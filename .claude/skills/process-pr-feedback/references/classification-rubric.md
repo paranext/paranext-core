@@ -1,8 +1,9 @@
 # Classification rubric
 
-Used by **P1 — Verify**. Every inventory item gets exactly one classification, decided by
-reading the code at the named revision — never by judging whether the reviewer's story sounds
-plausible.
+Used by **P1 — Verify**. Every inventory item that **makes a claim about the code** gets exactly
+one classification, decided by reading the code at the named revision — never by judging whether
+the reviewer's story sounds plausible. Items that make no claim — questions, offers, status
+reports — take the non-claim carve-out below instead.
 
 > *Provenance: the five-way scheme and the worked examples come from the 2026-08 review rounds
 > on the multi-window stack (PR #2621 round 4 and the lead dev's document round), where a
@@ -29,11 +30,68 @@ Two classifications can apply at different revisions, and that is information, n
 Say so: *"CONFIRMED at your base — REFUTED at the top of the stack."* Always name which revision
 each verdict belongs to.
 
-### Cost class
+### The non-claim carve-out — `ASK` · `OFFER` · `STATUS`
 
-Every non-INVALID item also carries a cost class, because G1 and `--fast-lane` both depend on
-it: **XS** (a line or a word), **S** (one file, no design), **M** (several files or a test
-rewrite), **L** (a design change or a new API surface).
+**The five-way applies to items that make a claim about the code.** A reviewer's round routinely
+contains items that do not:
+
+| Kind | Looks like | What it owes the reviewer |
+|---|---|---|
+| **`ASK`** | *"Is this intentional?"* · *"Why not use the existing helper?"* · *"What happens on Windows?"* | An answer, in the thread, with the same evidence standard as a verdict. If the answer is "we don't know yet", say when they will know. |
+| **`OFFER`** | *"Want me to instrument that path?"* · *"I can take this one if it helps."* | Accept, decline, or counter-offer — explicitly, by the user's ruling. Silence reads as a refusal and costs the reviewer's next offer. |
+| **`STATUS`** | *"I've started on X."* · *"This overlaps the work in #NNNN."* | Usually an acknowledgement, plus whatever it changes about our plan. Sometimes it changes a disposition — check before filing it as noise. |
+
+These items get **a disposition and a reply target, and skip the five-way entirely.** Do not
+force them through it. `VALID` says nothing about a question, and a question wearing a
+classification badge looks answered when nobody has answered it — which is how a reviewer ends
+up waiting on a reply that the round has already marked complete.
+
+Two things they still get, in full: the same **verification rigour** where an answer depends on
+what the code does (an `ASK` answered from memory is as wrong as a verdict guessed from memory),
+and a place on the **G1 decision list** whenever the answer is the user's to give — every `OFFER`
+is, and any `ASK` whose answer commits us to something.
+
+### Cost is a pair
+
+Every non-INVALID item carries **`(edit-cost, verification-cost)`**, each on the same scale:
+**XS** (a line or a word), **S** (one file, no design), **M** (several files or a test rewrite),
+**L** (a design change or a new API surface). G1 sizing and `--fast-lane` both key on the pair,
+and `--fast-lane` requires XS on **both** halves.
+
+They are separate because they come apart, and the direction they come apart in is the dangerous
+one:
+
+| Item | Pair | Why |
+|---|---|---|
+| Rename a misleading local variable | `(XS, XS)` | Type-check covers it. |
+| Flip a boolean default on a startup path | `(XS, L)` | The edit is one word; proving it needs a build, an app launch, and the reviewer's scenario reproduced with a negative control. |
+| Rewrite a test to assert behaviour instead of implementation | `(M, XS)` | Sizeable edit; the suite verifies itself. |
+| Add a field to a public API surface | `(S, M)` | Small edit, but `build:types`, the two-surface experimental marker, and the wire contract all need checking. |
+
+A single number collapses to the edit cost every time, because the edit is the part in front of
+you. That is what turns "an XS fix, ten minutes" into an afternoon — and, worse, what lets a fix
+reach a reviewer verified only in theory, because the verification the item actually needed was
+never sized and so never scheduled.
+
+### Conditional verdicts
+
+When settling an item needs something this run cannot do — start the app, run e2e, ask a human —
+**state the verdict conditionally rather than guessing or deferring**. `--scout-only` runs meet
+this constantly by construction; they are read-only and unattended.
+
+The shape: the verdict, the condition, the exact measurement that would settle it, and what the
+verdict becomes in each branch.
+
+> CONFIRMED at `<ref>` **if** the handler runs before teardown — which this run cannot observe.
+> Measurement: `<the specific command or scenario, and what to look for>`. If it does, the item
+> is VALID and the smallest fix is `<…>`; if it does not, the item is INVALID because
+> `<mechanism>`.
+
+That is a complete answer, not a hedge: the analysis is finished and the one open input is named
+precisely enough for anyone to close it in a minute. "Needs investigation" throws that analysis
+away, and a guess dressed as a verdict is worse than either. A conditional verdict is always a
+**G1 decision item** — the user is being asked to authorise, run, or wait for the measurement,
+and the branches of the condition are the item's options.
 
 ---
 
@@ -117,8 +175,9 @@ and re-checked at posting time, for the same reason.
 
 ## Mandatory sub-checks
 
-Run all of these on every item. They are the checks that produced the three examples above, and
-each one has caught something the plain read did not.
+Run all of these on every **claim** item, and on any `ASK` whose answer depends on what the code
+does. They are the checks that produced the three examples above, and each one has caught
+something the plain read did not.
 
 1. **Already-fixed-upstream.** What revision did the reviewer read? Is the claim still true at
    the branch tip, and at the top of the stack? Name the revision with every verdict.
@@ -141,16 +200,32 @@ each one has caught something the plain read did not.
    a deterministic `grep` over the same corpus, per `.claude/rules/grep-safety-net.md`. Every
    grep hit must appear in the result or be explained as a false positive.
 
-## Read-only discipline
+## Read-only discipline, and reading by ref
 
-Verification touches nothing. `git show` / `git diff` / `git log` at explicit refs, plus reads of
-the working tree. No checkout, no commit, no push, no PR or comment mutation. State the refs
-used at the top of the report, so a later reader can tell what "confirmed" was confirmed
-against.
+Verification touches nothing. `git show` / `git diff` / `git log` at explicit refs. No checkout,
+no commit, no push, no PR or comment mutation.
+
+**Establish the checkout's branch before reading anything**, and say so at the top of the report:
+
+```bash
+git rev-parse --abbrev-ref HEAD && git status --short
+```
+
+**Whenever HEAD is not the ref the verdict is about, or the tree is dirty, every read is
+`git show <ref>:<path>`.** Never a working-tree read. This is the single highest-yield habit in
+the phase, because the failure it prevents is wrong, confident, and invisible all at once: the
+file exists on the other branch too, the line numbers resolve, the quote looks right, and the
+report contains nothing that records which branch it came from. Every downstream check passes and
+the error arrives at G1 wearing the same evidence format as a correct verdict. Checkouts are
+shared and move under a run, so establishing the branch once at the start does not make later
+reads safe — putting the ref in the command does. That is also what makes the evidence auditable
+later: `git show <ref>:src/main/main.ts` records which revision it read; "main.ts:412" does not.
 
 ## Report shape
 
-One section per item: the item id, the verbatim claim, the classification with its revision, the
-evidence (file:line at a named ref), the cost class, the smallest change that would satisfy the
-concern, and any sub-check that fired. Items that need the user's ruling are marked for G1 with
-the reason.
+One section per item: the item id, the verbatim claim, the classification with its revision (or
+the non-claim kind), the evidence (`file:line` at a named ref), the cost pair, the smallest change
+that would satisfy the concern, and any sub-check that fired. Items that need the user's ruling
+are marked for G1 with the reason, and conditional verdicts name their measurement. State the
+refs used, and the branch the checkout was on, at the top — so a later reader can tell what
+"confirmed" was confirmed against.

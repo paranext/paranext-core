@@ -57,7 +57,8 @@ Every run writes one packet, and **never reuses another run's**:
 .feedback-packets/<pr>-<YYYY-MM-DD>[-<run>]/
   00-inventory.md        P0   numbered inventory of every feedback item
   01-verification/       P1   one report per verifier agent
-  02-triage.md           P2   dispositions, options, cost classes, G1 decision list
+  02-triage.md           P2   dispositions, options, cost pairs, G1 decision list
+  shared-vocabulary.md   P2   which labels the reviewer has actually seen (see below)
   03-rulings.md          G1   the user's rulings, verbatim, dated
   04-fix-reports/        P3   one report per fix
   05-self-review.md      P4   /code-review findings + adjudication
@@ -66,18 +67,46 @@ Every run writes one packet, and **never reuses another run's**:
   bodies.json            P7   drafts extracted to JSON — the exact bytes that will post
   08-posting-log.txt     P7   append-only: status, item, pr, kind, comment id, url, time
   09-record.md           P8   what landed where, durability copies, residue
+  _phase-<n>-complete    all  one per finished phase, naming what it produced (see below)
+  _scout-complete        P2   written only by a `--scout-only` run, at the point it stops
 ```
+
+**`shared-vocabulary.md`** is small and easy to skip, and skipping it costs a public reply.
+It records, for this round, which item labels are **shared vocabulary** — ids the reviewer
+assigned themselves, or labels from a document they were actually sent — and which exist only
+inside this packet. `references/reply-conventions.md` rule 6 governs what belongs in a reply
+body; P7's dry-run check in `references/posting-mechanics.md` reads this file as its
+allow/deny configuration rather than guessing. Write it at P2, while the inventory's provenance
+is still in front of you; reconstructing it at P7 from reply drafts is how a packet-internal id
+reaches a reviewer.
 
 A PR often takes two rounds in one day, so the date alone does not separate them: add `-2`,
 `-3` … when `<pr>-<date>` already exists. Reusing a directory inherits the previous round's
-`_complete` markers — which makes `--resume` report that round's progress as this one's — and
+completion markers — which makes `--resume` report that round's progress as this one's — and
 its `08-posting-log.txt`, whose `OK` rows the poster treats as already-sent.
 
 `.feedback-packets/` is git-ignored, and repo-relative so it sits beside the checkout the run is
 about rather than in a scratch directory that gets swept. It is ignored by Prettier too
 (`.prettierignore`, `.prettierignorerun`); without that, P5's own `npm run format:check` gate
 fails on the packet the run is writing, and the natural response — `npm run format` — would
-rewrite `bodies.json`, the file that holds the exact approved bytes. **Sessions die, packets don't** —
+rewrite `bodies.json`, the file that holds the exact approved bytes.
+
+**Verify those three entries exist before writing the first packet file**, at the top of P0:
+
+```bash
+git check-ignore -v .feedback-packets/                              # the .gitignore rule
+grep -n '^\.feedback-packets/$' .prettierignore .prettierignorerun  # the two Prettier ones
+```
+
+Read the output: three lines, one naming each file. An exit code is not the check here — `grep`
+across two files succeeds when only one of them matches. This repo ships all three, so on a
+current checkout the check is a formality — which is exactly why it has to be mechanical rather
+than assumed, and why it is two commands and not a paragraph of trust. A checkout that
+predates them, a fork, or a worktree with a modified ignore set turns the packet into untracked
+noise in every `git status` for the rest of the run, and into a `format:check` failure at P5,
+discovered at the point in the run where the tempting fix is the destructive one. If an entry is
+missing, add it and say so — do not route the packet somewhere else to dodge the problem, because
+`--resume` and every path in this file assume it is here. **Sessions die, packets don't** —
 every phase writes its output to the packet before moving on, and every phase starts by reading
 what the previous one wrote rather than trusting conversation memory.
 
@@ -92,20 +121,104 @@ an explicit copy, not a property of where it lives.
 already there. State that inferred entry point to the user before doing any work, because a
 resumed run may be crossing a gate the previous session set up.
 
-Completeness is not "the output path exists". `01-verification/` and `04-fix-reports/` are
-directories that parallel agents fill incrementally, so a session that died after three of five
-verifier reports leaves a directory that looks finished. For those two phases the **orchestrator**
-therefore **writes a `_complete` marker into the directory once the last agent has reported**,
-naming what it produced (e.g. `5 verifier reports, items R5-01..R5-38`). It is the orchestrator's
-job and not the agents': no single agent knows whether its peers finished, so a marker written by
-one of them means nothing. A directory with no marker is a partial phase: read what is there,
-work out what is missing, and finish it before advancing. G1 must never rule on a
+**Completeness is not "the output path exists"**, and it is not something to eyeball either. A
+half-written `02-triage.md` and a finished one are the same `ls` entry; `01-verification/` and
+`04-fix-reports/` are directories that parallel agents fill incrementally, so a session that died
+after three of five verifier reports leaves a directory that looks finished. Both cases hand
+`--resume` a phase it will treat as done.
+
+So **every phase ends with the orchestrator writing `_phase-<n>-complete` at the packet root**,
+whose contents name what that phase produced and what the next phase is owed — for example
+`P1 complete: 5 verifier reports, items R5-01..R5-38, 0 unclassified`. The marker is written
+last, after the phase's output has been re-read and found whole. Its absence means partial: read
+what is there, work out what is missing, and finish it before advancing. G1 must never rule on a
 partially-verified round.
 
-The file-output phases need no marker of their own. Each one's spec below names what its file
-must end with — P0 an entry for every item, P2 the numbered decision list, and so on — so a
-half-written file shows as half-written on the re-read that opens the next phase. Do that
-re-read; the existence of the file is not the signal.
+Three properties make this work, and each one has a failure behind it:
+
+- **The orchestrator writes it, never an agent.** No single agent knows whether its peers
+  finished, so a marker written by one of them means nothing.
+- **It names contents, not status.** "P1 done" is unfalsifiable on re-read; a count and an id
+  range can be checked against the directory in one command.
+- **A `--scout-only` run also writes `_scout-complete`** at the point it stops, recording that
+  the run ended *at G1 by design* rather than dying there. Without it, a later session finds a
+  packet with `_phase-2-complete` and no rulings file and cannot tell a finished scout from an
+  interactive run that crashed on the way to the gate — and those want opposite responses.
+
+---
+
+## Presenting a gate
+
+G1 and G2 are where the run hands a human the decisions. The packet is the evidence; the gate
+presentation is the *ask*, and it is read by someone who has not read the packet, has not read
+the reviewer's text, and has not been in this session. Write every decision item as if that is
+literally true, because by the time a gate arrives it usually is — the user has been elsewhere
+while the run did P0–P2.
+
+**Every G1 and G2 decision item carries four parts, in this order:**
+
+1. **Context** — one or two plain sentences saying what happened, or what the reviewer said.
+   Assume the reader has seen **none** of the packet and none of the reviewer's text. This part
+   is the one that gets dropped, and dropping it is what makes a gate unanswerable.
+2. **The question** — one explicit interrogative sentence, ending in a question mark, that can be
+   answered as asked. A topic ("the caching decision"), a noun phrase, or "thoughts?" is not a
+   question.
+3. **Options** — lettered, one line each, each one a thing the user can say yes to by naming its
+   letter.
+4. **Recommendation** — which option, plus a one-line reason. Every item gets one; "no
+   recommendation" is a legitimate recommendation only for a genuine design preference, and then
+   say why the skill will not choose.
+
+**Banned in a gate presentation:** packet-internal ids and labels as the *subject* of an item,
+reviewer shorthand, a bare file or symbol name standing in for an explanation, and "as
+discussed" / "as above" / "per the triage". An id may trail an item as a pointer for
+traceability; it may never be the thing the reader has to decode before they can understand the
+question. The same rule governs replies to reviewers (`references/reply-conventions.md` rule 6)
+for the same reason — a label is only communication to someone who already shares it.
+
+**Pure-information items are not decisions.** Facts worth carrying, items already handled, and
+context for a later round go under their own heading — **"No decision needed — FYI"** — after the
+decision list, never interleaved with it. Mixed together, the user has to sort the list before
+they can answer it, and the items needing an answer are the entire reason for stopping.
+
+**The acceptance test is the cold-read test** `references/pr-thread-conversion.md` applies to PR
+threads, turned on our own gate: read the item as someone with only this message in front of
+them. Can they say what happened, what is being asked, what their choices are, and what you
+recommend? **If the user has to ask "what are you asking me?", the gate failed.** The cost is not
+a wasted turn — it is that a gate the user cannot read is a gate they approve blind, and the
+whole point of stopping was that a human looked.
+
+### Worked example
+
+**Bad** — every word of context lives somewhere the reader is not:
+
+> 1. **R3-04 / the cache staleness — which option?** A (fix here), **B + A′ (recommended)**, or
+>    C. And: do the XS logging fix regardless?
+
+Nothing here is answerable without the packet open: `R3-04` is ours, `A`/`B`/`C` were never
+stated, `A′` appears for the first time in the answer, and the second sentence asks a question
+whose subject is never named. The recommendation is the only part that survives a cold read, and
+a recommendation the reader cannot evaluate is just a request to rubber-stamp.
+
+**Good** — same item, self-contained:
+
+> **1. A reviewer found that a value we cache is never invalidated when the user switches
+> projects, so the second project can be shown the first project's data.** We reproduced it. The
+> cache predates this PR — the bug is reachable on `main` today and is not something this branch
+> introduced.
+>
+> **Do we fix it on this PR, or keep the PR to its stated scope and record the bug for you to
+> place on a ticket?**
+>
+> - **A.** Fix it here — clear the cache on project change. ~15 lines and one test.
+> - **B.** Keep this PR scoped, record the bug for you to place, and tell the reviewer that is
+>   what we did.
+> - **C.** Fix it here *and* re-key the cache by project so the class of bug goes away. Larger,
+>   and a design change we would want the lead dev on.
+>
+> **Recommendation: B** — the bug ships on `main` today, so it is not a regression this PR
+> introduces, and A would add an unrelated behavior change to a round that is otherwise ready to
+> land. *(packet item R3-04)*
 
 ---
 
@@ -116,7 +229,35 @@ re-read; the existence of the file is not the signal.
 **In:** the PR number, plus any free-text pointers from the invocation.
 **Out:** `00-inventory.md` — every feedback item, numbered `<round>-<nn>`, each with: source
 surface, verbatim quote, the comment id if one exists, the file:line it points at, and the
-revision the reviewer was looking at.
+revision the reviewer was looking at. Plus the base-state record below.
+
+**Base-state check — before any processing.** Establish where the PR branch stands against its
+own base, and record it at the top of `00-inventory.md`:
+
+```bash
+gh pr view <pr> --json mergeable,mergeStateStatus,baseRefName,headRefName
+```
+
+If `mergeable` is `CONFLICTING`, or `mergeStateStatus` says the branch is behind in a way that
+matters — the base moved under it, which is exactly what a squash-merge below it does — then
+**rebasing this branch onto its current base is a prerequisite**, not a task the round can carry
+alongside the fixes. It precedes fix-work and it changes G1 sizing, because every cost estimate is
+an estimate against the wrong tree until it happens. Record it in the packet as a required step
+**with an owner** — it is a decision item at G1 like any other, presented per *Presenting a gate*.
+Do not let fix commits land on a conflicted branch: they inherit the conflict, the reviewer sees a
+diff that will not merge, and the rebase that eventually happens replays them through the conflict
+anyway.
+
+`mergeable` is computed asynchronously and comes back `UNKNOWN` while GitHub is still working it
+out. `UNKNOWN` is not "fine" — re-query until it settles before concluding anything, because
+"no conflict was reported" and "no conflict exists" are the same output here and only one of them
+is a fact.
+
+**Keep this distinct from the restack.** Getting **this** branch cleanly onto **its** base is a
+*precondition*, handled here at P0. Restacking the branches **above** this one onto this branch is
+*downstream* work, handled at P6 with `references/restack-battery.md`. They point in opposite
+directions, they happen at opposite ends of the run, and treating the first as if P6 will cover
+it is how a round processes a whole reviewer's feedback against a branch that never merged.
 
 Sweep **all** surfaces, not just the obvious one:
 
@@ -126,7 +267,11 @@ Sweep **all** surfaces, not just the obvious one:
 - Issue comments on the PR — `gh api repos/paranext/paranext-core/issues/<pr>/comments --paginate`
 - Reviewable-native "no related file" discussions — these exist only in the Reviewable UI, are
   **not** returned by the inline comments API, and have no reply endpoint. No tool call can see
-  them: if the reviewer uses Reviewable, ask the invoker to paste any such discussions.
+  them. Record this as an **open surface question** in `00-inventory.md` and carry it onto the G1
+  decision list; do not stop collection to ask. An unattended scout run has no human to ask at
+  all, and an interactive run gets a better answer by asking once at the gate, alongside every
+  other decision the round needs, than by interrupting mid-sweep. Until it is answered the honest
+  finding is "no Reviewable-native discussions were reported", never "there are none".
 - Linked or pasted documents, DMs, Discord messages named in the invocation
 
 **Filter out threads the reviewer already resolved — REST cannot see them.** Neither
@@ -153,6 +298,25 @@ Also capture the **revision each reviewer read**. Reviews go stale under a movin
 can be correct at the reviewer's base and already fixed at the tip, and that is a disposition,
 not a dismissal.
 
+**Subsequent rounds on the same PR.** From round 2 onward the inventory covers *this* round's
+items. Items from earlier rounds are inventoried as **context, not work**, in their own section,
+each carrying an explicit `already-handled` marker with the round that handled it, its
+disposition, and where the fix or reply landed. They are there so this round can see what was
+already promised to this reviewer, and for nothing else:
+
+- They are **not re-verified.** A verifier's item list never includes them, and no agent is
+  briefed to re-check them. Re-verification burns a round's budget re-deriving conclusions that
+  were already delivered, and — worse — produces a second verdict that may differ from the one
+  already posted under the user's name.
+- They are **not re-litigated at G1.** A handled item does not return to the decision list.
+  The one exception is a genuine *new* fact about it — the fix regressed, or a later ruling
+  contradicts the reply that went out — and then it enters as a new item of this round, with the
+  new fact as its context, not as a re-run of the old argument.
+- The resolved-thread filter above already removes most of them mechanically. This convention
+  covers the rest: items whose thread stayed open, items that arrived off-PR, and items the
+  reviewer restated in new words. **A restated item is still a handled item** — match on
+  substance, not on wording.
+
 ### P1 — Verify
 
 **In:** `00-inventory.md`.
@@ -160,10 +324,18 @@ not a dismissal.
 **Agents:** parallel `verifier` agents, brief in `references/agent-briefs.md`. Shard by area
 (main / renderer / extension-host / C# / docs) or by contiguous item ranges, ~6–10 items each.
 
-Every item gets one of five classifications, defined with worked examples in
-`references/classification-rubric.md`:
+Every item **that makes a claim about the code** gets one of five classifications, defined with
+worked examples in `references/classification-rubric.md`:
 
 `VALID` · `VALID-WITH-CORRECTIONS` · `INVALID` · `DESIGN-PREFERENCE` · `ALREADY-SATISFIED`
+
+**Not every item is a claim.** A reviewer's round routinely contains questions, offers, and
+status reports — *"is this intentional?"*, *"want me to instrument that path?"*, *"I've started
+on X"*. Forcing those through the five-way produces a nonsense verdict (`VALID` says nothing
+about a question) and, worse, hides the fact that the reviewer is waiting on an answer. They take
+the **non-claim carve-out**: classify the kind (`ASK` · `OFFER` · `STATUS`), give the item a
+disposition and a reply target, and skip the five-way entirely. The carve-out and what each kind
+owes the reviewer are in `references/classification-rubric.md`.
 
 Verification is **adversarial and mechanism-level**: read the code at the named ref and decide
 what it actually does, rather than deciding whether the reviewer's story is plausible. The
@@ -171,17 +343,37 @@ rubric file carries the six mandatory sub-checks — already-fixed-upstream,
 right-conclusion-wrong-mechanism, self-refuting claims, cross-reviewer conflicts,
 reviewer-suggested fixes traced before they are trusted, and the grep safety net.
 
-Verifier agents are **read-only**: `git show` / `git diff` / `git log` at explicit refs, plus
-reads of the working tree. No checkout, no commit, no comment.
+**Establish the checkout's branch before reading a single file, and read by ref.** A verifier's
+first command is `git rev-parse --abbrev-ref HEAD` plus `git status --short`, reported at the top
+of its output. Whenever the checkout is not on the PR branch at the ref in question — or the tree
+is dirty — every file read is `git show <ref>:<path>`, never a working-tree read. This is the
+trap the phase most needs protection from: a working-tree read on the wrong branch is *wrong*,
+*confident*, and *invisible*. It returns real code with real line numbers, the verdict cites a
+file:line that exists, and nothing anywhere in the report says which branch it came from. A
+shared checkout moves under a run (another agent, another task, a half-finished bisect), so
+"I checked out the branch at the start" is not a property that holds for the length of a
+verification pass. `git show <ref>:<path>` carries its own ref in the command, which is what makes
+the evidence auditable at G1.
+
+Verifier agents are **read-only**: `git show` / `git diff` / `git log` at explicit refs. No
+checkout, no commit, no comment.
 
 ### P2 — Triage packet
 
 **In:** `01-verification/`.
-**Out:** `02-triage.md`, ending in an explicit **decision list for the user**.
+**Out:** `02-triage.md`, ending in an explicit **decision list for the user**; plus
+`shared-vocabulary.md`.
 
-Per item: classification, the smallest change that satisfies the concern, cost class
-(XS/S/M/L), which PR or branch it lands on, restack implications, and any tension with prior
+Per item: classification, the smallest change that satisfies the concern, the **cost pair**
+(below), which PR or branch it lands on, restack implications, and any tension with prior
 commitments — especially with replies already posted to a reviewer.
+
+**Cost is a pair, not a number: `(edit-cost, verification-cost)`**, each XS/S/M/L, defined in
+`references/classification-rubric.md`. They come apart constantly and in the direction that
+hurts: a one-word change on a startup path is `(XS, L)` — the edit is trivial and proving it
+works means building, launching the app, and reproducing the reviewer's scenario. Collapsing that
+to "XS" is how a round promises a fix in an hour and spends an afternoon, and it is how a fix
+reaches a reviewer verified only in theory. Size both halves separately and state both.
 
 The triage must separate, in its own sections:
 
@@ -192,15 +384,30 @@ The triage must separate, in its own sections:
   contradicts something already posted. Present both positions verbatim with the verified facts
   and say plainly what the reviewer is owed either way. **Never resolve one silently.**
 - **Declines and deferrals** — with the reason, and where the residue will be recorded.
+- **Asks, offers and status** — the non-claim items. Each with the answer we propose to give,
+  and its reply target. An unanswered question from a reviewer is a debt, and it is invisible in
+  a packet organised only around fixes.
 
-End with a numbered decision list ordered by consequence. Nothing on it is actioned without an
-answer.
+End with a numbered **decision list ordered by consequence**, every entry written per
+*Presenting a gate* above — context, question, lettered options, recommendation — and everything
+that needs no decision moved below it under **"No decision needed — FYI"**. Nothing on the
+decision list is actioned without an answer.
+
+Write `shared-vocabulary.md` in this phase too, while each item's provenance is still in front of
+you: which labels the reviewer assigned themselves or has been sent, and which exist only in this
+packet.
 
 ### G1 — Strategy gate · **HARD STOP**
 
 Present `02-triage.md` and stop. Do not begin any implementation, branch, or commit in the same
-turn. The user rules on: what gets fixed, where each fix lands, every design preference, and
-every cross-reviewer conflict.
+turn. The user rules on: what gets fixed, where each fix lands, every design preference, every
+cross-reviewer conflict, any base-state rebase P0 found to be a prerequisite, and any verdict P1
+left conditional on a measurement.
+
+**Present it per *Presenting a gate*** — every item self-contained for a cold reader, pure
+information under its own FYI heading. The packet is not the presentation: pasting `02-triage.md`
+into the conversation is not presenting a gate, because the triage is written for someone who has
+the verification reports open.
 
 State the house rule when presenting:
 
@@ -211,10 +418,17 @@ that file, not to conversation memory — a resumed session has no memory of the
 
 **`--fast-lane`.** G1 may merge into G2 only when the round qualifies on **all four** counts:
 
-1. every item classified `VALID`,
-2. every fix cost class XS,
+1. every item classified `VALID` — a round carrying `ASK` or `OFFER` items does not qualify,
+   because those need an answer from the user before a reply can go out,
+2. every fix XS on **both halves of the cost pair** — XS to edit *and* XS to verify,
 3. no design-preference items, and
-4. no cross-reviewer conflicts and no tension with anything already posted.
+4. no cross-reviewer conflicts and no tension with anything already posted, and no base-state
+   rebase outstanding from P0.
+
+Count 2 keys on both halves deliberately. An `(XS, L)` item is the exact shape fast-lane must
+refuse: the diff looks like nothing at G2, so it invites approval on sight, while the work that
+would show whether it is right — a build, an app run, the reviewer's scenario reproduced — is the
+part that got skipped. The pair is what makes that visible instead of inferable.
 
 Fast-lane is a property of the round, not a request. `--fast-lane` asks the skill to check
 whether the round qualifies; if it does not, say which of the four failed and run the normal
@@ -314,6 +528,18 @@ The tooling for that, all of it already in this repo:
 2. **Restack** every branch above the one that changed, following
    `references/restack-battery.md`. Run the full battery at the top of the stack. Nothing is
    force-pushed before G2.
+
+   **A force-push can dismiss reviewer approvals.** On repositories configured to dismiss stale
+   approvals on new commits, force-pushing a restacked branch drops every existing approving
+   review on its PR — silently, as a side effect of a push the run made for unrelated reasons. So
+   for every branch this round will force-push, record `gh pr view <n> --json reviewDecision,reviews`
+   **before** the push as part of the battery's step-1 numbers, and **re-check it after**. If an
+   approval was dismissed, say so at once and re-request review from exactly the reviewers who had
+   approved (`gh pr edit <n> --add-reviewer <login>`), then report it — a PR that reads
+   `APPROVED` before the round and `REVIEW_REQUIRED` after, with nobody told, looks to the
+   reviewer like their approval was thrown away and to the author like the PR is ready to merge.
+   Whether the repo dismisses is a setting, so check the state rather than reasoning about the
+   config: the before/after pair answers it for this repo, today, for free.
 3. **Draft replies** into `07-replies.md` — `reply-drafter` agents, brief in
    `references/agent-briefs.md`, conventions in `references/reply-conventions.md`. Each draft
    carries its target: an inline thread id (`pulls/<pr>/comments/<id>/replies`), or "issue
@@ -349,6 +575,14 @@ Present and stop. Nothing is pushed and nothing is posted in this turn. Present:
   reviewer, that asks for something, or that retracts something previously posted,
 - anything a reviewer is owed a correction on.
 
+Most of that is evidence, not a question, and it belongs under **"No decision needed — FYI"**.
+The **decisions** G2 actually asks for — push or hold, post or hold, and every flagged reply the
+user may want changed — are written per *Presenting a gate*: context, an explicit question,
+lettered options, a recommendation. A reply the user is expected to weigh in on needs its own
+item saying what the reviewer claimed and what the draft says back; the draft text alone is not
+a question, and burying it in a wall of results is how a confrontational reply gets approved
+unread.
+
 Repeat the house rule. Approval must name what is approved — "post the replies", "push the
 stack", or the specific items. A general go-ahead does not cross this gate.
 
@@ -360,7 +594,9 @@ stack", or the specific items. A general go-ahead does not cross this gate.
 `references/posting-mechanics.md`.
 
 1. **Push** — `--force-with-lease` for restacked branches, in stack order, bottom first, one
-   command at a time with the result checked before the next.
+   command at a time with the result checked before the next. Re-check each PR's approval state
+   immediately after its own push, per P6 step 2 — a dismissed approval is reported and
+   re-requested in this run, not discovered by the reviewer later.
 2. **Post** per `references/posting-mechanics.md`: extract bodies to JSON, run the dry-run
    checks, re-derive every head SHA at posting time, post sequentially, stop on the first
    failure with no retry, then verify by count and id set against the live API.
@@ -406,13 +642,47 @@ This is itself a P6→G2→P7 cycle: draft, gate, post. See `references/reply-co
 
 ## Scout mode (`--scout-only`)
 
-Runs **P0 → P1 → P2 only**, then stops at G1 and exits. Writes the packet and a three-line
-digest: PR, item counts by classification, and the headline decision the user owes.
+Runs **P0 → P1 → P2 only**, then stops at G1 and exits, writing the packet, `_scout-complete`,
+and a **digest**.
+
+**The digest is as long as the gate needs it to be.** It is not a headline: for an unattended run
+it is the *only* durable output the user is guaranteed to see, because the packet is git-ignored
+and machine-local and may never reach them. So it carries the whole ask, and it is written per
+*Presenting a gate*:
+
+- the run header — PR, packet path, the branch and base state P0 found, and every ref with its
+  SHA as re-derived at the moment the run stopped;
+- item counts by classification, including the non-claim kinds;
+- **the full G1 decision list**, each item self-contained: context, question, lettered options,
+  recommendation. Not a pointer into `02-triage.md`;
+- anything the run could not settle — open surface questions, and any verdict left conditional on
+  a measurement (below);
+- everything else under **"No decision needed — FYI"**.
+
+A three-item round's digest is short; a thirty-item round's is not, and padding one or truncating
+the other both fail the same test. Size it honestly and never compress a decision item to fit.
 
 Scout mode is the unattended-safe subset — read-only outside the packet directory, no e2e, no
 app, no commits, no pushes, no comments, no PR edits. A scheduled run cannot wait for a human,
 so the pattern is **run-to-gate, persist, stop**. The user reviews asynchronously and an
 interactive session picks it up with `--resume <packet-dir>` after G1.
+
+**Conditional verdicts are authorised, and they are the right answer more often than they look.**
+Scout mode cannot run the app, cannot run e2e, and cannot ask anyone anything — so it will meet
+items whose verdict genuinely turns on something it is forbidden to do. Do **not** guess, and do
+not downgrade the item to "needs investigation". State the verdict conditionally, naming the
+measurement exactly:
+
+> CONFIRMED at `<ref>` **if** the shutdown handler is reached before window teardown — which this
+> run cannot observe, because it cannot start the app. Measurement: run the app with two windows,
+> quit, and check `main.log` for `<marker>` before `<marker>`. If it is reached, the item is
+> VALID; if not, it is INVALID and the reviewer's trace names the wrong handler.
+
+A conditional verdict is **a decision item on the G1 list**, not a footnote — the user is being
+asked to authorise (or run, or wait for) a specific measurement, and the item's options are the
+branches of the condition. Written this way it is genuinely useful: the analysis is done, and the
+one thing scout mode could not do is named precisely enough for anyone to do it in a minute. A
+conditional verdict never converts itself into a fix — the branch it selects is still a ruling.
 
 P3 and later stay interactive: e2e needs Electron, a display, the .NET provider and built
 bundles, and pushes and postings should not originate from an unattended job under the house

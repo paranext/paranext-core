@@ -35,9 +35,26 @@ the user's name, in public, on a repo the whole team reads.
    reviewer themselves assigned — their own review's finding numbers — is the clearest possible
    way to say which item you are answering, and Example 3 below uses exactly that. An id that
    exists only in our packet, or a working label from a document they were never sent, is
-   noise that reads as jargon. Before drafting, decide which labels are shared vocabulary for
-   this round and record that list in the packet; the dry-run check in `posting-mechanics.md`
-   takes it as configuration, so it flags the internal ones without flagging the shared ones.
+   noise that reads as jargon.
+
+   That decision has a named home: **`shared-vocabulary.md` in the packet**, written at P2 while
+   each item's provenance is still visible, and read by every reply-drafter before it uses an id
+   in a body. Two lists, each label with where the reviewer saw it:
+
+   ```markdown
+   ## Shared — the reviewer has seen these, they belong in reply bodies
+   - `R4-07`, `R4-08` — their own numbering, from their 2026-08-07 review
+   - `FIX-B`, `FIX-D` — named in the design doc sent to them on 2026-08-09
+
+   ## Internal — this packet only, never in a body
+   - `T2-01`..`T2-09` — our inventory ids
+   - `H1` — our working name for the hypothesis in 01-verification/
+   ```
+
+   The dry-run check in `posting-mechanics.md` takes the **Internal** list as its configuration,
+   so it flags packet-only labels without flagging the shared ones. Deciding this per reply, at
+   drafting time, is what puts an internal id in front of a reviewer: each individual call looks
+   obvious, and the one that is wrong looks exactly like the ones that are right.
 
 ## Structure
 
