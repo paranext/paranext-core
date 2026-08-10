@@ -1404,12 +1404,14 @@ step, no automation. Just a record.
   concurrent navigation from several windows are PT-4270's. Persistence lags memory by the debounce
   interval, so a crash — not a quit, which flushes — loses at most one navigation's worth of scroll
   position. The one-time handover of pre-host state is adopt-then-flag and answers the offering
-  window, which discards its copy on either answer; a profile that downgrades, navigates on the old
-  build, and upgrades again loses that navigation, because the host refuses an offer once it has
-  state of its own. Because the window's URL is a SEED rather than a one-off argument, the renderer
+  window, which stops offering on either answer — by writing a renderer-local marker key rather than
+  by deleting the pre-host keys, so an older build downgraded onto the profile still finds the
+  reference the user left off at. What a downgrade still cannot do is round-trip: a profile that
+  downgrades, navigates on the old build, and upgrades again loses that navigation, because the host
+  refuses an offer once it has state of its own. Because the window's URL is a SEED rather than a one-off argument, the renderer
   rewrites its own query parameter (`history.replaceState`) whenever the cache changes: a RELOAD
   replays that URL, and the pre-host store a reloaded document would otherwise fall back to has been
-  handed over and deleted by then, so a URL left as old as the window would put a reloaded window
+  handed over by then, so a URL left as old as the window would put a reloaded window
   back on the reference it opened on — which for a restored Scripture editor is the extra chapter
   load the seed exists to avoid. The theme service moved the same way in ADR-0013.
 - **Source:** PT-4275 epic (multi-window architecture plan §6).
@@ -1468,7 +1470,11 @@ step, no automation. Just a record.
   the machine's dark-mode preference does it on the first start of a dark-mode machine) and those
   writes say nothing about what the user chose; reading them back as a user choice would refuse a
   handover that had not happened yet, and a refusal is what makes the offering window delete its
-  copy. "Do I have a theme worth handing a new window?" is deliberately a DIFFERENT question,
+  copy. The offering renderer records that it has finished offering with a marker key of its own
+  rather than by deleting the three pre-host value keys, so an older build downgraded onto the
+  profile still paints the theme the user chose; a downgrade cannot round-trip a theme changed on
+  the old build, which was true before the marker existed too. "Do I have a theme worth handing a
+  new window?" is deliberately a DIFFERENT question,
   answered by "is this still the compile-time default?", so a theme derived from the OS preference
   still travels on the URL. The theme list comes from a provider the extension host registers, which
   does not exist when this host starts and which `platform.restartExtensionHost` replaces, so the
