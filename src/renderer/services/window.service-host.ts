@@ -38,6 +38,7 @@ import { isDirectionFromTab } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE, WebViewId } from '@shared/models/web-view.model';
 import { logger } from '@shared/services/logger.service';
 import { settingsService } from '@shared/services/settings.service';
+import { createCachedInitializer } from '@shared/utils/cached-initializer';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
   focusType: 'other',
@@ -508,28 +509,22 @@ async function detectFocus(): Promise<FocusSubject | FocusSubjectElement | undef
   return { focusType: 'element', element: activeElement };
 }
 
-let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
 let dataProvider: IWindowService;
-export async function initialize(): Promise<void> {
-  if (!initializationPromise) {
-    initializationPromise = new Promise<void>((resolve, reject) => {
-      const executor = async () => {
-        try {
-          dataProvider = await dataProviderService.registerEngine(
-            windowServiceProviderName,
-            new WindowDataProviderEngine(),
-          );
-          resolve();
-        } catch (error) {
-          reject(error);
-        }
-      };
-      executor();
-    });
+export const initialize = createCachedInitializer(async () => {
+  const engine = new WindowDataProviderEngine();
+  try {
+    dataProvider = await dataProviderService.registerEngine(windowServiceProviderName, engine);
+  } catch (error) {
+    // Dispose so the engine's window focus listeners don't leak if initialization is retried
+    await engine
+      .dispose()
+      .catch((e) =>
+        logger.warn(`Failed to dispose WindowDataProviderEngine after failed init: ${e}`),
+      );
+    throw error;
   }
-  return initializationPromise;
-}
+});
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingWindowService = {

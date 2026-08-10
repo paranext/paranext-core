@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest';
 import {
   getLastFocusedTabId,
   getLastSelectedScriptureNavigableWebViewId,
@@ -25,6 +25,7 @@ const {
   getTabInfoByIdMock,
   getSavedWebViewDefinitionSyncMock,
   getAllOpenWebViewDefinitionsSyncMock,
+  registerEngineMock,
 } = vi.hoisted(() => {
   const callbacks: CloseWebViewCallback[] = [];
   const openCallbacks: WebViewLifecycleCallback[] = [];
@@ -47,6 +48,10 @@ const {
   const allOpenDefinitionsMock = vi.fn(
     (): { id: string; webViewType: string; projectId?: string }[] => [],
   );
+  // Default implementation returns the engine it is handed, mirroring the real
+  // `dataProviderService.registerEngine`. The initialize-retry tests reset and override this to
+  // simulate registration failures.
+  const registerMock = vi.fn(async (_name, engine) => engine);
   return {
     closeWebViewCallbacks: callbacks,
     openWebViewCallbacks: openCallbacks,
@@ -54,16 +59,23 @@ const {
     getTabInfoByIdMock: tabInfoMock,
     getSavedWebViewDefinitionSyncMock: definitionMock,
     getAllOpenWebViewDefinitionsSyncMock: allOpenDefinitionsMock,
+    registerEngineMock: registerMock,
   };
 });
 
 vi.mock('@renderer/services/web-view.service-host', () => ({
+  getAllOpenWebViewDefinitionsSync: getAllOpenWebViewDefinitionsSyncMock,
+  // detectFocus() calls getDockLayout().getTabInfoByElement, so the dock layout stays stubbed for
+  // the engine constructor's initial focus detection (see enginesToDispose below). That detection
+  // can resolve after the test finishes, so this mock must not be cleared — a cleared getDockLayout
+  // would resolve to undefined and throw.
   getDockLayout: vi.fn(async () => ({
     focusTab: vi.fn(),
-    getTabInfoByElement: vi.fn(() => undefined),
+    getTabInfoByDirectionFromTab: vi.fn().mockReturnValue(undefined),
+    getTabInfoByElement: vi.fn().mockReturnValue(undefined),
     getTabInfoById: getTabInfoByIdMock,
-    getTabInfoByDirectionFromTab: vi.fn(() => undefined),
   })),
+  getSavedWebViewDefinitionSync: getSavedWebViewDefinitionSyncMock,
   onDidCloseWebView: (callback: CloseWebViewCallback) => {
     closeWebViewCallbacks.push(callback);
     return () => true;
@@ -76,12 +88,14 @@ vi.mock('@renderer/services/web-view.service-host', () => ({
     updateWebViewCallbacks.push(callback);
     return () => true;
   },
-  getSavedWebViewDefinitionSync: getSavedWebViewDefinitionSyncMock,
-  getAllOpenWebViewDefinitionsSync: getAllOpenWebViewDefinitionsSyncMock,
 }));
 
 vi.mock('@shared/services/data-provider.service', () => ({
-  dataProviderService: { registerEngine: vi.fn(async (_name, engine) => engine) },
+  dataProviderService: { registerEngine: registerEngineMock },
+}));
+
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 // The module-load `platform.interfaceMode` subscription drives Simple-mode nav-target pinning. This
@@ -438,5 +452,44 @@ describe('navigation target web view', () => {
     emitCloseWebView('editor-1');
 
     expect(getNavigationTargetWebView()).toBeUndefined();
+  });
+});
+
+describe('window.service-host initialize', () => {
+  beforeEach(() => {
+    registerEngineMock.mockReset();
+    vi.resetModules();
+  });
+
+  it('disposes the engine on registerEngine failure, removing window focus listeners', async () => {
+    const addSpy = vi.spyOn(window, 'addEventListener');
+    const removeSpy = vi.spyOn(window, 'removeEventListener');
+
+    try {
+      registerEngineMock.mockRejectedValueOnce(new Error('simulated failure'));
+
+      const { initialize } = await import('@renderer/services/window.service-host');
+      await expect(initialize()).rejects.toThrow('simulated failure');
+
+      // The engine constructor adds focusin/focusout listeners; dispose() removes them
+      expect(addSpy).toHaveBeenCalledWith('focusin', expect.any(Function));
+      expect(addSpy).toHaveBeenCalledWith('focusout', expect.any(Function));
+      expect(removeSpy).toHaveBeenCalledWith('focusin', expect.any(Function));
+      expect(removeSpy).toHaveBeenCalledWith('focusout', expect.any(Function));
+    } finally {
+      addSpy.mockRestore();
+      removeSpy.mockRestore();
+    }
+  });
+
+  it('succeeds on retry after a failed attempt', async () => {
+    registerEngineMock.mockRejectedValueOnce(new Error('first failure')).mockResolvedValueOnce({});
+
+    const { initialize } = await import('@renderer/services/window.service-host');
+
+    await expect(initialize()).rejects.toThrow('first failure');
+    await initialize();
+
+    expect(registerEngineMock).toHaveBeenCalledTimes(2);
   });
 });
