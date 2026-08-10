@@ -190,10 +190,19 @@ export function useCharacterMarkerState({
     isMixed = !!selection?.end && selection.start.jsonPath !== selection.end.jsonPath;
   }
 
-  // Keyed on `coverage` because the generator owns what each row DOES as well as what it shows, and
-  // both depend on coverage: opening and closing the menu therefore re-runs its filter and
-  // locale-aware sort over the block's children. That re-run is the price of keeping a row's action
-  // and its displayed state in one place rather than splitting one decision across two files.
+  // Keyed on `coverage` because coverage is an INPUT to what the rows are, not a decoration on
+  // them. It decides whether the remove row exists at all (`resolveCurrentMarker` returns undefined
+  // for two-or-more covering markers, so the mixed case has no `currentMarker` to gate on and the
+  // remove-all row could never be added by a later pass over a finished list), and it decides what
+  // each row's action closure does. Neither is reachable by mapping over already-generated items,
+  // which can overwrite fields but cannot rewrite a closure.
+  //
+  // Consequence: opening and closing the menu re-runs the generator's filter and locale-aware sort
+  // over the block marker's character children — tens of items, twice per menu interaction.
+  // If that ever measures, the fix is NOT to stamp state on afterwards again (that is what put a
+  // row's action and its displayed state in two files). Split this memo instead: keep the sorted
+  // base list keyed on `(blockMarker, localizedStrings)`, and let only the coverage-dependent
+  // assembly — actions included — re-run.
   const markerMenuItems = useMemo(
     () =>
       buildMarkerMenuItems({

@@ -141,4 +141,25 @@ describe('useRemoveCharacterMarker', () => {
       expect.objectContaining({ message: 'Could not remove', severity: 'warning' }),
     );
   });
+
+  it('swallows a failing notification rather than rejecting into a fire-and-forget caller', async () => {
+    // The reporting path's own failure. `notify` self-catches so that a menu row's `action()` —
+    // which calls this without awaiting — can never produce an unhandled rejection. Both notifying
+    // sites are covered: the sync-blocked refusal (no editor call at all) and the removal failure
+    // (editor already threw), so neither can start relying on the send resolving.
+    // `Once` twice, not `mockRejectedValue`: `vi.clearAllMocks()` in `afterEach` clears calls but
+    // NOT a persistent implementation, so a non-Once rejection would leak into later tests.
+    sendNotification
+      .mockRejectedValueOnce(new Error('notification service down'))
+      .mockRejectedValueOnce(new Error('notification service down'));
+
+    const blocked = renderRemove({ isSyncBlocked: true });
+    await expect(blocked.current('nd')).resolves.toBeUndefined();
+
+    const { ref } = makeEditorRef({ throws: true });
+    const failing = renderRemove({ editorRef: ref });
+    await expect(failing.current('nd')).resolves.toBeUndefined();
+
+    expect(sendNotification).toHaveBeenCalledTimes(2);
+  });
 });
