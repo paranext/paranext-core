@@ -44,6 +44,7 @@ import { performStartupTasks } from '@main/startup-tasks';
 import { startNotificationRoutingService } from '@main/services/notification-routing.service';
 import { startWindowRoutingService } from '@main/services/window-routing.service';
 import {
+  isAppQuitRequested,
   isAppShuttingDown,
   markQuitRequested,
   resetShutdownLatchesForNewSession,
@@ -1350,9 +1351,12 @@ async function main() {
   };
 
   app.on('window-all-closed', () => {
-    // Respect the OSX convention of having the application in memory even
-    // after all windows have been closed
-    if (process.platform !== 'darwin') {
+    // The macOS convention of keeping the application resident after its last window closes only
+    // applies when no quit is in flight. Every window's `close` handler calls `preventDefault()`
+    // to run its shutdown work, and that cancels a requested quit — so a quit that closed the
+    // windows must be re-issued here, or the app stays resident with zero windows and `will-quit`
+    // never runs.
+    if (process.platform !== 'darwin' || isAppQuitRequested()) {
       app.quit();
     }
   });
