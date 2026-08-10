@@ -7,6 +7,7 @@ import { ResourceCell, GridResource } from './resource-cell.component';
 import type { ZoomMenuLabels } from './resource-cell-view.component';
 import { useResourceZoomInput } from './use-resource-zoom-input.hook';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
+import { resolveDisplayVerseNum } from './verse-display.utils';
 import { moveId } from '../scripture-text-grid-order.utils';
 
 export type ChapterContextResource = GridResource;
@@ -326,8 +327,10 @@ export function ScriptureTextGrid({
   // control (ArrowUp/ArrowDown) — the grip stops click/key propagation so reordering never triggers
   // the listitem's chapter-context activation. The Scripture reference is constant across rows in a
   // render, so format it once for the accessible name (`"{name}, {ref}"`, or just the name when no
-  // template is provided).
-  const reference = formatScrRef(scrRef);
+  // template is provided). Resolved so the announcement names the verse the cells actually display:
+  // at a verse-0 reference they show verse 1. This names the row, not its contents — a resource that
+  // lacks verse 1 shows the empty state under the same label.
+  const reference = formatScrRef({ ...scrRef, verseNum: resolveDisplayVerseNum(scrRef.verseNum) });
   const verseItemName = (label: string) =>
     cellAccessibleNameTemplate
       ? formatReplacementString(cellAccessibleNameTemplate, { resourceName: label, reference })

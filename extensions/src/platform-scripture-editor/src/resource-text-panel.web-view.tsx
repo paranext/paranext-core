@@ -396,6 +396,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region USJ Fetch
 
+  // Chapter view: the whole chapter goes to Editorial, which navigates to scrRef. Deliberately NOT
+  // sliced by scripture-text-grid/verse-display.utils — slicing would blank the verse-0 front matter
+  // (intros, Psalm superscriptions) this view exists to show. PT-3133 was a Text Collection bug
+  // only; showing front matter here is the approved behavior. See PT-4061.
   const [usjPossiblyError] = useProjectData(
     'platformScripture.USJ_Chapter',
     resourceProjectId,
