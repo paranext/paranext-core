@@ -51,6 +51,7 @@ vi.mock('platform-bible-react', () => ({
     </button>
   ),
   Spinner: () => <div data-testid="spinner" />,
+  cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
 }));
 
 vi.mock('platform-bible-react/experimental', () => ({

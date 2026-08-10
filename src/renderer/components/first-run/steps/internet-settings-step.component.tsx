@@ -42,9 +42,6 @@ const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
   proxyPort: 0,
 };
 
-// Show the "getting ready" message after this much elapsed loading time.
-const CONNECTING_MESSAGE_DELAY_MS = 2_000;
-
 /**
  * First-run wizard step that lets the user configure internet access before registration. Saves
  * immediately on each selection change (immediate-apply model). The identify step's restart applies
@@ -61,7 +58,7 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
 
   // While the provider is not yet registered, show the loading panel. Disable Next here so the
   // wizard can't advance before settings are readable.
-  const showConnectingMessage = useDelayedFlag(provider === undefined, CONNECTING_MESSAGE_DELAY_MS);
+  const showConnectingMessage = useDelayedFlag(provider === undefined);
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
   useEffect(() => {
@@ -122,7 +119,7 @@ function InternetSettingsLoaded({
   const lastGood = useRef<InternetSettings | undefined>(undefined);
 
   // When loading, value is the default placeholder, never a PlatformError — so gate on isLoading alone.
-  const showConnectingMessage = useDelayedFlag(isLoading, CONNECTING_MESSAGE_DELAY_MS);
+  const showConnectingMessage = useDelayedFlag(isLoading);
 
   useEffect(() => {
     isMounted.current = true;
