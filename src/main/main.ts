@@ -676,8 +676,8 @@ async function main() {
       logger.warn(`Window ${windowId} render process gone: ${JSON.stringify(details)}`);
       // Everything this window registered died with its renderer, so routing has to move to a window
       // that can answer rather than spending the network service's registration retry on handlers
-      // that no longer exist. The `onDidCreateNetworkObject` hook above marks it ready again when
-      // its window service reappears.
+      // that no longer exist. The `onDidRegisterWindowServiceShard` subscription above marks it
+      // ready again when its window service shard reappears.
       markWindowNotReady(windowId);
     });
     // A reload replaces the page and everything it registered, the same as a crash does. This also
