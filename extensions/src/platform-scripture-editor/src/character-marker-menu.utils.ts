@@ -59,8 +59,8 @@ function isMarkerRowInert(
   canRemove: boolean,
   canChange: boolean,
 ): boolean {
-  // Extending a partially-covering marker over the rest of the selection is a separate editor
-  // operation (`PT-XXX-B4`).
+  // Extending a partially-covering marker over the rest of the selection needs an extend operation
+  // the editor does not expose yet.
   if (selectionState === 'partial') return true;
   // Covers everything, so the action is a toggle-off — inert only if removal does not exist yet.
   if (selectionState === 'all') return !canRemove;
@@ -117,9 +117,10 @@ export function generateCharacterMarkerMenuListItems(
      * menu is closed, and when the selection cannot be resolved against the editor's USJ.
      *
      * It decides both what each row DOES and what it shows: a row whose marker covers the whole
-     * selection removes it, a partially-covering row is inert (extending it is `PT-XXX-B4`), and a
-     * mixed selection swaps the single remove row for a remove-all row. Both halves of that live
-     * here rather than being stamped on afterwards, so one decision is not split across two files.
+     * selection removes it, a partially-covering row is inert (extending it needs an editor
+     * operation that does not exist yet), and a mixed selection swaps the single remove row for a
+     * remove-all row. Both halves of that live here rather than being stamped on afterwards, so one
+     * decision is not split across two files.
      */
     coverage?: CharacterMarkerCoverage;
     /**
@@ -192,8 +193,9 @@ export function generateCharacterMarkerMenuListItems(
           // Toggle off: the marker already covers the whole selection, so picking it again means
           // "take it away". Applying it again would nest an identical character marker.
           if (selectionState === 'all' && removeCharacterMarker) removeCharacterMarker(marker);
-          // Inert while partially covering: extending the marker over the rest of the selection is
-          // a separate editor operation (`PT-XXX-B4`), and `insertMarker` would nest instead of
+          // Inert while partially covering: extending the marker over the rest of the selection
+          // needs an editor operation that does not exist yet, and `insertMarker` would nest
+          // instead of
           // extending. Falling through to the branches below would do exactly that. Also excludes
           // 'all': that case is handled above, and without a `removeCharacterMarker` (the option is
           // typed optional) it would otherwise fall through here and nest a duplicate marker.
