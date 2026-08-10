@@ -144,11 +144,11 @@ const alignedOverlayTree = () => (
 );
 
 /**
- * Coherent geometry for the alignment path: the probe (now appended to the hidden off-editor
- * measuring element, never to the `.para` itself) sits `probeOffset` (default 14) px below the
- * line's top edge, and the trigger's 16px icon is centred 16px below the bar container's top edge.
- * With the default offset, the bar's baseline term is 14 - 16 = -2, so the bar sits 2px above the
- * line's top.
+ * Coherent geometry for the alignment path: the probe (appended to the hidden off-editor measuring
+ * element, never to the `.para` itself) sits `probeOffset` (default 14) px below the line's top
+ * edge, and the trigger's 16px icon is centred 16px below the bar container's top edge. With the
+ * default offset, the bar's baseline term is 14 - 16 = -2, so the bar sits 2px above the line's
+ * top.
  *
  * `probeOffset` is a parameter (not hardcoded) so a test can vary the BASELINE the stub reports
  * while leaving `fontSize`/`lineHeight` (read via `getComputedStyle`, which this stub does not
@@ -382,9 +382,9 @@ describe('CharacterMarkerBarOverlay', () => {
   });
 
   it('anchors to the first paragraph before the user has placed a caret', () => {
-    // Discoverability is the point of the feature ("Need floating context menu UI to pick
-    // character styles"); a bar that appears only after you click into the text is not
-    // discoverable. stubRects reports 120 for any .para, so the first paragraph reads as 120.
+    // Discoverability is the point of the feature: a bar that appears only after you click into the
+    // text is not discoverable. stubRects reports 120 for any .para, so the first paragraph reads
+    // as 120.
     renderOverlay();
     expect(barContainer().style.top).toBe('120px');
   });
@@ -567,8 +567,8 @@ describe('CharacterMarkerBarOverlay', () => {
 
   it('applies the alignment on the way back from hidden, having cached nothing while hidden', async () => {
     // Mounting hidden never reaches the measurement at all: `recompute`'s visibility guard returns
-    // before any rect is read (see the sibling `rectReadCount === 0` assertion in the pre-existing
-    // hidden-view tests above), so nothing is cached while hidden and the measurement happens for the
+    // before any rect is read (see the sibling `rectReadCount === 0` assertion in the hidden-view
+    // tests above), so nothing is cached while hidden and the measurement happens for the
     // first time on the visibility flip instead — if it had cached a stale 0 here, the bar would stay
     // top-aligned for the life of the web view. (`measureBaselineOffset`'s own `undefined`-not-`0`
     // contract for the no-layout case is covered by its unit tests in `editor-dom.util.test.ts`, not
@@ -583,5 +583,69 @@ describe('CharacterMarkerBarOverlay', () => {
     });
 
     expect(barContainer().style.top).toBe('118px');
+  });
+});
+
+// The mount site (`platform-scripture-editor.web-view.tsx`) renders this overlay in BOTH interface
+// modes and gates only the `bar` slot, precisely so React never sees a different element type at
+// that tree position. These tests hold that contract from the overlay's side.
+describe('CharacterMarkerBarOverlay — empty bar slot (Power mode)', () => {
+  const emptyOverlayTree = () => (
+    <CharacterMarkerBarOverlay>
+      <div className="editor-input usfm">
+        <p className="para usfm_p">The LORD is my shepherd</p>
+      </div>
+    </CharacterMarkerBarOverlay>
+  );
+
+  it('renders the editor children but no bar container', () => {
+    render(emptyOverlayTree());
+
+    expect(screen.getByText('The LORD is my shepherd')).toBeInTheDocument();
+    expect(screen.queryByTestId('character-marker-bar-container')).not.toBeInTheDocument();
+  });
+
+  it('reads no geometry at all when there is nothing to position', async () => {
+    stubRects(120);
+    render(emptyOverlayTree());
+
+    // Not merely "renders nothing visible": with no bar the overlay must do no measuring work
+    // either. Without the early return in `recompute` this mount would read rects on mount and
+    // again on every caret move, in a mode where the result is discarded.
+    await putCaretInParagraph();
+
+    expect(rectReadCount).toBe(0);
+  });
+
+  it('keeps the editor subtree mounted when the bar slot fills in', async () => {
+    // The regression this exists for: the mount site used to choose between two DIFFERENT wrapper
+    // components by mode. React reconciles by element type, so that swap unmounted and remounted
+    // `children` — taking Lexical's undo history and scroll position with it — on every mode change,
+    // including the first resolution of `platform.interfaceMode`, which starts at its 'simple'
+    // default before the stored value arrives. Asserting on the DOM node's IDENTITY is what makes
+    // this falsifiable: a remount produces a new node even though the markup is identical.
+    stubRects(120);
+    const { rerender } = render(emptyOverlayTree());
+    const editorBefore = screen.getByText('The LORD is my shepherd');
+
+    await act(async () => {
+      rerender(overlayTree());
+    });
+
+    expect(screen.getByText('The LORD is my shepherd')).toBe(editorBefore);
+    expect(screen.getByTestId('character-marker-bar-container')).toBeInTheDocument();
+  });
+
+  it('keeps the editor subtree mounted when the bar slot empties', async () => {
+    stubRects(120);
+    const { rerender } = render(overlayTree());
+    const editorBefore = screen.getByText('The LORD is my shepherd');
+
+    await act(async () => {
+      rerender(emptyOverlayTree());
+    });
+
+    expect(screen.getByText('The LORD is my shepherd')).toBe(editorBefore);
+    expect(screen.queryByTestId('character-marker-bar-container')).not.toBeInTheDocument();
   });
 });

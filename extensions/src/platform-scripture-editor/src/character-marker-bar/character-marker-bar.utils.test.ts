@@ -50,9 +50,9 @@ describe('computeBarTop', () => {
     expect(computeBarTop(makeRect(100, 118), makeEl(0, 800), makeEl(0, 800), 13)).toBe(113);
   });
 
-  it('treats a missing baseline offset as zero, preserving the previous behavior', () => {
-    // This is what keeps every pre-existing computeBarTop test — and the bar's behavior before the
-    // first successful measurement — unchanged.
+  it('treats a missing baseline offset as zero', () => {
+    // The offset is unmeasurable until the view has layout, so the bar must anchor to the line box's
+    // top edge in the meantime rather than to an unknown baseline.
     expect(computeBarTop(makeRect(100, 118), makeEl(0, 800), makeEl(0, 800))).toBe(100);
   });
 

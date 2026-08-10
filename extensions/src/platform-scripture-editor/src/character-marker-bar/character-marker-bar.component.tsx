@@ -1,10 +1,8 @@
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { LanguageStrings } from 'platform-bible-utils';
 import { MutableRefObject, useMemo } from 'react';
-import {
-  CharacterMarkerControl,
-  CharacterMarkerToolbar,
-} from '../character-marker-control.component';
+import { CharacterMarkerControl } from '../character-marker-control/character-marker-control.component';
+import { CharacterMarkerToolbar } from '../character-marker-control/character-marker-toolbar.component';
 import { CharacterMarkerSelection } from '../character-marker-coverage.utils';
 import { useCharacterMarkerState } from '../use-character-marker-state.hook';
 import { useEditorSelectionVersion } from './use-editor-selection-version.hook';
@@ -25,8 +23,12 @@ export type CharacterMarkerBarProps = {
    * The project text's direction, as the editor itself is given it. Passed on to the menu so it
    * mirrors its alignment in an RTL project — see `menuDirection` on `CharacterMarkerControl` for
    * why this cannot be inferred from the document.
+   *
+   * Required for the same reason `menuDirection` is: the popover is portaled outside every element
+   * this app gives a `dir`, so an omitted direction resolves physically and an RTL project's menu
+   * runs off the iframe's inline-start edge.
    */
-  textDirection?: 'ltr' | 'rtl';
+  textDirection: 'ltr' | 'rtl';
   /** Localized strings for the control, its tooltips, and the menu. */
   localizedStrings: LanguageStrings;
   /**
@@ -52,7 +54,9 @@ export type CharacterMarkerBarProps = {
  *   `[key: string]`. TypeScript does not consider a `LocalizeKey`-keyed type assignable to a
  *   `string`-keyed one, so the bar takes the `LanguageStrings` every caller actually has — which is
  *   also what `useCharacterMarkerState` requires — and rebuilds it as a plain string-keyed object
- *   for the control.
+ *   for the control. Typing `CharacterMarkerControlLocalizedStrings` as `LanguageStrings` would
+ *   delete both the clone and the memo below; left alone here because the control is shared with
+ *   the toolbar placement and the change belongs with it, not with this placement.
  *
  * The Simple-mode gate lives in `CharacterMarkerToolbar`, so nothing renders in Power mode.
  */
@@ -121,11 +125,11 @@ export function CharacterMarkerBar({
         // an RTL project's 200px menu would run off the iframe's inline-start edge.
         menuDirection={textDirection}
         // `tw:overflow-hidden` is the STRUCTURAL guarantee that the trigger's CONTENT can never paint
-        // over project text — not a leftover workaround for a label that no longer exists. The 64px
-        // reservation fits the chrome with ZERO slack, so any future content change (a second icon, a
-        // wider chevron, a localized badge) would otherwise spill inline-start the moment the
-        // arithmetic stops holding. With this class, spill is impossible regardless of the
-        // arithmetic. Do not remove it on the reasoning that an icon-only trigger has nothing to clip.
+        // over project text. The 64px reservation fits the chrome with ZERO slack, so any future
+        // content change (a second icon, a wider chevron, a localized badge) would otherwise spill
+        // inline-start the moment the arithmetic stops holding. With this class, spill is impossible
+        // regardless of the arithmetic. Do not remove it on the reasoning that an icon-only trigger
+        // has nothing to clip.
         //
         // The Button's own `focus-visible:ring-3` is a box-shadow on the button's box, so
         // `overflow-hidden` does not clip it — the 3px it paints outside the border fits inside

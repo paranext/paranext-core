@@ -49,12 +49,18 @@ import { CharacterMarkerBar } from './character-marker-bar.component';
 
 const STRINGS = {
   '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel%': 'Character marker',
+  // The separators are localized rather than concatenated in code, so the accessible name and the
+  // visible label both come out of these patterns. Values match `contributions/localizedStrings.json`.
+  '%webView_platformScriptureEditor_characterMarkerControl_ariaLabel_format%': '{name}: {value}',
+  '%webView_platformScriptureEditor_characterMarkerControl_label_format%':
+    '{marker} - {description}',
   '%webView_platformScriptureEditor_characterMarkerControl_mixed%': '(mixed)',
   '%webView_platformScriptureEditor_characterMarkerControl_none%': '(none)',
   '%webView_platformScriptureEditor_characterMarkerControl_noMarkersTooltip%':
     'No character markers are available here.',
-  '%webView_platformScriptureEditor_characterMarkerMenu_searchPlaceholder%':
-    'Search to add a character style.',
+  // Lives in `platform-bible-react` beside its `_insert`/`_paragraph` siblings, not in this
+  // extension — all three fill the same shared `MarkerMenu` search field.
+  '%markerMenu_searchPlaceholder_character%': 'Search character markers',
   '%webView_platformScriptureEditor_characterMarkerMenu_removeMarker%': 'Remove character marker',
   '%webView_platformScriptureEditor_syncEditBlocked_banner%': 'Editing paused',
   // `usfmMarkers.bd.description`. The editor web view loads every marker description (see
@@ -81,6 +87,7 @@ function renderBar(overrides: Partial<Parameters<typeof CharacterMarkerBar>[0]> 
       blockMarker="p"
       contextMarker="bd"
       isSyncBlocked={false}
+      textDirection="ltr"
       localizedStrings={STRINGS}
       {...overrides}
     />,

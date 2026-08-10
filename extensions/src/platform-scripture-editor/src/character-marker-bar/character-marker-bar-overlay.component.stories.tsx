@@ -6,8 +6,8 @@ import { getLocalizedStrings } from '../../../../../.storybook/localization.util
 import {
   CHARACTER_MARKER_CONTROL_STRING_KEYS,
   CharacterMarkerControl,
-  CharacterMarkerToolbar,
-} from '../character-marker-control.component';
+} from '../character-marker-control/character-marker-control.component';
+import { CharacterMarkerToolbar } from '../character-marker-control/character-marker-toolbar.component';
 import { CharacterMarkerBarOverlay } from './character-marker-bar-overlay.component';
 
 const STRINGS = getLocalizedStrings([
@@ -76,6 +76,9 @@ function BarHarness() {
         onOpen={() => {}}
         onClose={() => {}}
         localizedStrings={STRINGS}
+        // The story runs LTR. Required by the control so a placement cannot leave the menu to
+        // resolve its alignment physically — see `menuDirection` on `CharacterMarkerControlProps`.
+        menuDirection="ltr"
         // Mirrors character-marker-bar.component.tsx, so the story shows the real trigger: filling
         // and clipping inside the reserved gutter rather than shrink-wrapping its label.
         className="tw:h-8 tw:w-full tw:min-w-0 tw:justify-between tw:overflow-hidden tw:px-2"

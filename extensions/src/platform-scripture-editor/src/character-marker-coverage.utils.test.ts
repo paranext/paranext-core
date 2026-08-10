@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { computeCharacterMarkerCoverage } from './character-marker-coverage.utils';
 
-// `kolo \bd Mulu\bd* rest` — U3's worked example. Paths:
+// `kolo \bd Mulu\bd* rest` — a partially marked paragraph. Paths:
 //   $.content[2].content[1]             → 'kolo '
 //   $.content[2].content[2].content[0]  → 'Mulu' (inside \bd)
 //   $.content[2].content[3]             → ' rest'
@@ -130,7 +130,7 @@ const MULU = '$.content[2].content[2].content[0]';
 const REST = '$.content[2].content[3]';
 
 describe('computeCharacterMarkerCoverage', () => {
-  it("reports 'partial' and uncovered text for U3's kolo + \\bd Mulu\\bd* selection", () => {
+  it("reports 'partial' and uncovered text for a kolo + \\bd Mulu\\bd* selection", () => {
     const coverage = computeCharacterMarkerCoverage(USJ_PARTIAL_BD, {
       start: { jsonPath: KOLO, offset: 0 },
       end: { jsonPath: MULU, offset: 4 },
