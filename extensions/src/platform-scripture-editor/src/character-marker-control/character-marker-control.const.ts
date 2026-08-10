@@ -28,17 +28,15 @@ export const NONE_KEY: LocalizeKey =
 export const NO_MARKERS_TOOLTIP_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_characterMarkerControl_noMarkersTooltip%';
 /**
- * The key name is declared in `MARKER_MENU_STRING_KEYS` in
- * `lib/platform-bible-react/src/components/advanced/marker-menu.component.tsx`, not in this
- * extension: it and its two siblings (`_insert`, `_paragraph`) are placeholders for the same shared
- * `MarkerMenu` search field, and the editor web view already preloads `MARKER_MENU_STRING_KEYS`, so
- * it needs no separate registration here.
+ * Declared in `MARKER_MENU_STRING_KEYS` (`platform-bible-react`), not in this extension: this key
+ * and its `_insert`/`_paragraph` siblings are placeholders for the same shared `MarkerMenu` search
+ * field, and the editor web view already preloads `MARKER_MENU_STRING_KEYS`, so it needs no
+ * separate registration here.
  *
- * Its shipped VALUE, unlike the `%webView_platformScriptureEditor_characterMarkerControl_*%` keys
- * above, does NOT live in `platform-bible-react` or in this extension's
- * `contributions/localizedStrings.json` — it ships in the platform shell's own locale assets
- * (`assets/localization/en.json`, `es.json`) beside its siblings, because it is a platform-shell
- * string, not an extension-namespaced one.
+ * Being a platform-shell string rather than an extension-namespaced one, its value ships in
+ * `assets/localization/en.json` and `es.json` beside those siblings — not in this extension's
+ * `contributions/localizedStrings.json`. Guarded by
+ * `src/shared/data/shipped-locale-assets.test.ts`.
  */
 export const SEARCH_PLACEHOLDER_KEY: LocalizeKey = '%markerMenu_searchPlaceholder_character%';
 /** Reuses the shipped sync-blocked wording rather than adding a second phrasing of it. */
