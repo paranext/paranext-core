@@ -1856,14 +1856,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return (
       <>
         {workaround}
-        {/* Gated on !isPowerMode so the overlay is ABSENT from the Power tree, not merely hidden by
-            CSS — matching how `editor-container-simple` is applied below, so the bar and its reserved
-            gutter space appear and disappear together. */}
-        {isPowerMode ? (
-          <ParagraphMarkerTooltipOverlay>{editorTree}</ParagraphMarkerTooltipOverlay>
-        ) : (
-          <CharacterMarkerBarOverlay
-            bar={
+        {/* The overlay is mounted in BOTH modes and only its `bar` slot is gated, so the element type
+            at this position never changes. Choosing between two different wrappers here would make
+            React unmount and remount `editorTree` whenever the mode changes — including the very
+            first resolution of `platform.interfaceMode`, which starts at its 'simple' default before
+            the stored value arrives — taking Lexical's undo history and the scroll position with it.
+            An empty slot renders nothing beside the editor.
+
+            `hasGutterParaMarkers` is checked here because it is the OTHER half of the condition the
+            gutter reservation in `_simple-mode.scss` matches on
+            (`.editor-container-simple .usfm.psc-gutter-markers`). Gating the bar on the same two
+            things the CSS does keeps the bar and the space it occupies inseparable: if this view ever
+            stops using the paragraph-structure preset — a Simple view-option chooser would do it —
+            the reservation and the bar disappear together instead of leaving the bar painting over
+            project text. The reservation cannot simply be broadened to match `!isPowerMode` alone,
+            because `_simple-mode.scss` is compiled into the resource-text and model-text panels too,
+            and both apply `editor-container-simple` unconditionally to an editor that has no gutter
+            markers. */}
+        <CharacterMarkerBarOverlay
+          bar={
+            isPowerMode || !viewOptions.hasGutterParaMarkers ? undefined : (
               <CharacterMarkerBar
                 editorRef={editorRef}
                 getSelection={getSelection}
@@ -1876,11 +1888,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 textDirection={textDirectionEffective}
                 localizedStrings={localizedStrings}
               />
-            }
-          >
-            <ParagraphMarkerTooltipOverlay>{editorTree}</ParagraphMarkerTooltipOverlay>
-          </CharacterMarkerBarOverlay>
-        )}
+            )
+          }
+        >
+          <ParagraphMarkerTooltipOverlay>{editorTree}</ParagraphMarkerTooltipOverlay>
+        </CharacterMarkerBarOverlay>
       </>
     );
   }

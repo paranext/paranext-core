@@ -43,8 +43,14 @@ export type CharacterMarkerBarOverlayProps = {
   /**
    * The bar to pin to the inline-end edge, tracking the active line. Deliberately a slot: this
    * component knows nothing about character markers, so the same shell could anchor anything.
+   *
+   * Optional so a caller that has no bar to show — Power mode — can keep mounting this component
+   * rather than swapping it out for a different element. React reconciles by element type, so
+   * choosing between two different wrappers at the same tree position would unmount and remount the
+   * editor subtree on every interface-mode change, losing Lexical's undo history and the scroll
+   * position. Leaving the slot empty changes only what is rendered beside the editor.
    */
-  bar: ReactNode;
+  bar?: ReactNode;
 };
 
 /**
@@ -132,6 +138,12 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
   const isVisibleRef = useRef(isViewVisible);
 
   const recompute = useCallback(() => {
+    // No bar in the slot (Power mode): there is nothing to position. Checked before the hidden-view
+    // deferral below so a hidden Power-mode view never accumulates a catch-up it has no use for.
+    // Read off the DOM rather than the `bar` prop because this callback is deliberately
+    // identity-stable (see `isVisibleRef`), and `bar` is a fresh JSX element on every render.
+    if (!barContainerRef.current) return;
+
     // Hidden case: rc-dock hides an inactive tab's pane with `display: none`, which keeps this
     // iframe's JavaScript running but removes all layout — every rect read returns zero. Measuring
     // here would store a garbage top and flash it on tab activation, so defer instead and catch up
@@ -332,49 +344,59 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
   return (
     <div ref={positionAnchorRef} className="tw:relative">
       {children}
-      {/* Off-editor measuring element for the baseline probe (see `measuringElementRef`): a sibling
-          of the editor, never a descendant, so the probe never touches Lexical's contenteditable. */}
-      <span
-        ref={measuringElementRef}
-        aria-hidden="true"
-        style={{
-          position: 'absolute',
-          visibility: 'hidden',
-          pointerEvents: 'none',
-          top: 0,
-          left: 0,
-        }}
-      />
-      {/* pointer-events-none on the container so the reserved gutter column stays click-through to
-          the editor; the bar itself re-enables them. */}
-      <div
-        ref={barContainerRef}
-        data-testid="character-marker-bar-container"
-        className="tw:absolute tw:pointer-events-none"
-        // insetInlineEnd is a string ('0px'), not the number 0: React only appends a `px` unit to
-        // numeric style values when they are non-zero (see setValueForStyles in react-dom), so a
-        // bare `0` renders as the unitless string "0" instead of "0px".
-        //
-        // width is CONSTRAINED to the reserved gutter, rather than left to shrink-wrap the bar.
-        // Shrink-wrapping grows inline-START — over project text — the moment the bar's content is
-        // wider than expected, which a longer localized `(mixed)`/`(none)` label makes likely. With
-        // a fixed width the bar clips inside the gutter instead, so "never overlaps text" stays a
-        // property of the construction rather than arithmetic on English strings.
-        //
-        // The value comes from the single `--psc-character-marker-bar-width` declaration in
-        // `_simple-mode.scss` (on `.editor-container-simple`, an ancestor of both this container and
-        // the `.usfm` element that reserves the space), so the reservation and the bar can never
-        // drift apart. No fallback value is given on purpose: a literal here would be that second
-        // source of truth.
-        style={{
-          top,
-          insetInlineEnd: '0px',
-          width: 'var(--psc-character-marker-bar-width)',
-          zIndex: Z_INDEX_OVERLAY,
-        }}
-      >
-        <div className="tw:pointer-events-auto">{bar}</div>
-      </div>
+      {/* Rendered only when there is a bar to position. `children` stays the FIRST child either way,
+          so React keeps the editor subtree mounted across an interface-mode change — see the `bar`
+          prop. The scroll/resize listeners above stay attached regardless: `bar` is a new element
+          every render, so making the effect depend on it would re-wire them constantly, and
+          `recompute` already returns immediately when the slot is empty. */}
+      {bar !== undefined && (
+        <>
+          {/* Off-editor measuring element for the baseline probe (see `measuringElementRef`): a
+              sibling of the editor, never a descendant, so the probe never touches Lexical's
+              contenteditable. */}
+          <span
+            ref={measuringElementRef}
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              visibility: 'hidden',
+              pointerEvents: 'none',
+              top: 0,
+              left: 0,
+            }}
+          />
+          {/* pointer-events-none on the container so the reserved gutter column stays click-through
+              to the editor; the bar itself re-enables them. */}
+          <div
+            ref={barContainerRef}
+            data-testid="character-marker-bar-container"
+            className="tw:absolute tw:pointer-events-none"
+            // insetInlineEnd is a string ('0px'), not the number 0: React only appends a `px` unit to
+            // numeric style values when they are non-zero (see setValueForStyles in react-dom), so a
+            // bare `0` renders as the unitless string "0" instead of "0px".
+            //
+            // width is CONSTRAINED to the reserved gutter, rather than left to shrink-wrap the bar.
+            // Shrink-wrapping grows inline-START — over project text — the moment the bar's content
+            // is wider than expected, which a longer localized `(mixed)`/`(none)` label makes likely.
+            // With a fixed width the bar clips inside the gutter instead, so "never overlaps text"
+            // stays a property of the construction rather than arithmetic on English strings.
+            //
+            // The value comes from the single `--psc-character-marker-bar-width` declaration in
+            // `_simple-mode.scss` (on `.editor-container-simple`, an ancestor of both this container
+            // and the `.usfm` element that reserves the space), so the reservation and the bar can
+            // never drift apart. No fallback value is given on purpose: a literal here would be that
+            // second source of truth.
+            style={{
+              top,
+              insetInlineEnd: '0px',
+              width: 'var(--psc-character-marker-bar-width)',
+              zIndex: Z_INDEX_OVERLAY,
+            }}
+          >
+            <div className="tw:pointer-events-auto">{bar}</div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

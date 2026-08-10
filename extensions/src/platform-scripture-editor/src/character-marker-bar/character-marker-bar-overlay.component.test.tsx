@@ -585,3 +585,67 @@ describe('CharacterMarkerBarOverlay', () => {
     expect(barContainer().style.top).toBe('118px');
   });
 });
+
+// The mount site (`platform-scripture-editor.web-view.tsx`) renders this overlay in BOTH interface
+// modes and gates only the `bar` slot, precisely so React never sees a different element type at
+// that tree position. These tests hold that contract from the overlay's side.
+describe('CharacterMarkerBarOverlay — empty bar slot (Power mode)', () => {
+  const emptyOverlayTree = () => (
+    <CharacterMarkerBarOverlay>
+      <div className="editor-input usfm">
+        <p className="para usfm_p">The LORD is my shepherd</p>
+      </div>
+    </CharacterMarkerBarOverlay>
+  );
+
+  it('renders the editor children but no bar container', () => {
+    render(emptyOverlayTree());
+
+    expect(screen.getByText('The LORD is my shepherd')).toBeInTheDocument();
+    expect(screen.queryByTestId('character-marker-bar-container')).not.toBeInTheDocument();
+  });
+
+  it('reads no geometry at all when there is nothing to position', async () => {
+    stubRects(120);
+    render(emptyOverlayTree());
+
+    // Not merely "renders nothing visible": with no bar the overlay must do no measuring work
+    // either. Without the early return in `recompute` this mount would read rects on mount and
+    // again on every caret move, in a mode where the result is discarded.
+    await putCaretInParagraph();
+
+    expect(rectReadCount).toBe(0);
+  });
+
+  it('keeps the editor subtree mounted when the bar slot fills in', async () => {
+    // The regression this exists for: the mount site used to choose between two DIFFERENT wrapper
+    // components by mode. React reconciles by element type, so that swap unmounted and remounted
+    // `children` — taking Lexical's undo history and scroll position with it — on every mode change,
+    // including the first resolution of `platform.interfaceMode`, which starts at its 'simple'
+    // default before the stored value arrives. Asserting on the DOM node's IDENTITY is what makes
+    // this falsifiable: a remount produces a new node even though the markup is identical.
+    stubRects(120);
+    const { rerender } = render(emptyOverlayTree());
+    const editorBefore = screen.getByText('The LORD is my shepherd');
+
+    await act(async () => {
+      rerender(overlayTree());
+    });
+
+    expect(screen.getByText('The LORD is my shepherd')).toBe(editorBefore);
+    expect(screen.getByTestId('character-marker-bar-container')).toBeInTheDocument();
+  });
+
+  it('keeps the editor subtree mounted when the bar slot empties', async () => {
+    stubRects(120);
+    const { rerender } = render(overlayTree());
+    const editorBefore = screen.getByText('The LORD is my shepherd');
+
+    await act(async () => {
+      rerender(emptyOverlayTree());
+    });
+
+    expect(screen.getByText('The LORD is my shepherd')).toBe(editorBefore);
+    expect(screen.queryByTestId('character-marker-bar-container')).not.toBeInTheDocument();
+  });
+});

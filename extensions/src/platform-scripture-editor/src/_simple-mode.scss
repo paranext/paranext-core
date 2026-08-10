@@ -62,16 +62,20 @@
 // column to make room for a control they never see. The React `!isPowerMode` gate cannot cover a
 // CSS selector, so the scoping must happen here.
 //
-// The real matching condition is `.editor-container-simple` AND `.psc-gutter-markers` — TWO gates,
-// not one. The bar itself is gated only on the first (`!isPowerMode` in
-// platform-scripture-editor.web-view.tsx). The second happens to be true throughout Simple mode
-// today only because `getViewOptionsForType` hardcodes the paragraph-structure preset — which sets
-// `hasGutterParaMarkers` — for BOTH Simple view types (see
-// platform-scripture-editor.web-view.tsx, `getViewOptionsForType`). RISK: if Simple ever gains a
-// view-option chooser and a user turns gutter paragraph markers off, this reservation disappears
-// while the bar keeps rendering, which is precisely the text overlap this design exists to
-// prevent. Whoever makes view options user-selectable in Simple must move this reservation onto a
-// selector the bar's own condition guarantees.
+// The matching condition is `.editor-container-simple` AND `.psc-gutter-markers` — TWO gates, and
+// BOTH are required. Do not broaden this to `.editor-container-simple .usfm`: this stylesheet is
+// compiled into every web view in this extension (via `_editor-overrides.scss`), and both
+// resource-text-panel.web-view.tsx and model-text-panel.component.tsx apply
+// `editor-container-simple` UNCONDITIONALLY to an editor that sets no `hasGutterParaMarkers` — so
+// the broader selector would reserve 64px of dead space in the Bible Texts / Commentaries panel and
+// the model text panel, neither of which has a character-marker bar. `.psc-gutter-markers` is what
+// keeps this rule off those two editors. (Broadening would also drop the RTL rule below from
+// specificity (0,4,0) to (0,3,0), tying `_usj-nodes.scss`'s mirror rule and losing on source order.)
+//
+// The bar is gated on the SAME two conditions in platform-scripture-editor.web-view.tsx —
+// `!isPowerMode` and `viewOptions.hasGutterParaMarkers` — so the bar and the space it occupies
+// cannot come apart. Keep them in step: a bar that renders where this rule does not match paints
+// over project text, which is the one failure this design exists to prevent.
 //
 // Reservation is unconditional within Simple mode, not tied to whether the bar is currently drawn:
 // reserving only while visible would reflow the whole text column as the caret enters and leaves
