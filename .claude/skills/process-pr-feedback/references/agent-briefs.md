@@ -31,8 +31,8 @@ role 4:
 - **Do not re-delegate your whole assignment** to another agent. You are the dedicated agent.
 - **Write your phase output to the packet, and summarise it in your final message.** Both, every
   time. The packet file is the artifact the next phase reads and the one that survives this
-  session; the final message is what the orchestrator reads to decide what to do next, and it is
-  the only part of your work that reaches the gate. Each role below names the packet path it
+  session; the final message is what the orchestrator reads to decide what happens next, and what
+  it works from when it composes the gate. Each role below names the packet path it
   owns and what its final message must carry. A file with no summary stalls the run; a summary
   with no file loses the phase when the session dies. (The general "no report files" instinct is
   right about *ad-hoc* reports nobody asked for — it does not apply to the packet paths named
