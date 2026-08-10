@@ -87,7 +87,12 @@ because the file does not exist yet is how an anchor error survives all the way 
 and the line is an ADDED line in that PR's own diff (base...head)."""
 import json, re, subprocess, sys
 
-items = [i for i in json.load(open("bodies.json", encoding="utf-8"))
+# Absolute, like every path in this skill — the working directory resets between shell calls, and
+# a relative "bodies.json" either fails outright or silently verifies an older batch it found in
+# whatever directory it was launched from.
+PACKET = "/abs/path/to/repo/.feedback-packets/<pr>-<date>"
+
+items = [i for i in json.load(open(f"{PACKET}/bodies.json", encoding="utf-8"))
          if i["kind"] == "inline"]
 HEADS = {2649: "<full-40-char-sha>"}          # gh pr view <n> --json headRefOid
 BASES = {2649: "<base-branch-name>"}          # gh pr view <n> --json baseRefName
@@ -115,10 +120,19 @@ for it in items:
         fails.append(f"{it['item']}: anchor mismatch at {path}:{line}\n"
                      f"    draft:   {expected!r}\n    at head: {actual!r}")
 
-    # 2. the line must be an ADDED line in this PR's own diff
-    mb = sh("git", "merge-base", f"origin/{BASES[pr]}", head).strip()
+    # 2. the line must be an ADDED line in this PR's own diff.
+    # Wrapped like the `git show` above: a base branch that was renamed or never fetched leaves
+    # origin/<base> absent, and an uncaught CalledProcessError here is a traceback instead of the
+    # "ANCHOR VERIFY: FAIL" line the caller keys on — killing every remaining anchor's check too.
+    try:
+        mb = sh("git", "merge-base", f"origin/{BASES[pr]}", head).strip()
+        diff_lines = sh("git", "diff", "--unified=0", mb, head, "--", path).split("\n")
+    except subprocess.CalledProcessError as exc:
+        fails.append(f"{it['item']}: cannot diff PR #{pr} against origin/{BASES[pr]} "
+                     f"(fetch it, or fix BASES) - {exc}")
+        continue
     added, new_ln = set(), None
-    for dl in sh("git", "diff", "--unified=0", mb, head, "--", path).split("\n"):
+    for dl in diff_lines:
         h = re.match(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", dl)
         if h:
             new_ln = int(h.group(1))
