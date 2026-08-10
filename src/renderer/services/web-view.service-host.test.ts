@@ -441,6 +441,178 @@ describe('loadLayout when the saved-layout request fails', () => {
   });
 });
 
+describe('loadLayout discards a load a newer one has superseded', () => {
+  /**
+   * Let every already-scheduled continuation run. A superseded load produces no observable call, so
+   * there is nothing to wait FOR — drain the queue instead and then assert nothing arrived. Several
+   * turns because the tail of a load awaits the saved-layout request and then the supplement
+   * flags.
+   */
+  async function settle() {
+    for (let turn = 0; turn < 5; turn += 1)
+      // Draining is inherently sequential
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+  }
+
+  test('a slow initial load must not replace the layout of the mode the user switched to', async () => {
+    let interfaceMode = 'power';
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    // Hold the initial load's saved-layout request open, the way a slow (or retrying) main process
+    // would: it takes seconds, and the user can act during them
+    let answerFirstGet: ((response: unknown) => void) | undefined;
+    let getLayoutCalls = 0;
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType !== 'windowLayout:get') return undefined;
+      getLayoutCalls += 1;
+      if (getLayoutCalls > 1) return { kind: 'empty' };
+      return new Promise((resolve) => {
+        answerFirstGet = resolve;
+      });
+    });
+
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
+    registerDockLayout(dockLayout);
+    await vi.waitFor(() => expect(getLayoutCalls).toBe(1));
+
+    // The user switches to simple mode while the initial load is still waiting on main. That load
+    // completes and swaps in the static simple layout.
+    interfaceMode = 'simple';
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    await interfaceModeCallback('simple');
+    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).toContain('anchor-tab-w2');
+    const loadsBeforeTheLateAnswer = loadedLayouts.length;
+
+    // Main finally answers the first request — with the power layout the user has already left
+    if (!answerFirstGet) throw new Error('the saved-layout request was never made');
+    answerFirstGet({ kind: 'entry', layout: layoutWithTab('stale-power-tab') });
+    await settle();
+
+    // The stale answer must not reach the dock: loading it would replace the whole layout, wiping
+    // whatever the user has done since the switch
+    expect(loadedLayouts).toHaveLength(loadsBeforeTheLateAnswer);
+    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).not.toContain('stale-power-tab-w2');
+
+    // Keep the dangling dock-layout registration from leaking into the next test
+    dockLayout.onLayoutChangeRef.current = undefined;
+  });
+
+  test('a superseded load leaves the interface-mode cache on the newer load’s reading', async () => {
+    // The cache decides whether `saveLayout` pushes at all, so a stale writer turns a power-mode
+    // session's layout changes into silent no-ops
+    let interfaceMode = 'simple';
+    let releaseFirstModeRead: (() => void) | undefined;
+    let modeReads = 0;
+    mocks.settingsGet.mockImplementation(async (key: string) => {
+      if (key !== 'platform.interfaceMode') return false;
+      modeReads += 1;
+      if (modeReads > 1) return interfaceMode;
+      // Park the initial load on its very first read, before it can seed the cache
+      await new Promise<void>((resolve) => {
+        releaseFirstModeRead = resolve;
+      });
+      return 'simple';
+    });
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    respondToGetLayout({ kind: 'empty' });
+
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { dockLayout } = makeDockLayout(layoutWithAnchor());
+    registerDockLayout(dockLayout);
+    await vi.waitFor(() => expect(releaseFirstModeRead).toBeDefined());
+
+    // The user switches to power mode; that load runs to completion and leaves the cache on 'power'
+    interfaceMode = 'power';
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    await interfaceModeCallback('power');
+
+    // Only now does the initial load's mode read come back — with 'simple', the stale reading
+    if (!releaseFirstModeRead) throw new Error('the initial mode read never happened');
+    releaseFirstModeRead();
+    await settle();
+
+    // Power-mode layout changes must still be pushed
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('after'), undefined, undefined);
+    expect(layoutPushes()).toHaveLength(1);
+  });
+
+  test('a superseded load must not declare the window fallback-bound after a newer load succeeded', async () => {
+    // The initial load's saved-layout request retries for seconds, which is exactly long enough for
+    // a mode round-trip to start and finish inside it. If the initial load's eventual failure still
+    // latched the fallback flag, it would hold every layout push for the rest of the session — on
+    // behalf of a load whose answer was already thrown away.
+    let interfaceMode = 'power';
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    let failLastAttempt: ((reason: Error) => void) | undefined;
+    let getLayoutCalls = 0;
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType !== 'windowLayout:get') return undefined;
+      getLayoutCalls += 1;
+      // The initial load's first two attempts fail outright; its third hangs until this test fails
+      // it, so the load that supersedes it (call 4) can finish first
+      if (getLayoutCalls <= 2) throw new Error('transport is down');
+      if (getLayoutCalls === 3)
+        return new Promise((_resolve, reject) => {
+          failLastAttempt = reject;
+        });
+      return { kind: 'entry', layout: layoutWithTab('saved-tab') };
+    });
+
+    vi.useFakeTimers();
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { dockLayout } = makeDockLayout(layoutWithAnchor());
+    registerDockLayout(dockLayout);
+    // Drive the two retry delays so the initial load reaches its final, hanging attempt
+    await vi.advanceTimersByTimeAsync(60_000);
+    vi.useRealTimers();
+    expect(getLayoutCalls).toBe(3);
+
+    // The user round-trips through simple mode and back while that attempt hangs. The load that
+    // brings them back to power gets a real answer, so this window is NOT on a fallback layout.
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    interfaceMode = 'simple';
+    await interfaceModeCallback('simple');
+    interfaceMode = 'power';
+    await interfaceModeCallback('power');
+    expect(getLayoutCalls).toBe(4);
+
+    // Only now does the superseded load give up
+    if (!failLastAttempt) throw new Error('the final attempt was never made');
+    failLastAttempt(new Error('transport is down'));
+    await settle();
+
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('after'), undefined, undefined);
+    expect(layoutPushes()).toHaveLength(1);
+  });
+});
+
 describe('saveLayout pushes this window’s layout to the main process', () => {
   beforeEach(() => {
     mocks.settingsGet.mockImplementation(async (key: string) =>

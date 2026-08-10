@@ -845,18 +845,38 @@ async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEnt
 }
 
 /**
+ * Which layout load is the current one. Bumped by every {@link loadLayout} call so a load can tell
+ * that another one started after it and everything it has read is stale.
+ *
+ * Only the no-argument path can go stale, but it goes stale badly: it reads the interface mode,
+ * then asks the main process for this window's saved layout (a round trip that retries, so
+ * seconds), and ends by replacing the dock's ENTIRE contents. An interface-mode switch during that
+ * stretch otherwise finishes first and is then overwritten by the earlier load's answer — the
+ * layout for the mode the user just left, wiping everything they have done since. A load that finds
+ * itself superseded therefore drops its answers instead of applying them.
+ */
+let layoutLoadGeneration = 0;
+
+/**
  * Loads layout information into the dock layout.
  *
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
  *   the persisted layout information and loads it into the dock layout.
  */
 async function loadLayout(layout?: LayoutInfo): Promise<void> {
+  layoutLoadGeneration += 1;
+  const thisGeneration = layoutLoadGeneration;
+  /** Whether a load started after this one, making everything this one has read stale */
+  const isSuperseded = () => thisGeneration !== layoutLoadGeneration;
   const dockLayoutVar = await getDockLayout();
   // Capture the web views open before the load so close events can be emitted for the ones the
   // new layout drops (see `emitCloseEventsForWebViewsRemovedByLayoutLoad`)
   const webViewsBeforeLoad = dockLayoutVar.getAllWebViewDefinitions();
   if (layout) {
     // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
+    // Applied unconditionally: the caller handed us the layout, so there is nothing here that a
+    // later load could make stale — and bumping the generation above is what lets this call cancel
+    // an in-flight no-argument load that would otherwise land on top of it.
     // NOTE: we intentionally do NOT apply the default-layout supplement here — a caller passing an
     // explicit layout owns its full contents. If a future "reset to default layout" path routes
     // through here and should include supplement tabs, merge `getEnabledSupplementEntries()` in too.
@@ -873,18 +893,34 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   // - Simple mode: always the static `simpleLayout`. `saveLayout` no-ops in simple mode, so changes
   //   there are ephemeral and never clobber the saved power layout.
   const interfaceMode = await settingsService.get('platform.interfaceMode');
+  if (isSuperseded()) {
+    // A newer load owns the cache and the dock now. Seeding the cache with this reading would tell
+    // `saveLayout` the wrong mode, which either drops the user's power-mode layout changes on the
+    // floor or lets simple-mode changes clobber their saved power layout.
+    logger.debug('Dropping a layout load that a newer one superseded while it read the mode');
+    return;
+  }
   // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
   // subsequent `saveLayout`) sees the current mode without another settings round-trip.
   currentInterfaceMode = interfaceMode;
+  const persistedLayout =
+    interfaceMode === 'simple'
+      ? dockLayoutVar.simpleLayout
+      : await getPersistedLayout(dockLayoutVar.testLayout, isSuperseded);
+  if (persistedLayout === undefined) {
+    // The only reason `getPersistedLayout` withholds a layout: a newer load started while it was
+    // waiting on the main process. Withholding rather than answering "empty" is what keeps this
+    // from being a dock wipe if the checkpoint below is ever moved.
+    logger.debug(
+      'Dropping a layout load that a newer one superseded while it read the saved layout',
+    );
+    return;
+  }
   // Every layout gets its web view ids scoped to this window, including one restored from
   // persistence: a saved entry's ids carry the window id of the session that saved them (window
   // ids are not stable across restarts), and the legacy pre-multi-window layout carries unscoped
   // ids. Re-scoping replaces the suffix rather than stacking another one, so it is safe on both.
-  const layoutToLoad = withWindowScopedWebViewIds(
-    interfaceMode === 'simple'
-      ? dockLayoutVar.simpleLayout
-      : await getPersistedLayout(dockLayoutVar.testLayout),
-  );
+  const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
   // Supplement tabs join the layout below, after the scoping pass above has already run over it, so
   // scope each supplement tab itself — its id comes from a build-baked file and would otherwise be
   // the same in every window. Scoping here rather than re-scoping the merged layout also keeps the
@@ -894,6 +930,13 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
     ...entry,
     tab: withWindowScopedWebViewIdInTab(entry.tab),
   }));
+  if (isSuperseded()) {
+    // Point of no return: everything below replaces the dock's whole contents, and the saved-layout
+    // request above can take seconds. The newer load has already loaded, or is about to load, the
+    // layout that belongs there.
+    logger.debug('Dropping a layout load that a newer one superseded before it reached the dock');
+    return;
+  }
   if (enabledEntries.length === 0) {
     // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
     dockLayoutVar.loadLayout(layoutToLoad);
@@ -979,9 +1022,19 @@ let hasLoggedHeldLayoutPushes = false;
  * whichever window hit the failure — and pushes are held so the fallback cannot replace the user's
  * real saved entry (see {@link isRunningOnFallbackLayout}).
  *
+ * Answers `undefined` — and only — when the load this read belongs to was superseded while it
+ * waited. That is deliberately not a layout: an "empty layout" answer would be indistinguishable
+ * from a genuine `empty`, leaving nothing but the caller's own staleness checkpoint between a
+ * superseded load and a dock wiped clean.
+ *
  * @param defaultLayout Layout to fall back to when the legacy path has nothing
+ * @param isSuperseded Whether the load this read belongs to has since been replaced by a newer one
+ * @returns The layout to load, or `undefined` if this load was superseded
  */
-async function getPersistedLayout(defaultLayout: LayoutInfo): Promise<LayoutInfo> {
+async function getPersistedLayout(
+  defaultLayout: LayoutInfo,
+  isSuperseded: () => boolean,
+): Promise<LayoutInfo | undefined> {
   let response: WindowLayoutGetResponse | undefined;
   for (let attempt = 1; attempt <= GET_PERSISTED_LAYOUT_ATTEMPTS; attempt += 1) {
     try {
@@ -1002,6 +1055,11 @@ async function getPersistedLayout(defaultLayout: LayoutInfo): Promise<LayoutInfo
         await wait(GET_PERSISTED_LAYOUT_RETRY_DELAY_MS);
     }
   }
+  // The retries above take seconds, which is long enough for a whole interface-mode round trip to
+  // start and finish inside them. Only the current load may say what this window is running on: a
+  // superseded load's answer is discarded either way, and letting its failure latch the flag would
+  // hold every layout push for the rest of the session on behalf of a load that no longer counts.
+  if (isSuperseded()) return undefined;
   if (!response) {
     isRunningOnFallbackLayout = true;
     logger.warn(
