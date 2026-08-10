@@ -53,6 +53,11 @@ because the failures it catches are invisible in per-commit review.
    worthless if it is read afterwards. Write down the decision and the list of approvers per
    branch.
 
+   `reviews` is every review ever left, so a reviewer who requested changes and later approved
+   appears twice and the list can name someone whose current stance is not approval. That is
+   harmless for detecting a *dismissal* — the before/after comparison is like-for-like — but use
+   `latestReviews` instead if you want the list to mean "who approves right now".
+
 ## Rebase, don't merge
 
 Rebase the stack bottom-up, each branch `--onto` the new tip of the one below:
@@ -163,9 +168,11 @@ Only after the battery passes, and only after the G2 approval that covers pushin
   (`gh pr edit <n> --add-reviewer <login>`) and report it in the same breath as the push result.
   Both silences are costly — the reviewer sees an approval they gave apparently thrown away, and
   the author sees a PR that looks ready to merge and is not. Whether a given repo dismisses is a
-  branch-protection setting, so **check the state rather than reasoning about the config**: the
-  before/after pair answers it for this repo today, at no cost, and a wrong assumption either way
-  is silent.
+  branch-protection rule or ruleset — **per base branch, not per repo** — so check the state
+  rather than reasoning about the config, and check it for **every** branch in the stack rather
+  than generalising from the first: a wrong assumption either way is silent. Dismissal is also
+  processed asynchronously, so a clean "after" read taken immediately is suggestive, not proof;
+  if the stack matters, re-read once more at the end of the push sequence.
 
 ## Reporting
 

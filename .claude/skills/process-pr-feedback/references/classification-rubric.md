@@ -53,7 +53,8 @@ is, and any `ASK` whose answer commits us to something.
 
 ### Cost is a pair
 
-Every non-INVALID item carries **`(edit-cost, verification-cost)`**, each on the same scale:
+Every **claim** item that is not `INVALID` carries **`(edit-cost, verification-cost)`**, each on
+the same scale:
 **XS** (a line or a word), **S** (one file, no design), **M** (several files or a test rewrite),
 **L** (a design change or a new API surface). G1 sizing and `--fast-lane` both key on the pair,
 and `--fast-lane` requires XS on **both** halves.
@@ -67,6 +68,11 @@ one:
 | Flip a boolean default on a startup path | `(XS, L)` | The edit is one word; proving it needs a build, an app launch, and the reviewer's scenario reproduced with a negative control. |
 | Rewrite a test to assert behaviour instead of implementation | `(M, XS)` | Sizeable edit; the suite verifies itself. |
 | Add a field to a public API surface | `(S, M)` | Small edit, but `build:types`, the two-surface experimental marker, and the wire contract all need checking. |
+
+Non-claim items (`ASK` / `OFFER` / `STATUS`) get **no cost pair** unless the user's ruling turns
+one into work — a cost pair on *"is this intentional?"* is noise that makes the real ones harder
+to scan. If an `OFFER` is accepted or an `ASK` resolves into a fix, it is sized then, as the item
+it became.
 
 A single number collapses to the edit cost every time, because the edit is the part in front of
 you. That is what turns "an XS fix, ten minutes" into an afternoon — and, worse, what lets a fix
@@ -208,7 +214,9 @@ no commit, no push, no PR or comment mutation.
 **Establish the checkout's branch before reading anything**, and say so at the top of the report:
 
 ```bash
-git rev-parse --abbrev-ref HEAD && git status --short
+git rev-parse --abbrev-ref HEAD   # literally "HEAD" when detached — pair it with the SHA
+git rev-parse HEAD
+git status --short
 ```
 
 **Whenever HEAD is not the ref the verdict is about, or the tree is dirty, every read is

@@ -63,7 +63,8 @@ Every run writes one packet, and **never reuses another run's**:
   04-fix-reports/        P3   one report per fix
   05-self-review.md      P4   /code-review findings + adjudication
   06-verification.md     P5   gate battery results, e2e, live verification
-  07-replies.md          P6   reply drafts, one per thread, with target ids
+  07-replies.d/          P6   one file per reply-drafter agent (concurrent writes)
+  07-replies.md          P6   the assembled drafts — orchestrator concatenates 07-replies.d/
   g2-approval.md         G2   the user's approval, verbatim and dated — what P7 is allowed to do
   bodies.json            P7   drafts extracted to JSON — the exact bytes that will post
   08-posting-log.txt     P7   append-only, write-ahead: status, item, pr, kind, id, url, time
@@ -75,10 +76,13 @@ Every run writes one packet, and **never reuses another run's**:
 **`shared-vocabulary.md`** is small and easy to skip, and skipping it costs a public reply.
 It records, for this round, which item labels are **shared vocabulary** — ids the reviewer
 assigned themselves, or labels from a document they were actually sent — and which exist only
-inside this packet. `references/reply-conventions.md` rule 6 governs what belongs in a reply
-body; P7's dry-run check in `references/posting-mechanics.md` reads this file as its
-allow/deny configuration rather than guessing. Write it at P2, while the inventory's provenance
-is still in front of you; reconstructing it at P7 from reply drafts is how a packet-internal id
+inside this packet. `references/reply-conventions.md` rule 6 governs what belongs in a reply body.
+
+P7's dry-run check in `references/posting-mechanics.md` is where it bites: that check's deny-list
+is **transcribed by hand** from this file's Internal list — nothing parses it — so write the
+entries in a form that transcribes cleanly, and expect the poster to quote what it transcribed.
+Write it at **P2**, while the inventory's provenance is still in front of you, and treat it as
+read-only from then on; reconstructing it at P7 from the reply drafts is how a packet-internal id
 reaches a reviewer.
 
 A PR often takes two rounds in one day, so the date alone does not separate them: add `-2`,
@@ -100,9 +104,10 @@ grep -n '^\.feedback-packets/$' .prettierignore .prettierignorerun  # the two Pr
 ```
 
 Read the output: three lines, one naming each file. An exit code is not the check here — `grep`
-across two files succeeds when only one of them matches. This repo ships all three, so on a
-current checkout the check is a formality — which is exactly why it has to be mechanical rather
-than assumed, and why it is two commands and not a paragraph of trust. A checkout that
+across two files succeeds when only one of them matches. This repo has shipped all three since
+the skill landed (2026-08), so on a current checkout the check is a formality — which is exactly
+why it has to be mechanical rather than assumed, and why it is two commands and not a paragraph
+of trust. A checkout that
 predates them, a fork, or a worktree with a modified ignore set turns the packet into untracked
 noise in every `git status` for the rest of the run, and into a `format:check` failure at P5,
 discovered at the point in the run where the tempting fix is the destructive one. If an entry is
@@ -124,9 +129,9 @@ resumed run may be crossing a gate the previous session set up.
 
 **Completeness is not "the output path exists"**, and it is not something to eyeball either. A
 half-written `02-triage.md` and a finished one are the same `ls` entry; `01-verification/` and
-`04-fix-reports/` are directories that parallel agents fill incrementally, so a session that died
-after three of five verifier reports leaves a directory that looks finished. Both cases hand
-`--resume` a phase it will treat as done.
+`04-fix-reports/` and `07-replies.d/` are directories that parallel agents fill incrementally, so
+a session that died after three of five verifier reports leaves a directory that looks finished.
+Both cases hand `--resume` a phase it will treat as done.
 
 So **every phase ends with the orchestrator writing `_phase-<n>-complete` at the packet root**,
 whose contents name what that phase produced and what the next phase is owed — for example
@@ -144,7 +149,9 @@ Three properties make this work, and each one has a failure behind it:
 - **A `--scout-only` run also writes `_scout-complete`** at the point it stops, recording that
   the run ended *at G1 by design* rather than dying there. Without it, a later session finds a
   packet with `_phase-2-complete` and no rulings file and cannot tell a finished scout from an
-  interactive run that crashed on the way to the gate — and those want opposite responses.
+  interactive run that crashed on the way to the gate. Those want opposite responses: a finished
+  scout is **presented at G1** as it stands, while a crashed run needs P0–P2 re-checked for what
+  the crash truncated before anything is presented at all.
 
 ---
 
@@ -238,32 +245,52 @@ revision the reviewer was looking at. Plus the base-state record below.
 own base, and record it at the top of `00-inventory.md`:
 
 ```bash
-gh pr view <pr> --json mergeable,mergeStateStatus,baseRefName,headRefName
+gh pr view <pr> --json state,mergeable,mergeStateStatus,baseRefName,headRefName
+gh api repos/paranext/paranext-core/compare/<base>...<head> --jq '{status,ahead_by,behind_by}'
 ```
 
-Read the two fields for **base state**, and ignore the ones that are about something else:
+**Both commands, always. `mergeStateStatus` alone cannot answer this question** — that is the
+trap this check exists to avoid, not a refinement of it. GitHub only reports `BEHIND` when the
+base branch's protection requires branches to be up to date before merging. Where it does not,
+a branch that is many commits behind reports `BLOCKED` (review required) or `CLEAN`, and an agent
+reading only the merge state concludes the base is fine. Measured on this repo, 2026-08-10: of
+100 open PRs, **`BEHIND` appeared zero times** — the states seen were `BLOCKED` 53, `DIRTY` 42,
+`CLEAN` 4, `UNSTABLE` 1 — while `compare/main...process-pr-feedback-skill` reported
+`behind_by: 2` on a PR whose merge state read `BLOCKED`.
+`git rev-list --count <head>..origin/<base>` gives the same number locally and is the better
+command when the branch is already fetched.
 
-| Reading | Means | This round |
+| Signal | Means | This round |
 |---|---|---|
+| `behind_by > 0` (compare API), or `git rev-list --count <head>..origin/<base>` > 0 | The base moved under it — what a squash-merge below it does | **Rebase is a prerequisite** |
 | `mergeable: CONFLICTING`, or `mergeStateStatus: DIRTY` | The branch conflicts with its base | **Rebase is a prerequisite** |
-| `mergeStateStatus: BEHIND` | The base moved under it — what a squash-merge below it does | **Rebase is a prerequisite** |
-| `mergeable: UNKNOWN` | GitHub has not finished computing it | Re-query until it settles; do not proceed on it |
-| `mergeStateStatus: BLOCKED` / `UNSTABLE` / `HAS_HOOKS` | Required reviews, draft status, failing checks — not the base | Not a base-state problem — do not act on it here |
+| `mergeable: UNKNOWN` on an **open** PR | GitHub has not finished computing it | Re-query (below) — do not read it as "fine" |
+| `mergeStateStatus: BLOCKED` / `UNSTABLE` / `HAS_HOOKS` / `BEHIND` | Required reviews, draft status, failing checks — and, where it appears at all, behind-ness the compare already told you about | Not the base-state answer. Never conclude "base is fine" from these |
 
-(`mergeStateStatus` is `DIRTY · UNKNOWN · BLOCKED · BEHIND · UNSTABLE · HAS_HOOKS · CLEAN`; there
-is no `DRAFT` value — a draft PR reads `BLOCKED`, which is why the last row matters. `mergeable`
-is `MERGEABLE · CONFLICTING · UNKNOWN`.)
+*(As of 2026-08-10 `mergeStateStatus` returns `DIRTY · UNKNOWN · BLOCKED · BEHIND · UNSTABLE ·
+HAS_HOOKS · CLEAN`; `DRAFT` is in the schema but deprecated and no longer returned, so a draft PR
+reads `BLOCKED`. `mergeable` is `MERGEABLE · CONFLICTING · UNKNOWN`. Re-introspect rather than
+trusting this list: `gh api graphql -f query='{__type(name:"MergeStateStatus"){enumValues{name}}}'`.)*
 
 Where a rebase is a prerequisite, it is **not** a task the round can carry alongside the fixes. It
 precedes fix-work and it changes G1 sizing, because every cost estimate is an estimate against the
-wrong tree until it happens. Record it in the packet as a required step **with an owner** — it is
-a decision item at G1 like any other, presented per *Presenting a gate*. Do not let fix commits
-land on a conflicted branch: they inherit the conflict, the reviewer sees a diff that will not
-merge, and the rebase that eventually happens replays them through the conflict anyway.
+wrong tree until it happens — so **size those items as provisional at P2 and say so at G1**, and
+re-check them once the rebase lands rather than treating the first estimate as settled. Record the
+rebase in the packet as a required step **with a named owner**, and note that **no phase of this
+skill performs it**: P3 is forbidden from rebasing on its own initiative and P6 is about the
+branches *above*. It is either the user's to do, or a task they explicitly hand back — the G1 item
+must make the reader choose one, per *Presenting a gate*. Do not let fix commits land on a
+conflicted branch: they inherit the conflict, the reviewer sees a diff that will not merge, and
+the rebase that eventually happens replays them through the conflict anyway.
 
-`UNKNOWN` deserves its own line because it is the one that reads as harmless: it is computed
-asynchronously, so "no conflict was reported" and "no conflict exists" arrive as the same output
-and only one of them is a fact.
+`mergeable: UNKNOWN` deserves its own line because it is the one that reads as harmless: it is
+computed asynchronously, so "no conflict was reported" and "no conflict exists" arrive as the same
+output and only one of them is a fact. Re-query **a bounded number of times** — say five, a few
+seconds apart — and if it has not settled, record it as unresolved and put it on the G1 list
+rather than blocking. Two carve-outs stop that loop from running forever: a **merged or closed**
+PR reports `UNKNOWN` permanently and legitimately (verified on merged PRs #2648 and #2634,
+2026-08-10), which is why `state` is in the query above; and the `behind_by` half of the check
+never returns `UNKNOWN` at all, so it stands on its own while `mergeable` is still settling.
 
 **Keep this distinct from the restack.** Getting **this** branch cleanly onto **its** base is a
 *precondition*, handled here at P0. Restacking the branches **above** this one onto this branch is
@@ -290,9 +317,16 @@ Sweep **all** surfaces, not just the obvious one:
 `pulls/<pr>/comments` nor `issues/<pr>/comments` returns resolution state, so a round-2 run that
 uses REST alone re-collects every thread round 1 answered: each one burns a verifier, reaches
 G1, and gets a second reply posted into a thread the reviewer closed. Only GraphQL carries it.
-`.claude/commands/triage-feedback.md` already does this query and this filter — read it and
-reuse it rather than writing a new one. It yields, per thread, the GraphQL node `id`,
-`isResolved`, `isOutdated`, and the `databaseId` of each comment inside.
+`.claude/commands/triage-feedback.md` already carries this query and this filter — **read the
+file and copy the query out of it**; do not paraphrase it, and do not write a new one. It yields,
+per thread, the GraphQL node `id`, `isResolved`, `isOutdated`, and the `databaseId` of each
+comment inside.
+
+**Never invoke it as `/triage-feedback`.** It is a slash command as well as a document, and its
+own later steps post replies and run `resolveReviewThread` with no gate in between. Running it
+would post under the user's name before G2 (guardrail 1) and would break `--scout-only`'s
+read-only contract (guardrail 4). The same applies wherever this skill points at that file: it is
+a source to read, never a step to run.
 
 Keep that node `id` in the inventory. It is what P8 needs to resolve the thread after replying,
 and it cannot be recovered from a REST comment id without re-querying.
@@ -339,6 +373,21 @@ The rules:
   covers the rest: items whose thread stayed open, items that arrived off-PR, and items the
   reviewer restated in new words. **A restated item is still a handled item** — match on
   substance, not on wording.
+
+**The one test that decides it is a timestamp, not a judgment call.** Compare when the reviewer
+wrote the item against when our reply posted or the fix landed:
+
+- Written **before** we answered → they had not seen the answer. Same item, `already-handled`,
+  context.
+- Written **after** we answered → they read the answer, or saw the fix, and are raising it
+  anyway. **That is this round's feedback and among the most important in it** — a reviewer
+  telling us our fix or our reasoning did not satisfy them. It gets a fresh item id and full
+  verification, and the earlier exchange is context *for* it rather than a reason to skip it.
+
+Get this backwards and the convention becomes a filter that discards exactly the feedback that
+matters most, silently, while reporting the round complete. When the timestamps are ambiguous,
+treat the item as live: re-verifying something already settled costs a verifier, and dismissing a
+live objection costs the reviewer's trust.
 
 ### P1 — Verify
 
@@ -413,10 +462,17 @@ The triage must separate, in its own sections:
   and its reply target. An unanswered question from a reviewer is a debt, and it is invisible in
   a packet organised only around fixes.
 
-End with a numbered **decision list ordered by consequence**, every entry written per
-*Presenting a gate* above — context, question, lettered options, recommendation — and everything
-that needs no decision moved below it under **"No decision needed — FYI"**. Nothing on the
-decision list is actioned without an answer.
+End with a numbered **decision list ordered by consequence**, and everything that needs no
+decision below it under **"No decision needed — FYI"**. Nothing on the decision list is actioned
+without an answer.
+
+Write the decision list in *Presenting a gate* form — context, question, lettered options,
+recommendation — because that is the form G1 needs and re-authoring it there loses the
+verification detail that was in front of you here. **G1 still presents rather than pastes**: the
+surrounding triage is written for a reader with `01-verification/` open, so the gate takes these
+entries and drops everything around them. If the entries are genuinely self-contained, that
+presentation is a copy of the list and nothing else — which is the intended outcome, not a
+shortcut.
 
 Write `shared-vocabulary.md` in this phase too, while each item's provenance is still in front of
 you: which labels the reviewer assigned themselves or has been sent, and which exist only in this
@@ -426,13 +482,16 @@ packet.
 
 Present the round's decisions and stop. Do not begin any implementation, branch, or commit in the
 same turn. The user rules on: what gets fixed, where each fix lands, every design preference,
-every cross-reviewer conflict, any base-state rebase P0 found to be a prerequisite, and any
-verdict P1 left conditional on a measurement.
+every cross-reviewer conflict, every `ASK` and `OFFER` whose answer is theirs to give, any
+base-state rebase P0 found to be a prerequisite, every open surface question P0 recorded, and
+any verdict P1 left conditional on a measurement. Each of those is an item **on the decision
+list** — none of them is a footnote, an aside, or an FYI entry.
 
 **Present it per *Presenting a gate*** — every item self-contained for a cold reader, pure
-information under its own FYI heading. `02-triage.md` is the input to that presentation, not the
-presentation itself: pasting it into the conversation does not cross this gate, because the triage
-is written for a reader who has the verification reports open and the user does not.
+information under its own FYI heading. P2 already wrote the decision list in that form, so this
+is *presenting the list*, not pasting the file: everything around it in `02-triage.md` — the
+per-item sections, the evidence, the classifications — is written for a reader with
+`01-verification/` open, and the user does not have it open. Carry the list; leave the apparatus.
 
 State the house rule when presenting:
 
@@ -443,8 +502,10 @@ that file, not to conversation memory — a resumed session has no memory of the
 
 **`--fast-lane`.** G1 may merge into G2 only when the round qualifies on **all four** counts:
 
-1. every item classified `VALID` — a round carrying `ASK` or `OFFER` items does not qualify,
-   because those need an answer from the user before a reply can go out,
+1. every item needing work classified `VALID`. `INVALID` and `ALREADY-SATISFIED` items are
+   compatible with fast-lane — they generate a reply, not a fix — as are `STATUS` items, which
+   need only an acknowledgement. `ASK` and `OFFER` items disqualify the round outright, because
+   their answer is the user's to give and a reply cannot go out without it,
 2. every fix XS on **both halves of the cost pair** — XS to edit *and* XS to verify,
 3. no design-preference items, and
 4. no cross-reviewer conflicts and no tension with anything already posted, and no base-state
@@ -463,8 +524,10 @@ item, and that statement is what the user reads at G2.
 A fast-lane run has no G1, so there is no `03-rulings.md` when P3 starts. P3 takes that
 qualifying statement in `02-triage.md` as its input instead, and `03-rulings.md` is written
 after G2 from the approval that covered both halves. Record `fast-lane` at the top of
-`02-triage.md`: without it a `--resume` finds no rulings file, infers G1 was never crossed, and
-re-runs the gate over fixes that are already implemented and committed.
+`02-triage.md` **and in `_phase-2-complete`**: `--resume` keys on the completion markers, so
+without that note it finds `_phase-3-complete` with no rulings file behind it, reads the gap as a
+phase that ran out of order, and re-opens a gate over fixes that are already implemented and
+committed.
 
 ### P3 — Implement
 
@@ -546,7 +609,8 @@ The tooling for that, all of it already in this repo:
 ### P6 — Integrate
 
 **In:** everything above.
-**Out:** commits; restacked branches (not yet pushed); `07-replies.md`.
+**Out:** commits; restacked branches (not yet pushed); `07-replies.d/` assembled into
+`07-replies.md`.
 
 1. **Commit** per `CLAUDE.md` § Git & PR Conventions — including all supporting files (plans,
    docs, configs), never excluding them.
@@ -558,19 +622,24 @@ The tooling for that, all of it already in this repo:
    approvals on new commits, force-pushing a restacked branch drops every existing approving
    review on its PR — silently, as a side effect of a push the run made for unrelated reasons. So
    for every branch this round will force-push, record `gh pr view <n> --json reviewDecision,reviews`
-   **before** the push — that is step 4 of `references/restack-battery.md`, taken alongside the
-   ahead/behind counts and for the same reason — and **re-check it after**. If an
+   **here in P6** — step 4 of `references/restack-battery.md`, taken alongside the ahead/behind
+   counts and for the same reason. The push itself happens in P7, after G2, and **re-checks it
+   there**; this phase's job is only to capture the "before". If an
    approval was dismissed, say so at once and re-request review from exactly the reviewers who had
    approved (`gh pr edit <n> --add-reviewer <login>`), then report it — a PR that reads
    `APPROVED` before the round and `REVIEW_REQUIRED` after, with nobody told, looks to the
    reviewer like their approval was thrown away and to the author like the PR is ready to merge.
    Whether the repo dismisses is a setting, so check the state rather than reasoning about the
    config: the before/after pair answers it for this repo, today, for free.
-3. **Draft replies** into `07-replies.md` — `reply-drafter` agents, brief in
-   `references/agent-briefs.md`, conventions in `references/reply-conventions.md`. Each draft
-   carries its target: an inline thread id (`pulls/<pr>/comments/<id>/replies`), or "issue
-   comment on #<pr>" when no inline thread exists. Verify each id against the live API; a
-   thread id from an earlier document may be stale.
+3. **Draft replies** — `reply-drafter` agents, brief in `references/agent-briefs.md`,
+   conventions in `references/reply-conventions.md`. Each agent writes its **own** file under
+   `07-replies.d/`; the orchestrator concatenates them into `07-replies.md` once all have
+   reported, and that assembled file is what G2 presents and P7 extracts from. Several drafters
+   run at once, so a single shared path would mean interleaved or lost bodies in the one phase
+   whose output posts publicly. Each draft carries its target: an inline thread id
+   (`pulls/<pr>/comments/<id>/replies`), or "issue comment on #<pr>" when no inline thread
+   exists. Verify each id against the live API; a thread id from an earlier document may be
+   stale.
 4. **Record the residue.** Declined and deferred items go somewhere durable. In order of
    preference:
    1. an existing, **not-yet-started** ticket the user names — cite its key in the reply;
