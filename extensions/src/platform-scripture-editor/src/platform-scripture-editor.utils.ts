@@ -17,7 +17,7 @@ import type PapiFrontend from '@papi/frontend';
 // Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
 // only `papi`, so this package must never become a runtime import here (see the note at the top of
 // this file). `USJ_VERSION` is used solely under `typeof`, so `import type` keeps it erased.
-import type { Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import type { MarkerContent, Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
   formatReplacementString,
@@ -39,7 +39,6 @@ import type { ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import type { MutableRefObject } from 'react';
 import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
-import type { MarkerContent, Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
