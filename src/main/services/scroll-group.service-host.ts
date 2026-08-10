@@ -215,11 +215,19 @@ let hasOwnScrollGroupState = Object.keys(scrRefs).length > 0;
  * rewritten; pass `false` to skip that second serialize + write when only the ref changed — the
  * common same-project navigation case, where the source id is unchanged. Defaults to `true` so
  * callers that can't tell stay correct.
+ *
+ * The key backing {@link hasOwnScrollGroupState} is written LAST, and that order is load-bearing
+ * rather than incidental. There is no atomicity across two keys, so a failure between them strands
+ * one of the pair — and whichever key the gate reads decides which way that half-written state is
+ * read at the next start. Written last, a stranded write leaves the gate closed and the whole write
+ * is simply retried. Written first, it leaves the gate open over state that was never finished, and
+ * a migration retry is then refused rather than repeated. The theme host's marker key is last for
+ * the same reason.
  */
 function persistScrRefsNow(sourceProjectIdsChanged = true) {
-  localStorage.setItem(SCR_REFS_STORAGE_KEY, serialize(scrRefs));
   if (sourceProjectIdsChanged)
     localStorage.setItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY, serialize(scrRefSourceProjectIds));
+  localStorage.setItem(SCR_REFS_STORAGE_KEY, serialize(scrRefs));
 }
 
 /**
@@ -579,7 +587,9 @@ export async function migrateStoredScrollGroupState(
   // records "already migrated" first can leave a profile permanently flagged as done with nothing
   // migrated — the user's last reference gone with no way to ask for it again. This order fails the
   // other way: an interrupted migration is simply retried at the next start, which is idempotent
-  // because `hasOwnScrollGroupState` only becomes true once something actually landed.
+  // because `hasOwnScrollGroupState` only becomes true once something actually landed. That last
+  // part is only true while `persistScrRefsNow` writes the key that flag is read from last — see
+  // its docblock before changing the order in there.
   try {
     takePendingPersist();
     persistScrRefsNow();
