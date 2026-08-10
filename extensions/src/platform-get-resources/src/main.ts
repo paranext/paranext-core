@@ -172,6 +172,9 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
       `getLocalNonDblResources: ${allMetadata.length} total projects, ` +
         `${allMetadata.filter((m) => m.isEditable === false).length} with isEditable=false`,
     );
+    logger.warn(
+      `getLocalNonDblResources: all projects: ${allMetadata.map((m) => `${m.id}(editable=${m.isEditable})`).join(', ')}`,
+    );
 
     // Exclude any resource whose project ID matches a DBL catalog entry (by exact projectId or by
     // the startsWith(dblEntryUid) convention Paratext uses when naming project directories).
