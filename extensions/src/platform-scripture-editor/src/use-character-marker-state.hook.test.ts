@@ -249,7 +249,9 @@ describe('useCharacterMarkerState — menu items', () => {
 
     const removeRow = result.current.markerMenuItems.find((item) => item.marker === undefined);
     expect(removeRow).toBeDefined();
-    expect(removeRow?.selectionState).toBe('partial');
+    // No selection affordance on a markerless action row — see the generator's note on why
+    // `selectionState` would render a misleading `aria-checked` here.
+    expect(removeRow?.selectionState).toBeUndefined();
     removeRow?.action();
     expect(removeCharacterMarker).toHaveBeenCalledWith();
   });
@@ -297,8 +299,9 @@ describe('useCharacterMarkerState — menu items', () => {
 
     const removeRow = result.current.markerMenuItems.find((item) => item.marker === undefined);
     expect(removeRow).toBeDefined();
-    // Every selected character carries at least the outer `wj` marker, so nothing is uncovered.
-    expect(removeRow?.selectionState).toBe('none');
+    // Every selected character carries at least the outer `wj` marker — the case that used to
+    // render `aria-checked="false"` ("not checked") beside an action certain to remove markers.
+    expect(removeRow?.selectionState).toBeUndefined();
     removeRow?.action();
     expect(removeCharacterMarker).toHaveBeenCalledWith();
   });

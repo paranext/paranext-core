@@ -267,7 +267,7 @@ describe('generateCharacterMarkerMenuListItems', () => {
     );
   });
 
-  it('offers a remove-all row instead of a single remove row when coverage is mixed', () => {
+  it('offers the catch-all remove row instead of a single remove row when coverage is mixed', () => {
     const { ref } = makeMockEditorRef();
     const removeCharacterMarker = vi.fn();
     const items = generateCharacterMarkerMenuListItems(ref, noop, {}, PARENT, {
@@ -278,7 +278,7 @@ describe('generateCharacterMarkerMenuListItems', () => {
     const commandRows = items.filter((item) => !item.marker);
     expect(commandRows).toHaveLength(1);
     expect(commandRows[0].title).toBe(
-      '%webView_platformScriptureEditor_characterMarkerMenu_removeAllMarkers%',
+      '%webView_platformScriptureEditor_characterMarkerMenu_removeMarkers%',
     );
   });
 
@@ -314,7 +314,7 @@ describe('generateCharacterMarkerMenuListItems', () => {
     });
 
     expect(items.find((item) => !item.marker)?.title).toBe(
-      '%webView_platformScriptureEditor_characterMarkerMenu_removeAllMarkers%',
+      '%webView_platformScriptureEditor_characterMarkerMenu_removeMarkers%',
     );
   });
 
@@ -387,9 +387,12 @@ describe('generateCharacterMarkerMenuListItems', () => {
     expect(items.find((item) => item.marker === 'bd')?.selectionState).toBe('all');
     expect(items.find((item) => item.marker === 'nd')?.selectionState).toBe('partial');
     expect(items.find((item) => item.marker === 'it')?.selectionState).toBe('none');
-    // The remove row reads 'partial' while any of the selection is unmarked, 'none' when every
-    // character carries a marker — the behavior the state hook used to stamp.
-    expect(items.find((item) => !item.marker)?.selectionState).toBe('partial');
+    // The remove row carries NO selectionState, even though coverage is available. `MarkerMenu`
+    // maps the prop onto `aria-checked` and a checkbox affordance, and it means "how much of the
+    // selection this MARKER covers" — a question a markerless action row does not pose. Stamping
+    // it here would announce "not checked" on a fully-marked selection, beside an action that is
+    // certain to remove markers.
+    expect(items.find((item) => !item.marker)?.selectionState).toBeUndefined();
   });
 
   it('leaves selectionState undefined when there is no coverage', () => {

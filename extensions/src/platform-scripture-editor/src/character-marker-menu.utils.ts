@@ -24,8 +24,17 @@ import {
 
 const REMOVE_CHARACTER_MARKER_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_characterMarkerMenu_removeMarker%';
-const REMOVE_ALL_CHARACTER_MARKERS_KEY: LocalizeKey =
-  '%webView_platformScriptureEditor_characterMarkerMenu_removeAllMarkers%';
+/**
+ * The catch-all row's label, shown when the selection carries more than one character marker or
+ * mixes marked and unmarked text.
+ *
+ * Deliberately NOT "Remove all character markers". One argument-less call removes the innermost
+ * marker of each covered run, so a nested stack takes one pass per layer — a label promising "all"
+ * would overstate what a single activation does. "Remove character markers" stays true in every
+ * case.
+ */
+const REMOVE_CHARACTER_MARKERS_KEY: LocalizeKey =
+  '%webView_platformScriptureEditor_characterMarkerMenu_removeMarkers%';
 
 /**
  * Localize keys used by {@link generateCharacterMarkerMenuListItems}. Spread these into the editor
@@ -33,7 +42,7 @@ const REMOVE_ALL_CHARACTER_MARKERS_KEY: LocalizeKey =
  */
 export const CHARACTER_MARKER_MENU_STRING_KEYS = Object.freeze([
   REMOVE_CHARACTER_MARKER_KEY,
-  REMOVE_ALL_CHARACTER_MARKERS_KEY,
+  REMOVE_CHARACTER_MARKERS_KEY,
 ] as const);
 
 /**
@@ -231,20 +240,26 @@ export function generateCharacterMarkerMenuListItems(
   if (!sortedMarkerMenuItems.length || !hasSomethingToRemove || !removeCharacterMarker)
     return sortedMarkerMenuItems;
 
-  // 'partial' when some of the selection is unmarked, 'none' when every character carries a
-  // marker. 'all' cannot arise: a remove row is only emitted when something is covered.
-  let removeRowSelectionState: 'partial' | 'none' | undefined;
-  if (coverage) removeRowSelectionState = coverage.hasUncovered ? 'partial' : 'none';
-  // Removing everything the selection covers is ONE argument-less call, not a loop: the editor
-  // walks each covered run and removes that run's innermost marker in a single update, so undo
-  // stays a single step. A nested OUTER marker survives that pass; invoking the row again clears
-  // it. Looping here would produce one undo entry per marker.
+  // Neither remove row carries a `selectionState`, deliberately. `MarkerMenu` maps that prop onto
+  // `aria-checked` ('all' → true, 'partial' → 'mixed', 'none' → false) and renders a matching
+  // checkbox affordance, and the prop's contract is "how much of the selection THIS MARKER covers".
+  // A remove row has no marker — that absence is exactly how `MarkerMenu` decides to draw an icon
+  // instead of a marker code — so any value here answers a question the row does not pose. The
+  // wrong answer is the common one: on a fully-marked selection the honest reading of coverage is
+  // `'none'` (nothing is unmarked), which renders as `aria-checked="false"` and is announced as
+  // "not checked" beside an action that is fully available and certain to remove markers.
+  //
+  // Removing the character markers a selection covers is ONE argument-less call, not a loop: the
+  // editor walks each covered run and removes that run's innermost marker in a single update, so
+  // undo stays a single step. Looping here would produce one undo entry per layer, and its
+  // termination condition is not readable synchronously (`getUsj()` returns a cached ref the
+  // non-discrete update does not refresh). A nested OUTER marker therefore survives the pass — the
+  // per-marker rows are the exact path for it, since the editor matches a NAMED marker at any
+  // nesting depth while `undefined` matches only the innermost.
   const removeRow: MarkerMenuItem = isMixedCoverage
     ? {
-        title:
-          localizedStrings[REMOVE_ALL_CHARACTER_MARKERS_KEY] ?? REMOVE_ALL_CHARACTER_MARKERS_KEY,
+        title: localizedStrings[REMOVE_CHARACTER_MARKERS_KEY] ?? REMOVE_CHARACTER_MARKERS_KEY,
         icon: RemoveFormatting,
-        selectionState: removeRowSelectionState,
         // Never inert: a remove row is only emitted at all when removal exists and something is
         // covered, so it always has something to do.
         isDisabled: false,
@@ -256,8 +271,7 @@ export function generateCharacterMarkerMenuListItems(
     : {
         title: localizedStrings[REMOVE_CHARACTER_MARKER_KEY] ?? REMOVE_CHARACTER_MARKER_KEY,
         icon: RemoveFormatting,
-        selectionState: removeRowSelectionState,
-        // See the remove-all row above: never inert.
+        // See the row above: never inert.
         isDisabled: false,
         action: () => {
           // Non-null: `hasSomethingToRemove` is true and `isMixedCoverage` is false here, so
