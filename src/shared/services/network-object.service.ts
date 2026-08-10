@@ -201,6 +201,31 @@ const networkObjectRegistrations = new Map<string, NetworkObjectRegistration>();
 const hasKnown = (id: string): boolean => networkObjectRegistrations.has(id);
 
 /**
+ * An id this process HOSTS that the given id cannot safely coexist with, if there is one.
+ *
+ * The invariant is the one {@link getNetworkObjectIdsLostWithClient} rests on: no object id may be
+ * another object id followed by a dot and more text. Where that is broken, the disposal of the
+ * longer id is read as a function name of the shorter one and never announced, so its name stays
+ * taken everywhere for the rest of the session and every holder keeps a proxy of a dead object.
+ *
+ * Checked in both directions, because the announcement heuristic does not care which of the pair
+ * registered first.
+ *
+ * Locally hosted registrations only, and that is the whole point rather than an optimization: the
+ * heuristic can only confuse a pair that goes away TOGETHER, which is a pair one process hosts. An
+ * object hosted elsewhere does not leave with this process, so its id is never in the set the
+ * heuristic reasons over — and refusing over one would make the same extension code succeed or fail
+ * depending on whether this process happened to have fetched a proxy of it first.
+ *
+ * Checked at registration and nowhere else, because that is the only moment an id is chosen.
+ */
+const findConflictingHostedId = (id: string): string | undefined =>
+  [...networkObjectRegistrations.entries()]
+    .filter(([, { registrationType }]) => registrationType === NetworkObjectRegistrationType.Local)
+    .map(([knownId]) => knownId)
+    .find((knownId) => startsWith(id, `${knownId}.`) || startsWith(knownId, `${id}.`));
+
+/**
  * What every request type registered for a network object starts with. Matches the front of what
  * {@link getNetworkObjectRequestType} produces.
  */
@@ -227,15 +252,16 @@ const NETWORK_OBJECT_REQUEST_TYPE_PREFIX = `${CATEGORY_NETWORK_OBJECT}:`;
  * The direction the heuristic errs in is the costly one, so it rests on an invariant worth stating:
  * **no object id is another object id followed by a dot and more text**. Every id family in the app
  * ends in a segment glued on with a hyphen or a suffix rather than a dot (`{name}-data`,
- * `{name}-webViewProvider`, `webViewController{nanoid}`, `{name}pdpf`), so splitting a longer id at
- * a dot cannot produce a shorter one that also exists. Where that holds, a candidate whose
+ * `{name}-webViewProvider`, `webViewController{nanoid}`, `{name}-pdpf`), so splitting a longer id
+ * at a dot cannot produce a shorter one that also exists. Where that holds, a candidate whose
  * dot-prefix also died is a function name and nothing else. Where it is broken — two objects hosted
  * by the same process named `X` and `X.Y` — the disposal of `X.Y` is never announced unless this
  * process happens to hold it, so its name stays taken everywhere for the rest of the session.
- * Anything that names network objects from outside the platform (an extension-supplied provider
- * name) is the way that invariant gets broken; a registration form that told ids and function names
- * apart outright, rather than reconstructing the distinction from the names, would remove the need
- * for it.
+ *
+ * {@link findConflictingHostedId} enforces the invariant where it can be enforced: `set` refuses a
+ * pair like that within one process, which is the only place both halves can be lost at once. A
+ * name chosen from outside the platform (an extension-supplied provider name) is caught by the same
+ * check, since it registers through the same call.
  */
 const getNetworkObjectIdsLostWithClient = (removedMethodNames: string[]): string[] => {
   const candidateIds = removedMethodNames
@@ -659,6 +685,12 @@ const set = async <T extends NetworkableObject>(
   return lock.runExclusive(async () => {
     // Check to see if we already know there is a network object with this ID.
     if (hasKnown(id)) throw new Error(`Network object with id ${id} is already registered`);
+
+    const conflictingId = findConflictingHostedId(id);
+    if (conflictingId)
+      throw new Error(
+        `Network object with id ${id} cannot be registered alongside ${conflictingId}: one id is the other followed by a dot, and this process losing both at once would leave the longer one's disposal unannounced. Join the segments with a hyphen instead of a dot.`,
+      );
 
     // Check if there is a network object with this ID remotely by trying to register it
     const unsubPromises = [

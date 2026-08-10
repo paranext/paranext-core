@@ -227,6 +227,53 @@ describe('networkObjectService.set — x-experimental fanout', () => {
 
     expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(expect.stringContaining('doThingg'));
   });
+
+  it('refuses an id that reads as a function of an id already registered here', async () => {
+    // When both die with their process, the disposal announcement reads `X.Y` as a function name of
+    // `X` and never announces it. `X.Y`'s name then stays taken everywhere for the rest of the
+    // session, and every holder keeps calling a proxy of an object that is gone
+    setupNetworkServiceMocks();
+    await networkObjectService.set('outer-obj', { doThing: async () => 1 });
+
+    await expect(
+      networkObjectService.set('outer-obj.inner', { doThing: async () => 1 }),
+    ).rejects.toThrow('outer-obj');
+  });
+
+  it('refuses an id that an id already registered here would read as a function of', async () => {
+    // Registering the pair in the other order breaks the same invariant, and the announcement
+    // heuristic does not care which of the two arrived first
+    setupNetworkServiceMocks();
+    await networkObjectService.set('later-outer.inner', { doThing: async () => 1 });
+
+    await expect(
+      networkObjectService.set('later-outer', { doThing: async () => 1 }),
+    ).rejects.toThrow('later-outer.inner');
+  });
+
+  it('allows a dotted id under one this process only holds a proxy of', async () => {
+    // The invariant is about a pair dying TOGETHER, which only happens when one process hosts both.
+    // An object hosted elsewhere does not go away with this process, so its methods are not in the
+    // set the announcement reasons over and nothing here can swallow the dotted id's disposal.
+    setupNetworkServiceMocks();
+    vi.mocked(networkService.request).mockResolvedValue(true);
+    await networkObjectService.get('remote-outer');
+
+    await expect(
+      networkObjectService.set('remote-outer.inner', { doThing: async () => 1 }),
+    ).resolves.toBeDefined();
+  });
+
+  it('allows two ids that share a prefix without a dot between them', async () => {
+    // The heuristic splits on dots, so this pair cannot be confused. Refusing it would ban most of
+    // the id families in the app — every one of them glues its suffix on with a hyphen
+    setupNetworkServiceMocks();
+    await networkObjectService.set('prefix-obj', { doThing: async () => 1 });
+
+    await expect(
+      networkObjectService.set('prefix-objective', { doThing: async () => 1 }),
+    ).resolves.toBeDefined();
+  });
 });
 
 /**
