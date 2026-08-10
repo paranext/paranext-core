@@ -28,10 +28,8 @@ export type DisabledTooltipWrapperProps = Omit<
  * the single focusable, named thing.
  *
  * Render it as the `asChild` child of a `TooltipTrigger`; it forwards the trigger's props and ref
- * onto its `div`.
- *
- * The paragraph switcher in `platform-scripture-editor.web-view.tsx` still carries its own inline
- * copy of this pattern; adopting this component there is a follow-up.
+ * onto its `div`. `DisabledActionTooltip` composes this with the rest of the `Tooltip` shell for
+ * the common case of one tooltip message driving both the accessible name and the tooltip body.
  */
 export function DisabledTooltipWrapper({
   children,
