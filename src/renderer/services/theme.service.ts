@@ -100,11 +100,31 @@ function readWindowCreationCurrentTheme(): ThemeDefinitionExpanded | undefined {
 }
 
 /**
+ * Marks that this profile's pre-host theme keys have been handed over, so nothing offers them
+ * again.
+ *
+ * A marker rather than deleting the keys, because the keys are also what an OLDER build reads — and
+ * only what an older build reads. Deleting them makes a downgrade start with no theme at all,
+ * losing a choice the user made; the marker leaves that build exactly what it had, and a build that
+ * never heard of this key ignores it. What a downgrade still cannot do is round-trip: a theme
+ * changed on the old build is not picked up again on the way back, which is what happened before
+ * this key existed too.
+ *
+ * Deliberately renderer-local — spelled here and nowhere shared. Main must never read it: it says
+ * something about this profile's renderer store, which main cannot see and has no business in.
+ */
+const HANDED_OVER_THEME_STATE_STORAGE_KEY = 'theme.service.handedOverPreviouslyStoredState';
+
+/**
  * Where the theme state used to be persisted, back when a renderer hosted the theme engine: this
  * window's own `localStorage`, under the keys the host now uses for its own store. The host cannot
  * read it — main's `localStorage` polyfill is a different store in a different place — so a profile
  * that predates the host has to hand it over, and until it has, this is the only thing in this
  * process that knows which theme the user chose.
+ *
+ * Answers with nothing once {@link HANDED_OVER_THEME_STATE_STORAGE_KEY} is set, which is what makes
+ * the handover one-time: the keys themselves stay for a downgraded build, and this build must not
+ * read them back as a choice main has not heard about.
  *
  * This module never treats these keys as its own state: they are read to paint the first frame on
  * the one start where main has nothing yet, and to be offered once (see
@@ -113,6 +133,7 @@ function readWindowCreationCurrentTheme(): ThemeDefinitionExpanded | undefined {
  */
 function readPreviouslyStoredThemeState(): PersistedThemeState | undefined {
   try {
+    if (localStorage.getItem(HANDED_OVER_THEME_STATE_STORAGE_KEY)) return undefined;
     const storedCurrentTheme = localStorage.getItem(CURRENT_THEME_STORAGE_KEY);
     const storedShouldMatchSystem = localStorage.getItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY);
     const storedUserThemes = localStorage.getItem(USER_THEMES_STORAGE_KEY);
@@ -135,10 +156,13 @@ function readPreviouslyStoredThemeState(): PersistedThemeState | undefined {
  * being evaluated — which is before React renders. Getting this wrong is visible: the window paints
  * one theme and then flashes into another a round trip later.
  *
- * The keys left over from before the host existed go FIRST, and only exist at all until the
- * one-time handover in {@link startThemeService} has run. While they are there they hold a theme the
- * user chose that main cannot have adopted yet, so they beat what main handed over — which on that
- * one start is a theme main derived from the default. Afterwards they are gone.
+ * The keys left over from before the host existed go FIRST, and are only readable at all until the
+ * one-time handover in {@link startThemeService} has run. While they are readable they hold a theme
+ * the user chose that main cannot have adopted yet, so they beat what main handed over — which on
+ * that one start is a theme main derived from the default. Afterwards
+ * {@link readPreviouslyStoredThemeState} answers with nothing, which is what keeps this ordering
+ * correct: the keys themselves stay behind for a downgraded build, and reading them again here
+ * would put a pre-host theme in front of the live one on every start.
  *
  * What main put on the URL is what is left, and it is as current as the last change this window
  * heard: the window rewrites its own query parameter on every change (see
@@ -265,11 +289,12 @@ async function retrySubscribingToCurrentTheme(
  * renderer held them.
  *
  * The offer is terminal in both directions. Adopted means the host now owns it; refused means the
- * host has state that beats it. Either way this window's copy is finished, so the keys are removed:
- * left in place they would be re-offered by every window on every start forever, and — worse — a
- * profile whose main-process store is ever cleared would silently resurrect a theme from before the
- * host existed. Only a rejection (the host was unreachable, or could not store what it adopted)
- * keeps them, because that is the one case where this copy is still the only one.
+ * host has state that beats it. Either way this window's copy is finished, and
+ * {@link HANDED_OVER_THEME_STATE_STORAGE_KEY} records that: left offerable it would be re-offered by
+ * every window on every start forever, and — worse — a profile whose main-process store is ever
+ * cleared would silently resurrect a theme from before the host existed. Only a rejection (the host
+ * was unreachable, or could not store what it adopted) leaves it offerable, because that is the one
+ * case where this copy is still the only one.
  *
  * Best-effort: a failed offer costs the user the theme they chose for this session, which choosing
  * again fixes, and it leaves the host with nothing adopted so a later start can offer again.
@@ -284,9 +309,10 @@ async function handOverPreviouslyStoredThemeState(): Promise<void> {
     // `papi.themes` does not offer them. This is the one call in this process that needs one.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     await (provider as IThemeHostService).migrateStoredThemeState(previouslyStoredState);
-    localStorage.removeItem(CURRENT_THEME_STORAGE_KEY);
-    localStorage.removeItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY);
-    localStorage.removeItem(USER_THEMES_STORAGE_KEY);
+    // One `setItem` rather than three `removeItem`s, which is also atomic where the three were not:
+    // a throw on the first of three left the other two stale forever, and stale keys win first paint
+    // on every start after that.
+    localStorage.setItem(HANDED_OVER_THEME_STATE_STORAGE_KEY, 'true');
   } catch (e) {
     logger.warn(
       `Could not hand this window's previously stored theme state to the theme service host; it will be offered again. ${getErrorMessage(e)}`,
