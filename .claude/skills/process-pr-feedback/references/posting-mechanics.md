@@ -55,7 +55,8 @@ directory. Each item carries:
 | `pr` | all | the PR the item posts to |
 | `body` | all | the exact text that will post |
 | `comment_id` | `reply` | the **thread-root** inline comment id being replied to (§1 — the endpoint takes no other) |
-| `updated_at` | `reply` | the target comment's `updated_at` as P0 recorded it, so the dry-run can detect an edit made after collection |
+| `answers_id` | `reply` | the comment the draft actually answers — the reviewer's own, from P0's per-item record. Often the root itself; a **nested reply** whenever the reviewer answered inside a thread we opened |
+| `updated_at` | `reply` | the answered comment's `updated_at` as P0 recorded it, so the dry-run can detect an edit made after collection |
 | `path`, `line`, `side` | `inline` | the anchor |
 | `anchor_line` | `inline` | the anchor line's **content** as the draft quotes it, so the anchor verification in `pr-thread-conversion.md` can prove the line still says what the draft assumed |
 
@@ -94,12 +95,16 @@ Run every check over the extracted bodies:
    that PR — fetch it and check its PR, its author, and its `path` against the thread the draft
    means to answer. Nothing downstream catches a wrong-but-valid id: the post succeeds, so the
    id-set verification in §7 reports PASS while the reply sits under an unrelated reviewer's
-   comment, under the user's name. Two more facts from that same fetch: its `in_reply_to_id`
+   comment, under the user's name. One more fact from that same fetch: its `in_reply_to_id`
    must be null — non-null means the target is itself a reply, which the replies endpoint
-   rejects, and the thread root to use is the value in that field (§1); and its `updated_at`
-   must not be later than the one P0 recorded — later means the reviewer edited the comment
-   after collection, so the draft may answer text that no longer exists. Stop and re-read the
-   comment; a changed ask goes back through triage, not straight to the POST.
+   rejects, and the thread root to use is the value in that field (§1). The edit check reads a
+   **different** comment: fetch `answers_id` — the reviewer's own comment, which in a nested
+   thread is not the POST target — and require its `updated_at` to be no later than the one P0
+   recorded. Later means the reviewer edited the comment after collection, so the draft may
+   answer text that no longer exists: stop and re-read it; a changed ask goes back through
+   triage, not straight to the POST. Watching the root instead leaves the check blind in
+   exactly the nested-thread shape §1 exists for — there the root is routinely **our own**
+   comment, whose timestamp says nothing about the reviewer's words.
 
 Print a single `DRY-RUN RESULT: PASS/FAIL` line and exit non-zero on FAIL.
 
@@ -346,10 +351,22 @@ for it in items:
         if c.get("in_reply_to_id"):
             fails.append(f"{it['item']}: comment_id {it['comment_id']} is itself a reply; "
                          f"reply to its thread root {c['in_reply_to_id']} instead")
-        # An edit after collection means the draft may answer text that no longer exists.
-        if it.get("updated_at") and c.get("updated_at", "") > it["updated_at"]:
-            fails.append(f"{it['item']}: target comment edited after collection "
-                         f"({c['updated_at']} > {it['updated_at']}) - re-read it before replying")
+        # An edit after collection means the draft may answer text that no longer exists. Read
+        # the ANSWERED comment for this, not the POST target: in a nested thread the reviewer's
+        # words live on the reply, and the root - the only valid POST target - may be ours.
+        ans = c
+        if it.get("answers_id") and it["answers_id"] != it["comment_id"]:
+            got_ans = subprocess.run(
+                ["gh", "api", f"repos/{SLUG}/pulls/comments/{it['answers_id']}"],
+                capture_output=True, text=True)
+            if got_ans.returncode != 0:
+                fails.append(f"{it['item']}: answers_id {it['answers_id']} does not resolve")
+                ans = None
+            else:
+                ans = json.loads(got_ans.stdout)
+        if ans and it.get("updated_at") and ans.get("updated_at", "") > it["updated_at"]:
+            fails.append(f"{it['item']}: answered comment edited after collection "
+                         f"({ans['updated_at']} > {it['updated_at']}) - re-read it before replying")
         print(f"    TARGET {it['item']}: replying to @{c['user']['login']} on "
               f"{c.get('path')}:{c.get('line')} - confirm this is the intended thread")
 

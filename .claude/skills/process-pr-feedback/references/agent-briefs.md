@@ -143,9 +143,11 @@ independent verdicts that disagree is exactly the signal worth having.
 > Do not read `mergeStateStatus` as the behind-check — it reports `BEHIND` only under a branch
 > protection this repo does not use. The `rev-list` count is the authority.
 >
-> P0 recorded this state and it was ruled on at the gate this run used — G1 on a normal run, G2 on
-> a `--fast-lane` run, which has no G1. Either way it was ruled on *before* you started, so a
-> change since then is news, and news goes back to the orchestrator rather than being absorbed.
+> P0 recorded this state, and it was settled before you started: on a normal run G1 ruled on it;
+> on a `--fast-lane` run — where P3 precedes the only gate — no gate has run yet, and it is the
+> qualifying statement in `02-triage.md` that asserted no base-state rebase was outstanding, or
+> the round would not have qualified. Either way a change since then is news, and news goes back
+> to the orchestrator rather than being absorbed.
 >
 > **Red-first.** For every behavior change, write the failing test first, run it, and record the
 > failure message. Then implement. Then run it again. A fix with no failing-first test is not
