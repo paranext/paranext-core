@@ -275,7 +275,17 @@ describe('keeping this window cache current', () => {
 // Main cannot read this window's `localStorage`, so a profile from before the host moved has to
 // hand its theme over once — and stop offering it afterwards.
 describe('handing over theme state stored before the host moved to main', () => {
-  it('offers what this window stored and clears the keys once the host has answered', async () => {
+  /** Restart the service the way a later start of the app does, and report whether it offered */
+  async function didOfferOnALaterStart() {
+    vi.resetModules();
+    host.migrateStoredThemeState.mockClear();
+    host.migrateStoredThemeState.mockResolvedValue(true);
+    const { startThemeService } = await import('@renderer/services/theme.service');
+    await startThemeService();
+    return host.migrateStoredThemeState.mock.calls.length > 0;
+  }
+
+  it('offers what this window stored and stops offering once the host has answered', async () => {
     storePreviouslyStoredThemeState();
     const { startThemeService } = await import('@renderer/services/theme.service');
 
@@ -286,12 +296,24 @@ describe('handing over theme state stored before the host moved to main', () => 
       shouldMatchSystem: false,
       userThemes: { 'user-0': {} },
     });
-    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toBeNull();
-    expect(localStorage.getItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY)).toBeNull();
-    expect(localStorage.getItem(USER_THEMES_STORAGE_KEY)).toBeNull();
+    expect(await didOfferOnALaterStart()).toBe(false);
   });
 
-  it('clears the keys when the host refuses the offer as well', async () => {
+  it('leaves the handed-over keys in place for a build that has no host', async () => {
+    // Deleting them is what makes a downgrade start broken: an older build reads these keys and
+    // nothing else, so it would come up with no theme rather than the one the user chose. A marker
+    // is what stops the re-offer, and an old build ignores markers it has never heard of.
+    storePreviouslyStoredThemeState();
+    const { startThemeService } = await import('@renderer/services/theme.service');
+
+    await startThemeService();
+
+    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toContain('ownFamily');
+    expect(localStorage.getItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY)).not.toBeNull();
+    expect(localStorage.getItem(USER_THEMES_STORAGE_KEY)).not.toBeNull();
+  });
+
+  it('stops offering when the host refuses the offer as well', async () => {
     storePreviouslyStoredThemeState();
     host.migrateStoredThemeState.mockResolvedValue(false);
     const { startThemeService } = await import('@renderer/services/theme.service');
@@ -299,8 +321,8 @@ describe('handing over theme state stored before the host moved to main', () => 
     await startThemeService();
 
     // Refused means the host has state that beats this copy, so this copy is finished either way;
-    // left in place it would be re-offered by every window on every start forever.
-    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toBeNull();
+    // left offerable it would be re-offered by every window on every start forever.
+    expect(await didOfferOnALaterStart()).toBe(false);
   });
 
   it('keeps the keys when the offer could not be delivered', async () => {
