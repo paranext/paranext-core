@@ -127,6 +127,11 @@ describe('target shard resolver', () => {
       );
 
       const resolving = resolve();
+      // Take hold of the rejection before advancing the clock. It happens while the timers run, and
+      // a promise that rejects with nothing attached to it yet is an unhandled rejection — which
+      // Vitest reports as an error against the whole file even though every test in it passed.
+      resolving.catch(() => undefined);
+
       // The wait is bounded: a shard whose own start failed is never announced, and the call has to
       // fail visibly rather than hang on an announcement that is not coming
       await vi.runAllTimersAsync();
