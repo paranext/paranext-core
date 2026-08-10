@@ -14,7 +14,10 @@
  * UUID from `simple-layout.data.ts`, not by localized text. This makes the tests locale-independent
  * and immune to translation changes.
  *
- * The Comment List Panel's fixed UUID in the simple layout is COMMENT_LIST_PANEL_UUID below.
+ * The Comment List Panel's fixed UUID in the simple layout is COMMENT_LIST_PANEL_UUID below. Match
+ * it as a PREFIX: the renderer suffixes every web view id from a shared layout with the window it
+ * was loaded into (`-w1`, `-w2`, ...) so two windows never collide on one id, so the rendered
+ * `data-web-view-id` is the UUID plus that suffix rather than the bare UUID.
  *
  * ## Tab overflow
  *
@@ -92,10 +95,10 @@ const SCRIPTURE_EDITOR_SLOT_UUID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
 async function waitForSimpleLayout(mainPage: Page): Promise<void> {
   await Promise.all([
     expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`),
+      mainPage.locator(`.platform-tab-title[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`),
     ).toBeAttached({ timeout: 120_000 }),
     expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id="${SCRIPTURE_EDITOR_SLOT_UUID}"]`),
+      mainPage.locator(`.platform-tab-title[data-web-view-id^="${SCRIPTURE_EDITOR_SLOT_UUID}"]`),
     ).toBeAttached({ timeout: 120_000 }),
   ]);
   // Wait for any workspace-updating overlay to clear. It can appear (and reappear) during dock
@@ -112,7 +115,7 @@ async function waitForSimpleLayout(mainPage: Page): Promise<void> {
  * regardless of whether the title resolved.
  */
 function commentsFrameLocator(mainPage: Page) {
-  return mainPage.frameLocator(`iframe[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`);
+  return mainPage.frameLocator(`iframe[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`);
 }
 
 /**
@@ -162,7 +165,7 @@ async function openScriptureEditor(
  */
 async function clickCommentsTab(mainPage: Page, actionTimeoutMs = 30_000): Promise<void> {
   const tabTitle = mainPage.locator(
-    `.platform-tab-title[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`,
+    `.platform-tab-title[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`,
   );
   if (await tabTitle.isVisible()) {
     await tabTitle.click({ timeout: actionTimeoutMs });
@@ -174,7 +177,7 @@ async function clickCommentsTab(mainPage: Page, actionTimeoutMs = 30_000): Promi
   // rc-tabs re-renders PlatformTabTitle (including our data-web-view-id) in the overflow popup.
   await mainPage
     .locator('[role="listbox"] [role="option"]')
-    .filter({ has: mainPage.locator(`[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`) })
+    .filter({ has: mainPage.locator(`[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`) })
     .click({ timeout: 5_000 });
 }
 
@@ -211,7 +214,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
     await waitForSimpleLayout(mainPage);
     // The UUID-based locator confirms the tab is in the DOM regardless of scroll position.
     await expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`),
+      mainPage.locator(`.platform-tab-title[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`),
     ).toBeAttached();
   });
 
@@ -474,7 +477,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
 
     await clickCommentsTab(mainPage);
     await expect(
-      mainPage.locator(`iframe[data-web-view-id="${COMMENT_LIST_PANEL_UUID}"]`),
+      mainPage.locator(`iframe[data-web-view-id^="${COMMENT_LIST_PANEL_UUID}"]`),
     ).toBeAttached({ timeout: 30_000 });
     const commentsFrame = commentsFrameLocator(mainPage);
     await expect(commentsFrame.locator('body')).toContainText('Project A unique comment text', {

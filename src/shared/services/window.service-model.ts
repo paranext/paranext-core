@@ -19,7 +19,7 @@ export const windowServiceObjectToProxy = Object.freeze({
   dataProviderName: windowServiceProviderName,
 });
 
-/** Focus of the app window is on a WebView iframe with the specified id */
+/** Focus of the window is on a WebView iframe with the specified id */
 export type FocusSubjectWebView = {
   focusType: 'webView';
   /** ID of the WebView in focus (its tab ID is the same) */
@@ -27,7 +27,7 @@ export type FocusSubjectWebView = {
 };
 
 /**
- * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
+ * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
  *
  * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
  * focused in the WebView's iframe
@@ -40,12 +40,12 @@ export type FocusSubjectTab = {
   id: string;
 };
 
-/** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
+/** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
 export type FocusSubjectOther = {
   focusType: 'other';
 };
 
-/** Current item that is the subject of top-level app window focus */
+/** Current item that is the subject of top-level focus in the window */
 export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
 
 /**
@@ -65,10 +65,10 @@ export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string
   return undefined;
 }
 
-/** Specific item that is intended to be focused in the top-level app window */
+/** Specific item that is intended to be focused at the top level of the window */
 export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
 
-/** Instructions that indicate how to change the app window focus */
+/** Instructions that indicate how to change the focus within the window */
 export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
 
 // Data Type to initialize data provider engine with
@@ -85,24 +85,24 @@ declare module 'papi-shared-types' {
 /**
  * JSDOC SOURCE windowService
  *
- * Service that allows to interact with the main application window
+ * Service that allows to interact with the current application window
  */
 export type IWindowService = {
   /**
    * JSDOC SOURCE getFocus
    *
-   * Get information about the current subject of focus in the main app window
+   * Get information about the current subject of focus in the current window
    *
    * @param selector `undefined`. Does not have to be provided
-   * @returns Information about the main app window's current subject of focus
+   * @returns Information about the current window's current subject of focus
    */
   getFocus(selector: undefined): Promise<FocusSubject>;
   /** JSDOC DESTINATION getFocus */
   getFocus(): Promise<FocusSubject>;
   /**
-   * Sets the subject of focus in the main app window.
+   * Sets the subject of focus in the current window.
    *
-   * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+   * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
    *   the window to update the current focus based on what is actually focused in the window (only
    *   necessary when an action happens that changes the focus but the window service does not
    *   detect already). In most cases, you will not need to set `'detect'` manually.
@@ -113,10 +113,10 @@ export type IWindowService = {
     focusSubject: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
   /**
-   * Sets the subject of focus in the main app window.
+   * Sets the subject of focus in the current window.
    *
    * @param selector `undefined`. Does not have to be provided
-   * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+   * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
    *   the window to update the current focus based on what is actually focused in the window (only
    *   necessary when an action happens that changes the focus but the window service does not
    *   detect already). In most cases, you will not need to set `'detect'` manually.
@@ -132,7 +132,7 @@ export type IWindowService = {
     focusSubject: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
   /**
-   * Subscribe to run a callback function when the main app window's subject of focus is changed
+   * Subscribe to run a callback function when the current window's subject of focus is changed
    *
    * @param selector `undefined`. Does not have to be provided
    * @param callback Function to run with the updated localized menuContent for this selector. If

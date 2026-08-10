@@ -31,10 +31,17 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useData: vi.fn(),
 }));
 
+// The cross-window web view proxy. Mocked but never driven: the picker must derive the current
+// project from this window's dock layout, so a test asserts this proxy is never queried.
 vi.mock('@renderer/services/papi-frontend.service', () => ({
   webViews: {
     getAllOpenWebViewDefinitions: vi.fn(async () => []),
   },
+}));
+
+// This window's own open web views, which is what the picker reads.
+vi.mock('@renderer/services/web-view.service-host', () => ({
+  getAllOpenWebViewDefinitionsSync: vi.fn(() => []),
 }));
 
 vi.mock('@shared/services/project-lookup.service', () => ({
@@ -101,6 +108,9 @@ function metadataList(items: MetadataFixture[]) {
 async function importMocks() {
   const { getNetworkEvent } = await import('@shared/services/network.service');
   const { webViews } = await import('@renderer/services/papi-frontend.service');
+  const { getAllOpenWebViewDefinitionsSync } = await import(
+    '@renderer/services/web-view.service-host'
+  );
   const { projectLookupService } = await import('@shared/services/project-lookup.service');
   const { papiFrontendProjectDataProviderService } = await import(
     '@shared/services/project-data-provider.service'
@@ -109,6 +119,7 @@ async function importMocks() {
   return {
     getNetworkEvent,
     webViews,
+    getAllOpenWebViewDefinitionsSync,
     projectLookupService,
     papiFrontendProjectDataProviderService,
     useData,
@@ -149,10 +160,11 @@ describe('useProjectPickerData', () => {
     // that calls mockReturnValue(...) contaminates all subsequent tests.
     vi.resetAllMocks();
 
-    const { getNetworkEvent, webViews, projectLookupService, useData } = await importMocks();
+    const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService, useData } =
+      await importMocks();
 
     vi.mocked(getNetworkEvent).mockImplementation(() => vi.fn(() => vi.fn()));
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([]);
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([]);
     // Default the single-project fallback to "not found" (it throws in production when no PDPF
     // provides the id); tests that exercise the fallback's success path override this.
@@ -186,8 +198,8 @@ describe('useProjectPickerData', () => {
   });
 
   it('returns currentProject from the first open Scripture Editor web view, from metadata alone', async () => {
-    const { webViews, projectLookupService } = await importMocks();
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+    const { getAllOpenWebViewDefinitionsSync, projectLookupService } = await importMocks();
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
       { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-abc' },
     ] as never);
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
@@ -200,6 +212,31 @@ describe('useProjectPickerData', () => {
     expect(result.current.isLoading).toBe(false);
     expect(result.current.currentProject?.fullName).toBe('Genesis Project');
     expect(result.current.currentProject?.id).toBe('proj-abc');
+  });
+
+  it('names the current project from THIS window only, never another window’s editor', async () => {
+    // The `webViews` network object is the main process's routing proxy: its
+    // getAllOpenWebViewDefinitions fans out across every open window. The picker labels the project
+    // of the editor in its OWN window (and feeds a toolbar that navigates this window's target), so
+    // it must read the local dock layout and never that cross-window list - otherwise a background
+    // window's editor names this window's current project.
+    const { webViews, getAllOpenWebViewDefinitionsSync, projectLookupService } =
+      await importMocks();
+    // This window has no editor open; another window does (only the proxy would report it).
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
+    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+      { id: 'wv-other-window', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-elsewhere' },
+    ] as never);
+    vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
+      metadataList([{ id: 'proj-elsewhere', fullName: 'Other Window Project' }]) as never,
+    );
+
+    const { result } = renderHook(() => useProjectPickerData());
+
+    await settle(result);
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.currentProject).toBeUndefined();
+    expect(webViews.getAllOpenWebViewDefinitions).not.toHaveBeenCalled();
   });
 
   it('returns allProjects from projectLookupService metadata, without opening any project data provider', async () => {
@@ -293,11 +330,11 @@ describe('useProjectPickerData', () => {
   });
 
   it('fetches metadata once per refresh, shared across all three sections', async () => {
-    const { webViews, projectLookupService, useData } = await importMocks();
+    const { getAllOpenWebViewDefinitionsSync, projectLookupService, useData } = await importMocks();
     vi.mocked(useData).mockImplementation(() => ({
       RecentProjects: vi.fn().mockReturnValue([RECENT_IDS_R1, vi.fn(), false]),
     }));
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
       { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-r1' },
     ] as never);
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
@@ -391,7 +428,8 @@ describe('useProjectPickerData', () => {
   });
 
   it('refreshes currentProject when onDidUpdateWebView fires', async () => {
-    const { getNetworkEvent, webViews, projectLookupService } = await importMocks();
+    const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
+      await importMocks();
     let capturedCallback: (() => void) | undefined;
     vi.mocked(getNetworkEvent).mockImplementation(
       (eventName: string) =>
@@ -401,9 +439,9 @@ describe('useProjectPickerData', () => {
         }) as never,
     );
 
-    vi.mocked(webViews.getAllOpenWebViewDefinitions)
-      .mockResolvedValueOnce([])
-      .mockResolvedValue([
+    vi.mocked(getAllOpenWebViewDefinitionsSync)
+      .mockReturnValueOnce([])
+      .mockReturnValue([
         { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-xyz' },
       ] as never);
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(
@@ -426,8 +464,8 @@ describe('useProjectPickerData', () => {
     // The active editor's project may not be in the picker's USJ-filtered snapshot yet - e.g. its
     // USJ-providing layering PDPF has not registered. The hook must still resolve it via a direct,
     // unfiltered single-project lookup rather than showing an error card during that startup window.
-    const { webViews, projectLookupService } = await importMocks();
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+    const { getAllOpenWebViewDefinitionsSync, projectLookupService } = await importMocks();
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
       { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-late' },
     ] as never);
     // Filtered snapshot lacks proj-late...
@@ -450,7 +488,8 @@ describe('useProjectPickerData', () => {
     // When even the direct lookup fails (nothing provides the id yet), the hook shows the error
     // card. That state must clear when there is no current editor, so the project can resolve on a
     // later open instead of staying wedged on 'Unable to load current project details'.
-    const { getNetworkEvent, webViews, projectLookupService } = await importMocks();
+    const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
+      await importMocks();
     let webViewCallback: (() => void) | undefined;
     vi.mocked(getNetworkEvent).mockImplementation(
       (eventName: string) =>
@@ -464,9 +503,7 @@ describe('useProjectPickerData', () => {
     let openDefs: unknown[] = [
       { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-stuck' },
     ];
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockImplementation(
-      async () => openDefs as never,
-    );
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementation(() => openDefs as never);
 
     // proj-stuck is absent from the filtered snapshot throughout.
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([] as never);
@@ -502,7 +539,8 @@ describe('useProjectPickerData', () => {
   it('does not re-fetch metadata on web view events (metadata cache is decoupled from them)', async () => {
     // Restoring N tabs at startup fires a burst of web view events; each must re-derive only the
     // active editor from the cached metadata, not launch a fresh full PDPF fan-out.
-    const { getNetworkEvent, webViews, projectLookupService } = await importMocks();
+    const { getNetworkEvent, getAllOpenWebViewDefinitionsSync, projectLookupService } =
+      await importMocks();
     let webViewCallback: (() => void) | undefined;
     vi.mocked(getNetworkEvent).mockImplementation(
       (eventName: string) =>
@@ -511,7 +549,7 @@ describe('useProjectPickerData', () => {
           return vi.fn();
         }) as never,
     );
-    vi.mocked(webViews.getAllOpenWebViewDefinitions).mockResolvedValue([
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
       { id: 'wv-1', webViewType: EDITOR_WEB_VIEW_TYPE, projectId: 'proj-r1' },
     ] as never);
     vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(

@@ -75,6 +75,15 @@ declare global {
    * as `isNoisyDevModeEnabled`.
    */
   var startupMarks: boolean;
+  /**
+   * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
+   * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
+   * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
+   * `platform.getFocusedWindowId`). `undefined` until the renderer reads the URL parameter.
+   *
+   * @experimental
+   */
+  var windowId: string | undefined;
 }
 /* eslint-enable */
 

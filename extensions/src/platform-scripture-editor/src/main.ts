@@ -269,15 +269,19 @@ async function open(
     // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
     // (one editor slot, no duplicate-(project, readonly) tabs) and the empty-editor probe; see
     // resolveOpenEditorDispatch JSDoc for the priority order.
-    // getAllOpenWebViewDefinitions can time out under load; fall back to an empty list so that
-    // open still succeeds (opening a new editor tab) rather than throwing.
-    let allOpenDefs: SavedWebViewDefinition[] = [];
+    // This rejects when a window could not be asked what it has open — most often a window whose
+    // renderer is still starting or has just gone away — and it may also time out under load. Both
+    // mean the same thing here: what is open is unknown. Carrying on with an empty list would tell
+    // the dispatch helper that nothing is open, and in simple mode that opens a second editor on
+    // top of the one the user already has, unsaved changes and all. Abort instead.
+    let allOpenDefs: SavedWebViewDefinition[];
     try {
       allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
     } catch (e) {
-      logger.warn(
-        `open: getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); opening as new tab`,
+      logger.error(
+        `open: could not establish which editors are already open (${getErrorMessage(e)}); not opening`,
       );
+      throw e;
     }
     const allScriptureEditors = toScriptureEditorInfos(allOpenDefs);
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
@@ -400,8 +404,11 @@ async function open(
     // Only applies in simple mode: openOrUpdateRelatedPanels (the source of the race) only runs
     // there, and in power mode re-resolving would return the same caller-supplied
     // existingTabIdToReplace anyway, so the re-check couldn't help.
-    // getAllOpenWebViewDefinitions can time out under load; if that happens keep the original
-    // dispatch — the target tab may still be present and openWebView will proceed normally.
+    // This read rejects when a window could not be asked what it has open (the dominant cause) and
+    // can also time out under load. Either way the original dispatch stands: it was resolved from a
+    // read that did succeed moments ago, and the one thing the re-check guards against — the target
+    // tab having vanished in the meantime — still surfaces, loudly, as openWebView refusing to
+    // replace a tab that is not there.
     let finalDispatch: OpenEditorDispatch = dispatch;
     if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
       try {
@@ -416,8 +423,8 @@ async function open(
           );
         }
       } catch (e) {
-        logger.warn(
-          `open: re-check getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); using original dispatch`,
+        logger.error(
+          `open: could not re-check which editors are open before replacing a tab (${getErrorMessage(e)}); using the dispatch resolved earlier`,
         );
       }
     }
