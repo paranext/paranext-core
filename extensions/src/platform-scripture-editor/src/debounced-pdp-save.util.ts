@@ -8,9 +8,12 @@ import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
  */
 export interface DebouncedPdpSaveParams {
   /**
-   * The editor's USJ captured when this save was SCHEDULED (the content typed for the chapter that
-   * was active then). Used as the save content when the chapter has since changed, and as a
-   * fallback when the editor can no longer be read.
+   * The editor's USJ as of when this save was SCHEDULED — already SETTLED and with any declared
+   * transient input (e.g. an open palette's `\`+filter literal) already excluded, because the
+   * caller captures it via `EditorRef.getUsj()` at schedule time rather than forwarding the raw
+   * `onUsjChange` payload. That is what makes it safe to replay later without re-reading the
+   * editor: used as the save content when the chapter has since changed (the editor has moved on to
+   * different content by then), and as a fallback when the editor can no longer be read.
    */
   usj: Usj;
   /** `book|chapterNum` of the chapter that was active when this save was SCHEDULED. */

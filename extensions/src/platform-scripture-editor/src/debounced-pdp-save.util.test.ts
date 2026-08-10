@@ -77,6 +77,83 @@ describe('performDebouncedPdpSave', () => {
   });
 });
 
+// Regression pins for a Critical review finding on the transient-input fix: `usj` is now
+// contracted to be the SETTLED, transient-excluded snapshot as of scheduling (captured by the
+// caller, `handleEditorialUsjChange` in `platform-scripture-editor.web-view.tsx`, via
+// `EditorRef.getUsj()` — not the raw `onUsjChange` payload). Before that caller-side fix, typing
+// `\f` (a passive backslash palette session) and switching chapters before the 700ms debounce
+// fired forced one of the two paths below with the RAW, un-excluded snapshot, writing the bare
+// `\f` literal to the PDP — the exact garbage-paragraph corruption (ParatextData tokenizes an
+// unrecognized marker in body text as a paragraph) the deleted string-stripping used to guard
+// against. This module has no palette awareness of its own; these tests pin that BOTH paths that
+// cannot re-read the editor at fire time replay the scheduled `usj` byte-for-byte, so a caller that
+// upholds the settled/excluded contract can never have a trigger literal reappear here.
+describe('performDebouncedPdpSave — settled-snapshot replay (no re-derivation of the scheduled usj)', () => {
+  // The exact repro this pins: cross-chapter flush racing an open palette session. `usj` here
+  // stands in for what `EditorRef.getUsj()` returns once `EditorRef.setTransientInput` has
+  // declared the session's `\f` — i.e. already settled with the trigger excluded — so the fix
+  // requires this branch to pass it straight through untouched.
+  it('replays the settled, transient-excluded scheduled snapshot on a cross-chapter flush — no trigger literal reaches the PDP', () => {
+    const capturedSave = vi.fn();
+    const settledSnapshotWithLiteralExcluded = usjWith('Den God tell, more text');
+
+    performDebouncedPdpSave({
+      usj: settledSnapshotWithLiteralExcluded,
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|2',
+      capturedSave,
+      latestSave: vi.fn(),
+      getEditorUsj: vi.fn(),
+    });
+
+    expect(capturedSave).toHaveBeenCalledWith(settledSnapshotWithLiteralExcluded);
+    expect(JSON.stringify(capturedSave.mock.calls[0][0])).not.toContain('\\f');
+  });
+
+  // The second replay path that cannot re-read the editor at fire time: same chapter, but the
+  // editor is gone (unmount flush). Falls back to the scheduled `usj` — which, under the same
+  // fixed contract, is already the settled, transient-excluded snapshot, so this fallback carries
+  // the same guarantee as the cross-chapter branch above.
+  it('falls back to the settled, transient-excluded scheduled snapshot when the editor has no USJ to read — no trigger literal reaches the PDP', () => {
+    const latestSave = vi.fn();
+    const settledSnapshotWithLiteralExcluded = usjWith('Den God tell, more text');
+
+    performDebouncedPdpSave({
+      usj: settledSnapshotWithLiteralExcluded,
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|1',
+      capturedSave: vi.fn(),
+      latestSave,
+      getEditorUsj: vi.fn(() => undefined),
+    });
+
+    expect(latestSave).toHaveBeenCalledWith(settledSnapshotWithLiteralExcluded);
+    expect(JSON.stringify(latestSave.mock.calls[0][0])).not.toContain('\\f');
+  });
+
+  // Ordinary same-chapter flush, editor present: unaffected by this fix — still reads the LIVE
+  // editor at fire time (fresher than the scheduled snapshot), which is itself already settled and
+  // transient-excluded per `EditorRef.getUsj`'s own contract. Re-asserted here alongside the two
+  // replay-path pins above so all three same-chapter/cross-chapter branches are covered in one
+  // place.
+  it('still reads the live editor (not the scheduled snapshot) on an ordinary same-chapter flush', () => {
+    const latestSave = vi.fn();
+    const getEditorUsj = vi.fn(() => freshEditorUsj);
+
+    performDebouncedPdpSave({
+      usj: scheduledUsj,
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|1',
+      capturedSave: vi.fn(),
+      latestSave,
+      getEditorUsj,
+    });
+
+    expect(getEditorUsj).toHaveBeenCalled();
+    expect(latestSave).toHaveBeenCalledWith(freshEditorUsj);
+  });
+});
+
 describe('resolveUsjToSaveToPdp', () => {
   it('returns undefined when the editor content matches the PDP except for whitespace', () => {
     expect(resolveUsjToSaveToPdp(usjWith('tell them'), usjWith('tell  them'))).toBeUndefined();

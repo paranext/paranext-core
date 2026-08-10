@@ -2415,7 +2415,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
       // pending trailing save always targets the chapter this content was typed in (Fix 2).
-      saveUsjToPdpDebounced.schedule(usj, saveUsjToPdpIfUpdatedRef.current, chapterKeyRef.current);
+      //
+      // Schedule the SETTLED, transient-excluded snapshot (`EditorRef.getUsj()`), not the raw
+      // `usj` this callback was invoked with: `onUsjChange`'s payload is the unsettled document as
+      // typed, and `setTransientInput`'s exclusion applies only to `getUsj()`. A pending trailing
+      // save can fire via the cross-chapter flush (`performDebouncedPdpSave`'s `capturedSave`
+      // branch) or via the editor-unavailable fallback in its same-chapter branch — neither of
+      // those can re-read the editor safely at fire time (the chapter has moved on, or the editor
+      // is gone), so the snapshot captured HERE, at schedule time, is what they replay. Reading it
+      // settled and transient-excluded now means both replay paths carry canonical bytes instead
+      // of a stray palette trigger literal. Falls back to the raw `usj` only if the editor is
+      // unavailable at this exact keystroke (should not happen in practice — `onUsjChange` only
+      // fires from a mounted editor).
+      saveUsjToPdpDebounced.schedule(
+        editorRef.current?.getUsj() ?? usj,
+        saveUsjToPdpIfUpdatedRef.current,
+        chapterKeyRef.current,
+      );
       if (editingNoteKey.current) {
         // When the FootnoteEditor saves, Lexical emits a replaceEmbedUpdate. This triggers
         // onUsjChange with an insertedNodeKey.
