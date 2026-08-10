@@ -760,3 +760,66 @@ step, no automation. Just a record.
   should not be assumed to remount anything.
 - **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
   `srcNonce` to its use site.
+
+## ADR-0013: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
+
+- **Date:** 2026-08-05
+- **Status:** Accepted
+- **Context:** A verse-0 reference means "everything preceding verse 1" — book/chapter intros,
+  titles, outlines, Psalm `\d` superscriptions. It is reachable three ways: placing the cursor in
+  pre-verse-1 editor content (`usj-reader-writer.ts` reports `verseNum: 0`); the toolbar
+  previous-verse button, which calls `getPreviousVerseRef` **without** `bounds`
+  (`book-chapter-control.navigation.ts`), so its no-versification branch floors at verse 0 in any
+  chapter, not just chapter 1; and typing a `C:0` reference. A one-verse-tall surface has no useful
+  way to render that content, so the Text Collection showed an empty cell at Luke 1:0 —
+  [PT-3133](https://paratextstudio.atlassian.net/browse/PT-3133). PT9's
+  Text Collection shows verse 1 there instead. A4/PT-4052 (PR #2509) shipped a "No text for this
+  verse" ghost-text state, contradicting PT-3133's written acceptance (display verse 1); the
+  divergence went unflagged until PT-4061.
+- **Decision:** Single-verse display surfaces resolve a verse-0 reference to verse 1 via
+  `resolveDisplayVerseNum` (`extensions/src/platform-scripture-editor/src/scripture-text-grid/verse-display.utils.ts`),
+  confirmed by Ian Hewerdine 2026-08-05. Three constraints make this safe:
+  - **Display-only, and it needs an explicit guard.** The resolved verse is never written back to
+    the scroll group — writing it back would yank the Scripture Editor off the intro the user came
+    from. This does not happen for free: `Editorial`'s `ScriptureReferencePlugin` mounts even when
+    `isReadonly` is set (gated only on `scrRef && onScrRefChange`) and reports any selection whose
+    verse differs from `scrRef`. Fall-forward makes that mismatch permanent, so `ResourceCell`
+    swallows the echo. Without the guard one click writes verse 1 — and, because the slice drops
+    chapter chrome, chapter 1, turning Luke 5:0 into Luke 1:1.
+  - **Chapter surfaces are exempt.** Anything rendering a whole chapter shows verse-0 front matter
+    directly: the Text Collection's chapter mode, its chapter-context split, its single-resource
+    path (`ScriptureTextGrid` renders one shown resource as `viewMode="chapter"`, so verse-0
+    behavior differs between one and several resources), and the Resource Viewer
+    (`resource-text-panel.web-view.tsx`). Correct behavior, signed off by Ian on PT-3133.
+  - **Genuinely-missing verses keep the ghost text.** Fall-forward applies only to verse 0. A verse
+    absent from a resource (an NT-only resource at an OT reference, an untranslated verse) still
+    renders "No text for this verse".
+  Accessible names resolve the same way, so the announcement names the verse the cells display. It
+  names the row, not its contents: a resource lacking verse 1 shows the empty state under the same
+  label, and a combined opener renders a "1-3" verse number under a label saying "1".
+- **Alternatives:** (a) *Keep the ghost-text empty state* — rejected: it blanks every cell at once
+  exactly when the user crosses a chapter or book boundary, so the tool reads as broken at the
+  moment it should be most useful; it also contradicts PT-3133's written acceptance. (b) *Normalize
+  the reference — forbid verse 0 in the Text Collection, or write verse 1 back to the scroll group*
+  (Todd Hoatson's suggestion on PT-3133) — rejected: the scroll group is shared, so it would move
+  every other view off the intro. (c) *Put the rule inside `sliceUsjToVerse`* — rejected: the
+  decision is about the **reference**, not the USJ, and the accessible-name site needs it without
+  having any USJ; burying a copy there would centralize nothing while making
+  `sliceUsjToVerse(usj, 0)` silently return verse 1.
+- **Consequences:** verse-0 content is not shown in verse view — deliberately. It stays one click
+  away via the chapter-context split, which renders the chapter unsliced; that escape hatch is what
+  makes the trade acceptable, so **revisit if the chapter-context split is ever removed or made
+  non-obvious**. Verse 0 and verse 1 now render identically and carry the same accessible name, so
+  stepping backward across that boundary produces no visible or announced change — accepted, since
+  the alternative is a row of ghost text at every chapter boundary. Note this is not one silent step
+  but a **silent dead end**: with no `bounds`, `getPreviousVerseRef` returns the same
+  `{chapterNum, verseNum: 0}` ref every time, so once the toolbar's previous-verse button lands on
+  verse 0 in a chapter > 1 it is inert, and fall-forward removes its last remaining cue. The pin
+  predates this decision; fixing it means passing `bounds` at that call site
+  (`book-chapter-control.navigation.ts`), which is out of scope here. Any future single-verse surface
+  must call `resolveDisplayVerseNum` — `sliceUsjToVerse` is deliberately mechanical and slices a raw
+  verse 0 to nothing (pinned by a test). Note the helper is currently private to
+  `platform-scripture-editor`; a surface in another extension cannot import it, so **promote it to
+  `lib/platform-bible-utils/src/scripture/` (which already owns `getPreviousVerseRef`, the producer
+  of verse-0 refs) at the second consumer** rather than re-typing the rule.
+- **Source:** PT-4061 (B3), which resolves PT-3133; Ian Hewerdine confirmed parity 2026-08-05.
