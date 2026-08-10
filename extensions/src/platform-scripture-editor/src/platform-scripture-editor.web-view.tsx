@@ -977,7 +977,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       end: { ...(selection.end ?? selection.start) },
     };
 
-    // Validate that the selection doesn't contain markers, and that there is meaningful content
+    // Validate that the selection doesn't contain markers, and that there is meaningful content.
+    // `selection`'s jsonPaths address the LIVE tree (EditorRef.getSelection's contract), while
+    // `getUsj()` returns the SETTLED document — identical when nothing is pending, but while a
+    // command surface has in-progress input elsewhere in the document, settled indices can shift
+    // out from under a jsonPath captured earlier. `jsonPathToUsjNodeAndDocumentLocation` throws
+    // outright when a path no longer resolves at all, and can otherwise resolve to a
+    // still-valid-but-DIFFERENT node whose string is a different length than the live one the
+    // offsets below were computed against — both guarded here rather than trusted, since neither
+    // is distinguishable from a genuine marker-boundary case by the caller.
     const editorUsj = editorRef.current?.getUsj();
     const editorUsjCorrected = editorUsj ? correctEditorUsjVersion(editorUsj) : undefined;
     if (editorUsjCorrected) {
@@ -985,12 +993,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         markersMap: USFM_MARKERS_MAP_PARATEXT_3_0,
       });
 
-      const startNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
-        selection.start.jsonPath,
-      );
-      const endNodeAndDocumentLocation = selection.end
-        ? usjRW.jsonPathToUsjNodeAndDocumentLocation(selection.end.jsonPath)
-        : startNodeAndDocumentLocation;
+      let startNodeAndDocumentLocation;
+      let endNodeAndDocumentLocation;
+      try {
+        startNodeAndDocumentLocation = usjRW.jsonPathToUsjNodeAndDocumentLocation(
+          selection.start.jsonPath,
+        );
+        endNodeAndDocumentLocation = selection.end
+          ? usjRW.jsonPathToUsjNodeAndDocumentLocation(selection.end.jsonPath)
+          : startNodeAndDocumentLocation;
+      } catch {
+        // A path that no longer resolves at all against the settled tree: same fail-safe response
+        // as an unresolvable selection below, not a crash.
+        papi.notifications.send({
+          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+          severity: 'warning',
+        });
+        return;
+      }
 
       const startNode = startNodeAndDocumentLocation?.node;
       const isStartNodeAString = isString(startNode);
@@ -1017,6 +1037,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         UsjReaderWriter.isUsjDocumentLocationForTextContent(endTextDocumentLocation) &&
         startTextDocumentLocation.jsonPath === endTextDocumentLocation.jsonPath &&
         startTextDocumentLocation.offset === endTextDocumentLocation.offset;
+      // A live-tree offset that no longer fits the settled string it resolved to: concrete
+      // evidence the two snapshots disagree about this node's content, not just a stale offset —
+      // proceeding would either mis-anchor the comment or (for offset > length) walk off the end
+      // of `startNode` below. Bail out the same way an unresolvable path already does.
+      if (
+        isCollapsed &&
+        'offset' in startTextDocumentLocation &&
+        startTextDocumentLocation.offset > startNode.length
+      ) {
+        papi.notifications.send({
+          message: '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
+          severity: 'warning',
+        });
+        return;
+      }
       if (isCollapsed) {
         if (!('offset' in startTextDocumentLocation)) {
           papi.notifications.send({
@@ -2250,6 +2285,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // of a stray palette trigger literal. Falls back to the raw `usj` only if the editor is
       // unavailable at this exact keystroke (should not happen in practice — `onUsjChange` only
       // fires from a mounted editor).
+      //
+      // LOAD-BEARING: reverting `editorRef.current?.getUsj() ?? usj` back to the plain `usj`
+      // argument compiles and passes every existing test — this web view has no component-level
+      // test harness for its save-scheduling path — but silently reopens a live corruption class:
+      // a save that fires mid-keystroke (the debounce timer, a window-blur flush, or the
+      // cross-chapter flush) would then schedule the UNSETTLED bytes directly, bypassing
+      // `setTransientInput`'s exclusion entirely, so an in-progress command-surface literal (e.g. a
+      // marker-palette trigger) could reach disk as a phantom marker even when the exclusion itself
+      // is working correctly. Only a live check (type a trigger literal, force a save before the
+      // surface consumes it, inspect the saved bytes) catches a regression on this line.
       saveUsjToPdpDebounced.schedule(
         editorRef.current?.getUsj() ?? usj,
         saveUsjToPdpIfUpdatedRef.current,
