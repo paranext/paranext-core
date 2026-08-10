@@ -243,6 +243,35 @@ export function getTargetWindowId(): number | undefined {
 }
 
 /**
+ * Bring a window to the front of the OS window stack, restoring it first if it is minimized.
+ *
+ * Lives here rather than at the call sites because this module is the only thing that holds a
+ * window id long enough to still have it after the window is gone: a routed call resolves its
+ * target window and then does a cross-process round trip, and the window can close during it.
+ * Looking the window up through the tracked list makes that a no-op instead of a throw on a
+ * destroyed BrowserWindow.
+ *
+ * Restoring before focusing because a minimized window that is merely focused stays minimized, so
+ * the raise the caller asked for would silently not happen.
+ *
+ * @param windowId Window to raise. Doing nothing is the right answer for a window that has closed.
+ */
+export function focusWindow(windowId: number): void {
+  const trackedWindow = trackedWindows.find((tracked) => tracked.windowId === windowId);
+  if (!trackedWindow || trackedWindow.window.isDestroyed()) return;
+
+  try {
+    if (trackedWindow.window.isMinimized()) trackedWindow.window.restore();
+    trackedWindow.window.focus();
+  } catch (e) {
+    // A window can be destroyed between the check above and either call. Raising a window is
+    // feedback about where something already happened, so failing to raise must not fail the
+    // operation that asked for it.
+    logger.warn(`Could not raise window ${windowId}: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
  * Announce that routed calls now go somewhere else, if they do.
  *
  * Every mutation in this module ends here rather than deciding for itself whether its change is
