@@ -1011,10 +1011,20 @@ export function addTabToDock(
       if (updatedLayout.targetTabId !== undefined) {
         // Look for a specific tab
         targetTab = dockLayout.find(updatedLayout.targetTabId);
-        if (!isTab(targetTab))
-          throw new LogError(
-            `When adding a panel, unknown target tab: '${updatedLayout.targetTabId}'`,
+        // Every caller that names a target tab today goes through the WebView service router, which
+        // sends the open to whichever window holds that tab — so a target missing here is a target
+        // no window claimed: it closed, or the caller is holding an id it read a while ago.
+        // Placing the panel as if no target had been asked for keeps the user's command producing a
+        // tab, which refusing the whole add does not; the same fall-through already covers a `tab`
+        // layout whose `parentTabGroupId` is not here. A caller that reached this function without
+        // going through the router gets the same placement rather than an error, so a wrong id
+        // shows up as a tab in an odd spot and a log line rather than as nothing at all.
+        if (!isTab(targetTab)) {
+          logger.warn(
+            `When adding a panel, target tab '${updatedLayout.targetTabId}' is not in this window. Adding the panel without it.`,
           );
+          targetTab = findPreviousTab(dockLayout);
+        }
       }
       // Didn't ask for a specific tab, so just get the previous tab and go from there
       else targetTab = findPreviousTab(dockLayout);
