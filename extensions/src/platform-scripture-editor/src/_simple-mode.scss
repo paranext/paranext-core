@@ -87,7 +87,7 @@
 // 64px keeps the icon-only trigger legible at 20% narrower than 5em (not half — the earlier 2.5em
 // estimate undercounted the chrome). The current-marker readout moved to the trigger's tooltip and
 // the menu's tri-state rows instead. Changing this one value is still the whole change; see
-// ADR-0007's 2026-08-05 amendment.
+// ADR-0011's 2026-08-05 amendment.
 //
 // PIXELS, deliberately, not `em`. Every term in that 64px is a FIXED pixel amount — Lucide icons are
 // 16px, and the Button's gap/padding/border are Tailwind pixel utilities — none of which scale with

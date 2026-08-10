@@ -85,6 +85,26 @@ describe('useCharacterMarkerState — getUsj cost', () => {
 
     expect(getUsj).toHaveBeenCalledTimes(1);
   });
+
+  it('holds the open-time coverage when the selection moves under an open menu', () => {
+    // The freeze is deliberate: the rows describe the selection the menu was opened against, and
+    // re-sampling would both repoint them at text the user cannot see and pay for another
+    // whole-chapter `getUsj()`. Pinned here so a future edit cannot make it drift by accident.
+    let selection = { start: { jsonPath: MULU, offset: 0 }, end: { jsonPath: MULU, offset: 4 } };
+    const { result, rerender } = renderHook((props) => useCharacterMarkerState(props), {
+      initialProps: options({ getSelection: () => selection }),
+    });
+
+    act(() => result.current.onOpen());
+    expect(result.current.currentMarker).toBe('bd');
+
+    // The caret moves out of `\bd` into the plain text before it, and the view re-renders.
+    selection = { start: { jsonPath: KOLO, offset: 0 }, end: { jsonPath: KOLO, offset: 5 } };
+    rerender(options({ getSelection: () => selection, contextMarker: 'p' }));
+
+    expect(result.current.currentMarker).toBe('bd');
+    expect(getUsj).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('useCharacterMarkerState — trigger label inputs', () => {
@@ -166,10 +186,11 @@ describe('useCharacterMarkerState — unresolvable selection', () => {
   it('falls back to contextMarker when the selection cannot be resolved against the USJ', () => {
     // A jsonPath that does not exist in USJ_PARTIAL_BD: `computeCharacterMarkerCoverage` returns
     // the pure function's "no information" result (empty markerStates, hasUncovered === false),
-    // which is indistinguishable from a genuinely unmarked selection only by checking hasUncovered
-    // — a real unmarked selection always has hasUncovered === true. The hook must treat this as "no
-    // coverage" rather than "nothing applied", falling back to contextMarker exactly as it does
-    // with no selection or no USJ.
+    // which is what it reports whenever there was nothing to measure — an unresolvable path, a
+    // selection inside a note, or a caret on a non-text node. A selection it *did* measure and
+    // found unmarked has hasUncovered === true instead. The hook must treat this as "no coverage"
+    // rather than "nothing applied", falling back to contextMarker exactly as it does with no
+    // selection or no USJ.
     const { result } = renderHook(() =>
       useCharacterMarkerState(
         options({
@@ -313,5 +334,57 @@ describe('useCharacterMarkerState — focus', () => {
     act(() => result.current.onClose());
 
     expect(focus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useCharacterMarkerState — disabled rows', () => {
+  // The generator stays inert whenever a character marker covers the selection, because
+  // `insertMarker` nests rather than replaces. These assert that the inert rows are also marked
+  // unavailable, so a click is refused visibly instead of being silently swallowed.
+
+  it('disables every marker row while a marker is applied and replacement does not exist yet', () => {
+    const { result } = renderHook(() => useCharacterMarkerState(options()));
+
+    const markerRows = result.current.markerMenuItems.filter((item) => item.marker);
+    expect(markerRows.length).toBeGreaterThan(0);
+    expect(markerRows.every((item) => item.isDisabled)).toBe(true);
+  });
+
+  it('disables only the applied marker once replacement exists', () => {
+    const { result } = renderHook(() =>
+      useCharacterMarkerState(options({ changeCharacterMarker: vi.fn() })),
+    );
+
+    const markerRows = result.current.markerMenuItems.filter((item) => item.marker);
+    expect(markerRows.find((item) => item.marker === 'bd')?.isDisabled).toBe(true);
+    expect(markerRows.filter((item) => item.marker !== 'bd').some((item) => item.isDisabled)).toBe(
+      false,
+    );
+  });
+
+  it('disables nothing when no character marker is applied, so adding still works', () => {
+    const { result } = renderHook(() =>
+      useCharacterMarkerState(
+        options({
+          contextMarker: 'p',
+          getSelection: () => ({
+            start: { jsonPath: KOLO, offset: 0 },
+            end: { jsonPath: KOLO, offset: 4 },
+          }),
+        }),
+      ),
+    );
+
+    expect(result.current.markerMenuItems.some((item) => item.isDisabled)).toBe(false);
+  });
+
+  it('never disables the remove row', () => {
+    const { result } = renderHook(() =>
+      useCharacterMarkerState(options({ removeCharacterMarker: vi.fn() })),
+    );
+
+    const removeRow = result.current.markerMenuItems.find((item) => item.marker === undefined);
+    expect(removeRow).toBeDefined();
+    expect(removeRow?.isDisabled).toBe(false);
   });
 });

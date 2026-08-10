@@ -17,7 +17,10 @@ import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { MarkerMenuItem } from 'platform-bible-react';
 import { RemoveFormatting } from 'lucide-react';
-import { CharacterMarkerCoverage } from './character-marker-coverage.utils';
+import {
+  CharacterMarkerCoverage,
+  CharacterMarkerSelectionState,
+} from './character-marker-coverage.utils';
 
 const REMOVE_CHARACTER_MARKER_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_characterMarkerMenu_removeMarker%';
@@ -32,6 +35,41 @@ export const CHARACTER_MARKER_MENU_STRING_KEYS = Object.freeze([
   REMOVE_CHARACTER_MARKER_KEY,
   REMOVE_ALL_CHARACTER_MARKERS_KEY,
 ] as const);
+
+/**
+ * Whether a marker row's action would do nothing, so the row must render unavailable rather than
+ * silently swallowing the click.
+ *
+ * This mirrors, condition for condition, the inert branches of the row's own action below — the two
+ * are written next to each other for exactly that reason. A row goes inert because `insertMarker`
+ * NESTS rather than replaces or extends, so every case where neither removal nor replacement is
+ * available has no defined meaning to act on.
+ *
+ * @param selectionState How much of the selection this row's marker covers, or `undefined` while
+ *   the menu has no coverage (it is only sampled on open).
+ * @param marker This row's marker code.
+ * @param currentCharacterMarker The marker the menu treats as applied, if any.
+ * @param canRemove Whether a remove operation was supplied.
+ * @param canChange Whether a replace operation was supplied.
+ */
+function isMarkerRowInert(
+  selectionState: CharacterMarkerSelectionState | undefined,
+  marker: string,
+  currentCharacterMarker: string | undefined,
+  canRemove: boolean,
+  canChange: boolean,
+): boolean {
+  // Extending a partially-covering marker over the rest of the selection is a separate editor
+  // operation (`PT-XXX-B4`).
+  if (selectionState === 'partial') return true;
+  // Covers everything, so the action is a toggle-off — inert only if removal does not exist yet.
+  if (selectionState === 'all') return !canRemove;
+  // Nothing applied: picking a marker adds it, which always works.
+  if (!currentCharacterMarker) return false;
+  // A marker IS applied: picking the same one again has no defined meaning, and picking a different
+  // one needs the replace operation.
+  return marker === currentCharacterMarker || !canChange;
+}
 
 /**
  * Function that generates the character marker menu items for the character-marker control.
@@ -142,6 +180,13 @@ export function generateCharacterMarkerMenuListItems(
         marker,
         title: localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
         selectionState: coverage ? (coverage.markerStates[marker] ?? 'none') : undefined,
+        isDisabled: isMarkerRowInert(
+          coverage ? (coverage.markerStates[marker] ?? 'none') : undefined,
+          marker,
+          currentCharacterMarker,
+          !!removeCharacterMarker,
+          !!changeCharacterMarker,
+        ),
         action: () => {
           const selectionState = coverage ? coverage.markerStates[marker] : undefined;
           // Toggle off: the marker already covers the whole selection, so picking it again means
@@ -198,6 +243,9 @@ export function generateCharacterMarkerMenuListItems(
           localizedStrings[REMOVE_ALL_CHARACTER_MARKERS_KEY] ?? REMOVE_ALL_CHARACTER_MARKERS_KEY,
         icon: RemoveFormatting,
         selectionState: removeRowSelectionState,
+        // Never inert: a remove row is only emitted at all when removal exists and something is
+        // covered, so it always has something to do.
+        isDisabled: false,
         action: () => {
           removeCharacterMarker();
           closeMarkersMenu();
@@ -207,6 +255,8 @@ export function generateCharacterMarkerMenuListItems(
         title: localizedStrings[REMOVE_CHARACTER_MARKER_KEY] ?? REMOVE_CHARACTER_MARKER_KEY,
         icon: RemoveFormatting,
         selectionState: removeRowSelectionState,
+        // See the remove-all row above: never inert.
+        isDisabled: false,
         action: () => {
           // Non-null: `hasSomethingToRemove` is true and `isMixedCoverage` is false here, so
           // `currentCharacterMarker` is set.

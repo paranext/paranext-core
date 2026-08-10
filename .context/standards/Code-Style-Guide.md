@@ -52,6 +52,14 @@ High-level guidelines that should shape both writing and reviewing code. The top
   - Avoid [initialisms and abbreviations](#initialisms-and-abbreviations) that aren't explicitly established or widely accepted.
   - Capitalize acronyms per [.NET capitalization conventions](https://learn.microsoft.com/en-us/dotnet/standard/design-guidelines/capitalization-conventions): two-letter together (`IOStream`), longer as words (`HttpRequest`).
 - **Use comments to explain why**, not what. Don't narrate obvious code; do explain non-obvious intent or purpose.
+- **Comments describe the code, not its history**: no change narration ("previously", "this PR",
+  "the review found") and no backward-facing ticket or PR references — those rot the moment the
+  branch merges. **Forward-facing ticket pointers are the exception**: when a comment defers work
+  or documents a known limitation whose fix lives elsewhere, name the ticket (`TODO (PT-XXXX)`,
+  "until PT-XXXX lands", "PT-XXXX's scope") — it is the only searchable pointer from the code to
+  the rest of the story. The test: would the reference still help a reader who never saw this
+  change land? A pointer to where deferred work lives does; a citation of what the code used to do
+  does not.
 - **Prefer `undefined` over `null`**: [JavaScript's two concepts of nothing](https://medium.com/@hbarcelos/why-i-banned-null-from-my-js-code-and-why-you-should-too-13df90323cfa) cause confusion. Use `undefined` throughout the codebase. Confine `null` to the boundary with external APIs that require or return it.
 - **Use empty arrays over `undefined`** when an absent collection is meaningful — empty arrays are always safe to iterate.
 - **Prefer path aliases for imports**: `import ... from '<alias>/...'` over long relative paths. Webpack is configured to understand the aliases.

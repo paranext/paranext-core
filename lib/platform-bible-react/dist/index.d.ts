@@ -10,7 +10,7 @@ import { LucideProps } from 'lucide-react';
 import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -942,6 +942,7 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
+	"%markerMenu_searchPlaceholder_character%",
 	"%markerMenu_searchPlaceholder_insert%",
 	"%markerMenu_searchPlaceholder_paragraph%",
 	...`%${string}%`[],
@@ -1221,6 +1222,7 @@ export declare const MARKER_MENU_STRING_KEYS: readonly [
 	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
+	"%markerMenu_searchPlaceholder_character%",
 	"%markerMenu_searchPlaceholder_insert%",
 	"%markerMenu_searchPlaceholder_paragraph%"
 ];
@@ -1267,6 +1269,17 @@ export interface MarkerMenuItem {
 	 * neither visibility nor selectability. It is display only.
 	 */
 	selectionState?: "all" | "partial" | "none";
+	/**
+	 * Whether the consumer currently has no operation for this row, so it must not be selectable.
+	 * Optional and additive — with no value the row is selectable exactly as it has always been.
+	 *
+	 * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this says
+	 * nothing about the marker itself and so renders no trailing label: those two describe a property
+	 * of the marker, while this describes the consumer's momentary inability to act on it. It also
+	 * does not affect visibility — the row stays listed, because a row that disappears reads as "this
+	 * marker does not exist here" rather than "you cannot do that to it right now."
+	 */
+	isDisabled?: boolean;
 	/** Function to be triggered when the marker or command is selected */
 	action: () => void;
 }
@@ -2378,6 +2391,56 @@ export type DestructiveKeyConfirmationProps = {
  * this component only renders the hint.
  */
 export declare function DestructiveKeyConfirmation({ open, anchorRect, message, confirmingKeyLabel, side, align, showArrow, }: DestructiveKeyConfirmationProps): import("react/jsx-runtime").JSX.Element;
+export type DisabledActionTooltipProps = {
+	/**
+	 * Whether the wrapped action(s) are currently disabled. While `true`, the wrapper becomes
+	 * focusable and labeled with `tooltipText` so the explanation stays reachable for keyboard and
+	 * screen-reader users.
+	 */
+	disabled: boolean;
+	/** Explanation shown in the tooltip, and used as the wrapper's `aria-label`, while `disabled`. */
+	tooltipText: string;
+	/** The action(s) to render — one or more buttons, a popover trigger, etc. */
+	children: React$1.ReactNode;
+	/** Optional class name for the focusable wrapper `div`. */
+	className?: string;
+};
+/**
+ * Wraps one or more actions (buttons, a popover trigger, etc.) that may be disabled, surfacing a
+ * tooltip explanation while they are, via {@link DisabledTooltipWrapper}. This is the convenience
+ * shape for the common case of a single tooltip message driving both the wrapper's accessible name
+ * and the tooltip body — use `DisabledTooltipWrapper` directly if the accessible name and the
+ * tooltip content need to differ, or the `Tooltip` needs non-default props.
+ */
+export declare function DisabledActionTooltip({ disabled, tooltipText, children, className, }: DisabledActionTooltipProps): import("react/jsx-runtime").JSX.Element;
+export type DisabledTooltipWrapperProps = Omit<React$1.ComponentPropsWithRef<"div">, "children" | "role" | "tabIndex" | "aria-label"> & {
+	/** The control to wrap — typically a button that is `disabled` for the same reason. */
+	children: React$1.ReactNode;
+	/** `true` while the wrapped control is disabled. Drives the focusability and the accessible name. */
+	isDisabled: boolean;
+	/**
+	 * The localized explanation of WHY the control is disabled. Becomes the wrapper's accessible name
+	 * while disabled, so it should be the same text the tooltip shows.
+	 */
+	disabledExplanation?: string;
+};
+/**
+ * Focusable wrapper that lets a DISABLED control still host a tooltip.
+ *
+ * A disabled button is removed from the tab order and (in most browser/AT combinations) does not
+ * fire the pointer and focus events Radix's `Tooltip` listens for — so the one moment the user most
+ * needs the explanation ("why can't I use this?") is the one moment the button cannot deliver it.
+ * Wrapping the control in a focusable, named element restores it: the wrapper takes the tooltip
+ * trigger's place in the tab order and carries the explanation as its accessible name, so keyboard
+ * and screen-reader users reach the same information pointer users get on hover. While the control
+ * is ENABLED the wrapper is inert — no role, no tab stop, no name — leaving the button itself as
+ * the single focusable, named thing.
+ *
+ * Render it as the `asChild` child of a `TooltipTrigger`; it forwards the trigger's props and ref
+ * onto its `div`. `DisabledActionTooltip` composes this with the rest of the `Tooltip` shell for
+ * the common case of one tooltip message driving both the accessible name and the tooltip body.
+ */
+export declare function DisabledTooltipWrapper({ children, isDisabled, disabledExplanation, ...props }: DisabledTooltipWrapperProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the

@@ -10,15 +10,18 @@ import { SHARE_LAYOUT_DIALOG } from '@renderer/components/dialogs/share-layout.d
 import { sendCommand } from '@shared/services/command.service';
 
 // Importing the real `DIALOGS` map transitively pulls in `project-picker.dialog.tsx` ->
-// `use-project-picker-data.hook.ts` -> `papi-frontend.service.ts`, whose module-level
-// `theme.service-host.ts` initialization calls `window.matchMedia`, which jsdom does not
-// implement. Mock this PAPI service boundary (matching the precedent in
+// `use-project-picker-data.hook.ts` -> the renderer web view host and `papi-frontend.service.ts`,
+// whose module-level `theme.service-host.ts` initialization calls `window.matchMedia`, which jsdom
+// does not implement. Mock both service boundaries (matching the precedent in
 // `use-project-picker-data.hook.test.ts`) since this smoke test only checks registration
 // metadata and never exercises project-picker behavior.
 vi.mock('@renderer/services/papi-frontend.service', () => ({
   webViews: {
     getAllOpenWebViewDefinitions: vi.fn(async () => []),
   },
+}));
+vi.mock('@renderer/services/web-view.service-host', () => ({
+  getAllOpenWebViewDefinitionsSync: vi.fn(() => []),
 }));
 
 const EMPTY_RESOURCE_LIST: ResourceReferenceList = { dataVersion: '1.0.0', items: [] };

@@ -1,4 +1,11 @@
-/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/usj-nodes.css */
+/* Based on scripture-editors' packages/platform/src/usj-nodes.css:
+   https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
+   (originally synced from commit ba0e846b3f1:
+   https://github.com/eten-tech-foundation/scripture-editors/commit/ba0e846b3f1).
+   Local additions: li/lim --para-indent and --verse-text-start entries in
+   .psc-gutter-markers.text-spacing, mirroring scripture-editors commit 846ad99
+   (https://github.com/eten-tech-foundation/scripture-editors/commit/846ad99,
+   \li/\lim gutter overlap fix). */
 
 /* stylelint-disable */
 
@@ -2562,12 +2569,16 @@ span.read img {
 }
 
 /* Indent compensation — mirrors the margin-left values above.
-   Only active when .text-spacing is present (same condition as the source rules). */
+   Only active when .text-spacing is present (same condition as the source rules).
+   pi2 and pi3 use the same primary-indent value in both LTR and RTL (10vw and 15vw
+   respectively), so no direction restriction is needed here. */
 .psc-gutter-markers.text-spacing .usfm_io,
 .psc-gutter-markers.text-spacing .usfm_io1,
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
-.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi2 {
+.psc-gutter-markers.text-spacing .usfm_li,
+.psc-gutter-markers.text-spacing .usfm_li1,
+.psc-gutter-markers.text-spacing .usfm_pi2 {
   --para-indent: 10vw;
 }
 .psc-gutter-markers.text-spacing .usfm_q,
@@ -2577,16 +2588,26 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_q4,
 .psc-gutter-markers.text-spacing .usfm_io2,
 .psc-gutter-markers.text-spacing .usfm_ili2,
-.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi3 {
+.psc-gutter-markers.text-spacing .usfm_li2,
+.psc-gutter-markers.text-spacing .usfm_lim,
+.psc-gutter-markers.text-spacing .usfm_lim1,
+.psc-gutter-markers.text-spacing .usfm_pi3 {
   --para-indent: 15vw;
 }
 .psc-gutter-markers.text-spacing .usfm_qm,
 .psc-gutter-markers.text-spacing .usfm_qm1,
-.psc-gutter-markers.text-spacing .usfm_io3 {
+.psc-gutter-markers.text-spacing .usfm_io3,
+.psc-gutter-markers.text-spacing .usfm_li3,
+.psc-gutter-markers.text-spacing .usfm_lim2 {
   --para-indent: 20vw;
 }
-.psc-gutter-markers.text-spacing .usfm_io4 {
+.psc-gutter-markers.text-spacing .usfm_io4,
+.psc-gutter-markers.text-spacing .usfm_li4,
+.psc-gutter-markers.text-spacing .usfm_lim3 {
   --para-indent: 25vw;
+}
+.psc-gutter-markers.text-spacing .usfm_lim4 {
+  --para-indent: 30vw;
 }
 .psc-gutter-markers.text-spacing .usfm_ipi,
 .psc-gutter-markers.text-spacing .usfm_imi,
@@ -2629,7 +2650,17 @@ span.read img {
 }
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
-.psc-gutter-markers.text-spacing .usfm_ili2 {
+.psc-gutter-markers.text-spacing .usfm_ili2,
+.psc-gutter-markers.text-spacing .usfm_li,
+.psc-gutter-markers.text-spacing .usfm_li1,
+.psc-gutter-markers.text-spacing .usfm_li2,
+.psc-gutter-markers.text-spacing .usfm_li3,
+.psc-gutter-markers.text-spacing .usfm_li4,
+.psc-gutter-markers.text-spacing .usfm_lim,
+.psc-gutter-markers.text-spacing .usfm_lim1,
+.psc-gutter-markers.text-spacing .usfm_lim2,
+.psc-gutter-markers.text-spacing .usfm_lim3,
+.psc-gutter-markers.text-spacing .usfm_lim4 {
   --verse-text-start: -7.5vw;
 }
 .psc-gutter-markers.text-spacing .usfm_iq,

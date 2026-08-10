@@ -15,12 +15,10 @@ import {
   DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS,
   DialogData,
 } from '@shared/models/dialog-options.model';
-import { registerCommand } from '@shared/services/command.service';
-import { CATEGORY_DIALOG } from '@shared/services/dialog.service-model';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
-import * as networkService from '@shared/services/network.service';
-import { serializeRequestType } from '@shared/utils/util';
+import { registerScopedCommands } from '@renderer/services/renderer-hosted-command-registry';
+import { registerScopedDialogRequest } from '@renderer/services/renderer-hosted-dialog-registry';
 import {
   aggregateUnsubscriberAsyncs,
   isLocalizeKey,
@@ -332,8 +330,8 @@ export async function startDialogService(): Promise<void> {
   // register functions as requests
   const unsubPromises: Promise<UnsubscriberAsync>[] = [];
   unsubPromises.push(
-    networkService.registerRequestHandler(
-      serializeRequestType(CATEGORY_DIALOG, 'showDialog'),
+    registerScopedDialogRequest(
+      'showDialog',
       showDialog,
       {
         method: {
@@ -404,8 +402,8 @@ export async function startDialogService(): Promise<void> {
     ),
   );
   unsubPromises.push(
-    networkService.registerRequestHandler(
-      serializeRequestType(CATEGORY_DIALOG, 'selectProject'),
+    registerScopedDialogRequest(
+      'selectProject',
       selectProject,
       {
         method: {
@@ -459,8 +457,8 @@ export async function startDialogService(): Promise<void> {
     ),
   );
   unsubPromises.push(
-    networkService.registerRequestHandler(
-      serializeRequestType(CATEGORY_DIALOG, 'showAboutDialog'),
+    registerScopedDialogRequest(
+      'showAboutDialog',
       showAboutDialog,
       {
         method: {
@@ -477,7 +475,9 @@ export async function startDialogService(): Promise<void> {
       },
     ),
   );
-  unsubPromises.push(registerCommand('platform.about', showAboutDialog));
+  // Register under a window-scoped name so multiple windows can coexist. The main process command
+  // routing proxy handles forwarding the generic name to the focused window.
+  unsubPromises.push(...registerScopedCommands({ 'platform.about': showAboutDialog }));
 
   // Wait to successfully register all requests
   const unsubscribeRequests = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));

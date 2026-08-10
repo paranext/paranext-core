@@ -6,9 +6,10 @@ import {
   CharacterMarkerCoverage,
   CharacterMarkerSelection,
   computeCharacterMarkerCoverage,
+  isEmptyCoverage,
 } from './character-marker-coverage.utils';
 import { generateCharacterMarkerMenuListItems } from './character-marker-menu.utils';
-import { CharacterMarkerControlProps } from './character-marker-control.component';
+import { CharacterMarkerControlProps } from './character-marker-control/character-marker-control.component';
 import { correctEditorUsjVersion } from './platform-scripture-editor.utils';
 
 export type UseCharacterMarkerStateOptions = {
@@ -50,11 +51,13 @@ export type CharacterMarkerState = Pick<
  * selection cannot be resolved against the editor's USJ.
  *
  * Empty `markerStates` together with `hasUncovered === false` is the pure function's "no
- * information" result — it also occurs when the selection's json paths do not resolve against this
- * USJ (e.g. drift between the editor's USJ and its selection after an edit). A genuinely unmarked
- * selection always has `hasUncovered === true` (a collapsed caret included), so this combination is
- * unambiguous. Returning `undefined` makes the hook degrade exactly as it does with no selection or
- * no USJ — falling back to `contextMarker` — rather than confidently reporting "nothing applied".
+ * information" result, and it is treated as such here — never as "the selection carries no marker".
+ * It arises whenever there was nothing to measure: the selection's json paths do not resolve
+ * against this USJ (e.g. drift between the editor's USJ and its selection after an edit), the
+ * selection resolves inside a note (which coverage excludes entirely), or a collapsed caret's start
+ * node is not a text node, so no text segment is collected at all. Returning `undefined` makes the
+ * hook degrade exactly as it does with no selection or no USJ — falling back to `contextMarker` —
+ * rather than confidently reporting "nothing applied".
  */
 function computeCoverage(
   editorRef: MutableRefObject<EditorRef | null>,
@@ -65,8 +68,7 @@ function computeCoverage(
   if (!selection || !editorUsj) return undefined;
 
   const computed = computeCharacterMarkerCoverage(correctEditorUsjVersion(editorUsj), selection);
-  const isUnresolvable = Object.keys(computed.markerStates).length === 0 && !computed.hasUncovered;
-  return isUnresolvable ? undefined : computed;
+  return isEmptyCoverage(computed) ? undefined : computed;
 }
 
 /**
@@ -144,6 +146,13 @@ export function useCharacterMarkerState({
 }: UseCharacterMarkerStateOptions): CharacterMarkerState {
   const [coverage, setCoverage] = useState<CharacterMarkerCoverage | undefined>(undefined);
 
+  // Coverage is deliberately FROZEN for as long as the menu is open. It is sampled once here and
+  // cleared on close, so a selection that changes underneath an open menu (an external scroll-group
+  // update, say) leaves the trigger label and the per-row check states showing the selection the
+  // user opened the menu against. That is the intended reading: the rows describe the selection the
+  // user is about to act on, and re-sampling would silently repoint the menu at text they cannot
+  // see. Re-syncing would also mean calling `getUsj()` — a whole-chapter serialization — on every
+  // selection change while open, which is the cost this whole design exists to avoid.
   const onOpen = useCallback(() => {
     setCoverage(computeCoverage(editorRef, getSelection));
   }, [editorRef, getSelection]);
@@ -153,9 +162,6 @@ export function useCharacterMarkerState({
     editorRef.current?.focus();
   }, [editorRef]);
 
-  const coveringMarkers = useMemo(() => Object.keys(coverage?.markerStates ?? {}), [coverage]);
-
-  // See `resolveCurrentMarker`; U3 is the case its doc comment describes.
   const currentMarker = useMemo(
     () => resolveCurrentMarker(coverage, contextMarker),
     [coverage, contextMarker],
@@ -175,6 +181,7 @@ export function useCharacterMarkerState({
   let isMixed: boolean;
   if (coverage) {
     // More than one covering marker, or a mix of covered and uncovered text.
+    const coveringMarkers = Object.keys(coverage.markerStates);
     isMixed = coveringMarkers.length > 1 || (coveringMarkers.length > 0 && coverage.hasUncovered);
   } else {
     // O(1) fallback while the menu is closed. It over-reports — a selection spanning two adjacent
@@ -183,6 +190,10 @@ export function useCharacterMarkerState({
     isMixed = !!selection?.end && selection.start.jsonPath !== selection.end.jsonPath;
   }
 
+  // Keyed on `coverage` because the generator owns what each row DOES as well as what it shows, and
+  // both depend on coverage: opening and closing the menu therefore re-runs its filter and
+  // locale-aware sort over the block's children. That re-run is the price of keeping a row's action
+  // and its displayed state in one place rather than splitting one decision across two files.
   const markerMenuItems = useMemo(
     () =>
       buildMarkerMenuItems({
