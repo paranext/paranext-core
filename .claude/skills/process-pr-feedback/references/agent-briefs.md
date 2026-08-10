@@ -199,9 +199,11 @@ share a worktree.
 > your final message so the orchestrator amends the file once; do not amend it yourself and do not
 > use the label meanwhile.
 >
-> **Target per draft.** Either an inline thread id (verified live against
+> **Target per draft.** Either an inline thread's **root comment id** (verified live against
 > `gh api repos/paranext/paranext-core/pulls/<n>/comments --paginate` — an id from an older
-> document may be stale), or "issue comment on #<n>" when no inline thread exists. Top-level
+> document may be stale), or "issue comment on #<n>" when no inline thread exists. The root id
+> is the one with null `in_reply_to_id`; a reviewer comment that is itself a reply names its
+> root in that field, and the replies endpoint rejects any other target. Top-level
 > review bodies and Reviewable-native discussions have no reply endpoint.
 >
 > **If the feedback arrived off-PR**, convert it to PR-anchored threads instead of answering in
