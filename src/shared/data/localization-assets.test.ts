@@ -41,9 +41,10 @@ describe('marker menu strings in shipped locale assets', () => {
     // unlike its sibling guard in
     // extensions/src/platform-scripture-editor/src/localized-strings.test.ts. That sibling covers
     // control-specific labels, where an es/en match usually means an untranslated copy-paste.
-    // MARKER_MENU_STRING_KEYS instead covers generic UI labels (e.g. short punctuation-only or
-    // widely-shared terms) where a legitimate es/en coincidence is expected, so a differs-from-
-    // English assertion here would produce false failures.
+    // MARKER_MENU_STRING_KEYS instead covers shared platform-bible-react library labels used by
+    // multiple callers, not one control's own strings — this guard checks that the shipped locale
+    // assets define them, the presence/absence failure this file exists to catch. A differs-from-
+    // English assertion would couple this guard to translation choices rather than that failure.
     it.each([...MARKER_MENU_STRING_KEYS])('defines %s', (key) => {
       expect(localizedStrings[locale][key]).toBeTruthy();
     });
