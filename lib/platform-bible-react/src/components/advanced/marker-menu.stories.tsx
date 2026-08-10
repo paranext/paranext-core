@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Eraser } from 'lucide-react';
-import { fn } from 'storybook/test';
+import { Eraser, RemoveFormatting } from 'lucide-react';
+import { expect, fn } from 'storybook/test';
 import { MarkerMenu, MarkerMenuItem } from './marker-menu.component';
 
 const localizedStrings = {
@@ -291,5 +291,90 @@ export const NarrowWithLongTitles: Story = {
           'rather than wrap, per the Responsiveness guideline. Hover a row to see the full text.',
       },
     },
+  },
+};
+
+/**
+ * Disallowed markers (for example, styles blocked while the document's structure is protected) are
+ * hidden until the search query matches them, so on an empty query the "Disallowed" badge is not
+ * visible. This story types the disallowed marker's code to reveal it, demonstrating that a
+ * revealed disallowed item is rendered disabled with a "Disallowed" badge.
+ */
+export const DisallowedMarker: Story = {
+  args: {
+    markerMenuItems: [
+      {
+        marker: 'bd',
+        title: 'Bold',
+        subtitle: 'A character style, use bold text',
+        action: fn(),
+      },
+      {
+        marker: 'nd',
+        title: 'Name of God',
+        subtitle: 'For name of deity',
+        action: fn(),
+      },
+      {
+        marker: 'q',
+        title: 'Poetry',
+        subtitle: 'Hidden until the search matches it',
+        isDisallowed: true,
+        action: fn(),
+      },
+    ],
+  },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Search for the disallowed "Poetry" (q) marker', async () => {
+      const searchInput = canvas.getByPlaceholderText('Type a style or search.');
+      await userEvent.type(searchInput, 'q');
+    });
+
+    await step('Verify the disallowed marker is revealed, disabled, with its badge', async () => {
+      const item = await canvas.findByRole('option', { name: /Poetry/ });
+      await expect(item).toHaveAttribute('aria-disabled', 'true');
+      await expect(canvas.getByText('Disallowed')).toBeInTheDocument();
+    });
+  },
+};
+
+/**
+ * The character-marker menu leads with a remove row: an icon-and-title command row with no marker
+ * code, which takes the character marker off the selected text and leaves the text itself in place.
+ * It appears only while a character marker is applied to the selection, ahead of the marker rows,
+ * which are sorted by marker code.
+ *
+ * Note that the row's icon must be passed explicitly. With `icon` absent, `MarkerMenu` falls back
+ * to a `Ban` glyph, which reads as "disallowed" rather than "remove" in a menu that already renders
+ * a disallowed affordance.
+ */
+export const CharacterMarkerRemoveRow: Story = {
+  args: {
+    markerMenuItems: [
+      {
+        icon: RemoveFormatting,
+        title: 'Remove character marker',
+        action: fn(),
+      },
+      {
+        marker: 'bd',
+        title: 'Bold',
+        subtitle: 'A character style, use bold text',
+        action: fn(),
+      },
+      {
+        marker: 'nd',
+        title: 'Name of God',
+        subtitle: 'For name of deity',
+        action: fn(),
+      },
+    ],
+  },
+  play: async ({ canvas, step }) => {
+    await step('Verify the remove row renders first and is selectable', async () => {
+      const options = await canvas.findAllByRole('option');
+      await expect(options[0]).toHaveTextContent('Remove character marker');
+      await expect(options[0]).not.toHaveAttribute('aria-disabled', 'true');
+    });
   },
 };
