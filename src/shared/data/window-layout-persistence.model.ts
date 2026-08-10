@@ -56,11 +56,24 @@ export type WindowLayoutStructure = { windows: WindowLayoutEntry[] };
 /**
  * What a window should restore, per the main process:
  *
- * - `entry`: the layout saved for this window.
- * - `legacy`: no layout has ever been captured for this window's entry — fall back to the
- *   pre-multi-window layout under the unprefixed localStorage key.
- * - `empty`: start with an empty dock layout (a window opened mid-session, or one whose saved layout
- *   is unusable).
+ * - `entry`: the layout saved for this window. A saved layout that reconciled down to nothing still
+ *   comes back this way — an emptied `dockbox` is an entry, not `empty`.
+ * - `legacy`: fall back to the pre-multi-window layout under the unprefixed localStorage key. Only
+ *   two windows are ever told this: the single window of a legacy startup (no structure file at
+ *   all), and the MAIN entry's window when that entry has never captured a layout (a structure
+ *   written by bounds updates alone, while the user's power layout still lives only in the
+ *   renderer's localStorage). A SECONDARY entry that never captured a layout gets `empty` instead;
+ *   falling back there would clone the legacy layout into it.
+ * - `empty`: start with an empty dock layout — a window opened mid-session (no saved entry), or a
+ *   restored secondary entry with no usable `layout` (the key is absent, meaning a bounds-only
+ *   entry for a deliberately empty window, or its stored value is not object-shaped). It is also
+ *   the defensive answer to a request that carries no window id or names a window that is not
+ *   tracked.
+ *
+ * An entry whose saved layout held only phantom tabs produces none of these: it is dropped while
+ * the structure loads, so no window is ever created to ask. The one exception is the main entry,
+ * which is always restored — its window is told `entry`, carrying whatever reconciliation left of
+ * the layout.
  */
 export type WindowLayoutGetResponse =
   | { kind: 'entry'; layout: LayoutInfo }
