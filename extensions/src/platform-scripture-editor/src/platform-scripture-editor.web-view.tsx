@@ -140,6 +140,7 @@ import {
   isStandardViewEnterKeyEvent,
   markerMenuItemToCommandPaletteItem,
   restoreSelectionIfLost,
+  transientInputForPaletteSession,
 } from './platform-scripture-editor.web-view.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 
@@ -642,6 +643,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | null>(null);
+
+  /**
+   * Tell the editor what the palette currently owns in the document, so a save that fires mid-
+   * session does not write the in-progress trigger literal to the PDP. Called wherever
+   * `paletteSession.current` is created, mutated, or cleared — the filter changes on every
+   * keystroke, and the editor verifies the declared bytes against its own caret at read time, so a
+   * declaration that lags by even one character is simply ignored.
+   */
+  const declarePaletteTransientInput = useCallback(() => {
+    editorRef.current?.setTransientInput(transientInputForPaletteSession(paletteSession.current));
+  }, []);
 
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
     'footnotesPaneVisible',
@@ -1567,6 +1579,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               items.some((item) => item.kind === 'note' && item.marker === filter),
           }
         : { kind: 'selection', token, filter: '', items };
+      declarePaletteTransientInput();
 
       papi.overlays
         .showCommandPalette(
@@ -1575,6 +1588,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         )
         .then((id) => {
           clearPaletteSessionIfCurrent(paletteSession, token);
+          declarePaletteTransientInput();
           if (id !== undefined) {
             const selected = items.find((item) => item.marker === id);
             if (selected) {
@@ -1612,10 +1626,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           // Replaced by a newer overlay request (PlatformError code ABORTED) or any other rejection
           // — treat the same as an explicit dismissal.
           clearPaletteSessionIfCurrent(paletteSession, token);
+          declarePaletteTransientInput();
           if (!passive) editorRef.current?.focus();
         });
     },
-    [webViewId, correctEditingNoteKeyAfterInsert],
+    [webViewId, correctEditingNoteKeyAfterInsert, declarePaletteTransientInput],
   );
 
   /**
@@ -1628,6 +1643,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       paletteSessionCounter.current += 1;
       const token = paletteSessionCounter.current;
       paletteSession.current = { kind: 'enter', token, filter: '', items };
+      declarePaletteTransientInput();
 
       papi.overlays
         .showCommandPalette(
@@ -1640,6 +1656,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         )
         .then((id) => {
           clearPaletteSessionIfCurrent(paletteSession, token);
+          declarePaletteTransientInput();
           // The Enter palette is always focused, so the editor is blurred the whole time it is
           // open and Lexical's blur processing can null the live selection; a nulled selection
           // makes the split land at the document end (focus() cannot restore it). Put the caret
@@ -1651,10 +1668,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         })
         .catch(() => {
           clearPaletteSessionIfCurrent(paletteSession, token);
+          declarePaletteTransientInput();
           editorRef.current?.focus();
         });
     },
-    [webViewId],
+    [webViewId, declarePaletteTransientInput],
   );
 
   /**
@@ -1739,6 +1757,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
           });
           if (outcome === 'ended') paletteSession.current = undefined;
+          // `handleMarkerPaletteSessionKeyDown` mutates `session.filter` in place for a filter
+          // keystroke, so the declaration is refreshed AFTER it returns, on the same keystroke that
+          // put the character in the document.
+          declarePaletteTransientInput();
           return;
         }
 
@@ -1856,6 +1878,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     styleInfo,
     openMarkerPalette,
     openEnterPalette,
+    declarePaletteTransientInput,
   ]);
 
   // Apply annotation styles from extensions
@@ -2001,21 +2024,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     function saveUsjToPdpIfUpdatedInternal(usjFromEditor = editorRef.current?.getUsj()) {
       if (!usjFromEditor) return;
 
-      // A passive palette session's un-settled `\`+filter literal sits in the editor text until
-      // the palette's apply consumes it. Saves can fire mid-session through this function with the
-      // RAW editor USJ (`useEditorPdpSync`'s push-back, the failed-save retry below), so
-      // `resolveUsjToSaveToPdp` strips the literal from the SAVED copy — the same protection the
-      // debounced save applies — and the stripped copy is what `usjSentToPdp` records in
-      // `saveUsjToPdpInternal`, keeping the echo comparison in `useEditorPdpSync` convergent.
-      // Saves already stripped by `performDebouncedPdpSave` pass through unchanged (the literal is
-      // no longer present).
-      const usjToSave = resolveUsjToSaveToPdp(
-        correctEditorUsjVersion(usjFromEditor),
-        usjFromPdp,
-        paletteSession.current?.kind === 'backslash'
-          ? `\\${paletteSession.current.filter}`
-          : undefined,
-      );
+      // An open command surface's in-progress input is excluded by the editor itself
+      // (`setTransientInput`), so what arrives here is already the document we mean to save.
+      const usjToSave = resolveUsjToSaveToPdp(correctEditorUsjVersion(usjFromEditor), usjFromPdp);
       if (usjToSave) saveUsjToPdpInternal(usjToSave);
     }
 
@@ -2185,15 +2196,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             currentChapterKey: chapterKeyRef.current,
             capturedSave,
             latestSave: (savedUsj?: Usj) => saveUsjToPdpIfUpdatedRef.current(savedUsj),
-            isPaletteSessionOpen: paletteSession.current !== undefined,
-            // Passive sessions have a literal `\`+filter sitting in the document; a flush must
-            // strip it from the SAVED copy (ParatextData tokenizes the unknown marker as a
-            // paragraph, echoing garbage back). Focused sessions claim their filter chars, so
-            // there is no literal to strip.
-            paletteLiteralRun:
-              paletteSession.current?.kind === 'backslash'
-                ? `\\${paletteSession.current.filter}`
-                : undefined,
             getEditorUsj: () => editorRef.current?.getUsj(),
           });
         },

@@ -29,35 +29,12 @@ describe('performDebouncedPdpSave', () => {
       currentChapterKey: 'GEN|2',
       capturedSave,
       latestSave,
-      isPaletteSessionOpen: false,
       getEditorUsj,
     });
 
     expect(capturedSave).toHaveBeenCalledWith(scheduledUsj);
     expect(latestSave).not.toHaveBeenCalled();
     expect(getEditorUsj).not.toHaveBeenCalled(); // never reads the wrong chapter's editor content
-  });
-
-  // Same chapter, marker-palette session open: the palette's apply must be the one to consume the
-  // typed literal, so pending marker edits are NOT settled here; the scheduled content is saved via
-  // the current chapter's save fn.
-  it('saves the scheduled content via the latest save fn without settling markers when a palette session is open', () => {
-    const capturedSave = vi.fn();
-    const latestSave = vi.fn();
-    const getEditorUsj = vi.fn(() => freshEditorUsj);
-
-    performDebouncedPdpSave({
-      usj: scheduledUsj,
-      scheduledChapterKey: 'GEN|1',
-      currentChapterKey: 'GEN|1',
-      capturedSave,
-      latestSave,
-      isPaletteSessionOpen: true,
-      getEditorUsj,
-    });
-
-    expect(latestSave).toHaveBeenCalledWith(scheduledUsj);
-    expect(capturedSave).not.toHaveBeenCalled();
   });
 
   // Same chapter, no palette: save what the editor shows. The editor's getUsj() is already SETTLED,
@@ -74,7 +51,6 @@ describe('performDebouncedPdpSave', () => {
       currentChapterKey: 'GEN|1',
       capturedSave,
       latestSave,
-      isPaletteSessionOpen: false,
       getEditorUsj,
     });
 
@@ -83,7 +59,7 @@ describe('performDebouncedPdpSave', () => {
     expect(capturedSave).not.toHaveBeenCalled();
   });
 
-  // Same chapter, no palette, but the editor is gone (unmount flush): fall back to the captured USJ.
+  // Same chapter, but the editor is gone (unmount flush): fall back to the captured USJ.
   it('falls back to the scheduled content when the editor has no USJ to read', () => {
     const latestSave = vi.fn();
     const getEditorUsj = vi.fn(() => undefined);
@@ -94,7 +70,6 @@ describe('performDebouncedPdpSave', () => {
       currentChapterKey: 'GEN|1',
       capturedSave: vi.fn(),
       latestSave,
-      isPaletteSessionOpen: false,
       getEditorUsj,
     });
 
@@ -102,183 +77,14 @@ describe('performDebouncedPdpSave', () => {
   });
 });
 
-describe('performDebouncedPdpSave — palette literal stripping', () => {
-  it('strips the un-settled `\\`+filter literal from a palette-open flush (last occurrence)', () => {
-    // Live corruption this pins: clicking a palette entry blurs the iframe, the blur-flush saved
-    // the raw literal (`...tell\f,`) to the PDP, and ParatextData tokenized the unknown marker as
-    // a PARAGRAPH — a garbage paragraph echoed back into the document.
-    const latestSave = vi.fn();
-    performDebouncedPdpSave({
-      usj: usjWith('Den God tell\\f, more text'),
-      scheduledChapterKey: 'GEN|1',
-      currentChapterKey: 'GEN|1',
-      capturedSave: vi.fn(),
-      latestSave,
-      isPaletteSessionOpen: true,
-      paletteLiteralRun: '\\f',
-      getEditorUsj: vi.fn(),
-    });
-
-    expect(latestSave).toHaveBeenCalledWith(usjWith('Den God tell, more text'));
+describe('resolveUsjToSaveToPdp', () => {
+  it('returns undefined when the editor content matches the PDP except for whitespace', () => {
+    expect(resolveUsjToSaveToPdp(usjWith('tell them'), usjWith('tell  them'))).toBeUndefined();
   });
 
-  it('removes only the LAST literal run when several are present (the one nearest the caret)', () => {
-    // "last occurrence" pin: stripLastLiteralRun uses lastIndexOf, so an earlier settled `\f` in the
-    // same text survives while only the trailing un-settled one is stripped. A first-occurrence
-    // (indexOf) regression would instead yield 'a b\f, more text' and fail here.
-    const latestSave = vi.fn();
-    performDebouncedPdpSave({
-      usj: usjWith('a\\f b\\f, more text'),
-      scheduledChapterKey: 'GEN|1',
-      currentChapterKey: 'GEN|1',
-      capturedSave: vi.fn(),
-      latestSave,
-      isPaletteSessionOpen: true,
-      paletteLiteralRun: '\\f',
-      getEditorUsj: vi.fn(),
-    });
-
-    expect(latestSave).toHaveBeenCalledWith(usjWith('a\\f b, more text'));
-  });
-
-  it('saves unchanged when the literal is not present in the content', () => {
-    const latestSave = vi.fn();
-    const usj = usjWith('no literal here');
-    performDebouncedPdpSave({
-      usj,
-      scheduledChapterKey: 'GEN|1',
-      currentChapterKey: 'GEN|1',
-      capturedSave: vi.fn(),
-      latestSave,
-      isPaletteSessionOpen: true,
-      paletteLiteralRun: '\\zz',
-      getEditorUsj: vi.fn(),
-    });
-    expect(latestSave).toHaveBeenCalledWith(usj);
-  });
-
-  it('does not mutate the scheduled USJ when stripping', () => {
-    const latestSave = vi.fn();
-    const usj = usjWith('tell\\f,');
-    performDebouncedPdpSave({
-      usj,
-      scheduledChapterKey: 'GEN|1',
-      currentChapterKey: 'GEN|1',
-      capturedSave: vi.fn(),
-      latestSave,
-      isPaletteSessionOpen: true,
-      paletteLiteralRun: '\\f',
-      getEditorUsj: vi.fn(),
-    });
-    expect(usj).toEqual(usjWith('tell\\f,')); // caller's object untouched
-    expect(latestSave).toHaveBeenCalledWith(usjWith('tell,'));
-  });
-
-  it('keeps the old behavior when no literal run is provided (focused sessions)', () => {
-    const latestSave = vi.fn();
-    const usj = usjWith('tell\\f,');
-    performDebouncedPdpSave({
-      usj,
-      scheduledChapterKey: 'GEN|1',
-      currentChapterKey: 'GEN|1',
-      capturedSave: vi.fn(),
-      latestSave,
-      isPaletteSessionOpen: true,
-      getEditorUsj: vi.fn(),
-    });
-    expect(latestSave).toHaveBeenCalledWith(usj);
-  });
-
-  // A chapter switch can flush a pending trailing save WHILE a passive palette session is still
-  // open on the chapter being left (e.g. the chapter-switch flush races the palette's own
-  // apply/blur flush). That flush takes the cross-chapter branch (capturedSave), which must strip
-  // the un-settled literal exactly like the same-chapter palette-open branch does — otherwise the
-  // captured content still carries the raw `\f` trigger into the PDP.
-  it('strips the un-settled literal from a cross-chapter flush that races an open palette session', () => {
-    const capturedSave = vi.fn();
-    performDebouncedPdpSave({
-      usj: usjWith('Den God tell\\f, more text'),
-      scheduledChapterKey: 'GEN|1',
-      currentChapterKey: 'GEN|2',
-      capturedSave,
-      latestSave: vi.fn(),
-      isPaletteSessionOpen: true,
-      paletteLiteralRun: '\\f',
-      getEditorUsj: vi.fn(),
-    });
-
-    expect(capturedSave).toHaveBeenCalledWith(usjWith('Den God tell, more text'));
-  });
-
-  // Cross-chapter flush with no palette literal in flight: behaves exactly as before this fix — the
-  // captured content is saved unchanged via the captured save fn.
-  it('leaves the captured content unchanged on a cross-chapter flush when no literal run is provided', () => {
-    const capturedSave = vi.fn();
-    const usj = usjWith('content typed for the scheduled chapter');
-    performDebouncedPdpSave({
-      usj,
-      scheduledChapterKey: 'GEN|1',
-      currentChapterKey: 'GEN|2',
-      capturedSave,
-      latestSave: vi.fn(),
-      isPaletteSessionOpen: true,
-      getEditorUsj: vi.fn(),
-    });
-
-    expect(capturedSave).toHaveBeenCalledWith(usj);
-  });
-});
-
-describe('resolveUsjToSaveToPdp — imperative (non-debounced) save path', () => {
-  // The debounced keystroke save strips a passive palette session's un-settled `\`+filter literal
-  // before writing (performDebouncedPdpSave above), but imperative saves — notably
-  // useEditorPdpSync's push-back when a PDP echo arrives mid-session — read the RAW editor USJ.
-  // This seam guarantees those saves strip the literal too; otherwise the raw literal reaches the
-  // PDP and ParatextData tokenizes the unknown marker into a garbage paragraph that echoes back.
-  it('strips the palette literal from the editor USJ before offering it for save', () => {
-    const result = resolveUsjToSaveToPdp(
-      usjWith('Den God tell\\f, more text'),
-      usjWith('older PDP content'),
-      '\\f',
+  it('returns the editor content when it differs from the PDP', () => {
+    expect(resolveUsjToSaveToPdp(usjWith('tell them'), usjWith('tell us'))).toEqual(
+      usjWith('tell them'),
     );
-
-    expect(result).toEqual(usjWith('Den God tell, more text'));
-  });
-
-  // When the literal is the ONLY divergence from the PDP, there is nothing real to save — a write
-  // here would be the exact garbage write the stripping exists to prevent. The stripped copy is
-  // compared, not the raw editor USJ, so the save is skipped entirely.
-  it('returns undefined when the palette literal is the only divergence from the PDP', () => {
-    const result = resolveUsjToSaveToPdp(
-      usjWith('Den God tell\\f,'),
-      usjWith('Den God tell,'),
-      '\\f',
-    );
-
-    expect(result).toBeUndefined();
-  });
-
-  it('does not mutate the editor USJ when stripping (the editor still owns that object)', () => {
-    const editorUsj = usjWith('tell\\f,');
-
-    resolveUsjToSaveToPdp(editorUsj, usjWith('older PDP content'), '\\f');
-
-    expect(editorUsj).toEqual(usjWith('tell\\f,'));
-  });
-
-  // No palette session (or a focused session with no literal in the document): behavior must be
-  // byte-identical to the pre-existing save path — the very same object is offered for save.
-  it('returns the editor USJ unchanged when no literal run is given and content differs', () => {
-    const editorUsj = usjWith('tell\\f, stray text is untouched without a session literal');
-
-    expect(resolveUsjToSaveToPdp(editorUsj, usjWith('older PDP content'), undefined)).toBe(
-      editorUsj,
-    );
-  });
-
-  it('returns undefined when the editor USJ already matches the PDP and no literal run is given', () => {
-    expect(
-      resolveUsjToSaveToPdp(usjWith('same text'), usjWith('same text'), undefined),
-    ).toBeUndefined();
   });
 });
