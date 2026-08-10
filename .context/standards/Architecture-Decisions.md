@@ -478,12 +478,22 @@ step, no automation. Just a record.
   transitional — each of its commands moves into the router for its own service — so it is expected
   to go away rather than to be converted.
 - **Amended 2026-08-07 (ADR-0014):** `command.service-router.ts` is gone, so the exception above is
-  spent — every router now discovers its shards through an index, and no module rebuilds a
-  window-scoped name to reach one. The index also answers with the id a shard ANNOUNCED
-  (`getShardNetworkObjectId`), which is what lets a router name one of a shard's methods —
-  `object:{id}.{method}`, for a request timeout — without that being a second rebuild of the same
-  name. It reports a shard's departure as well as its arrival, so a router that did something
-  outside itself on arrival can undo it.
+  spent — every ROUTER now discovers its shards through an index. The index also answers with the id
+  a shard ANNOUNCED (`getShardNetworkObjectId`), which is what lets a router name one of a shard's
+  methods — `object:{id}.{method}`, for a request timeout — without that being a second rebuild of
+  the same name. It reports a shard's departure as well as its arrival, so a router that did
+  something outside itself on arrival can undo it.
+- **Carve-out — `src/shared/services/window.service.ts`:** one module outside the routers still
+  builds a window-scoped name, spelling `${windowServiceProviderName}-${windowId}` to reach a
+  window's window-service DATA PROVIDER — for its own window, and (after a
+  `platform.getFocusedWindowId` round trip) for the focused one. Deliberate, and stated in the file
+  itself: a data provider is not a network object shard, and this module runs in every process
+  including the extension host, where there is no window of its own to ask. Main does publish a
+  generic `windowServiceProviderName` backed by an engine that forwards to the routing target, so
+  the carve-out could be retired by resolving that name instead — but the two do not answer
+  identically. `platform.getFocusedWindowId` is raw Electron focus, while the router's target is
+  focus PLUS readiness PLUS not-closing, so swapping them changes what `papi.window` answers during
+  startup, teardown and quit. That is its own change with its own tests, not a rename.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
 
 ## ADR-0012: The scroll group service is hosted in main, and each renderer keeps a predicting cache
@@ -663,8 +673,11 @@ step, no automation. Just a record.
   byte-identical.
 - **Consequences:** `papi.d.ts` **shrinks** by three `@experimental` exports
   (`RENDERER_HOSTED_COMMAND_NAMES`, `RENDERER_HOSTED_COMMAND_DOCS`,
-  `RENDERER_HOSTED_DIALOG_REQUEST_NAMES`) and grows by nothing — a breaking change for anyone who
-  imported them, which is why they were experimental. `command.service-router.ts`,
+  `RENDERER_HOSTED_DIALOG_REQUEST_NAMES`) and grows by one, also `@experimental`
+  (`getNetworkObjectMethodRequestType`, which is how a router names one of a shard's methods to give
+  that one method a request timeout). Removing the three is a breaking change for anyone who
+  imported them, which is why they were experimental — and all three were introduced within this
+  same epic, never on a release. `command.service-router.ts`,
   `renderer-hosted-command-registry.ts`, `renderer-hosted-dialog-registry.ts`, and both startup
   coverage checks are deleted; what replaces their guarantee is that each router's registration list
   is asserted by its own test, and each shard's methods are checked by its interface. Owner-vs-focus
@@ -686,5 +699,15 @@ step, no automation. Just a record.
   window itself just made reaches main one hop later. Cross-window navigation ordering beyond this
   is PT-4270. Registering three routers plus the navigation commands adds four entries to main's
   awaited startup batch; they are in-process registrations against main's own RPC server.
+- **Marking pre-existing names experimental:** this epic republishes names that already existed, and
+  it treats them two ways on purpose, so the rule is written down here rather than re-argued at each
+  router move. **Mark the OBJECT when the contract behind its name changed** — `WebViewService`,
+  `NotificationService` and `platform.windowServiceDataProvider` are all old names whose whole method
+  surface is now `x-experimental`, because several of their methods fan out over windows or route by
+  ownership and can fail in ways a single-window caller never had to handle. **Leave an individual
+  legacy COMMAND's flag alone** — `platform.about`, the three settings commands and the four Usersnap
+  commands stay unmarked, and tests pin that they do not drift, because moving where a command's
+  handler runs is not a change to what a caller of that command may rely on. New names, of course,
+  are marked on both surfaces regardless.
 - **Source:** PT-4275 (multi-window epic), multi-window architecture plan §7 and §9.1; branch
   `pt-4275-commands-to-main`.
