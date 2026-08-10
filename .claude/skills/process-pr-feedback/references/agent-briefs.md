@@ -50,7 +50,9 @@ role 4:
 > **First command, before you read any file: establish where this checkout is.**
 >
 > ```bash
-> git -C <repo-root> rev-parse --abbrev-ref HEAD && git -C <repo-root> status --short
+> git -C <repo-root> rev-parse --abbrev-ref HEAD   # literally "HEAD" when detached
+> git -C <repo-root> rev-parse HEAD                # the SHA — the one that always answers
+> git -C <repo-root> status --short
 > ```
 >
 > Report both at the top of your output. **Whenever HEAD is not the ref your verdict is about —
@@ -113,23 +115,37 @@ independent verdicts that disagree is exactly the signal worth having.
 
 ## 2. Fix-train (P3)
 
-> **Task.** Implement ruling(s) `<ids>` from `<packet>/03-rulings.md` on branch `<branch>`.
+> **Task.** Implement ruling(s) `<ids>` on branch `<branch>`, from `<packet>/03-rulings.md` — or,
+> on a `--fast-lane` run (which has no G1 and so no rulings file), from the qualifying statement
+> in `<packet>/02-triage.md`. Fill this slot with whichever file exists; if neither does, stop.
 > Implement **only** what the ruling says. Anything you discover along the way is reported, not
 > fixed — scope creep past a gate is the failure mode this phase has.
 >
 > **Before your first commit, confirm the branch is cleanly on its base.**
 >
 > ```bash
-> gh pr view <n> --json mergeable,mergeStateStatus,baseRefName
+> gh pr view <n> -R paranext/paranext-core --json mergeable,mergeStateStatus,baseRefName
+> git -C <repo-root> fetch origin <base> -q
+> git -C <repo-root> rev-list --count HEAD..origin/<base>   # behind — MUST be 0
 > git -C <repo-root> rev-parse --abbrev-ref HEAD
 > ```
 >
-> P0 recorded this state and G1 ruled on it. If it now reads `CONFLICTING`, or the branch is not
-> the one the ruling names, **stop and report** — do not rebase on your own initiative and do not
-> commit anyway. Fix commits on a conflicted branch inherit the conflict, show the reviewer a diff
-> that will not merge, and get replayed through the conflict when the rebase finally happens.
-> Getting **this** branch onto **its** base is a precondition someone owns; restacking the branches
-> **above** it is separate, downstream, and not yours.
+> `-R` and `-C` are not decoration: your working directory resets between calls, and a bare
+> `gh pr view` outside a checkout fails with `not a git repository`.
+>
+> **Stop and report** if the behind-count is not `0`, if `mergeable` is `CONFLICTING` or
+> `mergeStateStatus` is `DIRTY`, or if HEAD is not the branch your ruling names. Do not rebase on
+> your own initiative and do not commit anyway. Fix commits on a stale or conflicted branch inherit
+> the problem, show the reviewer a diff that will not merge, and get replayed through the conflict
+> when the rebase finally happens. Getting **this** branch onto **its** base is a precondition
+> someone else owns; restacking the branches **above** it is separate, downstream, and not yours.
+>
+> Do not read `mergeStateStatus` as the behind-check — it reports `BEHIND` only under a branch
+> protection this repo does not use. The `rev-list` count is the authority.
+>
+> P0 recorded this state and it was ruled on at the gate this run used — G1 on a normal run, G2 on
+> a `--fast-lane` run, which has no G1. Either way it was ruled on *before* you started, so a
+> change since then is news, and news goes back to the orchestrator rather than being absorbed.
 >
 > **Red-first.** For every behavior change, write the failing test first, run it, and record the
 > failure message. Then implement. Then run it again. A fix with no failing-first test is not
@@ -161,8 +177,14 @@ share a worktree.
 
 ## 3. Reply-drafter (P6)
 
-> **Task.** Draft replies for items `<ids>` into `<packet>/07-replies.md`. Draft only — nothing
-> posts in this phase.
+> **Task.** Draft replies for items `<ids>` into `<packet>/07-replies.d/<ids>.md`. Draft only —
+> nothing posts in this phase.
+>
+> **One file per agent, never a shared one.** Several drafters run at once, so a single
+> `07-replies.md` would be concurrent appends to one path — interleaved or lost bodies, in the
+> phase whose output posts publicly. The orchestrator concatenates `07-replies.d/` into
+> `07-replies.md` once every drafter has reported, and that assembled file is what G2 presents and
+> P7 extracts from.
 >
 > **Inputs.** `<packet>/01-verification/` for the facts, `<packet>/03-rulings.md` for the
 > dispositions, `<packet>/04-fix-reports/` for what landed where.
@@ -172,7 +194,10 @@ share a worktree.
 > — `🤖 Claude: ` once at the top, verdict in the first sentence, confirmed before corrected,
 > explicit disposition, deferrals citing a ticket key, no internal item labels in the body.
 > `<packet>/shared-vocabulary.md` is the round's ruling on which labels the reviewer has actually
-> seen; read it before you use any id in a body, and add to it rather than deciding case by case.
+> seen; **read it before you use any id in a body, and treat it as read-only** — several drafters
+> run concurrently, and it is P2's artifact. If you need a label it does not cover, report that in
+> your final message so the orchestrator amends the file once; do not amend it yourself and do not
+> use the label meanwhile.
 >
 > **Target per draft.** Either an inline thread id (verified live against
 > `gh api repos/paranext/paranext-core/pulls/<n>/comments --paginate` — an id from an older

@@ -68,11 +68,14 @@ Run every check over the extracted bodies:
 5. **Internal labels.** No label the reviewer has never seen. This one is **configuration, not a
    constant**: an id the reviewer assigned themselves is shared vocabulary and belongs in the
    body, while an id that exists only in our packet does not (see `reply-conventions.md` rule 6).
-   The configuration is the **Internal** list in the packet's `shared-vocabulary.md`, written at
-   P2 — read it, do not re-derive the distinction here. If that file is missing, **stop and say
-   so**; it is the drafting phase's to write, not the poster's to invent. A deny-list assembled
-   at posting time tests only the labels whoever assembled it happened to think of, and it is
-   assembled by the one role that must not be editing bodies. Allow a match only when **the
+   The configuration is the **Internal** list in the packet's `shared-vocabulary.md`, which **P2**
+   writes — read it, do not re-derive the distinction here, and do not edit it. If that file is
+   missing, **stop and say so**: a deny-list assembled at posting time tests only the labels
+   whoever assembled it happened to think of, and the poster is the one role forbidden from
+   touching bodies. Transcribe its Internal entries into `INTERNAL_LABELS` below as regexes; write
+   them in `shared-vocabulary.md` in a form that transcribes cleanly (a literal token or an obvious
+   pattern per line, prose after an em-dash), because nothing parses that file automatically.
+   Allow a match only when **the
    match itself** sits inside a URL — not merely inside a token that contains one. Testing the
    whole token waves through `[<label>](https://…)`, where the label is the link *text*: the most
    reviewer-visible position in the body, and exactly what gets linked. Print what was allowed so
