@@ -997,6 +997,50 @@ export async function syncOnProjectSwitch(
 
 // #endregion Project-Switch Sync
 
+// #region Finalize Project Switch
+
+/**
+ * Replays the project-switch side effects that `open()`'s replace-tab dispatch normally performs
+ * (S/R sync, admin's shared layout auto-apply, recording recently-opened) — for callers that
+ * already know the target project's Scripture Editor tab is showing correctly, where `open()`'s own
+ * dispatch resolves to `{ kind: 'focus-existing' }` and returns before any of that runs (see
+ * `resolveOpenEditorDispatch`). Used by Platform.Bible core's Power -> Simple mode switch, which
+ * bakes `projectId` directly into a cloned layout instead of routing through `open()`.
+ *
+ * @param papi Backend PAPI instance.
+ * @param projectId The project now showing in the Scripture Editor.
+ * @param isEditable The project's own `platform.isEditable` setting — i.e. whether it is a
+ *   Scripture-editable project rather than a read-only resource (DBL/published), NOT whether the
+ *   current user's role can edit it. Mirrors `open()`'s behavior of auto-applying the shared layout
+ *   only when the project is editable; read-only resources should never have a shared layout
+ *   applied.
+ * @param applyForProject Callback invoking `SharedLayoutReceiver.applyForProject`. Injected rather
+ *   than imported directly, since the receiver is a stateful instance owned by main.ts.
+ */
+export async function finalizeProjectSwitch(
+  papi: typeof PapiBackend,
+  projectId: string,
+  isEditable: boolean,
+  applyForProject: ((projectId: string) => Promise<void>) | undefined,
+): Promise<void> {
+  // Mirrors open()'s own gating: incoming sync fires regardless of isEditable; there's no outgoing
+  // project here since this replaces the whole Simple layout, not one editor tab within it.
+  await syncOnProjectSwitch(papi, projectId, undefined);
+  if (isEditable) await applyForProject?.(projectId);
+  try {
+    const recentlyOpenedProjects = await papi.dataProviders.get(
+      'platformScripture.recentlyOpenedProjects',
+    );
+    await recentlyOpenedProjects?.recordProjectOpened(projectId);
+  } catch (e) {
+    papi.logger.warn(
+      `finalizeProjectSwitch: failed to record recently-opened project ${projectId}: ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+// #endregion Finalize Project Switch
+
 // #region Text Connection Panels
 
 /**

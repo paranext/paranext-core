@@ -592,19 +592,13 @@ describe('handleSwitchToSimpleMode', () => {
     expect(getWorkspaceUpdating()).toBe(false);
   });
 
-  it('fast path: replicates openScriptureEditor side effects (shared layout, sync, recently-opened) non-blocking after the switch completes', async () => {
+  it('fast path: finalizes the project switch non-blocking after the switch completes', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
     setLastOpenedProject({ id: 'proj-side-effects', isEditable: true });
     getMetadataForProjectMock.mockResolvedValue({ isEditable: true });
-    const recordProjectOpened = vi.fn(async () => {});
-    dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
-      dataProviderId === 'platformScripture.recentlyOpenedProjects'
-        ? { recordProjectOpened }
-        : undefined,
-    );
 
     await host.handleSwitchToSimpleMode();
 
@@ -612,13 +606,30 @@ describe('handleSwitchToSimpleMode', () => {
     // observable immediately) but not awaited by handleSwitchToSimpleMode, so the switch's
     // perceived completion time isn't gated on its network round trip.
     expect(sendCommandMock).toHaveBeenCalledWith(
-      'platformScriptureEditor.openScriptureEditor',
+      'platformScriptureEditor.finalizeProjectSwitch',
       'proj-side-effects',
+      true,
     );
-    await vi.waitFor(() => expect(recordProjectOpened).toHaveBeenCalledWith('proj-side-effects'));
   });
 
-  it('fallback: does not replicate openScriptureEditor side effects when no project-bound switch happened', async () => {
+  it('fast path: passes the re-checked isEditable to finalizeProjectSwitch', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-drifted-editable', isEditable: true });
+    getMetadataForProjectMock.mockResolvedValue({ isEditable: false });
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(sendCommandMock).toHaveBeenCalledWith(
+      'platformScriptureEditor.finalizeProjectSwitch',
+      'proj-drifted-editable',
+      false,
+    );
+  });
+
+  it('fallback: does not finalize a project switch when no project-bound switch happened', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
