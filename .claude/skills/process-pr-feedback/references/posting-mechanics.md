@@ -58,14 +58,18 @@ they run over the exact bytes that will be posted, not over an approximation of 
 Run every check over the extracted bodies:
 
 1. **Counts and id set.** Total, and per kind. Compare against the expected set explicitly, and
-   assert that items deliberately *not* being posted are absent.
+   assert that items deliberately *not* being posted are absent. Assert the **list length** too,
+   not just the set: the poster keys items by id, so a duplicated id silently collapses and one
+   approved body never ships while every set comparison still passes.
 2. **Prefix.** Every body starts with `🤖 Claude: ` and contains it **exactly once**.
 3. **NUL and control characters.** No NULs; no control characters other than newline.
 4. **Placeholders.** No `TODO`, `TBD`, `FIXME`, `XXX`, `PLACEHOLDER`, `LOREM`, `<ALLCAPS>`
    template slots, or `{{` mustache slots.
-5. **Internal labels.** No internal item ids or working labels leaking into public text — the
-   reviewer never saw `FIX-B` or `R4-09`. Allow them only inside a URL token, and print what was
-   allowed so it can be eyeballed.
+5. **Internal labels.** No label the reviewer has never seen. This one is **configuration, not a
+   constant**: an id the reviewer assigned themselves is shared vocabulary and belongs in the
+   body, while an id that exists only in our packet does not (see `reply-conventions.md` rule 6).
+   List the round's internal labels explicitly and check for those. Allow a match only when it
+   sits inside a URL, and print what was allowed so it can be eyeballed.
 6. **Anchor sanity** (new inline comments only). `side` as intended, `line > 0`, and the item's
    PR matching the mapping the packet declares.
 
@@ -190,7 +194,12 @@ EXPECTED_IDS = {"R5-01", "R5-02"}          # <- fill in from the drafts file
 got = {i["item"] for i in items}
 if got != EXPECTED_IDS:
     fails.append(f"id set mismatch: missing={EXPECTED_IDS - got} extra={got - EXPECTED_IDS}")
-print(f"[count] total={len(items)} ids={sorted(got)}")
+# length as well as set: post.py keys items by id, so a duplicate id would silently collapse
+# and one approved body would never ship while the set comparison above still passed.
+if len(items) != len(got):
+    dupes = sorted(i for i in got if sum(x["item"] == i for x in items) > 1)
+    fails.append(f"duplicate item ids in bodies.json: {dupes}")
+print(f"[count] total={len(items)} unique={len(got)} ids={sorted(got)}")
 
 # 2. prefix — exactly once, at the very start
 PREFIX = "\U0001f916 Claude: "
@@ -208,18 +217,22 @@ for it in items:
     if ctrl:
         fails.append(f"{it['item']}: control chars {ctrl[:5]}")
 
-# 4 + 5. placeholders and internal labels that the reviewer has never seen
-PATTERNS = [r"\bTODO\b", r"\bTBD\b", r"\bFIXME\b", r"\bXXX\b", r"\bPLACEHOLDER\b",
-            r"\bLOREM\b", r"<[A-Z][A-Z_ -]{2,}>", r"\{\{",
-            r"\bFIX-[A-Z]\b", r"\bR\d+-\d+\b"]
+# 4 + 5. placeholders, and the labels THIS round keeps internal. Ids the reviewer assigned
+# themselves are shared vocabulary and must NOT be listed here — see reply-conventions.md rule 6.
+PLACEHOLDERS = [r"\bTODO\b", r"\bTBD\b", r"\bFIXME\b", r"\bXXX\b", r"\bPLACEHOLDER\b",
+                r"\bLOREM\b", r"<[A-Z][A-Z_ -]{2,}>", r"\{\{"]
+INTERNAL_LABELS = [r"\bFIX-[A-Z]\b"]        # <- fill in per round; keep reviewer-visible ids out
 for it in items:
-    for pat in PATTERNS:
+    for pat in PLACEHOLDERS + INTERNAL_LABELS:
         for m in re.finditer(pat, it["body"]):
-            # allow an internal-looking token only inside a URL
-            s = it["body"].rfind(" ", 0, m.start()) + 1
-            e = it["body"].find(" ", m.end())
-            tok = it["body"][s: e if e != -1 else len(it["body"])]
-            if "http" in tok:
+            # Allow a match only when it sits inside a URL. Bound the token on ANY whitespace:
+            # splitting on " " alone lets a token run across a newline, so a line ending in a
+            # URL would mask a label at the start of the next line.
+            s = max((it["body"].rfind(c, 0, m.start()) for c in " \n\t("), default=-1) + 1
+            e = min((p for p in (it["body"].find(c, m.end()) for c in " \n\t)") if p != -1),
+                    default=len(it["body"]))
+            tok = it["body"][s:e]
+            if tok.startswith("http") or "](http" in tok:
                 print(f"    NOTE {it['item']}: {m.group(0)!r} inside URL, allowed")
                 continue
             ctx = it["body"][max(0, m.start() - 50): m.end() + 50].replace("\n", " | ")
@@ -248,7 +261,6 @@ from collections import defaultdict
 PACKET = ".feedback-packets/<pr>-<date>"
 LOG = f"{PACKET}/08-posting-log.txt"
 SLUG = "paranext/paranext-core"
-PRS = [2649]
 WINDOW_START = "2026-08-10T15:00:00Z"     # just before the first POST of this batch
 
 
@@ -270,17 +282,26 @@ who = subprocess.run(["gh", "api", "user", "--jq", ".login"],
                      capture_output=True, text=True, check=True).stdout.strip()
 
 logged = defaultdict(lambda: {"review": set(), "issue": set()})
-rows = 0
+rows, failed_rows = 0, []
 for ln in open(LOG, encoding="utf-8"):
+    if not ln.strip():
+        continue
     status, item, pr, kind, cid = ln.rstrip("\n").split("\t")[:5]
     if status != "OK":
-        sys.exit(f"LOG HAS NON-OK ROW: {ln.strip()}")
+        # A partial batch is exactly when this script matters most, so record the failed row
+        # and keep going rather than exiting — the items that DID land still need verifying.
+        failed_rows.append(ln.strip())
+        continue
     logged[int(pr)]["issue" if kind == "issue" else "review"].add(int(cid))
     rows += 1
-print(f"token user: {who} · log rows: {rows}")
+print(f"token user: {who} · OK rows: {rows}")
+for fr in failed_rows:
+    print(f"  NOTE non-OK log row (not verified): {fr}")
 
+# Derive the PRs to check FROM THE LOG. A hardcoded list silently skips any PR the batch
+# touched but the list omitted, while still printing PASS.
 fails = []
-for pr in PRS:
+for pr in sorted(logged):
     rc = {c["id"] for c in gh(f"repos/{SLUG}/pulls/{pr}/comments")
           if c["user"]["login"] == who and c["created_at"] >= WINDOW_START}
     ic = {c["id"] for c in gh(f"repos/{SLUG}/issues/{pr}/comments")
@@ -299,5 +320,9 @@ if fails:
     for f_ in fails:
         print("  - " + f_)
     sys.exit(1)
-print("POST-VERIFY: PASS - live state matches the log exactly")
+if failed_rows:
+    print(f"POST-VERIFY: PARTIAL - the {rows} OK rows match live state, but {len(failed_rows)} "
+          f"row(s) failed to post and are still owed. This batch is NOT complete.")
+    sys.exit(2)
+print(f"POST-VERIFY: PASS - all {rows} logged posts match live state exactly")
 ```

@@ -60,15 +60,21 @@ empty commit.
 Run all six at the top of the stack. `A` = the old range's changed files, `N` = the new range's.
 
 ```bash
-git diff --name-only <old-base> <old-tip> | sort > /tmp/A.txt
-git diff --name-only <new-base> <new-tip> | sort > /tmp/N.txt
+P=.feedback-packets/<pr>-<date>        # keep these in the packet, not /tmp
+git diff --name-only <old-base> <old-tip> | LC_ALL=C sort > "$P/A.txt"
+git diff --name-only <new-base> <new-tip> | LC_ALL=C sort > "$P/N.txt"
 
-comm -13 /tmp/A.txt /tmp/N.txt    # N \ A  — check 2, must be empty
-comm -23 /tmp/A.txt /tmp/N.txt    # A \ N  — check 3, must be empty
-comm -12 /tmp/A.txt /tmp/N.txt    # A ∩ N  — the input to check 4
+comm -13 "$P/A.txt" "$P/N.txt"    # N \ A  — check 2, must be empty
+comm -23 "$P/A.txt" "$P/N.txt"    # A \ N  — check 3, must be empty
+comm -12 "$P/A.txt" "$P/N.txt"    # A ∩ N  — the input to check 4
 ```
 
-`comm` needs both inputs sorted, which is why `sort` is not optional here.
+Two details that are not cosmetic. **`LC_ALL=C`**: `comm` compares byte-wise, but `sort` collates
+per locale, and under a locale like `en_US.UTF-8` it ignores punctuation in ordering. Feed
+locale-sorted input to `comm` and it warns on stderr and emits wrong set differences — a
+false-empty `N \ A`, which is precisely the check this battery exists for. Pinning both to `C`
+makes the two agree. **Packet paths rather than `/tmp/A.txt`**: fixed temp names collide when two
+restacks run at once, and the files are evidence worth keeping with the run.
 
 1. **Commit accounting.** `git cherry <new-base> <old-tip> <old-base>` — every `-` (a pick
    git considers already present) must have an identical patch-id upstream:
@@ -105,8 +111,13 @@ Only after the battery passes, and only after the G2 approval that covers pushin
   branches; re-derive every SHA from a fresh command at the moment you use it rather than
   trusting one printed earlier in the session.
 - **Never rename a remote branch** as part of a restack. Renaming a branch that is the head of
-  an open PR auto-closes that PR. Use the `pr-safe-branch-rename` skill if a rename is genuinely
-  needed.
+  an open PR **auto-closes that PR** — and a closed PR loses its review threads from view. If a
+  rename is genuinely needed: push the new name first, retarget the PR onto it
+  (`gh pr edit <n> --head <new-name>` is not supported, so in practice open the rename as a
+  deliberate, separate operation and re-check the PR state after each step), and only then
+  delete the old remote branch. Verify with `gh pr view <n> --json state,headRefName` before and
+  after. Some setups have a dedicated `pr-safe-branch-rename` skill for this; it is not part of
+  this repo, so do not assume it is available.
 - After pushing, re-check `git rev-list --count origin/<branch>..<branch>` for every branch — it
   must be `0`, and the count must match the expectation recorded in step 1.
 

@@ -27,8 +27,13 @@ the user's name, in public, on a repo the whole team reads.
 5. **Name a revision with every claim.** File:line at a stated ref, or a commit SHA re-derived
    at drafting time and re-checked at posting. A SHA orphaned by a restack in a public reply is
    its own small embarrassment, and it has happened.
-6. **No internal labels.** The reviewer has never seen `FIX-B` or `R4-09`. Internal item ids are
-   for the packet, not for the thread. The dry-run check in `posting-mechanics.md` enforces this.
+6. **No labels the reviewer has never seen.** The test is visibility, not format. An id the
+   reviewer themselves assigned — their own review's finding numbers — is the clearest possible
+   way to say which item you are answering, and Example 3 below uses exactly that. An id that
+   exists only in our packet, or a working label from a document they were never sent, is
+   noise that reads as jargon. Before drafting, decide which labels are shared vocabulary for
+   this round and record that list in the packet; the dry-run check in `posting-mechanics.md`
+   takes it as configuration, so it flags the internal ones without flagging the shared ones.
 
 ## Structure
 
@@ -118,6 +123,11 @@ inside the same thread (or one issue comment covering the items that have no thr
 >
 > Sorry for the churn on both. The ruling arrived after the replies did, which is on our
 > sequencing, not on your findings.
+
+On the labels: `R4-07` and `R4-08` are the reviewer's own numbering from the round being
+corrected, and `FIX-B` / `FIX-D` were named in a document he had been sent — all four were
+shared vocabulary, which is why they belong in the body. The same reply would be wrong to cite
+an item id that only ever existed in our packet.
 
 Four things this does, and all four are required:
 
