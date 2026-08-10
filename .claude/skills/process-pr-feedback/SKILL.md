@@ -546,7 +546,8 @@ The tooling for that, all of it already in this repo:
    approvals on new commits, force-pushing a restacked branch drops every existing approving
    review on its PR — silently, as a side effect of a push the run made for unrelated reasons. So
    for every branch this round will force-push, record `gh pr view <n> --json reviewDecision,reviews`
-   **before** the push as part of the battery's step-1 numbers, and **re-check it after**. If an
+   **before** the push — that is step 4 of `references/restack-battery.md`, taken alongside the
+   ahead/behind counts and for the same reason — and **re-check it after**. If an
    approval was dismissed, say so at once and re-request review from exactly the reviewers who had
    approved (`gh pr edit <n> --add-reviewer <login>`), then report it — a PR that reads
    `APPROVED` before the round and `REVIEW_REQUIRED` after, with nobody told, looks to the
