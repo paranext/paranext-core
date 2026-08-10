@@ -1,10 +1,4 @@
-import { clampTopToVisibleArea } from '../editor-dom.util';
-
-/**
- * The USFM paragraph elements the editor renders. Matches the selector
- * `ParagraphMarkerTooltipOverlay` uses, so both overlays agree on what a paragraph is.
- */
-export const EDITOR_PARA_SELECTOR = '.para[class*="usfm_"]';
+import { clampTopToVisibleArea, EDITOR_PARA_SELECTOR } from '../editor-dom.util';
 
 /** A rect whose every edge is 0 — what a Range reports when it has no layout to measure. */
 function isDegenerate(rect: DOMRect): boolean {
@@ -32,6 +26,14 @@ export type ActiveLine = {
  * many lines. That rect degenerates to all-zeros at empty paragraphs, at some node boundaries, and
  * whenever the document has no layout at all (a `display: none` iframe), so fall back to the
  * containing paragraph's rect rather than reporting a position at the top of the editor.
+ *
+ * A NON-COLLAPSED selection anchors to the TOP of the selection, by design — not to the end the
+ * user is dragging. The range's union rect spans every selected line, so its `top` is the first
+ * selected line's, and the paragraph comes from `anchorNode` (the fixed end) rather than
+ * `focusNode` (the moving one). Extending a selection downward therefore leaves the bar where the
+ * selection began. That is the right readout for this control: the bar reports the marker coverage
+ * of the WHOLE selection, so pinning it to a stable edge keeps it from chasing the pointer while
+ * the thing it describes is still being chosen.
  *
  * @param selection The document's current selection, or `undefined` when there is none
  * @param editorRoot The editor element the selection must be inside to count

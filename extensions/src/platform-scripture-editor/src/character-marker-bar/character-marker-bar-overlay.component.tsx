@@ -1,11 +1,11 @@
 import { useViewVisibility, Z_INDEX_OVERLAY } from 'platform-bible-react';
 import { ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { findScrollContainer, measureBaselineOffset } from '../editor-dom.util';
 import {
-  computeBarTop,
   EDITOR_PARA_SELECTOR,
-  resolveActiveLineRect,
-} from './character-marker-bar.utils';
+  findScrollContainer,
+  measureBaselineOffset,
+} from '../editor-dom.util';
+import { computeBarTop, resolveActiveLineRect } from './character-marker-bar.utils';
 import { useEditorSelectionVersion } from './use-editor-selection-version.hook';
 
 /** The editor element the caret must be inside for the bar to track it. */
@@ -160,8 +160,25 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     const scrollContainer = scrollContainerRef.current;
     if (!positionAnchor || !scrollContainer) return;
 
+    // No editor yet. Unlike the hidden-view case above there is no deferral, because at the real
+    // mount site the overlay is only rendered once the editor tree exists — the bar is not mounted
+    // against an editor-less anchor. If that ever stops holding, this needs the same catch-up
+    // treatment the hidden case gets.
     const editorRoot = positionAnchor.querySelector<HTMLElement>(EDITOR_ROOT_SELECTOR);
     if (!editorRoot) return;
+
+    // Layout-less case, DISTINCT from the hidden-view case above. `useViewVisibility` reports on
+    // this iframe's own visibility (whole-tab), so it is `true` while an ANCESTOR INSIDE the
+    // document is `display: none` — which the empty-chapter view does, hiding the editor subtree
+    // with `tw:hidden` rather than unmounting it. Every rect then reads zero. Positioning here
+    // would not merely store a garbage top; it would latch `hasPositionedRef`, and the no-caret
+    // branch below returns early once that is set — so the first-paragraph re-anchor would never
+    // run and the bar would sit at the clamped top until the user's first click. Bail before
+    // either happens. Nothing needs to schedule the repair: `display: none` collapses the
+    // observed anchor to a 0x0 box, so regaining layout is itself a resize and the
+    // ResizeObserver below re-runs this.
+    const editorRootRect = editorRoot.getBoundingClientRect();
+    if (editorRootRect.width === 0 && editorRootRect.height === 0) return;
 
     const activeLine = resolveActiveLineRect(window.getSelection() ?? undefined, editorRoot);
     let targetRect = activeLine?.rect;
@@ -196,30 +213,35 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     // to catch). The webfont-load case this key can't see is handled separately — see the
     // `document.fonts` effect below.
     //
-    // The icon is resolved BEFORE the probe so a bar with no icon never touches the measuring element
-    // at all. Both halves must succeed: a partial measurement would align the trigger against a
-    // baseline that was never read. Leaving the ref unset is the correct outcome — `computeBarTop`'s
-    // default treats it as 0, i.e. the bar stays top-aligned, and the next recompute tries again.
+    // Both halves — the icon centre and the baseline probe — must succeed: a partial measurement
+    // would align the trigger against a baseline that was never read. Leaving the ref unset is the
+    // correct outcome — `computeBarTop`'s default treats it as 0, i.e. the bar stays top-aligned,
+    // and the next recompute tries again.
+    const para = measurementPara;
+    const measuringElement = measuringElementRef.current;
     const barContainer = barContainerRef.current;
-    const iconCenter = barContainer ? measureTriggerIconCenter(barContainer) : undefined;
-    if (iconCenter !== undefined) {
-      const para = measurementPara;
-      const measuringElement = measuringElementRef.current;
-      if (para && measuringElement) {
-        const paraStyle = window.getComputedStyle(para);
-        const { fontFamily, fontSize, fontWeight, fontStyle, lineHeight, letterSpacing } =
-          paraStyle;
-        const cachedMetrics = fontMetricsRef.current;
-        const metricsChanged =
-          !cachedMetrics ||
-          cachedMetrics.fontFamily !== fontFamily ||
-          cachedMetrics.fontSize !== fontSize ||
-          cachedMetrics.fontWeight !== fontWeight ||
-          cachedMetrics.fontStyle !== fontStyle ||
-          cachedMetrics.lineHeight !== lineHeight ||
-          cachedMetrics.letterSpacing !== letterSpacing;
+    if (para && measuringElement && barContainer) {
+      const paraStyle = window.getComputedStyle(para);
+      const { fontFamily, fontSize, fontWeight, fontStyle, lineHeight, letterSpacing } = paraStyle;
+      const cachedMetrics = fontMetricsRef.current;
+      const metricsChanged =
+        !cachedMetrics ||
+        cachedMetrics.fontFamily !== fontFamily ||
+        cachedMetrics.fontSize !== fontSize ||
+        cachedMetrics.fontWeight !== fontWeight ||
+        cachedMetrics.fontStyle !== fontStyle ||
+        cachedMetrics.lineHeight !== lineHeight ||
+        cachedMetrics.letterSpacing !== letterSpacing;
 
-        if (metricsChanged) {
+      if (metricsChanged) {
+        // Measured HERE rather than above the cache check, even though it is the trigger's half of
+        // the alignment rather than the paragraph's: `iconCenter` feeds nothing but the offset
+        // below, and it costs two `getBoundingClientRect` reads. With a warm cache — the steady
+        // state while scrolling — measuring it before the guard would throw both reads away on
+        // every frame. Resolving it before the probe still means a bar with no icon never touches
+        // the measuring element at all.
+        const iconCenter = measureTriggerIconCenter(barContainer);
+        if (iconCenter !== undefined) {
           // Copy the paragraph's computed text metrics onto the hidden off-editor element so its
           // line-box strut matches the real paragraph's — no filler text needed, the strut alone is
           // what gets measured.
@@ -264,6 +286,12 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     // content has loaded and made anything overflow — and possibly while the view is hidden, where
     // scrollHeight and clientHeight are both 0 — so "actually overflowing right now" would be the
     // wrong criterion. getComputedStyle still works under display:none, so discovery stays valid.
+    //
+    // Resolved ONCE and never re-resolved, which assumes the editor's scrolling ancestor cannot
+    // change. The footnotes reverse-portal does re-parent the editor subtree, so that assumption is
+    // load-bearing rather than trivially true — it holds only because the footnotes
+    // `ResizablePanel` is `overflow: hidden`, so discovery lands on the same outer container from
+    // either parent. A scrollable panel there would need this re-resolved on re-parent.
     scrollContainerRef.current =
       findScrollContainer(positionAnchor, { requireOverflow: false }) ?? positionAnchor;
 
@@ -277,7 +305,13 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     // A persistent bar must survive a panel resize or font-size change; the paragraph-marker
     // tooltip needs no equivalent because it is transient. Without this, dragging the dock
     // splitter leaves the bar at a stale top.
-    const resizeObserver = new ResizeObserver(() => recompute());
+    //
+    // Routed through `scheduleRecompute`, not `recompute` directly, for the same reason scroll and
+    // selection are: a splitter drag fires this at pointer rate, and the full recompute is several
+    // layout reads. Deferring to the next frame also keeps `setTop` out of the observer callback
+    // itself, which is what provokes the "ResizeObserver loop completed with undelivered
+    // notifications" console error.
+    const resizeObserver = new ResizeObserver(scheduleRecompute);
     resizeObserver.observe(positionAnchor);
 
     return () => {
@@ -286,6 +320,22 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
       cancelAnimationFrame(rafIdRef.current);
     };
   }, [recompute, scheduleRecompute]);
+
+  // Position the bar when the slot FILLS, which happens on a live Power -> Simple switch. No other
+  // effect covers it: the mount effect's dependencies are deliberately identity-stable, and the
+  // selection, visibility and font effects do not observe the slot. Nor is the ResizeObserver a
+  // guarantee — the bar container is absolutely positioned, so adding it does not resize
+  // `positionAnchor`; today the switch happens to reflow `.usfm` by adding
+  // `editor-container-simple`, but relying on that would make first paint after a mode switch
+  // incidental. `recompute` returns immediately when the slot is empty, so the emptying direction
+  // costs nothing.
+  //
+  // Keyed on PRESENCE, not on `bar` itself: `bar` is a fresh element every render, so depending on
+  // it directly would schedule a recompute on every caret move.
+  const hasBar = bar !== undefined;
+  useEffect(() => {
+    if (hasBar) scheduleRecompute();
+  }, [hasBar, scheduleRecompute]);
 
   // Invalidates the font-metrics cache (see `fontMetricsRef`) when a webfont finishes loading — the
   // one case that cache's computed-style key cannot detect on its own. `loadingdone` fires for every
@@ -349,7 +399,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
           prop. The scroll/resize listeners above stay attached regardless: `bar` is a new element
           every render, so making the effect depend on it would re-wire them constantly, and
           `recompute` already returns immediately when the slot is empty. */}
-      {bar !== undefined && (
+      {hasBar && (
         <>
           {/* Off-editor measuring element for the baseline probe (see `measuringElementRef`): a
               sibling of the editor, never a descendant, so the probe never touches Lexical's
@@ -371,9 +421,13 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
             ref={barContainerRef}
             data-testid="character-marker-bar-container"
             className="tw:absolute tw:pointer-events-none"
-            // insetInlineEnd is a string ('0px'), not the number 0: React only appends a `px` unit to
-            // numeric style values when they are non-zero (see setValueForStyles in react-dom), so a
-            // bare `0` renders as the unitless string "0" instead of "0px".
+            // insetInlineEnd is the string '0px', not 0: React renders a bare numeric 0 unitless.
+            //
+            // It resolves against `positionAnchor`, several wrappers above the `.usfm` element that
+            // actually reserves the gutter with `padding-inline-end`. The two edges coincide only
+            // because every wrapper in between is full-width with no inline padding and
+            // `.editor-container` sets `max-width: none`. Giving the text column a reading width or
+            // any max-width would leave the bar outside the reserved space, painting over text.
             //
             // width is CONSTRAINED to the reserved gutter, rather than left to shrink-wrap the bar.
             // Shrink-wrapping grows inline-START — over project text — the moment the bar's content
