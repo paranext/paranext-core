@@ -51,7 +51,7 @@
   padding-block: 0 !important;
 }
 
-// Reserve the inline-end gutter the character-marker bar occupies (PT-XXX-D2). Reserving rather
+// Reserve the inline-end gutter the character-marker bar occupies. Reserving rather
 // than floating is what makes "the bar never overlaps project text" GUARANTEED instead of
 // usually-true: there is no right margin to float over — `.editor-input` has just 10px of inline
 // padding (./_editor.scss) and `.editor-container` sets `max-width: none`, so prose wraps to the
@@ -78,16 +78,12 @@
 // the editor.
 //
 // 64px fits the ICON-ONLY trigger EXACTLY, with no slack: the `Type` icon (16px) + the Button's
-// `gap-1.5` (6px, not the `gap-2`/8px this comment previously assumed) + the `ChevronDown` (16px) +
-// the mount's `tw:px-2` padding (16px, 8px per side) + the Button's border (2px) is ~56px of chrome,
-// plus `CharacterMarkerToolbar`'s `tw:m-1` margin (8px, 4px per side) = 64px. The 5em (80px) this
-// replaces was chosen to "fit the widest trigger label" and did not — that same chrome left ~16px
-// for the label, less than `bd` needs, and `tw:overflow-hidden` cut the rest against the column
-// border. So 5em paid 80px of every Simple user's text column for a label that could not be read;
-// 64px keeps the icon-only trigger legible at 20% narrower than 5em (not half — the earlier 2.5em
-// estimate undercounted the chrome). The current-marker readout moved to the trigger's tooltip and
-// the menu's tri-state rows instead. Changing this one value is still the whole change; see
-// ADR-0007's 2026-08-05 amendment.
+// `gap-1.5` (6px) + the `ChevronDown` (16px) + the mount's `tw:px-2` padding (16px, 8px per side) +
+// the Button's border (2px) is ~56px of chrome, plus `CharacterMarkerToolbar`'s `tw:m-1` margin
+// (8px, 4px per side) = 64px. There is no room here for a trigger LABEL: the same chrome would
+// leave ~16px for it, less than `bd` needs, and `tw:overflow-hidden` would cut it off against the
+// column border — which is why the current-marker readout lives in the trigger's tooltip and the
+// menu's tri-state rows instead. Changing this one value is the whole change.
 //
 // PIXELS, deliberately, not `em`. Every term in that 64px is a FIXED pixel amount — Lucide icons are
 // 16px, and the Button's gap/padding/border are Tailwind pixel utilities — none of which scale with

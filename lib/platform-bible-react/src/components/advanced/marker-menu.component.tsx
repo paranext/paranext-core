@@ -104,7 +104,7 @@ function MenuMarkerIcon({ icon, className }: { icon?: FC<MarkerIconProps>; class
 
 /**
  * Leading tri-state indicator for a marker row. Rendered only when the consumer supplies a
- * selection state, so rows without one keep the layout they have always had.
+ * selection state, so rows without one render no leading column at all.
  */
 function MarkerSelectionStateIndicator({ state }: { state: 'all' | 'partial' | 'none' }) {
   return (
@@ -136,7 +136,6 @@ function MarkerMenuCommandItem({
     <CommandItem
       className="tw:flex tw:gap-2 tw:hover:bg-accent"
       disabled={item.isDisallowed || item.isDeprecated}
-      // Absent for items with no selection state, so existing consumers' rows are unchanged.
       // Never pair this with `data-checked`: CommandItem renders its own trailing check for that,
       // which would double the checkmark.
       aria-checked={

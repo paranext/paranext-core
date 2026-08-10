@@ -146,8 +146,8 @@ export const SyncBlocked: Story = { args: { isSyncBlocked: true } };
 export const NoMarkersAvailable: Story = { args: { hasMarkers: false } };
 
 // The placement combination the reserved 64px gutter forces: icon-only trigger, menu opening
-// inline-start at the prototype's 200px. Menu SIZE is reviewed here rather than asserted in a test —
-// a class-string assertion would pass whether or not the popover actually rendered at 200px.
+// inline-start at 200px. Menu SIZE is reviewed here rather than asserted in a test — a class-string
+// assertion would pass whether or not the popover actually rendered at 200px.
 export const IconOnlyMenuAlignedEnd: Story = {
   args: {
     initialMarker: 'bd',

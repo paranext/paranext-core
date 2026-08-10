@@ -165,9 +165,9 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
   ...CHARACTER_MARKER_MENU_STRING_KEYS,
-  // Consumed by CharacterMarkerControl, which the placement wrapper (PT-XXX-D1/D2) mounts. Preloaded
-  // here because the web view owns the key list; resolving one extra key in Power mode renders
-  // nothing.
+  // Not read by this file either. Consumed by CharacterMarkerControl, which the character-marker
+  // bar mounts. Preloaded here because the web view owns the key list; resolving these extra keys
+  // in Power mode, where the bar never renders, costs nothing.
   ...CHARACTER_MARKER_CONTROL_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)

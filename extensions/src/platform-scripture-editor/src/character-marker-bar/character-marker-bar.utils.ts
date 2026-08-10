@@ -67,8 +67,8 @@ export function resolveActiveLineRect(
  * @param positionAnchor The `position: relative` element that owns the coordinate space
  * @param scrollContainer The scrolling ancestor of `positionAnchor`
  * @param baselineOffset Pixels to shift the bar down so its trigger lines up with the line's text
- *   rather than with the line box's top edge. Defaults to `0`, which is the previous behavior and
- *   the correct value while the offset is still unmeasurable (a hidden view)
+ *   rather than with the line box's top edge. Defaults to `0`, the correct value while the offset
+ *   is still unmeasurable (a hidden view)
  * @returns The `top` to apply to the bar's container
  */
 export function computeBarTop(

@@ -187,8 +187,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
     // The icon is resolved BEFORE the probe so a bar with no icon never touches the measuring element
     // at all. Both halves must succeed: a partial measurement would align the trigger against a
     // baseline that was never read. Leaving the ref unset is the correct outcome — `computeBarTop`'s
-    // default treats it as 0, i.e. the previous top-aligned behavior, and the next recompute tries
-    // again.
+    // default treats it as 0, i.e. the bar stays top-aligned, and the next recompute tries again.
     const barContainer = barContainerRef.current;
     const iconCenter = barContainer ? measureTriggerIconCenter(barContainer) : undefined;
     if (iconCenter !== undefined) {
@@ -283,7 +282,7 @@ export function CharacterMarkerBarOverlay({ children, bar }: CharacterMarkerBarO
   // correct) and "loads later" (the case that actually needs the invalidation).
   //
   // `document.fonts` is unimplemented in jsdom, so this is feature-detected rather than assumed —
-  // the effect is a no-op there, and the existing tests neither exercise nor warn about it.
+  // the effect is a no-op there.
   //
   // An event-listener subscription, not a `.ready` promise `.then()`: `removeEventListener` in the
   // cleanup below is enough to make this safe across unmount, matching the scroll/resize listeners

@@ -64,7 +64,7 @@ export type CharacterMarkerControlProps = {
    *
    * A placement concern, deliberately passed in rather than decided here: a placement with room for
    * a label wants one, and a placement squeezed into a reserved gutter cannot fit one. Defaults to
-   * `false` so every existing consumer renders exactly as it did.
+   * `false`, so a consumer that passes nothing gets the visible label.
    */
   isLabelHidden?: boolean;
   /**
@@ -92,8 +92,7 @@ export type CharacterMarkerControlProps = {
    * and a 200px menu pinned to the text column's trailing (left) edge runs off the iframe and gets
    * shifted back over the trigger by Radix's collision handling.
    *
-   * Defaults to `undefined`, which leaves the popover's own `readDirection()` result in place — the
-   * behavior every pre-existing consumer already had.
+   * Defaults to `undefined`, which leaves the popover's own `readDirection()` result in place.
    */
   menuDirection?: 'ltr' | 'rtl';
   /**
@@ -115,12 +114,9 @@ export type CharacterMarkerControlProps = {
  *
  * Placement-agnostic by construction — it takes state and callbacks as props and renders no
  * positioning of its own, so the same component serves every placement wrapper. It is also
- * structure-protection-agnostic: character markers are deliberately exempt, so there is no input
- * that could disable it for that reason. The real guarantee is the ABSENCE of any
- * `isStructureProtected` prop or import on this component — verified by grep (`grep -n
- * "isStructureProtected" character-marker-control.component.tsx`) rather than by a runtime test,
- * since there is no prop to flip and a test asserting "stays enabled" would only cover the same
- * default-enabled path the other tests here already exercise.
+ * structure-protection-agnostic: character markers are deliberately exempt from structure
+ * protection, so this component takes no `isStructureProtected` input. Keep it that way — the
+ * absence of that prop is what guarantees the exemption.
  */
 export function CharacterMarkerControl({
   currentMarker,
@@ -164,7 +160,7 @@ export function CharacterMarkerControl({
 
   // Two different jobs for one tooltip. While DISABLED it explains why (a disabled button cannot
   // host its own tooltip, hence the focusable wrapper below). While ENABLED and icon-only it is the
-  // sighted user's only readout of the current marker, which the visible label used to provide.
+  // sighted user's only readout of the current marker.
   // Suppressed while the popover is open: a tooltip and a popover anchored to the same trigger
   // otherwise render on top of each other.
   const tooltipText = isDisabled ? disabledTooltip : label;
@@ -222,13 +218,12 @@ export function CharacterMarkerControl({
                 // an explicit `dir: undefined` would WIN and blank out the default, changing behavior
                 // for every consumer that passes no direction.
                 {...(menuDirection ? { dir: menuDirection } : {})}
-                // The prototype's `mt-1.5`. Placement-independent, so a constant rather than a prop.
+                // Placement-independent, so a constant rather than a prop.
                 sideOffset={6}
-                // 200px and a 220px list are the prototype's `min-w-[200px]` / `max-h-[220px]`.
-                // The list cap is a descendant override on THIS popover, not a prop on MarkerMenu:
-                // MarkerMenu is shared with the `\` keydown menu and the footnote editor, both of
-                // which render in Power mode, so it must stay untouched. `CommandList` already
-                // emits `data-slot="command-list"`, so the selector is stable.
+                // The 220px list cap is a descendant override on THIS popover, not a prop on
+                // MarkerMenu: MarkerMenu is shared with the `\` keydown menu and the footnote
+                // editor, both of which render in Power mode, so it must stay untouched.
+                // `CommandList` already emits `data-slot="command-list"`, so the selector is stable.
                 className="tw:w-[200px] tw:p-0 tw:**:data-[slot=command-list]:max-h-[220px]"
               >
                 <MarkerMenu

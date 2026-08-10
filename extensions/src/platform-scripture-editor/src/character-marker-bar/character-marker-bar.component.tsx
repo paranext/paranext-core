@@ -106,11 +106,11 @@ export function CharacterMarkerBar({
         // an RTL project's 200px menu would run off the iframe's inline-start edge.
         menuDirection={textDirection}
         // `tw:overflow-hidden` is the STRUCTURAL guarantee that the trigger's CONTENT can never paint
-        // over project text — not a leftover workaround for a label that no longer exists. The 64px
-        // reservation fits the chrome with ZERO slack, so any future content change (a second icon, a
-        // wider chevron, a localized badge) would otherwise spill inline-start the moment the
-        // arithmetic stops holding. With this class, spill is impossible regardless of the
-        // arithmetic. Do not remove it on the reasoning that an icon-only trigger has nothing to clip.
+        // over project text. The 64px reservation fits the chrome with ZERO slack, so any future
+        // content change (a second icon, a wider chevron, a localized badge) would otherwise spill
+        // inline-start the moment the arithmetic stops holding. With this class, spill is impossible
+        // regardless of the arithmetic. Do not remove it on the reasoning that an icon-only trigger
+        // has nothing to clip.
         //
         // The Button's own `focus-visible:ring-3` is a box-shadow on the button's box, so
         // `overflow-hidden` does not clip it — the 3px it paints outside the border fits inside

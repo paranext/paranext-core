@@ -144,11 +144,11 @@ const alignedOverlayTree = () => (
 );
 
 /**
- * Coherent geometry for the alignment path: the probe (now appended to the hidden off-editor
- * measuring element, never to the `.para` itself) sits `probeOffset` (default 14) px below the
- * line's top edge, and the trigger's 16px icon is centred 16px below the bar container's top edge.
- * With the default offset, the bar's baseline term is 14 - 16 = -2, so the bar sits 2px above the
- * line's top.
+ * Coherent geometry for the alignment path: the probe (appended to the hidden off-editor measuring
+ * element, never to the `.para` itself) sits `probeOffset` (default 14) px below the line's top
+ * edge, and the trigger's 16px icon is centred 16px below the bar container's top edge. With the
+ * default offset, the bar's baseline term is 14 - 16 = -2, so the bar sits 2px above the line's
+ * top.
  *
  * `probeOffset` is a parameter (not hardcoded) so a test can vary the BASELINE the stub reports
  * while leaving `fontSize`/`lineHeight` (read via `getComputedStyle`, which this stub does not
@@ -382,9 +382,9 @@ describe('CharacterMarkerBarOverlay', () => {
   });
 
   it('anchors to the first paragraph before the user has placed a caret', () => {
-    // Discoverability is the point of the feature ("Need floating context menu UI to pick
-    // character styles"); a bar that appears only after you click into the text is not
-    // discoverable. stubRects reports 120 for any .para, so the first paragraph reads as 120.
+    // Discoverability is the point of the feature: a bar that appears only after you click into the
+    // text is not discoverable. stubRects reports 120 for any .para, so the first paragraph reads
+    // as 120.
     renderOverlay();
     expect(barContainer().style.top).toBe('120px');
   });
@@ -567,8 +567,8 @@ describe('CharacterMarkerBarOverlay', () => {
 
   it('applies the alignment on the way back from hidden, having cached nothing while hidden', async () => {
     // Mounting hidden never reaches the measurement at all: `recompute`'s visibility guard returns
-    // before any rect is read (see the sibling `rectReadCount === 0` assertion in the pre-existing
-    // hidden-view tests above), so nothing is cached while hidden and the measurement happens for the
+    // before any rect is read (see the sibling `rectReadCount === 0` assertion in the hidden-view
+    // tests above), so nothing is cached while hidden and the measurement happens for the
     // first time on the visibility flip instead — if it had cached a stale 0 here, the bar would stay
     // top-aligned for the life of the web view. (`measureBaselineOffset`'s own `undefined`-not-`0`
     // contract for the no-layout case is covered by its unit tests in `editor-dom.util.test.ts`, not

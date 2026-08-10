@@ -116,7 +116,7 @@ describe('CharacterMarkerControl — trigger label', () => {
     renderControl({ currentMarker: 'bd', isLabelHidden: true });
 
     // The accessible name is the ONLY readout of the value once the label is gone, so it must still
-    // carry it — this assertion is load-bearing, not incidental.
+    // carry it.
     const trigger = screen.getByRole('button', { name: 'Character marker: bd' });
     expect(trigger).toBeInTheDocument();
     // `bd` must not appear as rendered text anywhere in the trigger.
@@ -368,7 +368,7 @@ describe('CharacterMarkerToolbar', () => {
   });
 
   it('renders additional slot children without any change to the control', () => {
-    // U1: a second action button must be addable without editing this component's internals.
+    // A second action button must be addable without editing this component's internals.
     render(
       <CharacterMarkerToolbar>
         <CharacterMarkerControl

@@ -231,7 +231,7 @@ describe('MarkerMenu — selection state', () => {
 
   it('renders no selection affordance and sets no aria-checked when an item omits selectionState', () => {
     // The inertness guard. Both Power-mode consumers (the `\` menu and the footnote editor) pass
-    // items without this field, and they must render exactly as they did before it existed.
+    // items without this field, and must render with no selection affordance at all.
     render(
       <MarkerMenu
         localizedStrings={SELECTION_STRINGS}

@@ -119,8 +119,8 @@ describe('useCharacterMarkerState — trigger label inputs', () => {
   it('prefers coverage over the cheap check once the menu opens', () => {
     // `\bd Mu\bd*\bd lu\bd*` — two adjacent sibling char nodes carrying the SAME marker, so the two
     // ends have different json paths. The cheap check over-reports `isMixed` before the menu opens;
-    // coverage corrects it once `onOpen` runs. This is the only test standing behind the spec's
-    // §4.1 guarantee that the trigger and the open menu never contradict each other.
+    // coverage corrects it once `onOpen` runs. This is the only test holding the guarantee that the
+    // trigger and the open menu never contradict each other.
     const usjSiblingSameMarker: Usj = {
       type: 'USJ',
       version: '3.0',

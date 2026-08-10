@@ -159,7 +159,7 @@ export function useCharacterMarkerState({
 
   const coveringMarkers = useMemo(() => Object.keys(coverage?.markerStates ?? {}), [coverage]);
 
-  // See `resolveCurrentMarker`; U3 is the case its doc comment describes.
+  // See `resolveCurrentMarker` for why coverage outranks `contextMarker` here.
   const currentMarker = useMemo(
     () => resolveCurrentMarker(coverage, contextMarker),
     [coverage, contextMarker],
