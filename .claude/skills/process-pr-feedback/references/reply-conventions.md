@@ -182,3 +182,11 @@ Flag every reply that:
 - names a deferral without a ticket key.
 
 Those are the ones the user actually needs to read word for word. Present the rest as a list.
+
+A flagged reply is a **decision item**, so it follows *Presenting a gate* in `SKILL.md` like any
+other: one or two sentences of context saying what the reviewer claimed and what we found,
+the explicit question (post as drafted, soften, or hold?), the options, and a recommendation —
+then the full body. The draft text on its own is not a question, and a confrontational reply
+handed over as a wall of prose gets approved unread, which is the failure the flag existed to
+prevent. The unflagged rest belong under the presentation's **"No decision needed — FYI"**
+heading.

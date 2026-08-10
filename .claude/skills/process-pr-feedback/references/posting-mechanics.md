@@ -69,9 +69,10 @@ Run every check over the extracted bodies:
    constant**: an id the reviewer assigned themselves is shared vocabulary and belongs in the
    body, while an id that exists only in our packet does not (see `reply-conventions.md` rule 6).
    The configuration is the **Internal** list in the packet's `shared-vocabulary.md`, written at
-   P2 — read it, do not re-derive the distinction here. If that file is missing, stop and write it
-   rather than guessing: a check whose deny-list was invented at posting time only tests whichever
-   labels the poster happened to think of. Allow a match only when **the
+   P2 — read it, do not re-derive the distinction here. If that file is missing, **stop and say
+   so**; it is the drafting phase's to write, not the poster's to invent. A deny-list assembled
+   at posting time tests only the labels whoever assembled it happened to think of, and it is
+   assembled by the one role that must not be editing bodies. Allow a match only when **the
    match itself** sits inside a URL — not merely inside a token that contains one. Testing the
    whole token waves through `[FIX-B](https://…)`, where the label is the link *text*: the most
    reviewer-visible position in the body, and exactly what gets linked. Print what was allowed so

@@ -165,9 +165,11 @@ while the run did P0–P2.
    question.
 3. **Options** — lettered, one line each, each one a thing the user can say yes to by naming its
    letter.
-4. **Recommendation** — which option, plus a one-line reason. Every item gets one; "no
-   recommendation" is a legitimate recommendation only for a genuine design preference, and then
-   say why the skill will not choose.
+4. **Recommendation** — which option, plus a one-line reason. Every item gets one, *including*
+   design preferences, where the skill recommends but never chooses. The single exception is a
+   **cross-reviewer conflict**: guardrail 5 forbids taking a side, so there the fourth part is
+   what each reviewer is owed under each option, and an explicit statement that the skill is not
+   recommending and why.
 
 **Banned in a gate presentation:** packet-internal ids and labels as the *subject* of an item,
 reviewer shorthand, a bare file or symbol name standing in for an explanation, and "as
@@ -238,20 +240,29 @@ own base, and record it at the top of `00-inventory.md`:
 gh pr view <pr> --json mergeable,mergeStateStatus,baseRefName,headRefName
 ```
 
-If `mergeable` is `CONFLICTING`, or `mergeStateStatus` says the branch is behind in a way that
-matters — the base moved under it, which is exactly what a squash-merge below it does — then
-**rebasing this branch onto its current base is a prerequisite**, not a task the round can carry
-alongside the fixes. It precedes fix-work and it changes G1 sizing, because every cost estimate is
-an estimate against the wrong tree until it happens. Record it in the packet as a required step
-**with an owner** — it is a decision item at G1 like any other, presented per *Presenting a gate*.
-Do not let fix commits land on a conflicted branch: they inherit the conflict, the reviewer sees a
-diff that will not merge, and the rebase that eventually happens replays them through the conflict
-anyway.
+Read the two fields for **base state**, and ignore the ones that are about something else:
 
-`mergeable` is computed asynchronously and comes back `UNKNOWN` while GitHub is still working it
-out. `UNKNOWN` is not "fine" — re-query until it settles before concluding anything, because
-"no conflict was reported" and "no conflict exists" are the same output here and only one of them
-is a fact.
+| Reading | Means | This round |
+|---|---|---|
+| `mergeable: CONFLICTING`, or `mergeStateStatus: DIRTY` | The branch conflicts with its base | **Rebase is a prerequisite** |
+| `mergeStateStatus: BEHIND` | The base moved under it — what a squash-merge below it does | **Rebase is a prerequisite** |
+| `mergeable: UNKNOWN` | GitHub has not finished computing it | Re-query until it settles; do not proceed on it |
+| `mergeStateStatus: BLOCKED` / `UNSTABLE` / `HAS_HOOKS` | Required reviews, draft status, failing checks — not the base | Not a base-state problem — do not act on it here |
+
+(`mergeStateStatus` is `DIRTY · UNKNOWN · BLOCKED · BEHIND · UNSTABLE · HAS_HOOKS · CLEAN`; there
+is no `DRAFT` value — a draft PR reads `BLOCKED`, which is why the last row matters. `mergeable`
+is `MERGEABLE · CONFLICTING · UNKNOWN`.)
+
+Where a rebase is a prerequisite, it is **not** a task the round can carry alongside the fixes. It
+precedes fix-work and it changes G1 sizing, because every cost estimate is an estimate against the
+wrong tree until it happens. Record it in the packet as a required step **with an owner** — it is
+a decision item at G1 like any other, presented per *Presenting a gate*. Do not let fix commits
+land on a conflicted branch: they inherit the conflict, the reviewer sees a diff that will not
+merge, and the rebase that eventually happens replays them through the conflict anyway.
+
+`UNKNOWN` deserves its own line because it is the one that reads as harmless: it is computed
+asynchronously, so "no conflict was reported" and "no conflict exists" arrive as the same output
+and only one of them is a fact.
 
 **Keep this distinct from the restack.** Getting **this** branch cleanly onto **its** base is a
 *precondition*, handled here at P0. Restacking the branches **above** this one onto this branch is
@@ -320,7 +331,9 @@ already promised to this reviewer, and for nothing else:
 ### P1 — Verify
 
 **In:** `00-inventory.md`.
-**Out:** `01-verification/` — one report per agent, every inventory item classified.
+**Out:** `01-verification/` — one report per agent, every item of *this* round dispositioned:
+classified if it makes a claim, kinded if it does not, and none left untouched. Items carried as
+`already-handled` context are not verified and do not appear.
 **Agents:** parallel `verifier` agents, brief in `references/agent-briefs.md`. Shard by area
 (main / renderer / extension-host / C# / docs) or by contiguous item ranges, ~6–10 items each.
 
@@ -399,15 +412,15 @@ packet.
 
 ### G1 — Strategy gate · **HARD STOP**
 
-Present `02-triage.md` and stop. Do not begin any implementation, branch, or commit in the same
-turn. The user rules on: what gets fixed, where each fix lands, every design preference, every
-cross-reviewer conflict, any base-state rebase P0 found to be a prerequisite, and any verdict P1
-left conditional on a measurement.
+Present the round's decisions and stop. Do not begin any implementation, branch, or commit in the
+same turn. The user rules on: what gets fixed, where each fix lands, every design preference,
+every cross-reviewer conflict, any base-state rebase P0 found to be a prerequisite, and any
+verdict P1 left conditional on a measurement.
 
 **Present it per *Presenting a gate*** — every item self-contained for a cold reader, pure
-information under its own FYI heading. The packet is not the presentation: pasting `02-triage.md`
-into the conversation is not presenting a gate, because the triage is written for someone who has
-the verification reports open.
+information under its own FYI heading. `02-triage.md` is the input to that presentation, not the
+presentation itself: pasting it into the conversation does not cross this gate, because the triage
+is written for a reader who has the verification reports open and the user does not.
 
 State the house rule when presenting:
 
