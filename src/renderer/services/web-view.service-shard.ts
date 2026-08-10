@@ -2471,9 +2471,29 @@ async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layou
   );
 }
 
+/** Whether a value that arrived over the wire is a Scripture reference and not a scroll group id */
+function isSerializedVerseRef(scrRef: unknown): boolean {
+  return (
+    typeof scrRef === 'object' &&
+    !!scrRef &&
+    'book' in scrRef &&
+    typeof scrRef.book === 'string' &&
+    'chapterNum' in scrRef &&
+    typeof scrRef.chapterNum === 'number' &&
+    'verseNum' in scrRef &&
+    typeof scrRef.verseNum === 'number'
+  );
+}
+
 /**
  * Point a web view that carries its own independent reference at a new one. Only this window can:
  * the definition lives in its dock layout.
+ *
+ * The argument is checked rather than trusted because this is a registered network object method:
+ * it is reachable from any process, and what it writes is typed `ScrollGroupId |
+ * SerializedVerseRef` — so a numeric argument would not set a reference at all, it would attach a
+ * detached web view to a scroll group. That is a change to the definition beyond anything this
+ * method exists to make.
  *
  * A failure is warned about and reported rather than thrown — a reference the user asked to move to
  * that one tab could not take is not worth failing the whole navigation command over.
@@ -2482,6 +2502,13 @@ async function setDetachedScrRef(
   webViewId: WebViewId,
   scrRef: SerializedVerseRef,
 ): Promise<boolean> {
+  if (!isSerializedVerseRef(scrRef)) {
+    logger.warn(
+      `Refused to set the detached ref on ${webViewId}: expected a Scripture reference, got ${typeof scrRef}`,
+    );
+    return false;
+  }
+
   try {
     return updateWebViewDefinitionSync(webViewId, { scrollGroupScrRef: scrRef });
   } catch (e) {
