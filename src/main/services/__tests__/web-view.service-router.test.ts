@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => {
     getReadyWindowIds: vi.fn(),
     getNotReadyWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
+    getFocusedWindowId: vi.fn(),
+    focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
     shardAnnouncementListeners,
@@ -52,6 +54,8 @@ vi.mock('@main/services/window-state.service', () => ({
   getReadyWindowIds: mocks.getReadyWindowIds,
   getNotReadyWindowIds: mocks.getNotReadyWindowIds,
   isWindowReady: mocks.isWindowReady,
+  getFocusedWindowId: mocks.getFocusedWindowId,
+  focusWindow: mocks.focusWindow,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
@@ -72,7 +76,8 @@ function windowShard(openWebViewIds: string[]) {
       openWebViewIds.includes(id) ? { id } : undefined,
     ),
     getAllOpenWebViewDefinitions: vi.fn(async () => openWebViewIds.map((id) => ({ id }))),
-    openWebView: vi.fn(async () => 'opened'),
+    // Typed the way the real method is — it answers with nothing when the open did not happen
+    openWebView: vi.fn<() => Promise<string | undefined>>(async () => 'opened'),
     reloadWebView: vi.fn(async () => 'reloaded'),
   };
 }
@@ -84,6 +89,7 @@ describe('web view service router', () => {
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getNotReadyWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
+    mocks.getFocusedWindowId.mockReturnValue(1);
   });
 
   describe('finding a window`s shard', () => {
@@ -224,6 +230,164 @@ describe('web view service router', () => {
 
     expect(owner.openWebView).toHaveBeenCalled();
     expect(focused.openWebView).not.toHaveBeenCalled();
+  });
+
+  describe('a layout that names a tab to open next to', () => {
+    // A layout naming a target tab names the window that tab is in just as surely as `existingId`
+    // does, and the tab it names is routinely in a window other than the one the user is working in
+    // — a comment panel opened beside an editor, a resource opened beside the tab it came from
+
+    test('opens next to a panel layout`s target tab in the window that owns it', async () => {
+      const focused = windowShard([]);
+      const owner = windowShard(['target-tab']);
+      withWindows({ 1: focused, 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'panel', targetTabId: 'target-tab' });
+
+      expect(owner.openWebView).toHaveBeenCalled();
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('opens over a replace-tab layout`s target tab in the window that owns it', async () => {
+      const focused = windowShard([]);
+      const owner = windowShard(['target-tab']);
+      withWindows({ 1: focused, 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'replace-tab', targetTabId: 'target-tab' });
+
+      expect(owner.openWebView).toHaveBeenCalled();
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('lets an existing web view decide the window before the layout target does', async () => {
+      // The window shard brings an existing web view to the front and returns before it ever looks
+      // at the layout, so routing has to put the two in the same order the shard does
+      const focused = windowShard([]);
+      const existingOwner = windowShard(['existing-view']);
+      const targetOwner = windowShard(['target-tab']);
+      withWindows({ 1: focused, 2: existingOwner, 3: targetOwner });
+      const router = await getRouter();
+
+      await router.openWebView(
+        'someType',
+        { type: 'panel', targetTabId: 'target-tab' },
+        { existingId: 'existing-view' },
+      );
+
+      expect(existingOwner.openWebView).toHaveBeenCalled();
+      expect(targetOwner.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('falls back to the focused window when no window owns the layout target', async () => {
+      const focused = windowShard([]);
+      withWindows({ 1: focused, 2: windowShard([]) });
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'panel', targetTabId: 'tab-nobody-has' });
+
+      expect(focused.openWebView).toHaveBeenCalled();
+    });
+
+    test('still opens when a window that could not be asked might have had the target', async () => {
+      // The `existingId` search fails the call here, because guessing wrong there mints a second
+      // copy of a web view meant to be unique. Guessing wrong about a layout target costs placement
+      // and nothing else — and a window stays unaskable for as long as its renderer takes to start,
+      // or forever if it crashed, so failing would take every tab-naming open down with it
+      const focused = windowShard([]);
+      const starting = windowShard(['target-tab']);
+      withWindows({ 1: focused, 2: starting }, { unreadyWindowIds: [2] });
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'panel', targetTabId: 'target-tab' });
+
+      expect(focused.openWebView).toHaveBeenCalled();
+    });
+
+    test('does not go looking for an owner when the layout names no tab', async () => {
+      // Every layout without a `targetTabId` means "wherever the user is", so searching the windows
+      // for one would be a cross-process fan-out per open that can only ever come back empty
+      const focused = windowShard([]);
+      const other = windowShard([]);
+      withWindows({ 1: focused, 2: other });
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'tab', parentTabGroupId: 'some-group' });
+
+      expect(focused.openWebView).toHaveBeenCalled();
+      expect(other.getOpenWebViewDefinition).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('raising the window an open was routed to', () => {
+    // Routing an open to another window puts the tab where it belongs, but the window it went to is
+    // behind the one the user is looking at — so without raising it the whole operation is invisible
+
+    test('raises the window that owns an existing web view', async () => {
+      withWindows({ 1: windowShard([]), 2: windowShard(['existing-view']) });
+      const router = await getRouter();
+
+      await router.openWebView('someType', undefined, { existingId: 'existing-view' });
+
+      expect(mocks.focusWindow).toHaveBeenCalledWith(2);
+    });
+
+    test('raises the window that owns the layout`s target tab', async () => {
+      withWindows({ 1: windowShard([]), 2: windowShard(['target-tab']) });
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'panel', targetTabId: 'target-tab' });
+
+      expect(mocks.focusWindow).toHaveBeenCalledWith(2);
+    });
+
+    test('leaves the window the user is already working in alone', async () => {
+      // Raising the window a call was already going to steals focus from whatever the user is
+      // doing — a dialog they are typing in, another app — to show them a tab that is already there
+      const focused = windowShard(['existing-view']);
+      withWindows({ 1: focused, 2: windowShard([]) });
+      const router = await getRouter();
+
+      await router.openWebView('someType', undefined, { existingId: 'existing-view' });
+
+      expect(focused.openWebView).toHaveBeenCalled();
+      expect(mocks.focusWindow).not.toHaveBeenCalled();
+    });
+
+    test('does not raise a window for an open that did not happen', async () => {
+      // Raising a window to show a tab that never appeared is worse than not raising it
+      const owner = windowShard(['existing-view']);
+      owner.openWebView.mockResolvedValue(undefined);
+      withWindows({ 1: windowShard([]), 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('someType', undefined, { existingId: 'existing-view' });
+
+      expect(mocks.focusWindow).not.toHaveBeenCalled();
+    });
+
+    test('does not take focus from another application', async () => {
+      // An open routed here is not necessarily something the user just asked for — an extension can
+      // re-open a web view by id at any moment — so with the app in the background, raising a
+      // window would pull it in front of whatever the user is actually working in
+      mocks.getFocusedWindowId.mockReturnValue(undefined);
+      withWindows({ 1: windowShard([]), 2: windowShard(['existing-view']) });
+      const router = await getRouter();
+
+      await router.openWebView('someType', undefined, { existingId: 'existing-view' });
+
+      expect(mocks.focusWindow).not.toHaveBeenCalled();
+    });
+
+    test('does not raise anything when the open went to the focused window by fallback', async () => {
+      withWindows({ 1: windowShard([]), 2: windowShard([]) });
+      const router = await getRouter();
+
+      await router.openWebView('someType');
+
+      expect(mocks.focusWindow).not.toHaveBeenCalled();
+    });
   });
 
   test('opens a brand new web view in the focused window', async () => {
