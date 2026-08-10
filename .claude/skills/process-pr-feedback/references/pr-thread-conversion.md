@@ -115,7 +115,11 @@ for it in items:
         h = re.match(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", dl)
         if h:
             new_ln = int(h.group(1))
-        elif new_ln is None or dl.startswith("+++"):
+        # `new_ln is None` covers the ---/+++ file headers, which always precede the first @@.
+        # Do NOT also skip on startswith("+++"): an added line whose own text begins with "++"
+        # renders as "+++…", and skipping it without advancing new_ln shifts every later line
+        # number in the file by one. That is reachable from any doc containing a diff snippet.
+        elif new_ln is None:
             continue
         elif dl.startswith("+"):
             added.add(new_ln)

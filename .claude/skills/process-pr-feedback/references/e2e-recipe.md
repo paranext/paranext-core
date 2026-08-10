@@ -48,12 +48,16 @@ erodes Rolf's trust in the whole pipeline.
 - `npm stop` is a script in this repo's `package.json`; run it from the **repo root** of any
   paranext-core checkout. It kills by process name, so it stops an app launched from a
   different checkout too. Never hand-roll `pkill`.
-- `e2e-tests/tests/isolated/multi-window` is the path for the multi-window suite specifically.
-  Substitute the suite the fix touches; keep `--project=isolated` and `--workers=1` regardless.
-- The "known pre-existing local failures" list is from 2026-08. Do not treat it as current —
-  the durable rule is the method: **record base-vs-branch**. Run the suite at the merge-base as
-  well as at the branch tip and compare, so a pre-existing failure is proven pre-existing
-  instead of assumed.
+- **The suite path above will not work as written.** `e2e-tests/tests/isolated/multi-window`
+  existed only on the 2026-08 multi-window stack and is not on `main`. Copying the headline
+  command verbatim gets "no tests found". List what actually exists first —
+  `ls e2e-tests/tests/isolated/` — and substitute the suite the fix touches. The parts that
+  transfer unchanged are `--config e2e-tests/playwright.config.ts`, `--project=isolated`,
+  `--workers=1`, redirecting to a file, and no outer timeout wrapper.
+- The "known pre-existing local failures" list, and "the multi-window suite exists only from
+  #2639 upward", are both 2026-08 snapshots. Do not treat either as current — the durable rule
+  is the method: **record base-vs-branch**. Run the suite at the merge-base as well as at the
+  branch tip and compare, so a pre-existing failure is proven pre-existing instead of assumed.
 - "Report with the remaining evidence" means the e2e result is not the only gate: unit tests,
   typecheck, lint, and a live smoke run are independent evidence and should be reported
   together with a failed or flaky e2e attempt.
