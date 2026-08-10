@@ -9,8 +9,11 @@
  */
 
 import {
+  focusWindow,
+  getFocusedWindowId,
   getNotReadyWindowIds,
   getReadyWindowIds,
+  getTargetWindowId,
   isWindowReady,
 } from '@main/services/window-state.service';
 import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
@@ -70,7 +73,16 @@ const getTargetWebViewShard = createTargetShardResolver(
 );
 
 /** The window that owns a web view, and the definition the ownership search already fetched */
-type WebViewOwner = { shard: WebViewServiceType; definition: SavedWebViewDefinition };
+type WebViewOwner = {
+  /**
+   * The window that claimed the web view. Kept alongside the shard because the search already
+   * resolved it, and raising that window afterwards is the only way the user sees where a
+   * cross-window operation went.
+   */
+  windowId: number;
+  shard: WebViewServiceType;
+  definition: SavedWebViewDefinition;
+};
 
 /**
  * Search the windows that can answer for the one that owns a given web view, returning its WebView
@@ -116,7 +128,7 @@ async function findOwner(
           return undefined;
         }
         const definition = await webViewShard.getOpenWebViewDefinition(webViewId);
-        if (definition) return { shard: webViewShard, definition };
+        if (definition) return { windowId, shard: webViewShard, definition };
         return undefined;
       } catch (e) {
         logger.warn(
@@ -138,6 +150,67 @@ async function findOwner(
   return undefined;
 }
 
+/**
+ * The tab a layout says to open next to or over, which names the window that tab is in.
+ *
+ * `tab` layouts are deliberately not routed by their `parentTabGroupId`. A tab group id is not a
+ * web view id, so answering it would mean asking every window a question none of them can answer
+ * today — a new cross-process query per open, for the single call site that passes one (the dock's
+ * "+" button, whose tab group is by construction in the window the user just clicked in).
+ */
+function getLayoutTargetTabId(layout?: Layout): string | undefined {
+  if (layout?.type === 'panel' || layout?.type === 'replace-tab') return layout.targetTabId;
+  return undefined;
+}
+
+/**
+ * The window holding the tab a layout points at, or nothing if no window that could answer has it.
+ *
+ * A window that could not be asked does NOT fail the open here, which is the one way this differs
+ * from the `existingId` search. Guessing wrong there costs a second copy of a web view meant to be
+ * unique; guessing wrong here costs only placement — the tab still opens, in the window the user is
+ * in, beside whatever is already there. Failing instead would mean that for as long as ANY window
+ * cannot answer — a second window still starting, or one whose renderer crashed and never
+ * re-registered — every open naming a tab produces nothing at all.
+ */
+async function findLayoutTargetOwner(targetTabId: string): Promise<WebViewOwner | undefined> {
+  try {
+    return await findOwner(targetTabId, 'openWebView beside a layout target');
+  } catch (e) {
+    logger.warn(
+      `Could not work out which window holds tab ${targetTabId}, so this open goes to the window the user is in: ${getErrorMessage(e)}`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Run an open in the window that owns the tab it was routed by, and raise that window.
+ *
+ * Raising is deliberately narrow. It only happens when something actually opened — raising a window
+ * to show a tab that did not appear is worse than not raising it — and only when the owning window
+ * is not the one the call was already going to, since the tab is appearing in front of the user
+ * there anyway and taking OS focus would interrupt whatever else they are doing to show it to
+ * them.
+ *
+ * It also only happens while this app holds focus, so this can move focus BETWEEN this app's
+ * windows but never take it from another application. An open routed here need not be something the
+ * user just asked for — an extension can re-open a web view by id at any moment — and pulling the
+ * app in front of whatever they are working in would be the wrong answer to every one of those.
+ */
+async function openWebViewInOwningWindow(
+  owner: WebViewOwner,
+  webViewType: WebViewType,
+  layout?: Layout,
+  options?: OpenWebViewOptions,
+): Promise<WebViewId | undefined> {
+  const openedWebViewId = await owner.shard.openWebView(webViewType, layout, options);
+  const isCrossWindow = owner.windowId !== getTargetWindowId();
+  if (openedWebViewId && isCrossWindow && getFocusedWindowId() !== undefined)
+    focusWindow(owner.windowId);
+  return openedWebViewId;
+}
+
 // Router methods that route to the focused window's WebView service shard
 
 async function openWebView(
@@ -148,8 +221,19 @@ async function openWebView(
   // If an existingId is provided, search all windows for the webview's owner
   if (options?.existingId) {
     const owner = await findOwner(options.existingId, 'openWebView');
-    if (owner) return owner.shard.openWebView(webViewType, layout, options);
+    if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
   }
+
+  // A layout naming a tab names the window that tab is in, so it routes the same way an existingId
+  // does — and after it, because a window shard that finds the existing web view raises it and
+  // returns before it ever reads the layout. Routing in the other order would send the call to a
+  // window that then ignores the reason it was sent there.
+  const layoutTargetTabId = getLayoutTargetTabId(layout);
+  if (layoutTargetTabId) {
+    const owner = await findLayoutTargetOwner(layoutTargetTabId);
+    if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
+  }
+
   // No existingId or not found in any window — route to focused window
   const webViewShard = await getTargetWebViewShard();
   return webViewShard.openWebView(webViewType, layout, options);
