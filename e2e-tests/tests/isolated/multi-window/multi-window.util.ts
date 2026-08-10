@@ -384,10 +384,14 @@ export interface AppExitResult {
  * `app.quit()` is scheduled rather than called inline so the evaluate round-trip completes before
  * teardown begins.
  *
- * Budget: the quit path is a bounded shutdown-sync attempt (which rejects immediately when no S/R
- * extension is registered) plus bounded child-process waits of a few seconds, so a healthy quit
- * lands well under a minute; 120 seconds is slow-machine headroom. A quit that exceeds it means
- * shutdown hung, which is exactly a failure of the behaviour under test.
+ * Budget: the quit path is a bounded shutdown-sync attempt (which rejects immediately in this
+ * suite's configuration, since no S/R extension is registered) plus bounded child-process waits of
+ * a few seconds, so a healthy quit lands well under a minute — but only in that configuration: with
+ * an S/R extension registered, the sync's own bound (`AUTO_SYNC_MAX_DURATION_MS`, 600 s) exceeds
+ * this whole budget. 120 seconds is slow-machine headroom. A quit that exceeds it means shutdown
+ * hung, which is exactly a failure of the behaviour under test. When it does, the tail of `output`
+ * (if given) is folded into the timeout error — the captured app output is what can name the
+ * statement shutdown is stuck on.
  *
  * Reaping: in dev mode the .NET watcher child survives its Electron parent, holding the inherited
  * stdio pipes open. Killing the leftover process group means nothing leaks into later launches and
@@ -396,6 +400,7 @@ export interface AppExitResult {
  */
 export async function quitAppAndWaitForExit(
   electronApp: ElectronApplication,
+  output?: AppOutputCapture,
 ): Promise<AppExitResult> {
   const electronProcess = electronApp.process();
   const processExit = new Promise<AppExitResult>((resolve) => {
@@ -411,10 +416,16 @@ export async function quitAppAndWaitForExit(
   const exitResult = await Promise.race([
     processExit,
     new Promise<never>((_resolve, reject) => {
-      setTimeout(
-        () => reject(new Error('Electron process did not exit within 120 s of app.quit()')),
-        120_000,
-      );
+      setTimeout(() => {
+        const outputTail = output?.text().split('\n').slice(-60).join('\n');
+        reject(
+          new Error(
+            `Electron process did not exit within 120 s of app.quit()${
+              outputTail ? `; last app output:\n${outputTail}` : ''
+            }`,
+          ),
+        );
+      }, 120_000);
     }),
   ]);
 
@@ -443,7 +454,7 @@ export async function quitAndExpectCleanExit(
   logStep: (label: string) => void,
   label: string,
 ): Promise<void> {
-  const exitResult = await quitAppAndWaitForExit(electronApp);
+  const exitResult = await quitAppAndWaitForExit(electronApp, output);
   logStep(`${label}: exited with code ${exitResult.code} signal ${exitResult.signal}`);
   expect(exitResult.signal).toBeUndefined();
   expect(exitResult.code).toBe(0);
