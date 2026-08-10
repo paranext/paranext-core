@@ -18,6 +18,7 @@ import {
   isStandardViewEnterKeyEvent,
   markerMenuItemToCommandPaletteItem,
   restoreSelectionIfLost,
+  transientInputForPaletteSession,
 } from './platform-scripture-editor.web-view.utils';
 
 /** Build a mock editor ref exposing a spy for the method the generator calls. */
@@ -304,5 +305,27 @@ describe('markerMenuItemToCommandPaletteItem', () => {
 
     expect(markerMenuItemToCommandPaletteItem(nonBasic).muted).toBe(true);
     expect(markerMenuItemToCommandPaletteItem(basic).muted).toBe(false);
+  });
+});
+
+describe('transientInputForPaletteSession', () => {
+  // Only the PASSIVE backslash session leaves bytes in the document: its `\` and every filter
+  // character land as literal text. Focused sessions claim their keys, so there is nothing in the
+  // document to declare.
+  it('declares the trigger plus the current filter for a passive backslash session', () => {
+    expect(transientInputForPaletteSession({ kind: 'backslash', filter: '' })).toEqual({
+      kind: 'marker-literal',
+      run: '\\',
+    });
+    expect(transientInputForPaletteSession({ kind: 'backslash', filter: 'q1' })).toEqual({
+      kind: 'marker-literal',
+      run: '\\q1',
+    });
+  });
+
+  it('declares nothing for focused sessions or no session at all', () => {
+    expect(transientInputForPaletteSession({ kind: 'enter', filter: 'q1' })).toBeUndefined();
+    expect(transientInputForPaletteSession({ kind: 'selection', filter: 'nd' })).toBeUndefined();
+    expect(transientInputForPaletteSession(undefined)).toBeUndefined();
   });
 });
