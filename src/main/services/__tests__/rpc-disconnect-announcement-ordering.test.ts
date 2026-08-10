@@ -29,7 +29,13 @@ const REGISTER_REQUEST_ID = 7;
 const MICROTASK_HOPS_TO_DRAIN = 20;
 
 /** A JSON-RPC message main handed to a socket, reduced to the fields these tests order by */
-type SentMessage = { method?: unknown; id?: unknown; params?: unknown[] };
+type SentMessage = {
+  method?: unknown;
+  id?: unknown;
+  params?: unknown[];
+  result?: unknown;
+  isResponse?: boolean;
+};
 
 /** What main sent to a socket, parsed back off the wire in the order it was sent */
 function sentMessages(sentPayloads: string[]): SentMessage[] {
@@ -41,6 +47,10 @@ function sentMessages(sentPayloads: string[]): SentMessage[] {
       method: 'method' in message ? message.method : undefined,
       id: 'id' in message ? message.id : undefined,
       params: Array.isArray(params) ? params : undefined,
+      result: 'result' in message ? message.result : undefined,
+      // An id alone does not make a message a response: main numbers its own outgoing requests from
+      // the same small integers, so a request it originates could carry the id this test waits on.
+      isResponse: 'result' in message || 'error' in message,
     };
   });
 }
@@ -50,7 +60,8 @@ const isDisposalOf = (networkObjectId: string) => (message: SentMessage) =>
   message.method === DISPOSE_NETWORK_OBJECT_EVENT && message.params?.[0] === networkObjectId;
 
 /** Matches the response to a request a client sent under `requestId` */
-const isResponseTo = (requestId: number) => (message: SentMessage) => message.id === requestId;
+const isResponseTo = (requestId: number) => (message: SentMessage) =>
+  message.isResponse === true && message.id === requestId;
 
 /**
  * Lets every microtask that is already queued run — and only those. Never yields to the event loop,
@@ -140,7 +151,6 @@ describe('a disconnect announcement reaches surviving sockets before anything ca
 
     dyingSocket.close();
     await drainMicrotasks();
-    clearTimeout(macrotask);
 
     // Nothing above may have turned the event loop, or the check below would prove nothing about
     // what the announcement path itself waits on
@@ -149,12 +159,26 @@ describe('a disconnect announcement reaches surviving sockets before anything ca
     expect(
       sentMessages(survivingSocket.sentPayloads).filter(isDisposalOf(DYING_OBJECT_ID)),
     ).toHaveLength(1);
+
+    // The witness is only evidence if it was able to flip: let the event loop turn once for real and
+    // require it to fire. Without this, a `drainMicrotasks` that quietly started yielding to the
+    // event loop — the one edit that would make the check above vacuous — would still read green,
+    // and what the test pins would decay from "before any macrotask" to "eventually".
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    expect(ranAfterAYieldToTheEventLoop).toBe(true);
+    clearTimeout(macrotask);
   });
 
   it('overtakes a registration request that a surviving client starts in the same turn', async () => {
+    // The worst case the ordering has to survive, and the only interleaving in which the hazard
+    // exists at all: the close has to come first, because the id stays taken until the close removes
+    // the dead client's methods from the registry — a claim that arrives before that is simply
+    // refused, and a refused claim is nothing for a late disposal to revoke. So the race is always
+    // this one, and it is a real race, since the close only *queues* the announcement here: the
+    // claim below starts before that announcement has been sent.
     dyingSocket.close();
-    // The worst case the ordering has to survive: a process claiming the dead object's id starts
-    // before the announcement of its death has been sent
     survivingSocket.receiveMessage({
       jsonrpc: '2.0',
       id: REGISTER_REQUEST_ID,
@@ -171,10 +195,20 @@ describe('a disconnect announcement reaches surviving sockets before anything ca
     });
 
     const messages = sentMessages(survivingSocket.sentPayloads);
+    const disposalIndex = messages.findIndex(isDisposalOf(DYING_OBJECT_ID));
+    const responseIndex = messages.findIndex(isResponseTo(REGISTER_REQUEST_ID));
+
+    // `findIndex` answers -1 for a message that never came, and -1 sorts before everything, so the
+    // ordering below only means something once both messages are known to be present
+    expect(disposalIndex).toBeGreaterThanOrEqual(0);
+    expect(responseIndex).toBeGreaterThanOrEqual(0);
+    // And it is only the race under test while the id really was handed out again: a registration
+    // that got refused would leave these two in this order for a reason that has nothing to do with
+    // the timing, so a future guard against re-registering a just-departed id would quietly empty
+    // this test instead of failing it.
+    expect(messages[responseIndex].result).toBe(true);
     // The disposal names an id, so arriving after the response would revoke the registration that
     // response granted rather than the one that died
-    expect(messages.findIndex(isDisposalOf(DYING_OBJECT_ID))).toBeLessThan(
-      messages.findIndex(isResponseTo(REGISTER_REQUEST_ID)),
-    );
+    expect(disposalIndex).toBeLessThan(responseIndex);
   });
 });
