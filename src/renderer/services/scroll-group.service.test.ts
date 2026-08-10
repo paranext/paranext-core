@@ -378,26 +378,47 @@ describe('handing over previously stored state', () => {
     expect(host.migrateStoredScrollGroupState).not.toHaveBeenCalled();
   });
 
-  it('clears what it offered once the host has adopted it', async () => {
+  /** Restart the service the way a later start of the app does, and report whether it offered */
+  async function didOfferOnALaterStart() {
+    vi.resetModules();
+    host.migrateStoredScrollGroupState.mockClear();
+    host.migrateStoredScrollGroupState.mockResolvedValue(true);
+    await startService();
+    return host.migrateStoredScrollGroupState.mock.calls.length > 0;
+  }
+
+  it('stops offering what it offered once the host has adopted it', async () => {
     storePreviouslyStoredState({ scrRefs: { 0: MARK }, scrRefSourceProjectIds: { 0: 'projOld' } });
     host.migrateStoredScrollGroupState.mockResolvedValue(true);
 
     await startService();
 
-    // Left in place these are re-offered by every window on every start forever, and a profile whose
-    // main-process store is ever cleared silently resurrects a reference from before the host.
-    expect(localStorage.getItem(SCR_REFS_STORAGE_KEY)).toBeNull();
-    expect(localStorage.getItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY)).toBeNull();
+    // Left offerable these are re-offered by every window on every start forever, and a profile
+    // whose main-process store is ever cleared silently resurrects a reference from before the host.
+    expect(await didOfferOnALaterStart()).toBe(false);
   });
 
-  it('clears what it offered when the host refuses it', async () => {
+  it('leaves the handed-over keys in place for a build that has no host', async () => {
+    // Deleting them is what makes a downgrade start broken: an older build reads these keys and
+    // nothing else, so it would come up at the default reference rather than where the user left
+    // off. A marker is what stops the re-offer, and an old build ignores markers it never heard of.
+    storePreviouslyStoredState({ scrRefs: { 0: MARK }, scrRefSourceProjectIds: { 0: 'projOld' } });
+    host.migrateStoredScrollGroupState.mockResolvedValue(true);
+
+    await startService();
+
+    expect(localStorage.getItem(SCR_REFS_STORAGE_KEY)).not.toBeNull();
+    expect(localStorage.getItem(SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY)).not.toBeNull();
+  });
+
+  it('stops offering what it offered when the host refuses it', async () => {
     storePreviouslyStoredState({ scrRefs: { 0: MARK }, scrRefSourceProjectIds: {} });
     host.migrateStoredScrollGroupState.mockResolvedValue(false);
 
     await startService();
 
     // Refused means the host has state that beats this copy, so this copy is finished either way.
-    expect(localStorage.getItem(SCR_REFS_STORAGE_KEY)).toBeNull();
+    expect(await didOfferOnALaterStart()).toBe(false);
   });
 
   it('keeps what it offered when the offer never lands', async () => {
