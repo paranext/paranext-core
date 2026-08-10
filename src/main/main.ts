@@ -946,20 +946,23 @@ async function main() {
       event.preventDefault();
       isWindowClosing = true;
 
-      // Recorded before the decision below, and read by every window's handler, so that windows
-      // closing at the same moment agree on what is happening rather than each leaving the shutdown
-      // tasks to the other. Announces to arbitrary subscribers as it goes, which is the other reason
-      // it sits below `preventDefault()`.
-      markWindowClosing(windowId);
-
-      // Shutdown tasks belong to the app going down, not to a window going away. Two ways the app
-      // goes down, and both have to be caught here: every remaining window closing at once, and a
-      // quit (Cmd+Q, menu Quit, OS logout) — which does NOT show up as a last-window close, since
-      // Electron closes every window and `isAppQuitRequested` is set from `before-quit`, which
-      // fires ahead of any `close`.
-      isAppGoingDown = isAppShuttingDown();
-
+      // Everything from here down is inside the guard: the window is now prevented from closing and
+      // latched as closing, so a throw that escaped would strand it exactly there — visible, inert,
+      // and (from an async listener) reported only as a rejection Electron never sees.
       try {
+        // Recorded before the decision below, and read by every window's handler, so that windows
+        // closing at the same moment agree on what is happening rather than each leaving the
+        // shutdown tasks to the other. Announces to arbitrary subscribers as it goes, which is the
+        // other reason it sits below `preventDefault()`.
+        markWindowClosing(windowId);
+
+        // Shutdown tasks belong to the app going down, not to a window going away. Two ways the app
+        // goes down, and both have to be caught here: every remaining window closing at once, and a
+        // quit (Cmd+Q, menu Quit, OS logout) — which does NOT show up as a last-window close, since
+        // Electron closes every window and `isAppQuitRequested` is set from `before-quit`, which
+        // fires ahead of any `close`.
+        isAppGoingDown = isAppShuttingDown();
+
         if (isAppGoingDown) {
           // The app is on its way down: stop the startup boot-race retry loop so it can't fire a
           // startup sync after this shutdown sync, or reach a network connection that is about to
@@ -974,9 +977,16 @@ async function main() {
           // does the same, so the last flush holds everyone's.
           // Only on this path: a window closing while the app stays up is leaving the structure,
           // and its `closed` handler below rewrites the structure without it.
-          cancelPendingBoundsCapture();
-          updateWindowBounds(windowId, captureWindowBoundsState());
-          await writeNow(getWindows().map((window) => window.id));
+          try {
+            cancelPendingBoundsCapture();
+            updateWindowBounds(windowId, captureWindowBoundsState());
+            await writeNow(getWindows().map((window) => window.id));
+          } catch (e) {
+            // Losing the structure costs the user their window arrangement. Skipping the shutdown
+            // tasks below would cost them their unsynced edits, which nothing can write back once
+            // the app is gone — so a persistence failure is logged and the shutdown continues.
+            logger.warn(`Could not persist window layouts during shutdown: ${getErrorMessage(e)}`);
+          }
 
           // On a multi-window quit every window reaches this line, so the tasks are shared rather
           // than run once per window — each window waits on the same run before destroying itself.
@@ -988,6 +998,10 @@ async function main() {
           // shutdown is: there is nothing left to write the edits back later.
           await performWindowCloseTasks(windowId);
         }
+      } catch (e) {
+        // The window still goes down via the `finally` below; what this adds is the report, which a
+        // rejected promise out of an async listener would not give us.
+        logger.warn(`Window ${windowId} close handling failed: ${getErrorMessage(e)}`);
       } finally {
         // Out of the routable set before the renderer goes. `closed` is what removes the window from
         // the tracked list, and until that fires a fan-out would still ask a window that cannot

@@ -398,18 +398,17 @@ function buildStructure(windowIdsInOrder: readonly number[]): WindowLayoutStruct
   return { windows: built.map(({ entry }) => entry) };
 }
 
-/** Write the structure to disk, never throwing — persistence must not be able to break the app */
+/**
+ * Write the structure to disk. Throws on failure; {@link enqueueWrite} is the single place that
+ * catches, so that one boundary covers building the structure as well as writing it.
+ */
 async function writeStructureToDisk(structure: WindowLayoutStructure): Promise<void> {
-  try {
-    const filePath = getWindowLayoutsFilePath();
-    // Write to a temp file and rename over the real one so a crash mid-write cannot leave a
-    // torn (unparseable) structure behind
-    const tempPath = `${filePath}.tmp`;
-    await writeFile(tempPath, JSON.stringify(structure), 'utf8');
-    await rename(tempPath, filePath);
-  } catch (error) {
-    logger.warn(`Failed to write ${WINDOW_LAYOUTS_FILE_NAME}: ${getErrorMessage(error)}`);
-  }
+  const filePath = getWindowLayoutsFilePath();
+  // Write to a temp file and rename over the real one so a crash mid-write cannot leave a
+  // torn (unparseable) structure behind
+  const tempPath = `${filePath}.tmp`;
+  await writeFile(tempPath, JSON.stringify(structure), 'utf8');
+  await rename(tempPath, filePath);
 }
 
 /**
@@ -421,7 +420,17 @@ async function writeStructureToDisk(structure: WindowLayoutStructure): Promise<v
  */
 function enqueueWrite(windowIdsInOrder: readonly number[]): Promise<void> {
   const windowIds = [...windowIdsInOrder];
-  writeChain = writeChain.then(() => writeStructureToDisk(buildStructure(windowIds)));
+  writeChain = writeChain
+    .then(() => writeStructureToDisk(buildStructure(windowIds)))
+    // The one error boundary for persistence, deliberately placed here rather than inside
+    // `writeStructureToDisk` so that it also covers `buildStructure`. It is what keeps a failure
+    // from spreading: every later write chains off this promise, so a rejection left here would
+    // skip persistence for the rest of the session, and `writeNow`'s callers — the quit path among
+    // them — would see a rejection from a service that must never be able to break the app.
+    // Catching resolves the chain again, so the next write starts from a clean one.
+    .catch((error) => {
+      logger.warn(`Failed to write ${WINDOW_LAYOUTS_FILE_NAME}: ${getErrorMessage(error)}`);
+    });
   return writeChain;
 }
 
