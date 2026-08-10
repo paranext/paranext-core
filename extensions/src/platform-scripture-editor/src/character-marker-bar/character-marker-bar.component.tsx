@@ -48,7 +48,9 @@ export type CharacterMarkerBarProps = {
  *   `[key: string]`. TypeScript does not consider a `LocalizeKey`-keyed type assignable to a
  *   `string`-keyed one, so the bar takes the `LanguageStrings` every caller actually has — which is
  *   also what `useCharacterMarkerState` requires — and rebuilds it as a plain string-keyed object
- *   for the control.
+ *   for the control. Typing `CharacterMarkerControlLocalizedStrings` as `LanguageStrings` would
+ *   delete both the clone and the memo below; left alone here because the control is shared with
+ *   the toolbar placement and the change belongs with it, not with this placement.
  *
  * The Simple-mode gate lives in `CharacterMarkerToolbar`, so nothing renders in Power mode.
  */

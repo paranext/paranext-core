@@ -15,6 +15,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi, Mock } from 'vitest';
 import {
   BASELINE_PROBE_ATTRIBUTE,
+  clampTopToVisibleArea,
   findScrollContainer,
   measureBaselineOffset,
   scrollToAnnotation,
@@ -449,5 +450,47 @@ describe('measureBaselineOffset', () => {
     measureBaselineOffset(container);
 
     expect(container.childNodes).toHaveLength(0);
+  });
+});
+
+/**
+ * Pure arithmetic over three rects, so these are plain value tests with no DOM.
+ *
+ * It has two consumers — `computePosition` (paragraph-marker tooltip) and `computeBarTop`
+ * (character-marker bar) — whose own suites exercise it end to end. Covered directly here as well
+ * because those suites assert through their callers' additional offsets, so neither pins the two
+ * clamps on their own: a change to the clamp order, or to the 1px anchor height, could be absorbed
+ * by a compensating change in either caller.
+ */
+describe('clampTopToVisibleArea', () => {
+  it('returns the target position relative to the anchor when fully visible', () => {
+    // Nothing to clamp: the target sits below the visible area's top and well above its own bottom.
+    expect(clampTopToVisibleArea({ top: 150, bottom: 170 }, { top: 100 }, { top: 100 })).toBe(50);
+  });
+
+  it('subtracts the anchor top, not the scroll container top, for the returned coordinate', () => {
+    // The two are deliberately different here. The result is in the ANCHOR's content coordinates;
+    // the scroll container only says where the visible area begins. Passing the wrong element is
+    // the documented failure mode, and only an asymmetric fixture can catch it.
+    expect(clampTopToVisibleArea({ top: 150, bottom: 170 }, { top: 100 }, { top: 120 })).toBe(50);
+  });
+
+  it('pins to the top of the visible area when the target has scrolled above it', () => {
+    // Target top is 20px above where the container's visible area starts, so the first clamp wins
+    // and the result is the visible area's own top in anchor coordinates.
+    expect(clampTopToVisibleArea({ top: 100, bottom: 200 }, { top: 80 }, { top: 120 })).toBe(40);
+  });
+
+  it("never exceeds the target's own bottom edge, less the 1px anchor height", () => {
+    // An almost-fully-scrolled-past target: the visible-area clamp alone would place the anchor at
+    // 40, below the target's own bottom (30). The second clamp keeps it inside the target, so the
+    // overlay does not detach and trail beneath the thing it is tracking.
+    expect(clampTopToVisibleArea({ top: 90, bottom: 110 }, { top: 80 }, { top: 120 })).toBe(29);
+  });
+
+  it('applies the two clamps in order, so the bottom clamp wins when they disagree', () => {
+    // Both clamps are active and pull opposite ways. Order is the behavior being pinned: max-then-min
+    // yields the bottom bound, whereas min-then-max would return the visible-area top instead.
+    expect(clampTopToVisibleArea({ top: 0, bottom: 50 }, { top: 0 }, { top: 100 })).toBe(49);
   });
 });
