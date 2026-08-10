@@ -21,6 +21,14 @@ Replies appear under the user's name; there is no such thing as a low-stakes acc
 Get inline comment ids from `gh api repos/{owner}/{repo}/pulls/{pr}/comments --paginate`. An id
 copied from an older document may be stale — re-derive it before posting.
 
+The `{id}` in the replies endpoint must be the thread's **top-level** comment id — GitHub
+rejects replies to replies ("This must be the ID of a top-level review comment"). A reviewer
+comment that is itself a reply (non-null `in_reply_to_id`) names its thread root in that very
+field: reply to the root, never to the reply. This is the routine shape whenever a reviewer
+answers inside a thread we opened, and the id resolves, matches the PR, and carries the right
+author — every plausibility check passes, and the POST fails. The dry-run check in §4 tests it
+mechanically.
+
 ## 2. Never shell-interpolate a body
 
 Reply bodies are backtick-, pipe-, emoji- and arrow-heavy. `gh api --body "$VAR"` and any `sed`
@@ -46,7 +54,8 @@ directory. Each item carries:
 | `kind` | all | `reply` (into an existing thread) · `inline` (new anchored comment) · `issue` |
 | `pr` | all | the PR the item posts to |
 | `body` | all | the exact text that will post |
-| `comment_id` | `reply` | the inline comment id being replied to |
+| `comment_id` | `reply` | the **thread-root** inline comment id being replied to (§1 — the endpoint takes no other) |
+| `updated_at` | `reply` | the target comment's `updated_at` as P0 recorded it, so the dry-run can detect an edit made after collection |
 | `path`, `line`, `side` | `inline` | the anchor |
 | `anchor_line` | `inline` | the anchor line's **content** as the draft quotes it, so the anchor verification in `pr-thread-conversion.md` can prove the line still says what the draft assumed |
 
@@ -85,7 +94,12 @@ Run every check over the extracted bodies:
    that PR — fetch it and check its PR, its author, and its `path` against the thread the draft
    means to answer. Nothing downstream catches a wrong-but-valid id: the post succeeds, so the
    id-set verification in §7 reports PASS while the reply sits under an unrelated reviewer's
-   comment, under the user's name.
+   comment, under the user's name. Two more facts from that same fetch: its `in_reply_to_id`
+   must be null — non-null means the target is itself a reply, which the replies endpoint
+   rejects, and the thread root to use is the value in that field (§1); and its `updated_at`
+   must not be later than the one P0 recorded — later means the reviewer edited the comment
+   after collection, so the draft may answer text that no longer exists. Stop and re-read the
+   comment; a changed ask goes back through triage, not straight to the POST.
 
 Print a single `DRY-RUN RESULT: PASS/FAIL` line and exit non-zero on FAIL.
 
@@ -327,6 +341,15 @@ for it in items:
         if int(c["pull_request_url"].rsplit("/", 1)[1]) != it["pr"]:
             fails.append(f"{it['item']}: comment_id {it['comment_id']} belongs to "
                          f"{c['pull_request_url'].rsplit('/', 1)[1]}, not PR {it['pr']}")
+        # The replies endpoint takes only TOP-LEVEL comment ids ("replies to replies are not
+        # supported"). A nested id resolves and matches the PR, so only this check catches it.
+        if c.get("in_reply_to_id"):
+            fails.append(f"{it['item']}: comment_id {it['comment_id']} is itself a reply; "
+                         f"reply to its thread root {c['in_reply_to_id']} instead")
+        # An edit after collection means the draft may answer text that no longer exists.
+        if it.get("updated_at") and c.get("updated_at", "") > it["updated_at"]:
+            fails.append(f"{it['item']}: target comment edited after collection "
+                         f"({c['updated_at']} > {it['updated_at']}) - re-read it before replying")
         print(f"    TARGET {it['item']}: replying to @{c['user']['login']} on "
               f"{c.get('path')}:{c.get('line')} - confirm this is the intended thread")
 

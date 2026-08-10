@@ -238,16 +238,23 @@ a recommendation the reader cannot evaluate is just a request to rubber-stamp.
 
 **In:** the PR number, plus any free-text pointers from the invocation.
 **Out:** `00-inventory.md` — every feedback item, numbered `<round>-<nn>`, each with: source
-surface, verbatim quote, the comment id if one exists, the file:line it points at, and the
-revision the reviewer was looking at. Plus the base-state record below.
+surface, verbatim quote, the comment id and its `updated_at` if one exists (the timestamp is
+what lets P7 detect that the reviewer edited the comment after this collection), the file:line
+it points at, and the revision the reviewer was looking at. Plus the base-state record below.
 
 **Base-state check — before any processing.** Establish where the PR branch stands against its
 own base, and record it at the top of `00-inventory.md`:
 
 ```bash
-gh pr view <pr> --json state,mergeable,mergeStateStatus,baseRefName,headRefName
-gh api repos/paranext/paranext-core/compare/<base>...<head> --jq '{status,ahead_by,behind_by}'
+gh pr view <pr> --json state,mergeable,mergeStateStatus,baseRefName,headRefName,headRefOid
+gh api repos/paranext/paranext-core/compare/<base>...<head-oid> --jq '{status,ahead_by,behind_by}'
 ```
+
+`<head-oid>` is the `headRefOid` from the first command — compare by SHA, never by
+`headRefName`. On a fork PR the head branch does not exist in this repo, so the name form 404s
+(measured on #2239, 2026-08-10) — and if a same-named branch happened to exist here, it would
+compare that branch instead, silently. The SHA form answers identically for same-repo PRs and
+works for forks, whose head commits are reachable in this repo's network.
 
 **Both commands, always. `mergeStateStatus` alone cannot answer this question** — that is the
 trap this check exists to avoid, not a refinement of it. GitHub only reports `BEHIND` when the
@@ -334,6 +341,12 @@ and it cannot be recovered from a REST comment id without re-querying.
 Record for each item whether an inline thread exists, and whether it is outdated. The first fact
 decides where its reply can go later (threaded reply vs. issue comment) and is expensive to
 rediscover at P7; the second is the mechanical half of "which revision did the reviewer read".
+When a thread exists, record its **root comment id** too — the first `databaseId` in that
+thread's comments, which is also the value every reply in the thread carries in
+`in_reply_to_id`. The replies endpoint accepts only top-level comment ids ("replies to replies
+are not supported"), so a reviewer comment that is itself a reply — routine whenever they answer
+inside a thread we started, as on #2639 (2026-08-10) — is a valid-looking reply target that the
+POST will reject. The reply goes to the root; the draft still answers the reviewer's own words.
 
 > Feedback arrives off-PR routinely. One reviewer's whole round arrived as an issue comment;
 > another's arrived as a document with zero PR presence and had to be hand-converted into
@@ -342,7 +355,11 @@ rediscover at P7; the second is the mechanical half of "which revision did the r
 
 Also capture the **revision each reviewer read**. Reviews go stale under a moving stack; an item
 can be correct at the reviewer's base and already fixed at the tip, and that is a disposition,
-not a dismissal.
+not a dismissal. For an inline comment the field is `original_commit_id`, **not** `commit_id` —
+GitHub rewrites `commit_id` as it repositions comments under force-pushes, so the
+obvious-looking field names the wrong revision precisely in the moving-stack case this capture
+exists for (measured on #2621, 2026-08-10: 151 of 266 inline comments carried a repositioned
+`commit_id`; comments from the same review batch agreed only on `original_commit_id`).
 
 **Subsequent rounds on the same PR.** From round 2 onward the inventory covers *this* round's
 items. Items from earlier rounds are inventoried as **context, not work**, in their own section,
