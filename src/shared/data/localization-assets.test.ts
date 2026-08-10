@@ -37,6 +37,13 @@ describe('marker menu strings in shipped locale assets', () => {
   });
 
   describe.each(SHIPPED_LOCALES)('%s.json', (locale) => {
+    // Deliberately does NOT also assert `localizedStrings.es[key] !== localizedStrings.en[key]`,
+    // unlike its sibling guard in
+    // extensions/src/platform-scripture-editor/src/localized-strings.test.ts. That sibling covers
+    // control-specific labels, where an es/en match usually means an untranslated copy-paste.
+    // MARKER_MENU_STRING_KEYS instead covers generic UI labels (e.g. short punctuation-only or
+    // widely-shared terms) where a legitimate es/en coincidence is expected, so a differs-from-
+    // English assertion here would produce false failures.
     it.each([...MARKER_MENU_STRING_KEYS])('defines %s', (key) => {
       expect(localizedStrings[locale][key]).toBeTruthy();
     });
