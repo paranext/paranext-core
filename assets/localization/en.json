@@ -311,6 +311,7 @@
   "%markerMenu_marker_xta_description%": "Cross reference target references added text",
   "%markerMenu_noResults%": "No results found.",
   "%markerMenu_searchPlaceholder%": "Type a style or search.",
+  "%markerMenu_searchPlaceholder_character%": "Search to change character style.",
   "%markerMenu_searchPlaceholder_insert%": "Search to insert a style.",
   "%markerMenu_searchPlaceholder_paragraph%": "Search to change paragraph style.",
   "%menuItemName_wordList%": "Word List",
