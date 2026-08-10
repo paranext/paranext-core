@@ -482,7 +482,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
       });
     });
 
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(getLayoutCalls).toBe(1));
@@ -534,7 +534,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
     );
     respondToGetLayout({ kind: 'empty' });
 
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(releaseFirstModeRead).toBeDefined());
@@ -586,7 +586,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
     });
 
     vi.useFakeTimers();
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     // Drive the two retry delays so the initial load reaches its final, hanging attempt
