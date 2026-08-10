@@ -80,3 +80,7 @@ e2e-tests/playwright-report
 .review
 .superpowers
 CLAUDE.md
+
+# Working state for the /process-pr-feedback skill (git-ignored, but --ignore-path
+# replaces .gitignore rather than adding to it, so it must be listed here too)
+.feedback-packets/

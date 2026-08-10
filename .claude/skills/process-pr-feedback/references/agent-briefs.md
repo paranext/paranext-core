@@ -7,21 +7,32 @@ Fill in the angle-bracket slots. Keep the rest — the standing rules are here b
 not inherit the orchestrator's context, its memory, or the user's preferences, and every one of
 these rules exists because something was missed without it.
 
+`<repo-root>` is a slot like any other: substitute the absolute path of the checkout the run is
+about (`git rev-parse --show-toplevel`). Do not paste a brief with the slot unfilled — the agent
+cannot resolve it, and a path from someone else's machine is worse than no path at all.
+
 ## Rules every brief carries
 
-Paste these into every role, verbatim:
+Paste these into every role, verbatim — except the posting bullet, which carries a carve-out for
+role 4:
 
 - **Absolute paths only.** Your working directory resets between shell calls.
 - **Reference repo standards; do not restate them.** Read the file and follow it. A rule
   paraphrased from memory drifts, and a stale copy in a brief outranks nothing.
 - **Never skip hooks** (`--no-verify`, `-n`, `HUSKY=0`). If a hook fails, fix the cause.
 - **Never post a PR or issue comment, never push, never create a Jira ticket.** Those are gated
-  actions the orchestrator performs after the user approves them. Drafting is always fine.
+  actions that happen only after the user approves them. Drafting is always fine.
+
+  **Roles 1–3 only.** The Poster (role 4) exists to post and push, so pasting this bullet into
+  its brief hands that agent two contradictory orders — it will either stall after a valid G2
+  approval or discard the whole guardrail set to get moving. Replace this bullet in the Poster
+  brief with role 4's own approval clause, which authorises exactly the named batch and nothing
+  else. "Never create a Jira ticket" still binds the Poster.
 - **Do not re-delegate your whole assignment** to another agent. You are the dedicated agent.
 - **Report findings in your final message**, not in a file. Files you write as input to a later
   step are fine; a report file nobody reads is not.
 - **Bracket every large-list judgment scan with a deterministic grep** over the same corpus, per
-  `/home/paratext/git/paranext-core/.claude/rules/grep-safety-net.md`. Every grep hit must appear
+  `<repo-root>/.claude/rules/grep-safety-net.md`. Every grep hit must appear
   in your result or be explained as a false positive.
 
 ---
@@ -37,7 +48,7 @@ Paste these into every role, verbatim:
 > **Refs.** Reviewer read `<ref>`. Branch tip is `<ref>`. Top of stack is `<ref>`. Name which
 > ref every verdict belongs to; two verdicts at two refs is a valid, informative answer.
 >
-> **Method.** Follow `/home/paratext/git/paranext-core/.claude/skills/process-pr-feedback/references/classification-rubric.md`
+> **Method.** Follow `<repo-root>/.claude/skills/process-pr-feedback/references/classification-rubric.md`
 > — the five classifications, and all six mandatory sub-checks, on every item. Decide what the
 > code does by reading it, not by judging whether the reviewer's story is plausible.
 >
@@ -65,21 +76,21 @@ independent verdicts that disagree is exactly the signal worth having.
 >
 > **Red-first.** For every behavior change, write the failing test first, run it, and record the
 > failure message. Then implement. Then run it again. A fix with no failing-first test is not
-> done. Follow `/home/paratext/git/paranext-core/.context/standards/Testing-Guide.md`.
+> done. Follow `<repo-root>/.context/standards/Testing-Guide.md`.
 >
-> **Comment discipline.** Follow `/home/paratext/git/paranext-core/.context/standards/Code-Style-Guide.md`.
+> **Comment discipline.** Follow `<repo-root>/.context/standards/Code-Style-Guide.md`.
 > Comments carry constraints and the "why". No ticket ids, no PR numbers, no
 > before/after-the-fix framing in source comments.
 >
 > **New public API — the experimental marker goes on TWO surfaces**, the type-visible one and
 > the wire-visible one, and missing either is a miss. Read the authoritative per-surface table
-> at `/home/paratext/git/paranext-core/.context/standards/Paranext-Core-Patterns.md`
+> at `<repo-root>/.context/standards/Paranext-Core-Patterns.md`
 > § Experimental APIs and apply it as written. Do not work from a summary — that table is the
 > only place the per-surface rules are kept current.
 >
 > **Project-data writes (C#).** Any new code path that mutates project data must open with the
 > Send/Receive write gate. See the Send/Receive Write Gate section of
-> `/home/paratext/git/paranext-core/CLAUDE.md`.
+> `<repo-root>/CLAUDE.md`.
 >
 > **Do not push. Do not open or edit a PR. Do not comment.** Commit on `<branch>` only.
 > Never `--no-verify`.
@@ -99,7 +110,7 @@ share a worktree.
 > dispositions, `<packet>/04-fix-reports/` for what landed where.
 >
 > **Conventions.** Follow
-> `/home/paratext/git/paranext-core/.claude/skills/process-pr-feedback/references/reply-conventions.md`
+> `<repo-root>/.claude/skills/process-pr-feedback/references/reply-conventions.md`
 > — `🤖 Claude: ` once at the top, verdict in the first sentence, confirmed before corrected,
 > explicit disposition, deferrals citing a ticket key, no internal item labels in the body.
 >
@@ -110,7 +121,7 @@ share a worktree.
 >
 > **If the feedback arrived off-PR**, convert it to PR-anchored threads instead of answering in
 > kind, per
-> `/home/paratext/git/paranext-core/.claude/skills/process-pr-feedback/references/pr-thread-conversion.md`,
+> `<repo-root>/.claude/skills/process-pr-feedback/references/pr-thread-conversion.md`,
 > including anchor verification against the PR's own diff.
 >
 > **Every SHA and file:line re-derived** at drafting time. A SHA orphaned by a restack must not
@@ -128,11 +139,16 @@ share a worktree.
 > item is ambiguous, stop and ask — do not infer.
 >
 > **Mechanics.** Follow
-> `/home/paratext/git/paranext-core/.claude/skills/process-pr-feedback/references/posting-mechanics.md`
+> `<repo-root>/.claude/skills/process-pr-feedback/references/posting-mechanics.md`
 > end to end: extract bodies to JSON, run the dry-run checks (counts, id set, prefix, NUL,
-> placeholders, internal labels, anchor sanity), re-derive every head SHA now, post sequentially,
-> stop on the first failure with **no retry**, append to `<packet>/08-posting-log.txt` after each
-> post, then verify by count and id set against the live API.
+> placeholders, internal labels, targets resolve), re-derive every head SHA now, post
+> sequentially, stop on the first failure with **no retry**, append to
+> `<packet>/08-posting-log.txt` after each post, then verify against the live API by count, id
+> set, and — for replies — that each one nested under the thread it named.
+>
+> **Posting and pushing are your job, and only inside `<ids>`.** The standing "never post, never
+> push" rule the other roles carry does not apply to you; every other guardrail does, including
+> never creating a Jira ticket.
 >
 > **Never shell-interpolate a body.** Python, `json.dumps`, `gh api --input -`.
 >

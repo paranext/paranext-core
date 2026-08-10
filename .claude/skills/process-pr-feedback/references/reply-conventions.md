@@ -15,7 +15,11 @@ the user's name, in public, on a repo the whole team reads.
 
 ## Hard rules
 
-1. **`🤖 Claude: ` once, at the top** of every body. Not repeated, not in the middle.
+1. **`🤖 Claude: ` once, at the top** of every body. Not repeated, not in the middle. When you
+   quote a previous reply — which Example 3 requires — quote its substance and drop its prefix,
+   as Example 3 does. A verbatim copy carries the prefix into the middle of the body, and the
+   dry-run check in `posting-mechanics.md` hard-fails the whole batch on it; the poster is
+   forbidden from editing a body to get past a check, so the fix has to happen here, at drafting.
 2. **Factual about disposition.** Fixed, declined, or deferred — say which, plainly. "We'll look
    into it" is not a disposition.
 3. **Deferrals cite a ticket.** A deferral is a promise. The only valid home is a ticket that
