@@ -74,6 +74,13 @@ question is about.
 
 ### Anchor verification script
 
+Run it **twice**. It reads `bodies.json`, which P7 extracts — so at drafting time, write the
+item→anchor mapping table below into that same shape (`item`, `pr`, `path`, `line`, `side`,
+`anchor_line`) and run it before a single body is written; then run it again at posting time
+over the real `bodies.json`, against the re-derived heads. The first pass is what keeps a bad
+anchor out of a draft; the second is what keeps a moved head out of a post. Skipping the first
+because the file does not exist yet is how an anchor error survives all the way to G2.
+
 ```python
 #!/usr/bin/env python3
 """Verify every inline anchor: the content at the PR head matches the quoted anchor line,

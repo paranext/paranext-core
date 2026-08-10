@@ -4,25 +4,44 @@ Used by **P5 — Verify effectiveness**. Read the whole thing before the first a
 it to any agent that will run e2e — verbatim or by file path. Per-brief rule-passing is not
 enough; every agent that rediscovers these live burns 20–60 minutes of visible thrash.
 
-> *Provenance: copied verbatim from the session-memory reference `e2e-run-recipe` (2026-08-07),
-> written after an agent was watched thrashing through a stuck → fail → self-kill → restart
-> loop. Paths below are from that machine; see "Reading this in a fresh checkout" at the end.*
+> *Provenance: copied from the session-memory reference `e2e-run-recipe` (2026-08-07), written
+> after an agent was watched thrashing through a stuck → fail → self-kill → restart loop.*
+>
+> **The dated specifics below are 2026-08 snapshots, not current state** — the suite path, the
+> "known pre-existing local failures" list, and the claim about which branch carries the
+> multi-window suite. Read the method as live and every named suite as historical; "Reading this
+> in a fresh checkout" at the end says how to re-derive each one.
 
 ---
 
-Hard-learned recipe for local e2e runs (multi-window era, 2026-08). Rolf watched an agent
-thrash (stuck → fail → self-kill → restart loop) and called it out; per-brief rule-passing was
-not enough — every e2e-running agent must get this WHOLE recipe, verbatim or by file pointer.
+Hard-learned recipe for local e2e runs (multi-window era, 2026-08), written after an agent was
+watched thrashing (stuck → fail → self-kill → restart loop) and called out for it; per-brief
+rule-passing was not enough — every e2e-running agent must get this WHOLE recipe, verbatim or by
+file pointer.
 
-**Invocation** (from the worktree root):
-`npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e2e-tests/tests/isolated/multi-window --workers=1`
+**Invocation** — prefer the repo's own wrapper, from the worktree root:
+
+```bash
+npm run test:e2e:isolated                 # lists the subsets that exist, runs nothing
+npm run test:e2e:isolated <subset>        # runs one, e.g. scroll-groups
+npm run test:e2e:isolated <subset> -- --workers=1
+```
+
+`e2e-tests/run-isolated.mjs` already supplies `--config e2e-tests/playwright.config.ts` and
+`--project=isolated`, enumerates the real subset directories, and fails with the actual list on
+an unknown name instead of a silent "no tests found". Use it rather than reconstructing the
+command.
+
+The raw form, for when a flag the wrapper does not pass through is needed:
+`npx playwright test --config e2e-tests/playwright.config.ts --project=isolated <suite-path> --workers=1`
 — never omit `--project=isolated` (ECONNREFUSED without it); always `--workers=1` locally;
 output redirected to a file; NO outer timeout wrapper (first Electron launch after a rebuild
 takes 60–90 s and reads as a hang).
 
-**Before any attempt — full cleanup once:** `npm stop` from ~/git/paranext-core (kills by
-process name, works from any checkout); verify 8876/9223/1212 free (`ss -ltn`); no stray
-electron/xvfb. The isolated global-setup kills whatever holds 8876 — never run the dev app
+**Before any attempt — full cleanup once:** `npm stop` from the root of any paranext-core
+checkout (it kills by process name, so it stops an app launched from a different one); verify
+8876/9223/1212 free (`ss -ltn` on Linux, `lsof -iTCP -sTCP:LISTEN -P` on macOS,
+`netstat -ano` on Windows); no stray electron/xvfb. The isolated global-setup kills whatever holds 8876 — never run the dev app
 concurrently. `dev-appdata/local-storage/main/` is SHARED across e2e launches (main-process
 localStorage polyfill) — clear it if a spec asserts fresh-store state.
 
@@ -39,7 +58,7 @@ pre-existing local failures (record base-vs-branch, don't chase): scroll-groups
 `waitForHomeTab`, navigation-history, internet-settings.
 
 **Why:** each agent rediscovering these live burns 20–60 min of visible thrash per run and
-erodes Rolf's trust in the whole pipeline.
+erodes trust in the whole pipeline.
 
 ---
 
@@ -48,12 +67,12 @@ erodes Rolf's trust in the whole pipeline.
 - `npm stop` is a script in this repo's `package.json`; run it from the **repo root** of any
   paranext-core checkout. It kills by process name, so it stops an app launched from a
   different checkout too. Never hand-roll `pkill`.
-- **The suite path above will not work as written.** `e2e-tests/tests/isolated/multi-window`
-  existed only on the 2026-08 multi-window stack and is not on `main`. Copying the headline
-  command verbatim gets "no tests found". List what actually exists first —
-  `ls e2e-tests/tests/isolated/` — and substitute the suite the fix touches. The parts that
-  transfer unchanged are `--config e2e-tests/playwright.config.ts`, `--project=isolated`,
-  `--workers=1`, redirecting to a file, and no outer timeout wrapper.
+- **Never copy a suite name out of this file.** `multi-window`, named in the traps below,
+  existed only on the 2026-08 multi-window stack and is not on `main`; the raw `npx` form gets
+  "no tests found" for it. Run `npm run test:e2e:isolated` with no argument — it prints the
+  subsets that exist in this checkout — and pick the one the fix touches. The parts that
+  transfer unchanged are `--project=isolated`, `--workers=1`, redirecting to a file, and no
+  outer timeout wrapper.
 - The "known pre-existing local failures" list, and "the multi-window suite exists only from
   #2639 upward", are both 2026-08 snapshots. Do not treat either as current — the durable rule
   is the method: **record base-vs-branch**. Run the suite at the merge-base as well as at the

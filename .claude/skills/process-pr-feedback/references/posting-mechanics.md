@@ -68,10 +68,17 @@ Run every check over the extracted bodies:
 5. **Internal labels.** No label the reviewer has never seen. This one is **configuration, not a
    constant**: an id the reviewer assigned themselves is shared vocabulary and belongs in the
    body, while an id that exists only in our packet does not (see `reply-conventions.md` rule 6).
-   List the round's internal labels explicitly and check for those. Allow a match only when it
-   sits inside a URL, and print what was allowed so it can be eyeballed.
-6. **Anchor sanity** (new inline comments only). `side` as intended, `line > 0`, and the item's
-   PR matching the mapping the packet declares.
+   List the round's internal labels explicitly and check for those. Allow a match only when **the
+   match itself** sits inside a URL — not merely inside a token that contains one. Testing the
+   whole token waves through `[FIX-B](https://…)`, where the label is the link *text*: the most
+   reviewer-visible position in the body, and exactly what gets linked. Print what was allowed so
+   it can be eyeballed.
+6. **Targets resolve.** For a new inline comment: `side` as intended, `line > 0`, and the item's
+   PR matching the mapping the packet declares. For a reply: the `comment_id` must still exist on
+   that PR — fetch it and check its PR, its author, and its `path` against the thread the draft
+   means to answer. Nothing downstream catches a wrong-but-valid id: the post succeeds, so the
+   id-set verification in §7 reports PASS while the reply sits under an unrelated reviewer's
+   comment, under the user's name.
 
 Print a single `DRY-RUN RESULT: PASS/FAIL` line and exit non-zero on FAIL.
 
@@ -105,6 +112,8 @@ Read the live API back and compare against the log:
   misses (logged but not live).
 - For new inline comments, assert `subject_type == "line"`. A comment that silently degraded to
   a file-level comment is a different artifact than the one that was approved.
+- For replies, assert `in_reply_to_id == comment_id`. The id set alone cannot tell you a reply
+  landed in the right thread — only that *a* comment was created.
 
 Report the counts and the verdict. "Posted successfully" without a read-back is not a result.
 
@@ -179,13 +188,19 @@ print(f"  -> id={resp['id']}\n  -> {resp['html_url']}")
 if it["kind"] == "inline":
     print(f"  -> path={resp.get('path')} line={resp.get('line')} "
           f"side={resp.get('side')} subject_type={resp.get('subject_type')}")
+# For replies, prove it nested where it was meant to. The id-set verification cannot tell a
+# reply in the right thread from one in a stranger's.
+if it["kind"] == "reply" and resp.get("in_reply_to_id") != it["comment_id"]:
+    sys.exit(f"WRONG THREAD: {item_id} nested under {resp.get('in_reply_to_id')}, "
+             f"expected {it['comment_id']} - STOPPING")
 ```
 
 ```python
 #!/usr/bin/env python3
 """check.py — dry-run safety checks over the extracted bodies. Any FAIL => STOP."""
-import json, re, sys
+import json, re, subprocess, sys
 
+SLUG = "paranext/paranext-core"
 items = json.load(open(".feedback-packets/<pr>-<date>/bodies.json", encoding="utf-8"))
 fails = []
 
@@ -232,16 +247,37 @@ for it in items:
             e = min((p for p in (it["body"].find(c, m.end()) for c in " \n\t)") if p != -1),
                     default=len(it["body"]))
             tok = it["body"][s:e]
-            if tok.startswith("http") or "](http" in tok:
+            # Where the URL starts inside the token: at its head, or just past a markdown "](".
+            # Test the MATCH's own offset against that, not just "does this token contain a URL":
+            # in `[FIX-B](https://…)` the label is the link TEXT, and a whole-token test allows
+            # it — leaking the label into the most reviewer-visible position in the body.
+            link = tok.find("](http")
+            url_at = 0 if tok.startswith("http") else (link + 2 if link != -1 else None)
+            if url_at is not None and (m.start() - s) >= url_at:
                 print(f"    NOTE {it['item']}: {m.group(0)!r} inside URL, allowed")
                 continue
             ctx = it["body"][max(0, m.start() - 50): m.end() + 50].replace("\n", " | ")
             fails.append(f"{it['item']}: {m.group(0)!r} -> ...{ctx}...")
 
-# 6. anchor sanity for new inline comments
+# 6. targets resolve. Inline anchors are checked locally; reply targets need the live API,
+# because a stale-but-still-valid comment_id posts successfully into the WRONG thread and every
+# later check still passes. Verify PR membership, and eyeball the author/path against the draft.
 for it in items:
     if it.get("kind") == "inline" and (it["line"] <= 0 or it["side"] not in ("RIGHT", "LEFT")):
         fails.append(f"{it['item']}: bad anchor {it['path']}:{it['line']} side={it['side']}")
+    if it.get("kind") == "reply":
+        got = subprocess.run(
+            ["gh", "api", f"repos/{SLUG}/pulls/comments/{it['comment_id']}"],
+            capture_output=True, text=True)
+        if got.returncode != 0:
+            fails.append(f"{it['item']}: comment_id {it['comment_id']} does not resolve")
+            continue
+        c = json.loads(got.stdout)
+        if int(c["pull_request_url"].rsplit("/", 1)[1]) != it["pr"]:
+            fails.append(f"{it['item']}: comment_id {it['comment_id']} belongs to "
+                         f"{c['pull_request_url'].rsplit('/', 1)[1]}, not PR {it['pr']}")
+        print(f"    TARGET {it['item']}: replying to @{c['user']['login']} on "
+              f"{c.get('path')}:{c.get('line')} - confirm this is the intended thread")
 
 print()
 if fails:
@@ -287,12 +323,17 @@ for ln in open(LOG, encoding="utf-8"):
     if not ln.strip():
         continue
     status, item, pr, kind, cid = ln.rstrip("\n").split("\t")[:5]
+    # Touch the PR for EVERY row, including failures, so it enters the query set below with an
+    # empty expected set. `gh` can fail after GitHub already created the comment, and that stray
+    # only surfaces on a PR something actually reads back — a PR whose every row failed is
+    # precisely where the double-post risk lives.
+    entry = logged[int(pr)]
     if status != "OK":
         # A partial batch is exactly when this script matters most, so record the failed row
         # and keep going rather than exiting — the items that DID land still need verifying.
         failed_rows.append(ln.strip())
         continue
-    logged[int(pr)]["issue" if kind == "issue" else "review"].add(int(cid))
+    entry["issue" if kind == "issue" else "review"].add(int(cid))
     rows += 1
 print(f"token user: {who} · OK rows: {rows}")
 for fr in failed_rows:
@@ -321,8 +362,9 @@ if fails:
         print("  - " + f_)
     sys.exit(1)
 if failed_rows:
-    print(f"POST-VERIFY: PARTIAL - the {rows} OK rows match live state, but {len(failed_rows)} "
-          f"row(s) failed to post and are still owed. This batch is NOT complete.")
+    print(f"POST-VERIFY: PARTIAL - the {rows} OK rows match live state and no strays were found "
+          f"on any PR in the log, but {len(failed_rows)} row(s) failed to post. A clean stray "
+          f"list is what makes them safe to re-post; re-post one at a time. NOT complete.")
     sys.exit(2)
 print(f"POST-VERIFY: PASS - all {rows} logged posts match live state exactly")
 ```

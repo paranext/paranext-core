@@ -76,9 +76,14 @@ false-empty `N \ A`, which is precisely the check this battery exists for. Pinni
 makes the two agree. **Packet paths rather than `/tmp/A.txt`**: fixed temp names collide when two
 restacks run at once, and the files are evidence worth keeping with the run.
 
-1. **Commit accounting.** `git cherry <new-base> <old-tip> <old-base>` — every `-` (a pick
-   git considers already present) must have an identical patch-id upstream:
-   `git show <sha> | git patch-id --stable`. An unexplained `-` is a dropped commit.
+1. **Commit accounting.** `git cherry <new-tip> <old-tip> <old-base>` — walks the old range and
+   marks each commit `-` when an equivalent patch exists at the new tip (it survived the replay)
+   and `+` when none does (**it was dropped**). Every `+` must be an intentional drop, confirmed
+   against the new range with `git show <sha> | git patch-id --stable` before it is accepted.
+
+   Compare against the new **tip**, not the new base. The base contains none of the branch's own
+   commits by construction, so `git cherry <new-base> …` marks every commit `+` whether it
+   survived or not, and the only commit-accounting check in the battery can never fail.
 
 2. **`N \ A` — content the new branch carries that the old never did.** Must be empty, or
    every entry a documented deviation. *This is the check that caught 33 untracked proof PNGs
@@ -105,7 +110,12 @@ command's) are useless as verification. Every check above must produce output yo
 
 Only after the battery passes, and only after the G2 approval that covers pushing.
 
-- `--force-with-lease`, never bare `--force`.
+- `--force-with-lease=<branch>:<the tip SHA step 1 recorded>`, never bare `--force` — and never
+  bare `--force-with-lease` either. With no expected value the lease is checked against the
+  remote-tracking ref, so any `git fetch` between step 1 and the push (routine across a run that
+  spans two human gates) advances that ref to a collaborator's commit, the lease then matches,
+  and the push destroys their work silently. Naming the recorded SHA is what makes the lease
+  mean what the line claims.
 - **Stack order, bottom first**, one branch per command, checking the result before the next.
   A batched compound push whose output garbles has produced non-existent objects and broken
   branches; re-derive every SHA from a fresh command at the moment you use it rather than
@@ -113,8 +123,9 @@ Only after the battery passes, and only after the G2 approval that covers pushin
 - **Never rename a remote branch** as part of a restack. Renaming a branch that is the head of
   an open PR **auto-closes that PR** — and a closed PR loses its review threads from view. If a
   rename is genuinely needed: push the new name first, retarget the PR onto it
-  (`gh pr edit <n> --head <new-name>` is not supported, so in practice open the rename as a
-  deliberate, separate operation and re-check the PR state after each step), and only then
+  (`gh pr edit` had no `--head` flag as of 2026-08 — re-check before relying on that — so in
+  practice open the rename as a deliberate, separate operation and re-check the PR state after
+  each step), and only then
   delete the old remote branch. Verify with `gh pr view <n> --json state,headRefName` before and
   after. Some setups have a dedicated `pr-safe-branch-rename` skill for this; it is not part of
   this repo, so do not assume it is available.
