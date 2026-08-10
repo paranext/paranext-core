@@ -18,11 +18,16 @@ because the failures it catches are invisible in per-commit review.
    ```bash
    git rev-list --count origin/<branch>..<branch>   # ahead
    git rev-list --count <branch>..origin/<branch>   # behind
+   git rev-parse origin/<branch>                    # remote tip — the force-with-lease expectation
    ```
 
    Do this for the whole stack **first**, and write the numbers down. They are the expectations
    every later check is measured against. Discovering the counts after the rebase means having
    nothing to compare to.
+
+   Record that **remote** tip SHA per branch, not just the counts. It is the value the push at
+   the end needs, and it has to be read here, before anything else fetches — that is the whole
+   point of pinning the lease.
 
 2. **Tag every branch tip before rewriting it.**
 
@@ -110,7 +115,7 @@ command's) are useless as verification. Every check above must produce output yo
 
 Only after the battery passes, and only after the G2 approval that covers pushing.
 
-- `--force-with-lease=<branch>:<the tip SHA step 1 recorded>`, never bare `--force` — and never
+- `--force-with-lease=<branch>:<the remote tip SHA step 1 recorded>`, never bare `--force` — and never
   bare `--force-with-lease` either. With no expected value the lease is checked against the
   remote-tracking ref, so any `git fetch` between step 1 and the push (routine across a run that
   spans two human gates) advances that ref to a collaborator's commit, the lease then matches,
