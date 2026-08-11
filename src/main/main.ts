@@ -71,7 +71,10 @@ import {
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
 } from '@main/services/shutdown-latch.service';
-import { startWebViewServiceRouter } from '@main/services/web-view.service-router';
+import {
+  setWebViewWindowCreator,
+  startWebViewServiceRouter,
+} from '@main/services/web-view.service-router';
 import {
   addWindow,
   doesNavigationReplaceRendererRegistrations,
@@ -91,6 +94,7 @@ import {
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
   loadWindowLayouts,
+  markWindowPendingContent,
   setMainWindowId,
   trackLegacyWindow,
   trackNewWindow,
@@ -552,7 +556,10 @@ async function main() {
   }
 
   /** Sets up the electron BrowserWindow renderer process */
-  const createWindow = async (restoreInfo?: WindowRestoreInfo): Promise<BrowserWindow> => {
+  const createWindow = async (
+    restoreInfo?: WindowRestoreInfo,
+    creationOptions?: { pendingContent?: boolean },
+  ): Promise<BrowserWindow> => {
     // The menu and the `platform.createWindow` command stay live through a quit, because every
     // window sits in `preventDefault()` waiting on the shared shutdown run for as long as that run
     // takes. Opening a window in that gap would start a session the app is in no position to serve:
@@ -660,6 +667,8 @@ async function main() {
     if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entryIndex);
     else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
     else trackNewWindow(windowId);
+
+    if (creationOptions?.pendingContent) markWindowPendingContent(windowId);
 
     // Track which window is focused for multi-window command routing
     newWindow.on('focus', () => {
@@ -1332,6 +1341,14 @@ async function main() {
 
     return newWindow;
   };
+
+  // The router that serves `openWebView` starts before this closure exists, so it is handed the
+  // window facilities once they are real
+  setWebViewWindowCreator({
+    createPendingContentWindow: async () =>
+      (await createWindow(undefined, { pendingContent: true })).id,
+    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+  });
 
   /**
    * Create the app's windows from the persisted window-layouts structure: one window per saved
