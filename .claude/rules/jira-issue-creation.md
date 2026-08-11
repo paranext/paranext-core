@@ -1,7 +1,17 @@
 ---
 paths:
   - ".claude/commands/prd-to-jira.md"
+  - ".claude/commands/investigate-prd.md"
+  - ".claude/commands/refine-prd.md"
 ---
+
+<!--
+This rule's real trigger is a tool call, not a file location: it applies whenever a Jira issue is
+created, from any directory. `paths:` cannot express that, so .claude/hooks/jira-create-context.py
+delivers this file's contents on `mcp__atlassian__createJiraIssue` / `editJiraIssue`. The paths
+above only cover editing the commands that orchestrate issue creation. Keep this file as the single
+source of truth — the hook reads it rather than copying it.
+-->
 
 ## Creating Jira Issues — Fill the Template, Don't Overwrite It
 
