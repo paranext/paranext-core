@@ -567,6 +567,9 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    * (which asks for a NEW window) is an error. The open fails if no such window is serving web
    * views — a caller that names a window wants that window, not a guess.
    *
+   * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
+   * names the window.
+   *
    * This is a runtime-only handle: window ids are reused across sessions, so never persist one. Get
    * the current window's id via the `platform.getFocusedWindowId` command.
    *
