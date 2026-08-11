@@ -717,6 +717,62 @@ describe('web view service router', () => {
     });
   });
 
+  describe('opens into a window the caller named with targetWindowId', () => {
+    test('opens in the window the options name', async () => {
+      const focused = windowShard([]);
+      const named = windowShard([]);
+      withWindows({ 1: focused, 2: named });
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'tab' }, { targetWindowId: 2 });
+
+      expect(named.openWebView).toHaveBeenCalledWith(
+        'someType',
+        { type: 'tab' },
+        { targetWindowId: 2 },
+      );
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('fails rather than guessing when the named window does not exist', async () => {
+      // Same 5 s grace concern as the window-layout rung's "shard never appears" test: the target
+      // shard resolver waits out the announcement grace period for a window id it has never
+      // indexed before giving up.
+      vi.useFakeTimers();
+      try {
+        const focused = windowShard([]);
+        withWindows({ 1: focused });
+        const router = await getRouter();
+
+        const opening = router.openWebView('someType', { type: 'tab' }, { targetWindowId: 42 });
+        opening.catch(() => undefined);
+
+        await vi.runAllTimersAsync();
+
+        await expect(opening).rejects.toThrow();
+        expect(focused.openWebView).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test('lets an existing web view decide the window before the named target does', async () => {
+      const existingOwner = windowShard(['existing-view']);
+      const named = windowShard([]);
+      withWindows({ 1: windowShard([]), 2: existingOwner, 3: named });
+      const router = await getRouter();
+
+      await router.openWebView(
+        'someType',
+        { type: 'tab' },
+        { existingId: 'existing-view', targetWindowId: 3 },
+      );
+
+      expect(existingOwner.openWebView).toHaveBeenCalled();
+      expect(named.openWebView).not.toHaveBeenCalled();
+    });
+  });
+
   describe('a layout that names a tab to open next to', () => {
     // A layout naming a target tab names the window that tab is in just as surely as `existingId`
     // does, and the tab it names is routinely in a window other than the one the user is working in
