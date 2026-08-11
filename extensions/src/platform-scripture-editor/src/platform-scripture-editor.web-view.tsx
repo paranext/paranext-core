@@ -1977,8 +1977,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             and the scroll position with it, and a blank chapter is transient — adding a chapter
             number flips `isBlankChapter` straight back. The overlay lives INSIDE this wrapper so the
             bar is hidden along with the text it annotates rather than painting beside an empty
-            chapter; its `useViewVisibility` deferral already covers being under `display: none`, so
-            it defers positioning while hidden and catches up when the editor returns. */}
+            chapter.
+
+            Being hidden HERE is not the case the overlay's `useViewVisibility` deferral handles:
+            that hook reports on this iframe's own visibility (whether the tab is active), so it
+            still reads visible while this inner subtree is `display: none`. What covers this case
+            is the overlay's zero-geometry guard — it declines to position, and crucially declines
+            to latch `hasPositionedRef`, when the editor root has no layout — plus its
+            ResizeObserver, which fires when the subtree regains layout because `display: none`
+            collapses the observed anchor to a 0x0 box. */}
         <div className={showEmptyChapterView ? 'tw:hidden' : undefined}>
           {/* The overlay is mounted in BOTH modes and only its `bar` slot is gated, so the element type
             at this position never changes. Choosing between two different wrappers here would make
