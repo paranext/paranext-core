@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => {
     loggerDebug: vi.fn(),
     registerRequestHandler: vi.fn(),
     settingsGet: vi.fn(),
+    clearWindowPendingContent: vi.fn(),
     shardAnnouncementListeners,
     onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
       shardAnnouncementListeners.create.push(listener);
@@ -85,6 +86,9 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: mocks.settingsGet },
+}));
+vi.mock('@main/services/window-layout-persistence.service', () => ({
+  clearWindowPendingContent: mocks.clearWindowPendingContent,
 }));
 
 /** Capture the router object registered under the generic name */
@@ -560,6 +564,9 @@ describe('web view service router', () => {
       expect(created.openWebView).toHaveBeenCalledWith('someType', { type: 'tab' }, undefined);
       expect(focused.openWebView).not.toHaveBeenCalled();
       expect(openedId).toBe('opened');
+      // The routed content landed, so the window's pending-content mark comes off — a reload
+      // before its first layout push must not leave it waiting forever.
+      expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith(7);
     });
 
     test('degrades to a tab in the focused window in simple mode', async () => {
@@ -678,6 +685,9 @@ describe('web view service router', () => {
 
       expect(openedId).toBeUndefined();
       expect(creator.closeWindow).toHaveBeenCalledWith(7);
+      // The window closes instead, which clears the pending-content mark via removal — clearing
+      // it here too would be redundant and, worse, would race a removal that has not happened yet.
+      expect(mocks.clearWindowPendingContent).not.toHaveBeenCalled();
     });
 
     test('still answers nothing for a decline even when the cleanup close itself fails, closing only once', async () => {
