@@ -27,11 +27,17 @@ CMD_START = r"(?:^|[;&|]\s*|&&\s*|\|\|\s*|\(\s*|\bthen\s+|\bdo\s+)"
 
 
 def check_pipe_starters(cmd):
-    """`refresh.sh | tail` hangs forever — the persistent child holds the pipe."""
-    for m in re.finditer(CMD_START + r"(" + STARTERS + r")", cmd):
-        # Only the part after the starter matters; a pipe before it is someone
-        # else's command.
-        if "|" in cmd[m.end():].split("&&")[0].split(";")[0]:
+    """`refresh.sh | tail` hangs forever — the persistent child holds the pipe.
+
+    Only a pipe in the starter's OWN segment counts. Scanning the raw command
+    string instead reports a pipe belonging to an unrelated later command, and
+    treats the `|` characters in `||` as a pipe.
+    """
+    # Split into top-level segments. After splitting on `||`, any surviving `|`
+    # is a real pipe.
+    for segment in re.split(r"\|\||&&|[;\n]", cmd):
+        m = re.search(CMD_START + r"(" + STARTERS + r")", segment)
+        if m and "|" in segment[m.end():]:
             return (
                 f"Blocked: piping a long-running starter ({m.group(1).strip()}).\n"
                 "The child process holds the pipe open and the command never returns "

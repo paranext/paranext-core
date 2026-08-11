@@ -28,6 +28,14 @@ BLOCK = [
 ALLOW = [
     "npm start > /tmp/start.log 2>&1",
     "npm start",
+    "npm start || echo failed",               # `||` is not a pipe
+    "./.erb/scripts/refresh.sh || echo 'start failed'",
+    "npm start && npm run start:data",        # two starters, no pipe
+    "npm start &",
+    # A pipe belonging to a later, unrelated command must not implicate the
+    # starter. This shape blocked a real command during review.
+    "for c in 'npm start && npm run start:data'; do echo \"$c\" | wc -c; done",
+    "echo 'run npm start | tail to see logs'",
     "npm run startup-waterfall | head -40",   # not a starter
     "npm test | tail -20",
     "npm run build && npm run lint",

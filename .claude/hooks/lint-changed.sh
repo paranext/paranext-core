@@ -27,16 +27,17 @@ COUNTER="${TMPDIR:-/tmp}/claude-lint-attempts-$SESSION"
 ATTEMPTS=$(cat "$COUNTER" 2>/dev/null || echo 0)
 
 # Cheap exit: most turns touch no lintable file at all.
-FILES=$(
+mapfile -t FILES < <(
   {
     git diff --name-only --diff-filter=ACMR HEAD
     git ls-files --others --exclude-standard
   } 2>/dev/null | grep -E '\.(cjs|mjs|js|jsx|cts|mts|ts|tsx)$' | sort -u
 )
-[ -z "$FILES" ] && { rm -f "$COUNTER"; exit 0; }
+[ "${#FILES[@]}" -eq 0 ] && { rm -f "$COUNTER"; exit 0; }
 
-# shellcheck disable=SC2086 # word splitting is how the file list is passed
-OUTPUT=$(npx eslint --cache --no-error-on-unmatched-pattern $FILES 2>&1)
+# Array expansion, not $FILES: a path containing a space would otherwise be
+# split into two nonexistent paths and silently linted as nothing.
+OUTPUT=$(npx eslint --cache --no-error-on-unmatched-pattern "${FILES[@]}" 2>&1)
 STATUS=$?
 
 if [ "$STATUS" -eq 0 ]; then
