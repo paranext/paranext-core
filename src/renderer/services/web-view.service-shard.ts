@@ -123,6 +123,9 @@ import {
   GET_WINDOW_LAYOUT_REQUEST_TYPE,
   SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
   WindowLayoutGetResponse,
+  WINDOW_EMPTIED_REQUEST_TYPE,
+  WindowEmptiedReason,
+  WindowEmptiedResponse,
 } from '@shared/data/window-layout-persistence.model';
 import { reconcileSavedLayout } from '@shared/utils/saved-layout-reconciliation.util';
 import {
@@ -841,6 +844,28 @@ function collectWebViewIdsFromLayoutInfo(layout: LayoutInfo): Set<WebViewId> {
 }
 
 /**
+ * Whether a layout holds any tab at all (docked, floated, or maximized) — used to decide whether a
+ * freshly loaded layout leaves this window's dock empty. Same traversal shape as
+ * {@link collectWebViewIdsFromLayoutInfo}, but matching ANY tab rather than only web view tabs: a
+ * dock is empty when it has no tabs, of any type.
+ */
+function hasAnyTabs(layout: LayoutInfo): boolean {
+  const visit = (node: unknown): boolean => {
+    if (!node || typeof node !== 'object') return false;
+    if ('tabs' in node && Array.isArray(node.tabs) && node.tabs.length > 0) return true;
+    if ('children' in node && Array.isArray(node.children)) return node.children.some(visit);
+    return false;
+  };
+
+  return (
+    visit(layout.dockbox) ||
+    visit(layout.floatbox) ||
+    visit(layout.maxbox) ||
+    visit(layout.windowbox)
+  );
+}
+
+/**
  * Emits {@link onDidCloseWebView} for every web view that was open before a whole-layout load and is
  * not present in the loaded layout. `PapiDockLayout.loadLayout` replaces all tabs at once without
  * running rc-dock's per-tab remove callback (the only other place the close event is emitted — see
@@ -1067,6 +1092,7 @@ async function loadLayout(
     dockLayoutVar.loadLayout(layoutToLoad);
     layoutLoadGenerationInDock = thisGeneration;
     emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
+    if (!hasAnyTabs(layoutToLoad)) reportDockEmptied('born-empty');
     return;
   }
   // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
@@ -1096,6 +1122,7 @@ async function loadLayout(
   layoutLoadGenerationInDock = thisGeneration;
   // Emit close events for pre-existing web views the (supplemented) layout dropped
   emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, supplementedLayoutInfo);
+  if (!hasAnyTabs(supplementedLayoutInfo)) reportDockEmptied('born-empty');
 }
 
 /**
@@ -2835,6 +2862,27 @@ export const openWebView = async (
     bringToFront: true,
   });
 };
+
+/**
+ * Tell the main process this window's dock is empty and act on its decision: dock Home here, or
+ * nothing — the window is about to close. Only the main process knows how many windows exist, so
+ * the close-or-home decision lives there; see the window-emptiness handler.
+ */
+export async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
+  try {
+    const response = await sendNetworkRequest<[number, WindowEmptiedReason], WindowEmptiedResponse>(
+      WINDOW_EMPTIED_REQUEST_TYPE,
+      getWindowIdOrThrow(),
+      reason,
+    );
+    if (response.action !== 'open-home') return;
+    await openWebView('platformGetResources.home', { type: 'tab' });
+  } catch (e) {
+    logger.warn(
+      `Reporting an empty dock failed; leaving the window as it is: ${getErrorMessage(e)}`,
+    );
+  }
+}
 
 /** See {@link WebViewServiceShard.reloadWebView} */
 export async function reloadWebView(

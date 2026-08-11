@@ -21,7 +21,7 @@ import { DialogData } from '@shared/models/dialog-options.model';
 
 import { testLayout } from '@renderer/testing/test-layout.data';
 import { simpleLayout } from '@renderer/components/docking/simple-layout.data';
-import { openWebView, registerDockLayout } from '@renderer/services/web-view.service-shard';
+import { reportDockEmptied, registerDockLayout } from '@renderer/services/web-view.service-shard';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-shard';
 import { logger } from '@shared/services/logger.service';
 
@@ -188,18 +188,9 @@ export function PlatformDockLayout() {
                   Filter.Docked | Filter.Tab,
                 );
                 if (hasNoTabs) {
-                  (async () => {
-                    try {
-                      await openWebView('platformGetResources.home', {
-                        type: 'tab',
-                      });
-                    } catch (e) {
-                      throw new Error(
-                        `platform-dock-layout.component error: Opening Home web view failed! ${e}`,
-                        { cause: e },
-                      );
-                    }
-                  })();
+                  // Whether an emptied window closes or docks Home is the main process's call — it
+                  // is the only place that knows how many windows exist
+                  reportDockEmptied('emptied-by-removal');
                 }
               }
             }
