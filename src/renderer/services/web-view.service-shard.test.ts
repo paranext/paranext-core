@@ -2092,6 +2092,8 @@ describe('a failed dock add rolls back what the open already did', () => {
     const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
     const { localThemeService } = await import('@renderer/services/theme.service');
     // Provider succeeds — the failure comes later, at the dock
+    // `webViewProviderService` is mocked as `{}` (see the file-level mock above); attaching a stub
+    // method to it needs a type assertion because the plain-object mock type doesn't model it.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
       async () => ({
@@ -2107,12 +2109,16 @@ describe('a failed dock add rolls back what the open already did', () => {
     // `openOrReloadWebView` builds the injected theme stylesheet from `theme.cssVariables` before
     // it ever reaches the dock add, so the stub needs that field even though nothing in this test
     // reads it back.
+    // `localThemeService` is mocked as `{}` (see the file-level mock above); same untyped-attach
+    // reasoning as the provider stub above requires the assertion here too.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
       cssVariables: {},
     }));
     await module.startWebViewServiceShard();
     const { dockLayout } = await registerWindow(layoutWithTab('unrelated-tab'));
+    // `dockLayout` comes back from `makeDockLayout` typed as the full `PapiDockLayout`; overriding
+    // one method to throw needs the same untyped-attach assertion as the stubs above.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     (dockLayout as { addWebViewToDock?: unknown }).addWebViewToDock = vi.fn(() => {
       throw new Error('Replacing tab failed: target not found');
