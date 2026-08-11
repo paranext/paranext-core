@@ -361,14 +361,22 @@ describe('useOpenProjectTabs', () => {
   it('does not issue a fetch after unmount during retry delay', async () => {
     vi.useFakeTimers();
     try {
-      mockGetAllOpenWebViewDefinitions.mockRejectedValueOnce(new Error('window 3 unreachable'));
+      // Reject multiple times so we have retries available
+      mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('window 3 unreachable'));
       const { unmount } = renderHook(() => useOpenProjectTabs());
-      // Unmount while the retry delay is pending (before it resolves)
-      unmount();
+      // Flush the first attempt's rejection and let the 2000 ms delay get scheduled
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(3000);
+        await vi.advanceTimersByTimeAsync(0);
       });
-      // Should have been called exactly once (initial attempt); no post-unmount retry attempt
+      // At this point, first attempt should have failed and retry delay scheduled
+      expect(mockGetAllOpenWebViewDefinitions).toHaveBeenCalledTimes(1);
+      // Unmount while the retry delay is pending (mid-delay)
+      unmount();
+      // Advance well past the delay
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      // Should still be exactly 1 (the initial attempt); no post-unmount retry attempt
       expect(mockGetAllOpenWebViewDefinitions).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
