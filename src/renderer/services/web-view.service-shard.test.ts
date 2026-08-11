@@ -1669,6 +1669,84 @@ describe('loadLayout reports a dock that landed empty', () => {
     await flushMicrotasks();
     expect(addWebViewToDockCalls).toEqual([]);
   });
+
+  describe('a dock that lost its last docked tab', () => {
+    /**
+     * Layout with one tab floating above a dock that holds nothing but the empty placeholder panel
+     * rc-dock puts in a root box with no panels left
+     */
+    function layoutWithOnlyAFloatingTab(): LayoutInfo {
+      return {
+        dockbox: { mode: 'horizontal', children: [{ id: '+0', tabs: [] }] },
+        floatbox: {
+          mode: 'float',
+          children: [
+            {
+              tabs: [
+                {
+                  id: 'floated-tab',
+                  tabType: TAB_TYPE_WEBVIEW,
+                  data: { id: 'floated-tab', webViewType: 'test.type', state: {} },
+                },
+              ],
+            },
+          ],
+        },
+      } as unknown as LayoutInfo;
+    }
+
+    /** Layout with no tab anywhere — only the empty placeholder panel in the dock */
+    function layoutWithNoTabsAnywhere(): LayoutInfo {
+      return {
+        dockbox: { mode: 'horizontal', children: [{ id: '+0', tabs: [] }] },
+      } as unknown as LayoutInfo;
+    }
+
+    /** Stand up the open path and a registered dock layout, with the initial load already landed */
+    async function windowHoldingOneTab() {
+      respondToGetLayoutAndEmptied(
+        { kind: 'entry', layout: layoutWithTab('t1') },
+        { action: 'closing' },
+      );
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, loadedLayouts, addWebViewToDockCalls } =
+        makeDockLayoutThatTracksAdds(layoutWithAnchor());
+      module.registerDockLayout(dockLayout);
+      await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+      return { module, addWebViewToDockCalls };
+    }
+
+    test('a tab floated out of the dock keeps the window: Home fills the dock, nothing is reported', async () => {
+      const { module, addWebViewToDockCalls } = await windowHoldingOneTab();
+
+      await module.handleDockEmptiedByRemoval(layoutWithOnlyAFloatingTab());
+
+      // Reporting here would have the main process close a window whose floating tab (or open
+      // dialog, which is also a float) is very much still there
+      expect(mocks.networkRequest).not.toHaveBeenCalledWith(
+        'windowLayout:emptied',
+        expect.anything(),
+        'emptied-by-removal',
+      );
+      expect(addWebViewToDockCalls).toEqual([
+        expect.objectContaining({ webViewType: 'platformGetResources.home' }),
+      ]);
+    });
+
+    test('the last tab in the window leaving reports the dock emptied', async () => {
+      const { module, addWebViewToDockCalls } = await windowHoldingOneTab();
+
+      await module.handleDockEmptiedByRemoval(layoutWithNoTabsAnywhere());
+
+      expect(mocks.networkRequest).toHaveBeenCalledWith(
+        'windowLayout:emptied',
+        2,
+        'emptied-by-removal',
+      );
+      // Main answered `closing`, so nothing is docked into a window on its way out
+      expect(addWebViewToDockCalls).toEqual([]);
+    });
+  });
 });
 
 describe('loadLayout when the saved-layout request fails', () => {
