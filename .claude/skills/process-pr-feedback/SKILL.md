@@ -64,7 +64,7 @@ Every run writes one packet, and **never reuses another run's**:
   05-self-review.md      P4   /code-review findings + adjudication
   06-verification.md     P5   gate battery results, e2e, live verification
   06-evidence/           P5   optional screenshots from live verification (embed candidates)
-  07-replies.d/          P6   one file per reply-drafter agent (concurrent writes)
+  07-replies.d/          P6   parts directory (conf.d-style): one file per reply-drafter agent
   07-replies.md          P6   the assembled drafts — orchestrator concatenates 07-replies.d/
   g2-approval.md         G2   the user's approval, verbatim and dated — what P7 is allowed to do
   bodies.json            P7   drafts extracted to JSON — the exact bytes that will post
