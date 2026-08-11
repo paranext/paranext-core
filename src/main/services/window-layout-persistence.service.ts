@@ -83,6 +83,8 @@ let fileSlots: FileSlot[] = [];
 let mainSlotIndex: number | undefined;
 /** Live windows in creation order */
 let trackedWindows: TrackedWindow[] = [];
+/** Windows created to receive specific content, until their first layout push arrives */
+const pendingContentWindowIds = new Set<number>();
 /** Window whose entry the save walk marks `isMain` */
 let mainWindowId: number | undefined;
 /** Bounds the previous keeper saved, seeded into the legacy window so an upgrade keeps placement */
@@ -225,6 +227,7 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
   trackedWindows = [];
   mainWindowId = undefined;
   legacyBoundsState = undefined;
+  pendingContentWindowIds.clear();
 
   let raw: string | undefined;
   try {
@@ -353,6 +356,7 @@ export function handleWindowRemoved(windowId: number): void {
   cancelScheduledWrite();
   trackedWindows = trackedWindows.filter((tracked) => tracked.windowId !== windowId);
   fileSlots = fileSlots.filter((slot) => slot.windowId !== windowId);
+  pendingContentWindowIds.delete(windowId);
 }
 
 /** A window's live state as a file entry */
@@ -453,6 +457,14 @@ export async function writeNow(windowIdsInOrder: readonly number[]): Promise<voi
   return enqueueWrite(windowIdsInOrder);
 }
 
+/**
+ * Mark a window as created-for-content: its layout get answers `pending-content` (start truly
+ * empty) until the window pushes its first real layout.
+ */
+export function markWindowPendingContent(windowId: number): void {
+  pendingContentWindowIds.add(windowId);
+}
+
 function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
   if (typeof windowId !== 'number') {
     logger.warn(`${GET_WINDOW_LAYOUT_REQUEST_TYPE} called without a window id`);
@@ -463,6 +475,7 @@ function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
     logger.warn(`${GET_WINDOW_LAYOUT_REQUEST_TYPE} called for untracked window ${windowId}`);
     return { kind: 'empty' };
   }
+  if (pendingContentWindowIds.has(windowId)) return { kind: 'pending-content' };
   if (tracked.layout) return { kind: 'entry', layout: tracked.layout };
   if (tracked.usesLegacyLayout) return { kind: 'legacy' };
   return { kind: 'empty' };
@@ -486,6 +499,9 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
   // Reconcile on arrival so phantom content (duplicate or orphaned tabs, empty panels) cannot
   // enter the persisted structure even when a pusher skipped its own reconciliation
   tracked.layout = reconcileSavedLayout(layoutRecord);
+  // This push is the window's real content arriving, so it stops being pending-content — a
+  // second get request must be answered with the entry it just saved, not told to wait again
+  pendingContentWindowIds.delete(windowId);
   scheduleWrite();
 }
 
