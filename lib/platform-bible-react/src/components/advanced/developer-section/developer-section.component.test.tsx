@@ -98,7 +98,7 @@ describe('DeveloperSection', () => {
     expect(screen.getByTestId('server-type-test')).toHaveAttribute('data-state', 'off');
   });
 
-  test('Test item is active when selectedServer is Test', () => {
+  test('shows the Test item as active when selectedServer is Test', () => {
     renderSection({ selectedServer: 'Test' });
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
     expect(screen.getByTestId('server-type-test')).toHaveAttribute('data-state', 'on');
