@@ -3670,7 +3670,10 @@ export declare const Z_INDEX_ONBOARDING_TOUR = 650;
 export declare const Z_INDEX_FIRST_RUN = 700;
 /** One stop in the guided tour. */
 export interface TourStep {
-	/** CSS selector for the element to spotlight. A step whose target is absent is skipped. */
+	/**
+	 * CSS selector for the element to spotlight. A step whose target is absent — or present but
+	 * zero-size, e.g. an empty wrapper whose conditional child is not rendered — is skipped.
+	 */
 	target: string;
 	/** Heading shown in the step card. */
 	title: string;
@@ -3731,9 +3734,9 @@ export interface TourProps {
  * and positions a step card beside it.
  *
  * Navigated with Back / Next / Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target
- * selector is not found in the DOM when the tour opens are skipped, so an absent target degrades
- * gracefully instead of killing the overlay. Returns `null` when `open` is false or no step targets
- * resolve.
+ * selector is not found in the DOM — or resolves to a zero-size element — when the tour opens are
+ * skipped, so an absent target degrades gracefully instead of killing the overlay. Returns `null`
+ * when `open` is false or no step targets resolve.
  */
 export declare function Tour({ steps, open, onDone, onSkip, stepCounter, nextLabel, backLabel, skipLabel, doneLabel, }: TourProps): import("react/jsx-runtime").JSX.Element | null;
 /**

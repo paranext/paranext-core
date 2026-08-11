@@ -41,27 +41,23 @@ const LOCALIZE_KEYS: LocalizeKey[] = [
   '%onboardingTour_stepCounter%',
 ];
 
-/**
- * One-shot Simple-mode orientation tour. Shows five spotlight stops once per user (see the trigger
- * note above), then never shows again (persisted in localStorage). Renders nothing if:
- *
- * - The user is in Power mode
- * - The app is not yet unlocked (`firstRunStatus.kind !== 'app'` — still loading or in the wizard)
- * - The tour has already been completed or skipped
- *
- * RTL is handled entirely inside `Tour` (logical `start`/`end` sides resolved via
- * `readDirection()`); this component never reads layout direction.
- */
-export function OnboardingTour() {
+/** Hook-bearing implementation of the tour — mounted only while the tour might still show. */
+function OnboardingTourNotYetDone() {
   const isPowerMode = useIsPowerMode();
   const firstRunStatus = useSyncExternalStore(subscribeToFirstRun, getFirstRunStatus);
-  const [tourDone, setTourDone] = useState(readTourDone);
+  // The persisted flag is re-read every render (it is a cheap synchronous localStorage read)
+  // rather than snapshotted in state: an external writer — e.g. the e2e harness suppressing the
+  // tour between mount and open — must be honored at the moment the tour would open. The state
+  // half only exists to trigger the closing re-render on Done/Skip, since same-document
+  // localStorage writes fire no event.
+  const [finishedThisSession, setFinishedThisSession] = useState(false);
+  const tourDone = finishedThisSession || readTourDone();
 
   const [strings, isLoading] = useLocalizedStrings(LOCALIZE_KEYS);
 
   const handleFinish = useCallback(() => {
     writeTourDone();
-    setTourDone(true);
+    setFinishedThisSession(true);
   }, []);
 
   const stepCounter = useCallback(
@@ -170,6 +166,30 @@ export function OnboardingTour() {
       doneLabel={strings['%onboardingTour_button_done%']}
     />
   );
+}
+
+/**
+ * One-shot Simple-mode orientation tour. Shows five spotlight stops once per user (see the trigger
+ * note above), then never shows again (persisted in localStorage). Renders nothing if:
+ *
+ * - The user is in Power mode
+ * - The app is not yet unlocked (`firstRunStatus.kind !== 'app'` — still loading or in the wizard)
+ * - The tour has already been completed or skipped
+ *
+ * RTL is handled entirely inside `Tour` (logical `start`/`end` sides resolved via
+ * `readDirection()`); this component never reads layout direction.
+ */
+export function OnboardingTour() {
+  // One-shot gate: for users who completed the tour in an earlier session (the permanent common
+  // case), skip mounting the implementation entirely so every launch doesn't pay its localized-
+  // strings subscription and first-run/power-mode hooks for a tour that can never show. Read once
+  // at mount — re-showing the tour requires clearing the flag and reloading (the documented
+  // retrigger path).
+  const [doneAtMount] = useState(readTourDone);
+  // React components render nothing via null.
+  // eslint-disable-next-line no-null/no-null
+  if (doneAtMount) return null;
+  return <OnboardingTourNotYetDone />;
 }
 
 export default OnboardingTour;

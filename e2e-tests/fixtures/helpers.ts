@@ -674,13 +674,41 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
 }
 
 /**
+ * LocalStorage key persisting onboarding-tour completion. Mirrors ONBOARDING_TOUR_DONE_KEY in
+ * src/renderer/services/first-run-store.ts — keep in sync (renderer source cannot be imported into
+ * the Playwright Node context).
+ */
+export const ONBOARDING_TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
+
+/** Options accepted by {@link waitForAppReady}. */
+export interface WaitForAppReadyOptions {
+  /**
+   * Set true only in tests that are ABOUT the onboarding tour and need it to show. By default the
+   * helper suppresses the tour (see {@link waitForAppReady}) because its full-screen overlay blocks
+   * all pointer events for every other test.
+   */
+  allowOnboardingTour?: boolean;
+}
+
+/**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
  * platform-dock layout to appear, then for a renderer to finish registering its window-scoped menu
  * commands (the dock can render before that async work completes), and finally for the full-screen
  * initialization overlay to clear. The overlay lingers while async services (settings, theme)
  * finish initializing — it must be gone before tests interact with the UI.
+ *
+ * Unless `allowOnboardingTour` is set, also suppresses the onboarding tour: in Simple mode with a
+ * fresh profile the tour opens automatically (and asynchronously — it waits for the dock layout and
+ * localized strings), and its full-screen overlay blocks all pointer events. Writing the done flag
+ * makes `OnboardingTour` (which re-reads it each render) refuse to open from that point on, closing
+ * the race a visibility check alone would leave; an instance that already opened before the flag
+ * landed is dismissed with Escape.
  */
-export async function waitForAppReady(page: Page, timeout = 90_000): Promise<void> {
+export async function waitForAppReady(
+  page: Page,
+  timeout = 90_000,
+  options?: WaitForAppReadyOptions,
+): Promise<void> {
   const start = Date.now();
   await page.waitForSelector('div[class*="dock-layout"]', {
     state: 'attached',
@@ -696,13 +724,17 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
   // Services like settings and theme finish async work after dock-layout mounts and platform.about
   // registers, so the overlay can outlast both earlier signals.
   await waitForOverlayGone(page, remaining2);
-  // Dismiss the onboarding tour if it is showing. In Simple mode with a fresh profile the tour
-  // opens automatically after first-run completes, and its full-screen overlay blocks all pointer
-  // events — without this, any subsequent click in the test hits the tour instead of the app.
-  const tourDialog = page.locator('[role="dialog"][aria-modal="true"]');
-  if (await tourDialog.isVisible()) {
-    await page.keyboard.press('Escape');
-    await expect(tourDialog).not.toBeVisible({ timeout: 5000 });
+  if (!options?.allowOnboardingTour) {
+    await page.evaluate((key) => {
+      localStorage.setItem(key, 'true');
+    }, ONBOARDING_TOUR_DONE_KEY);
+    // The tour-specific test id (not a generic modal-dialog selector) so an unrelated dialog —
+    // e.g. a real startup error — is never silently Escape-dismissed here.
+    const tourDialog = page.getByTestId('tour-dialog');
+    if (await tourDialog.isVisible()) {
+      await page.keyboard.press('Escape');
+      await expect(tourDialog).not.toBeVisible({ timeout: 5000 });
+    }
   }
 }
 

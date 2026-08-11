@@ -5,7 +5,10 @@ import { Button } from '../../shadcn-ui/button';
 
 /** One stop in the guided tour. */
 export interface TourStep {
-  /** CSS selector for the element to spotlight. A step whose target is absent is skipped. */
+  /**
+   * CSS selector for the element to spotlight. A step whose target is absent — or present but
+   * zero-size, e.g. an empty wrapper whose conditional child is not rendered — is skipped.
+   */
   target: string;
   /** Heading shown in the step card. */
   title: string;
@@ -99,14 +102,42 @@ function resolvePhysicalSide(
   return isRtl ? 'left' : 'right'; // 'end'
 }
 
-/** Computes card position (clamped into the viewport) relative to the spotlight target. */
+const VIEWPORT_MARGIN_PX = 8;
+
+/**
+ * Computes card position relative to the spotlight target. When the card cannot fit on the
+ * requested side, it flips to the opposite side if that one fits — clamping alone would slide the
+ * card over its own target. The result is always clamped into the viewport as a last resort (e.g.
+ * when neither side fits).
+ */
 function computeCardPosition(
   rect: TargetRect,
-  physicalSide: 'top' | 'bottom' | 'left' | 'right',
+  requestedSide: 'top' | 'bottom' | 'left' | 'right',
   cardHeightPx: number,
 ): { top: number; left: number } {
-  const clampLeft = (l: number) => Math.max(8, Math.min(l, window.innerWidth - CARD_WIDTH_PX - 8));
-  const clampTop = (t: number) => Math.max(8, Math.min(t, window.innerHeight - cardHeightPx - 8));
+  const clampLeft = (l: number) =>
+    Math.max(
+      VIEWPORT_MARGIN_PX,
+      Math.min(l, window.innerWidth - CARD_WIDTH_PX - VIEWPORT_MARGIN_PX),
+    );
+  const clampTop = (t: number) =>
+    Math.max(
+      VIEWPORT_MARGIN_PX,
+      Math.min(t, window.innerHeight - cardHeightPx - VIEWPORT_MARGIN_PX),
+    );
+  const fits = {
+    top: rect.top - CARD_GAP_PX - cardHeightPx >= VIEWPORT_MARGIN_PX,
+    bottom:
+      rect.top + rect.height + CARD_GAP_PX + cardHeightPx <=
+      window.innerHeight - VIEWPORT_MARGIN_PX,
+    left: rect.left - CARD_WIDTH_PX - CARD_GAP_PX >= VIEWPORT_MARGIN_PX,
+    right:
+      rect.left + rect.width + CARD_GAP_PX + CARD_WIDTH_PX <=
+      window.innerWidth - VIEWPORT_MARGIN_PX,
+  };
+  const opposite = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' } as const;
+  const physicalSide =
+    !fits[requestedSide] && fits[opposite[requestedSide]] ? opposite[requestedSide] : requestedSide;
   switch (physicalSide) {
     case 'top':
       return {
@@ -128,9 +159,9 @@ function computeCardPosition(
  * and positions a step card beside it.
  *
  * Navigated with Back / Next / Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target
- * selector is not found in the DOM when the tour opens are skipped, so an absent target degrades
- * gracefully instead of killing the overlay. Returns `null` when `open` is false or no step targets
- * resolve.
+ * selector is not found in the DOM — or resolves to a zero-size element — when the tour opens are
+ * skipped, so an absent target degrades gracefully instead of killing the overlay. Returns `null`
+ * when `open` is false or no step targets resolve.
  */
 export function Tour({
   steps,
@@ -172,7 +203,10 @@ export function Tour({
       setTargetRect(undefined);
       return;
     }
-    setVisibleSteps(steps.filter((step) => !!document.querySelector(step.target)));
+    // Use measureTarget (not bare querySelector) so presence and measurability agree: a target
+    // that exists but has zero area (e.g. an empty wrapper whose conditional child is absent)
+    // would otherwise be counted as a step that can never be spotlighted.
+    setVisibleSteps(steps.filter((step) => measureTarget(step.target) !== undefined));
     setStepIndex(0);
     // Snapshot steps once on open; intentionally excludes 'steps' from deps so mid-tour
     // locale updates do not reset the user back to step 1.
@@ -180,6 +214,10 @@ export function Tour({
   }, [open]);
 
   const currentStep = visibleSteps[stepIndex];
+  // The card mounts one commit after the step becomes current (the render guard below returns
+  // null until the target has been measured). Effects that reach into the card via refs must
+  // re-run when the card appears, not only when the step changes.
+  const isCardRendered = targetRect !== undefined;
 
   // Measure the current target; re-measure on resize or scroll.
   useEffect(() => {
@@ -188,8 +226,19 @@ export function Tour({
     const measure = () => {
       const r = measureTarget(currentStep.target);
       // Keep last-known-good rect if the target momentarily can't be measured, so the overlay
-      // never blanks mid-tour while other steps remain viable.
-      if (r) setTargetRect(r);
+      // never blanks mid-tour while other steps remain viable. Returning the previous object when
+      // nothing moved skips the re-render entirely — capture-phase scroll ticks fire for scrolls
+      // that don't move the target at all.
+      if (r)
+        setTargetRect((prev) =>
+          prev &&
+          prev.top === r.top &&
+          prev.left === r.left &&
+          prev.width === r.width &&
+          prev.height === r.height
+            ? prev
+            : r,
+        );
     };
     const scheduleRemeasure = () => {
       if (remeasureFrameId !== undefined) return;
@@ -211,12 +260,12 @@ export function Tour({
 
   // Measure real card height after step changes so position math uses the actual size rather than
   // the approximation constant. The functional setter prevents re-render loops.
-  // Scoped to step changes only; card content is stable within a step.
+  // Scoped to step changes and card mount only; card content is stable within a step.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const measured = cardRef.current?.offsetHeight;
     if (measured) setCardHeight((prev) => (prev !== measured ? measured : prev));
-  }, [open, stepIndex]);
+  }, [open, stepIndex, isCardRendered]);
 
   // Save focus on open; restore it on close.
   useEffect(() => {
@@ -232,10 +281,12 @@ export function Tour({
     }
   }, [open]);
 
-  // Move focus to the primary action when the step changes (accessibility).
+  // Move focus to the primary action when the step changes or the card first mounts
+  // (accessibility). Without the card-mount dependency, the first open would run this effect
+  // while the card is still unmounted and focus would silently stay behind the overlay.
   useEffect(() => {
-    if (open && currentStep) primaryButtonRef.current?.focus();
-  }, [open, currentStep]);
+    if (open && currentStep && isCardRendered) primaryButtonRef.current?.focus();
+  }, [open, currentStep, isCardRendered]);
 
   const isLast = stepIndex === visibleSteps.length - 1;
   const isFirst = stepIndex === 0;
@@ -263,9 +314,11 @@ export function Tour({
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [open, onSkip]);
 
-  // Focus trap: cycle Tab/Shift+Tab among the card's buttons while the dialog is open.
+  // Focus trap: cycle Tab/Shift+Tab among the card's buttons while the dialog is open. Depends on
+  // the card being mounted — on first open the card mounts a commit later than the step, and a
+  // trap snapshotted before that would be a permanent no-op for step 1.
   useEffect(() => {
-    if (!open || !currentStep) return undefined;
+    if (!open || !currentStep || !isCardRendered) return undefined;
     // Query focusable elements once per step — card content is stable within a step.
     const focusable = Array.from(
       cardRef.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? [],
@@ -287,7 +340,7 @@ export function Tour({
     // Capture phase ensures stopPropagation inside card buttons cannot block the trap.
     document.addEventListener('keydown', trapFocus, true);
     return () => document.removeEventListener('keydown', trapFocus, true);
-  }, [open, currentStep]);
+  }, [open, currentStep, isCardRendered]);
 
   // React component must return null to render nothing.
   // eslint-disable-next-line no-null/no-null
@@ -308,6 +361,9 @@ export function Tour({
       aria-modal="true"
       aria-label={currentStep.title}
       aria-describedby={descId}
+      // Stable hook for tests: generic modal-dialog selectors also match other overlay dialogs,
+      // so anything that needs to find (or avoid) specifically the tour targets this test id.
+      data-testid="tour-dialog"
       className="tw:fixed tw:inset-0"
       style={{ zIndex: Z_INDEX_ONBOARDING_TOUR }}
     >

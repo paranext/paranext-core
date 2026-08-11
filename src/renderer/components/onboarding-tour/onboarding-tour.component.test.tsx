@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { FirstRunStatus } from '@renderer/services/first-run-store';
 import { readTourDone, writeTourDone } from '@renderer/services/first-run-store';
@@ -177,6 +177,38 @@ describe('OnboardingTour', () => {
   it('does not render when the tour has already been completed', () => {
     writeTourDone();
     render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+  });
+
+  it('opens once the layout panel appears (MutationObserver path)', async () => {
+    // Panel absent at mount → the layoutReady gate holds the tour closed and observes the DOM.
+    layoutPanelEl.remove();
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+    // Panel mounts later (the real dock layout loads via an async PAPI round-trip).
+    await act(async () => {
+      document.body.appendChild(layoutPanelEl);
+      // MutationObserver callbacks deliver as a microtask; yield once so the gate can clear.
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('mock-tour')).toBeInTheDocument();
+  });
+
+  it('honors a done flag written externally between mount and open (e2e suppression path)', async () => {
+    // Panel absent at mount → the tour is waiting on the layoutReady gate.
+    layoutPanelEl.remove();
+    render(<OnboardingTour />);
+    expect(screen.queryByTestId('mock-tour')).toBeNull();
+
+    // An external writer (e.g. the e2e harness) persists the done flag while the tour waits.
+    mockTourDone = true;
+
+    // Layout becomes ready — the tour must re-read the flag at open time and stay closed.
+    await act(async () => {
+      document.body.appendChild(layoutPanelEl);
+      await Promise.resolve();
+    });
     expect(screen.queryByTestId('mock-tour')).toBeNull();
   });
 });

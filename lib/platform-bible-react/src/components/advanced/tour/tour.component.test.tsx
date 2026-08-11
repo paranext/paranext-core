@@ -92,6 +92,86 @@ describe('Tour', () => {
     expect(container.querySelector('[role="dialog"]')).toBeNull();
   });
 
+  it('skips a step whose target is present but has zero size (e.g. an empty wrapper div)', () => {
+    // #b is in the DOM but measures 0×0. The open-time filter must agree with measureTarget's
+    // zero-area guard and skip it — otherwise the step is counted in the total but can never be
+    // spotlighted, leaving the overlay stuck on the previous step's rect.
+    const priorGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      if (this.id === 'b')
+        // Same jsdom mock-shape workaround as the RTL test below.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        return { ...DEFAULT_TEST_RECT, width: 0, height: 0, right: 0, bottom: 0 } as DOMRect;
+      return priorGetBoundingClientRect.call(this);
+    };
+    try {
+      renderWithTargets(THREE_STEPS, ['a', 'b', 'c']);
+      expect(screen.getByText('1 / 2')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      // Advances straight to C — the zero-size B was never a step.
+      expect(screen.getByText('C')).toBeInTheDocument();
+    } finally {
+      Element.prototype.getBoundingClientRect = priorGetBoundingClientRect;
+    }
+  });
+
+  it('focuses the primary action button when the tour first opens', () => {
+    render(
+      <div>
+        <div id="a">A</div>
+        <Tour
+          steps={[{ target: '#a', title: 'A', description: 'x' }]}
+          open
+          onDone={vi.fn()}
+          onSkip={vi.fn()}
+        />
+      </div>,
+    );
+    // The card mounts one commit after open (the target must be measured first); focus must land
+    // on the primary button once the card exists, not silently stay on the page behind the overlay.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Done' }));
+  });
+
+  it('flips the card to the opposite side when the requested side does not fit', () => {
+    // Place the target near the bottom of the viewport so a 'bottom' card cannot fit below it.
+    // Clamping alone would slide the card upward over its own target; the fix is to flip above.
+    const targetTop = window.innerHeight - 50;
+    const TARGET_RECT = { left: 100, top: targetTop, width: 80, height: 40 };
+    const priorGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      if (this.id === 'a')
+        // Same jsdom mock-shape workaround as the RTL test below.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        return {
+          ...TARGET_RECT,
+          right: TARGET_RECT.left + TARGET_RECT.width,
+          bottom: TARGET_RECT.top + TARGET_RECT.height,
+          x: TARGET_RECT.left,
+          y: TARGET_RECT.top,
+          toJSON: () => ({}),
+        } as DOMRect;
+      return priorGetBoundingClientRect.call(this);
+    };
+    try {
+      renderWithTargets(
+        [{ target: '#a', title: 'Flip Step', description: 'x', side: 'bottom' }],
+        ['a'],
+      );
+      const titleEl = screen.getByText('Flip Step');
+      const card = titleEl.closest<HTMLElement>('div[style]');
+      expect(card).not.toBeNull();
+      // The preceding expect confirms non-null; TypeScript cannot narrow through Vitest assertions.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const cardTop = parseInt(card!.style.top, 10);
+      // Flipped placement: target top − gap (12) − card height (jsdom offsetHeight is 0, so the
+      // approximation constant 176 stays in effect). A merely-clamped card would sit at
+      // window.innerHeight − 176 − 8 instead.
+      expect(cardTop).toBe(targetTop - 12 - 176);
+    } finally {
+      Element.prototype.getBoundingClientRect = priorGetBoundingClientRect;
+    }
+  });
+
   it('calls onDone when Done is clicked on the last step', () => {
     const onDone = vi.fn();
     render(

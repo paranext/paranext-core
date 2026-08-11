@@ -1,4 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
+import { ONBOARDING_TOUR_DONE_KEY } from '../../fixtures/helpers';
 
 /**
  * Page-object helpers for the onboarding tour overlay.
@@ -19,30 +20,25 @@ import type { Locator, Page } from '@playwright/test';
  * - Back: `%onboardingTour_button_back%` → "Back"
  */
 
-// Mirrors ONBOARDING_TOUR_DONE_KEY in src/renderer/services/first-run-store.ts — keep in sync.
-const TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
-
 /** Clears the onboarding-tour completion flag from localStorage. */
 export async function clearTourDone(page: Page): Promise<void> {
   await page.evaluate((key) => {
     localStorage.removeItem(key);
-  }, TOUR_DONE_KEY);
+  }, ONBOARDING_TOUR_DONE_KEY);
+}
+
+/** Reads the raw onboarding-tour completion flag from localStorage (`'true'` or null). */
+export async function getTourDoneFlag(page: Page): Promise<string | null> {
+  return page.evaluate((key) => localStorage.getItem(key), ONBOARDING_TOUR_DONE_KEY);
 }
 
 /**
- * Returns a Locator for the tour dialog element. The Tour component renders a `role="dialog"`
- * `aria-modal="true"` div when open; this is `null` when the tour is closed.
+ * Returns a Locator for the tour dialog element. The Tour component renders its outermost div with
+ * `data-testid="tour-dialog"` — a tour-specific hook, so this can never match another modal
+ * dialog.
  */
 export function getTourDialog(page: Page): Locator {
-  return page.locator('[role="dialog"][aria-modal="true"]');
-}
-
-/**
- * Returns whether the tour overlay is currently present in the DOM and visible. Checks for
- * `role="dialog"` `aria-modal="true"` (the Tour component's outermost element).
- */
-export async function isTourVisible(page: Page): Promise<boolean> {
-  return getTourDialog(page).isVisible();
+  return page.getByTestId('tour-dialog');
 }
 
 /**
@@ -73,6 +69,24 @@ export async function getCurrentStepTitle(page: Page): Promise<string> {
 export async function advanceTour(page: Page): Promise<void> {
   const dialog = getTourDialog(page);
   await dialog.getByRole('button', { name: /^(Next|Done)$/i }).click();
+}
+
+/**
+ * Clicks Next until the last step is reached — i.e. until the primary button reads Done instead of
+ * Next. Does NOT click Done, so callers can assert last-step state or finish explicitly. Bounded
+ * well above the tour's real step count so a regression cannot loop forever; if Next is still
+ * visible after the bound, the caller's next assertion fails with a clear error.
+ */
+export async function advanceToLastStep(page: Page): Promise<void> {
+  const dialog = getTourDialog(page);
+  const nextButton = dialog.getByRole('button', { name: /^Next$/i });
+  for (let i = 0; i < 10; i += 1) {
+    // Steps are inherently sequential — each click must complete before the next check.
+    // eslint-disable-next-line no-await-in-loop
+    if (!(await nextButton.isVisible())) return;
+    // eslint-disable-next-line no-await-in-loop
+    await nextButton.click();
+  }
 }
 
 /**
