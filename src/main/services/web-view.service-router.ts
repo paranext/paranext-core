@@ -245,7 +245,9 @@ function getLayoutTargetTabId(layout?: Layout): string | undefined {
  * unique; guessing wrong here costs only placement — the tab still opens, in the window the user is
  * in, beside whatever is already there. Failing instead would mean that for as long as ANY window
  * cannot answer — a second window still starting, or one whose renderer crashed and never
- * re-registered — every open naming a tab produces nothing at all.
+ * re-registered — every open naming a tab produces nothing at all. Replace-tab opens do not come
+ * through here — they use the strict search directly, since for them a wrong guess costs more than
+ * placement.
  */
 async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard | undefined> {
   // Every window that could not be asked is warned about and then treated as one that does not hold
@@ -378,7 +380,16 @@ async function openWebView(
   // window that then ignores the reason it was sent there.
   const layoutTargetTabId = getLayoutTargetTabId(layout);
   if (layoutTargetTabId) {
-    const owner = await findLayoutTargetOwner(layoutTargetTabId);
+    // For `replace-tab`, replacing IS the operation, not placement advice: a window that
+    // guessed wrong throws only after the web view provider has run and its side effects
+    // (controller, nonce, state) exist. So an unaskable window fails this open, the same rule
+    // the `existingId` search applies. A target no window claims still falls through to the
+    // focused window: the owner search only sees web views, and a replace-tab target can be a
+    // settings tab or dialog that is invisible to it.
+    const owner =
+      layout?.type === 'replace-tab'
+        ? await findOwner(layoutTargetTabId, 'openWebView over a replace-tab target')
+        : await findLayoutTargetOwner(layoutTargetTabId);
     if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
   }
 

@@ -611,6 +611,33 @@ describe('web view service router', () => {
       expect(other.openWebView).not.toHaveBeenCalled();
     });
 
+    test('fails a replace-tab open when a window that could not be asked might hold the target', async () => {
+      // Unlike `panel`, replacing IS the operation: sending it to a guessed window risks a
+      // throw after the provider has already run. Same reachability rule as `existingId`.
+      const focused = windowShard([]);
+      const starting = windowShard(['target-tab']);
+      withWindows({ 1: focused, 2: starting }, { unreadyWindowIds: [2] });
+      const router = await getRouter();
+
+      await expect(
+        router.openWebView('someType', { type: 'replace-tab', targetTabId: 'target-tab' }),
+      ).rejects.toThrow('unreachable');
+
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('still falls back to the focused window when every window answers no to a replace-tab target', async () => {
+      // The owner search only sees web views. A replace-tab target can be a settings tab or
+      // dialog, which no window will claim — the focused window is still the right guess then.
+      const focused = windowShard([]);
+      withWindows({ 1: focused, 2: windowShard([]) });
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'replace-tab', targetTabId: 'settings-tab' });
+
+      expect(focused.openWebView).toHaveBeenCalled();
+    });
+
     test('lets an existing web view decide the window before the layout target does', async () => {
       // The window shard brings an existing web view to the front and returns before it ever looks
       // at the layout, so routing has to put the two in the same order the shard does
