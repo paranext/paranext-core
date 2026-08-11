@@ -100,6 +100,7 @@ import {
   updateWindowBounds,
   writeNow,
 } from '@main/services/window-layout-persistence.service';
+import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
@@ -110,9 +111,10 @@ import {
   MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS,
   NO_RENDERER_CRASH_RELOADS_YET,
 } from '@main/renderer-crash-reload-budget.util';
-import type {
-  WindowBoundsState,
-  WindowLayoutEntry,
+import {
+  WINDOW_EMPTIED_REQUEST_TYPE,
+  type WindowBoundsState,
+  type WindowLayoutEntry,
 } from '@shared/data/window-layout-persistence.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
@@ -361,6 +363,42 @@ async function main() {
   // Window layout persistence must register its request handlers before any window exists so a
   // renderer's layout load can never race the registration
   await initializeWindowLayoutPersistence();
+
+  // Same reasoning as above: a window can report itself empty as soon as it exists, so the handler
+  // that decides what happens next must already be registered
+  const handleWindowEmptied = createWindowEmptinessHandler({
+    countWindows: () => getWindows().length,
+    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+  });
+  await networkService.registerRequestHandler(
+    WINDOW_EMPTIED_REQUEST_TYPE,
+    async (...args) => handleWindowEmptied(args[0], args[1]),
+    {
+      method: {
+        'x-experimental': true,
+        summary: "Report a window's dock empty and learn whether it closes or docks Home",
+        params: [
+          {
+            name: 'windowId',
+            required: true,
+            summary: 'Electron BrowserWindow ID of the window reporting itself empty',
+            schema: { type: 'number' },
+          },
+          {
+            name: 'reason',
+            required: true,
+            summary: 'Why the window is empty',
+            schema: { type: 'string', enum: ['emptied-by-removal', 'born-empty'] },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Whether the window should dock Home, or that it is being closed',
+          schema: { type: 'object' },
+        },
+      },
+    },
+  );
 
   // A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed
   // call until its renderer has registered. Its window service shard appearing is that signal, and
