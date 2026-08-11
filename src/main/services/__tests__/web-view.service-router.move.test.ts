@@ -1,0 +1,291 @@
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+// `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
+import {
+  setWebViewWindowCreator,
+  testingWebViewServiceRouter,
+} from '@main/services/web-view.service-router';
+import {
+  withWindows as withWindowsServingShards,
+  type ShardAnnouncementListeners,
+} from '@main/services/__tests__/service-router-test.util';
+import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
+import type { NetworkObjectDetails } from '@shared/models/network-object.model';
+import type { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
+
+const mocks = vi.hoisted(() => {
+  // Where the router's shard index parks its subscriptions — module state that outlives one test,
+  // same reasoning as the pre-existing `web-view.service-router.test.ts`.
+  const shardAnnouncementListeners: ShardAnnouncementListeners = { create: [], dispose: [] };
+  return {
+    getTargetWindowId: vi.fn(),
+    getReadyWindowIds: vi.fn(),
+    getNotReadyWindowIds: vi.fn(),
+    isWindowReady: vi.fn(),
+    isWindowClosing: vi.fn(),
+    getFocusedWindowId: vi.fn(),
+    focusWindow: vi.fn(),
+    networkObjectGet: vi.fn(),
+    settingsGet: vi.fn(),
+    clearWindowPendingContent: vi.fn(),
+    loggerWarn: vi.fn(),
+    loggerError: vi.fn(),
+    shardAnnouncementListeners,
+    onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
+      shardAnnouncementListeners.create.push(listener);
+      return () => {};
+    }),
+    onDidDisposeNetworkObject: vi.fn((listener: (networkObjectId: string) => void) => {
+      shardAnnouncementListeners.dispose.push(listener);
+      return () => {};
+    }),
+  };
+});
+
+/** Wire windows whose WebView service shards are the given objects */
+function withWindows(
+  shardsByWindowId: Record<number, unknown>,
+  options?: { unreadyWindowIds?: number[] },
+) {
+  withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
+}
+
+vi.mock('@main/services/window-state.service', () => ({
+  getTargetWindowId: mocks.getTargetWindowId,
+  getReadyWindowIds: mocks.getReadyWindowIds,
+  getNotReadyWindowIds: mocks.getNotReadyWindowIds,
+  isWindowReady: mocks.isWindowReady,
+  isWindowClosing: mocks.isWindowClosing,
+  getFocusedWindowId: mocks.getFocusedWindowId,
+  focusWindow: mocks.focusWindow,
+}));
+vi.mock('@shared/services/network-object.service', () => ({
+  networkObjectService: { get: mocks.networkObjectGet, set: vi.fn() },
+  onDidCreateNetworkObject: mocks.onDidCreateNetworkObject,
+  onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
+}));
+vi.mock('@shared/services/network.service', () => ({
+  getNetworkEvent: () => vi.fn(),
+  registerRequestHandler: vi.fn(),
+}));
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: { get: mocks.settingsGet },
+}));
+vi.mock('@main/services/window-layout-persistence.service', () => ({
+  clearWindowPendingContent: mocks.clearWindowPendingContent,
+}));
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { warn: mocks.loggerWarn, error: mocks.loggerError, info: vi.fn(), debug: vi.fn() },
+}));
+
+const { moveWebView } = testingWebViewServiceRouter;
+
+/**
+ * A per-window WebView service shard whose web views are the given ids, extended with the move
+ * primitives `moveWebView` drives. `captureAndCloseWebView` answers a definition only for ids this
+ * window holds, matching the real shard's "not mine" answer of `undefined`; `adoptWebView` answers
+ * with the id of whatever definition it was handed, matching a provider that accepts every move.
+ */
+function windowShard(openWebViewIds: string[]) {
+  return {
+    getOpenWebViewDefinition: vi.fn(async (id: string) =>
+      openWebViewIds.includes(id) ? { id } : undefined,
+    ),
+    getAllOpenWebViewDefinitions: vi.fn(async () => openWebViewIds.map((id) => ({ id }))),
+    openWebView: vi.fn<() => Promise<string | undefined>>(async () => 'opened'),
+    reloadWebView: vi.fn(async () => 'reloaded'),
+    openSettingsTab: vi.fn(async () => undefined),
+    captureAndCloseWebView: vi.fn<
+      (webViewId: WebViewId) => Promise<SavedWebViewDefinition | undefined>
+    >(async (id) => (openWebViewIds.includes(id) ? { id, webViewType: 'test.type' } : undefined)),
+    adoptWebView: vi.fn<
+      (savedWebViewDefinition: SavedWebViewDefinition) => Promise<WebViewId | undefined>
+    >(async (savedWebViewDefinition) => savedWebViewDefinition.id),
+  };
+}
+
+describe('moveWebView', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getReadyWindowIds.mockReturnValue([]);
+    mocks.getNotReadyWindowIds.mockReturnValue([]);
+    mocks.isWindowReady.mockReturnValue(true);
+    mocks.isWindowClosing.mockReturnValue(false);
+    mocks.getFocusedWindowId.mockReturnValue(1);
+    mocks.settingsGet.mockResolvedValue('power');
+  });
+
+  test('moves to an existing window: captures in the owner, adopts in the target, answers the id', async () => {
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    withWindows({ 2: owner, 3: target });
+
+    const movedId = await moveWebView('view-1', 3);
+
+    expect(owner.captureAndCloseWebView).toHaveBeenCalledWith('view-1');
+    expect(target.adoptWebView).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
+    );
+    expect(movedId).toBe('view-1');
+  });
+
+  test('raises the target window after a successful move while the app holds focus', async () => {
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    withWindows({ 2: owner, 3: target });
+    mocks.getFocusedWindowId.mockReturnValue(2);
+
+    await moveWebView('view-1', 3);
+
+    expect(mocks.focusWindow).toHaveBeenCalledWith(3);
+  });
+
+  test('does not raise any window when the app does not hold focus', async () => {
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    withWindows({ 2: owner, 3: target });
+    mocks.getFocusedWindowId.mockReturnValue(undefined);
+
+    await moveWebView('view-1', 3);
+
+    expect(mocks.focusWindow).not.toHaveBeenCalled();
+  });
+
+  test('an unknown target window fails the move before anything closes', async () => {
+    // resolveShardForWindow waits out the shard-announcement grace period for a window id it has
+    // never indexed before giving up — same reasoning as the pre-existing suite's equivalent test.
+    vi.useFakeTimers();
+    try {
+      const owner = windowShard(['view-1']);
+      withWindows({ 2: owner });
+
+      const moving = moveWebView('view-1', 99);
+      moving.catch(() => undefined);
+
+      await vi.runAllTimersAsync();
+
+      await expect(moving).rejects.toThrow();
+      expect(owner.captureAndCloseWebView).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('an unknown web view fails the move', async () => {
+    withWindows({ 2: windowShard([]) });
+
+    await expect(moveWebView('missing-view', 2)).rejects.toThrow('no window has it open');
+  });
+
+  test('a web view already in the target window is left alone', async () => {
+    const owner = windowShard(['view-1']);
+    withWindows({ 2: owner });
+
+    const movedId = await moveWebView('view-1', 2);
+
+    expect(movedId).toBe('view-1');
+    expect(owner.captureAndCloseWebView).not.toHaveBeenCalled();
+    expect(owner.adoptWebView).not.toHaveBeenCalled();
+    expect(mocks.focusWindow).not.toHaveBeenCalled();
+  });
+
+  test('moving to a new window uses the pending-content scaffold', async () => {
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    const movedId = await moveWebView('view-1', 'new');
+
+    expect(creator.createPendingContentWindow).toHaveBeenCalled();
+    expect(owner.captureAndCloseWebView).toHaveBeenCalledWith('view-1');
+    expect(created.adoptWebView).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
+    );
+    expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith(7);
+    expect(movedId).toBe('view-1');
+  });
+
+  test('move-to-new-window outside power mode leaves the view where it is', async () => {
+    mocks.settingsGet.mockResolvedValue('simple');
+    const owner = windowShard(['view-1']);
+    withWindows({ 2: owner });
+
+    const movedId = await moveWebView('view-1', 'new');
+
+    expect(movedId).toBe('view-1');
+    expect(owner.captureAndCloseWebView).not.toHaveBeenCalled();
+  });
+
+  test('a capture that comes back empty fails the move', async () => {
+    const owner = windowShard(['view-1']);
+    owner.captureAndCloseWebView.mockResolvedValue(undefined);
+    withWindows({ 2: owner, 3: windowShard([]) });
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow('no longer had it');
+  });
+
+  test('a failed target adopt reopens the view in the source window and still rejects', async () => {
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    target.adoptWebView.mockRejectedValue(new Error('provider exploded'));
+    withWindows({ 2: owner, 3: target });
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow(/window 2, where it came from/);
+
+    expect(owner.adoptWebView).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
+    );
+  });
+
+  test('a closing source window is skipped and the view reopens in the focused window', async () => {
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    target.adoptWebView.mockRejectedValue(new Error('provider exploded'));
+    const focused = windowShard([]);
+    withWindows({ 1: focused, 2: owner, 3: target });
+    mocks.isWindowClosing.mockImplementation((windowId: number) => windowId === 2);
+    mocks.getTargetWindowId.mockReturnValue(1);
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow(/the focused window/);
+
+    expect(owner.adoptWebView).not.toHaveBeenCalled();
+    expect(focused.adoptWebView).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
+    );
+  });
+
+  test('a provider decline in a new window closes that window and enters recovery', async () => {
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    created.adoptWebView.mockResolvedValue(undefined);
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    await expect(moveWebView('view-1', 'new')).rejects.toThrow();
+
+    expect(creator.closeWindow).toHaveBeenCalledWith(7);
+    // Recovery entered: the source window is offered the definition back
+    expect(owner.adoptWebView).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
+    );
+  });
+
+  test('when nothing can reopen the view, the move rejects and the definition is in the log', async () => {
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    target.adoptWebView.mockRejectedValue(new Error('provider exploded'));
+    owner.adoptWebView.mockRejectedValue(new Error('source is gone too'));
+    const focused = windowShard([]);
+    focused.adoptWebView.mockRejectedValue(new Error('focused window is gone too'));
+    withWindows({ 1: focused, 2: owner, 3: target });
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow('captured definition is in the log');
+
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.stringContaining(JSON.stringify({ id: 'view-1', webViewType: 'test.type' })),
+    );
+  });
+});
