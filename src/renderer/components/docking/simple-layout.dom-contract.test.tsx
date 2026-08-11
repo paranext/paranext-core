@@ -42,11 +42,14 @@ afterEach(cleanup);
  * that renamed or dropped the attribute would silently shrink the tour with zero failing tests
  * anywhere else. This test turns that assumption into an upgrade-detecting assertion.
  */
+// Module-scope so it is a stable reference across renders (react/jsx-no-bind); rc-dock calls it
+// to materialize each saved tab into renderable content.
+function loadTab(tab: TabBase): TabData {
+  return { id: tab.id, title: tab.id ?? 'tab', content: <div /> };
+}
+
 describe('simpleLayout rc-dock DOM contract', () => {
   it('renders each simple-mode panel id as a data-dockid DOM attribute', () => {
-    function loadTab(tab: TabBase): TabData {
-      return { id: tab.id, title: tab.id ?? 'tab', content: <div /> };
-    }
     const dockLayoutRef = createRef<DockLayout>();
     render(
       <DockLayout

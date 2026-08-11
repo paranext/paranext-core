@@ -81,9 +81,10 @@ export async function advanceToLastStep(page: Page): Promise<void> {
   const dialog = getTourDialog(page);
   const nextButton = dialog.getByRole('button', { name: /^Next$/i });
   for (let i = 0; i < 10; i += 1) {
-    // Steps are inherently sequential — each click must complete before the next check.
+    // Steps are inherently sequential — must observe the current step before advancing.
     // eslint-disable-next-line no-await-in-loop
     if (!(await nextButton.isVisible())) return;
+    // Sequential: the click must complete (revealing the next step) before the next iteration.
     // eslint-disable-next-line no-await-in-loop
     await nextButton.click();
   }

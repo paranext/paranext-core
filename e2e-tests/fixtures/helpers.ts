@@ -706,21 +706,24 @@ export interface WaitForAppReadyOptions {
  */
 export async function waitForAppReady(
   page: Page,
-  timeout = 90_000,
+  // Not a default parameter (would trip default-param-last, since `options` follows it);
+  // callers pass `undefined` to keep the default while supplying options.
+  timeout?: number,
   options?: WaitForAppReadyOptions,
 ): Promise<void> {
+  const effectiveTimeout = timeout ?? 90_000;
   const start = Date.now();
   await page.waitForSelector('div[class*="dock-layout"]', {
     state: 'attached',
-    timeout,
+    timeout: effectiveTimeout,
   });
-  const remaining1 = Math.max(1000, timeout - (Date.now() - start));
+  const remaining1 = Math.max(1000, effectiveTimeout - (Date.now() - start));
   await waitForPapiMethodRegistered(
     SCOPED_PLATFORM_ABOUT_COMMAND,
     DEFAULT_WEBSOCKET_PORT,
     remaining1,
   );
-  const remaining2 = Math.max(1000, timeout - (Date.now() - start));
+  const remaining2 = Math.max(1000, effectiveTimeout - (Date.now() - start));
   // Services like settings and theme finish async work after dock-layout mounts and platform.about
   // registers, so the overlay can outlast both earlier signals.
   await waitForOverlayGone(page, remaining2);
