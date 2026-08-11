@@ -1,3 +1,11 @@
+---
+paths:
+  - "lib/platform-bible-react/**"
+  - "src/renderer/**"
+  - "extensions/src/**"
+  - "**/*.web-view.tsx"
+---
+
 # Cross-View Sync Must Handle Hidden Views
 
 When implementing or modifying anything that synchronizes behavior across views/tabs/panes —
