@@ -16,6 +16,8 @@ import {
   getReadyWindowIds,
   getTargetWindowId,
   getUnreachableWindowIds,
+  isWindowClosing,
+  isWindowReady,
   wasWindowEverReady,
 } from '@main/services/window-state.service';
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
@@ -452,6 +454,136 @@ async function openWebViewInNewWindow(
     shard.openWebView(webViewType, { type: 'tab' }, options),
   );
 }
+
+/** Where a move sends a web view: an existing window's id, or `'new'` for a window created for it */
+type MoveWebViewTarget = number | 'new';
+
+/**
+ * Move a web view: close it in the window that holds it, reopen it from the captured definition in
+ * the target. Close-source-first is load-bearing — a one-instance web view cannot be opened in the
+ * target while the source instance is alive, because reuse logic would find and raise the source
+ * instead.
+ *
+ * @returns Id of the web view in its new window (the same id it had)
+ * @throws If no window holds the web view, if the target window does not exist, or if the target
+ *   open failed — the error says where the web view ended up (see {@link recoverAfterFailedMove})
+ */
+async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Promise<WebViewId> {
+  const owner = await findOwner(webViewId, 'move');
+  if (!owner) throw new Error(`Cannot move webview ${webViewId}: no window has it open.`);
+
+  const targetDescription = target === 'new' ? 'a new window' : `window ${target}`;
+
+  let targetShard: WebViewServiceShard | undefined;
+  if (target === 'new') {
+    // Same read and same fail-closed degrade as opening into a new window: in Simple mode —
+    // single-window by design — there is no other window to move to, and the view already is a
+    // tab in the only window there is, so there is nothing to do
+    let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+    try {
+      interfaceMode = await settingsService.get('platform.interfaceMode');
+    } catch (e) {
+      logger.warn(
+        `Could not read platform.interfaceMode for a move; leaving the web view where it is: ${getErrorMessage(e)}`,
+      );
+    }
+    if (interfaceMode !== 'power') return webViewId;
+    // Checked before anything closes, even though openInFreshWindow checks again: failing after
+    // the capture would put the view through a needless close and recovery
+    if (!windowCreator)
+      throw new Error(`Cannot move webview ${webViewId}: window creation is not wired up`);
+  } else {
+    // The web view is already there; closing and reopening it would be churn for nothing
+    if (target === owner.windowId) return webViewId;
+    // Resolved before anything closes: an unknown target must fail the move with the web view
+    // untouched
+    targetShard = await resolveShardForWindow(
+      NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+      webViewShards,
+      target,
+    );
+  }
+
+  const captured = await owner.shard.captureAndCloseWebView(webViewId);
+  if (!captured)
+    throw new Error(
+      `Cannot move webview ${webViewId}: window ${owner.windowId} no longer had it when the move tried to capture it.`,
+    );
+
+  try {
+    const movedWebViewId =
+      targetShard !== undefined
+        ? await targetShard.adoptWebView(captured)
+        : await openInFreshWindow(webViewId, (shard) => shard.adoptWebView(captured));
+    if (movedWebViewId !== undefined) {
+      // Raising is how the user sees where the web view went — same narrow rule as cross-window
+      // opens: only between this app's windows, never taking focus from another application. A
+      // new window raises itself when it is created
+      if (typeof target === 'number' && getFocusedWindowId() !== undefined) focusWindow(target);
+      return movedWebViewId;
+    }
+    logger.warn(
+      `Moving webview ${webViewId} to ${targetDescription} did not happen: the provider did not recreate it there. Reopening it where it can go.`,
+    );
+  } catch (e) {
+    logger.warn(
+      `Moving webview ${webViewId} to ${targetDescription} failed: ${getErrorMessage(e)}. Reopening it where it can go.`,
+    );
+  }
+
+  return recoverAfterFailedMove(webViewId, owner, captured, targetDescription);
+}
+
+/**
+ * Reopen a web view whose move could not open it in its target, escalating until something takes
+ * it: the source window — unless its close has begun, which a move that emptied it will have made
+ * true — then the focused window. Always rejects: wherever the web view ended up, the move the
+ * caller asked for did not happen, and the error says where it is.
+ */
+async function recoverAfterFailedMove(
+  webViewId: WebViewId,
+  owner: WebViewOwner,
+  captured: SavedWebViewDefinition,
+  targetDescription: string,
+): Promise<never> {
+  let reopenedIn: string | undefined;
+  if (!isWindowClosing(owner.windowId)) {
+    try {
+      if ((await owner.shard.adoptWebView(captured)) !== undefined)
+        reopenedIn = `window ${owner.windowId}, where it came from`;
+    } catch (e) {
+      logger.warn(
+        `Could not reopen webview ${webViewId} in its source window ${owner.windowId}: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+  if (reopenedIn === undefined) {
+    try {
+      if ((await (await getTargetWebViewShard()).adoptWebView(captured)) !== undefined)
+        reopenedIn = 'the focused window';
+    } catch (e) {
+      logger.warn(
+        `Could not reopen webview ${webViewId} in the focused window: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+  if (reopenedIn === undefined) {
+    // Last resort short of silent loss: the definition in the log is enough to reconstruct the
+    // web view by hand
+    logger.error(
+      `Nothing could reopen webview ${webViewId} after its failed move. Captured definition: ${JSON.stringify(captured)}`,
+    );
+    throw new Error(
+      `Could not move webview ${webViewId} to ${targetDescription}, and could not reopen it anywhere afterwards. Its captured definition is in the log.`,
+    );
+  }
+  throw new Error(
+    `Could not move webview ${webViewId} to ${targetDescription}; it was reopened in ${reopenedIn}.`,
+  );
+}
+
+/** Internal-only export for testing; not for use in development */
+export const testingWebViewServiceRouter = { moveWebView };
 
 // Router methods that route to the focused window's WebView service shard
 
