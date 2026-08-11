@@ -82,6 +82,7 @@ import {
 } from '@main/services/web-view.service-router';
 import {
   addWindow,
+  countWindowsNotClosing,
   doesNavigationReplaceRendererRegistrations,
   getFocusedWindowId,
   getTargetWindowId,
@@ -381,8 +382,9 @@ async function main() {
   // Same reasoning as above: a window can report itself empty as soon as it exists, so the handler
   // that decides what happens next must already be registered
   const handleWindowEmptied = createWindowEmptinessHandler({
-    countWindows: () => getWindows().length,
+    countWindows: countWindowsNotClosing,
     closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+    markWindowClosing,
   });
   await networkService.registerRequestHandler(
     WINDOW_EMPTIED_REQUEST_TYPE,
