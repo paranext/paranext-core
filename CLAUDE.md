@@ -212,7 +212,7 @@ Never skip pre-commit hooks (`--no-verify`, `-n`, `HUSKY=0`) — they run the se
   PR body: `AI-assisted — [session 1](<url>), [session 2](<url>)`
 - Use squash-merge for PRs.
 - Keep PR titles short (under 70 characters) with a descriptive body.
-- Run `npm run typecheck && npm run lint && npm test && dotnet test c-sharp-tests/` before committing.
+- Run `npm run typecheck && npm run format:check && npm run lint && npm test && dotnet test c-sharp-tests/` before committing. CI runs `format:check` as a separate step from `lint`, so a formatting-only failure will not show up in `npm run lint`.
 - When committing, include ALL related files (plans, docs, configs) — never exclude supporting files unless they are gitignored or you are explicitly told to.
 - When git reports warnings about untracked or uncommitted files, investigate what they are before dismissing them. Never claim a file is unrelated without reading it first.
 - After completing file changes, push all relevant branches before reporting completion.

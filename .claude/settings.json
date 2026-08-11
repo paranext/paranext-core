@@ -66,8 +66,15 @@
     ]
   },
 
-
   "hooks": {
+    "SessionStart": [
+        {
+          "matcher": "startup|resume|clear",
+          "hooks": [
+            { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/session-git-state.sh" }
+          ]
+        }
+      ],
     "PreToolUse": [
       {
         "matcher": "Bash",
