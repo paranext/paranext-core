@@ -465,6 +465,14 @@ export function markWindowPendingContent(windowId: number): void {
   pendingContentWindowIds.add(windowId);
 }
 
+/**
+ * Un-mark a pending-content window: its routed content has arrived (or its creator gave up), so
+ * from now on it restores like any other window.
+ */
+export function clearWindowPendingContent(windowId: number): void {
+  pendingContentWindowIds.delete(windowId);
+}
+
 function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
   if (typeof windowId !== 'number') {
     logger.warn(`${GET_WINDOW_LAYOUT_REQUEST_TYPE} called without a window id`);
