@@ -366,6 +366,63 @@ async function openWebViewInOwningWindow(
 }
 
 /**
+ * Create a pending-content window, run an open against its shard, and never leak the window: any
+ * failure — and a provider decline — closes it again, since a window whose content never arrived is
+ * an empty shell the user never asked to manage. On success the pending-content mark comes off, so
+ * a reload before the first layout push restores as an ordinary (empty) window instead of waiting
+ * forever for content that already arrived.
+ */
+async function openInFreshWindow(
+  webViewDescription: string,
+  open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+): Promise<WebViewId | undefined> {
+  if (!windowCreator)
+    throw new Error(
+      `Cannot open ${webViewDescription} in a new window: window creation is not wired up`,
+    );
+  const creator = windowCreator;
+  const windowId = await creator.createPendingContentWindow();
+
+  // Closes the window this call created, at most once, and never lets a failure to close replace
+  // the reason the window is being closed in the first place — a window that fails to close is a
+  // leak to warn about, not grounds to hide why the open itself did not succeed.
+  const closeAbandonedWindow = () => {
+    try {
+      creator.closeWindow(windowId);
+    } catch (closeError) {
+      logger.warn(
+        `Could not close window ${windowId} after its new-window open did not succeed: ${getErrorMessage(closeError)}`,
+      );
+    }
+  };
+
+  let openedWebViewId: WebViewId | undefined;
+  try {
+    const shard = await resolveShardForWindow(
+      NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+      webViewShards,
+      windowId,
+    );
+    openedWebViewId = await open(shard);
+  } catch (e) {
+    closeAbandonedWindow();
+    throw e;
+  }
+
+  if (openedWebViewId === undefined) {
+    // The provider chose not to create the web view — the established "it did not happen"
+    // answer. The window it would have lived in has no reason to exist.
+    closeAbandonedWindow();
+  } else {
+    // The routed content is in the window now. Un-mark it, so a reload before its first layout
+    // push restores as an ordinary (empty) window instead of waiting forever for content that
+    // already arrived.
+    clearWindowPendingContent(windowId);
+  }
+  return openedWebViewId;
+}
+
+/**
  * Open a web view in a window created for it. In Simple mode — single-window by design — the window
  * layout degrades to a tab in the window the user is working in; the platform owns placement there.
  * The mode read fails closed to the degraded path, matching how window restore treats an unreadable
@@ -391,48 +448,9 @@ async function openWebViewInNewWindow(
     return webViewShard.openWebView(webViewType, { type: 'tab' }, options);
   }
 
-  if (!windowCreator)
-    throw new Error(`Cannot open ${webViewType} in a new window: window creation is not wired up`);
-  const creator = windowCreator;
-  const windowId = await creator.createPendingContentWindow();
-
-  // Closes the window this call created, at most once, and never lets a failure to close replace
-  // the reason the window is being closed in the first place — a window that fails to close is a
-  // leak to warn about, not grounds to hide why the open itself did not succeed.
-  const closeAbandonedWindow = () => {
-    try {
-      creator.closeWindow(windowId);
-    } catch (closeError) {
-      logger.warn(
-        `Could not close window ${windowId} after its new-window open did not succeed: ${getErrorMessage(closeError)}`,
-      );
-    }
-  };
-
-  let openedWebViewId: WebViewId | undefined;
-  try {
-    const shard = await resolveShardForWindow(
-      NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
-      webViewShards,
-      windowId,
-    );
-    openedWebViewId = await shard.openWebView(webViewType, { type: 'tab' }, options);
-  } catch (e) {
-    closeAbandonedWindow();
-    throw e;
-  }
-
-  if (openedWebViewId === undefined) {
-    // The provider chose not to create the web view — the established "it did not happen"
-    // answer. The window it would have lived in has no reason to exist.
-    closeAbandonedWindow();
-  } else {
-    // The routed content is in the window now. Un-mark it, so a reload before its first layout
-    // push restores as an ordinary (empty) window instead of waiting forever for content that
-    // already arrived.
-    clearWindowPendingContent(windowId);
-  }
-  return openedWebViewId;
+  return openInFreshWindow(webViewType, (shard) =>
+    shard.openWebView(webViewType, { type: 'tab' }, options),
+  );
 }
 
 // Router methods that route to the focused window's WebView service shard
