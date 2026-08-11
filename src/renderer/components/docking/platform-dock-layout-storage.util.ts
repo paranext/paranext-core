@@ -1036,6 +1036,8 @@ export function addTabToDock(
         // Every caller that names a target tab today goes through the WebView service router, which
         // sends the open to whichever window holds that tab — so a target missing here is a target
         // no window claimed: it closed, or the caller is holding an id it read a while ago.
+        // Alternatively, a caller may explicitly specify targetWindowId to route the panel to a
+        // particular window where the target tab is not present.
         // Placing the panel as if no target had been asked for keeps the user's command producing a
         // tab, which refusing the whole add does not; the same fall-through already covers a `tab`
         // layout whose `parentTabGroupId` is not here. A caller that reached this function without
