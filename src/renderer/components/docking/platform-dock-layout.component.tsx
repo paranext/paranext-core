@@ -177,7 +177,7 @@ export function PlatformDockLayout() {
               }
             }
 
-            // If there are no more docked tabs, add one
+            // If there are no more docked tabs, report it — main decides whether to dock Home or close
             if (direction === 'float' || direction === 'remove') {
               if (layout.dockbox.children.length === 1) {
                 const hasNoTabs = !dockLayoutRef.current.find(
