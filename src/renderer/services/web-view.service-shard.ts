@@ -3158,6 +3158,46 @@ async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layou
   );
 }
 
+/** See {@link WebViewServiceShard.captureAndCloseWebView} */
+async function captureAndCloseWebView(
+  webViewId: WebViewId,
+): Promise<SavedWebViewDefinition | undefined> {
+  const dockLayout = await getDockLayout();
+  const webViewDefinition = dockLayout.getWebViewDefinition(webViewId);
+  if (!webViewDefinition) return undefined;
+
+  const captured = convertWebViewDefinitionToSaved(webViewDefinition);
+  // The live state lives in this window's storage, not on the dock's definition — carry it.
+  // Deliberately NOT deleted here: if the move fails and the web view comes back to this
+  // window, its state being still here is what that recovery needs
+  const liveState = getFullWebViewStateById(captured.id);
+  if (Object.keys(liveState).length > 0) captured.state = liveState;
+  // A window re-scopes web view ids to itself when it reloads a layout. Hand the target the
+  // minted id — the spelling a fresh open would use — so the id does not carry this window's
+  // scope into a window it does not belong to
+  captured.id = stripWindowScopeFromWebViewId(captured.id);
+
+  dockLayout.removeTabFromDock(webViewDefinition.id);
+  return captured;
+}
+
+/** See {@link WebViewServiceShard.adoptWebView} */
+async function adoptWebView(
+  savedWebViewDefinition: SavedWebViewDefinition,
+): Promise<WebViewId | undefined> {
+  await waitForInitialize();
+  // Seeded before the provider runs: the moved view's state must be in this window's storage
+  // for the view to read, including when the provider does not echo state back. A provider
+  // that returns state still wins — the open persists the provider's state after this
+  if (savedWebViewDefinition.state && Object.keys(savedWebViewDefinition.state).length > 0)
+    setFullWebViewStateById(savedWebViewDefinition.id, savedWebViewDefinition.state);
+  return openOrReloadWebView(
+    savedWebViewDefinition,
+    { type: 'tab' },
+    getWebViewOptionsDefaults({}),
+  );
+}
+
 /** Whether a value that arrived over the wire is a Scripture reference and not a scroll group id */
 function isSerializedVerseRef(scrRef: unknown): boolean {
   return (
@@ -3216,6 +3256,8 @@ const webViewServiceShard: WebViewServiceShard = {
   dockContainsTab,
   openSettingsTab,
   setDetachedScrRef,
+  captureAndCloseWebView,
+  adoptWebView,
 };
 
 /** Register the network object that backs the PAPI webview service */
