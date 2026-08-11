@@ -95,8 +95,12 @@ public static class Program
             );
             var inventoryDataProvider = new InventoryDataProvider(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi, inventoryDataProvider);
+            var internetSettingsDataProvider = new InternetSettingsDataProvider(papi);
             var dblResources = new DblResourcesDataProvider(papi, paratextProjects);
-            var paratextRegistrationService = new ParatextRegistrationService(papi);
+            var paratextRegistrationService = new ParatextRegistrationService(
+                papi,
+                internetSettingsDataProvider
+            );
             var checklistNetworkObject = new ChecklistNetworkObject(papi);
             var manageBooksService = new ManageBooksService(
                 papi,
@@ -130,7 +134,8 @@ public static class Program
                     Task.Run(() => checkRunner.RegisterDataProviderAsync()),
                     Task.Run(() => checklistNetworkObject.InitializeAsync()),
                     Task.Run(() => manageBooksService.RegisterNetworkObjectAsync()),
-                    Task.Run(() => enhancedResourceFactory.InitializeAsync())
+                    Task.Run(() => enhancedResourceFactory.InitializeAsync()),
+                    Task.Run(() => internetSettingsDataProvider.RegisterDataProviderAsync())
                 ),
                 "Background service registration"
             );

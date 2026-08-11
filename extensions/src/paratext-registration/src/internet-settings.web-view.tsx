@@ -1,30 +1,25 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useData, useLocalizedStrings } from '@papi/frontend/react';
 import { InternetSettings } from 'paratext-registration';
-import { usePromise } from 'platform-bible-react';
-import { getErrorMessage, wait } from 'platform-bible-utils';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { getErrorMessage, isPlatformError, wait } from 'platform-bible-utils';
+import { useEffect, useRef, useState } from 'react';
 import { INTERNET_SETTINGS_STRING_KEYS, InternetSettingsForm } from './internet-settings.component';
 import { SaveState } from './utils';
 
 /** Time in milliseconds to wait before restarting the application after changing internet settings. */
 const INTERNET_SETTINGS_RESTART_DELAY_MS = 5 * 1000;
 
-// #region PAPI helpers
+const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
 
-async function getInternetSettings() {
-  return papi.commands.sendCommand('paratextRegistration.getParatextDataInternetSettings');
-}
-
-async function saveInternetSettings(internetSettings: InternetSettings) {
-  return papi.commands.sendCommand(
-    'paratextRegistration.setParatextDataInternetSettings',
-    internetSettings,
-  );
-}
-
-// #endregion
+// Intentionally duplicated in the first-run wizard (internet-settings-step.component.tsx): the two
+// consumers sit on opposite sides of the core/extension boundary and `paratext-registration` is a
+// types-only module, so there is no shared runtime module to hoist this into.
+const DEFAULT_INTERNET_SETTINGS: InternetSettings = {
+  permittedInternetUse: 'VpnRequired',
+  selectedServer: 'Production',
+  proxyPort: 0,
+};
 
 // Run once per renderer-process session. Ensures the post-restart detection in the mount
 // effect does not misfire when the panel is reopened while a restart countdown is in progress.
@@ -64,7 +59,7 @@ globalThis.webViewComponent = function InternetSettingsComponent({
   // Staged settings: what the user has edited in the form (persisted in web view state).
   const [internetSettings, setInternetSettings] = useWebViewState<InternetSettings>(
     'internetSettings',
-    { permittedInternetUse: 'VpnRequired', selectedServer: 'Production', proxyPort: 0 },
+    DEFAULT_INTERNET_SETTINGS,
   );
 
   // Last-persisted settings from PAPI: undefined while the fetch is in flight.
@@ -72,32 +67,31 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     InternetSettings | undefined
   >();
 
-  // Stable wrapper so usePromise fires exactly once. Catches PAPI command errors and surfaces
-  // them via saveError so the user sees an actionable message instead of a silent locked form.
-  const getInternetSettingsSafe = useCallback(async () => {
-    try {
-      return await getInternetSettings();
-    } catch (err: unknown) {
-      if (isMounted.current) setSaveError(getErrorMessage(err));
-      return undefined;
-    }
-  }, []); // stable: isMounted is a ref, setSaveError is a useState setter, getInternetSettings is module-level
+  const [dpValue, setData, isLoadingSettings] = useData(
+    INTERNET_SETTINGS_DATA_PROVIDER,
+  ).InternetSettings(undefined, DEFAULT_INTERNET_SETTINGS);
 
-  // Fetch current settings from PAPI on mount; undefined until resolved or on error.
-  const [fetchedInternetSettings] = usePromise(getInternetSettingsSafe, undefined);
-
-  // Guard against overwriting an in-progress user edit if the callback were ever replaced.
+  // Once the staged draft + saved baseline have been synced from the first successful read.
   const hasSyncedFetch = useRef(false);
 
-  // When fetch resolves, update both staged and saved baselines.
+  // `setData` is undefined until the provider resolves, so it doubles as the readiness signal (no
+  // separate useDataProvider needed). While unresolved or the first read is in flight, defer. On a
+  // load error, surface it via saveError. Otherwise sync the staged draft AND the saved baseline
+  // exactly once: this is a stage-then-commit dialog, so the Reset target and dirty-state must stay
+  // anchored to what was loaded (or last saved locally, via handleSaveAndRestart) rather than
+  // shifting under the user when another window changes settings via a live provider push.
   useEffect(() => {
-    if (fetchedInternetSettings === undefined) return;
+    if (!setData || isLoadingSettings) return;
+    if (isPlatformError(dpValue)) {
+      if (isMounted.current) setSaveError(getErrorMessage(dpValue));
+      return;
+    }
     if (!hasSyncedFetch.current) {
       hasSyncedFetch.current = true;
-      setInternetSettings(fetchedInternetSettings);
+      setInternetSettings(dpValue);
+      setSavedInternetSettings(dpValue);
     }
-    setSavedInternetSettings(fetchedInternetSettings);
-  }, [fetchedInternetSettings, setInternetSettings]);
+  }, [setData, isLoadingSettings, dpValue, setInternetSettings]);
 
   const isFormDisabled =
     savedInternetSettings === undefined ||
@@ -105,10 +99,18 @@ globalThis.webViewComponent = function InternetSettingsComponent({
     saveState === SaveState.IsRestarting;
 
   const handleSaveAndRestart = async () => {
+    if (!setData) {
+      // Defensive: the Save button is disabled (isFormDisabled) until the provider is ready, so this
+      // is unreachable via the UI. Bail without restarting or marking saved rather than persisting
+      // nothing; log for the theoretical programmatic caller.
+      logger.warn('Internet settings provider unavailable; ignoring Save and restart.');
+      setSaveState(SaveState.HasNotSaved);
+      return;
+    }
     setSaveState(SaveState.IsSaving);
     setSaveError('');
     try {
-      await saveInternetSettings(internetSettings);
+      await setData(internetSettings);
       // Update the saved baseline so Reset reflects the just-persisted state.
       if (isMounted.current) setSavedInternetSettings(internetSettings);
       // Queue restart asynchronously so the UI can update first.
