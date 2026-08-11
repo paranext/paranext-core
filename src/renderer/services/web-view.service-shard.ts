@@ -1095,7 +1095,7 @@ async function loadLayout(
     dockLayoutVar.loadLayout(layoutToLoad);
     layoutLoadGenerationInDock = thisGeneration;
     emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
-    if (!hasAnyTabs(layoutToLoad)) reportDockEmptied('born-empty');
+    reportIfLoadedLayoutIsEmpty(layoutToLoad);
     return;
   }
   // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
@@ -1125,7 +1125,7 @@ async function loadLayout(
   layoutLoadGenerationInDock = thisGeneration;
   // Emit close events for pre-existing web views the (supplemented) layout dropped
   emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, supplementedLayoutInfo);
-  if (!hasAnyTabs(supplementedLayoutInfo)) reportDockEmptied('born-empty');
+  reportIfLoadedLayoutIsEmpty(supplementedLayoutInfo);
 }
 
 /**
@@ -1242,6 +1242,20 @@ async function getPersistedLayout(
   if (response.kind === 'pending-content')
     return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: true };
   return { layout: getLegacySavedLayout(defaultLayout), isPendingContent: false };
+}
+
+/**
+ * Report a freshly loaded layout that left this window's dock with no tab in it — unless this
+ * window is running on a fallback layout, which is deliberately NOT the user's layout (see
+ * {@link isRunningOnFallbackLayout}) and whose emptiness therefore says nothing about what the user
+ * has. Docking Home into one would put a tab in a dock whose changes are held from persistence
+ * anyway, and present a window the app could not load as a window the user emptied.
+ *
+ * @param layout The layout that was just loaded into the dock
+ */
+function reportIfLoadedLayoutIsEmpty(layout: LayoutInfo): void {
+  if (isRunningOnFallbackLayout || hasAnyTabs(layout)) return;
+  reportDockEmptied('born-empty');
 }
 
 /**
