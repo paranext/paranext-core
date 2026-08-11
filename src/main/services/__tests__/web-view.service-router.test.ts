@@ -1296,12 +1296,14 @@ describe('web view service router', () => {
     test('claims all three settings command names', async () => {
       await getCommandHandler('platform.openSettings');
 
-      expect([...registrations().keys()].sort()).toEqual(
-        [
+      // A subset check, not an exhaustive one: the router also claims other command names (e.g.
+      // the move commands) registered in the same startup call, which this test is not about.
+      expect([...registrations().keys()]).toEqual(
+        expect.arrayContaining([
           'command:platform.openProjectSettings',
           'command:platform.openSettings',
           'command:platform.openUserSettings',
-        ].sort(),
+        ]),
       );
     });
 
@@ -1310,17 +1312,25 @@ describe('web view service router', () => {
 
       // None of these carried the experimental mark, and two are deprecated aliases whose
       // documentation is what tells a caller to move off them. Adding or dropping either flag is a
-      // change to the published surface.
-      const publishedFlags = [...registrations()].map(([name, { docs }]) => {
-        const method = Reflect.get(Object(docs), 'method') ?? {};
-        return [
-          name,
-          {
-            experimental: Reflect.get(method, 'x-experimental'),
-            deprecated: Reflect.get(method, 'deprecated'),
-          },
-        ];
-      });
+      // change to the published surface. Scoped to the settings commands specifically — the router
+      // also claims other command names in the same startup call that this test is not about.
+      const settingsCommandNames = [
+        'command:platform.openSettings',
+        'command:platform.openProjectSettings',
+        'command:platform.openUserSettings',
+      ];
+      const publishedFlags = [...registrations()]
+        .filter(([name]) => settingsCommandNames.includes(name))
+        .map(([name, { docs }]) => {
+          const method = Reflect.get(Object(docs), 'method') ?? {};
+          return [
+            name,
+            {
+              experimental: Reflect.get(method, 'x-experimental'),
+              deprecated: Reflect.get(method, 'deprecated'),
+            },
+          ];
+        });
 
       expect(Object.fromEntries(publishedFlags)).toEqual({
         'command:platform.openSettings': { experimental: undefined, deprecated: undefined },

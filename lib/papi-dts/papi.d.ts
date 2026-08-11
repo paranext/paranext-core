@@ -4734,6 +4734,37 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    /**
+     * Move a web view to a window created for it.
+     *
+     * A move closes the web view in the window that holds it and reopens it — same id, same
+     * `useWebViewState` state — in the target window. Consumers see a close event in the source
+     * and an open event in the target, and the web view controller is disposed and re-created:
+     * a held controller reference must be re-acquired after a move. In Simple mode — single-window
+     * by design — there is no other window to move to, and this does nothing.
+     *
+     * @param webViewId Web view to move
+     * @returns Id of the web view in its new window (the same id it had)
+     * @experimental
+     */
+    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    /**
+     * Move a web view to an existing window, named by its runtime window id (see
+     * `platform.getFocusedWindowId`; window ids are reused across sessions — never persist one).
+     *
+     * Same semantics as `platform.moveWebViewToNewWindow`, and: moving a web view to the window
+     * it is already in does nothing, and naming a window that does not exist is an error that
+     * leaves the web view where it is.
+     *
+     * @param webViewId Web view to move
+     * @param targetWindowId Window to move it to
+     * @returns Id of the web view in its new window (the same id it had)
+     * @experimental
+     */
+    'platform.moveWebViewToWindow': (
+      webViewId: WebViewId,
+      targetWindowId: number,
+    ) => Promise<WebViewId>;
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
     /** Open Usersnap feedback form to submit an idea */

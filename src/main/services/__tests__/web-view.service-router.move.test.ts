@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
 import {
   setWebViewWindowCreator,
+  startWebViewServiceRouter,
   testingWebViewServiceRouter,
 } from '@main/services/web-view.service-router';
 import {
@@ -11,6 +12,7 @@ import {
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import type { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
+import type { InternalRequestHandler } from '@shared/data/rpc.model';
 
 const mocks = vi.hoisted(() => {
   // Where the router's shard index parks its subscriptions — module state that outlives one test,
@@ -25,6 +27,11 @@ const mocks = vi.hoisted(() => {
     getFocusedWindowId: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
+    networkObjectSet: vi.fn(),
+    registerRequestHandler:
+      vi.fn<
+        (requestType: string, handler: InternalRequestHandler, ...rest: unknown[]) => unknown
+      >(),
     settingsGet: vi.fn(),
     clearWindowPendingContent: vi.fn(),
     loggerWarn: vi.fn(),
@@ -59,13 +66,13 @@ vi.mock('@main/services/window-state.service', () => ({
   focusWindow: mocks.focusWindow,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
-  networkObjectService: { get: mocks.networkObjectGet, set: vi.fn() },
+  networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
   onDidCreateNetworkObject: mocks.onDidCreateNetworkObject,
   onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
 }));
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: () => vi.fn(),
-  registerRequestHandler: vi.fn(),
+  registerRequestHandler: mocks.registerRequestHandler,
 }));
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: mocks.settingsGet },
@@ -78,6 +85,18 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 
 const { moveWebView } = testingWebViewServiceRouter;
+
+/** Start the router and hand back the handler registered for the given command name */
+async function getCommandHandler(commandName: string): Promise<InternalRequestHandler> {
+  mocks.networkObjectSet.mockResolvedValue(undefined);
+  mocks.registerRequestHandler.mockResolvedValue(vi.fn());
+  await startWebViewServiceRouter();
+  const call = mocks.registerRequestHandler.mock.calls.find(
+    ([requestType]) => requestType === `command:${commandName}`,
+  );
+  if (!call) throw new Error(`${commandName} was not registered`);
+  return call[1];
+}
 
 /**
  * A per-window WebView service shard whose web views are the given ids, extended with the move
@@ -308,5 +327,37 @@ describe('moveWebView', () => {
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.stringContaining(JSON.stringify({ id: 'view-1', webViewType: 'test.type' })),
     );
+  });
+});
+
+describe('the move commands', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('the new-window command rejects a non-string web view id', async () => {
+    const handler = await getCommandHandler('platform.moveWebViewToNewWindow');
+
+    await expect(handler(42)).rejects.toThrow(/web view id/);
+  });
+
+  test('the to-window command rejects a non-string web view id', async () => {
+    const handler = await getCommandHandler('platform.moveWebViewToWindow');
+
+    await expect(handler(42, 3)).rejects.toThrow(/web view id/);
+  });
+
+  test('the to-window command rejects a non-number target window id', async () => {
+    const handler = await getCommandHandler('platform.moveWebViewToWindow');
+
+    await expect(handler('view-1', 'not-a-number')).rejects.toThrow(/target window id/);
+  });
+
+  test('the commands are declared owner-routed with a first webViewId param', async () => {
+    // `assertCommandRoutingMatchesDocs` runs synchronously inside `startWebViewServiceRouter` and
+    // throws in dev mode on any mismatch between a command's routing and what its params document
+    // — so a router that registers without throwing is one where the move commands' `webViewId`
+    // first, owner-routed declarations agree with their docs.
+    await expect(getCommandHandler('platform.moveWebViewToNewWindow')).resolves.toBeDefined();
   });
 });
