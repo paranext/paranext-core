@@ -11,7 +11,7 @@
  */
 
 import { Layout } from '@shared/models/docking-framework.model';
-import { WebViewId } from '@shared/models/web-view.model';
+import { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 
@@ -58,4 +58,28 @@ export interface WebViewServiceShard extends WebViewServiceType {
    * @experimental
    */
   setDetachedScrRef(webViewId: WebViewId, scrRef: SerializedVerseRef): Promise<boolean>;
+
+  /**
+   * Capture a web view's definition — including its live `useWebViewState` state, which lives in
+   * this window's storage and would otherwise stay behind — and close its tab through the normal
+   * close lifecycle. The move primitive's source half: closing first is what lets a one-instance
+   * web view be opened in a target window at all, since reuse logic would find and raise the
+   * still-open source instead.
+   *
+   * @param webViewId Web view to capture and close
+   * @returns The captured definition, or `undefined` if this window does not hold the web view
+   * @experimental
+   */
+  captureAndCloseWebView(webViewId: WebViewId): Promise<SavedWebViewDefinition | undefined>;
+
+  /**
+   * Open a web view in this window from a definition captured elsewhere. The move primitive's
+   * target half: seeds the captured `useWebViewState` state into this window's storage before the
+   * provider runs, then opens through the normal open lifecycle (open event, fresh controller).
+   *
+   * @param savedWebViewDefinition Captured definition to open from
+   * @returns Id of the web view this window now holds, or `undefined` if the provider declined
+   * @experimental
+   */
+  adoptWebView(savedWebViewDefinition: SavedWebViewDefinition): Promise<WebViewId | undefined>;
 }
