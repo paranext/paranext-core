@@ -68,6 +68,13 @@ export function useRemoveCharacterMarker({
       // marker" restore point with nothing behind it. Unlike the insert paths this shares its helper
       // with, removal has a reachable no-op: the editor ref is null until the editor mounts, and
       // `editorRef.current?.` would swallow that silently.
+      //
+      // Nothing downstream cleans that up. `commitChanges` DOES skip an unchanged tree, but only
+      // when `forceCommit` is false, and every pre-edit snapshot in the app passes `true` — it has
+      // to, since the point is to capture state before the edit lands. So an unguarded no-op leaves
+      // a real empty restore point rather than one the backend quietly drops. (In plain
+      // Platform.Bible the C# handler is an unimplemented stub that throws, so this only surfaces in
+      // Paratext 10 Studio, where the command is actually implemented.)
       const editor = editorRef.current;
       if (!editor) {
         logger.warn('Cannot remove a character marker: the editor is not mounted.');
