@@ -226,6 +226,27 @@ describe('moveWebView', () => {
     await expect(moveWebView('view-1', 3)).rejects.toThrow('no longer had it');
   });
 
+  test('a capture that throws fails the move with the owner-search definition in the log', async () => {
+    const owner = windowShard(['view-1']);
+    owner.captureAndCloseWebView.mockRejectedValue(new Error('capture round trip lost'));
+    const target = windowShard([]);
+    withWindows({ 2: owner, 3: target });
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow(
+      /Could not move webview view-1 to window 3: capturing it failed/,
+    );
+
+    // The owner search's own answer is what gets logged — the only definition still in hand once
+    // the capture itself is the thing that failed
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.stringContaining(JSON.stringify({ id: 'view-1' })),
+    );
+    // No recovery attempt: re-adopting from the owner search's definition could duplicate a view
+    // whose tab never actually closed
+    expect(owner.adoptWebView).not.toHaveBeenCalled();
+    expect(target.adoptWebView).not.toHaveBeenCalled();
+  });
+
   test('a failed target adopt reopens the view in the source window and still rejects', async () => {
     const owner = windowShard(['view-1']);
     const target = windowShard([]);
