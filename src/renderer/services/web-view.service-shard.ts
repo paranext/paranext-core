@@ -2108,11 +2108,26 @@ async function openOrReloadWebView(
     allowedFrameSources,
   };
 
-  const finalLayout = (await getDockLayout()).addWebViewToDock(
-    finalWebView,
-    layout,
-    optionsDefaulted.bringToFront,
-  );
+  let finalLayout: Layout | undefined;
+  try {
+    finalLayout = (await getDockLayout()).addWebViewToDock(
+      finalWebView,
+      layout,
+      optionsDefaulted.bringToFront,
+    );
+  } catch (e) {
+    // The provider has already run: a controller may be registered in the extension host, a
+    // nonce minted, and state persisted — and no close event will ever fire for a tab that
+    // never joined the dock. Emit the close event ourselves (controller disposal and nonce
+    // cleanup both subscribe to it) and evict the state, so a failed add leaves nothing
+    // behind. An already-open tab updates in place and returns before any throwing branch,
+    // so a throw here always means the tab never existed.
+    onDidCloseWebViewBufferedEmitter.emit({
+      webView: convertWebViewDefinitionToSaved(finalWebView),
+    });
+    deleteFullWebViewStateById(webView.id);
+    throw e;
+  }
 
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
   // inform web view consumers that we added a new web view
