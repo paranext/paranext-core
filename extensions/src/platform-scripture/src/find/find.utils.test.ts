@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { applyPreserveCase, buildSearchRegex, CharacterCategorizer } from './find.utils';
+import { newPlatformError } from 'platform-bible-utils';
+import {
+  applyPreserveCase,
+  buildSearchRegex,
+  CharacterCategorizer,
+  isSimpleInterfaceMode,
+} from './find.utils';
 
 /** Default character categorizer matching the project-settings defaults used in production */
 const DEFAULT_CATEGORIZER: CharacterCategorizer = {
@@ -55,6 +61,20 @@ describe('applyPreserveCase', () => {
 
   it('upper-cases a multi-word replacement when match is all-caps', () => {
     expect(applyPreserveCase('FOO BAR', 'hello world')).toBe('HELLO WORLD');
+  });
+});
+
+describe('isSimpleInterfaceMode', () => {
+  it('returns false for the definitive power mode so replace stays available', () => {
+    expect(isSimpleInterfaceMode('power')).toBe(false);
+  });
+
+  it('returns true for simple mode so the replace toggle is hidden', () => {
+    expect(isSimpleInterfaceMode('simple')).toBe(true);
+  });
+
+  it('fails safe to simple (true) when the setting is a PlatformError (loading/errored)', () => {
+    expect(isSimpleInterfaceMode(newPlatformError('interface mode unavailable'))).toBe(true);
   });
 });
 

@@ -1,6 +1,8 @@
 import {
   escapeStringRegexp,
+  isPlatformError,
   isSelectableInvisibleCharOrWhiteSpace,
+  PlatformError,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
 import { FindOptions } from 'platform-scripture';
@@ -95,6 +97,20 @@ export function applyPreserveCase(matchedText: string, replacementText: string):
     return replacementText[0].toUpperCase() + replacementText.slice(1);
   }
   return replacementText;
+}
+
+/**
+ * Whether the Find panel should treat the given `platform.interfaceMode` value as "simple" — i.e.
+ * hide the find/replace toggle and stay in find mode. Replace is a power-mode-only capability, so
+ * this returns `false` ONLY when the mode is definitively `'power'`; a {@link PlatformError} (the
+ * setting is still loading or failed to read) or any non-`'power'` value fails safe to simple.
+ *
+ * @param interfaceMode The `platform.interfaceMode` value (or a PlatformError) from `useSetting`.
+ * @returns `true` when the replace toggle should be hidden (simple mode), `false` when it should be
+ *   shown (power mode).
+ */
+export function isSimpleInterfaceMode(interfaceMode: 'simple' | 'power' | PlatformError): boolean {
+  return isPlatformError(interfaceMode) || interfaceMode !== 'power';
 }
 
 /**
