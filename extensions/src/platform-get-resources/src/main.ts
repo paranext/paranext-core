@@ -99,10 +99,6 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
           includeProjectInterfaces: ['platform.base'],
         });
       }
-      logger.warn(
-        `getCachedResources: ${localProjectMetadata.length} total projects, ` +
-          `${localProjectMetadata.filter((m) => m.isEditable === false).length} with isEditable=false`,
-      );
       const newCachedResources = cachedResources.map((resource) => {
         const matchingLocalProject = localProjectMetadata.find((localProject) =>
           // If the `projectId` is defined then tries to use that
@@ -139,9 +135,6 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
             JSON.stringify(cachedResources),
           );
       }
-      logger.warn(
-        `getCachedResources: ${cachedResources.filter((r) => r.installed).length} installed resources (${cachedResources.length} total in catalog)`,
-      );
     } catch (error: unknown) {
       logger.warn(`Error getting cached resources: ${getErrorMessage(error)}`);
     }
@@ -193,14 +186,6 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
       });
     }
 
-    logger.warn(
-      `getLocalNonDblResources: ${allMetadata.length} total projects, ` +
-        `${allMetadata.filter((m) => m.isEditable === false).length} with isEditable=false`,
-    );
-    logger.warn(
-      `getLocalNonDblResources: all projects: ${allMetadata.map((m) => `${m.id}(editable=${m.isEditable})`).join(', ')}`,
-    );
-
     // Exclude any resource whose project ID matches a DBL catalog entry (by exact projectId or by
     // the startsWith(dblEntryUid) convention Paratext uses when naming project directories).
     const dblEntries = cachedResources ?? [];
@@ -212,18 +197,9 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
           // Guard against empty dblEntryUid: ''.startsWith('') is true for every string
           (r.dblEntryUid !== '' && m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
       );
-      if (matchingDblEntry) {
-        logger.warn(
-          `getLocalNonDblResources: excluding ${m.id} — matched DBL entry uid="${matchingDblEntry.dblEntryUid}" projectId="${matchingDblEntry.projectId}" (${matchingDblEntry.projectId !== '' && matchingDblEntry.projectId === m.id ? 'exact projectId' : 'startsWith uid'})`,
-        );
-        return false;
-      }
+      if (matchingDblEntry) return false;
       return true;
     });
-
-    logger.warn(
-      `getLocalNonDblResources: ${nonDblMetadata.length} non-DBL resources (${dblEntries.length} DBL entries checked): ${nonDblMetadata.map((m) => m.id).join(', ')}`,
-    );
 
     // Use name/fullName/language from the project metadata directly — the C# factory populates
     // these at enumeration time (same values as the platform.name/fullName/language settings),
