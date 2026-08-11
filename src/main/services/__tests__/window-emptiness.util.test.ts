@@ -11,6 +11,10 @@ vi.mock('@shared/services/logger.service', () => ({
 describe('deciding what happens to a window that reports its dock empty', () => {
   let countWindows: ReturnType<typeof vi.fn<() => number>>;
   let closeWindow: ReturnType<typeof vi.fn<(windowId: number) => void>>;
+  let markWindowClosing: ReturnType<typeof vi.fn<(windowId: number) => void>>;
+  // Ids the handler has marked closing through `markWindowClosing`, so a scenario that needs
+  // `countWindows` to honor a decision made earlier in the same test can read them back
+  let markedIds: Set<number>;
   let handler: ReturnType<typeof createWindowEmptinessHandler>;
 
   beforeEach(() => {
@@ -18,7 +22,9 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     vi.useRealTimers();
     countWindows = vi.fn();
     closeWindow = vi.fn();
-    handler = createWindowEmptinessHandler({ countWindows, closeWindow });
+    markedIds = new Set();
+    markWindowClosing = vi.fn((windowId: number) => markedIds.add(windowId));
+    handler = createWindowEmptinessHandler({ countWindows, closeWindow, markWindowClosing });
   });
 
   test('a window born empty docks Home rather than closing, even as the only window', () => {
@@ -63,7 +69,8 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     // closed yet — so the handler must count the first window's own answer to keep the second from
     // also being told to close, which would auto-close the app's last two windows at once.
     vi.useFakeTimers();
-    countWindows.mockReturnValue(2);
+    const total = 2;
+    countWindows.mockImplementation(() => total - markedIds.size);
 
     const firstResponse = handler(1, 'emptied-by-removal');
     const secondResponse = handler(2, 'emptied-by-removal');
@@ -82,7 +89,8 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     // window is open — and counted — for all of that. Forgetting it the moment its close is handed
     // out would tell the second window it is one of two, closing the app's last two windows at once.
     vi.useFakeTimers();
-    countWindows.mockReturnValue(2);
+    const total = 2;
+    countWindows.mockImplementation(() => total - markedIds.size);
 
     expect(handler(1, 'emptied-by-removal')).toEqual({ action: 'closing' });
     vi.runAllTimers();
