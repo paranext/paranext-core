@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   createTargetShardResolver,
   createTargetWindowShardResolver,
+  resolveShardForWindow,
 } from '@main/services/target-shard-resolver.util';
 import type { ServiceShardIndex } from '@main/services/service-shard-index';
 
@@ -200,5 +201,49 @@ describe('target shard resolver that reports which window answered', () => {
     mocks.getTargetWindowId.mockReturnValue(undefined);
 
     await expect(resolve()).rejects.toThrow('No windows available to route TestService call');
+  });
+});
+
+describe('resolveShardForWindow', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('answers with the shard already indexed for the named window', async () => {
+    const index = shardIndex([1, 2], async (windowId) => ({ servedBy: windowId }));
+
+    expect(await resolveShardForWindow('TestService', index, 2)).toEqual({ servedBy: 2 });
+  });
+
+  test('waits for a late shard announcement for the named window and resolves when it lands', async () => {
+    // Same registration skew a routed call waits out, but for a window named up front rather than
+    // whichever one routing currently picks
+    const { index, announceShard } = shardIndexAwaitingAnnouncement(async (windowId) => ({
+      servedBy: windowId,
+    }));
+
+    const resolving = resolveShardForWindow('TestService', index, 3);
+    announceShard(3);
+
+    expect(await resolving).toEqual({ servedBy: 3 });
+  });
+
+  test('throws when the named window never announces a shard within the grace period', async () => {
+    vi.useFakeTimers();
+    try {
+      const index = shardIndex([], async () => undefined);
+
+      const resolving = resolveShardForWindow('TestService', index, 5);
+      // Take hold of the rejection before advancing the clock, same reasoning as the equivalent
+      // createTargetShardResolver test above: an unattached rejection during the timer run is
+      // reported as an unhandled rejection against the whole file.
+      resolving.catch(() => undefined);
+
+      await vi.runAllTimersAsync();
+
+      await expect(resolving).rejects.toThrow('is not available');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
