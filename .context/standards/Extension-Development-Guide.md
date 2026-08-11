@@ -251,11 +251,11 @@ When opening a WebView via `papi.webViews.openWebView()`, you can specify how it
 
 - `'tab'` (default): Opens as a tab within the current dock panel.
 - `'panel'`: Opens as a panel adjacent to the active tab (specify `direction` to control placement: `'left'`, `'right'`, `'bottom'`, `'top'`, etc.).
-- `'float'`: Opens as a floating window (experimental; can specify `floatSize` and `position`: `'cascade'` or `'center'`).
+- `'float'`: Opens as a floating window; can specify `floatSize` and `position`: `'cascade'` or `'center'`.
 - `'window'` **(experimental)**: Opens in its own application window. In Simple mode—which is single-window by design—this degrades to `'tab'`.
 - `'replace-tab'`: Replaces an existing tab (requires `targetTabId`).
 
-Additionally, `targetWindowId` (experimental) lets you open a WebView into a specific named window instead of the one the user is working in. This is a runtime-only handle; window IDs are reused across sessions, so never persist one. Retrieve the current window's ID via `platform.getFocusedWindowId`.
+Additionally, `targetWindowId` **(experimental)** lets you open a WebView into a specific named window instead of the one the user is working in. Applies to `'tab'`, `'panel'`, and `'float'` layouts only; combining it with `'window'` is an error. The open fails if no such window exists — it never falls back to another window. This is a runtime-only handle; window IDs are reused across sessions, so never persist one. Retrieve the current window's ID via `platform.getFocusedWindowId`.
 
 ### Styling Requirements
 
