@@ -103,6 +103,16 @@
             "statusMessage": "Checking the app is running..."
           }
         ]
+      },
+      {
+        "matcher": "mcp__atlassian__(create|edit)JiraIssue",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/jira-create-context.py"]
+          }
+        ]
       }
     ],
     "PostToolUse": [

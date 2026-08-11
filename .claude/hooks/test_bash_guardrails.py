@@ -36,6 +36,11 @@ ALLOW = [
     # starter. This shape blocked a real command during review.
     "for c in 'npm start && npm run start:data'; do echo \"$c\" | wc -c; done",
     "echo 'run npm start | tail to see logs'",
+    # A starter named inside a quoted argument is not a starter being run.
+    # This exact shape blocked a grep during review.
+    r"""grep -nE '^\+.*(refresh\.sh|npm start).*\|' /tmp/x.diff | cut -c1-190""",
+    "grep -c 'npm start' notes.md | wc -l",
+    "echo 'see .erb/scripts/refresh.sh | tail' > /tmp/note.txt",
     "npm run startup-waterfall | head -40",   # not a starter
     "npm test | tail -20",
     "npm run build && npm run lint",

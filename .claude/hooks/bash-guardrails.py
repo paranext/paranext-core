@@ -11,35 +11,84 @@ refusal path here must use exit 2.
 
 import json
 import re
+import shlex
 import sys
 
-# Commands that spawn a persistent child. Piping one keeps the pipe open
-# forever, so the shell never returns.
-# `start:data` and `start:renderer` count; `startup-waterfall` does not.
-STARTERS = (
-    r"(?:\./)?(?:\.erb/scripts/)?refresh\.sh"
-    r"|npm\s+start\b"
-    r"|npm\s+run\s+(?:start|dev)(?:[:-][\w:-]+)?\b"
-)
+SEPARATORS = {";", "&&", "||", "&", "\n"}
 
-# Anything that could begin a new command, used to anchor "command position".
+# Anything that could begin a new command, used to anchor "command position"
+# in the checks that still work on raw text.
 CMD_START = r"(?:^|[;&|]\s*|&&\s*|\|\|\s*|\(\s*|\bthen\s+|\bdo\s+)"
+
+
+def segments(cmd):
+    """Split a command line into pipeline segments of shell tokens.
+
+    Uses shlex rather than a regex because every false positive this check has
+    produced came from reading shell text without understanding quoting: a `|`
+    inside a quoted regex looked like a pipe, and `||` looked like one too.
+    shlex keeps quoted content inside a single token and emits real operators
+    separately.
+
+    Returns None when the line cannot be tokenized (unbalanced quotes, shell
+    syntax shlex does not model), which callers treat as "do not judge".
+    """
+    lexer = shlex.shlex(cmd, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        tokens = list(lexer)
+    except ValueError:
+        return None
+    out, current = [], []
+    for token in tokens:
+        if token in SEPARATORS:
+            out.append(current)
+            current = []
+        else:
+            current.append(token)
+    out.append(current)
+    return out
+
+
+def starter_name(tokens):
+    """The long-running starter a segment invokes, or None.
+
+    Matches only at the head of the segment, so a starter named inside a quoted
+    argument is not mistaken for one being run. `start:data` counts;
+    `startup-waterfall` does not.
+    """
+    words = [t for t in tokens if "=" not in t.split("/")[0] or t.startswith("/")]
+    if not words:
+        return None
+    head = words[0]
+    if head.split("/")[-1] == "refresh.sh":
+        return head
+    if head != "npm" or len(words) < 2:
+        return None
+    if words[1] == "start":
+        return "npm start"
+    if words[1] == "run" and len(words) > 2:
+        script = words[2]
+        base = re.split(r"[:-]", script)[0]
+        if base in ("start", "dev"):
+            return f"npm run {script}"
+    return None
 
 
 def check_pipe_starters(cmd):
     """`refresh.sh | tail` hangs forever — the persistent child holds the pipe.
 
-    Only a pipe in the starter's OWN segment counts. Scanning the raw command
-    string instead reports a pipe belonging to an unrelated later command, and
-    treats the `|` characters in `||` as a pipe.
+    Only a `|` operator in the starter's own segment counts, and only when the
+    starter is the command being run rather than a word inside an argument.
     """
-    # Split into top-level segments. After splitting on `||`, any surviving `|`
-    # is a real pipe.
-    for segment in re.split(r"\|\||&&|[;\n]", cmd):
-        m = re.search(CMD_START + r"(" + STARTERS + r")", segment)
-        if m and "|" in segment[m.end():]:
+    parts = segments(cmd)
+    if parts is None:
+        return None
+    for tokens in parts:
+        name = starter_name(tokens)
+        if name and "|" in tokens:
             return (
-                f"Blocked: piping a long-running starter ({m.group(1).strip()}).\n"
+                f"Blocked: piping a long-running starter ({name}).\n"
                 "The child process holds the pipe open and the command never returns "
                 "(this cost 4 hours once).\n"
                 "Redirect to a file instead:  npm start > /tmp/start.log 2>&1"
