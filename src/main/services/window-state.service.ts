@@ -145,6 +145,21 @@ export function getWindows(): BrowserWindow[] {
   return trackedWindows.filter(({ window }) => !window.isDestroyed()).map(({ window }) => window);
 }
 
+/**
+ * How many tracked windows are still open and not already closing.
+ *
+ * The last-window decision ("does closing this window exit the application?") must not count a
+ * window whose close has already begun: a window stays tracked until Electron reports it gone,
+ * which is long after its close was decided, and a decision made in that gap would count a dying
+ * window as a reason to let another one die too. Counting from the same closing set that every
+ * close path marks keeps that decision on one source of truth.
+ */
+export function countWindowsNotClosing(): number {
+  return trackedWindows.filter(
+    ({ windowId, window }) => !window.isDestroyed() && !closingWindowIds.has(windowId),
+  ).length;
+}
+
 /** Whether a window's renderer has registered its window service, so routing to it can succeed */
 export function isWindowReady(windowId: number): boolean {
   return readyWindowIds.has(windowId);
