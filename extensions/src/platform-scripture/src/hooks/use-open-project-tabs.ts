@@ -132,6 +132,7 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
           await new Promise((resolve) => {
             setTimeout(resolve, seedDelayMs);
           });
+          if (cancelled) return;
         }
       }
     };
