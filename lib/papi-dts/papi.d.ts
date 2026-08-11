@@ -900,6 +900,18 @@ declare module 'shared/models/web-view.model' {
      * looking at.
      */
     bringToFront?: boolean;
+    /**
+     * Id of the application window to open the web view in, instead of the window the user is working
+     * in. Applies to `tab`, `panel`, and `float` layouts; combining it with a `'window'` layout
+     * (which asks for a NEW window) is an error. The open fails if no such window is serving web
+     * views — a caller that names a window wants that window, not a guess.
+     *
+     * This is a runtime-only handle: window ids are reused across sessions, so never persist one. Get
+     * the current window's id via the `platform.getFocusedWindowId` command.
+     *
+     * @experimental This option is unstable and may change or disappear without notice
+     */
+    targetWindowId?: number;
   };
   /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
   export type GetWebViewOptions = OpenWebViewOptions;
@@ -3815,8 +3827,19 @@ declare module 'shared/models/docking-framework.model' {
     /** The ID of the tab to replace */
     targetTabId: string;
   }
+  /**
+   * Information about opening a tab in its own application window.
+   *
+   * In Simple mode — which is single-window by design — this degrades to `'tab'`: the web view opens
+   * as a normal tab in the window the user is working in.
+   *
+   * @experimental This type is unstable and may change or disappear without notice
+   */
+  export interface WindowLayout {
+    type: 'window';
+  }
   /** Information about how a Platform.Bible tab fits into the dock layout */
-  export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
+  export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout | WindowLayout;
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
   /**
