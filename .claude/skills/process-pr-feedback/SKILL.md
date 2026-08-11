@@ -63,6 +63,7 @@ Every run writes one packet, and **never reuses another run's**:
   04-fix-reports/        P3   one report per fix
   05-self-review.md      P4   /code-review findings + adjudication
   06-verification.md     P5   gate battery results, e2e, live verification
+  06-evidence/           P5   optional screenshots from live verification (embed candidates)
   07-replies.d/          P6   one file per reply-drafter agent (concurrent writes)
   07-replies.md          P6   the assembled drafts — orchestrator concatenates 07-replies.d/
   g2-approval.md         G2   the user's approval, verbatim and dated — what P7 is allowed to do
@@ -623,6 +624,12 @@ The tooling for that, all of it already in this repo:
 | Call PAPI directly to check a command or provider | the `papi-client` skill |
 | Run a filtered test set with structured output | the `test-runner` skill |
 
+When live verification shows something visual — the symptom, the fix behaving, a
+before/after — save the screenshots into the packet under `06-evidence/`. They are
+candidates for inline embedding in the replies (P6 step 3); a run that skips them loses
+nothing but the garnish. "Every green result is a locally-run claim" is a real reviewer
+complaint this answers: evidence the reviewer can see beats evidence the reply asserts.
+
 ### P6 — Integrate
 
 **In:** everything above.
@@ -657,6 +664,15 @@ The tooling for that, all of it already in this repo:
    (`pulls/<pr>/comments/<id>/replies`), or "issue comment on #<pr>" when no inline thread
    exists. Verify each id against the live API; a thread id from an earlier document may be
    stale.
+
+   **Optional evidence embeds.** Where P5 saved screenshots under `06-evidence/`, a draft may
+   embed them: upload with the `pr-attach` skill (`.claude/skills/pr-attach/`) and paste the
+   returned `![name](https://github.com/user-attachments/assets/…)` lines into the draft body.
+   Fail-soft is the rule — pr-attach exiting 3 means draft WITHOUT images and continue; never
+   block or retry-loop over a screenshot. Two facts from that skill matter here: a fresh
+   upload 404s anonymously until the draft is actually posted (verify pending assets with an
+   authenticated fetch, not a plain curl), and the embeds are part of the body G2 inspects —
+   the approver sees the exact markdown, image URLs included.
 4. **Record the residue.** Declined and deferred items go somewhere durable. In order of
    preference:
    1. an existing, **not-yet-started** ticket the user names — cite its key in the reply;
@@ -683,8 +699,9 @@ Present and stop. Nothing is pushed and nothing is posted in this turn. Present:
 - a per-item table: item → disposition → fix → commit SHA → branch,
 - the P5 gate results, including the e2e outcome and the live verification,
 - the restack battery results,
-- **the full reply texts**, flagging every one that is confrontational, that refutes the
-  reviewer, that asks for something, or that retracts something previously posted,
+- **the full reply texts** — including any `pr-attach` image embeds exactly as they will
+  post — flagging every one that is confrontational, that refutes the reviewer, that asks
+  for something, or that retracts something previously posted,
 - anything a reviewer is owed a correction on.
 
 Most of that is evidence, not a question, and it belongs under **"No decision needed — FYI"**.
