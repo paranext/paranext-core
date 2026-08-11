@@ -587,6 +587,27 @@ describe('web view service router', () => {
       expect(focused.openWebView).toHaveBeenCalled();
     });
 
+    test('refuses when power mode has no window creator wired up', async () => {
+      // `windowCreator` is module-level state that outlives any one test — every other test in
+      // this describe block sets it explicitly before opening — so seeing the state a router has
+      // before anything ever wires a creator needs a module instance of its own, not reliance on
+      // running before whichever test would otherwise set it first.
+      vi.resetModules();
+      const freshRouterModule = await import('@main/services/web-view.service-router');
+      const focused = windowShard([]);
+      withWindows({ 1: focused });
+      const router = await getRegisteredRouter<WebViewServiceType>(
+        mocks.networkObjectSet,
+        freshRouterModule.startWebViewServiceRouter,
+      );
+
+      await expect(router.openWebView('someType', { type: 'window' })).rejects.toThrow(
+        'not wired up',
+      );
+
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
     test('closes the created window when its shard never appears', async () => {
       vi.useFakeTimers();
       try {
@@ -612,6 +633,35 @@ describe('web view service router', () => {
       }
     });
 
+    test('surfaces the original failure rather than a failed cleanup close, closing only once', async () => {
+      // The shard-never-appears failure is the one the caller needs to see; a close that also
+      // fails on the way out must not steal that error out from under it.
+      vi.useFakeTimers();
+      try {
+        const focused = windowShard([]);
+        withWindows({ 1: focused });
+        const creator = {
+          createPendingContentWindow: vi.fn(async () => 99),
+          closeWindow: vi.fn(() => {
+            throw new Error('window already gone');
+          }),
+        };
+        setWebViewWindowCreator(creator);
+        const router = await getRouter();
+
+        const opening = router.openWebView('someType', { type: 'window' });
+        opening.catch(() => undefined);
+
+        await vi.runAllTimersAsync();
+
+        await expect(opening).rejects.toThrow('is not available');
+        expect(creator.closeWindow).toHaveBeenCalledTimes(1);
+        expect(creator.closeWindow).toHaveBeenCalledWith(99);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     test('closes the created window and answers nothing when the provider declines', async () => {
       const focused = windowShard([]);
       const created = windowShard([]);
@@ -624,6 +674,27 @@ describe('web view service router', () => {
       const openedId = await router.openWebView('someType', { type: 'window' });
 
       expect(openedId).toBeUndefined();
+      expect(creator.closeWindow).toHaveBeenCalledWith(7);
+    });
+
+    test('still answers nothing for a decline even when the cleanup close itself fails, closing only once', async () => {
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      created.openWebView.mockResolvedValue(undefined);
+      withWindows({ 1: focused, 7: created });
+      const creator = {
+        createPendingContentWindow: vi.fn(async () => 7),
+        closeWindow: vi.fn(() => {
+          throw new Error('window already gone');
+        }),
+      };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      const openedId = await router.openWebView('someType', { type: 'window' });
+
+      expect(openedId).toBeUndefined();
+      expect(creator.closeWindow).toHaveBeenCalledTimes(1);
       expect(creator.closeWindow).toHaveBeenCalledWith(7);
     });
 

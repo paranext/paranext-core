@@ -389,24 +389,41 @@ async function openWebViewInNewWindow(
 
   if (!windowCreator)
     throw new Error(`Cannot open ${webViewType} in a new window: window creation is not wired up`);
-  const windowId = await windowCreator.createPendingContentWindow();
+  const creator = windowCreator;
+  const windowId = await creator.createPendingContentWindow();
+
+  // Closes the window this call created, at most once, and never lets a failure to close replace
+  // the reason the window is being closed in the first place — a window that fails to close is a
+  // leak to warn about, not grounds to hide why the open itself did not succeed.
+  const closeAbandonedWindow = () => {
+    try {
+      creator.closeWindow(windowId);
+    } catch (closeError) {
+      logger.warn(
+        `Could not close window ${windowId} after its new-window open did not succeed: ${getErrorMessage(closeError)}`,
+      );
+    }
+  };
+
+  let openedWebViewId: WebViewId | undefined;
   try {
     const shard = await resolveShardForWindow(
       NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
       webViewShards,
       windowId,
     );
-    const openedWebViewId = await shard.openWebView(webViewType, { type: 'tab' }, options);
-    if (openedWebViewId === undefined) {
-      // The provider chose not to create the web view — the established "it did not happen"
-      // answer. The window it would have lived in has no reason to exist.
-      windowCreator.closeWindow(windowId);
-    }
-    return openedWebViewId;
+    openedWebViewId = await shard.openWebView(webViewType, { type: 'tab' }, options);
   } catch (e) {
-    windowCreator.closeWindow(windowId);
+    closeAbandonedWindow();
     throw e;
   }
+
+  if (openedWebViewId === undefined) {
+    // The provider chose not to create the web view — the established "it did not happen"
+    // answer. The window it would have lived in has no reason to exist.
+    closeAbandonedWindow();
+  }
+  return openedWebViewId;
 }
 
 // Router methods that route to the focused window's WebView service shard
