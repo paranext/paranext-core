@@ -483,6 +483,17 @@ describe('window layout persistence service', () => {
     });
   });
 
+  test('clearWindowPendingContent un-marks a window so it answers as if never marked', async () => {
+    const service = await startService();
+    await service.loadWindowLayouts();
+    service.trackNewWindow(86);
+    service.markWindowPendingContent(86);
+
+    service.clearWindowPendingContent(86);
+
+    await expect(registeredHandler('windowLayout:get')(86)).resolves.toEqual({ kind: 'empty' });
+  });
+
   test('marking an untracked window pending content does not change its (empty) answer', async () => {
     const service = await startService();
     await service.loadWindowLayouts();
