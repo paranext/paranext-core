@@ -78,9 +78,31 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
       // locally-installed resources that don't implement USJ (e.g. VULGP83, TNN, TND, HBK)
       // are found and their installed flags are correctly set to true.
       let isChanged = false;
-      const localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+      let localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platform.base'],
       });
+      // Wait for the C# Paratext PDPF to register all resource projects before syncing
+      // installed flags. Without this retry, a dialog opened early (before the factory has
+      // finished registering) would see no isEditable=false projects and leave resources
+      // like TNN/TND/HBK with installed=false, causing them to appear in "Available to
+      // Download" instead of "Installed". Mirrors the same retry in getLocalNonDblResources.
+      const MAX_RETRIES = 5;
+      for (
+        let attempt = 0;
+        attempt < MAX_RETRIES && !localProjectMetadata.some((m) => m.isEditable === false);
+        attempt++
+      ) {
+        // eslint-disable-next-line no-await-in-loop
+        await wait(500);
+        // eslint-disable-next-line no-await-in-loop
+        localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+          includeProjectInterfaces: ['platform.base'],
+        });
+      }
+      logger.warn(
+        `getCachedResources: ${localProjectMetadata.length} total projects, ` +
+          `${localProjectMetadata.filter((m) => m.isEditable === false).length} with isEditable=false`,
+      );
       const newCachedResources = cachedResources.map((resource) => {
         const matchingLocalProject = localProjectMetadata.find((localProject) =>
           // If the `projectId` is defined then tries to use that
@@ -117,6 +139,9 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
             JSON.stringify(cachedResources),
           );
       }
+      logger.warn(
+        `getCachedResources: ${cachedResources.filter((r) => r.installed).length} installed resources (${cachedResources.length} total in catalog)`,
+      );
     } catch (error: unknown) {
       logger.warn(`Error getting cached resources: ${getErrorMessage(error)}`);
     }
