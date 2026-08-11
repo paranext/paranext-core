@@ -75,6 +75,20 @@ const stubRects = (caretTop: number) => {
   });
 };
 
+/**
+ * Geometry for an editor sitting under a `display: none` ancestor: every rect in such a subtree
+ * reads all-zero, paragraphs included. Distinct from the hidden-VIEW case the mocked
+ * `useViewVisibility` models — that one is the whole tab; this one is an ancestor inside a tab that
+ * is still visible, which is what the empty-chapter view's `tw:hidden` does.
+ */
+const stubNoLayoutRects = () => {
+  rectReadCount = 0;
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(() => {
+    rectReadCount += 1;
+    return new DOMRect(0, 0, 0, 0);
+  });
+};
+
 // A factory, not a shared element: React bails out of re-rendering a subtree when the new element
 // is referentially identical to the previous one, so a `rerender` with the same element would skip
 // the render entirely — and with it the visibility flip the hidden-view tests depend on.
@@ -397,8 +411,34 @@ describe('CharacterMarkerBarOverlay', () => {
     act(() => {
       resizeCallbacks.forEach((callback) => callback([], stubResizeObserverInstance));
     });
+    // The resize path is rAF-coalesced like scroll and selection, so the measurement lands on the
+    // next frame rather than inside the observer callback.
+    await flushAnimationFrame();
 
     expect(barContainer().style.top).toBe('220px');
+  });
+
+  it('does not latch a position measured while an ancestor gives the editor no layout', async () => {
+    // The empty-chapter view HIDES the editor subtree with `tw:hidden` rather than unmounting it.
+    // `useViewVisibility` watches this iframe's own visibility, not an inner subtree, so it still
+    // reports visible and the overlay's hidden-view deferral does NOT cover this case — recompute
+    // runs against all-zero rects. The damage is not the garbage top, which is 0 anyway; it is that
+    // positioning sets `hasPositionedRef`, and the no-caret branch returns early once that is set.
+    // Latching here would make the first-paragraph anchor below unreachable, leaving the bar at the
+    // top of the editor until the user's first click.
+    stubNoLayoutRects();
+    renderOverlay();
+
+    // The chapter fills in and the subtree regains layout. Nothing schedules this explicitly:
+    // `display: none` collapses the observed anchor to a 0x0 box, so regaining layout is itself a
+    // resize.
+    stubRects(140);
+    act(() => {
+      resizeCallbacks.forEach((callback) => callback([], stubResizeObserverInstance));
+    });
+    await flushAnimationFrame();
+
+    expect(barContainer().style.top).toBe('140px');
   });
 
   it('offsets the bar so the trigger icon lines up with the line, not the line box top', () => {
@@ -634,6 +674,24 @@ describe('CharacterMarkerBarOverlay — empty bar slot (Power mode)', () => {
 
     expect(screen.getByText('The LORD is my shepherd')).toBe(editorBefore);
     expect(screen.getByTestId('character-marker-bar-container')).toBeInTheDocument();
+  });
+
+  it('positions the bar as soon as the slot fills, without waiting for an incidental resize', async () => {
+    // A live Power -> Simple switch fills the slot with no other signal to act on: the mount
+    // effect's dependencies are deliberately identity-stable, the selection/visibility/font effects
+    // do not observe the slot, and an absolutely-positioned bar does not resize the anchor the
+    // ResizeObserver watches. Falsifiable: with nothing keyed on the slot, the bar keeps the `0px`
+    // it was born with, because the only recompute that ever ran was the empty-slot mount's.
+    stubRects(120);
+    const { rerender } = render(emptyOverlayTree());
+
+    stubRects(320);
+    await act(async () => {
+      rerender(overlayTree());
+    });
+    await flushAnimationFrame();
+
+    expect(barContainer().style.top).toBe('320px');
   });
 
   it('keeps the editor subtree mounted when the bar slot empties', async () => {

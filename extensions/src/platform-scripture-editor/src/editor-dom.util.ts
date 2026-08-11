@@ -15,6 +15,17 @@ const EDITOR_FIRST_LOAD_POLL_TIME = 100;
 const EDITOR_MAX_POLL_INTERVALS = 100; // Hopefully the editor will load in 10 seconds
 
 /**
+ * The USFM paragraph elements the editor renders.
+ *
+ * Shared rather than restated: both gutter overlays decide what counts as a paragraph, and they
+ * have to agree — `ParagraphMarkerTooltipOverlay` picks the paragraph to describe, and
+ * `CharacterMarkerBarOverlay` picks the one to anchor and measure against. Two copies of the
+ * selector could drift, and a mismatch would leave the bar tracking a different element than the
+ * tooltip names.
+ */
+export const EDITOR_PARA_SELECTOR = '.para[class*="usfm_"]';
+
+/**
  * Run something on the editor's first load. This is a workaround until we can listen for the editor
  * to finish loading.
  *

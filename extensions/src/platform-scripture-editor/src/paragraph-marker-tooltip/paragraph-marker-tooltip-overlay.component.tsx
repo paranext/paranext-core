@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { cn, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
-import { findScrollContainer } from '../editor-dom.util';
+import { EDITOR_PARA_SELECTOR, findScrollContainer } from '../editor-dom.util';
 import { blockMarkerToBlockNames } from '../platform-scripture-editor.utils';
 import { computePosition, extractMarker, TooltipPosition } from './paragraph-marker-tooltip.utils';
 
@@ -43,7 +43,7 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
   const handleMouseOver = useCallback((e: React.MouseEvent) => {
     // e.target is EventTarget; cast to Element for DOM traversal via .closest()
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const para = (e.target as Element).closest<HTMLElement>('.para[class*="usfm_"]');
+    const para = (e.target as Element).closest<HTMLElement>(EDITOR_PARA_SELECTOR);
     if (para === currentParaRef.current) return; // same para, skip re-render
     currentParaRef.current = para ?? undefined;
     const anchor = positionAnchorRef.current;
@@ -66,11 +66,11 @@ export function ParagraphMarkerTooltipOverlay({ children }: Props) {
     // the stale-tooltip case that onMouseOver alone misses when the cursor stops moving.
     // e.target / e.relatedTarget are EventTarget; cast to Element for DOM traversal via .closest()
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const leavingPara = (e.target as Element).closest<HTMLElement>('.para[class*="usfm_"]');
+    const leavingPara = (e.target as Element).closest<HTMLElement>(EDITOR_PARA_SELECTOR);
     // e.relatedTarget is EventTarget; cast to Element for DOM traversal via .closest()
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const enteringPara = (e.relatedTarget as Element | null)?.closest<HTMLElement>(
-      '.para[class*="usfm_"]',
+      EDITOR_PARA_SELECTOR,
     );
     if (leavingPara && !enteringPara) {
       currentParaRef.current = undefined;
