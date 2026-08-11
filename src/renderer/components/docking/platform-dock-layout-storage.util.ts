@@ -1082,11 +1082,19 @@ export function addTabToDock(
 
       break;
 
-    default:
-      // Type assert here because TypeScript thinks this layout is `never` because the switch has
-      // covered all its options (if JS were statically typed, this `default` would never hit)
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      throw new LogError(`Unknown layoutType: '${(updatedLayout as Layout).type}'`);
+    case 'window':
+      // The main-process router intercepts window layouts and rewrites them as tab opens routed
+      // to the window it created, so one arriving here means the routing contract broke
+      throw new LogError(
+        `addTabToDock received a 'window' layout; these are handled by the main process`,
+      );
+
+    default: {
+      // Compile-time exhaustiveness: adding a Layout member without a case above makes this
+      // assignment a type error instead of a runtime throw
+      const unhandledLayout: never = updatedLayout;
+      throw new LogError(`Unknown layout: ${JSON.stringify(unhandledLayout)}`);
+    }
   }
 
   if (shouldBringToFront && !didFocusTab)
