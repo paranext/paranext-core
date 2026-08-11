@@ -200,6 +200,8 @@ type HarnessConfig = {
   searchTerm?: string;
   /** Initial mode. */
   activeMode?: 'find' | 'replace';
+  /** Hide the find/replace toggle entirely (simple interface mode — find-only). */
+  hideModeToggle?: boolean;
   /** Initial scope. */
   scope?: Scope;
   /** Initial selected books for the `selectedBooks` scope. */
@@ -442,6 +444,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
       activeMode={activeMode}
+      hideModeToggle={config.hideModeToggle}
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
       isReplacing={false}
@@ -510,6 +513,14 @@ export const Populated: Story = {
  */
 export const ReplaceMode: Story = {
   decorators: [createDecorator({ activeMode: 'replace' })],
+};
+
+/**
+ * Simple interface mode: the find/replace toggle is hidden and the panel is find-only. Replace is a
+ * power-mode-only capability, so it is not offered here.
+ */
+export const SimpleMode: Story = {
+  decorators: [createDecorator({ hideModeToggle: true })],
 };
 
 /** An in-progress search — the progress bar and Cancel button show while results stream in. */

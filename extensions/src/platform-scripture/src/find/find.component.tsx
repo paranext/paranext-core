@@ -164,6 +164,12 @@ export type FindProps = {
   // Mode + replace state
   /** Whether the UI is in find or replace mode. */
   activeMode: 'find' | 'replace';
+  /**
+   * When true, hide the find/replace toggle entirely (e.g. in simple interface mode, where replace
+   * is not offered). The panel then shows only the find UI. Callers must also keep `activeMode` at
+   * `'find'` while this is set so no replace UI is rendered.
+   */
+  hideModeToggle?: boolean;
   /** The replacement term entered in replace mode. */
   replaceTerm: string;
   /** Whether to preserve the case of the matched text when replacing. */
@@ -284,6 +290,7 @@ export function Find({
   wordRestriction,
   isRegexAllowed,
   activeMode,
+  hideModeToggle = false,
   replaceTerm,
   preserveCase,
   isReplacing,
@@ -523,28 +530,31 @@ export function Find({
     <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
-        {/* Find/Replace mode toggle */}
-        <ToggleGroup
-          type="single"
-          value={activeMode}
-          onValueChange={(value) => {
-            if (value === 'find' || value === 'replace') onToggleMode(value);
-          }}
-          className="tw:w-fit tw:rounded-lg tw:bg-muted tw:p-1"
-        >
-          <ToggleGroupItem
-            value="find"
-            className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+        {/* Find/Replace mode toggle — hidden in simple interface mode, where replace is not offered
+            and the panel is find-only. */}
+        {!hideModeToggle && (
+          <ToggleGroup
+            type="single"
+            value={activeMode}
+            onValueChange={(value) => {
+              if (value === 'find' || value === 'replace') onToggleMode(value);
+            }}
+            className="tw:w-fit tw:rounded-lg tw:bg-muted tw:p-1"
           >
-            {localizedStrings['%webView_find_findTab%']}
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="replace"
-            className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
-          >
-            {localizedStrings['%webView_find_replaceTab%']}
-          </ToggleGroupItem>
-        </ToggleGroup>
+            <ToggleGroupItem
+              value="find"
+              className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+            >
+              {localizedStrings['%webView_find_findTab%']}
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="replace"
+              className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+            >
+              {localizedStrings['%webView_find_replaceTab%']}
+            </ToggleGroupItem>
+          </ToggleGroup>
+        )}
 
         {/* Find input row */}
         <div className="tw:flex tw:gap-2 tw:flex-wrap">

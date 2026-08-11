@@ -7,6 +7,7 @@ import {
   useProjectData,
   useProjectDataProvider,
   useProjectSetting,
+  useSetting,
   useWebViewController,
 } from '@papi/frontend/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
@@ -37,6 +38,7 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Find, FIND_LOCALIZED_STRING_KEYS } from './find/find.component';
+import { isSimpleInterfaceMode } from './find/find.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
@@ -205,6 +207,19 @@ global.webViewComponent = function FindWebView({
   const [isRegexAllowed, setIsRegexAllowed] = useWebViewState<boolean>('findIsRegexAllowed', false);
 
   const [activeMode, setActiveMode] = useWebViewState<'find' | 'replace'>('findActiveMode', 'find');
+  // Replace is a power-mode-only capability. In simple interface mode we hide the find/replace
+  // toggle and keep the panel in find mode. Defaults to 'simple' while the setting loads, so the
+  // toggle stays hidden until we know the mode is 'power' (fail-safe — see isSimpleInterfaceMode).
+  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
+  const isSimpleMode = useMemo(
+    () => isSimpleInterfaceMode(interfaceModePossiblyError),
+    [interfaceModePossiblyError],
+  );
+  // If the user was left in replace mode (persisted from power mode) and the interface switches to
+  // simple, coerce back to find so the internal replace-gating effects below also see find mode.
+  useEffect(() => {
+    if (isSimpleMode && activeMode === 'replace') setActiveMode('find');
+  }, [isSimpleMode, activeMode, setActiveMode]);
   const [replaceTerm, setReplaceTerm] = useWebViewState<string>('findReplaceTerm', '');
   const [preserveCase, setPreserveCase] = useWebViewState<boolean>('findPreserveCase', false);
   const [storedPreviewOptions, setStoredPreviewOptions] = useWebViewState<PreviewOptions>(
@@ -1426,7 +1441,8 @@ global.webViewComponent = function FindWebView({
       searchTextType={searchTextType}
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
-      activeMode={activeMode}
+      activeMode={isSimpleMode ? 'find' : activeMode}
+      hideModeToggle={isSimpleMode}
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
       previewOptions={previewOptions}
