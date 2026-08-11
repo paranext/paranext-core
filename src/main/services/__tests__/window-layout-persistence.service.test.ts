@@ -465,6 +465,69 @@ describe('window layout persistence service', () => {
     expect(writtenStructure().windows).toEqual([{ layout: pushed, isMain: true }]);
   });
 
+  test('a window marked pending content answers pending-content until its first layout push', async () => {
+    const service = await startService();
+    await service.loadWindowLayouts();
+    service.trackNewWindow(81);
+
+    service.markWindowPendingContent(81);
+    await expect(registeredHandler('windowLayout:get')(81)).resolves.toEqual({
+      kind: 'pending-content',
+    });
+
+    const pushed = layoutWithTab('routed');
+    await registeredHandler('windowLayout:save')(81, pushed);
+    await expect(registeredHandler('windowLayout:get')(81)).resolves.toEqual({
+      kind: 'entry',
+      layout: pushed,
+    });
+  });
+
+  test('marking an untracked window pending content does not change its (empty) answer', async () => {
+    const service = await startService();
+    await service.loadWindowLayouts();
+
+    service.markWindowPendingContent(999);
+
+    await expect(registeredHandler('windowLayout:get')(999)).resolves.toEqual({ kind: 'empty' });
+  });
+
+  test('a tracked window not marked pending content is unaffected by another window’s mark', async () => {
+    const service = await startService();
+    await service.loadWindowLayouts();
+    service.trackNewWindow(82);
+    service.trackNewWindow(83);
+
+    service.markWindowPendingContent(82);
+
+    await expect(registeredHandler('windowLayout:get')(83)).resolves.toEqual({ kind: 'empty' });
+  });
+
+  test('removing a pending-content window clears its mark so a later window cannot inherit it', async () => {
+    const service = await startService();
+    await service.loadWindowLayouts();
+    service.trackNewWindow(84);
+    service.markWindowPendingContent(84);
+
+    service.handleWindowRemoved(84);
+    // A later window that happens to reuse the same runtime id must not inherit the stale mark
+    service.trackNewWindow(84);
+
+    await expect(registeredHandler('windowLayout:get')(84)).resolves.toEqual({ kind: 'empty' });
+  });
+
+  test('reloading window layouts clears pending-content marks left over from the previous session', async () => {
+    const service = await startService();
+    await service.loadWindowLayouts();
+    service.trackNewWindow(85);
+    service.markWindowPendingContent(85);
+
+    await service.loadWindowLayouts();
+    service.trackNewWindow(85);
+
+    await expect(registeredHandler('windowLayout:get')(85)).resolves.toEqual({ kind: 'empty' });
+  });
+
   test('a mid-session window is appended after the restored entries when written', async () => {
     const service = await startService();
     await loadAndAssignAll(

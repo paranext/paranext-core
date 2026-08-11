@@ -1474,6 +1474,37 @@ describe('loadLayout restores this window’s layout from the main process', () 
     // here holds the anchor tab; the supplement then merges onto that anchor as usual)
     expect(tabIdsIn(loaded)).toContain('anchor-tab-w2');
   });
+
+  test('a window created for pending content starts truly empty', async () => {
+    respondToGetLayout({ kind: 'pending-content' });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(tabIdsIn(loaded)).toEqual([]);
+  });
+
+  test('a window created for pending content skips the default-layout supplement even when its flag is enabled', async () => {
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : true,
+    );
+    respondToGetLayout({ kind: 'pending-content' });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(tabIdsIn(loaded)).toEqual([]);
+  });
+
+  test('a window created for pending content is not held back from pushing its layout', async () => {
+    respondToGetLayout({ kind: 'pending-content' });
+
+    // Unlike the every-attempt-failed fallback (which holds pushes because the dock does not hold
+    // the user's real saved layout), a pending-content answer is a genuine answer: the dock's
+    // (empty) contents are the real state to persist once this window's content arrives.
+    const { dockLayout } = await registerWindow(layoutWithAnchor());
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('routed-in'), undefined, undefined);
+
+    expect(layoutPushes()).toHaveLength(1);
+  });
 });
 
 describe('loadLayout when the saved-layout request fails', () => {
