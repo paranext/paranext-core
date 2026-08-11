@@ -1126,6 +1126,10 @@ async function main() {
       // failing against a renderer that is already gone.
       cancelPendingBoundsCapture();
       handleWindowRemoved(windowId);
+      // A window told to close counts as gone from the moment it is told, and stops counting for
+      // real only here — its close runs the async work above, and it is open and counted for all of
+      // it. Told or not, every window passes through here, and untracked ids are ignored.
+      handleWindowEmptied.handleWindowGone(windowId);
       if (!isAppGoingDown) await writeNow(getWindows().map((window) => window.id));
 
       try {
