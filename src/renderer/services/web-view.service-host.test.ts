@@ -12,20 +12,28 @@ import { serialize } from 'platform-bible-utils';
 // which process it is running in
 globalThis.processType = ProcessType.Renderer;
 
-const ANCHOR_WEB_VIEW_TYPE = 'test.anchor';
+// Matches the real default-layout-supplement.json's anchor (platformScriptureEditor.bibleTexts) so
+// the same mocked supplement entry can anchor onto both the window-scoping suite's synthetic layout
+// and the handleSwitchToSimpleMode suite's `bible-texts-tab` fixture below.
+const ANCHOR_WEB_VIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const SUPPLEMENT_TAB_ID = 'supplement-tab';
 
 const { storageGetItemMock } = vi.hoisted(() => ({
   storageGetItemMock: vi.fn((): string | undefined => undefined),
 }));
 
+const SUPPLEMENT_FLAG_SETTING = 'test.supplementEnabled';
+
 // The supplement is product-specific data; supply our own so these tests describe the merge
-// behavior rather than whichever tabs the shipped file happens to contain.
+// behavior rather than whichever tabs the shipped file happens to contain. Gated behind
+// `flagSetting` (not omitted) so the enabled/disabled merge tests below exercise the real
+// filter-then-merge behavior rather than an entry that's unconditionally included.
 vi.mock('@renderer/components/docking/default-layout-supplement.json', () => ({
   default: {
     tabs: [
       {
         anchorWebViewType: ANCHOR_WEB_VIEW_TYPE,
+        flagSetting: SUPPLEMENT_FLAG_SETTING,
         tab: {
           id: SUPPLEMENT_TAB_ID,
           tabType: TAB_TYPE_WEBVIEW,
@@ -125,9 +133,10 @@ vi.mock('@shared/services/command.service', () => ({
 // assertion point below. `SIMPLE_LAYOUT_TAB_IDS` is mocked to `[]` so the (real,
 // separately-tested) tabs-resolved tracker resolves immediately instead of waiting on webview
 // open/update events that never fire in this test. The dockbox includes a
-// `platformScriptureEditor.bibleTexts` tab so the real (unmocked) default-layout-supplement merge
-// has a matching anchor to attach the Scripture Text Grid supplement tab to (see the merge tests
-// below) - the merge/filter logic itself is real production code, not mocked.
+// `platformScriptureEditor.bibleTexts` tab, matching `ANCHOR_WEB_VIEW_TYPE` above, so the real
+// (unmocked) default-layout-supplement merge logic has a matching anchor to attach the mocked
+// supplement's `SUPPLEMENT_TAB_ID` tab to (see the merge tests below) - the merge/filter logic
+// itself is real production code, only the supplement's own content is mocked.
 const { buildSimpleLayoutForProjectMock, simpleLayoutTabIdsMock, visibleSimpleLayoutTabIdsMock } =
   vi.hoisted(() => {
     // Mutable (not frozen empty) so individual tests can populate it to exercise logic keyed off
@@ -610,7 +619,7 @@ describe('handleSwitchToSimpleMode', () => {
     host.registerDockLayout(fakeDockLayout);
     settingsGetMock.mockImplementation(async (key: string) => {
       if (key === 'platform.interfaceMode') return 'simple';
-      if (key === 'platformScriptureEditor.enableScriptureTextGrid') return true;
+      if (key === SUPPLEMENT_FLAG_SETTING) return true;
       return false;
     });
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
@@ -627,7 +636,7 @@ describe('handleSwitchToSimpleMode', () => {
       dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
     };
     const bibleTextsPanelTabs = loadedLayout.dockbox.children[0].children[0].tabs;
-    expect(bibleTextsPanelTabs.map((tab) => tab.id)).toContain('scripture-text-grid-tab');
+    expect(bibleTextsPanelTabs.map((tab) => tab.id)).toContain(SUPPLEMENT_TAB_ID);
   });
 
   it('fast path: does not merge a disabled default-layout supplement entry', async () => {
@@ -649,7 +658,7 @@ describe('handleSwitchToSimpleMode', () => {
       dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
     };
     const bibleTextsPanelTabs = loadedLayout.dockbox.children[0].children[0].tabs;
-    expect(bibleTextsPanelTabs.map((tab) => tab.id)).not.toContain('scripture-text-grid-tab');
+    expect(bibleTextsPanelTabs.map((tab) => tab.id)).not.toContain(SUPPLEMENT_TAB_ID);
   });
 
   it('a superseded switch never reaches loadLayout, even if its own async work finishes after a newer switch started', async () => {
