@@ -69,6 +69,8 @@ export type WindowLayoutStructure = { windows: WindowLayoutEntry[] };
  *   entry for a deliberately empty window, or its stored value is not object-shaped). It is also
  *   the defensive answer to a request that carries no window id or names a window that is not
  *   tracked.
+ * - `pending-content`: like `empty`, but also skip the default-layout supplement — the window was
+ *   created to receive one specific web view, routed separately, and must start with nothing else.
  *
  * An entry whose saved layout held only phantom tabs produces none of these: it is dropped while
  * the structure loads, so no window is ever created to ask. The one exception is the main entry,
@@ -78,4 +80,9 @@ export type WindowLayoutStructure = { windows: WindowLayoutEntry[] };
 export type WindowLayoutGetResponse =
   | { kind: 'entry'; layout: LayoutInfo }
   | { kind: 'legacy' }
-  | { kind: 'empty' };
+  | { kind: 'empty' }
+  /**
+   * This window was created to receive specific content that the main process is about to route to
+   * it: start truly empty (no default tabs, no supplement) and wait
+   */
+  | { kind: 'pending-content' };

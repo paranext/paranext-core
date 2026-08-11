@@ -939,6 +939,13 @@ let layoutLoadGeneration = 0;
 let layoutLoadGenerationInDock = 0;
 
 /**
+ * Whether the layout just fetched said this window is waiting for routed content. Consumed (and
+ * reset) by `loadLayout`, which then skips the default-layout supplement — a window created for one
+ * specific web view starts with nothing else. Set by {@link getPersistedLayout}.
+ */
+let lastPersistedLayoutWasPendingContent = false;
+
+/**
  * Loads layout information into the dock layout.
  *
  * Accepts either the shared model's opaque `LayoutInfo` or rc-dock's `LayoutBase`. The two are
@@ -1031,11 +1038,22 @@ async function loadLayout(
     );
     return;
   }
+  // Consumed here, once, regardless of interface mode — a simple-mode load (which never calls
+  // `getPersistedLayout`) must not pick up a stale latch left by an earlier power-mode load.
+  const skipSupplement = lastPersistedLayoutWasPendingContent;
+  lastPersistedLayoutWasPendingContent = false;
   // Every layout gets its web view ids scoped to this window, including one restored from
   // persistence: a saved entry's ids carry the window id of the session that saved them (window
   // ids are not stable across restarts), and the legacy pre-multi-window layout carries unscoped
   // ids. Re-scoping replaces the suffix rather than stacking another one, so it is safe on both.
   const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
+  if (skipSupplement) {
+    // A window created to receive one specific web view, routed separately, starts with nothing
+    // else — skip the default-layout supplement entirely, without even fetching its flags.
+    dockLayoutVar.loadLayout(layoutToLoad);
+    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
+    return;
+  }
   // Supplement tabs join the layout below, after the scoping pass above has already run over it, so
   // scope each supplement tab itself — its id comes from a build-baked file and would otherwise be
   // the same in every window. Scoping here rather than re-scoping the merged layout also keeps the
@@ -1197,6 +1215,10 @@ async function getPersistedLayout(
   isRunningOnFallbackLayout = false;
   if (response.kind === 'entry') return response.layout;
   if (response.kind === 'empty') return EMPTY_DOCK_LAYOUT;
+  if (response.kind === 'pending-content') {
+    lastPersistedLayoutWasPendingContent = true;
+    return EMPTY_DOCK_LAYOUT;
+  }
   return getLegacySavedLayout(defaultLayout);
 }
 
