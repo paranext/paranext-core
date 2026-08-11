@@ -454,15 +454,18 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // 'user') are INCLUDED. ProjectReference IDs are included so that locally-installed non-DBL
   // resources added via selectTextConnection appear in INCLUDED rather than re-appearing in
   // INSTALLED on the next picker open.
+  // Uses ALL pickerResources (not the type-filtered filteredResources) so that resources of any
+  // type in the text collection (e.g. CommentaryResource TNN/TND alongside ScriptureResource
+  // texts) are marked as INCLUDED, not re-offered in INSTALLED.
   const currentFilteredDblIds = useMemo(() => {
-    return filteredResources.flatMap((r) => {
+    return (pickerResources ?? []).flatMap((r) => {
       if (r.source === 'downloaded') return [];
       const { reference } = r;
       if (isDblResourceReference(reference)) return [reference.id];
       if (isProjectReference(reference)) return [reference.id];
       return [];
     });
-  }, [filteredResources]);
+  }, [pickerResources]);
 
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
@@ -497,8 +500,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
     useMemo(
-      () => ({ resourceType, selectedResourceIds: currentFilteredDblIds, isModal: true }),
-      [resourceType, currentFilteredDblIds],
+      () => ({ selectedResourceIds: currentFilteredDblIds, isModal: true }),
+      [currentFilteredDblIds],
     ),
     useCallback(
       (resource: DblResourceData | undefined) => {
