@@ -130,6 +130,8 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
+import { CharacterMarkerBarOverlay } from './character-marker-bar/character-marker-bar-overlay.component';
+import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.component';
 import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
@@ -166,8 +168,9 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
   // gets its remove row localized through the `localizedStrings` this web view already resolves.
   ...CHARACTER_MARKER_MENU_STRING_KEYS,
-  // Consumed by CharacterMarkerControl, which its placement wrapper mounts. Preloaded here because
-  // the web view owns the key list; resolving one extra key in Power mode renders nothing.
+  // Not read by this file either. Consumed by CharacterMarkerControl, which the character-marker
+  // bar mounts. Preloaded here because the web view owns the key list; resolving these extra keys
+  // in Power mode, where the bar never renders, costs nothing.
   ...CHARACTER_MARKER_CONTROL_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
@@ -345,6 +348,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /** Stores the current editor selection, updated on every selection change. */
   const currentSelectionRef = useRef<SelectionRange | undefined>(undefined);
+
+  /** Reads the current editor selection. A ref read has no dependencies. */
+  const getSelection = useCallback(() => currentSelectionRef.current, []);
 
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   // Set by the core auto-sync edit-block driver while an automatic (scheduled) Send/Receive is
@@ -1927,6 +1933,28 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
     }
 
+    const editorTree = (
+      <TwoStepDeleteTooltipOverlay>
+        <EditorKeyboardShortcuts editorRef={editorRef}>
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={setScrRefNoScroll}
+            options={options}
+            logger={logger}
+            onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+            onSelectionChange={handleSelectionChange}
+            onStateChange={(state) => {
+              setCanUndo(state.canUndo);
+              setCanRedo(state.canRedo);
+              setBlockMarker(state.blockMarker);
+              setContextMarker(state.contextMarker);
+            }}
+          />
+        </EditorKeyboardShortcuts>
+      </TwoStepDeleteTooltipOverlay>
+    );
+
     const showEmptyChapterView = !isPowerMode && isBlankChapter;
 
     return (
@@ -1944,28 +1972,58 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onAddChapterNumber={handleAddChapterNumber}
           />
         )}
+        {/* The empty-chapter view HIDES this subtree rather than replacing it, for the same reason
+            the overlay below is mounted in both modes: unmounting would take Lexical's undo history
+            and the scroll position with it, and a blank chapter is transient — adding a chapter
+            number flips `isBlankChapter` straight back. The overlay lives INSIDE this wrapper so the
+            bar is hidden along with the text it annotates rather than painting beside an empty
+            chapter.
+
+            Being hidden HERE is not the case the overlay's `useViewVisibility` deferral handles:
+            that hook reports on this iframe's own visibility (whether the tab is active), so it
+            still reads visible while this inner subtree is `display: none`. What covers this case
+            is the overlay's zero-geometry guard — it declines to position, and crucially declines
+            to latch `hasPositionedRef`, when the editor root has no layout — plus its
+            ResizeObserver, which fires when the subtree regains layout because `display: none`
+            collapses the observed anchor to a 0x0 box. */}
         <div className={showEmptyChapterView ? 'tw:hidden' : undefined}>
-          <ParagraphMarkerTooltipOverlay>
-            <TwoStepDeleteTooltipOverlay>
-              <EditorKeyboardShortcuts editorRef={editorRef}>
-                <Editorial
-                  ref={editorRef}
-                  scrRef={scrRef}
-                  onScrRefChange={setScrRefNoScroll}
-                  options={options}
-                  logger={logger}
-                  onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
-                  onSelectionChange={handleSelectionChange}
-                  onStateChange={(state) => {
-                    setCanUndo(state.canUndo);
-                    setCanRedo(state.canRedo);
-                    setBlockMarker(state.blockMarker);
-                    setContextMarker(state.contextMarker);
-                  }}
+          {/* The overlay is mounted in BOTH modes and only its `bar` slot is gated, so the element type
+            at this position never changes. Choosing between two different wrappers here would make
+            React unmount and remount `editorTree` whenever the mode changes — including the very
+            first resolution of `platform.interfaceMode`, which starts at its 'simple' default before
+            the stored value arrives — taking Lexical's undo history and the scroll position with it.
+            An empty slot renders nothing beside the editor.
+
+            `hasGutterParaMarkers` is checked here because it is the OTHER half of the condition the
+            gutter reservation in `_simple-mode.scss` matches on
+            (`.editor-container-simple .usfm.psc-gutter-markers`). Gating the bar on the same two
+            things the CSS does keeps the bar and the space it occupies inseparable: if this view ever
+            stops using the paragraph-structure preset — a Simple view-option chooser would do it —
+            the reservation and the bar disappear together instead of leaving the bar painting over
+            project text. The reservation cannot simply be broadened to match `!isPowerMode` alone,
+            because `_simple-mode.scss` is compiled into the resource-text and model-text panels too,
+            and both apply `editor-container-simple` unconditionally to an editor that has no gutter
+            markers. */}
+          <CharacterMarkerBarOverlay
+            bar={
+              isPowerMode || !viewOptions.hasGutterParaMarkers ? undefined : (
+                <CharacterMarkerBar
+                  editorRef={editorRef}
+                  getSelection={getSelection}
+                  blockMarker={blockMarker}
+                  contextMarker={contextMarker}
+                  isSyncBlocked={isSyncBlocked}
+                  // The same direction the editor itself is given below. The marker menu portals to
+                  // `document.body`, outside that `dir` element, so it can only mirror its alignment for
+                  // an RTL project if the direction is handed to it explicitly.
+                  textDirection={textDirectionEffective}
+                  localizedStrings={localizedStrings}
                 />
-              </EditorKeyboardShortcuts>
-            </TwoStepDeleteTooltipOverlay>
-          </ParagraphMarkerTooltipOverlay>
+              )
+            }
+          >
+            <ParagraphMarkerTooltipOverlay>{editorTree}</ParagraphMarkerTooltipOverlay>
+          </CharacterMarkerBarOverlay>
         </div>
       </>
     );

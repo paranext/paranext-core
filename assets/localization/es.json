@@ -428,6 +428,7 @@
   "%markerMenu_marker_xta_description%": "Texto añadido en referencia cruzada",
   "%markerMenu_noResults%": "No se encontraron resultados.",
   "%markerMenu_searchPlaceholder%": "Escriba un estilo o busque.",
+  "%markerMenu_searchPlaceholder_character%": "Buscar para cambiar el estilo de carácter.",
   "%markerMenu_searchPlaceholder_insert%": "Buscar para insertar un estilo.",
   "%markerMenu_searchPlaceholder_paragraph%": "Buscar para cambiar el estilo de párrafo.",
   "%menuItemName_wordList%": "Lista de Palabras",
