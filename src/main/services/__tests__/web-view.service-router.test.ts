@@ -561,9 +561,6 @@ describe('web view service router', () => {
       expect(created.openWebView).toHaveBeenCalledWith('someType', { type: 'tab' }, undefined);
       expect(focused.openWebView).not.toHaveBeenCalled();
       expect(openedId).toBe('opened');
-      // The routed content landed, so the window's pending-content mark comes off — a reload
-      // before its first layout push must not leave it waiting forever.
-      expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith(7);
     });
 
     test('degrades to a tab in the focused window in simple mode', async () => {
@@ -682,9 +679,6 @@ describe('web view service router', () => {
 
       expect(openedId).toBeUndefined();
       expect(creator.closeWindow).toHaveBeenCalledWith(7);
-      // The window closes instead, which clears the pending-content mark via removal — clearing
-      // it here too would be redundant and, worse, would race a removal that has not happened yet.
-      expect(mocks.clearWindowPendingContent).not.toHaveBeenCalled();
     });
 
     test('still answers nothing for a decline even when the cleanup close itself fails, closing only once', async () => {
@@ -721,6 +715,39 @@ describe('web view service router', () => {
 
       expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
       expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('clears the pending-content mark when the routed open succeeds', async () => {
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      withWindows({ 1: focused, 7: created });
+      setWebViewWindowCreator({
+        createPendingContentWindow: vi.fn(async () => 7),
+        closeWindow: vi.fn(),
+      });
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'window' });
+
+      // The routed content landed, so the window's pending-content mark comes off — a reload
+      // before its first layout push must not leave it waiting forever.
+      expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith(7);
+    });
+
+    test('does not clear the pending-content mark when the provider declines', async () => {
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      created.openWebView.mockResolvedValue(undefined);
+      withWindows({ 1: focused, 7: created });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'window' });
+
+      // The window closes instead, which clears the pending-content mark via removal — clearing
+      // it here too would be redundant and, worse, would race a removal that has not happened yet.
+      expect(mocks.clearWindowPendingContent).not.toHaveBeenCalled();
     });
   });
 
