@@ -19,7 +19,10 @@ import {
   wasWindowEverReady,
 } from '@main/services/window-state.service';
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
-import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
+import {
+  createTargetShardResolver,
+  resolveShardForWindow,
+} from '@main/services/target-shard-resolver.util';
 import {
   GetWebViewOptions,
   OpenWebViewOptions,
@@ -39,6 +42,8 @@ import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
+import { settingsService } from '@shared/services/settings.service';
+import { SettingTypes } from 'papi-shared-types';
 import {
   CloseWebViewEvent,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
@@ -93,6 +98,24 @@ function describeMatcher(matcher: OwnerMatcher): string {
   return matcher.kind === 'id'
     ? `webview ${matcher.webViewId}`
     : `a ${matcher.webViewType} web view`;
+}
+
+/**
+ * The main-process window facilities the window-layout rung needs. Injected by `main.ts` after it
+ * defines its window-creating closure — this router starts before that closure exists.
+ */
+export type WebViewWindowCreator = {
+  /** Create a window that starts truly empty and waits for routed content. Answers its window id */
+  createPendingContentWindow: () => Promise<number>;
+  /** Close a window this router created whose content never arrived */
+  closeWindow: (windowId: number) => void;
+};
+
+let windowCreator: WebViewWindowCreator | undefined;
+
+/** Wire the window facilities the window-layout rung uses. See {@link WebViewWindowCreator} */
+export function setWebViewWindowCreator(creator: WebViewWindowCreator): void {
+  windowCreator = creator;
 }
 
 /** A window a search settled on, and the shard an operation runs in it through */
@@ -341,6 +364,54 @@ async function openWebViewInOwningWindow(
   return openedWebViewId;
 }
 
+/**
+ * Open a web view in a window created for it. In Simple mode — single-window by design — the window
+ * layout degrades to a tab in the window the user is working in; the platform owns placement there.
+ * The mode read fails closed to the degraded path, matching how window restore treats an unreadable
+ * mode.
+ *
+ * Any failure after the window exists closes it again: a window whose content never arrived is an
+ * empty shell the user never asked to manage.
+ */
+async function openWebViewInNewWindow(
+  webViewType: WebViewType,
+  options?: OpenWebViewOptions,
+): Promise<WebViewId | undefined> {
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+  try {
+    interfaceMode = await settingsService.get('platform.interfaceMode');
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.interfaceMode for a window-layout open; opening as a tab instead: ${getErrorMessage(e)}`,
+    );
+  }
+  if (interfaceMode !== 'power') {
+    const webViewShard = await getTargetWebViewShard();
+    return webViewShard.openWebView(webViewType, { type: 'tab' }, options);
+  }
+
+  if (!windowCreator)
+    throw new Error(`Cannot open ${webViewType} in a new window: window creation is not wired up`);
+  const windowId = await windowCreator.createPendingContentWindow();
+  try {
+    const shard = await resolveShardForWindow(
+      NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+      webViewShards,
+      windowId,
+    );
+    const openedWebViewId = await shard.openWebView(webViewType, { type: 'tab' }, options);
+    if (openedWebViewId === undefined) {
+      // The provider chose not to create the web view — the established "it did not happen"
+      // answer. The window it would have lived in has no reason to exist.
+      windowCreator.closeWindow(windowId);
+    }
+    return openedWebViewId;
+  } catch (e) {
+    windowCreator.closeWindow(windowId);
+    throw e;
+  }
+}
+
 // Router methods that route to the focused window's WebView service shard
 
 async function openWebView(
@@ -375,6 +446,14 @@ async function openWebView(
     // long as one window is unreachable, which for a crashed renderer is the rest of the session.
     // Guessing wrong costs a second copy of the view, in the window the user is looking at, where
     // they can see and close it. Falling through to open where the user is beats not opening.
+  }
+
+  if (layout?.type === 'window') {
+    if (options?.targetWindowId !== undefined)
+      throw new Error(
+        `Cannot open ${webViewType}: a 'window' layout asks for a new window, but targetWindowId names an existing one. Pass one or the other.`,
+      );
+    return openWebViewInNewWindow(webViewType, options);
   }
 
   // A layout naming a tab or tab group names the window that holds it, so it routes the same way an
