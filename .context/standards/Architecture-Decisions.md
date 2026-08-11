@@ -340,3 +340,78 @@ step, no automation. Just a record.
   the cost of the signal being an approximation (one service standing in for all of them) rather than
   a true invariant.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
+
+## ADR-0011: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
+
+- **Date:** 2026-08-10
+- **Status:** Accepted
+- **Context:** The character-marker menu's catch-all remove row calls the editor's
+  `removeCharacterMarker()` with no argument. In `@eten-tech-foundation/platform-editor`,
+  `$getCharNodeToRemove` matches only the **innermost** `CharNode` when the marker is `undefined`,
+  but matches a **named** marker at any nesting depth. So one activation of the catch-all row peels
+  a single layer from each covered run, while a per-marker row removes that marker exactly, however
+  deeply nested. Coverage (`getAncestorCharacterMarkers`) reports every enclosing character marker,
+  so a nested stack surfaces one enabled row per layer. The row had been labelled "Remove all
+  character markers", which overstated what a single activation does.
+- **Decision:** Keep the single argument-less call and **relabel** the row to "Remove character
+  markers" (`%…_characterMarkerMenu_removeMarkers%`), which is true in every case. Treat the
+  per-marker rows as the exact path for removing a specific nested marker. Neither remove row
+  carries a `selectionState`: `MarkerMenu` maps that prop onto `aria-checked` and a checkbox
+  affordance, and its contract is "how much of the selection **this marker** covers" — a question a
+  markerless action row does not pose, and whose common answer (`'none'` on a fully-marked
+  selection) announces as "not checked" beside an action certain to remove markers.
+- **Alternatives:** **Loop until coverage is empty** — rejected: each `removeCharacterMarker()` call
+  is its own `editor.update()`, so undo would gain one entry per layer, and the loop's termination
+  condition is not readable synchronously because `getUsj()` returns the cached `editedUsjRef` that
+  a non-discrete update does not refresh. **Keep the menu open after a removal so remaining markers
+  stay visible** — rejected for the same staleness reason: coverage is sampled on open from
+  `getUsj()`, so a re-sample immediately after the update reads the same stale object.
+  **Nested-aware removal in the editor** — deferred: it is a change to the editor package, outside
+  this epic's 2-week appetite.
+- **Consequences:** A user clearing a nested stack activates the row once per layer, or uses the
+  per-marker rows to target a layer directly. Undo stays one step per activation. The PRD's
+  non-negotiable — "UI for deleting markers only removes markers, not the content within markers" —
+  holds either way, since one-layer removal never touches content. **Revisit** if the editor grows
+  an outcome signal from `removeCharacterMarker` (a return value, or discrete-update-plus-re-derive):
+  that would also let the currently-silent partial refusal — a run whose innermost marker is nested
+  and only partly covered is skipped without notification — be reported to the user.
+- **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
+  character-marker removal work on `remove-character-marker`.
+
+## ADR-0012: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
+
+- **Date:** 2026-08-11
+- **Status:** Accepted
+- **Context:** Every destructive or sync-gated edit in `platform-scripture-editor` needs the same two
+  side effects around it: a best-effort version-history snapshot before the edit, and the standard
+  "editing paused during Send/Receive" notice when the S/R gate refuses it. Both had been inlined per
+  call site — the snapshot block three times (insert footnote, insert cross-reference, remove
+  character marker) and the sync notice twice. The snapshot block carries a non-obvious contract (the
+  `ERROR_UNIMPLEMENTED` sentinel that lets an older host without version history still perform the
+  edit), so a change to it had to be made in every copy, and the sync notice's severity and message
+  key could drift between copies. The character-marker work added the third and second copies
+  respectively, which is what surfaced this.
+- **Decision:** Consolidate both into `extensions/src/platform-scripture-editor/src/editor-side-effects.utils.ts`
+  and route every call site through it. `commitVersionHistorySnapshot(projectId, message,
+  editDescription)` owns the `ERROR_UNIMPLEMENTED` handling and the "no project means no snapshot, and
+  that is not an error" rule. `notifySyncEditBlocked(localizedStrings)` takes the strings rather than a
+  resolved message, so `SYNC_EDIT_BLOCKED_KEY` is named exactly once in the codebase and is listed in
+  the web view's key list via that const — a caller cannot reach the notice while spelling the key
+  itself. The module value-imports `@papi/frontend`, so it must stay out of `main.ts`'s import graph;
+  `extension-host-import-boundary.test.ts` enforces that.
+- **Alternatives:** **Extract only for the new character-marker path** — rejected: it reduces the
+  invariant from three copies to two rather than one, leaving the same drift risk with an extra
+  indirection. **Have the helper take a resolved message string** — rejected: the message key would
+  still be spelled at each call site, which is the specific thing that can drift. **A React hook
+  instead of plain async functions** — rejected: the insert paths call these from inside a message
+  handler, not at render time; the web view wraps the plain function in its own `useCallback` where it
+  needs a stable identity for dependency lists.
+- **Consequences:** One place to change either contract. The removal path additionally gates its
+  snapshot on a resolved editor ref, because unlike the insert paths it has a reachable no-op (the ref
+  is null until the editor mounts) and would otherwise write a restore point for an edit that never
+  happened. One no-op remains documented-but-undefended — the editor silently declines a removal it
+  cannot confine to the selection — for the same reason ADR-0011 records: there is no outcome signal
+  from `removeCharacterMarker` to branch on. New edit paths should route through this module rather
+  than inlining a fourth copy.
+- **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
+  and sync-notice blocks.

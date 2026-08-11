@@ -6,6 +6,7 @@ import { CharacterMarkerToolbar } from '../character-marker-control/character-ma
 import { CharacterMarkerSelection } from '../character-marker-coverage.utils';
 import { useCharacterMarkerState } from '../use-character-marker-state.hook';
 import { useEditorSelectionVersion } from './use-editor-selection-version.hook';
+import { useRemoveCharacterMarker } from './use-remove-character-marker.hook';
 
 export type CharacterMarkerBarProps = {
   /** The editor, used to insert markers and to read USJ when the menu opens. */
@@ -30,6 +31,11 @@ export type CharacterMarkerBarProps = {
   textDirection: 'ltr' | 'rtl';
   /** Localized strings for the control, its tooltips, and the menu. */
   localizedStrings: LanguageStrings;
+  /**
+   * The project to snapshot into version history before a removal. Absent means no snapshot —
+   * removal still works, matching the insert-footnote path.
+   */
+  projectId?: string;
 };
 
 /**
@@ -62,9 +68,17 @@ export function CharacterMarkerBar({
   isSyncBlocked,
   textDirection,
   localizedStrings,
+  projectId,
 }: CharacterMarkerBarProps) {
   // Read for its re-render side effect; the value itself is not needed here.
   useEditorSelectionVersion();
+
+  const removeCharacterMarker = useRemoveCharacterMarker({
+    editorRef,
+    projectId,
+    isSyncBlocked,
+    localizedStrings,
+  });
 
   const characterMarkerState = useCharacterMarkerState({
     editorRef,
@@ -72,6 +86,7 @@ export function CharacterMarkerBar({
     blockMarker,
     contextMarker,
     localizedStrings,
+    removeCharacterMarker,
   });
 
   // See the note above: the control's index signature is keyed by `string`, not `LocalizeKey`, so
