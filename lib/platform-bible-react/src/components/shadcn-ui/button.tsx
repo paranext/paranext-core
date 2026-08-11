@@ -13,7 +13,13 @@ import { cn } from '@/utils/shadcn-ui/utils';
 const buttonVariants = cva(
   // CUSTOM: Added 'pr-twp' at the front of the base class string to apply Platform.Bible's
   // Tailwind CSS scope isolation. All Button instances inherit this via buttonVariants.
-  'pr-twp tw:group/button tw:inline-flex tw:shrink-0 tw:items-center tw:justify-center tw:rounded-lg tw:border tw:border-transparent tw:bg-clip-padding tw:text-sm tw:font-medium tw:whitespace-nowrap tw:transition-all tw:outline-none tw:select-none tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:active:not-aria-[haspopup]:translate-y-px tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
+  // CUSTOM: Changed the pressed-state nudge from 'tw:active:not-aria-[haspopup]:translate-y-px' to
+  // 'tw:active:not-aria-[haspopup]:transform-[translateY(1px)]' so it composes with caller
+  // positioning. Every Tailwind translate utility writes the same '--tw-translate-y' custom
+  // property, so the nudge replaced rather than added to a caller's translate: a Button centered
+  // with 'tw:-translate-y-1/2' jumped down half its own height while held. 'transform' is a separate
+  // property that the browser applies after 'translate', so the two now stack.
+  'pr-twp tw:group/button tw:inline-flex tw:shrink-0 tw:items-center tw:justify-center tw:rounded-lg tw:border tw:border-transparent tw:bg-clip-padding tw:text-sm tw:font-medium tw:whitespace-nowrap tw:transition-all tw:outline-none tw:select-none tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:active:not-aria-[haspopup]:transform-[translateY(1px)] tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
   {
     variants: {
       variant: {
