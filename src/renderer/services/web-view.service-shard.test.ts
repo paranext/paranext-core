@@ -26,6 +26,7 @@ const SUPPLEMENT_TAB_ID = 'supplement-tab';
 
 const mocks = vi.hoisted(() => ({
   networkRequest: vi.fn(),
+  bufferedEmitters: new Map<string, { emit: ReturnType<typeof vi.fn> }>(),
 }));
 
 const SUPPLEMENT_FLAG_SETTING = 'test.supplementEnabled';
@@ -81,7 +82,11 @@ const { getNetworkEventMock, emitNetworkEvent, clearNetworkEventHandlers } = vi.
   };
 });
 vi.mock('@shared/services/network.service', () => ({
-  createBufferedNetworkEventEmitter: () => ({ emit: vi.fn(), dispose: vi.fn() }),
+  createBufferedNetworkEventEmitter: (eventName: string) => {
+    const emitter = { emit: vi.fn(), dispose: vi.fn() };
+    mocks.bufferedEmitters.set(eventName, emitter);
+    return emitter;
+  },
   getNetworkEvent: getNetworkEventMock,
   request: mocks.networkRequest,
 }));
@@ -378,6 +383,7 @@ const openWindow = globalThis.open;
 beforeEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
+  mocks.bufferedEmitters.clear();
   globalThis.open = openWindow;
   localStorage.clear();
   globalThis.windowId = '2';
@@ -2077,5 +2083,57 @@ describe('setDetachedScrRef', () => {
     expect(await shard.setDetachedScrRef('some-web-view', { book: 'MAT' })).toBe(false);
     expect(await shard.setDetachedScrRef('some-web-view', 'MAT 1:1')).toBe(false);
     expect(updates).toEqual([]);
+  });
+});
+
+describe('a failed dock add rolls back what the open already did', () => {
+  test('emits the close event and evicts state when addWebViewToDock throws', async () => {
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+    const { localThemeService } = await import('@renderer/services/theme.service');
+    // Provider succeeds — the failure comes later, at the dock
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
+      async () => ({
+        getWebView: async (saved: { id: string }) => ({
+          id: saved.id,
+          webViewType: 'test.type',
+          contentType: 'html',
+          content: '<p>content</p>',
+          state: { some: 'state' },
+        }),
+      }),
+    );
+    // `openOrReloadWebView` builds the injected theme stylesheet from `theme.cssVariables` before
+    // it ever reaches the dock add, so the stub needs that field even though nothing in this test
+    // reads it back.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
+      cssVariables: {},
+    }));
+    await module.startWebViewServiceShard();
+    const { dockLayout } = await registerWindow(layoutWithTab('unrelated-tab'));
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (dockLayout as { addWebViewToDock?: unknown }).addWebViewToDock = vi.fn(() => {
+      throw new Error('Replacing tab failed: target not found');
+    });
+
+    await expect(
+      module.openWebView('test.type', { type: 'replace-tab', targetTabId: 'gone-tab' }),
+    ).rejects.toThrow('Replacing tab failed');
+
+    const { deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+    expect(deleteFullWebViewStateById).toHaveBeenCalledTimes(1);
+    const closeEmitter = [...mocks.bufferedEmitters.entries()].find(([name]) =>
+      /close/i.test(name),
+    )?.[1];
+    if (!closeEmitter) throw new Error('close emitter was never created');
+    expect(closeEmitter.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webView: expect.objectContaining({ webViewType: 'test.type' }),
+      }),
+    );
   });
 });
