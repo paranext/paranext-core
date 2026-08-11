@@ -41,5 +41,13 @@ done
 LINE="$LINE. Working tree: $DIRTY uncommitted change(s)."
 
 # additionalContext reaches the model; it is not printed to the user.
-jq -n --arg c "$LINE" \
-  '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $c}}'
+# python3 rather than jq, which is not a documented prerequisite of this repo --
+# depending on it would mean a hook error on every session start for anyone
+# without it.
+CONTEXT="$LINE" python3 -c "
+import json, os
+print(json.dumps({'hookSpecificOutput': {
+    'hookEventName': 'SessionStart',
+    'additionalContext': os.environ['CONTEXT'],
+}}))
+"

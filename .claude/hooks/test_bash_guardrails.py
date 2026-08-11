@@ -23,6 +23,11 @@ BLOCK = [
     "gh issue create --title x --body 'has | a pipe'",
     "sed -i 's|foo|bar|baz|' notes.md",
     "sed -i 's/a/b/c/d/' notes.md",
+    # Shapes an adversarial pass found slipping through.
+    "(npm start | tee /tmp/x.log)",           # grouping parens hid the head
+    "npm start \\\n  | tee /tmp/x.log",       # backslash-newline continuation
+    "npm start 2>&1 | tee /tmp/x.log",
+    "NODE_ENV=development npm start | tee x",
 ]
 
 ALLOW = [
@@ -43,6 +48,8 @@ ALLOW = [
     "echo 'see .erb/scripts/refresh.sh | tail' > /tmp/note.txt",
     "npm run startup-waterfall | head -40",   # not a starter
     "npm test | tail -20",
+    "npm start 2>&1 > /tmp/x.log",            # redirect, no pipe
+    "cat <<EOF | wc -l\nnpm start | tail\nEOF",  # starter inside a heredoc
     "npm run build && npm run lint",
     "gh pr comment 2611 --body-file /tmp/body.md",
     "gh pr view 2611 --json title",

@@ -15,19 +15,38 @@ REPO="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null)}"
 [ -n "$REPO" ] && cd "$REPO" || exit 0
 
 PAYLOAD=$(cat)
-SESSION=$(printf '%s' "$PAYLOAD" | jq -r '.session_id // "unknown"')
+
+# python3 rather than jq: two other hooks already require python3, and jq is not
+# among this repo's documented prerequisites, so depending on it would make this
+# hook error out on a clean machine.
+read_field() {
+  printf '%s' "$PAYLOAD" | python3 -c "
+import json, sys
+try:
+    print(json.load(sys.stdin).get('$1', '$2'))
+except Exception:
+    print('$2')
+" 2>/dev/null
+}
+
+SESSION=$(read_field session_id unknown)
 
 # A Stop hook that always blocks would trap the session. Claude Code sets
 # stop_hook_active once a Stop hook has already fired this turn; fall back to a
 # per-session attempt counter when that field is absent.
-if [ "$(printf '%s' "$PAYLOAD" | jq -r '.stop_hook_active // false')" = "true" ]; then
+if [ "$(read_field stop_hook_active False)" = "True" ]; then
   exit 0
 fi
 COUNTER="${TMPDIR:-/tmp}/claude-lint-attempts-$SESSION"
 ATTEMPTS=$(cat "$COUNTER" 2>/dev/null || echo 0)
 
 # Cheap exit: most turns touch no lintable file at all.
-mapfile -t FILES < <(
+# A read loop rather than `mapfile`: mapfile needs bash 4, and macOS ships
+# bash 3.2, so this hook would fail outright for anyone on a stock mac.
+FILES=()
+while IFS= read -r f; do
+  [ -n "$f" ] && FILES+=("$f")
+done < <(
   {
     git diff --name-only --diff-filter=ACMR HEAD
     git ls-files --others --exclude-standard

@@ -33,6 +33,8 @@ def segments(cmd):
     Returns None when the line cannot be tokenized (unbalanced quotes, shell
     syntax shlex does not model), which callers treat as "do not judge".
     """
+    # A backslash-newline is a line continuation, not a command boundary.
+    cmd = re.sub(r"\\\n\s*", " ", cmd)
     lexer = shlex.shlex(cmd, posix=True, punctuation_chars=True)
     lexer.whitespace_split = True
     try:
@@ -44,7 +46,9 @@ def segments(cmd):
         if token in SEPARATORS:
             out.append(current)
             current = []
-        else:
+        elif token not in ("(", ")"):
+            # Grouping parens do not change what a segment runs, but leaving
+            # them in shifts the head token and hides `(npm start | tee)`.
             current.append(token)
     out.append(current)
     return out
