@@ -504,7 +504,22 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
     );
   }
 
-  const captured = await owner.shard.captureAndCloseWebView(webViewId);
+  let captured: SavedWebViewDefinition | undefined;
+  try {
+    captured = await owner.shard.captureAndCloseWebView(webViewId);
+  } catch (e) {
+    // A cross-process capture that fails may have closed the tab without delivering the capture.
+    // There is no captured definition to recover from — and blindly reopening from the owner
+    // search's definition could duplicate a view whose tab never closed — so log that definition
+    // (enough to reconstruct the web view by hand) and surface the move context the raw shard
+    // error lacks
+    logger.error(
+      `Capturing webview ${webViewId} for a move to ${targetDescription} failed; window ${owner.windowId} may or may not still have it. Definition from the owner search: ${JSON.stringify(owner.definition)}`,
+    );
+    throw new Error(
+      `Could not move webview ${webViewId} to ${targetDescription}: capturing it failed (${getErrorMessage(e)}). Its definition from before the move is in the log.`,
+    );
+  }
   if (!captured)
     throw new Error(
       `Cannot move webview ${webViewId}: window ${owner.windowId} no longer had it when the move tried to capture it.`,
