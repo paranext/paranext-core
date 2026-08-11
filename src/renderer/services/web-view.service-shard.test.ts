@@ -1844,6 +1844,23 @@ describe('loadLayout when the saved-layout request fails', () => {
     );
     expect(layoutPushes()).toHaveLength(1);
   });
+
+  test('a window on a fallback layout does not report itself born empty', async () => {
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+
+    await registerWindowThroughRetries(layoutWithAnchor());
+
+    // The fallback dock is empty, but it is not the user's layout: this window keeps the behavior
+    // it had before windows started reporting emptiness at all
+    expect(mocks.networkRequest).not.toHaveBeenCalledWith(
+      'windowLayout:emptied',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
 });
 
 describe('loadLayout discards a load a newer one has superseded', () => {
