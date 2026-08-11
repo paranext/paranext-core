@@ -805,6 +805,24 @@ describe('web view service router', () => {
       expect(existingOwner.openWebView).toHaveBeenCalled();
       expect(named.openWebView).not.toHaveBeenCalled();
     });
+
+    test('refuses a target window id combined with a replace-tab layout', async () => {
+      const focused = windowShard([]);
+      const named = windowShard(['target-tab']);
+      withWindows({ 1: focused, 2: named });
+      const router = await getRouter();
+
+      await expect(
+        router.openWebView(
+          'someType',
+          { type: 'replace-tab', targetTabId: 'target-tab' },
+          { targetWindowId: 2 },
+        ),
+      ).rejects.toThrow('names its own window');
+
+      expect(named.openWebView).not.toHaveBeenCalled();
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
   });
 
   describe('a layout that names a tab to open next to', () => {

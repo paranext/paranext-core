@@ -479,6 +479,11 @@ async function openWebView(
   // A named window outranks placement inference: the caller said where. It never outranks
   // `existingId` reuse above — an existing view stays wherever it lives.
   if (options?.targetWindowId !== undefined) {
+    if (layout?.type === 'replace-tab')
+      throw new Error(
+        `Cannot open ${webViewType}: a replace-tab layout names its own window through its target tab, so targetWindowId cannot also name one. Pass one or the other.`,
+      );
+
     const shard = await resolveShardForWindow(
       NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
       webViewShards,

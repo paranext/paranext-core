@@ -236,7 +236,7 @@ When opening a WebView via `papi.webViews.openWebView()`, you can specify how it
 - `'window'` **(experimental)**: Opens in its own application window. In Simple mode—which is single-window by design—this degrades to `'tab'`.
 - `'replace-tab'`: Replaces an existing tab (requires `targetTabId`).
 
-Additionally, `targetWindowId` **(experimental)** lets you open a WebView into a specific named window instead of the one the user is working in. Applies to `'tab'`, `'panel'`, and `'float'` layouts only; combining it with `'window'` is an error. The open fails if no such window exists — it never falls back to another window. This is a runtime-only handle; window IDs are reused across sessions, so never persist one. Retrieve the current window's ID via `platform.getFocusedWindowId`.
+Additionally, `targetWindowId` **(experimental)** lets you open a WebView into a specific named window instead of the one the user is working in. Applies to `'tab'`, `'panel'`, and `'float'` layouts only; combining it with `'window'` is an error, and combining it with `'replace-tab'` is likewise an error—the tab being replaced already names the window. The open fails if no such window exists — it never falls back to another window. This is a runtime-only handle; window IDs are reused across sessions, so never persist one. Retrieve the current window's ID via `platform.getFocusedWindowId`.
 
 ### Styling Requirements
 
