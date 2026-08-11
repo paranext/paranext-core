@@ -107,15 +107,35 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
     // Seed initial state from currently-open WebViews. PAPI events don't replay for already-open
     // tabs, so without this the hook would be empty on mount when consumers mount after tabs are
     // already open. The map dedupes by id, so any race with the first live event is harmless.
-    papi.webViews
-      .getAllOpenWebViewDefinitions()
-      .then((webViews) => {
-        if (!cancelled) webViews.forEach((wv) => upsert(wv));
-        return undefined;
-      })
-      .catch(() => {
-        // Non-fatal — live events will still populate state going forward.
-      });
+    // Seeding can fail while another window is starting or reloading (the enumeration refuses to
+    // under-report when a window cannot be asked), so a failed attempt is retried — silently
+    // giving up would leave every already-open tab invisible here for the life of the component.
+    const seedDelayMs = 2000;
+    const seedMaxAttempts = 3;
+    const seed = async () => {
+      for (let attempt = 1; attempt <= seedMaxAttempts; attempt++) {
+        try {
+          // Retry logic requires awaiting inside the loop to implement delay between attempts
+          // eslint-disable-next-line no-await-in-loop
+          const webViews = await papi.webViews.getAllOpenWebViewDefinitions();
+          if (!cancelled) webViews.forEach((wv) => upsert(wv));
+          return;
+        } catch (e) {
+          papi.logger.warn(
+            `useOpenProjectTabs: seed attempt ${attempt}/${seedMaxAttempts} failed${
+              attempt < seedMaxAttempts ? '; retrying' : '; giving up — live events only'
+            }: ${e}`,
+          );
+          if (cancelled || attempt === seedMaxAttempts) return;
+          // Retry logic requires awaiting inside the loop to implement delay between attempts
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise((resolve) => {
+            setTimeout(resolve, seedDelayMs);
+          });
+        }
+      }
+    };
+    seed();
     const unsubOpen = papi.webViews.onDidOpenWebView(({ webView }) => upsert(webView));
     const unsubUpdate = papi.webViews.onDidUpdateWebView(({ webView }) => upsert(webView));
     const unsubClose = papi.webViews.onDidCloseWebView(({ webView }) => {

@@ -19,6 +19,10 @@ const mockUnsubOpen = vi.fn();
 const mockUnsubUpdate = vi.fn();
 const mockUnsubClose = vi.fn();
 
+// Create a wrapper object so we can access mockLoggerWarn after initialization
+const mockState = { loggerWarn: vi.fn() };
+const mockLoggerWarn = mockState.loggerWarn;
+
 vi.mock('@papi/frontend', () => ({
   default: {
     webViews: {
@@ -36,6 +40,7 @@ vi.mock('@papi/frontend', () => ({
       },
       getAllOpenWebViewDefinitions: () => mockGetAllOpenWebViewDefinitions(),
     },
+    logger: { warn: (...args: unknown[]) => mockLoggerWarn(...args) },
   },
 }));
 
@@ -48,6 +53,7 @@ beforeEach(() => {
   mockUnsubOpen.mockClear();
   mockUnsubUpdate.mockClear();
   mockUnsubClose.mockClear();
+  mockLoggerWarn.mockClear();
 });
 
 afterEach(() => {
@@ -300,26 +306,55 @@ describe('useOpenProjectTabs', () => {
     expect(result.current).toHaveLength(2);
   });
 
-  it('falls back to live events when getAllOpenWebViewDefinitions rejects', async () => {
-    mockGetAllOpenWebViewDefinitions.mockRejectedValueOnce(new Error('papi unavailable'));
-    const { result } = renderHook(() => useOpenProjectTabs());
-    // Wait one microtask flush so the rejection settles before we drive a live event.
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(result.current).toEqual([]);
-    const handler = mockOnDidOpenWebView.mock.calls[0][0];
-    act(() =>
-      handler({
-        webView: {
-          id: 'wv-live',
+  it('retries a failed seed and uses what the retry brings', async () => {
+    vi.useFakeTimers();
+    try {
+      mockGetAllOpenWebViewDefinitions.mockRejectedValueOnce(new Error('window 3 unreachable'));
+      mockGetAllOpenWebViewDefinitions.mockResolvedValueOnce([
+        {
+          id: 'wv-seeded-late',
           webViewType: 'platformScriptureEditor.react',
           projectId: 'p-1',
           scrollGroupScrRef: 0,
         },
-      }),
-    );
-    expect(result.current).toHaveLength(1);
-    expect(result.current[0].webViewId).toBe('wv-live');
+      ]);
+      const { result } = renderHook(() => useOpenProjectTabs());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].webViewId).toBe('wv-seeded-late');
+      expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('warns and still serves live events when every seed attempt fails', async () => {
+    vi.useFakeTimers();
+    try {
+      mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('window 3 unreachable'));
+      const { result } = renderHook(() => useOpenProjectTabs());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10000);
+      });
+      expect(result.current).toEqual([]);
+      // One warning per failed attempt — the final one marks the seed as given up
+      expect(mockLoggerWarn).toHaveBeenCalledTimes(3);
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-live',
+            webViewType: 'platformScriptureEditor.react',
+            projectId: 'p-1',
+            scrollGroupScrRef: 0,
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
