@@ -473,6 +473,17 @@ async function openWebView(
     return openWebViewInNewWindow(webViewType, options);
   }
 
+  // A named window outranks placement inference: the caller said where. It never outranks
+  // `existingId` reuse above — an existing view stays wherever it lives.
+  if (options?.targetWindowId !== undefined) {
+    const shard = await resolveShardForWindow(
+      NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+      webViewShards,
+      options.targetWindowId,
+    );
+    return shard.openWebView(webViewType, layout, options);
+  }
+
   // A layout naming a tab or tab group names the window that holds it, so it routes the same way an
   // existingId does — and after it, because a window shard that finds the existing web view raises it and
   // returns before it ever reads the layout. Routing in the other order would send the call to a
