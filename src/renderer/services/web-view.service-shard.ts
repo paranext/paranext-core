@@ -859,13 +859,6 @@ async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEnt
 let layoutLoadGeneration = 0;
 
 /**
- * Whether the layout just fetched said this window is waiting for routed content. Consumed (and
- * reset) by `loadLayout`, which then skips the default-layout supplement — a window created for one
- * specific web view starts with nothing else. Set by {@link getPersistedLayout}.
- */
-let lastPersistedLayoutWasPendingContent = false;
-
-/**
  * Loads layout information into the dock layout.
  *
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
@@ -911,11 +904,13 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
   // subsequent `saveLayout`) sees the current mode without another settings round-trip.
   currentInterfaceMode = interfaceMode;
-  const persistedLayout =
+  // Simple mode never calls `getPersistedLayout` — the static `simpleLayout` never signals pending
+  // content, so this always keeps the default-layout supplement.
+  const persistedResult =
     interfaceMode === 'simple'
-      ? dockLayoutVar.simpleLayout
+      ? { layout: dockLayoutVar.simpleLayout, isPendingContent: false }
       : await getPersistedLayout(dockLayoutVar.testLayout, isSuperseded);
-  if (persistedLayout === undefined) {
+  if (persistedResult === undefined) {
     // The only reason `getPersistedLayout` withholds a layout: a newer load started while it was
     // waiting on the main process. Withholding rather than answering "empty" is what keeps this
     // from being a dock wipe if the checkpoint below is ever moved.
@@ -924,16 +919,13 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
     );
     return;
   }
-  // Consumed here, once, regardless of interface mode — a simple-mode load (which never calls
-  // `getPersistedLayout`) must not pick up a stale latch left by an earlier power-mode load.
-  const skipSupplement = lastPersistedLayoutWasPendingContent;
-  lastPersistedLayoutWasPendingContent = false;
+  const { layout: persistedLayout, isPendingContent } = persistedResult;
   // Every layout gets its web view ids scoped to this window, including one restored from
   // persistence: a saved entry's ids carry the window id of the session that saved them (window
   // ids are not stable across restarts), and the legacy pre-multi-window layout carries unscoped
   // ids. Re-scoping replaces the suffix rather than stacking another one, so it is safe on both.
   const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
-  if (skipSupplement) {
+  if (isPendingContent) {
     // A window created to receive one specific web view, routed separately, starts with nothing
     // else — skip the default-layout supplement entirely, without even fetching its flags.
     dockLayoutVar.loadLayout(layoutToLoad);
@@ -1048,12 +1040,14 @@ let hasLoggedHeldLayoutPushes = false;
  *
  * @param defaultLayout Layout to fall back to when the legacy path has nothing
  * @param isSuperseded Whether the load this read belongs to has since been replaced by a newer one
- * @returns The layout to load, or `undefined` if this load was superseded
+ * @returns The layout to load along with whether this window is waiting for routed content (in
+ *   which case the caller skips the default-layout supplement — a window created for one specific
+ *   web view starts with nothing else), or `undefined` if this load was superseded
  */
 async function getPersistedLayout(
   defaultLayout: LayoutInfo,
   isSuperseded: () => boolean,
-): Promise<LayoutInfo | undefined> {
+): Promise<{ layout: LayoutInfo; isPendingContent: boolean } | undefined> {
   let response: WindowLayoutGetResponse | undefined;
   for (let attempt = 1; attempt <= GET_PERSISTED_LAYOUT_ATTEMPTS; attempt += 1) {
     try {
@@ -1084,16 +1078,14 @@ async function getPersistedLayout(
     logger.warn(
       `Could not get this window's saved layout after ${GET_PERSISTED_LAYOUT_ATTEMPTS} attempts; starting empty and holding layout pushes until a load succeeds`,
     );
-    return EMPTY_DOCK_LAYOUT;
+    return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
   }
   isRunningOnFallbackLayout = false;
-  if (response.kind === 'entry') return response.layout;
-  if (response.kind === 'empty') return EMPTY_DOCK_LAYOUT;
-  if (response.kind === 'pending-content') {
-    lastPersistedLayoutWasPendingContent = true;
-    return EMPTY_DOCK_LAYOUT;
-  }
-  return getLegacySavedLayout(defaultLayout);
+  if (response.kind === 'entry') return { layout: response.layout, isPendingContent: false };
+  if (response.kind === 'empty') return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
+  if (response.kind === 'pending-content')
+    return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: true };
+  return { layout: getLegacySavedLayout(defaultLayout), isPendingContent: false };
 }
 
 /**
