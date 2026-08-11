@@ -247,8 +247,20 @@ interface ReplaceTabLayout {
   targetTabId: string;
 }
 
+/**
+ * Information about opening a tab in its own application window.
+ *
+ * In Simple mode — which is single-window by design — this degrades to `'tab'`: the web view opens
+ * as a normal tab in the window the user is working in.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export interface WindowLayout {
+  type: 'window';
+}
+
 /** Information about how a Platform.Bible tab fits into the dock layout */
-export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
+export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout | WindowLayout;
 
 /** Props that are passed to the web view tab component */
 export type WebViewTabProps = WebViewDefinition;
