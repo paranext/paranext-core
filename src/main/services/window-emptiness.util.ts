@@ -34,27 +34,38 @@ export type WindowEmptinessHandler = ((
 /**
  * Build a `windowLayout:emptied` handler over the given dependencies.
  *
- * @param deps.countWindows Number of windows currently open, main process's authority
+ * @param deps.countWindows Number of windows currently open and NOT already closing, main process's
+ *   authority
  * @param deps.closeWindow Close the window with the given id
+ * @param deps.markWindowClosing Record that this window's close has been decided
  * @returns A handler taking the reporting window's id and why it is empty (both `unknown`, as they
  *   arrive over the wire unvalidated), answering what that window should do — see
  *   {@link WindowEmptinessHandler} for the `handleWindowGone` the wiring must call
  */
 export function createWindowEmptinessHandler(deps: {
+  /** Number of windows currently open and NOT already closing — main process's authority */
   countWindows: () => number;
+  /** Close the window with the given id */
   closeWindow: (windowId: number) => void;
+  /**
+   * Record that this window's close has been decided, so the count above excludes it from every
+   * later decision and nothing routes new content into it while its close is in flight
+   */
+  markWindowClosing: (windowId: number) => void;
 }): WindowEmptinessHandler {
   /**
-   * Windows already told "closing" that are still open. Counted as gone, so two windows emptying
-   * while both are still open can never both be told to close — the second one is, by then, the
-   * last window standing.
+   * Windows already told "closing" that are still open.
+   *
+   * Its role narrows to repeat-answer idempotence: a window that reports empty again while its
+   * close is still in flight gets the same answer again, and nothing more — a second close on a
+   * closing window trips main's force-close escape hatch, which destroys the window outright and
+   * abandons the close-time work the first close started. The count no longer subtracts this set: a
+   * decided close is marked through `deps.markWindowClosing`, and `deps.countWindows` excludes
+   * marked windows itself.
    *
    * An entry lives until {@link WindowEmptinessHandler.handleWindowGone} says the window really went
    * away, NOT until its close is handed out: closing a window runs an intercepted close whose async
-   * close tasks can take seconds, and the window stays open, and counted, throughout. Because an
-   * entry outlives the count it is subtracted from only if that call never comes, the worst a stale
-   * entry can do is keep a window open that could have closed — never close one that should have
-   * stayed.
+   * close tasks can take seconds, and the window stays open throughout.
    */
   const closingWindowIds = new Set<number>();
 
@@ -68,15 +79,16 @@ export function createWindowEmptinessHandler(deps: {
 
     if (reason === 'born-empty') return { action: 'open-home' };
 
-    // A window already on its way out gets the same answer again, and nothing more: a second close
-    // on a closing window trips main's force-close escape hatch, which destroys the window outright
-    // and abandons the close-time work the first close started.
+    // Repeat-answer idempotence — see the set's own doc comment
     if (closingWindowIds.has(windowId)) return { action: 'closing' };
 
-    const remainingWindows = deps.countWindows() - closingWindowIds.size;
+    const remainingWindows = deps.countWindows();
     if (remainingWindows <= 1) return { action: 'open-home' };
 
     closingWindowIds.add(windowId);
+    // Marked before the close is even scheduled: from this decision on, the window must not
+    // count toward anyone's last-window arithmetic
+    deps.markWindowClosing(windowId);
     // Close on the next tick, after this response has gone out — closing first can tear down the
     // socket the answer needs to travel on
     setTimeout(() => {
