@@ -238,6 +238,13 @@ When opening a WebView via `papi.webViews.openWebView()`, you can specify how it
 
 Additionally, `targetWindowId` **(experimental)** lets you open a WebView into a specific named window instead of the one the user is working in. Applies to `'tab'`, `'panel'`, and `'float'` layouts only; combining it with `'window'` is an error, and combining it with `'replace-tab'` is likewise an error—the tab being replaced already names the window. The open fails if no such window exists — it never falls back to another window. This is a runtime-only handle; window IDs are reused across sessions, so never persist one. Retrieve the current window's ID via `platform.getFocusedWindowId`.
 
+Two **experimental** commands expose moving a WebView between windows:
+`platform.moveWebViewToNewWindow(webViewId)` and
+`platform.moveWebViewToWindow(webViewId, targetWindowId)`. A move closes the WebView in its
+current window and reopens it — same id, same `useWebViewState` state — in the target, so
+consumers see a close event then an open event, and a WebView controller reference held across a
+move must be re-acquired.
+
 ### Styling Requirements
 
 - Use **TailwindCSS** (Tailwind v4) with the `tw:` prefix for theming

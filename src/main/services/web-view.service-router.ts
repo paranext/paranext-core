@@ -593,6 +593,82 @@ async function recoverAfterFailedMove(
   );
 }
 
+/** The move command names this router claims */
+type MoveCommandName = 'platform.moveWebViewToNewWindow' | 'platform.moveWebViewToWindow';
+
+/** OpenRPC documentation for the move commands, keyed like {@link SETTINGS_COMMAND_DOCS} */
+const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
+  'platform.moveWebViewToNewWindow': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Move a web view to a window created for it: close it where it is, reopen it there. ' +
+        'Does nothing in Simple mode',
+      params: [
+        {
+          name: 'webViewId',
+          required: true,
+          summary: 'Web view to move',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        summary: 'Id of the web view in its new window (the same id it had)',
+        schema: { type: 'string' },
+      },
+    },
+  },
+  'platform.moveWebViewToWindow': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Move a web view to the given window: close it where it is, reopen it there. Moving it ' +
+        'to its own window does nothing; naming a window that does not exist is an error',
+      params: [
+        {
+          name: 'webViewId',
+          required: true,
+          summary: 'Web view to move',
+          schema: { type: 'string' },
+        },
+        {
+          name: 'targetWindowId',
+          required: true,
+          summary: "The target window's runtime id — reused across sessions, never persist one",
+          schema: { type: 'number' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        summary: 'Id of the web view in its new window (the same id it had)',
+        schema: { type: 'string' },
+      },
+    },
+  },
+};
+
+/** Handle `platform.moveWebViewToNewWindow`. Arguments arrive untyped over the network */
+async function moveWebViewToNewWindow(webViewId: unknown): Promise<WebViewId> {
+  if (typeof webViewId !== 'string')
+    throw new Error(`platform.moveWebViewToNewWindow needs a web view id; got ${typeof webViewId}`);
+  return moveWebView(webViewId, 'new');
+}
+
+/** Handle `platform.moveWebViewToWindow`. Arguments arrive untyped over the network */
+async function moveWebViewToWindow(
+  webViewId: unknown,
+  targetWindowId: unknown,
+): Promise<WebViewId> {
+  if (typeof webViewId !== 'string')
+    throw new Error(`platform.moveWebViewToWindow needs a web view id; got ${typeof webViewId}`);
+  if (typeof targetWindowId !== 'number')
+    throw new Error(
+      `platform.moveWebViewToWindow needs a target window id number; got ${typeof targetWindowId}`,
+    );
+  return moveWebView(webViewId, targetWindowId);
+}
+
 /** Internal-only export for testing; not for use in development */
 export const testingWebViewServiceRouter = { moveWebView };
 
@@ -1028,6 +1104,16 @@ export async function startWebViewServiceRouter(): Promise<void> {
       docs: SETTINGS_COMMAND_DOCS['platform.openUserSettings'],
       routing: 'focus',
     },
+    {
+      commandName: 'platform.moveWebViewToNewWindow',
+      docs: MOVE_COMMAND_DOCS['platform.moveWebViewToNewWindow'],
+      routing: 'owner',
+    },
+    {
+      commandName: 'platform.moveWebViewToWindow',
+      docs: MOVE_COMMAND_DOCS['platform.moveWebViewToWindow'],
+      routing: 'owner',
+    },
   ]);
 
   await networkObjectService.set<WebViewServiceType>(
@@ -1057,6 +1143,16 @@ export async function startWebViewServiceRouter(): Promise<void> {
       serializeRequestType(CATEGORY_COMMAND, 'platform.openUserSettings'),
       openUserSettings,
       SETTINGS_COMMAND_DOCS['platform.openUserSettings'],
+    ),
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, 'platform.moveWebViewToNewWindow'),
+      moveWebViewToNewWindow,
+      MOVE_COMMAND_DOCS['platform.moveWebViewToNewWindow'],
+    ),
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, 'platform.moveWebViewToWindow'),
+      moveWebViewToWindow,
+      MOVE_COMMAND_DOCS['platform.moveWebViewToWindow'],
     ),
   ]);
   logger.info('WebView service router registered');
