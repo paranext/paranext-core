@@ -7,6 +7,7 @@ import {
   CharacterMarkerSelection,
   computeCharacterMarkerCoverage,
   isEmptyCoverage,
+  isMixedCoverage,
 } from './character-marker-coverage.utils';
 import { generateCharacterMarkerMenuListItems } from './character-marker-menu.utils';
 import { CharacterMarkerControlProps } from './character-marker-control/character-marker-control.component';
@@ -180,9 +181,9 @@ export function useCharacterMarkerState({
   // half is O(1) by design, so recomputing every render costs nothing and buys correctness.
   let isMixed: boolean;
   if (coverage) {
-    // More than one covering marker, or a mix of covered and uncovered text.
-    const coveringMarkers = Object.keys(coverage.markerStates);
-    isMixed = coveringMarkers.length > 1 || (coveringMarkers.length > 0 && coverage.hasUncovered);
+    // Shared with the menu's remove-row decision so this label and that row cannot disagree about
+    // the same selection.
+    isMixed = isMixedCoverage(coverage);
   } else {
     // O(1) fallback while the menu is closed. It over-reports — a selection spanning two adjacent
     // same-marker nodes has two paths — which is corrected the moment coverage arrives.

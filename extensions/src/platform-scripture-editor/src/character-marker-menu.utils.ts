@@ -20,6 +20,7 @@ import { RemoveFormatting } from 'lucide-react';
 import {
   CharacterMarkerCoverage,
   CharacterMarkerSelectionState,
+  isMixedCoverage as getIsMixedCoverage,
 } from './character-marker-coverage.utils';
 
 const REMOVE_CHARACTER_MARKER_KEY: LocalizeKey =
@@ -28,10 +29,8 @@ const REMOVE_CHARACTER_MARKER_KEY: LocalizeKey =
  * The catch-all row's label, shown when the selection carries more than one character marker or
  * mixes marked and unmarked text.
  *
- * Deliberately NOT "Remove all character markers". One argument-less call removes the innermost
- * marker of each covered run, so a nested stack takes one pass per layer — a label promising "all"
- * would overstate what a single activation does. "Remove character markers" stays true in every
- * case.
+ * Deliberately NOT "Remove all character markers" — one activation peels a single nesting layer, so
+ * "all" would overstate it. ADR-0011 has the full rationale.
  */
 const REMOVE_CHARACTER_MARKERS_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_characterMarkerMenu_removeMarkers%';
@@ -142,8 +141,8 @@ export function generateCharacterMarkerMenuListItems(
     changeCharacterMarker?: (fromMarker: string, toMarker: string) => void;
     /**
      * Removes character markers, keeping their content. Called with a marker to remove that one,
-     * and with no argument to remove every marker the selection covers — which the editor does in a
-     * single update, so it stays a single undo step. Omit to offer no remove row at all.
+     * and with no argument to peel one nesting layer from every run the selection covers
+     * (ADR-0011). Omit to offer no remove row at all.
      */
     removeCharacterMarker?: (marker?: string) => void;
   },
@@ -168,15 +167,10 @@ export function generateCharacterMarkerMenuListItems(
       ? rawCurrentCharacterMarker
       : undefined;
 
-  const coveringMarkers = coverage ? Object.keys(coverage.markerStates) : [];
-  // More than one covering marker, or a mix of covered and uncovered text. Deliberately NOT read
-  // off `currentCharacterMarker`: the state hook resolves that to a marker whenever exactly one
-  // covers the selection, including when half the selection is unmarked — so a marked run plus
-  // adjacent plain text would otherwise offer to "remove the marker" as if that were the whole
-  // story.
-  const isMixedCoverage =
-    !!coverage &&
-    (coveringMarkers.length > 1 || (coveringMarkers.length > 0 && coverage.hasUncovered));
+  // See `isMixedCoverage` for what "mixed" means and why it is not read off `currentCharacterMarker`.
+  // Shared with the trigger's `(mixed)` label so the label and this menu's remove row cannot
+  // disagree about the same selection.
+  const isMixedCoverage = !!coverage && getIsMixedCoverage(coverage);
 
   // Every generated item carries a marker code — `MarkerMenuItem.marker` is optional only for rows
   // like the remove rows below, which are prepended after sorting — so the sort compares codes
@@ -186,45 +180,69 @@ export function generateCharacterMarkerMenuListItems(
   ).flatMap((markers) =>
     markers
       .filter((marker) => isCharacterMarker(marker))
-      .map((marker) => ({
-        marker,
-        title: localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
-        selectionState: coverage ? (coverage.markerStates[marker] ?? 'none') : undefined,
-        isDisabled: isMarkerRowInert(
-          coverage ? (coverage.markerStates[marker] ?? 'none') : undefined,
+      .map((marker) => {
+        // Normalized ONCE and shared by all three consumers below — the displayed state, the inert
+        // test, and the action. `isMarkerRowInert` must mirror the action's branches
+        // condition-for-condition, so reading the raw map in one place and the `?? 'none'` form in
+        // another is how those two silently diverge the moment a `'none'`-specific branch is added.
+        //
+        // The `| undefined` on `coveredState` is load-bearing, not decoration. `markerStates` is a
+        // `Record<string, CharacterMarkerCoverageState>`, so TypeScript types an arbitrary-key lookup
+        // as always-present and would treat the `?? 'none'` below as dead code — narrowing
+        // `selectionState` to `'all' | 'partial' | undefined` and rejecting the `=== 'none'` test.
+        // At runtime the fallback absolutely does fire: absence from the map is exactly how coverage
+        // encodes "this marker covers none of the selection".
+        const coveredState: CharacterMarkerCoverage['markerStates'][string] | undefined =
+          coverage?.markerStates[marker];
+        // Absent coverage stays `undefined` — the menu only samples coverage on open, which is a
+        // different thing from "sampled, and nothing is covered".
+        const selectionState: CharacterMarkerSelectionState | undefined = coverage
+          ? (coveredState ?? 'none')
+          : undefined;
+        return {
           marker,
-          currentCharacterMarker,
-          !!removeCharacterMarker,
-          !!changeCharacterMarker,
-        ),
-        action: () => {
-          const selectionState = coverage ? coverage.markerStates[marker] : undefined;
-          // Toggle off: the marker already covers the whole selection, so picking it again means
-          // "take it away". Applying it again would nest an identical character marker.
-          if (selectionState === 'all' && removeCharacterMarker) removeCharacterMarker(marker);
-          // Inert while partially covering: extending the marker over the rest of the selection
-          // needs an editor operation that does not exist yet, and `insertMarker` would nest
-          // instead of
-          // extending. Falling through to the branches below would do exactly that. Also excludes
-          // 'all': that case is handled above, and without a `removeCharacterMarker` (the option is
-          // typed optional) it would otherwise fall through here and nest a duplicate marker.
-          else if (selectionState !== 'partial' && selectionState !== 'all') {
-            // Never `insertMarker` while a character marker is already applied: it *nests* rather
-            // than replaces. Verified 2026-08-04 against the editor package by driving
-            // `getUsjMarkerAction('bd')` over a selection inside an existing `\nd` CharNode, which
-            // produced `char:nd > char:bd > "LORD"` — and `char:nd > char:nd` for the same marker
-            // picked twice. `$charNodeTransform`
-            // (`libs/shared-react/src/plugins/usj/CharNodePlugin.tsx`) only coalesces *sibling*
-            // CharNodes, so the nesting survives into the saved USJ. So when a marker is applied,
-            // change it if the editor can, and otherwise stay inert.
-            if (currentCharacterMarker) {
-              if (marker !== currentCharacterMarker)
-                changeCharacterMarker?.(currentCharacterMarker, marker);
-            } else editorRef.current?.insertMarker(marker);
-          }
-          closeMarkersMenu();
-        },
-      })),
+          title:
+            localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
+          selectionState,
+          isDisabled: isMarkerRowInert(
+            selectionState,
+            marker,
+            currentCharacterMarker,
+            !!removeCharacterMarker,
+            !!changeCharacterMarker,
+          ),
+          action: () => {
+            // Toggle off: the marker already covers the whole selection, so picking it again means
+            // "take it away". Applying it again would nest an identical character marker.
+            if (selectionState === 'all' && removeCharacterMarker) removeCharacterMarker(marker);
+            // An ALLOWLIST, not `!== 'partial' && !== 'all'`. This is the only branch that may reach
+            // `insertMarker`, so it must admit exactly the states where adding a marker is defined:
+            // nothing covered, or no coverage sampled at all. Stated positively, a future fourth
+            // selection state is excluded by default rather than falling into the insert path.
+            //
+            // The two states it excludes, and why: 'partial' — extending the marker over the rest of
+            // the selection needs an editor operation that does not exist yet, and `insertMarker`
+            // would nest rather than extend. 'all' — handled above, but without a
+            // `removeCharacterMarker` (the option is typed optional) it would otherwise fall through
+            // here and nest a duplicate marker.
+            else if (selectionState === 'none' || selectionState === undefined) {
+              // Never `insertMarker` while a character marker is already applied: it *nests* rather
+              // than replaces. Verified 2026-08-04 against the editor package by driving
+              // `getUsjMarkerAction('bd')` over a selection inside an existing `\nd` CharNode, which
+              // produced `char:nd > char:bd > "LORD"` — and `char:nd > char:nd` for the same marker
+              // picked twice. `$charNodeTransform`
+              // (`libs/shared-react/src/plugins/usj/CharNodePlugin.tsx`) only coalesces *sibling*
+              // CharNodes, so the nesting survives into the saved USJ. So when a marker is applied,
+              // change it if the editor can, and otherwise stay inert.
+              if (currentCharacterMarker) {
+                if (marker !== currentCharacterMarker)
+                  changeCharacterMarker?.(currentCharacterMarker, marker);
+              } else editorRef.current?.insertMarker(marker);
+            }
+            closeMarkersMenu();
+          },
+        };
+      }),
   );
   const sortedMarkerMenuItems = markerMenuItems.sort((a, b) => a.marker.localeCompare(b.marker));
 
@@ -249,13 +267,9 @@ export function generateCharacterMarkerMenuListItems(
   // `'none'` (nothing is unmarked), which renders as `aria-checked="false"` and is announced as
   // "not checked" beside an action that is fully available and certain to remove markers.
   //
-  // Removing the character markers a selection covers is ONE argument-less call, not a loop: the
-  // editor walks each covered run and removes that run's innermost marker in a single update, so
-  // undo stays a single step. Looping here would produce one undo entry per layer, and its
-  // termination condition is not readable synchronously (`getUsj()` returns a cached ref the
-  // non-discrete update does not refresh). A nested OUTER marker therefore survives the pass — the
-  // per-marker rows are the exact path for it, since the editor matches a NAMED marker at any
-  // nesting depth while `undefined` matches only the innermost.
+  // Removing the character markers a selection covers is ONE argument-less call, not a loop, so a
+  // nested OUTER marker survives the pass and the per-marker rows are the exact path for it. See
+  // ADR-0011 for why looping was rejected.
   const removeRow: MarkerMenuItem = isMixedCoverage
     ? {
         title: localizedStrings[REMOVE_CHARACTER_MARKERS_KEY] ?? REMOVE_CHARACTER_MARKERS_KEY,

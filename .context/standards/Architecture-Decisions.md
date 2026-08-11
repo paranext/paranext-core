@@ -377,3 +377,41 @@ step, no automation. Just a record.
   and only partly covered is skipped without notification — be reported to the user.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
+
+## ADR-0012: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
+
+- **Date:** 2026-08-11
+- **Status:** Accepted
+- **Context:** Every destructive or sync-gated edit in `platform-scripture-editor` needs the same two
+  side effects around it: a best-effort version-history snapshot before the edit, and the standard
+  "editing paused during Send/Receive" notice when the S/R gate refuses it. Both had been inlined per
+  call site — the snapshot block three times (insert footnote, insert cross-reference, remove
+  character marker) and the sync notice twice. The snapshot block carries a non-obvious contract (the
+  `ERROR_UNIMPLEMENTED` sentinel that lets an older host without version history still perform the
+  edit), so a change to it had to be made in every copy, and the sync notice's severity and message
+  key could drift between copies. The character-marker work added the third and second copies
+  respectively, which is what surfaced this.
+- **Decision:** Consolidate both into `extensions/src/platform-scripture-editor/src/editor-side-effects.utils.ts`
+  and route every call site through it. `commitVersionHistorySnapshot(projectId, message,
+  editDescription)` owns the `ERROR_UNIMPLEMENTED` handling and the "no project means no snapshot, and
+  that is not an error" rule. `notifySyncEditBlocked(localizedStrings)` takes the strings rather than a
+  resolved message, so `SYNC_EDIT_BLOCKED_KEY` is named exactly once in the codebase and is listed in
+  the web view's key list via that const — a caller cannot reach the notice while spelling the key
+  itself. The module value-imports `@papi/frontend`, so it must stay out of `main.ts`'s import graph;
+  `extension-host-import-boundary.test.ts` enforces that.
+- **Alternatives:** **Extract only for the new character-marker path** — rejected: it reduces the
+  invariant from three copies to two rather than one, leaving the same drift risk with an extra
+  indirection. **Have the helper take a resolved message string** — rejected: the message key would
+  still be spelled at each call site, which is the specific thing that can drift. **A React hook
+  instead of plain async functions** — rejected: the insert paths call these from inside a message
+  handler, not at render time; the web view wraps the plain function in its own `useCallback` where it
+  needs a stable identity for dependency lists.
+- **Consequences:** One place to change either contract. The removal path additionally gates its
+  snapshot on a resolved editor ref, because unlike the insert paths it has a reachable no-op (the ref
+  is null until the editor mounts) and would otherwise write a restore point for an edit that never
+  happened. One no-op remains documented-but-undefended — the editor silently declines a removal it
+  cannot confine to the selection — for the same reason ADR-0011 records: there is no outcome signal
+  from `removeCharacterMarker` to branch on. New edit paths should route through this module rather
+  than inlining a fourth copy.
+- **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
+  and sync-notice blocks.

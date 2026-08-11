@@ -57,6 +57,23 @@ export function isEmptyCoverage(coverage: CharacterMarkerCoverage): boolean {
 }
 
 /**
+ * Whether a selection carries more than one character marker, or mixes marked and unmarked text.
+ *
+ * This is the test that decides the trigger's `(mixed)` label AND whether the menu swaps its single
+ * remove row for the catch-all remove row. Exported so those two answers come from one definition:
+ * they must agree, and they live in different files.
+ *
+ * Deliberately NOT read off a resolved "current marker": the state hook resolves that to a marker
+ * whenever exactly one covers the selection, INCLUDING when half the selection is unmarked — so a
+ * marked run plus adjacent plain text would otherwise read as a plain single-marker selection and
+ * offer to "remove the marker" as if that were the whole story.
+ */
+export function isMixedCoverage(coverage: CharacterMarkerCoverage): boolean {
+  const coveringMarkers = Object.keys(coverage.markerStates);
+  return coveringMarkers.length > 1 || (coveringMarkers.length > 0 && coverage.hasUncovered);
+}
+
+/**
  * Guard on the ancestor walk. USJ nesting is shallow in practice (book > para > char > char), so a
  * depth this size can only be reached by a malformed document or a JSONPath that resolves to
  * something unexpected — in which case stopping is better than looping.

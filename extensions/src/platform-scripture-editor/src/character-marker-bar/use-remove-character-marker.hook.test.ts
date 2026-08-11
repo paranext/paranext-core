@@ -119,6 +119,19 @@ describe('useRemoveCharacterMarker', () => {
     expect(removeCharacterMarker).toHaveBeenCalledWith('nd');
   });
 
+  it('takes no snapshot when the editor is not mounted', async () => {
+    // The ref starts out null until the editor mounts, and the removal used to run
+    // `editorRef.current?.removeCharacterMarker()` — so this path wrote a "Before removing character
+    // marker" restore point for an edit that could never happen. The snapshot is gated on the ref
+    // being resolved for exactly this reason.
+    // eslint-disable-next-line no-null/no-null
+    const result = renderRemove({ editorRef: { current: null } });
+
+    await expect(result.current('nd')).resolves.toBeUndefined();
+
+    expect(sendCommand).not.toHaveBeenCalled();
+  });
+
   it('refuses to remove while a Send/Receive has editing paused', async () => {
     const { ref, removeCharacterMarker } = makeEditorRef();
     const result = renderRemove({ editorRef: ref, isSyncBlocked: true });

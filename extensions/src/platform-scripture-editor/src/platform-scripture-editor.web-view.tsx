@@ -134,6 +134,11 @@ import { CharacterMarkerBarOverlay } from './character-marker-bar/character-mark
 import { CharacterMarkerBar } from './character-marker-bar/character-marker-bar.component';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import {
+  commitVersionHistorySnapshot,
+  notifySyncEditBlocked as sendSyncEditBlockedNotification,
+  SYNC_EDIT_BLOCKED_KEY,
+} from './editor-side-effects.utils';
+import {
   SyncBlockedBanner,
   SYNC_BLOCKED_BANNER_STRING_KEYS,
 } from './sync-blocked-banner.component';
@@ -187,7 +192,11 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
-  '%webView_platformScriptureEditor_error_syncEditBlocked%',
+  // The one listing of this key. Named via the const so the sync-blocked message, its severity, and
+  // its self-catching stay in one place (`editor-side-effects.utils.ts`) — the character-marker
+  // bar's removal action shows the same notice through the same helper and deliberately does not
+  // re-list the key.
+  SYNC_EDIT_BLOCKED_KEY,
   '%webView_platformScriptureEditor_error_noTextSelected%',
   '%webView_platformScriptureEditor_error_selectionContainsMarkers%',
   '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%',
@@ -623,21 +632,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   /**
    * Show the standard "editing paused during Send/Receive" warning notification (the
-   * `(SR_EDIT_BLOCKED)` gate rejection surfaced to the user). Extracted so the severity/message
-   * cannot drift across the several call sites that report it, and self-catching so fire-and-forget
-   * callers (the ones that cannot `await`) never surface an unhandled promise rejection from the
-   * notification service.
+   * `(SR_EDIT_BLOCKED)` gate rejection surfaced to the user).
+   *
+   * The severity, message key, and self-catching all live in
+   * {@link sendSyncEditBlockedNotification}, shared with the character-marker bar's removal action
+   * so they cannot drift across the call sites that report this. This wrapper exists only to bind
+   * `localizedStrings` and give the callback a stable identity for the effect dependency lists
+   * below.
    */
-  const notifySyncEditBlocked = useCallback(async () => {
-    try {
-      await papi.notifications.send({
-        severity: 'warning',
-        message: localizedStrings['%webView_platformScriptureEditor_error_syncEditBlocked%'],
-      });
-    } catch (e) {
-      logger.warn(`Failed to send the sync-edit-blocked notification: ${getErrorMessage(e)}`);
-    }
-  }, [localizedStrings]);
+  const notifySyncEditBlocked = useCallback(
+    () => sendSyncEditBlockedNotification(localizedStrings),
+    [localizedStrings],
+  );
 
   const paragraphSwitcherMenuItems = useMemo(
     () =>
@@ -865,56 +871,25 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'insertFootnoteAtSelection': {
-          // Commits a snapshot of the project to the version history
-          if (projectId)
-            try {
-              await papi.commands.sendCommand(
-                'paratextBibleSendReceive.commitChanges',
-                projectId,
-                localizedStrings['%versionHistoryCommit_beforeInsertFootnote%'],
-                true,
-              );
-            } catch (err: unknown) {
-              const errMessage = getErrorMessage(err);
-              // Requires the `commitChanges` command handler to throw
-              // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
-              // successfully handle if this command is not implemented in the application version
-              if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-                logger.info(errMessage);
-              } else {
-                logger.warn(
-                  `Error committing changes to version history before inserting footnote: ${getErrorMessage(err)}`,
-                );
-              }
-            }
+          // Commits a snapshot of the project to the version history. Best-effort: see
+          // `commitVersionHistorySnapshot`, which owns the ERROR_UNIMPLEMENTED handling shared with
+          // the cross-reference and character-marker-removal paths.
+          await commitVersionHistorySnapshot(
+            projectId,
+            localizedStrings['%versionHistoryCommit_beforeInsertFootnote%'],
+            'inserting footnote',
+          );
 
           editorRef.current?.insertMarker('f');
           break;
         }
         case 'insertCrossReferenceAtSelection': {
-          // Commits a snapshot of the project to the version history
-
-          if (projectId)
-            try {
-              await papi.commands.sendCommand(
-                'paratextBibleSendReceive.commitChanges',
-                projectId,
-                localizedStrings['%versionHistoryCommit_beforeInsertCrossReference%'],
-                true,
-              );
-            } catch (err: unknown) {
-              const errMessage = getErrorMessage(err);
-              // Requires the `commitChanges` command handler to throw
-              // `PlatformUnimplementedException` having the `ERROR_UNIMPLEMENTED` prefix to
-              // successfully handle if this command is not implemented in the application version
-              if (errMessage.includes('ERROR_UNIMPLEMENTED')) {
-                logger.info(errMessage);
-              } else {
-                logger.warn(
-                  `Error committing changes to version history before inserting cross-reference: ${getErrorMessage(err)}`,
-                );
-              }
-            }
+          // Commits a snapshot of the project to the version history — see the footnote case above.
+          await commitVersionHistorySnapshot(
+            projectId,
+            localizedStrings['%versionHistoryCommit_beforeInsertCrossReference%'],
+            'inserting cross-reference',
+          );
 
           editorRef.current?.insertMarker('x');
           break;
