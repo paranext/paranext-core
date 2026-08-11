@@ -21,7 +21,10 @@ import { DialogData } from '@shared/models/dialog-options.model';
 
 import { testLayout } from '@renderer/testing/test-layout.data';
 import { simpleLayout } from '@renderer/components/docking/simple-layout.data';
-import { reportDockEmptied, registerDockLayout } from '@renderer/services/web-view.service-shard';
+import {
+  handleDockEmptiedByRemoval,
+  registerDockLayout,
+} from '@renderer/services/web-view.service-shard';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-shard';
 import { logger } from '@shared/services/logger.service';
 
@@ -177,20 +180,28 @@ export function PlatformDockLayout() {
               }
             }
 
-            // If there are no more docked tabs, report it — main decides whether to dock Home or close
+            // If there are no more docked tabs, hand off the decision of what happens next
             if (direction === 'float' || direction === 'remove') {
               if (layout.dockbox.children.length === 1) {
-                const hasNoTabs = !dockLayoutRef.current.find(
+                const hasNoDockedTabs = !dockLayoutRef.current.find(
                   // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
                   (item) => isTab(item) && item.id !== currentTabId,
                   // Search through the docked tabs. This is the API for rc-dock, so we must use it
                   // eslint-disable-next-line no-bitwise
                   Filter.Docked | Filter.Tab,
                 );
-                if (hasNoTabs) {
-                  // Whether an emptied window closes or docks Home is the main process's call — it
-                  // is the only place that knows how many windows exist
-                  reportDockEmptied('emptied-by-removal');
+                if (hasNoDockedTabs) {
+                  // An empty dock is not the same as an empty window: a tab the user just floated
+                  // (or a dialog, which opens as a float) has not gone away. Only a window with
+                  // nothing left anywhere is reported, and whether such a window closes or docks
+                  // Home is the main process's call — it is the only place that knows how many
+                  // windows exist. Otherwise Home simply fills the dock sitting empty behind the
+                  // tabs that are still there.
+                  // `layout` is rc-dock's `LayoutBase`, and it is the layout the dock is changing
+                  // to, where `dockLayoutRef.current` still holds the one it is changing from.
+                  // Cross to the opaque `LayoutInfo` here, as elsewhere in this file.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  handleDockEmptiedByRemoval(layout as unknown as LayoutInfo);
                 }
               }
             }

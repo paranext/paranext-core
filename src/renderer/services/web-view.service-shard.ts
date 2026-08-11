@@ -2871,7 +2871,7 @@ export const openWebView = async (
  * nothing — the window is about to close. Only the main process knows how many windows exist, so
  * the close-or-home decision lives there; see the window-emptiness handler.
  */
-export async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
+async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
   try {
     const response = await sendNetworkRequest<[number, WindowEmptiedReason], WindowEmptiedResponse>(
       WINDOW_EMPTIED_REQUEST_TYPE,
@@ -2884,6 +2884,34 @@ export async function reportDockEmptied(reason: WindowEmptiedReason): Promise<vo
     logger.warn(
       `Reporting an empty dock failed; leaving the window as it is: ${getErrorMessage(e)}`,
     );
+  }
+}
+
+/**
+ * Act on this window's dock having just lost its last docked tab.
+ *
+ * Only a window with no tab left ANYWHERE is empty, and that is what gets reported (see
+ * {@link reportDockEmptied}) — the main process then decides whether it closes or docks Home. A tab
+ * that is floating, maximized, or in its own window has not gone away, and neither has the window
+ * holding it: reporting there would close a window with live content in it (an open dialog is a
+ * float too). The dock behind those tabs would sit empty, so Home fills it right here instead.
+ *
+ * Uses the same definition of empty as the born-empty check on a freshly loaded layout, so a window
+ * that would be closed for landing empty is exactly one that would be closed for being emptied.
+ *
+ * @param layout The layout the dock is changing to
+ */
+export async function handleDockEmptiedByRemoval(layout: LayoutInfo): Promise<void> {
+  if (!hasAnyTabs(layout)) {
+    await reportDockEmptied('emptied-by-removal');
+    return;
+  }
+  try {
+    await openWebView('platformGetResources.home', { type: 'tab' });
+  } catch (e) {
+    throw new Error(`web-view.service-shard error: Opening Home web view failed! ${e}`, {
+      cause: e,
+    });
   }
 }
 
