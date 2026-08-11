@@ -65,7 +65,6 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   ...WEB_VIEW_LOCALIZED_STRINGS,
 ];
 
-const defaultBooksPresent: string = '';
 const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
 /** Delay after typing stops before the current search term is saved to history. */
