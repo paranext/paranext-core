@@ -37,6 +37,11 @@ const buttonVariants = cva(
       size: {
         default:
           'tw:h-8 tw:gap-1.5 tw:px-2.5 tw:has-data-[icon=inline-end]:pe-2 tw:has-data-[icon=inline-start]:ps-2',
+        // CUSTOM: Renamed 'var(--radius-md)' to 'var(--tw-radius-md)' in the rounding utilities for
+        // the 'xs', 'sm', 'icon-xs', and 'icon-sm' sizes. 'src/index.css' imports Tailwind with
+        // 'prefix(tw)', which emits every '@theme' variable under a 'tw' prefix, so the
+        // boilerplate's unprefixed name resolves to nothing. That invalidates the whole 'min()' and
+        // leaves those four sizes with square corners.
         xs: 'tw:h-6 tw:gap-1 tw:rounded-[min(var(--tw-radius-md),10px)] tw:px-2 tw:text-xs tw:in-data-[slot=button-group]:rounded-lg tw:has-data-[icon=inline-end]:pe-1.5 tw:has-data-[icon=inline-start]:ps-1.5 tw:[&_svg:not([class*=size-])]:size-3',
         sm: 'tw:h-7 tw:gap-1 tw:rounded-[min(var(--tw-radius-md),12px)] tw:px-2.5 tw:text-[0.8rem] tw:in-data-[slot=button-group]:rounded-lg tw:has-data-[icon=inline-end]:pe-1.5 tw:has-data-[icon=inline-start]:ps-1.5 tw:[&_svg:not([class*=size-])]:size-3.5',
         lg: 'tw:h-9 tw:gap-1.5 tw:px-2.5 tw:has-data-[icon=inline-end]:pe-2 tw:has-data-[icon=inline-start]:ps-2',

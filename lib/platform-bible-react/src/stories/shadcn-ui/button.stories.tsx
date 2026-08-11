@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
+import { X } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 
 const meta: Meta<typeof Button> = {
@@ -296,5 +297,34 @@ export const ComplexInteraction: Story = {
       await expect(button).toBeInTheDocument();
       await expect(args.onClick).toHaveBeenCalledTimes(3);
     });
+  },
+};
+
+export const PressNudgeWithCallerTranslate: Story = {
+  render: () => (
+    <div className="tw:relative tw:w-64">
+      <input
+        aria-label="Search"
+        className="tw:h-8 tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-background tw:ps-2 tw:pe-8 tw:text-sm"
+        defaultValue="Search term"
+        readOnly
+      />
+      <Button
+        aria-label="Clear search"
+        className="tw:absolute tw:end-1 tw:top-1/2 tw:-translate-y-1/2"
+        size="icon-xs"
+        variant="ghost"
+      >
+        <X />
+      </Button>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The clear button is positioned by the caller with `tw:-translate-y-1/2`, the standard way to center an icon button inside an input. Hold it down: it should nudge 1px and stay vertically centered. The pressed nudge lives on `transform` rather than on a translate utility precisely so it composes with caller positioning instead of overwriting `--tw-translate-y`. No play function asserts the pressed geometry: it needs a held press and `tw:transition-all` animates it, so this story is the manual check. `button.test.tsx` pins the class instead.',
+      },
+    },
   },
 };
