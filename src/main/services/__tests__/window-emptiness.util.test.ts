@@ -77,6 +77,78 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     expect(closeWindow).toHaveBeenCalledTimes(1);
   });
 
+  test('a window emptying while an earlier one is still closing is not also told to close', () => {
+    // Closing a window runs an intercepted close whose async close tasks can take seconds, and the
+    // window is open — and counted — for all of that. Forgetting it the moment its close is handed
+    // out would tell the second window it is one of two, closing the app's last two windows at once.
+    vi.useFakeTimers();
+    countWindows.mockReturnValue(2);
+
+    expect(handler(1, 'emptied-by-removal')).toEqual({ action: 'closing' });
+    vi.runAllTimers();
+    expect(closeWindow).toHaveBeenCalledWith(1);
+
+    expect(handler(2, 'emptied-by-removal')).toEqual({ action: 'open-home' });
+
+    vi.runAllTimers();
+    expect(closeWindow).not.toHaveBeenCalledWith(2);
+  });
+
+  test('a window reporting again while it closes is told closing without a second close', () => {
+    vi.useFakeTimers();
+    countWindows.mockReturnValue(3);
+
+    expect(handler(1, 'emptied-by-removal')).toEqual({ action: 'closing' });
+    expect(handler(1, 'emptied-by-removal')).toEqual({ action: 'closing' });
+
+    vi.runAllTimers();
+    // A second close on a window already closing trips main's force-close escape hatch, abandoning
+    // the close-time work the first close started
+    expect(closeWindow).toHaveBeenCalledTimes(1);
+  });
+
+  test('once a closing window is really gone, the window left behind docks Home', () => {
+    vi.useFakeTimers();
+    countWindows.mockReturnValue(2);
+    expect(handler(1, 'emptied-by-removal')).toEqual({ action: 'closing' });
+    vi.runAllTimers();
+
+    handler.handleWindowGone(1);
+    countWindows.mockReturnValue(1);
+
+    expect(handler(2, 'emptied-by-removal')).toEqual({ action: 'open-home' });
+    vi.runAllTimers();
+    expect(closeWindow).not.toHaveBeenCalledWith(2);
+  });
+
+  test('a window that has gone away stops counting against the windows that are left', () => {
+    vi.useFakeTimers();
+    countWindows.mockReturnValue(2);
+    expect(handler(1, 'emptied-by-removal')).toEqual({ action: 'closing' });
+    vi.runAllTimers();
+
+    handler.handleWindowGone(1);
+    // Window 1 is gone and window 3 has opened since, so there are two windows open again
+    countWindows.mockReturnValue(2);
+
+    expect(handler(3, 'emptied-by-removal')).toEqual({ action: 'closing' });
+    vi.runAllTimers();
+    expect(closeWindow).toHaveBeenCalledWith(3);
+  });
+
+  test('a close that throws is warned about rather than left to escape the deferred callback', () => {
+    vi.useFakeTimers();
+    countWindows.mockReturnValue(2);
+    closeWindow.mockImplementation(() => {
+      throw new Error('the window was already destroyed');
+    });
+
+    expect(handler(1, 'emptied-by-removal')).toEqual({ action: 'closing' });
+
+    expect(() => vi.runAllTimers()).not.toThrow();
+    expect(mocks.loggerWarn).toHaveBeenCalled();
+  });
+
   test('a non-number window id answers open-home and logs a warning, never closing', () => {
     countWindows.mockReturnValue(2);
 
