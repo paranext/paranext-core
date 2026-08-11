@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   getAllOpenWebViewDefinitionsWithReachability,
   getOpenWebViewDefinitionsForWindow,
+  setWebViewWindowCreator,
   startWebViewServiceRouter,
 } from '@main/services/web-view.service-router';
 import {
@@ -34,6 +35,7 @@ const mocks = vi.hoisted(() => {
     loggerWarn: vi.fn(),
     loggerDebug: vi.fn(),
     registerRequestHandler: vi.fn(),
+    settingsGet: vi.fn(),
     shardAnnouncementListeners,
     onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
       shardAnnouncementListeners.create.push(listener);
@@ -78,6 +80,9 @@ vi.mock('@shared/services/network.service', () => ({
 }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { info: vi.fn(), warn: mocks.loggerWarn, debug: mocks.loggerDebug, error: vi.fn() },
+}));
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: { get: mocks.settingsGet },
 }));
 
 /** Capture the router object registered under the generic name */
@@ -157,6 +162,7 @@ describe('web view service router', () => {
     mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
     mocks.getFocusedWindowId.mockReturnValue(1);
+    mocks.settingsGet.mockResolvedValue('power');
   });
 
   describe('finding a window`s shard', () => {
@@ -533,6 +539,108 @@ describe('web view service router', () => {
 
     expect(result).toBe('wv-lower');
     expect(higher.openWebView).not.toHaveBeenCalled();
+  });
+
+  describe('a window layout opens into a new window', () => {
+    test('creates a window and opens the web view in it', async () => {
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      withWindows({ 1: focused, 7: created });
+      setWebViewWindowCreator({
+        createPendingContentWindow: vi.fn(async () => 7),
+        closeWindow: vi.fn(),
+      });
+      const router = await getRouter();
+
+      const openedId = await router.openWebView('someType', { type: 'window' });
+
+      expect(created.openWebView).toHaveBeenCalledWith('someType', { type: 'tab' }, undefined);
+      expect(focused.openWebView).not.toHaveBeenCalled();
+      expect(openedId).toBe('opened');
+    });
+
+    test('degrades to a tab in the focused window in simple mode', async () => {
+      mocks.settingsGet.mockResolvedValue('simple');
+      const focused = windowShard([]);
+      withWindows({ 1: focused });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'window' });
+
+      expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
+      expect(focused.openWebView).toHaveBeenCalledWith('someType', { type: 'tab' }, undefined);
+    });
+
+    test('degrades to a tab when the interface mode cannot be read', async () => {
+      mocks.settingsGet.mockRejectedValue(new Error('settings unavailable'));
+      const focused = windowShard([]);
+      withWindows({ 1: focused });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'window' });
+
+      expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
+      expect(focused.openWebView).toHaveBeenCalled();
+    });
+
+    test('closes the created window when its shard never appears', async () => {
+      vi.useFakeTimers();
+      try {
+        const focused = windowShard([]);
+        withWindows({ 1: focused });
+        const creator = { createPendingContentWindow: vi.fn(async () => 99), closeWindow: vi.fn() };
+        setWebViewWindowCreator(creator);
+        const router = await getRouter();
+
+        const opening = router.openWebView('someType', { type: 'window' });
+        // Take hold of the rejection before advancing the clock — same reasoning as
+        // target-shard-resolver.util.test.ts: an unattached rejection during the timer run is
+        // reported as an unhandled rejection against the whole file.
+        opening.catch(() => undefined);
+
+        await vi.runAllTimersAsync();
+
+        await expect(opening).rejects.toThrow();
+        expect(creator.closeWindow).toHaveBeenCalledWith(99);
+        expect(focused.openWebView).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test('closes the created window and answers nothing when the provider declines', async () => {
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      created.openWebView.mockResolvedValue(undefined);
+      withWindows({ 1: focused, 7: created });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      const openedId = await router.openWebView('someType', { type: 'window' });
+
+      expect(openedId).toBeUndefined();
+      expect(creator.closeWindow).toHaveBeenCalledWith(7);
+    });
+
+    test('refuses a window layout combined with a target window id', async () => {
+      const focused = windowShard([]);
+      withWindows({ 1: focused });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      await expect(
+        router.openWebView('someType', { type: 'window' }, { targetWindowId: 1 }),
+      ).rejects.toThrow('one or the other');
+
+      expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
   });
 
   describe('a layout that names a tab to open next to', () => {

@@ -554,6 +554,18 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    * disturb whatever window the user is currently looking at.
    */
   bringToFront?: boolean;
+  /**
+   * Id of the application window to open the web view in, instead of the window the user is working
+   * in. Applies to `tab`, `panel`, and `float` layouts; combining it with a `'window'` layout
+   * (which asks for a NEW window) is an error. The open fails if no such window is serving web
+   * views — a caller that names a window wants that window, not a guess.
+   *
+   * This is a runtime-only handle: window ids are reused across sessions, so never persist one. Get
+   * the current window's id via the `platform.getFocusedWindowId` command.
+   *
+   * @experimental This option is unstable and may change or disappear without notice
+   */
+  targetWindowId?: number;
 };
 
 /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
