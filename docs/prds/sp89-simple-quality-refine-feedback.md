@@ -1,7 +1,8 @@
 # Refine-pass feedback — Sprint 89 Simple Quality PRD
 
-> **Frozen record** — output of `/refine-prd docs/prds/sp89-simple-quality.md` run 2026-08-10
-> against commit `b7d0abd374a`. Reflects the repos and open PRs as of that date; follow the
+> **Frozen record** — outputs of `/refine-prd docs/prds/sp89-simple-quality.md`: first pass run
+> 2026-08-10 against commit `b7d0abd374a`; second pass (appended at bottom) run 2026-08-12 after
+> the first pass was incorporated. Reflects the repos and open PRs as of those dates; follow the
 > current PRD and code, not this document.
 
 ## What the PRD asks
@@ -109,3 +110,48 @@ sprint work the appetite should acknowledge.
 - PT-1641 root cause (open question 3) — fine once the acceptance bar is settled.
 - Where exactly the sync progress strings originate (from NTH-2's premise check) — an
   engineering verification, correctly not answered in the PRD.
+
+---
+
+# Second pass — 2026-08-12
+
+Run after the first pass was incorporated (commit `159fe0f6d8b` lineage). PT10 repo scan
+not re-run (the 2026-08-10 scan informed the incorporated edits); load-bearing PR states
+re-checked fresh on 2026-08-12: #2425 OPEN awaiting review (active 11 Aug), studio #171
+OPEN and out of draft, #2630 OPEN, #2529 OPEN, #2291 OPEN but untouched since mid-June.
+
+## Contradictions and gaps
+
+1. **NN-4 "priority order" reads backwards as a work order** — item 2 (#2425) is item
+   1's prerequisite; execution order is 2 → 1 → 3. Fix: one clarifying line.
+2. **NN-3 residual scope ambiguous** — NN-3 states #2425 "already contains fixes for
+   both" of its bug clusters; if fully true, NN-3 reduces to verify + regression test +
+   residuals and its fix work double-counts with NN-4. Engineering should map #2425 to
+   each NN-3 symptom during investigation.
+3. **NTH-9 vs the "no new functionality" no-go** — both cite the epic's framing for
+   opposite conclusions on completing the footnote toggle. Needs an explicit carve-out
+   sentence in Out of scope, ratified by the PO.
+4. **Stale header metadata** — status line still says first pass / 2026-08-10.
+5. **NN-5 degraded-consolidation rank unstated** — if the escape valve fires, where do
+   items 2–3 land relative to NTH-1…10?
+
+## Appetite sanity
+
+Structural risk has shifted from "two oversized NNs" (pass 1; mitigated by NN-5's valve
+and NN-6's mitigation-first scope) to a single critical path: **PR #2425 gates NN-3 and
+NN-4**, with external-repo #171 stacked on top. If #2425 stalls a week, a third of the
+NN commitment is blocked. Open question 4 (Tom's landing-cost read) should be treated as
+a sprint-entry gate, not a mid-sprint question.
+
+## Settle in the PRD
+
+1. NTH-9 carve-out sentence in Out of scope (+ PO ratification).
+2. NN-4 execution-order one-liner.
+3. NN-5 degraded-consolidation rank (suggested: joins the next-NTHs pool).
+4. Status-line bump.
+
+## Fine to leave open
+
+Open questions 1 (book-list UX — Ian/Alex), 3 (PT-1641 acceptance — Ian), 4 (#2425
+landing cost — Tom); NTH-7's landing-repo confirmation; NTH-10's user-facing metric
+(Matt G); NTH-2's concatenation location.
