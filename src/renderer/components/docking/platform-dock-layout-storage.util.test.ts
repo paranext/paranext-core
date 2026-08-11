@@ -49,6 +49,16 @@ describe('Dock Layout Component', () => {
         addTabToDock('this is wrong' as unknown as SavedTabInfo, layout, false, dockLayout),
       ).toThrow();
     });
+
+    it('should throw when receiving a window layout', () => {
+      const localMockDockLayout = mock(DockLayout);
+      const dockLayout = instance(localMockDockLayout);
+      const tab: SavedTabInfo = { id: 'myId', tabType: 'webView' };
+      const layout: Layout = { type: 'window' };
+
+      expect(() => addTabToDock(tab, layout, false, dockLayout)).toThrow(/window.*layout/i);
+    });
+
     // TODO: verify it adds an error tab if no/bad tab type provided
   });
 
