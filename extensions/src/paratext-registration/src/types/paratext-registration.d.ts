@@ -166,6 +166,7 @@ declare module 'papi-shared-types' {
 
   export interface DataProviders {
     'paratextRegistration.internetSettingsDataProvider': IInternetSettingsDataProvider;
+  }
 
   export interface SettingTypes {
     /**
