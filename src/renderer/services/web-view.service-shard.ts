@@ -2735,14 +2735,30 @@ export async function openOrReloadWebView(
     allowedFrameSources,
   };
 
-  const finalLayout = (await getDockLayout()).addWebViewToDock(
-    finalWebView,
-    layout,
-    optionsDefaulted.bringToFront,
-  );
+  let finalLayout: Layout | undefined;
+  try {
+    finalLayout = (await getDockLayout()).addWebViewToDock(
+      finalWebView,
+      layout,
+      optionsDefaulted.bringToFront,
+    );
+  } catch (e) {
+    // The provider has already run: a controller may be registered in the extension host, a
+    // nonce minted, and state persisted — and no close event will ever fire for a tab that
+    // never joined the dock. Emit the close event ourselves (controller disposal and nonce
+    // cleanup both subscribe to it) and evict the state, so a failed add leaves nothing
+    // behind. An already-open tab updates in place and returns before any throwing branch,
+    // so a throw here always means the tab never existed.
+    onDidCloseWebViewBufferedEmitter.emit({
+      webView: convertWebViewDefinitionToSaved(finalWebView),
+    });
+    deleteFullWebViewStateById(webView.id);
+    throw e;
+  }
   // See `trackSimpleEditorReplaceTab`'s doc: keeps the last-opened-project cache's id tracking
   // current the instant a `replace-tab` placement lands, regardless of webview type — the function
-  // itself no-ops unless `layout.targetTabId` is already a tracked Simple editor id.
+  // itself no-ops unless `layout.targetTabId` is already a tracked Simple editor id. Below the add
+  // rather than beside it: a placement that never joined the dock is not one to track.
   trackSimpleEditorReplaceTab(layout, finalWebView.id);
 
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
