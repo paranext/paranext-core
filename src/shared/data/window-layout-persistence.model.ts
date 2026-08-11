@@ -25,6 +25,13 @@ export const GET_WINDOW_LAYOUT_REQUEST_TYPE = serializeRequestType(CATEGORY_WIND
  */
 export const SAVE_WINDOW_LAYOUT_REQUEST_TYPE = serializeRequestType(CATEGORY_WINDOW_LAYOUT, 'save');
 
+/**
+ * Report that a window's dock became empty (or that it started that way) and learn what it should
+ * do about it. Takes the reporting window's id and a {@link WindowEmptiedReason}; returns a
+ * {@link WindowEmptiedResponse}.
+ */
+export const WINDOW_EMPTIED_REQUEST_TYPE = serializeRequestType(CATEGORY_WINDOW_LAYOUT, 'emptied');
+
 /** Position and size of a window or display, in screen coordinates */
 export type WindowRectangle = { x: number; y: number; width: number; height: number };
 
@@ -86,3 +93,22 @@ export type WindowLayoutGetResponse =
    * it: start truly empty (no default tabs, no supplement) and wait
    */
   | { kind: 'pending-content' };
+
+/**
+ * Why a window is reporting itself empty:
+ *
+ * - `emptied-by-removal`: it held tabs and the last one was just removed.
+ * - `born-empty`: it started with nothing to restore (a {@link WindowLayoutGetResponse} of `empty` or
+ *   `pending-content` that never received content) and stayed that way.
+ */
+export type WindowEmptiedReason = 'emptied-by-removal' | 'born-empty';
+
+/**
+ * What a window that reported itself empty should do, per the main process:
+ *
+ * - `open-home`: dock Home instead of staying empty — the window either started empty or is the last
+ *   window standing, and closing it would exit the application.
+ * - `closing`: the main process is closing this window. Windows are equal siblings; one with nothing
+ *   in it has nothing to be.
+ */
+export type WindowEmptiedResponse = { action: 'open-home' } | { action: 'closing' };
