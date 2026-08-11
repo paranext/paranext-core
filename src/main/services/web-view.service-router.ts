@@ -19,6 +19,7 @@ import {
   wasWindowEverReady,
 } from '@main/services/window-state.service';
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
+import { clearWindowPendingContent } from '@main/services/window-layout-persistence.service';
 import {
   createTargetShardResolver,
   resolveShardForWindow,
@@ -425,6 +426,11 @@ async function openWebViewInNewWindow(
     // The provider chose not to create the web view — the established "it did not happen"
     // answer. The window it would have lived in has no reason to exist.
     closeAbandonedWindow();
+  } else {
+    // The routed content is in the window now. Un-mark it, so a reload before its first layout
+    // push restores as an ordinary (empty) window instead of waiting forever for content that
+    // already arrived.
+    clearWindowPendingContent(windowId);
   }
   return openedWebViewId;
 }
