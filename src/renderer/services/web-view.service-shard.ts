@@ -2839,13 +2839,24 @@ export const openWebView = async (
 
   const optionsDefaulted = getWebViewOptionsDefaults(options);
 
+  // `existingProjectId` only qualifies a '?' search; a concrete existingId already names one
+  // exact web view, so combining it with a project filter is contradictory.
+  if (optionsDefaulted.existingProjectId !== undefined && optionsDefaulted.existingId !== '?')
+    throw new Error(
+      `openWebView: existingProjectId only qualifies an existingId of '?'; existingId ${JSON.stringify(optionsDefaulted.existingId)} already names an exact web view.`,
+    );
+
   // Find existing webView if one exists and handle it if it does
   if (optionsDefaulted.existingId) {
     const dockLayout = await getDockLayout();
     const existingWebView =
       optionsDefaulted.existingId === '?'
-        ? // If they provided '?', that means look for any webview with a matching webViewType
-          dockLayout.findFirstWebViewDefinitionByType(webViewType)
+        ? // If they provided '?', that means look for any webview with a matching webViewType,
+          // optionally limited to a project
+          dockLayout.findFirstWebViewDefinitionByType(
+            webViewType,
+            optionsDefaulted.existingProjectId,
+          )
         : // If they provided any other string, look for a webview with that ID
           dockLayout.getWebViewDefinition(optionsDefaulted.existingId);
 

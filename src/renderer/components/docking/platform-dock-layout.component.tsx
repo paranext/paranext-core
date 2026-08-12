@@ -79,8 +79,8 @@ export function PlatformDockLayout() {
     const unsub = registerDockLayout({
       onLayoutChangeRef,
       loadLayout: (layout: LayoutInfo) => loadLayout(dockLayoutRef.current, layout),
-      findFirstWebViewDefinitionByType: (webViewType: string) =>
-        findFirstWebViewDefinitionByType(dockLayoutRef.current, webViewType),
+      findFirstWebViewDefinitionByType: (webViewType: string, projectId?: string) =>
+        findFirstWebViewDefinitionByType(dockLayoutRef.current, webViewType, projectId),
       addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout, shouldBringToFront = true) =>
         addTabToDock(savedTabInfo, layout, shouldBringToFront, dockLayoutRef.current),
       addWebViewToDock: (webView: WebViewTabProps, layout: Layout, shouldBringToFront = true) =>

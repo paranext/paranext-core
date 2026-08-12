@@ -540,6 +540,16 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    */
   existingId?: string | '?';
   /**
+   * Limit an `existingId: '?'` search to web views showing this project.
+   *
+   * Only meaningful with `existingId: '?'` — a concrete `existingId` already names one exact web
+   * view, so combining it with a project filter is contradictory and is rejected as an error.
+   * Without this, `'?'` matches any web view of the type regardless of project.
+   *
+   * @experimental
+   */
+  existingProjectId?: string;
+  /**
    * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
    * relevant if `existingId` is provided. If `existingId` is not provided, this property is
    * ignored.
