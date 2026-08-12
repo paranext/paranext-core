@@ -288,13 +288,14 @@ async function getOpenWebViewDefinition(
 ): Promise<SavedWebViewDefinition | undefined> {
   const matcher: OwnerMatcher = { kind: 'id', webViewId };
   const { owner, hadUnreachableWindows } = await findOwner(matcher, 'getOpenWebViewDefinition');
+  if (owner) return owner.definition;
   // A window that could not be asked may be the one holding this web view, so an unresolved owner
   // is not evidence it does not exist.
   if (hadUnreachableWindows)
     throw new Error(
       `Could not getOpenWebViewDefinition ${describeMatcher(matcher)}: some windows were unreachable.`,
     );
-  return owner?.definition;
+  return undefined;
 }
 
 /** Everything the windows that answered have open, and the ready windows that did not answer */
