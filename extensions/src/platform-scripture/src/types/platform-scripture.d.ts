@@ -2504,12 +2504,16 @@ declare module 'papi-shared-types' {
      *   `papi.webViews.getOpenWebViewDefinition`.
      * @param selectedText Text to pre-fill the search box with (e.g. the editor's current selection
      *   when invoked via Ctrl+F). Pass `undefined` to open without a pre-filled search.
+     * @param sourceProjectId Explicit project/resource id to search, overriding the project
+     *   resolved from `editorWebViewId`. Passed by resource panels (model text, Bible texts,
+     *   commentaries) whose displayed resource differs from the tab's own project.
      * @returns Id of the find web view (existing or newly opened), or `undefined` if no editor web
      *   view id was provided or the web view has no project (nothing is opened in that case).
      */
     'platformScripture.openFind': (
       editorWebViewId?: string | undefined,
       selectedText?: string | undefined,
+      sourceProjectId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**

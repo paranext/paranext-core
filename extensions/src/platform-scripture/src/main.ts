@@ -15,6 +15,7 @@ import {
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import { FindHistoryDataProviderEngine } from './find/find-history.data-provider';
+import { resolveFindInvocation, type FindTriggerWebViewDefinition } from './find/open-find.utils';
 import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
@@ -283,19 +284,17 @@ async function openManageBooks(
 async function openFind(
   editorWebViewId: string | undefined,
   selectedText?: string,
+  sourceProjectId?: string,
 ): Promise<string | undefined> {
-  let projectId: FindWebViewOptions['projectId'];
-  let tabIdFromWebViewId: string | undefined;
-  let editorScrollGroupId: FindWebViewOptions['editorScrollGroupId'];
-
   logger.debug('Opening find UI');
 
+  let webViewDefinition: FindTriggerWebViewDefinition | undefined;
   if (editorWebViewId) {
-    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
-    projectId = webViewDefinition?.projectId;
-    tabIdFromWebViewId = webViewDefinition?.id;
-    editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
+    webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
   }
+
+  const { projectId, editorScrollGroupId, tabIdFromWebViewId, editorWebViewIdForFind } =
+    resolveFindInvocation(webViewDefinition, editorWebViewId, sourceProjectId);
 
   if (!projectId) {
     logger.debug('No project!');
@@ -306,7 +305,7 @@ async function openFind(
     projectId,
     editorScrollGroupId,
     bringToFront: true,
-    editorWebViewId,
+    editorWebViewId: editorWebViewIdForFind,
     initialSearchText: selectedText,
   };
 
@@ -683,6 +682,13 @@ export async function activate(context: ExecutionActivationContext) {
           name: 'selectedText',
           required: false,
           summary: 'Text to pre-fill in the search field and immediately search for',
+          schema: { type: 'string' },
+        },
+        {
+          name: 'sourceProjectId',
+          required: false,
+          summary:
+            "Explicit project/resource id to search, overriding the project resolved from the triggering web view. Used when the triggering tab displays a resource whose id differs from the tab's own project (model text, Bible texts, commentaries panels).",
           schema: { type: 'string' },
         },
       ],
