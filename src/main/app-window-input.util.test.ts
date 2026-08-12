@@ -94,6 +94,20 @@ describe('announceAppWindowInput', () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
+  it('swallows and warns when emitting throws, so the caller keeps running', async () => {
+    const { announceAppWindowInput, startAppWindowInputEvent, emit } = await loadFreshModule();
+    await startAppWindowInputEvent();
+    const { logger } = await import('@shared/services/logger.service');
+    // A disposed emitter or a throwing local subscriber surfaces here; the window's input hooks
+    // must still go on to detect the focus change
+    emit.mockImplementation(() => {
+      throw new Error('emitter is disposed');
+    });
+
+    expect(() => announceAppWindowInput(mouse('mouseDown'))).not.toThrow();
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
   it('emits nothing when the event failed to register', async () => {
     vi.resetModules();
     const networkService = await import('@shared/services/network.service');

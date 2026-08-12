@@ -11795,6 +11795,11 @@ declare module 'renderer/services/overlays/overlay.service-host' {
   ): Promise<TReturn | undefined>;
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
+  /**
+   * Resets the parent-document pointerdown record. Exported for use in tests only, so one test's
+   * recorded click cannot correlate with the next test's input signal. @internal
+   */
+  export function resetAppWindowInputState(): void;
   /** Initialize the overlay service. Called during renderer startup. */
   export function startOverlayService(): Promise<void>;
 }

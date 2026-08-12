@@ -1142,21 +1142,21 @@ describe('overlay.service-host', () => {
       content: { type: 'text', body: 'Popover body' },
     };
 
-    /**
-     * Time to advance past both OVERLAY_CREATION_GRACE_MS (300ms) and the parent-document
-     * pointerdown correlation window, so neither the just-created overlays nor a pointerdown
-     * recorded by an earlier test influences the decision under test.
-     */
-    const PAST_GRACE_AND_CORRELATION_MS = 400;
+    /** Time to advance past OVERLAY_CREATION_GRACE_MS (300ms) so overlays become dismissable */
+    const PAST_GRACE_MS = 400;
 
-    /** Time to advance past the deferred mouseDown decision */
+    /** Time to advance past the deferred mouseDown decision (APP_WINDOW_INPUT_DEFER_MS is 30ms) */
     const PAST_INPUT_DEFER_MS = 50;
 
     beforeEach(async () => {
       vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
       // Only track the subscription this test's startOverlayService call registers
       appWindowInputSubscribers.length = 0;
-      const { startOverlayService } = await import('./overlay.service-host');
+      const { startOverlayService, resetAppWindowInputState } = await import(
+        './overlay.service-host'
+      );
+      // Drop any pointerdown an earlier test recorded so it cannot correlate with this test's signal
+      resetAppWindowInputState();
       await startOverlayService();
     });
 
@@ -1189,7 +1189,7 @@ describe('overlay.service-host', () => {
       const popoverDismissed = overlayService.onPopoverDismissed(popoverId);
       expect(getOverlays()).toHaveLength(3);
 
-      vi.advanceTimersByTime(PAST_GRACE_AND_CORRELATION_MS);
+      vi.advanceTimersByTime(PAST_GRACE_MS);
       emitAppWindowInput('mouseDown');
       vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
 
@@ -1204,7 +1204,7 @@ describe('overlay.service-host', () => {
 
       const palettePromise = overlayService.showCommandPalette(paletteRequest, 'palette-click');
 
-      vi.advanceTimersByTime(PAST_GRACE_AND_CORRELATION_MS);
+      vi.advanceTimersByTime(PAST_GRACE_MS);
       dispatchParentDocumentPointerDown('insideOverlay');
       emitAppWindowInput('mouseDown');
       vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
@@ -1221,7 +1221,7 @@ describe('overlay.service-host', () => {
 
       const palettePromise = overlayService.showCommandPalette(paletteRequest, 'outside-click');
 
-      vi.advanceTimersByTime(PAST_GRACE_AND_CORRELATION_MS);
+      vi.advanceTimersByTime(PAST_GRACE_MS);
       dispatchParentDocumentPointerDown('outsideOverlay');
       emitAppWindowInput('mouseDown');
       vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
@@ -1240,7 +1240,7 @@ describe('overlay.service-host', () => {
       expectPopoverId(popoverId);
       const popoverDismissed = overlayService.onPopoverDismissed(popoverId);
 
-      vi.advanceTimersByTime(PAST_GRACE_AND_CORRELATION_MS);
+      vi.advanceTimersByTime(PAST_GRACE_MS);
       emitAppWindowInput('escape');
 
       await expect(contextMenuPromise).resolves.toBeUndefined();
@@ -1258,7 +1258,7 @@ describe('overlay.service-host', () => {
       const popoverDismissed = overlayService.onPopoverDismissed(popoverId);
       const palettePromise = overlayService.showCommandPalette(paletteRequest, 'sticky-popover');
 
-      vi.advanceTimersByTime(PAST_GRACE_AND_CORRELATION_MS);
+      vi.advanceTimersByTime(PAST_GRACE_MS);
       emitAppWindowInput('mouseDown');
       vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
 
@@ -1302,6 +1302,50 @@ describe('overlay.service-host', () => {
 
       // The deferred mouseDown decision is never scheduled
       expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it('should wait for the parent document to report its pointerdown when the signal arrives first', async () => {
+      vi.useFakeTimers();
+
+      const palettePromise = overlayService.showCommandPalette(paletteRequest, 'defer-webview');
+      vi.advanceTimersByTime(PAST_GRACE_MS);
+
+      // The main process's hook runs before any frame processes the click, so the signal can beat
+      // the parent document's own pointerdown — the decision has to wait for it
+      emitAppWindowInput('mouseDown');
+      vi.advanceTimersByTime(10);
+      dispatchParentDocumentPointerDown('insideOverlay');
+      vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+
+      expect(getOverlays().filter((o) => o.type === 'commandPalette')).toHaveLength(1);
+
+      // Clean up
+      getOverlays().forEach((overlay) => overlay.resolve(undefined));
+      await expect(palettePromise).resolves.toBeUndefined();
+    });
+
+    it('should dismiss the overlay open at signal time while sparing one the same click opens', async () => {
+      vi.useFakeTimers();
+
+      const palettePromise = overlayService.showCommandPalette(paletteRequest, 'snapshot-webview');
+      vi.advanceTimersByTime(PAST_GRACE_MS);
+
+      // Click inside a WebView whose handler opens a popover before the deferred decision runs
+      emitAppWindowInput('mouseDown');
+      vi.advanceTimersByTime(10);
+      const popoverId = await overlayService.showPopover(popoverRequest, 'snapshot-webview');
+      expectPopoverId(popoverId);
+      const popoverDismissed = overlayService.onPopoverDismissed(popoverId);
+
+      vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+
+      // The palette that was open when the click happened goes; the popover the click created stays
+      await expect(palettePromise).resolves.toBeUndefined();
+      expect(getOverlays().filter((o) => o.type === 'popover')).toHaveLength(1);
+
+      // Clean up
+      getOverlays().forEach((overlay) => overlay.resolve(undefined));
+      await expect(popoverDismissed).resolves.toBeUndefined();
     });
   });
 

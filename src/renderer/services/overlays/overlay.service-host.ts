@@ -83,6 +83,15 @@ const OVERLAY_CREATION_GRACE_MS = 300;
 /** Timestamp of the most recent overlay creation */
 let lastOverlayCreatedAt = 0;
 
+/** ID of the most recently created overlay, paired with {@link lastOverlayCreatedAt} */
+let lastOverlayCreatedId: string | undefined;
+
+/** Records an overlay creation for the auto-dismiss listeners' grace period */
+function noteOverlayCreated(overlayId: string): void {
+  lastOverlayCreatedAt = Date.now();
+  lastOverlayCreatedId = overlayId;
+}
+
 /** Whether an overlay was created too recently for an auto-dismiss listener to act on it */
 function isWithinOverlayCreationGrace(): boolean {
   return Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS;
@@ -94,6 +103,11 @@ function isWithinOverlayCreationGrace(): boolean {
  * under `document.body` when they are anchored, outside the host div. Kept in one constant so the
  * focus-change and app-window-input listeners cannot drift apart on what counts as interacting with
  * an overlay rather than clicking away from it.
+ *
+ * The scroll listener deliberately keeps its own, narrower selector: it asks whether the scroll
+ * happened inside content that is itself scrollable (a popover or a command palette list), not
+ * whether the event touched an overlay, and widening it to the host container would change which
+ * scrolls dismiss a context menu.
  */
 const OVERLAY_CONTENT_SELECTOR =
   '[data-overlay-host], [data-overlay-popover], [data-overlay-command-palette], [data-radix-popper-content-wrapper]';
@@ -253,10 +267,21 @@ function dismissAll(...types: OverlayEntry['type'][]): void {
  * A popover that opted out with `dismissOnClickOutside: false` survives a click away but not
  * Escape, matching the popover component's own Escape handler, which dismisses regardless of that
  * option (the option governs click-outside, not the key).
+ *
+ * @param trigger What is dismissing the overlays
+ * @param onlyIds When provided, only overlays with these IDs are dismissed. Used by the app-window
+ *   input listener to act on exactly the overlays that were open when the input happened.
  */
-function dismissTransientOverlays(trigger: 'clickAway' | 'escape'): void {
-  dismissAll('contextMenu', 'commandPalette');
+function dismissTransientOverlays(
+  trigger: 'clickAway' | 'escape',
+  onlyIds?: ReadonlySet<string>,
+): void {
   getOverlays().forEach((overlay) => {
+    if (onlyIds && !onlyIds.has(overlay.id)) return;
+    if (overlay.type === 'contextMenu' || overlay.type === 'commandPalette') {
+      resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
+      return;
+    }
     if (
       overlay.type === 'popover' &&
       (trigger === 'escape' || overlay.request.dismissOnClickOutside !== false)
@@ -324,7 +349,7 @@ async function showContextMenu(
   const clampedPosition = clampToViewport(translatedPosition, 4);
 
   announceLocalizedToScreenReader('%overlay_aria_contextMenuOpened%');
-  lastOverlayCreatedAt = Date.now();
+  noteOverlayCreated(overlayId);
 
   const selectedCommand = await new Promise<string | undefined>((resolve, reject) => {
     addOverlay({
@@ -512,7 +537,7 @@ async function showPopover(request: PopoverRequest, webViewId: string): Promise<
 
   announceLocalizedToScreenReader('%overlay_aria_popoverOpened%');
 
-  lastOverlayCreatedAt = Date.now();
+  noteOverlayCreated(overlayId);
 
   // Set up auto-dismiss timer if requested
   if (request.dismissAfterMs && request.dismissAfterMs > 0) {
@@ -675,7 +700,7 @@ async function showCommandPalette(
 
   announceLocalizedToScreenReader('%overlay_aria_commandPaletteOpened%');
 
-  lastOverlayCreatedAt = Date.now();
+  noteOverlayCreated(overlayId);
 
   return new Promise<string | undefined>((resolve, reject) => {
     addOverlay({
@@ -867,6 +892,30 @@ const PARENT_POINTER_DOWN_CORRELATION_MS = 150;
 let lastParentPointerDown: { time: number; insideOverlay: boolean } | undefined;
 
 /**
+ * Resets the parent-document pointerdown record. Exported for use in tests only, so one test's
+ * recorded click cannot correlate with the next test's input signal. @internal
+ */
+export function resetAppWindowInputState(): void {
+  lastParentPointerDown = undefined;
+}
+
+/**
+ * The overlays an app-window input signal is allowed to dismiss: everything open when the signal
+ * arrives, minus an overlay created inside the creation grace window.
+ *
+ * Capturing the IDs up front is what keeps a click from closing an overlay it opened itself: an
+ * overlay created after the signal (the usual order — the main process's hook runs before any frame
+ * processes the click) is simply not in the set. The grace exclusion covers the reverse race, where
+ * a busy renderer processes the click and creates the overlay before the signal is delivered. Old
+ * overlays stay dismissable either way, which a blanket grace check would prevent.
+ */
+function getDismissableOverlayIds(): Set<string> {
+  const ids = new Set(getOverlays().map((overlay) => overlay.id));
+  if (lastOverlayCreatedId && isWithinOverlayCreationGrace()) ids.delete(lastOverlayCreatedId);
+  return ids;
+}
+
+/**
  * Dismiss transient overlays on a mouse-down or Escape anywhere in the app window, as announced by
  * the main process. Its input hooks see every frame, including WebView iframes whose events never
  * reach the parent document, so this is what closes an overlay when the user clicks or presses
@@ -876,20 +925,16 @@ let lastParentPointerDown: { time: number; insideOverlay: boolean } | undefined;
  * does for itself — Radix's outside-click dismissal, a WebView's own Escape handling — is safe.
  */
 function handleAppWindowInput(event: AppWindowInputEvent): void {
-  // Every mouse-down in the app arrives here, so nothing open is the common path
-  if (getOverlays().length === 0) return;
+  // Every mouse-down in the app arrives here, so nothing dismissable is the common path
+  const dismissableOverlayIds = getDismissableOverlayIds();
+  if (dismissableOverlayIds.size === 0) return;
 
   if (event.kind === 'escape') {
-    if (isWithinOverlayCreationGrace()) return;
-    dismissTransientOverlays('escape');
+    dismissTransientOverlays('escape', dismissableOverlayIds);
     return;
   }
 
   setTimeout(() => {
-    // Re-checked after the wait: the click may have opened an overlay of its own (the marker-glyph
-    // popover), which must not be closed by the very click that opened it
-    if (getOverlays().length === 0 || isWithinOverlayCreationGrace()) return;
-
     const recentParentPointerDown =
       lastParentPointerDown &&
       Date.now() - lastParentPointerDown.time < PARENT_POINTER_DOWN_CORRELATION_MS
@@ -901,7 +946,7 @@ function handleAppWindowInput(event: AppWindowInputEvent): void {
     // outside the overlay.
     if (recentParentPointerDown?.insideOverlay) return;
 
-    dismissTransientOverlays('clickAway');
+    dismissTransientOverlays('clickAway', dismissableOverlayIds);
   }, APP_WINDOW_INPUT_DEFER_MS);
 }
 
@@ -975,7 +1020,10 @@ function registerAutoDismissListeners(): void {
       // Focus moving INTO an overlay is not a reason to dismiss it (previously, clicking a focused
       // palette's own search input closed the palette). Overlays live in the parent document, so
       // focusing one is classified as leaving the webview by detectFocus — check whether the newly
-      // active element actually sits inside overlay content.
+      // active element actually sits inside overlay content. Sharing OVERLAY_CONTENT_SELECTOR
+      // deliberately widens this from the host container and Radix popper wrapper it used to check:
+      // it now also spares focus landing in a non-anchored palette or popover, which is the same
+      // "interacting with the overlay" case.
       const active = document.activeElement;
       if (active?.closest(OVERLAY_CONTENT_SELECTOR)) return;
 
