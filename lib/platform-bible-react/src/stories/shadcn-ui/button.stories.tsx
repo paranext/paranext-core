@@ -307,7 +307,7 @@ export const PressNudgeWithCallerTranslate: Story = {
       <Input aria-label="Search" className="tw:w-full tw:ps-2 tw:pe-8" defaultValue="Search term" />
       <Button
         aria-label="Clear search"
-        className="tw:absolute tw:inset-e-1 tw:top-1/2 tw:-translate-y-1/2"
+        className="tw:absolute tw:end-1 tw:top-1/2 tw:-translate-y-1/2"
         onClick={fn()}
         size="icon-xs"
         variant="ghost"
