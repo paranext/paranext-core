@@ -51,6 +51,15 @@ the user's name, in public, on a repo the whole team reads.
    - `H1` — our working name for the hypothesis in 01-verification/
    ```
 
+   **A reviewer may adopt *our* numbering, and then it is shared** — the case that inverts the
+   default assumption. When we post numbered open questions as anchored threads and the reviewer
+   answers "1. … 2. …" by our numbers, those numbers are the round's clearest shared vocabulary:
+   they are on the PR, in their own words, and paraphrasing them away makes the reply harder to
+   match to the question than the id ever was. Move exactly those into **Shared**, noting where
+   they were posted, and leave every id they never saw — our inventory ids among them — in
+   **Internal**. The test has not changed; it is visibility, and here visibility runs the other
+   way.
+
    The dry-run check in `posting-mechanics.md` takes the **Internal** list as its configuration,
    so it flags packet-only labels without flagging the shared ones. Deciding this per reply, at
    drafting time, is what puts an internal id in front of a reviewer: each individual call looks
