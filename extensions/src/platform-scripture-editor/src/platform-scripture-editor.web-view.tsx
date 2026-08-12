@@ -655,6 +655,43 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editorRef.current?.setTransientInput(transientInputForPaletteSession(paletteSession.current));
   }, []);
 
+  /**
+   * Ends the open marker-palette session exactly the way the keydown table's Escape branch does —
+   * clear the session, refresh the transient-input declaration, dismiss the overlay — for the
+   * dismissal triggers the overlay service cannot observe. The palette renders in the PARENT
+   * document (outside this iframe), so its own outside-click detection never hears a click inside
+   * this web view, and a passive palette keeps focus in this iframe so no parent-window blur fires
+   * either. Any typed trigger literal is deliberately left in the document: the click that
+   * dismisses also moves the caret, and the engine's normal caret-departure completion tokenizes
+   * the literal — the same thing PT9's debounced reformat does after its dropdown closes.
+   */
+  const dismissPaletteSessionIfOpen = useCallback(() => {
+    if (!paletteSession.current) return;
+    paletteSession.current = undefined;
+    declarePaletteTransientInput();
+    papi.overlays.dismissCommandPalette(webViewId).catch((error) => {
+      logger.warn(`Error dismissing marker palette: ${getErrorMessage(error)}`);
+    });
+  }, [webViewId, declarePaletteTransientInput]);
+
+  // Any pointerdown inside this iframe is by definition outside the palette (it lives in the
+  // parent document), so it dismisses like PT9's dropdown closing on click-away. Capture phase so
+  // a click that itself opens a palette (the marker-glyph popover) dismisses the old session
+  // before the click handler creates the new one.
+  useEffect(() => {
+    const handlePointerDown = () => dismissPaletteSessionIfOpen();
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    return () => document.removeEventListener('pointerdown', handlePointerDown, true);
+  }, [dismissPaletteSessionIfOpen]);
+
+  // Book/chapter navigation replaces the document the palette was typing into, and a same-web-view
+  // navigation is invisible to the overlay service's own auto-dismiss listeners (blur, tab focus),
+  // so the editor cancels its palette itself. Keyed on book/chapter only: verse-level scrRef
+  // changes ride along with ordinary caret movement inside the loaded chapter.
+  useEffect(() => {
+    dismissPaletteSessionIfOpen();
+  }, [scrRef.book, scrRef.chapterNum, dismissPaletteSessionIfOpen]);
+
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
     'footnotesPaneVisible',
     false,
