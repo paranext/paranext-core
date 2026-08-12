@@ -175,12 +175,22 @@ async function findOwner(
   const owner =
     matches.find((candidate) => candidate.windowId === targetWindowId) ??
     matches.sort((a, b) => a.windowId - b.windowId)[0];
-  // App-wide uniqueness means only one window should ever answer, so more than one match is already
-  // a violated invariant; this is what keeps the router's behavior predictable anyway.
-  if (matches.length > 1)
-    logger.warn(
-      `Found more than one ${describeMatcher(matcher)} (${matches.map((match) => match.definition.id).join(', ')}); these are meant to be unique across the app. Using the one in window ${owner.windowId}.`,
-    );
+  // App-wide uniqueness is a real invariant for an `id` matcher: `withWindowScopedWebViewIds`
+  // suffixes every id with its window at creation, so two windows answering the same id search
+  // means that scoping was bypassed somehow. It is not an invariant for a `type` matcher: simple
+  // mode loads the same static layout into every window with no per-window scoping, so several
+  // windows each having one open web view of a given type is the ordinary multi-window state, not
+  // a violation, and is not worth alarming a log reader over.
+  if (matches.length > 1) {
+    if (matcher.kind === 'id')
+      logger.warn(
+        `Webview ${matcher.webViewId} was found open in more than one window (${matches.map((match) => match.windowId).join(', ')}); web view ids are meant to be unique across the app. Using the one in window ${owner.windowId}.`,
+      );
+    else
+      logger.debug(
+        `Found ${matches.length} open '${matcher.webViewType}' web views (${matches.map((match) => match.definition.id).join(', ')}); using the one in window ${owner.windowId}.`,
+      );
+  }
   return { owner, hadUnreachableWindows: hadServiceErrors };
 }
 
@@ -225,6 +235,11 @@ async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard |
   // Every window that could not be asked is warned about and then treated as one that does not hold
   // the target — see the doc comment above for why that is the right call for a layout target
   // specifically.
+  const notReadyWindowIds = getNotReadyWindowIds();
+  if (notReadyWindowIds.length > 0)
+    logger.warn(
+      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so they could not be asked whether they hold '${targetTabId}' for openWebView beside a layout target`,
+    );
   const holders = await Promise.all(
     getReadyWindowIds().map(async (windowId) => {
       try {
