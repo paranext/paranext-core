@@ -671,9 +671,11 @@ export function getWebViewDefinition(
  *
  * @param dockLayout The rc-dock dock layout React component ref
  * @param webViewType The web view type to search for
- * @param projectId Optionally limited to web views showing a given project. @experimental parameter
+ * @param projectId Optionally limits the search to web views showing a given project
  * @returns The WebViewDefinition of a matching web view, or `undefined` if no web view of that type
  *   is open
+ * @experimental The optional `projectId` filter is new; the rest of this function is
+ *   long-established.
  */
 export function findFirstWebViewDefinitionByType(
   dockLayout: DockLayout,
