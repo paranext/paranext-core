@@ -473,6 +473,19 @@ export function clearWindowPendingContent(windowId: number): void {
   pendingContentWindowIds.delete(windowId);
 }
 
+/**
+ * Whether a window is currently marked created-for-content — see {@link markWindowPendingContent}.
+ *
+ * Exists so the main-process last-window-emptiness decision can exclude these windows from its
+ * count: a pending-content window starts truly empty and is not yet a real window, and the very
+ * operation that created it (a `{ type: 'window' }` open, or a move-to-new-window) can still fail
+ * and take it away again. Letting it stand in as "the last window" would leave the app with zero
+ * windows the instant that failure path runs.
+ */
+export function isWindowPendingContent(windowId: number): boolean {
+  return pendingContentWindowIds.has(windowId);
+}
+
 function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
   if (typeof windowId !== 'number') {
     logger.warn(`${GET_WINDOW_LAYOUT_REQUEST_TYPE} called without a window id`);

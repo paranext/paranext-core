@@ -34,8 +34,8 @@ export type WindowEmptinessHandler = ((
 /**
  * Build a `windowLayout:emptied` handler over the given dependencies.
  *
- * @param deps.countWindows Number of windows currently open and NOT already closing, main process's
- *   authority
+ * @param deps.countWindows Number of windows currently open, NOT already closing, and NOT still
+ *   pending content (see `isWindowPendingContent`) — main process's authority
  * @param deps.closeWindow Close the window with the given id
  * @param deps.markWindowClosing Record that this window's close has been decided
  * @returns A handler taking the reporting window's id and why it is empty (both `unknown`, as they
@@ -43,7 +43,11 @@ export type WindowEmptinessHandler = ((
  *   {@link WindowEmptinessHandler} for the `handleWindowGone` the wiring must call
  */
 export function createWindowEmptinessHandler(deps: {
-  /** Number of windows currently open and NOT already closing — main process's authority */
+  /**
+   * Number of windows currently open, NOT already closing, and NOT still pending content (a window
+   * created for specific content that has not yet arrived — see `isWindowPendingContent`) — main
+   * process's authority
+   */
   countWindows: () => number;
   /** Close the window with the given id */
   closeWindow: (windowId: number) => void;
