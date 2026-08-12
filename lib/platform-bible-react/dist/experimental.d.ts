@@ -21,7 +21,7 @@ type ClassProp = {
 type OmitUndefined<T> = T extends undefined ? never : T;
 type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
 declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | null | undefined;
+	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | "subtle" | null | undefined;
 	size?: "default" | "icon" | "xs" | "sm" | "lg" | "icon-xs" | "icon-sm" | "icon-lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 interface ButtonProps extends React$1.ComponentProps<"button">, VariantProps<typeof buttonVariants> {

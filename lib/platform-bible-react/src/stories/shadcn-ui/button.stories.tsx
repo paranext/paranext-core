@@ -8,7 +8,7 @@ const meta: Meta<typeof Button> = {
   tags: ['autodocs', 'test'],
   argTypes: {
     variant: {
-      options: ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link'],
+      options: ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link', 'subtle'],
       control: { type: 'select' },
     },
     size: {
@@ -64,6 +64,7 @@ export const VariantsDemo: Story = {
       <Button variant="secondary">Secondary</Button>
       <Button variant="ghost">Ghost</Button>
       <Button variant="link">Link</Button>
+      <Button variant="subtle">Subtle</Button>
     </div>
   ),
   parameters: {
@@ -138,6 +139,13 @@ export const Link: Story = {
   args: {
     children: 'Link Button',
     variant: 'link',
+  },
+};
+
+export const Subtle: Story = {
+  args: {
+    children: 'Subtle Button',
+    variant: 'subtle',
   },
 };
 
