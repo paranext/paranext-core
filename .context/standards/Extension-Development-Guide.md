@@ -264,6 +264,13 @@ current window and reopens it — same id, same `useWebViewState` state — in t
 consumers see a close event then an open event, and a WebView controller reference held across a
 move must be re-acquired.
 
+`existingId: '?'` reuse is **cross-window** (experimental): the search covers every window,
+prefers the window the user is working in when more than one matches, and raises the window
+where the match was found. The optional, **experimental** `existingProjectId` limits a `'?'`
+search to web views showing that project (combining it with a concrete `existingId` — or with no
+`existingId` at all — is an error). Like reuse by id, a `'?'` search fails rather than guessing
+when any window cannot be asked — a wrong guess would duplicate a view meant to be unique.
+
 ### Styling Requirements
 
 - Use **TailwindCSS** (Tailwind v4) with the `tw:` prefix for theming
