@@ -8636,6 +8636,30 @@ declare module 'shared/data/platform.data' {
    * @experimental
    */
   export const THEME_STATE_QUERY_PARAMETER = 'themeState';
+  /** How a query parameter's text maps to the value the app uses. */
+  type UrlParameterKind = 'flag' | 'integer' | 'enum' | 'serialized';
+  /** What a reader needs to turn one query parameter's text into a value it can trust. */
+  type UrlParameterSpec = {
+    kind: UrlParameterKind;
+    default?: string;
+    allowed?: readonly string[];
+  };
+  /**
+   * Every query parameter passed to a renderer, keyed by its parameter name, and what its text means:
+   * a `flag` is present-or-absent (any value, including none, means true), an `integer` or `enum` is
+   * a single value read at face value, and `serialized` is the output of platform-bible-utils'
+   * `serialize`, opaque to this table.
+   *
+   * Declarative on purpose, not a table of encode/decode functions: this module is import-free so the
+   * `ts-node` startup-waterfall CLI can read it without pulling in the logger, and codec functions
+   * would need `serialize`/`deserialize` from platform-bible-utils, a runtime import. `deserialize`
+   * returns `any`, so a `serialized` entry is exactly as much of an unchecked cast at its read site
+   * as an `enum` one — the table exists so both kinds of drift are visible in the same place instead
+   * of only the ones a linter happens to flag.
+   *
+   * @experimental
+   */
+  export const URL_PARAMETERS: Readonly<Record<string, UrlParameterSpec>>;
   /**
    * Prefix that identifies a startup timing mark in the logs (see
    * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
