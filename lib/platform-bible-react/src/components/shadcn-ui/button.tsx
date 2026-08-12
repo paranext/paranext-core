@@ -13,12 +13,12 @@ import { cn } from '@/utils/shadcn-ui/utils';
 const buttonVariants = cva(
   // CUSTOM: Added 'pr-twp' at the front of the base class string to apply Platform.Bible's
   // Tailwind CSS scope isolation. All Button instances inherit this via buttonVariants.
-  // CUSTOM: Changed the pressed-state nudge from 'tw:active:not-aria-[haspopup]:translate-y-px' to
-  // 'tw:active:not-aria-[haspopup]:transform-[translateY(1px)]' so it composes with caller
-  // positioning. Every Tailwind translate utility writes the same '--tw-translate-y' custom
-  // property, so the nudge replaced rather than added to a caller's translate: a Button centered
-  // with 'tw:-translate-y-1/2' jumped down half its own height while held. 'transform' is a separate
-  // property that the browser applies after 'translate', so the two now stack.
+  // CUSTOM: Moved the pressed-state nudge off 'tw:active:not-aria-[haspopup]:translate-y-px' onto
+  // 'transform'. Every Tailwind translate utility writes the same '--tw-translate-y', so the nudge
+  // replaced a caller's centering translate rather than adding to it. The browser applies
+  // 'translate', 'rotate' and 'scale' before 'transform', so those compose (a caller 'rotate-*' or
+  // 'scale-*' does rotate or scale the 1px); caller 'skew-*', 'rotate-x/y/z-*', 'transform*'
+  // utilities and inline style transforms still override it.
   'pr-twp tw:group/button tw:inline-flex tw:shrink-0 tw:items-center tw:justify-center tw:rounded-lg tw:border tw:border-transparent tw:bg-clip-padding tw:text-sm tw:font-medium tw:whitespace-nowrap tw:transition-all tw:outline-none tw:select-none tw:focus-visible:border-ring tw:focus-visible:ring-3 tw:focus-visible:ring-ring/50 tw:active:not-aria-[haspopup]:transform-[translateY(1px)] tw:disabled:pointer-events-none tw:disabled:opacity-50 tw:aria-invalid:border-destructive tw:aria-invalid:ring-3 tw:aria-invalid:ring-destructive/20 tw:dark:aria-invalid:border-destructive/50 tw:dark:aria-invalid:ring-destructive/40 tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0 tw:[&_svg:not([class*=size-])]:size-4',
   {
     variants: {
@@ -38,10 +38,10 @@ const buttonVariants = cva(
         default:
           'tw:h-8 tw:gap-1.5 tw:px-2.5 tw:has-data-[icon=inline-end]:pe-2 tw:has-data-[icon=inline-start]:ps-2',
         // CUSTOM: Renamed 'var(--radius-md)' to 'var(--tw-radius-md)' in the rounding utilities for
-        // the 'xs', 'sm', 'icon-xs', and 'icon-sm' sizes. 'src/index.css' imports Tailwind with
-        // 'prefix(tw)', which emits every '@theme' variable under a 'tw' prefix, so the
-        // boilerplate's unprefixed name resolves to nothing. That invalidates the whole 'min()' and
-        // leaves those four sizes with square corners.
+        // the sizes that clamp their radius. 'src/index.css' imports Tailwind with 'prefix(tw)',
+        // which emits every '@theme' variable under a 'tw' prefix, so the boilerplate's unprefixed
+        // name resolves to nothing. That invalidates the whole 'min()' and leaves those sizes with
+        // square corners.
         xs: 'tw:h-6 tw:gap-1 tw:rounded-[min(var(--tw-radius-md),10px)] tw:px-2 tw:text-xs tw:in-data-[slot=button-group]:rounded-lg tw:has-data-[icon=inline-end]:pe-1.5 tw:has-data-[icon=inline-start]:ps-1.5 tw:[&_svg:not([class*=size-])]:size-3',
         sm: 'tw:h-7 tw:gap-1 tw:rounded-[min(var(--tw-radius-md),12px)] tw:px-2.5 tw:text-[0.8rem] tw:in-data-[slot=button-group]:rounded-lg tw:has-data-[icon=inline-end]:pe-1.5 tw:has-data-[icon=inline-start]:ps-1.5 tw:[&_svg:not([class*=size-])]:size-3.5',
         lg: 'tw:h-9 tw:gap-1.5 tw:px-2.5 tw:has-data-[icon=inline-end]:pe-2 tw:has-data-[icon=inline-start]:ps-2',

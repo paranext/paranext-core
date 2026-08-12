@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { X } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
+import { Input } from '@/components/shadcn-ui/input';
 
 const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
@@ -303,15 +304,11 @@ export const ComplexInteraction: Story = {
 export const PressNudgeWithCallerTranslate: Story = {
   render: () => (
     <div className="tw:relative tw:w-64">
-      <input
-        aria-label="Search"
-        className="tw:h-8 tw:w-full tw:rounded-lg tw:border tw:border-border tw:bg-background tw:ps-2 tw:pe-8 tw:text-sm"
-        defaultValue="Search term"
-        readOnly
-      />
+      <Input aria-label="Search" className="tw:w-full tw:ps-2 tw:pe-8" defaultValue="Search term" />
       <Button
         aria-label="Clear search"
-        className="tw:absolute tw:end-1 tw:top-1/2 tw:-translate-y-1/2"
+        className="tw:absolute tw:inset-e-1 tw:top-1/2 tw:-translate-y-1/2"
+        onClick={fn()}
         size="icon-xs"
         variant="ghost"
       >
@@ -323,7 +320,7 @@ export const PressNudgeWithCallerTranslate: Story = {
     docs: {
       description: {
         story:
-          'The clear button is positioned by the caller with `tw:-translate-y-1/2`, the standard way to center an icon button inside an input. Hold it down: it should nudge 1px and stay vertically centered. The pressed nudge lives on `transform` rather than on a translate utility precisely so it composes with caller positioning instead of overwriting `--tw-translate-y`. No play function asserts the pressed geometry: it needs a held press and `tw:transition-all` animates it, so this story is the manual check. `button.test.tsx` pins the class instead.',
+          'Hold the clear button down: it should nudge 1px and stay vertically centered. Centering it with `tw:-translate-y-1/2` is one common way to place an icon button inside an input, and it is the case the pressed-state nudge used to break.',
       },
     },
   },
