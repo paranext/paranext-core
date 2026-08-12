@@ -184,8 +184,9 @@ describe('dataProviderService.registerEngine — failure does not leak a pending
     // `buildDataProvider` creates an AsyncVariable with a long timeout BEFORE the awaits that can
     // fail. A failure after that point used to leave it pending, so it rejected on its own timer
     // long after the fact with nothing listening — an unhandled rejection pointing nowhere near the
-    // cause. This is reachable whenever a name is free but its update event is not, which is what a
-    // window taking over an app-global service hits.
+    // cause. This is reachable whenever a name is free but its update event is not — what a
+    // restarted extension host hits when it registers the same provider names while the departed
+    // process's event registrations are still being torn down.
     vi.useFakeTimers();
     const unhandled: unknown[] = [];
     const recordUnhandled = (reason: unknown) => unhandled.push(reason);

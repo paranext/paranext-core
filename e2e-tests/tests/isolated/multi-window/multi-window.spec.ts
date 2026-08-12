@@ -97,8 +97,8 @@ import {
  * The main process announces the network objects a departed window was hosting, naming each of
  * them. `src/shared/services/network-object.service.ts`
  *
- * No window hosts the theme provider any more (main does, before any window exists), so this
- * pattern matching after a window closes would mean a renderer had claimed the name again.
+ * No window hosts the theme provider (main does, before any window exists), so this pattern
+ * matching after a window closes would mean a renderer had claimed the name.
  */
 const ANNOUNCE_THEME_OBJECT_PATTERN =
   /Announcing the network objects a departed process took with it:[^\n]*themeServiceDataProvider/;
@@ -393,9 +393,10 @@ test.describe('multi-window lifecycle', () => {
     await expectWindowDockEmpty(page2);
     logStep(`window ${window2Id} rendered an empty dock`);
 
-    // The second renderer must start clean: its per-window services register under scoped names,
-    // so nothing may collide with window 1's registrations. Expected step-aside lines for the
-    // app-global services are debug-severity and thus excluded by the pattern (see its doc).
+    // The second renderer must start clean: its per-window services register under scoped names and
+    // it registers no globally-unique name at all, so nothing may collide with window 1's
+    // registrations. Any warn/error collision line here is a fault — see the pattern's doc for why
+    // it is bounded by severity.
     const window2StartupLog = output.textFrom(beforeCreateMark);
     expect(window2StartupLog).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 
