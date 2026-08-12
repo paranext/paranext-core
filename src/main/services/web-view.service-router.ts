@@ -1026,6 +1026,9 @@ async function openSettingsForWebView(webViewId?: WebViewId): Promise<void> {
         `Could not openSettings ${describeMatcher({ kind: 'id', webViewId })}: some windows were unreachable.`,
       );
   }
+  logger.debug(
+    `openSettingsForWebView has no owner to route by; focus-routing to window ${getTargetWindowId()}`,
+  );
   await (await getTargetWebViewShard()).openSettingsTab(undefined);
 }
 
@@ -1037,6 +1040,7 @@ async function openSettingsForWebView(webViewId?: WebViewId): Promise<void> {
  * their routing.
  */
 async function openUserSettings(): Promise<void> {
+  logger.debug(`openUserSettings is focus-routing to window ${getTargetWindowId()}`);
   await (await getTargetWebViewShard()).openSettingsTab(undefined);
 }
 
