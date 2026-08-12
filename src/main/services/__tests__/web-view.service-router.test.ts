@@ -78,8 +78,15 @@ async function getRouter() {
  * A per-window WebView service shard whose web views are the given ids, or full definitions for
  * tests that need more than an id — a type search reads `webViewType` off of what
  * `getAllOpenWebViewDefinitions` returns.
+ *
+ * @param openWebViews Web views this window has open
+ * @param otherDockIds Ids this window's dock holds that are not web views — tab groups, and tabs of
+ *   other kinds. A dock holds its web view tabs too, so those need not be repeated here.
  */
-function windowShard(openWebViews: (string | SavedWebViewDefinition)[]) {
+function windowShard(
+  openWebViews: (string | SavedWebViewDefinition)[],
+  otherDockIds: string[] = [],
+) {
   const definitions = openWebViews.map((entry) =>
     typeof entry === 'string' ? { id: entry } : entry,
   );
@@ -88,6 +95,11 @@ function windowShard(openWebViews: (string | SavedWebViewDefinition)[]) {
       definitions.find((definition) => definition.id === id),
     ),
     getAllOpenWebViewDefinitions: vi.fn(async () => definitions),
+    dockContainsTab: vi.fn(
+      async (tabOrTabGroupId: string) =>
+        definitions.some((definition) => definition.id === tabOrTabGroupId) ||
+        otherDockIds.includes(tabOrTabGroupId),
+    ),
     // Typed the way the real method is — it answers with nothing when the open did not happen
     openWebView: vi.fn<() => Promise<string | undefined>>(async () => 'opened'),
     reloadWebView: vi.fn(async () => 'reloaded'),
@@ -341,6 +353,53 @@ describe('web view service router', () => {
       expect(focused.openWebView).not.toHaveBeenCalled();
     });
 
+    test('opens in the window whose dock holds the tab group a tab layout names', async () => {
+      // The dock's "+" button sends a command naming the tab group it was clicked in, and that
+      // command comes back through the router from the extension host — by which point the window
+      // it started in is no longer necessarily the one this call is headed for
+      const focused = windowShard([]);
+      const owner = windowShard([], ['tab-group-9']);
+      withWindows({ 1: focused, 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('comments', { type: 'tab', parentTabGroupId: 'tab-group-9' });
+
+      expect(owner.openWebView).toHaveBeenCalled();
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('opens in the window whose dock holds a target tab that is no web view', async () => {
+      // A tab is not always a web view — settings tabs and dialogs are tabs too. Asking which
+      // window has the web view with that id answers "none" for those, and the window it then falls
+      // back to is the one window that is sure to reject the layout as naming a tab it does not have
+      const focused = windowShard([]);
+      const owner = windowShard([], ['settings-tab']);
+      withWindows({ 1: focused, 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('comments', { type: 'panel', targetTabId: 'settings-tab' });
+
+      expect(owner.openWebView).toHaveBeenCalled();
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('keeps a tab group id that several windows use in the window the call is headed for', async () => {
+      // Tab group ids are minted per window, so two windows routinely hold the same one and the
+      // window a call is already headed for is the only thing that tells them apart. Picking the
+      // lowest window id instead would send every "+" click in a later window to an unrelated tab
+      // group in the first one.
+      const other = windowShard([], ['+1']);
+      const target = windowShard([], ['+1']);
+      withWindows({ 1: other, 2: target });
+      mocks.getTargetWindowId.mockReturnValue(2);
+      const router = await getRouter();
+
+      await router.openWebView('comments', { type: 'tab', parentTabGroupId: '+1' });
+
+      expect(target.openWebView).toHaveBeenCalled();
+      expect(other.openWebView).not.toHaveBeenCalled();
+    });
+
     test('lets an existing web view decide the window before the layout target does', async () => {
       // The window shard brings an existing web view to the front and returns before it ever looks
       // at the layout, so routing has to put the two in the same order the shard does
@@ -385,18 +444,19 @@ describe('web view service router', () => {
       expect(focused.openWebView).toHaveBeenCalled();
     });
 
-    test('does not go looking for an owner when the layout names no tab', async () => {
-      // Every layout without a `targetTabId` means "wherever the user is", so searching the windows
-      // for one would be a cross-process fan-out per open that can only ever come back empty
+    test('does not go looking for an owner when the layout names nothing', async () => {
+      // A layout that names neither a tab nor a tab group means "wherever the user is", so
+      // searching the windows for one would be a cross-process fan-out per open that can only ever
+      // come back empty
       const focused = windowShard([]);
       const other = windowShard([]);
       withWindows({ 1: focused, 2: other });
       const router = await getRouter();
 
-      await router.openWebView('someType', { type: 'tab', parentTabGroupId: 'some-group' });
+      await router.openWebView('someType', { type: 'tab' });
 
       expect(focused.openWebView).toHaveBeenCalled();
-      expect(other.getOpenWebViewDefinition).not.toHaveBeenCalled();
+      expect(other.dockContainsTab).not.toHaveBeenCalled();
     });
   });
 

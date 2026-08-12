@@ -830,6 +830,21 @@ export function findPreviousTab(dockLayout: DockLayout) {
 }
 
 /**
+ * Whether this dock holds the tab or tab group with the specified ID.
+ *
+ * `find` matches tabs and tab groups alike — docked, floating, windowed or maximized — so one
+ * question answers for either kind of ID and for every kind of tab, not just WebView tabs.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabOrTabGroupId ID of the tab or tab group to look for
+ * @returns `true` if this dock holds it, `false` otherwise
+ */
+export function containsTab(dockLayout: DockLayout, tabOrTabGroupId: string): boolean {
+  return !!dockLayout.find(tabOrTabGroupId);
+}
+
+/**
  * Sets an existing tab as the active tab in its tab group, makes sure it is unobscured by other
  * tabs, and sets the document focus in that tab
  *
@@ -965,6 +980,13 @@ export function addTabToDock(
           previousTabId = tab.id;
           break;
         }
+        // Placing the tab as if no group had been named keeps the user's command producing a tab,
+        // which refusing the whole add does not — the same trade-off the `panel` case below makes.
+        // Saying so is what keeps a tab that landed somewhere else from looking like a placement
+        // the caller asked for.
+        logger.warn(
+          `When adding a tab, parent tab group '${updatedLayout.parentTabGroupId}' is not in this window. Adding the tab without it.`,
+        );
       }
 
       const isDockBoxEmpty =
