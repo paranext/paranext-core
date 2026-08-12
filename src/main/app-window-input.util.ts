@@ -79,9 +79,21 @@ export async function startAppWindowInputEvent(): Promise<void> {
  * Never calls `preventDefault` on the input — the focused frame must still receive it (e.g. the
  * scripture editor acts on Escape itself). Dismissing an already-dismissed overlay is a no-op, so
  * the two paths can safely overlap.
+ *
+ * A failed announcement is warned about and swallowed: this runs inside the window's mouse and key
+ * hooks, which must go on to detect focus changes no matter what the announcement does. `emit` can
+ * throw synchronously (a disposed emitter, a local subscriber throwing); its network send is
+ * fire-and-forget inside the emitter, so a failure there surfaces from the network service rather
+ * than here.
  */
 export function announceAppWindowInput(input: AppWindowInputSource): void {
   const kind = getAppWindowInputKind(input);
   if (!kind || !appWindowInputEmitter) return;
-  appWindowInputEmitter.emit({ kind });
+  try {
+    appWindowInputEmitter.emit({ kind });
+  } catch (e) {
+    logger.warn(
+      `Failed to announce app window '${kind}' input on ${EVENT_NAME_ON_DID_APP_WINDOW_INPUT}. ${getErrorMessage(e)}`,
+    );
+  }
 }
