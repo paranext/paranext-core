@@ -59,7 +59,6 @@ import {
   getServiceShardAttributes,
   WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
 } from '@shared/models/service-shard.model';
-import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import {
   createBufferedNetworkEventEmitter,
   getNetworkEvent,
@@ -77,6 +76,7 @@ import {
   getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   OpenWebViewEvent,
+  WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import { markStartupOnce } from '@shared/utils/startup-timing.util';
 import { newNonce } from '@shared/utils/util';
@@ -2443,7 +2443,7 @@ export const initialize = () => {
 
 // #endregion Initialization
 
-const papiWebViewService: WebViewServiceShard = {
+const papiWebViewService: WebViewServiceType = {
   onDidAddWebView: onDidOpenWebView,
   onDidOpenWebView,
   onDidUpdateWebView,
@@ -2455,7 +2455,6 @@ const papiWebViewService: WebViewServiceShard = {
   getOpenWebViewDefinition,
   getAllOpenWebViewDefinitions,
   getWebViewController,
-  dockContainsTab,
 };
 
 /**
@@ -2536,6 +2535,7 @@ async function setDetachedScrRef(
  */
 const webViewServiceShard: WebViewServiceShard = {
   ...papiWebViewService,
+  dockContainsTab,
   openSettingsTab,
   setDetachedScrRef,
 };
