@@ -45,6 +45,13 @@ export function refreshWindowCreationState(parameterName: string, state: unknown
     // window id, the log level, and the dev-mode flags travel on this same URL and a reload has to
     // find them too.
     globalThis.history?.replaceState({}, '', `?${searchParams}`);
+    // A navigation rate limiter can drop this write without throwing, leaving the query exactly as
+    // it was. That silence is otherwise indistinguishable from success, so read the query back
+    // rather than trust the call returned: a mismatch is the only observable symptom.
+    if (new URLSearchParams(globalThis.location?.search ?? '').get(parameterName) !== serialized)
+      logger.warn(
+        `URL rewrite is being rate-limited, so this window's ${parameterName} is stale on its URL. A reload would restore an older value.`,
+      );
   } catch (e) {
     // Costs a reload its first frame, nothing else: the state in memory is unaffected and the
     // host's next event corrects a reloaded window a round trip later.
