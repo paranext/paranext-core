@@ -8,15 +8,16 @@
  * leftover process group is reaped) before the next launches.
  *
  * TEST 1 — the window set across restarts: every window open at quit comes back on relaunch — the
- * main window with its dock layout, a deliberately-empty secondary window empty — each at its saved
- * bounds, while a window the user deliberately closed mid-session does NOT come back.
+ * main window with its dock layout, a secondary window that only ever held its own auto-docked Home
+ * tab — each at its saved bounds, while a window the user deliberately closed mid-session does NOT
+ * come back.
  *
  * - Phase 1 (fresh profile): the first window shows the single-Home-tab fallback layout; a second
- *   window is created mid-session (it starts empty); both windows are placed at known,
- *   different-sized bounds; graceful quit.
+ *   window is created mid-session (it docks Home, having nothing else of its own to show); both
+ *   windows are placed at known, different-sized bounds; graceful quit.
  * - Phase 2 (relaunch): BOTH windows come back — the main window with its Home tab, the second one
- *   EMPTY — each at its saved bounds; the second window is then deliberately closed; graceful
- *   quit.
+ *   with just its own Home tab — each at its saved bounds; the second window is then deliberately
+ *   closed; graceful quit.
  * - Phase 3 (second relaunch): exactly ONE window comes back (the deliberately closed window stays
  *   closed), still with its Home tab; graceful quit. The final teardown deletes the profile.
  *
@@ -24,7 +25,7 @@
  * existed (a legacy dock layout under the renderer's unprefixed localStorage key, the old
  * bounds-keeper file, and NO structure file) upgrades to exactly one window that loads the legacy
  * layout and honors the keeper's window size — and a window created mid-session in that upgraded
- * session still starts empty rather than cloning the legacy layout.
+ * session still docks only its own Home tab rather than cloning the legacy layout.
  *
  * - Launch A (fresh profile): the app runs normally; the layout it persists for the main window is
  *   harvested from the structure file, extended with a SECOND web view tab (a Home clone under a
@@ -34,9 +35,9 @@
  *   with a known window size is written — the profile now looks exactly like a pre-multi-window
  *   install.
  * - Launch B: exactly one window; it renders BOTH seeded tabs (the discriminator — no fallback layout
- *   has two tabs, so a pass cannot come from the fresh-profile default); its size is the keeper
- *   file's; a newly created second window starts empty; graceful quit; the final teardown deletes
- *   the profile.
+ *   has two tabs, and a window that only docks Home has one, so a pass cannot come from either);
+ *   its size is the keeper file's; a newly created second window docks only its own Home tab;
+ *   graceful quit; the final teardown deletes the profile.
  *
  * ## App configuration
  *
@@ -49,9 +50,9 @@
  * - Multi-monitor behaviour (restoring a window whose saved display is gone): this environment has a
  *   single virtual display; the monitor-gone re-placement is a pure function with its own unit
  *   tests.
- * - Tab-bearing SECONDARY windows round-tripping their content: putting a tab into a second window
- *   needs the move-web-views-between-windows feature; until then only the main window's layout has
- *   content to round-trip.
+ * - SECONDARY windows round-tripping content BEYOND their own auto-docked Home tab: putting a
+ *   project/editor tab into a second window needs the move-web-views-between-windows feature; until
+ *   then only the main window's layout has that kind of content to round-trip.
  * - Window POSITION restore at the window level: this environment's compositor (WSLg) assigns
  *   positions itself, in host-desktop coordinates that can lie outside the virtual display Electron
  *   reports, so a restored window's position never observably matches what the app requested.
@@ -80,7 +81,7 @@ import {
   captureAppOutput,
   createSecondWindow,
   createStepLogger,
-  expectWindowDockEmpty,
+  expectWindowDockHasOnlyHomeTab,
   getAppPages,
   getWindowIdOfPage,
   homeTabTitle,
@@ -295,8 +296,8 @@ const LEGACY_WINDOW_STATE_FILE_NAME = 'window-state.json';
 /**
  * Web view id of the SECOND tab the upgrade test seeds into the legacy layout: a clone of the Home
  * tab under this distinct id. Two tabs are the upgrade test's discriminator — the fresh-profile
- * fallback layout has exactly one tab and an empty layout has none, so only the seeded legacy blob
- * can produce a tab with this id.
+ * fallback layout has exactly one tab and a window with nothing of its own docks only its own Home
+ * tab (also one), so only the seeded legacy blob can produce a tab with this id.
  */
 const LEGACY_SECOND_TAB_UUID = 'ada6a781-10bf-46f3-a2f9-a1bb0e2fa221';
 
@@ -430,10 +431,11 @@ test.describe('window layout persistence', () => {
       const page2 = await createSecondWindow(ctx.electronApp);
       const window2Id = getWindowIdOfPage(page2);
       await waitForRendererRegistered(window2Id, 120_000);
-      // The mid-session window starts empty (that behaviour is locked by multi-window.spec.ts);
-      // asserting it here too makes phase 2's "restored EMPTY" meaningful — it restores what was
-      // genuinely an empty window.
-      await expectWindowDockEmpty(page2);
+      // The mid-session window docks its own Home tab, having nothing else of its own to show
+      // (that behaviour is locked by multi-window.spec.ts); asserting it here too makes phase 2's
+      // "restored with just its own Home tab" meaningful — it restores what genuinely started with
+      // only Home docked.
+      await expectWindowDockHasOnlyHomeTab(page2);
       const placedSecondBounds = await placeWindowAndSettle(ctx.electronApp, window2Id, {
         x: workArea.x + 120,
         y: workArea.y + 100,
@@ -441,7 +443,7 @@ test.describe('window layout persistence', () => {
         height: Math.min(620, workArea.height - 160),
       });
       logStep(
-        `phase 1: window ${window2Id} created empty and placed at ${JSON.stringify(placedSecondBounds)}`,
+        `phase 1: window ${window2Id} created with only Home docked and placed at ${JSON.stringify(placedSecondBounds)}`,
       );
 
       // The compositor may re-place a window at any time after it settles (a host-side minimize
@@ -462,12 +464,14 @@ test.describe('window layout persistence', () => {
       await quitAndExpectCleanExit(ctx.electronApp, output1, logStep, 'phase 1');
 
       // The persisted structure must hold both windows: exactly one main entry, whose layout
-      // carries the Home web view — and the second entry must NOT carry it (an empty window's
-      // entry with the main window's layout cloned in would restore tabs in phase 2). Each entry
-      // must also hold its window's pre-quit placement EXACTLY, position included — this is the
-      // save half of the bounds round trip, and the only place position is checkable in this
-      // environment (see expectRestoredSizeForSavedPlacement). Asserting the save side here means
-      // a phase-2 failure can be attributed to the restore side.
+      // carries the Home web view under its fixed fallback-layout id — and the second entry must
+      // NOT carry that exact id (it holds its OWN independently-docked Home tab under a freshly
+      // minted id; carrying the fixed id instead would mean the main window's whole layout got
+      // cloned into it, not that it docked its own Home tab, and would restore that clone in phase
+      // 2). Each entry must also hold its window's pre-quit placement EXACTLY, position included —
+      // this is the save half of the bounds round trip, and the only place position is checkable in
+      // this environment (see expectRestoredSizeForSavedPlacement). Asserting the save side here
+      // means a phase-2 failure can be attributed to the restore side.
       const entriesAfterPhase1 = readSavedWindowEntries(userDataDir);
       expect(entriesAfterPhase1).toHaveLength(2);
       const mainEntriesAfterPhase1 = entriesAfterPhase1.filter((entry) => entry.isMain);
@@ -509,13 +513,17 @@ test.describe('window layout persistence', () => {
 
       // Layout round-trip: the main window still shows its Home tab…
       await expect(homeTabTitle(mainPage2, mainId2)).toBeAttached({ timeout: 120_000 });
-      // …and the deliberately-empty second window is restored EMPTY: neither a copy of the main
-      // window's layout nor any default layout may appear in it.
-      await expectWindowDockEmpty(secondPage2);
-      // The restore created exactly the saved windows — no duplicates (expectWindowDockEmpty's
-      // settle has already given a straggler window time to appear).
+      // …and the second window — which only ever held its own auto-docked Home tab — is restored
+      // with just that: neither a copy of the main window's layout nor any default layout may
+      // appear in it.
+      await expectWindowDockHasOnlyHomeTab(secondPage2);
+      // The restore created exactly the saved windows — no duplicates
+      // (expectWindowDockHasOnlyHomeTab's settle has already given a straggler window time to
+      // appear).
       expect(getAppPages(ctx.electronApp)).toHaveLength(2);
-      logStep('phase 2: main window has its Home tab; second window restored empty');
+      logStep(
+        'phase 2: main window has its Home tab; second window restored with just its own Home tab',
+      );
 
       // Bounds round-trip, per window, against what was saved at quit. Which live expectation
       // applies depends on whether the compositor left the saved placement on the virtual display
@@ -603,7 +611,7 @@ test.describe('window layout persistence', () => {
     }
   });
 
-  test('a pre-multi-window profile upgrades to one window with its legacy layout, and new windows still start empty', async () => {
+  test('a pre-multi-window profile upgrades to one window with its legacy layout, and new windows still dock only their own Home tab', async () => {
     const logStep = createStepLogger('window-layout-upgrade');
     let ctx: ElectronAppContext | undefined;
     let profileDir: string | undefined;
@@ -700,10 +708,11 @@ test.describe('window layout persistence', () => {
       expect(storedLegacyBlob ?? '').toContain(LEGACY_SECOND_TAB_UUID);
 
       // The discriminator: BOTH seeded tabs must render. A pass cannot be vacuous through some
-      // other layout source — the fresh-profile fallback layout has exactly ONE tab (Home) and an
-      // empty layout has none, so a tab with the seeded clone id can only have come from the
-      // legacy localStorage blob itself. An upgrade that lost the legacy layout would show one
-      // Home tab (fallback) or an empty dock, and fail here.
+      // other layout source — the fresh-profile fallback layout has exactly ONE tab (Home) and a
+      // window with nothing of its own docks only its own Home tab (also one), so a tab with the
+      // seeded clone id can only have come from the legacy localStorage blob itself. An upgrade
+      // that lost the legacy layout would show one Home tab (fallback, or its own docked Home), and
+      // fail here.
       await expect(homeTabTitle(pageB, windowBId)).toBeAttached({ timeout: 60_000 });
       await expect(
         pageB.locator(
@@ -735,15 +744,17 @@ test.describe('window layout persistence', () => {
       );
       logStep('launch B: keeper-file window size honored');
 
-      // A window created mid-session in the upgraded session must START EMPTY even though a legacy
-      // blob exists in localStorage — the kill-shot for the fallback that cloned the legacy layout
-      // into every new window. A regression to that behaviour would render the two seeded tabs
-      // here.
+      // A window created mid-session in the upgraded session must dock only its OWN Home tab even
+      // though a legacy blob exists in localStorage — the kill-shot for the fallback that cloned
+      // the legacy layout into every new window. A regression to that behaviour would render the
+      // two seeded tabs here.
       const page2B = await createSecondWindow(ctx.electronApp);
       const window2BId = getWindowIdOfPage(page2B);
       await waitForRendererRegistered(window2BId, 120_000);
-      await expectWindowDockEmpty(page2B);
-      logStep(`launch B: mid-session window ${window2BId} started empty despite the legacy blob`);
+      await expectWindowDockHasOnlyHomeTab(page2B);
+      logStep(
+        `launch B: mid-session window ${window2BId} docked only its own Home tab despite the legacy blob`,
+      );
 
       await quitAndExpectCleanExit(ctx.electronApp, outputB, logStep, 'launch B');
 
