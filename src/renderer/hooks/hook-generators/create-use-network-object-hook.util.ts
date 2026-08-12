@@ -85,11 +85,12 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
     const didReceiveNetworkObject = !isString(networkObjectSource);
 
     // The network object this hook was handed that has since been disposed, if any. Objects are
-    // looked up by name, and the process hosting a name can change — an app-global object whose
-    // host window goes away is re-published elsewhere under the same name — so a disposal is a
-    // reason to look the name up again rather than to give up on it. Held as the object itself
-    // rather than a flag so the answer to "is what we are holding dead?" survives the lookup that
-    // follows it: `usePromise` keeps serving the value it has while the next one resolves.
+    // looked up by name, and the process answering a name can be replaced under it —
+    // `platform.restartExtensionHost` tears down every data provider the extension host registered
+    // and the replacement process registers the same names — so a disposal is a reason to look the
+    // name up again rather than to give up on it. Held as the object itself rather than a flag so
+    // the answer to "is what we are holding dead?" survives the lookup that follows it: `usePromise`
+    // keeps serving the value it has while the next one resolves.
     // Note: do nothing if we already received a network object, but still run this hook.
     // (We must make sure to run the same number of hooks in all code paths.)
     const [disposedNetworkObject, setDisposedNetworkObject] = useState<
@@ -97,8 +98,10 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
     >(undefined);
 
     // Bumped to ask for another look at the name. The disposal of what this hook was holding is not
-    // the last moment the answer can change: the window taking an app-global object over may not
-    // have published it yet when the lookup a disposal triggers runs.
+    // the last moment the answer can change: a registration outlives the process that made it until
+    // the connection teardown is noticed, so the disposal announcement lands after the object is
+    // already unreachable, and whatever answers the name next may not have registered yet when the
+    // lookup a disposal triggers runs.
     // Note: do nothing if we already received a network object, but still run this hook.
     // (We must make sure to run the same number of hooks in all code paths.)
     const [lookupAttempt, setLookupAttempt] = useState(0);
@@ -148,8 +151,8 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
       useCallback(() => setDisposedNetworkObject(networkObject), [networkObject]),
     );
 
-    // A disposal drives exactly one re-lookup. If that lookup lands in the gap before a surviving
-    // window has re-published the name — or fails outright — nothing else would ever change a
+    // A disposal drives exactly one re-lookup. If that lookup lands in the gap before anything has
+    // registered under the name again — or fails outright — nothing else would ever change a
     // dependency above, and the component would serve nothing for the rest of its life over a gap
     // that closed a second later. So while this hook is holding nothing after a disposal, listen for
     // something being published under the name it wants and look again when it is.
