@@ -101,8 +101,6 @@ type OwnerMatcher =
       /**
        * Narrows the search to web views showing this project. Left out, a type matches whatever
        * project it is showing.
-       *
-       * @experimental The project filter is new; searching by type is long-established.
        */
       projectId?: string;
     };
