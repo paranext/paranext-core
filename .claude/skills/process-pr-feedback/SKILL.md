@@ -146,6 +146,18 @@ where the tempting fix is the destructive one. **Sessions die, packets don't** �
 every phase writes its output to the packet before moving on, and every phase starts by reading
 what the previous one wrote rather than trusting conversation memory.
 
+**Running in a worktree** is the natural move when another session is already live in the same
+checkout, and three things behave differently there. First, `.git` is a **file**, not a directory,
+so the obvious per-clone escape hatch `.git/info/exclude` does not resolve: the real one is
+`"$(git rev-parse --git-common-dir)"/info/exclude`, which lives outside the worktree — and a
+harness that isolates a session to its worktree may refuse to write there at all. That is a second
+reason the self-ignoring `.gitignore` above is the mechanism to use rather than a fallback.
+Second, refs and objects are shared with the primary checkout, which makes
+`git rev-list --count <head>..origin/<base>` the cheaper base-state form here: it is a local read
+of a ref any fetch elsewhere in the repo has already advanced, where the compare API is a network
+round trip per query. Third, a fresh worktree has **no `node_modules`**, so P5's battery cannot run
+in it — see P5 for where to run it instead.
+
 **Being git-ignored, a packet does not travel.** It is never pushed, so it survives a dead
 session on the same machine and nothing more. An unattended cloud scout run therefore cannot
 hand its packet to a later local session through git: its durable output is the digest in its
@@ -766,6 +778,13 @@ new members", or "unchanged"), then compare. An unexpected diff there is a findi
 `build:types` comes first deliberately: `npm run lint` invokes it as its own first step, so
 running lint earlier would regenerate `papi.d.ts` before you had recorded the prediction, and
 the comparison you most want would be gone.
+
+**Where to run it when the packet lives in a worktree.** A fresh worktree has no `node_modules`
+and every command above needs it, so run the battery in the checkout that already has the
+dependencies, at the commit the fixes are on, and record **which checkout and which SHA** in
+`06-verification.md` — a battery result with no ref behind it is as unfalsifiable as a green tick.
+A second `npm install` inside the worktree is the fallback, not the default: it costs minutes and
+a full duplicate dependency tree to answer a question the primary checkout can already answer.
 
 Then **e2e per `references/e2e-recipe.md`** — read it and follow it verbatim; it encodes a
 two-attempt cap and every known local trap.
