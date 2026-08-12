@@ -91,29 +91,45 @@ A PR often takes two rounds in one day, so the date alone does not separate them
 completion markers — which makes `--resume` report that round's progress as this one's — and
 its `08-posting-log.txt`, whose `OK` rows the poster treats as already-sent.
 
-`.feedback-packets/` is git-ignored, and repo-relative so it sits beside the checkout the run is
-about rather than in a scratch directory that gets swept. It is ignored by Prettier too
-(`.prettierignore`, `.prettierignorerun`); without that, P5's own `npm run format:check` gate
-fails on the packet the run is writing, and the natural response — `npm run format` — would
-rewrite `bodies.json`, the file that holds the exact approved bytes.
+`.feedback-packets/` is repo-relative so it sits beside the checkout the run is about rather than
+in a scratch directory that gets swept. Two things must be true of it before the first packet file
+is written — git must ignore it, and Prettier must ignore it — and they have different remedies.
 
-**Verify those three entries exist before writing the first packet file**, at the top of P0:
+**Git — make the packet ignore itself.** Create the directory with a `.gitignore` containing a
+single `*`, then confirm it bites:
 
 ```bash
-git check-ignore -v .feedback-packets/                              # the .gitignore rule
-grep -n '^\.feedback-packets/$' .prettierignore .prettierignorerun  # the two Prettier ones
+mkdir -p .feedback-packets && printf '*\n' > .feedback-packets/.gitignore
+git check-ignore -v .feedback-packets/00-inventory.md   # must name the file written above
 ```
 
-Read the output: three lines, one naming each file. An exit code is not the check here — `grep`
-across two files succeeds when only one of them matches. This repo has shipped all three since
-the skill landed (2026-08), so on a current checkout the check is a formality — which is exactly
-why it has to be mechanical rather than assumed, and why it is two commands and not a paragraph
-of trust. A checkout that
-predates them, a fork, or a worktree with a modified ignore set turns the packet into untracked
-noise in every `git status` for the rest of the run, and into a `format:check` failure at P5,
-discovered at the point in the run where the tempting fix is the destructive one. If an entry is
-missing, add it and say so — do not route the packet somewhere else to dodge the problem, because
-`--resume` and every path in this file assume it is here. **Sessions die, packets don't** —
+This is the primary mechanism, and deliberately **not** a repo-root `.gitignore` entry. A run
+processes feedback on a branch that is usually not yours; adding an ignore entry to that branch
+puts an unrelated file in the reviewer's diff, which this skill's own P3 scope rules forbid. The
+self-ignoring directory needs no repo state, works on any branch, fork, or worktree, and cannot
+reach the diff. If the checkout already has a repo-root entry, fine — but never assume one is
+there, and do not add one. **Do not route the packet elsewhere to dodge the problem**, because
+`--resume` and every path in this file assume it is here.
+
+**Prettier — check, and work around it rather than edit.** Exactly one file is load-bearing for
+the gate: `format:check` runs `prettier --check --ignore-path .prettierignorerun .` (verified
+2026-08-12), so `.prettierignorerun` alone decides whether P5 fails.
+
+```bash
+grep -n '^\.feedback-packets/$' .prettierignorerun   # the entry P5's gate actually reads
+grep -n '^\.feedback-packets/$' .prettierignore      # editor/format-on-save only; nice to have
+```
+
+If `.prettierignorerun` lacks the entry, P5's `npm run format:check` fails on the packet the run
+is writing. The response is **not** `npm run format` — that rewrites `bodies.json`, the file
+holding the exact approved bytes. Confirm instead that every path it reports sits inside
+`.feedback-packets/`, record that in `06-verification.md`, and treat the gate as passed for repo
+files. Add the entry only if the branch is one you own.
+
+Neither check is a formality, and neither may be assumed from "this repo ships it" — a fork, an
+older branch, a long-lived feature branch, or a run of this skill from a checkout that does not
+contain it all break that assumption, and the failure surfaces at P5, at the point in the run
+where the tempting fix is the destructive one. **Sessions die, packets don't** —
 every phase writes its output to the packet before moving on, and every phase starts by reading
 what the previous one wrote rather than trusting conversation memory.
 
@@ -723,8 +739,10 @@ complaint this answers: evidence the reviewer can see beats evidence the reply a
    stale.
 
    **Optional evidence embeds.** Where P5 saved screenshots under `06-evidence/`, a draft may
-   embed them: upload with the `pr-attach` skill (`.claude/skills/pr-attach/`) and paste the
-   returned `![name](https://github.com/user-attachments/assets/…)` lines into the draft body.
+   embed them: upload with the `pr-attach` skill (a sibling of this one, resolved beside this
+   skill rather than under the checkout — see `references/agent-briefs.md` on `<skill-dir>`) and
+   paste the returned `![name](https://github.com/user-attachments/assets/…)` lines into the draft
+   body.
    Fail-soft is the rule — pr-attach exiting 3 means draft WITHOUT images and continue; never
    block or retry-loop over a screenshot. Two facts from that skill matter here: a fresh
    upload 404s anonymously until the draft is actually posted (verify pending assets with an

@@ -9,7 +9,28 @@ these rules exists because something was missed without it.
 
 `<repo-root>` is a slot like any other: substitute the absolute path of the checkout the run is
 about (`git rev-parse --show-toplevel`). Do not paste a brief with the slot unfilled — the agent
-cannot resolve it, and a path from someone else's machine is worse than no path at all.
+cannot resolve it, and a path from someone else's machine is worse than no path at all. It is the
+right slot for anything that lives **in the checkout**: `.context/standards/`, `CLAUDE.md`,
+`.claude/rules/`.
+
+`<skill-dir>` is the second path slot, and it is **not** under `<repo-root>`. The briefs cite this
+skill's own reference files — the rubric, the reply conventions, the posting mechanics — and a run
+processes feedback on a branch that is usually not yours and usually does not contain this skill at
+all. A skill can be installed user-level (`~/.claude/skills/<name>/`), plugin-level (under
+`~/.claude/plugins/`), or checked into a branch, and only the last of those makes
+`<repo-root>/.claude/skills/process-pr-feedback/` correct. Hard-code it and the agent gets
+file-not-found, then either burns turns hunting or — the expensive case — proceeds without the
+rubric and returns verdicts with no classification discipline behind them.
+
+**The orchestrator resolves `<skill-dir>` once, at runtime, and substitutes the resolved absolute
+path into every brief.** It is the directory this skill was loaded from — the one holding the
+`SKILL.md` being executed — not a path reconstructed from the repo layout. Confirm it before
+pasting (`ls <skill-dir>/references/` must list the files the briefs name).
+
+**If the file cannot be reached from the agent's side at all** — a sandboxed agent, a cloud run
+whose filesystem does not include the skill — do not cite a path that will fail to open. **Inline
+the rules that brief actually needs**, and say in the brief that they are inlined so the agent does
+not go looking. A longer brief is cheap; a verifier working without the rubric is not.
 
 ## Rules every brief carries
 
@@ -72,7 +93,7 @@ role 4:
 > **Refs.** Reviewer read `<ref>`. Branch tip is `<ref>`. Top of stack is `<ref>`. Name which
 > ref every verdict belongs to; two verdicts at two refs is a valid, informative answer.
 >
-> **Method.** Follow `<repo-root>/.claude/skills/process-pr-feedback/references/classification-rubric.md`
+> **Method.** Follow `<skill-dir>/references/classification-rubric.md`
 > — the five classifications, and all six mandatory sub-checks, on every item. Decide what the
 > code does by reading it, not by judging whether the reviewer's story is plausible.
 >
@@ -205,7 +226,7 @@ share a worktree.
 > dispositions, `<packet>/04-fix-reports/` for what landed where.
 >
 > **Conventions.** Follow
-> `<repo-root>/.claude/skills/process-pr-feedback/references/reply-conventions.md`
+> `<skill-dir>/references/reply-conventions.md`
 > — `🤖 Claude: ` once at the top, verdict in the first sentence, confirmed before corrected,
 > explicit disposition, deferrals citing a ticket key, no internal item labels in the body.
 > `<packet>/shared-vocabulary.md` is the round's ruling on which labels the reviewer has actually
@@ -223,7 +244,7 @@ share a worktree.
 >
 > **If the feedback arrived off-PR**, convert it to PR-anchored threads instead of answering in
 > kind, per
-> `<repo-root>/.claude/skills/process-pr-feedback/references/pr-thread-conversion.md`,
+> `<skill-dir>/references/pr-thread-conversion.md`,
 > including anchor verification against the PR's own diff.
 >
 > **Every SHA and file:line re-derived** at drafting time. A SHA orphaned by a restack must not
@@ -243,7 +264,7 @@ share a worktree.
 > exist, **stop**: an unrecorded gate is indistinguishable from an uncrossed one.
 >
 > **Mechanics.** Follow
-> `<repo-root>/.claude/skills/process-pr-feedback/references/posting-mechanics.md`
+> `<skill-dir>/references/posting-mechanics.md`
 > end to end: extract bodies to JSON, run the dry-run checks (counts, id set, prefix, NUL,
 > placeholders, internal labels, targets resolve), re-derive every head SHA now, post
 > sequentially, stop on the first failure with **no retry**, append to
