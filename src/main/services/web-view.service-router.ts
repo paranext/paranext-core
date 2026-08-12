@@ -72,6 +72,21 @@ const getTargetWebViewShard = createTargetShardResolver(
   webViewShards,
 );
 
+/**
+ * What a window is asked to look for. An id is answered by one lookup per window; a type needs the
+ * window's whole list, which is why the two are distinct rather than one predicate — the id path is
+ * on every routed call and must not start shipping every definition.
+ */
+type OwnerMatcher =
+  | { kind: 'id'; webViewId: WebViewId }
+  | { kind: 'type'; webViewType: WebViewType };
+
+function describeMatcher(matcher: OwnerMatcher): string {
+  return matcher.kind === 'id'
+    ? `webview ${matcher.webViewId}`
+    : `a ${matcher.webViewType} web view`;
+}
+
 /** The window that owns a web view, and the definition the ownership search already fetched */
 type WebViewOwner = {
   /**
@@ -100,7 +115,7 @@ type WebViewOwner = {
  *   be the window that did not answer
  */
 async function findOwner(
-  webViewId: WebViewId,
+  matcher: OwnerMatcher,
   operation: string,
 ): Promise<WebViewOwner | undefined> {
   // A tracked window that has not registered its services is skipped by the search below rather
@@ -111,7 +126,7 @@ async function findOwner(
   let hadServiceErrors = notReadyWindowIds.length > 0;
   if (hadServiceErrors)
     logger.warn(
-      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so they could not be asked about webview ${webViewId} for ${operation}`,
+      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so they could not be asked about ${describeMatcher(matcher)} for ${operation}`,
     );
   const owners = await Promise.all(
     getReadyWindowIds().map(async (windowId) => {
@@ -122,17 +137,22 @@ async function findOwner(
         // not be asked, not one that answered no — see the reachability note below.
         if (!webViewShard) {
           logger.warn(
-            `WebView service for window ${windowId} is not registered, so it could not be asked about webview ${webViewId} for ${operation}`,
+            `WebView service for window ${windowId} is not registered, so it could not be asked about ${describeMatcher(matcher)} for ${operation}`,
           );
           hadServiceErrors = true;
           return undefined;
         }
-        const definition = await webViewShard.getOpenWebViewDefinition(webViewId);
+        const definition =
+          matcher.kind === 'id'
+            ? await webViewShard.getOpenWebViewDefinition(matcher.webViewId)
+            : (await webViewShard.getAllOpenWebViewDefinitions()).find(
+                (candidate) => candidate.webViewType === matcher.webViewType,
+              );
         if (definition) return { windowId, shard: webViewShard, definition };
         return undefined;
       } catch (e) {
         logger.warn(
-          `Failed to query webview ${webViewId} in window ${windowId} for ${operation}: ${getErrorMessage(e)}`,
+          `Failed to query ${describeMatcher(matcher)} in window ${windowId} for ${operation}: ${getErrorMessage(e)}`,
         );
         hadServiceErrors = true;
         return undefined;
@@ -145,7 +165,9 @@ async function findOwner(
   // "Could not ask" is not "answered no": the window that failed may be the one holding this web
   // view, and treating it as an unowned id sends the operation to the focused window instead
   if (hadServiceErrors)
-    throw new Error(`Could not ${operation} webview ${webViewId}: some windows were unreachable.`);
+    throw new Error(
+      `Could not ${operation} ${describeMatcher(matcher)}: some windows were unreachable.`,
+    );
 
   return undefined;
 }
@@ -175,7 +197,10 @@ function getLayoutTargetTabId(layout?: Layout): string | undefined {
  */
 async function findLayoutTargetOwner(targetTabId: string): Promise<WebViewOwner | undefined> {
   try {
-    return await findOwner(targetTabId, 'openWebView beside a layout target');
+    return await findOwner(
+      { kind: 'id', webViewId: targetTabId },
+      'openWebView beside a layout target',
+    );
   } catch (e) {
     logger.warn(
       `Could not work out which window holds tab ${targetTabId}, so this open goes to the window the user is in: ${getErrorMessage(e)}`,
@@ -220,7 +245,11 @@ async function openWebView(
 ): Promise<WebViewId | undefined> {
   // If an existingId is provided, search all windows for the webview's owner
   if (options?.existingId) {
-    const owner = await findOwner(options.existingId, 'openWebView');
+    const matcher: OwnerMatcher =
+      options.existingId === '?'
+        ? { kind: 'type', webViewType }
+        : { kind: 'id', webViewId: options.existingId };
+    const owner = await findOwner(matcher, 'openWebView');
     if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
   }
 
@@ -244,7 +273,7 @@ async function reloadWebView(
   webViewId: WebViewId,
   options?: ReloadWebViewOptions,
 ): Promise<WebViewId | undefined> {
-  const owner = await findOwner(webViewId, 'reload');
+  const owner = await findOwner({ kind: 'id', webViewId }, 'reload');
   if (owner) return owner.shard.reloadWebView(webViewType, webViewId, options);
 
   // Webview not found in any window — fall back to focused window (may be a new webview)
@@ -255,7 +284,7 @@ async function reloadWebView(
 async function getOpenWebViewDefinition(
   webViewId: string,
 ): Promise<SavedWebViewDefinition | undefined> {
-  return (await findOwner(webViewId, 'getOpenWebViewDefinition'))?.definition;
+  return (await findOwner({ kind: 'id', webViewId }, 'getOpenWebViewDefinition'))?.definition;
 }
 
 /** Everything the windows that answered have open, and the ready windows that did not answer */
