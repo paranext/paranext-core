@@ -38,6 +38,25 @@ Paste these into every role, verbatim — except the posting bullet, which carri
 role 4:
 
 - **Absolute paths only.** Your working directory resets between shell calls.
+- **Confirm you are looking at the right tree before you look at anything, and say so in your
+  first finding-bearing message.** State the absolute worktree path, the branch, the resolved HEAD
+  SHA, and the diff range you are reviewing — and check them against what the brief named:
+
+  ```bash
+  git -C <worktree> rev-parse --abbrev-ref HEAD   # literally `HEAD` when detached — pair with the SHA
+  git -C <worktree> rev-parse HEAD                # must equal the SHA the brief named
+  git -C <worktree> diff --stat <base>..<head> | tail -1   # sanity-check the file count
+  ```
+
+  If any of them disagrees with the brief, **stop and report the mismatch** rather than reviewing
+  what you found. A session's working directory is not a reliable answer to "which code am I
+  reviewing": it can sit on an unrelated checkout, and a review tool asked to review "the current
+  branch" will happily review that one. Observed 2026-08-12: a max-depth review drifted onto an
+  unrelated branch and returned **fifteen confident, well-evidenced findings about the wrong
+  codebase** — nothing in the output looked wrong, because every finding was internally correct.
+  This is cheap insurance precisely because the failure is invisible downstream: a wrong-tree
+  report is indistinguishable from a right-tree one until someone verifies a finding against the
+  actual PR.
 - **Reference repo standards; do not restate them.** Read the file and follow it. A rule
   paraphrased from memory drifts, and a stale copy in a brief outranks nothing.
 - **Never skip hooks** (`--no-verify`, `-n`, `HUSKY=0`). If a hook fails, fix the cause.
