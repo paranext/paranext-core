@@ -58,8 +58,8 @@ import { networkObjectService } from '@shared/services/network-object.service';
 import {
   getServiceShardAttributes,
   WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
-  WebViewServiceShardType,
 } from '@shared/models/service-shard.model';
+import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import {
   createBufferedNetworkEventEmitter,
   getNetworkEvent,
@@ -1510,7 +1510,7 @@ export function convertWebViewDefinitionToSaved(
   return webViewDefinitionCloned;
 }
 
-/** See {@link WebViewServiceShardType.getOpenWebViewDefinition} */
+/** See {@link WebViewServiceShard.getOpenWebViewDefinition} */
 async function getOpenWebViewDefinition(
   webViewId: WebViewId,
 ): Promise<SavedWebViewDefinition | undefined> {
@@ -1549,7 +1549,7 @@ export function getSavedWebViewDefinitionSync(
   return savedWebViewDefinition;
 }
 
-/** See {@link WebViewServiceShardType.getAllOpenWebViewDefinitions} */
+/** See {@link WebViewServiceShard.getAllOpenWebViewDefinitions} */
 async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]> {
   // Wait for the dock layout to be registered, then delegate to the sync implementation so the
   // strip-and-keep-alive logic lives in one place
@@ -2209,7 +2209,7 @@ async function openOrReloadWebView(
   return webView.id;
 }
 
-/** See {@link WebViewServiceShardType.openWebView} */
+/** See {@link WebViewServiceShard.openWebView} */
 export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
@@ -2257,7 +2257,7 @@ export const openWebView = async (
   });
 };
 
-/** See {@link WebViewServiceShardType.reloadWebView} */
+/** See {@link WebViewServiceShard.reloadWebView} */
 export async function reloadWebView(
   // Keeping this parameter for the likelihood that we will add options per WebViewType sometime
   _webViewType: WebViewType,
@@ -2274,7 +2274,7 @@ export async function reloadWebView(
   return openOrReloadWebView(existingSavedWebView, undefined, getWebViewOptionsDefaults(options));
 }
 
-/** See {@link WebViewServiceShardType.dockContainsTab} */
+/** See {@link WebViewServiceShard.dockContainsTab} */
 async function dockContainsTab(tabOrTabGroupId: string): Promise<boolean> {
   return (await getDockLayout()).containsTab(tabOrTabGroupId);
 }
@@ -2452,7 +2452,7 @@ export const initialize = () => {
 
 // #endregion Initialization
 
-const papiWebViewService: WebViewServiceShardType = {
+const papiWebViewService: WebViewServiceShard = {
   onDidAddWebView: onDidOpenWebView,
   onDidOpenWebView,
   onDidUpdateWebView,
@@ -2497,7 +2497,7 @@ export async function startWebViewServiceShard(): Promise<void> {
   // renderers can coexist. The main process's WebView service router registers the generic name and
   // forwards to the shard that should handle each call. The object type and window id are how the
   // router finds this shard; the name it is registered under is nobody else's business.
-  await networkObjectService.set<WebViewServiceShardType>(
+  await networkObjectService.set<WebViewServiceShard>(
     `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
     papiWebViewService,
     WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
