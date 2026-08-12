@@ -509,6 +509,29 @@ rubric file carries the six mandatory sub-checks — already-fixed-upstream,
 right-conclusion-wrong-mechanism, self-refuting claims, cross-reviewer conflicts,
 reviewer-suggested fixes traced before they are trusted, and the grep safety net.
 
+**Spot-verify at least one finding from every agent report yourself, against the intended tree,
+before acting on any of it.** This is the orchestrator's own step and it is not optional. The
+briefs make each agent pin its target (see `references/agent-briefs.md`), but that guards the
+send side only; this guards the receive side, and it is the half that survives a correctly-briefed
+agent still handing you something wrong. Pick one finding with a concrete `file:symbol` claim,
+open the file in the worktree the round is actually about, and confirm the code says what the
+report says.
+
+Two failure modes it catches, both observed on 2026-08-12:
+
+- **A wrong-tree report.** A review that silently resolves the wrong branch returns findings that
+  are each internally correct and collectively about the wrong codebase. Nothing in the output
+  looks wrong — a wrong-tree report is indistinguishable from a right-tree one until exactly this
+  check is run.
+- **A confident, well-argued, false finding.** One round's most alarming claim — that a feature
+  was dead in every packaged build — reasoned correctly from browser behaviour and was still
+  wrong, because the runtime differs from the browser. It cost one command to disprove and would
+  have cost a day to "fix".
+
+Where a claim is about **runtime** behaviour rather than what the source says, prefer running it
+over reading it: a ten-line script in the real runtime beats any amount of argument, and it is
+usually the cheaper of the two.
+
 **Establish the checkout's branch before reading a single file, and read by ref.** A verifier's
 first command is `git rev-parse --abbrev-ref HEAD` plus `git status --short`, reported at the top
 of its output. Whenever the checkout is not on the PR branch at the ref in question — or the tree
