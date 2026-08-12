@@ -41,7 +41,9 @@ interface CommentListWebViewOptions extends OpenWebViewOptions {
   editorWebViewId: string | undefined;
   // One-shot initial filter/scope for a NEW view, seeded into web view state so the view mounts
   // already-filtered instead of relying on a post-open setFilters message (which could race the
-  // view's message listener). Only set when creating a new view; undefined on reuse/restore.
+  // view's message listener). Passed by openCommentList on every open, but only takes effect when
+  // creating a new view: a reuse hit returns before the provider (getWebViewDefinition) ever runs,
+  // so these are simply inert there.
   initialFilters: Partial<CommentFilters> | undefined;
   initialScopeFilter: ScopeFilter | undefined;
 }
@@ -265,11 +267,10 @@ async function openCommentList(
   }
 
   // Find the project's comment list wherever it lives in the dock — including in another window —
-  // or create one if none is open anywhere. The dock layouts are the reuse authority, so this one
-  // call replaces any local bookkeeping: a `'?'` search scoped by `existingProjectId` finds the
-  // project's list regardless of which window it was last opened or moved to. The initial
-  // filters/scope are seeded into the web view state so a freshly-created view mounts
-  // already-filtered.
+  // or create one if none is open anywhere. The dock layouts are the reuse authority: a `'?'` search
+  // scoped by `existingProjectId` finds the project's list regardless of which window it was last
+  // opened or moved to. The initial filters/scope are seeded into the web view state so a
+  // freshly-created view mounts already-filtered.
   const webViewOptions: CommentListWebViewOptions = {
     projectId,
     editorScrollGroupId,
@@ -289,12 +290,13 @@ async function openCommentList(
     },
   );
 
-  // Post-open controller actions. A freshly-created view already has its filters seeded via state
-  // (above), so a post-open setFilters is a harmless, idempotent re-send there — its message is
-  // dropped if the view's listener isn't mounted yet, and reapplies the same values if it is; either
-  // way the view ends up in the requested state. Only fetch the controller when there is actually
-  // something to send — so a filters-only open skips it entirely and can't fail on a transient
-  // controller-lookup miss.
+  // Post-open controller actions. Sent unconditionally even to a freshly-created view whose filters
+  // are already seeded via state (above): web view messages are buffered and replayed once the
+  // view's iframe finishes loading (see web-view.component.tsx), so this never races a mount-order
+  // loss — but it does mean the receiver (comment-list.web-view.tsx) is responsible for making a
+  // same-value re-send a no-op rather than churning React/query state. Only fetch the controller
+  // when there is actually something to send — so a filters-only open skips it entirely and can't
+  // fail on a transient controller-lookup miss.
   const needsSetFilters = !!options.filtersToSet || effectiveScopeFilterToSet !== undefined;
   const needsSelectThread = !!options.threadIdToSelect;
   if (commentListWebViewId && (needsSetFilters || needsSelectThread)) {

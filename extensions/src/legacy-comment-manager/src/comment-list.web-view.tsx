@@ -40,6 +40,7 @@ import {
   ScopeFilter,
   UNFILTERED,
 } from './comment-list-filters.model';
+import { resolveSetFiltersMessage } from './comment-list-web-view-message.util';
 import type { CommentListScrollTarget } from './comment-list-scroll.utils';
 import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
@@ -278,6 +279,17 @@ global.webViewComponent = function CommentListWebView({
     commentThreadsRef.current = safeCommentThreads;
   }, [safeCommentThreads]);
 
+  /**
+   * Latest applied filters/scope, readable from the stable message listener without re-subscribing
+   * it. Lets an incoming `setFilters` message compare against the view's current values so a
+   * same-value re-send (see `resolveSetFiltersMessage`) can skip the `useState`/`useWebViewState`
+   * setter entirely instead of minting a new-but-equal `CommentFilters` object.
+   */
+  const currentViewRef = useRef({ filters, scopeFilter });
+  useEffect(() => {
+    currentViewRef.current = { filters, scopeFilter };
+  }, [filters, scopeFilter]);
+
   const isViewVisible = useViewVisibility();
 
   // Performs the DOM scroll for a computed sync-scroll target. The hook computes WHERE to scroll;
@@ -378,8 +390,16 @@ global.webViewComponent = function CommentListWebView({
         // unspecified filter axes reset to 'all' and an omitted scope resets to UNFILTERED, so the
         // programmatic open (e.g. the S/R conflict link) shows exactly the requested view — nothing
         // carries over from prior state.
-        setFilters(applyFilterOverrides(data.filters));
-        setScopeFilter(data.scopeFilter ?? UNFILTERED);
+        //
+        // openCommentList sends this message unconditionally on every open, including a reuse hit
+        // whose filters are already correct — so an equal-values re-send is expected, not an edge
+        // case. Skip the setters when nothing actually changes: applying an equal value would still
+        // mint a new-but-equal CommentFilters object, invalidating the CommentThreads selector's
+        // identity-based useMemo below and forcing an unnecessary PDP unsubscribe/resubscribe,
+        // re-query, and skeleton flash.
+        const resolved = resolveSetFiltersMessage(data, currentViewRef.current);
+        if (resolved.filtersChanged) setFilters(resolved.filters);
+        if (resolved.scopeFilterChanged) setScopeFilter(resolved.scopeFilter);
       }
     };
 
