@@ -275,6 +275,21 @@ describe('web view service router', () => {
     expect(mocks.loggerWarn).toHaveBeenCalledWith(expect.stringContaining('more than one'));
   });
 
+  test('finds a `?` match even when a window that could not be asked sorts ahead of it', async () => {
+    // getReadyWindowIds() lists window 1 before window 2, so an implementation that gave up as soon
+    // as it hit a window it could not ask — instead of waiting for every ready window to answer
+    // before deciding — would report this as unreachable without ever reaching window 2, where the
+    // match actually is
+    const owner = windowShard([{ id: 'wv-2', webViewType: 'comments' }]);
+    withWindows({ 1: undefined, 2: owner });
+    const router = await getRouter();
+
+    await expect(router.openWebView('comments', undefined, { existingId: '?' })).resolves.toBe(
+      'opened',
+    );
+    expect(owner.openWebView).toHaveBeenCalled();
+  });
+
   test('a probe returns not-found rather than throwing when a window could not be asked', async () => {
     // Nothing claimed the web view, and window 2 could not be asked at all — a probe has nothing
     // to lose by treating that as not-found rather than failing the call
@@ -390,7 +405,12 @@ describe('web view service router', () => {
     // behind the one the user is looking at — so without raising it the whole operation is invisible
 
     test('raises the window that owns an existing web view', async () => {
-      withWindows({ 1: windowShard([]), 2: windowShard(['existing-view']) });
+      const owner = windowShard(['existing-view']);
+      // A found-existing open resolves to the id it searched for, not a placeholder only a freshly
+      // created web view would produce — pinning the raise to that returned value keeps this test
+      // from passing against an implementation that raises only for a genuinely new id.
+      owner.openWebView.mockResolvedValue('existing-view');
+      withWindows({ 1: windowShard([]), 2: owner });
       const router = await getRouter();
 
       await router.openWebView('someType', undefined, { existingId: 'existing-view' });
@@ -452,6 +472,34 @@ describe('web view service router', () => {
       await router.openWebView('someType');
 
       expect(mocks.focusWindow).not.toHaveBeenCalled();
+    });
+
+    test('does not raise the owning window for a passive probe that opted out of bringToFront', async () => {
+      // A probe that already declined to be brought to the front is not something the user is
+      // watching for — raising a window at it would steal focus every time it happened to run
+      const owner = windowShard([{ id: 'wv-2', webViewType: 'comments' }]);
+      owner.openWebView.mockResolvedValue('wv-2');
+      withWindows({ 1: windowShard([]), 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('comments', undefined, {
+        existingId: '?',
+        createNewIfNotFound: false,
+        bringToFront: false,
+      });
+
+      expect(mocks.focusWindow).not.toHaveBeenCalled();
+    });
+
+    test('raises the owning window when the caller explicitly asks to be brought to front', async () => {
+      const owner = windowShard([{ id: 'wv-2', webViewType: 'comments' }]);
+      owner.openWebView.mockResolvedValue('wv-2');
+      withWindows({ 1: windowShard([]), 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('comments', undefined, { existingId: '?', bringToFront: true });
+
+      expect(mocks.focusWindow).toHaveBeenCalledWith(2);
     });
   });
 
