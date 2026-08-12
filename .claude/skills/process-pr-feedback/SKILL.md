@@ -394,6 +394,26 @@ POST will reject. The reply goes to the root; the draft still answers the review
 > anchored threads afterwards. Ask "what surfaces has this reviewer used?" before concluding
 > the inventory is complete.
 
+**Named case: the reviewer answered our numbered questions in bulk.** On this team it is the
+normal shape rather than an exotic one, because we post open questions as anchored threads plus a
+per-PR index comment (`references/pr-thread-conversion.md`) and the reviewer answers the whole
+list in one comment. Measured on the round this case was written from (PRs #2649/#2651,
+2026-08-12): **zero** inline comments, two issue comments, each answering seven numbered questions
+by number.
+
+The inventory splits such a comment into **one item per numbered answer**, and each item records
+**the thread it answers** — that thread's GraphQL node id and root comment id, from the threads
+*we* opened — alongside the issue comment it physically arrived in. That mapping is this case's
+whole deliverable, and it is cheap here and expensive later: P6's default reply target is "the
+thread the reviewer commented in", which for these is no thread at all, so a run without the
+mapping posts one issue comment back and leaves seven threads open with our own question as their
+last word — and the next round re-collects every one of them, since the resolved-thread filter
+above only removes threads someone actually closed.
+
+Answers that map to no question of ours are **net-new rulings arriving inside an otherwise on-PR
+round**. They are items like any other; what they lack is an anchor, which is a P6 problem — mark
+them so P6 sees it, and do not invent a thread for them here.
+
 Also capture the **revision each reviewer read**. Reviews go stale under a moving stack; an item
 can be correct at the reviewer's base and already fixed at the tip, and that is a disposition,
 not a dismissal. For an inline comment the field is `original_commit_id`, **not** `commit_id` —
@@ -834,6 +854,22 @@ complaint this answers: evidence the reviewer can see beats evidence the reply a
 **If the feedback arrived off-PR** — a document, a DM — convert it to PR-anchored review threads
 rather than answering in kind. That is the default, and the pattern is in
 `references/pr-thread-conversion.md`.
+
+**An answer to one of our numbered questions is replied to inside the thread that asked it** — the
+thread P0 mapped it to, not the issue comment it arrived in. There the exchange reads as one
+conversation, P8 can resolve the thread, and the next round does not re-collect it; replied to as
+an issue comment, every one of those threads stays open and unanswered in public. So one bulk
+comment fans out into several threaded replies, plus at most one issue comment covering whatever
+it said that answered nothing we asked.
+
+**Net-new rulings with no anchor, inside an otherwise on-PR round**, take the conversion pattern
+per item rather than per round. `references/pr-thread-conversion.md` is written for a whole round
+arriving off-PR, but its rules carry unchanged to a single item: anchor at the code the ruling is
+about, on the PR that carries that code, verified against that PR's own diff. A ruling that
+changes code gets its thread where the change lands; one that changes nothing and needs no answer
+belongs in an index comment's current-state notes, or nowhere. What it must not become is a reply
+buried in a thread about something else, where neither the reviewer nor the next round will find
+it.
 
 ### G2 — Inspection gate · **HARD STOP**
 
