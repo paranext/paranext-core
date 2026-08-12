@@ -157,8 +157,10 @@ independent verdicts that disagree is exactly the signal worth having.
 > ruling. If you find a reason the ruling is wrong, stop and report it to the orchestrator as an
 > escalation — it is a new decision for the user, never one you take. Answer the flow's questions
 > from `<packet>/03-rulings.md`, `<packet>/02-triage.md` and `<packet>/01-verification/` wherever
-> they answer them, and escalate only genuine gaps. Where those skills are unavailable in your
-> session, the rules below are the floor.
+> they answer them, and escalate only genuine gaps. If any of those skills is unavailable in your
+> session, stop and report that rather than substituting a method of your own — P3 checked for
+> them before the train started, so a gap here is news about your session, not something to work
+> around.
 >
 > **Red-first.** For every behavior change, write the failing test first, run it, and record the
 > failure message. Then implement. Then run it again. A fix with no failing-first test is not
