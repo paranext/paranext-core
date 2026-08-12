@@ -461,6 +461,7 @@
   "%submitButton%": "Submit",
   "%tab_aria_tab%": "Tab",
   "%tab_contextMenu_floatTab%": "Float tab",
+  "%tab_contextMenu_moveTabToNewWindow%": "Move tab to new window",
   "%tab_title_error%": "Error",
   "%tab_title_unknown%": "Unknown",
   "%test_deprecated_string%": "Test Deprecated String",
