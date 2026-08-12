@@ -2418,3 +2418,37 @@ step, no automation. Just a record.
   exactly one case — a dock reactivation brings a window back before readiness lands — which is the
   case it was added for.
 - **Source:** PT-4386.
+## ADR-0017: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
+
+- **Date:** 2026-08-11
+- **Status:** Accepted
+- **Context:** rc-dock ships a `windowbox` feature that pops a dock tab into a child browser
+  window, which looked like a shortcut to multi-window. A live spike (Power mode, tab dragged
+  out via the windowbox path) failed on four independent axes: the popup is an unmanaged
+  window (default chrome, none of the app's preload/security/window wiring); React 19 removed
+  `findDOMNode` and rc-dock's rc-util fallback crashes the host window's React root
+  (`WindowPanel`/`NewWindow` — the same crash signature later reproduced when a persisted
+  layout carrying a stray windowbox node was restored); the popped tab's content did not
+  render and could not be interacted with; and the popup booted a spurious second full app
+  renderer, registering duplicate window-scoped services. The failures are structural — the
+  feature assumes a same-origin child window sharing the parent's React tree, which
+  contradicts this app's window model (isolated renderer per window, window-scoped service
+  shards, main-process orchestration).
+- **Decision:** Every application window is a real Electron `BrowserWindow` created and
+  tracked by the main process, with its own renderer, dock layout, and window-scoped service
+  shards; cross-window placement flows through the main-process routers (window layout,
+  `targetWindowId`, the move primitive), never through rc-dock's windowbox. Layout traversal
+  code still walks the `windowbox` box shape defensively (`hasAnyTabs`), so foreign or legacy
+  layout nodes cannot make a non-empty dock read as empty.
+- **Alternatives:** rc-dock windowbox — rejected on the spike evidence above. Keeping the
+  single-window model — rejected; multi-window is the epic. Patching rc-dock's windowbox into
+  the app's window model — rejected; it would re-implement window management inside a docking
+  library that never owned it, against the process architecture.
+- **Consequences:** Windows are equal siblings managed by main (persistence, bounds, layout
+  each per window); popping a tab out is a routed re-open in a new `BrowserWindow`, so the
+  web view's close/open lifecycle runs on a move rather than a reparent. A windowbox node
+  appearing in a persisted layout is foreign data: restore currently renders it through
+  rc-dock's crashing code path, so stripping windowbox nodes at restore is candidate
+  hardening if such layouts recur.
+- **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
+  design doc § spike); multi-window epic architecture discussion.
