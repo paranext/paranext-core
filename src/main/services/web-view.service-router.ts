@@ -466,7 +466,13 @@ type MoveWebViewTarget = number | 'new';
  *   {@link recoverAfterFailedMove})
  */
 async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Promise<WebViewId> {
-  const owner = await findOwner(webViewId, 'move');
+  const matcher: OwnerMatcher = { kind: 'id', webViewId };
+  const { owner, hadUnreachableWindows } = await findOwner(matcher, 'move');
+  // A move always names an existing web view, so a window that could not be asked may be the one
+  // holding it. Reading that as "nobody has it" would fail the move for the wrong reason, and the
+  // caller could not tell a view that is not open from one in a window that never answered.
+  if (!owner && hadUnreachableWindows)
+    throw new Error(`Could not move ${describeMatcher(matcher)}: some windows were unreachable.`);
   if (!owner) throw new Error(`Cannot move webview ${webViewId}: no window has it open.`);
 
   const targetDescription = target === 'new' ? 'a new window' : `window ${target}`;
@@ -754,10 +760,23 @@ async function openWebView(
     // the `existingId` search applies. A target no window claims still falls through to the
     // focused window: the owner search only sees web views, and a replace-tab target can be a
     // settings tab or dialog that is invisible to it.
-    const owner =
-      layout?.type === 'replace-tab'
-        ? await findOwner(layoutTargetTabId, 'openWebView over a replace-tab target')
-        : await findLayoutTargetOwner(layoutTargetTabId);
+    let owner: WindowShard | undefined;
+    if (layout?.type === 'replace-tab') {
+      const targetMatcher: OwnerMatcher = { kind: 'id', webViewId: layoutTargetTabId };
+      const { owner: replaceTabOwner, hadUnreachableWindows } = await findOwner(
+        targetMatcher,
+        'openWebView over a replace-tab target',
+      );
+      // Only when nothing claimed the target: a window that answered yes settles where this goes,
+      // and another window failing to answer cannot make that answer wrong. Failing here rather
+      // than falling through is what keeps the open from running in a guessed window and throwing
+      // there, after the provider has already run.
+      if (!replaceTabOwner && hadUnreachableWindows)
+        throw new Error(
+          `Could not openWebView ${webViewType} over replace-tab target '${layoutTargetTabId}': some windows were unreachable.`,
+        );
+      owner = replaceTabOwner;
+    } else owner = await findLayoutTargetOwner(layoutTargetTabId);
     if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
   }
 
