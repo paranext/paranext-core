@@ -160,7 +160,22 @@ async function findOwner(
       }
     }),
   );
-  const owner = owners.find((candidate) => candidate !== undefined);
+  // Ready-window order is creation order, so picking the first match would prefer a window opened
+  // earlier over the one this call is already headed for. Collecting candidates in parallel above
+  // does not reintroduce that nondeterminism: selection below only starts once every window has
+  // answered, so whichever one replies fastest cannot change which owner comes out — only window id
+  // and the routing target decide that.
+  const matches = owners.filter((candidate) => candidate !== undefined);
+  const targetWindowId = getTargetWindowId();
+  const owner =
+    matches.find((candidate) => candidate.windowId === targetWindowId) ??
+    matches.sort((a, b) => a.windowId - b.windowId)[0];
+  // App-wide uniqueness means only one window should ever answer, so more than one match is already
+  // a violated invariant; this is what keeps the router's behavior predictable anyway.
+  if (matches.length > 1)
+    logger.warn(
+      `Found more than one ${describeMatcher(matcher)} (${matches.map((match) => match.definition.id).join(', ')}); these are meant to be unique across the app. Using the one in window ${owner.windowId}.`,
+    );
   return { owner, hadUnreachableWindows: hadServiceErrors };
 }
 
