@@ -459,6 +459,18 @@ describe('web view service router', () => {
     expect(owner.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
   });
 
+  test('answers with the definition when another window claims it despite a window that could not be asked', async () => {
+    // Mirrors "still answers when another window claims the web view" below for reloadWebView — a
+    // match found in one window short-circuits regardless of another window being unreachable
+    const owner = windowShard(['owned-view']);
+    withWindows({ 1: owner, 2: windowShard([]) }, { unreadyWindowIds: [2] });
+    const router = await getRouter();
+
+    await expect(router.getOpenWebViewDefinition('owned-view')).resolves.toEqual({
+      id: 'owned-view',
+    });
+  });
+
   test('does not ask a window that has not registered its services yet who owns a web view, and will not fall back to focus', async () => {
     // The window that could not be asked is the one holding the web view here, which is exactly why
     // falling back to focus is wrong: it would reload whatever the focused window is showing
