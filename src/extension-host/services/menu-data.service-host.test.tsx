@@ -1,3 +1,4 @@
+import { menuDocumentCombiner } from '@extension-host/services/contribution.service';
 import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
 import { PlatformMenus, ReferencedItem, WebViewMenus } from 'platform-bible-utils';
 import { vi } from 'vitest';
@@ -437,5 +438,46 @@ describe('Simple-mode menu item filtering', () => {
         (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
       ),
     ).toBe(false);
+  });
+});
+
+describe('Platform menu document interface-mode gating', () => {
+  /**
+   * The real platform menu document (`menu.data.json`), exactly as the combiner hands it to the
+   * engine at startup — so these tests pin the shipped document's mode gating, not a mock's.
+   */
+  function getRealPlatformMenus(): PlatformMenus {
+    const realMenus = menuDocumentCombiner.rawOutput;
+    if (!realMenus) throw new Error('Platform menu document failed to combine');
+    return realMenus;
+  }
+
+  test('getMainMenu hides the Open new window item when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
+    // Let the fire-and-forget settings read in the constructor resolve
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getMainMenu();
+    expect(
+      result.items.some((item) => 'command' in item && item.command === 'platform.createWindow'),
+    ).toBe(false);
+  });
+
+  test('getMainMenu shows the Open new window item when platform.interfaceMode is power', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getMainMenu();
+    expect(
+      result.items.some((item) => 'command' in item && item.command === 'platform.createWindow'),
+    ).toBe(true);
   });
 });
