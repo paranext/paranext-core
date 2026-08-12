@@ -188,7 +188,7 @@ describe("a '?' reuse search limited to a project", () => {
         existingId: 'wv-1',
         existingProjectId: 'project-B',
       }),
-    ).rejects.toThrow(/existingProjectId/);
+    ).rejects.toThrow(/already names an exact web view/);
 
     expect(owner.getOpenWebViewDefinition).not.toHaveBeenCalled();
     expect(owner.getAllOpenWebViewDefinitions).not.toHaveBeenCalled();
