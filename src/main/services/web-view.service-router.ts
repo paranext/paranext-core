@@ -30,7 +30,10 @@ import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
-import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
+import {
+  WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
+  WebViewServiceShardType,
+} from '@shared/models/service-shard.model';
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
   CloseWebViewEvent,
@@ -48,9 +51,10 @@ import {
  * The WebView service shard each window registers, found by network object type and window
  * attribute rather than by rebuilding the window-scoped name the window registered under.
  */
-const webViewShards = createServiceShardIndex<WebViewServiceType>({
+const webViewShards = createServiceShardIndex<WebViewServiceShardType>({
   objectType: WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
-  resolveShard: (networkObjectId) => networkObjectService.get<WebViewServiceType>(networkObjectId),
+  resolveShard: (networkObjectId) =>
+    networkObjectService.get<WebViewServiceShardType>(networkObjectId),
 });
 
 /**
@@ -62,7 +66,9 @@ const webViewShards = createServiceShardIndex<WebViewServiceType>({
  *
  * @param windowId The Electron BrowserWindow ID
  */
-export async function getWebViewShard(windowId: number): Promise<WebViewServiceType | undefined> {
+export async function getWebViewShard(
+  windowId: number,
+): Promise<WebViewServiceShardType | undefined> {
   return webViewShards.getShard(windowId);
 }
 
@@ -87,15 +93,19 @@ function describeMatcher(matcher: OwnerMatcher): string {
     : `a ${matcher.webViewType} web view`;
 }
 
-/** The window that owns a web view, and the definition the ownership search already fetched */
-type WebViewOwner = {
+/** A window a search settled on, and the shard an operation runs in it through */
+type WindowShard = {
   /**
-   * The window that claimed the web view. Kept alongside the shard because the search already
-   * resolved it, and raising that window afterwards is the only way the user sees where a
-   * cross-window operation went.
+   * The window that answered. Kept alongside the shard because the search already resolved it, and
+   * raising that window afterwards is the only way the user sees where a cross-window operation
+   * went.
    */
   windowId: number;
-  shard: WebViewServiceType;
+  shard: WebViewServiceShardType;
+};
+
+/** The window that owns a web view, and the definition the ownership search already fetched */
+type WebViewOwner = WindowShard & {
   definition: SavedWebViewDefinition;
 };
 
@@ -180,20 +190,28 @@ async function findOwner(
 }
 
 /**
- * The tab a layout says to open next to or over, which names the window that tab is in.
+ * The tab or tab group a layout says to open next to, over or inside, which names the window that
+ * tab or tab group is in.
  *
- * `tab` layouts are deliberately not routed by their `parentTabGroupId`. A tab group id is not a
- * web view id, so answering it would mean asking every window a question none of them can answer
- * today — a new cross-process query per open, for the single call site that passes one (the dock's
- * "+" button, whose tab group is by construction in the window the user just clicked in).
+ * A `tab` layout's `parentTabGroupId` names one as surely as the other layouts' `targetTabId` does.
+ * The dock's "+" button passes the tab group it sits in through a command, so by the time that open
+ * arrives here it has been round the extension host and which window it belongs in is a question
+ * only the tab group id can answer.
  */
 function getLayoutTargetTabId(layout?: Layout): string | undefined {
   if (layout?.type === 'panel' || layout?.type === 'replace-tab') return layout.targetTabId;
+  if (layout?.type === 'tab') return layout.parentTabGroupId;
   return undefined;
 }
 
 /**
- * The window holding the tab a layout points at, or nothing if no window that could answer has it.
+ * The window whose dock holds the tab or tab group a layout points at, or nothing if no window that
+ * could answer holds it.
+ *
+ * Asks each window what its dock holds rather than which window owns a web view with that id. A
+ * layout can name a tab that is no web view — a settings tab, a dialog — and a tab group id is not
+ * a web view id at all, so an ownership lookup answers "nobody" for both and the open lands
+ * wherever the user happens to be instead of where it was aimed.
  *
  * A window that could not be asked does NOT fail the open here, which is the one way this differs
  * from the `existingId` search. Guessing wrong there costs a second copy of a web view meant to be
@@ -202,14 +220,42 @@ function getLayoutTargetTabId(layout?: Layout): string | undefined {
  * cannot answer — a second window still starting, or one whose renderer crashed and never
  * re-registered — every open naming a tab produces nothing at all.
  */
-async function findLayoutTargetOwner(targetTabId: string): Promise<WebViewOwner | undefined> {
-  // A window that could not be asked is folded into "no owner" here rather than reported — see the
-  // doc comment above for why that is the right call for a layout target specifically.
-  const { owner } = await findOwner(
-    { kind: 'id', webViewId: targetTabId },
-    'openWebView beside a layout target',
+async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard | undefined> {
+  // Every window that could not be asked is warned about and then treated as one that does not hold
+  // the target — see the doc comment above for why that is the right call for a layout target
+  // specifically.
+  const holders = await Promise.all(
+    getReadyWindowIds().map(async (windowId) => {
+      try {
+        const webViewShard = await getWebViewShard(windowId);
+        if (!webViewShard) {
+          logger.warn(
+            `WebView service for window ${windowId} is not registered, so it could not be asked whether it holds '${targetTabId}' for openWebView beside a layout target`,
+          );
+          return undefined;
+        }
+        return (await webViewShard.dockContainsTab(targetTabId))
+          ? { windowId, shard: webViewShard }
+          : undefined;
+      } catch (e) {
+        logger.warn(
+          `Failed to ask window ${windowId} whether it holds '${targetTabId}' for openWebView beside a layout target: ${getErrorMessage(e)}`,
+        );
+        return undefined;
+      }
+    }),
   );
-  return owner;
+  const holdingWindows = holders.filter((candidate) => candidate !== undefined);
+  // Tab group ids are minted per window, so several windows routinely hold the same one, and which
+  // window this call is already headed for is what tells those apart — a "+" click in a later
+  // window would otherwise land in an unrelated tab group in the first one. Window id order decides
+  // the rest so that a target held by neither the routing target nor a single window still goes
+  // somewhere predictable rather than wherever answered first.
+  const targetWindowId = getTargetWindowId();
+  return (
+    holdingWindows.find((candidate) => candidate.windowId === targetWindowId) ??
+    holdingWindows.sort((a, b) => a.windowId - b.windowId)[0]
+  );
 }
 
 /**
@@ -235,7 +281,7 @@ async function findLayoutTargetOwner(targetTabId: string): Promise<WebViewOwner 
  * below.
  */
 async function openWebViewInOwningWindow(
-  owner: WebViewOwner,
+  owner: WindowShard,
   webViewType: WebViewType,
   layout?: Layout,
   options?: OpenWebViewOptions,
@@ -281,8 +327,8 @@ async function openWebView(
     if (hadUnreachableWindows) return undefined;
   }
 
-  // A layout naming a tab names the window that tab is in, so it routes the same way an existingId
-  // does — and after it, because a window shard that finds the existing web view raises it and
+  // A layout naming a tab or tab group names the window that holds it, so it routes the same way an
+  // existingId does — and after it, because a window shard that finds the existing web view raises it and
   // returns before it ever reads the layout. Routing in the other order would send the call to a
   // window that then ignores the reason it was sent there.
   const layoutTargetTabId = getLayoutTargetTabId(layout);

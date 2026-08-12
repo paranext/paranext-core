@@ -3851,6 +3851,17 @@ declare module 'shared/models/docking-framework.model' {
      */
     getTabInfoById: (tabId: string) => TabInfo | undefined;
     /**
+     * Whether this dock holds the tab or tab group with the given ID.
+     *
+     * Tabs and tab groups are looked up the same way, so one question answers for either kind of ID.
+     * Every kind of tab counts, not only WebView tabs.
+     *
+     * @param tabOrTabGroupId ID of the tab or tab group to look for
+     * @returns `true` if this dock holds it, `false` otherwise
+     * @experimental
+     */
+    containsTab: (tabOrTabGroupId: string) => boolean;
+    /**
      * Sets an existing tab as the active tab in its tab group, makes sure it is unobscured by other
      * tabs, and sets the document focus in that tab
      *

@@ -29,6 +29,7 @@ import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrap
 import {
   addTabToDock,
   addWebViewToDock,
+  containsTab,
   floatTabById,
   getAllWebViewDefinitions,
   getTabInfoByElement,
@@ -110,6 +111,7 @@ export function PlatformDockLayout() {
         getTabInfoByElement(dockLayoutRef.current, tabElement),
       getTabInfoById: (tabId: string) =>
         getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
+      containsTab: (tabOrTabGroupId: string) => containsTab(dockLayoutRef.current, tabOrTabGroupId),
       focusTab: (tabId: string) => focusTab(dockLayoutRef.current, tabId),
       // `LayoutInfo` is intentionally opaque in the shared model so callers don't need to know
       // about rc-dock's `LayoutBase`. Cross the boundary here at the only place we know the
