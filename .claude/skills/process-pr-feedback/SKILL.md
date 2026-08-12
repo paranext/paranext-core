@@ -555,6 +555,22 @@ committed.
 **Agents:** `fix-train` agents, brief in `references/agent-briefs.md`. Serialize fixes that
 touch the same files; parallelize across branches only when they do not share a worktree.
 
+**Superpowers is a hard dependency of this phase — check it here, and stop if it is missing.**
+The method below is not this skill's own, and there is no degraded version of it to fall back on:
+`superpowers:brainstorming`, `superpowers:writing-plans`, `superpowers:test-driven-development`
+and the execution skills (`superpowers:subagent-driven-development` /
+`superpowers:executing-plans`) must be available before the first fix starts. If any of them is
+not, **stop and tell the user** — name what is missing and what P3 needed it for — rather than
+proceeding on a thinner method. The quiet substitution is the worse outcome by a distance: the
+round still produces commits, they are merely designed worse, and nobody — not the user, not the
+reviewer, not P4 — ever learns that the design step did not happen. The stop is legible and cheap:
+G1's rulings are already on disk, so `--resume <packet-dir>` re-enters here once the plugin is
+installed. **It fires at the top of P3 rather than at the start of the run** because this is where
+the dependency becomes real. P0, P1 and P2 need none of it, and that is worth protecting:
+`--scout-only` is exactly those three phases and a stop at G1 — the unattended-safe subset — so a
+dependency declared for the skill as a whole would fail unattended scout runs over a capability
+they never reach.
+
 **The method comes from Superpowers; this phase supplies the constraints.** What this skill knows
 that nothing else does is the feedback lifecycle — sweeping every surface, verifying adversarially,
 triaging, gating, replying, posting, recording. Design-and-implementation discipline is a different
@@ -564,8 +580,7 @@ here, per `.claude/rules/agent-authoring-link-dont-paraphrase.md`: `superpowers:
 the execution shape — `superpowers:subagent-driven-development` in this session, which is what the
 `fix-train` fan-out already is, or `superpowers:executing-plans` in a separate one. Scale it to the
 ruling: a one-line correction needs the TDD skill and nothing above it; a reshape the user ruled
-"do it now" earns the whole flow. Where those skills are unavailable in the session, the rules
-below are the floor rather than a summary of what was skipped.
+"do it now" earns the whole flow.
 
 **The rulings enter that flow as fixed constraints, not as inputs to question.** This is the one
 seam where the two skills pull against each other, and it is worth stating flatly because nesting
@@ -577,13 +592,17 @@ is never a decision the flow takes for itself. Implement **only** what the rulin
 else found along the way is reported, not fixed — scope creep past a gate is this phase's failure
 mode, and a design step that re-opens a settled question is scope creep wearing a method's clothes.
 
-**Seed the flow with the packet, then filter its questions.** A brainstorming skill asks its
-questions whether or not the answers are already settled, so the orchestrator answers from
-`03-rulings.md`, `02-triage.md`, `01-verification/` and the code everything they answer, and puts
-only genuine gaps to the user. Observed on the 2026-08-12 round: of the design questions the flow
-raised, most were answerable from the packet and the code, and one was a real product call that
-needed the user. Passing them all through unfiltered turns one gate into a dozen, and a user asked
-twelve questions stops reading the twelfth.
+**Brainstorm across everything G1 approved, then filter what the flow asks back.** The design
+step takes the approved set whole rather than a hand-picked subset of it — picking re-scopes the
+round after the gate that scoped it — while what G1 deferred or declined is not designed at all.
+Then filter its questions. A brainstorming skill asks them whether or not the answers are already
+settled, so the orchestrator answers from `03-rulings.md`, `02-triage.md`, `01-verification/` and
+the code everything they answer, and puts to the user **only** the questions that genuinely need a
+human decision. Observed on the 2026-08-12 round: of the design questions raised after G1, all but
+one were answerable from the packet and the code, and exactly one was a real product call — what
+`existingId: '?'` should do when no window can be asked and nothing matched. Unfiltered, that is
+one gate turned into a dozen, most of them re-litigating rulings the user already made, and a user
+asked twelve questions stops reading the twelfth.
 
 **The seam is the end of P3.** Superpowers' tail overlaps what follows — `test-driven-development`
 is the red-first rule below, and `superpowers:verification-before-completion` resembles P5's
