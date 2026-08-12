@@ -13,7 +13,7 @@ The PR-feedback train, codified. Nine phases, two hard human gates, four subagen
 /process-pr-feedback <pr-number>… [--scout-only] [--resume <packet-dir>] [--fast-lane]
 ```
 
-Free text after the PR number carries out-of-band feedback: `also process the doc at <path>`,
+Free text after the PR number(s) carries out-of-band feedback: `also process the doc at <path>`,
 `TJ's DM says: …`. Feedback does not always arrive as PR comments — see P0.
 
 **A round may span a stack, and it takes one packet.** Stacked PRs are this repo's normal
@@ -70,6 +70,7 @@ Every run writes one packet, and **never reuses another run's**:
   02-triage.md           P2   dispositions, options, cost pairs, G1 decision list
   shared-vocabulary.md   P2   which labels the reviewer has actually seen (see below)
   03-rulings.md          G1   the user's rulings, verbatim, dated
+  03-repin.md            P3   heads re-derived after the gate; which cited files moved
   04-fix-reports/        P3   one report per fix
   05-self-review.md      P4   /code-review findings + adjudication
   06-verification.md     P5   gate battery results, e2e, live verification
@@ -278,8 +279,9 @@ a recommendation the reader cannot evaluate is just a request to rubber-stamp.
 
 ### P0 — Collect
 
-**In:** the PR number, plus any free-text pointers from the invocation.
-**Out:** `00-inventory.md` — every feedback item, numbered `<round>-<nn>`, each with: source
+**In:** the PR number(s), plus any free-text pointers from the invocation.
+**Out:** `00-inventory.md` — every feedback item, numbered `<round>-<nn>` (on a stack, `<pr>-<nn>`,
+so the PR is readable from the id), each with: source
 surface, verbatim quote, the comment id and its `updated_at` if one exists (the timestamp is
 what lets P7 detect that the reviewer edited the comment after this collection), the file:line
 it points at, and the revision the reviewer was looking at. Plus the base-state record below.
@@ -637,10 +639,11 @@ committed.
 touch the same files; parallelize across branches only when they do not share a worktree.
 
 **Re-pin the evidence first — the orchestrator's step, before any agent is dispatched.** P1 cited
-every finding at an explicit ref; G1 then took as long as the human took. Measured on the run this
-step was written from (2026-08-12): ~2.5 hours at the gate, during which another session merged a
-PR below the stack and rebased both PRs, moving both heads. Every citation was then at a
-superseded ref.
+every finding at an explicit ref, and P3 acts on those citations however long afterwards; on a
+normal run that gap is the gate, which lasts as long as the human takes. Measured on the run this
+step was written from (2026-08-12): ~2.5 hours at G1, during which another session merged a PR
+below the stack and rebased both PRs, moving both heads. Every citation was then at a superseded
+ref.
 
 The check is cheap because it is narrow — the **cited files**, not the diff:
 
@@ -650,15 +653,15 @@ git -C <repo-root> fetch origin -q
 git -C <repo-root> diff --name-only <recorded-ref> <new-head> -- <the cited files>
 ```
 
-Run it per PR the round covers and record the outcome in the packet — old ref, new head, and which
-cited files moved — beside `03-rulings.md`. On that run it reported **1 of 13** cited files
+Run it per PR the round covers and write the outcome to `03-repin.md` — old ref, new head, and
+which cited files moved. On that run it reported **1 of 13** cited files
 changed: 12 findings were untouched and cost nothing to keep, and the one that moved was the file a
 ruling was about, with a non-cosmetic change. That asymmetry is the point — one diff separates
 re-verifying a single item from implementing a whole round's rulings against code that no longer
 says what the verdicts said.
 
-**A cited file that changed sends its item back to P1**, and back through G1 if the re-verified
-verdict moved, before it returns to P3. It is not implemented on the strength of a verdict taken at
+**A cited file that changed sends its item back to P1**, and back through the gate that ruled on
+it if the re-verified verdict moved, before it returns to P3. It is not implemented on the strength of a verdict taken at
 a ref that is gone. If a head moved at all, the P0 base-state record is stale too — re-derive it
 rather than reading it.
 
@@ -989,7 +992,8 @@ it is the *only* durable output the user is guaranteed to see, because the packe
 and machine-local and may never reach them. So it carries the whole ask, and it is written per
 *Presenting a gate*:
 
-- the run header — PR, packet path, the branch and base state P0 found, and every ref with its
+- the run header — every PR in the round, packet path, the branch and base state P0 found per
+  PR, and every ref with its
   SHA as re-derived at the moment the run stopped;
 - item counts by classification, including the non-claim kinds;
 - **the full G1 decision list**, each item self-contained: context, question, lettered options,
