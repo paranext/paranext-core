@@ -215,16 +215,24 @@ async function findLayoutTargetOwner(targetTabId: string): Promise<WebViewOwner 
 /**
  * Run an open in the window that owns the tab it was routed by, and raise that window.
  *
- * Raising is deliberately narrow. It only happens when something actually opened — raising a window
- * to show a tab that did not appear is worse than not raising it — and only when the owning window
- * is not the one the call was already going to, since the tab is appearing in front of the user
- * there anyway and taking OS focus would interrupt whatever else they are doing to show it to
- * them.
+ * Raising is deliberately narrow.
  *
- * It also only happens while this app holds focus, so this can move focus BETWEEN this app's
- * windows but never take it from another application. An open routed here need not be something the
- * user just asked for — an extension can re-open a web view by id at any moment — and pulling the
- * app in front of whatever they are working in would be the wrong answer to every one of those.
+ * It happens only when the shard resolved an id. A web view it found already open resolves to that
+ * existing id here, the same as one it just created — both reached the window and are meant to
+ * raise it; only a shard that resolved nothing (no match, and the caller declined to create one)
+ * skips raising, since there is then no tab there to show.
+ *
+ * It happens only when the owning window is not the one the call was already going to, since the
+ * tab is appearing in front of the user there anyway and taking OS focus would interrupt whatever
+ * else they are doing to show it to them.
+ *
+ * It happens only while this app holds focus, so this can move focus BETWEEN this app's windows but
+ * never take it from another application. An open routed here need not be something the user just
+ * asked for — an extension can re-open a web view by id at any moment — and pulling the app in
+ * front of whatever they are working in would be the wrong answer to every one of those.
+ *
+ * It happens only when the caller did not opt out with `bringToFront: false` — see the comment
+ * below.
  */
 async function openWebViewInOwningWindow(
   owner: WebViewOwner,
@@ -234,7 +242,16 @@ async function openWebViewInOwningWindow(
 ): Promise<WebViewId | undefined> {
   const openedWebViewId = await owner.shard.openWebView(webViewType, layout, options);
   const isCrossWindow = owner.windowId !== getTargetWindowId();
-  if (openedWebViewId && isCrossWindow && getFocusedWindowId() !== undefined)
+  // A caller who opted out of bringToFront is opting out at the window level too: the shard already
+  // honours this for the tab it raises inside its own window, and an OS-level raise the caller did
+  // not ask for is the louder half of the same action. Skipping it here is what keeps a passive
+  // probe from pulling a window to the front every time it runs.
+  if (
+    openedWebViewId &&
+    isCrossWindow &&
+    getFocusedWindowId() !== undefined &&
+    options?.bringToFront !== false
+  )
     focusWindow(owner.windowId);
   return openedWebViewId;
 }
