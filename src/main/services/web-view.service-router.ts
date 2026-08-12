@@ -109,15 +109,16 @@ type WebViewOwner = {
  * asking it stalls the search for the network service's whole registration retry. It still counts
  * as a window that could not be asked — see below.
  *
- * Returns undefined when every window answered and none owns it.
- *
- * @throws If no window claimed the web view and some window could not be asked, since the owner may
- *   be the window that did not answer
+ * Does not decide what an unresolved owner means. `owner` comes back undefined both when every
+ * window answered and none owns it, and when some window could not be asked at all — those two are
+ * indistinguishable from in here, since the window that failed may be the one holding it.
+ * `hadUnreachableWindows` carries that fact forward so each caller can weigh it against what
+ * guessing wrong would cost there.
  */
 async function findOwner(
   matcher: OwnerMatcher,
   operation: string,
-): Promise<WebViewOwner | undefined> {
+): Promise<{ owner: WebViewOwner | undefined; hadUnreachableWindows: boolean }> {
   // A tracked window that has not registered its services is skipped by the search below rather
   // than answering it, which makes it a window that could not be asked. Letting the search come
   // back "nobody owns this" while such a window exists would send the operation to the focused
@@ -160,16 +161,7 @@ async function findOwner(
     }),
   );
   const owner = owners.find((candidate) => candidate !== undefined);
-  if (owner) return owner;
-
-  // "Could not ask" is not "answered no": the window that failed may be the one holding this web
-  // view, and treating it as an unowned id sends the operation to the focused window instead
-  if (hadServiceErrors)
-    throw new Error(
-      `Could not ${operation} ${describeMatcher(matcher)}: some windows were unreachable.`,
-    );
-
-  return undefined;
+  return { owner, hadUnreachableWindows: hadServiceErrors };
 }
 
 /**
@@ -196,17 +188,13 @@ function getLayoutTargetTabId(layout?: Layout): string | undefined {
  * re-registered — every open naming a tab produces nothing at all.
  */
 async function findLayoutTargetOwner(targetTabId: string): Promise<WebViewOwner | undefined> {
-  try {
-    return await findOwner(
-      { kind: 'id', webViewId: targetTabId },
-      'openWebView beside a layout target',
-    );
-  } catch (e) {
-    logger.warn(
-      `Could not work out which window holds tab ${targetTabId}, so this open goes to the window the user is in: ${getErrorMessage(e)}`,
-    );
-    return undefined;
-  }
+  // A window that could not be asked is folded into "no owner" here rather than reported — see the
+  // doc comment above for why that is the right call for a layout target specifically.
+  const { owner } = await findOwner(
+    { kind: 'id', webViewId: targetTabId },
+    'openWebView beside a layout target',
+  );
+  return owner;
 }
 
 /**
@@ -249,8 +237,16 @@ async function openWebView(
       options.existingId === '?'
         ? { kind: 'type', webViewType }
         : { kind: 'id', webViewId: options.existingId };
-    const owner = await findOwner(matcher, 'openWebView');
+    const { owner, hadUnreachableWindows } = await findOwner(matcher, 'openWebView');
     if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
+    // "Could not ask" is not "answered no". Opening blind here is what mints a second copy of a view
+    // meant to be unique app-wide, so only the path that would create refuses to guess; a caller that
+    // creates nothing is told nothing was found, which is true and costs it nothing.
+    if (hadUnreachableWindows && options.createNewIfNotFound !== false)
+      throw new Error(
+        `Could not openWebView ${describeMatcher(matcher)}: some windows were unreachable.`,
+      );
+    if (hadUnreachableWindows) return undefined;
   }
 
   // A layout naming a tab names the window that tab is in, so it routes the same way an existingId
@@ -273,8 +269,14 @@ async function reloadWebView(
   webViewId: WebViewId,
   options?: ReloadWebViewOptions,
 ): Promise<WebViewId | undefined> {
-  const owner = await findOwner({ kind: 'id', webViewId }, 'reload');
+  const matcher: OwnerMatcher = { kind: 'id', webViewId };
+  const { owner, hadUnreachableWindows } = await findOwner(matcher, 'reload');
   if (owner) return owner.shard.reloadWebView(webViewType, webViewId, options);
+  // A reload always targets a specific existing web view, so a window that could not be asked may
+  // be the one holding it — falling back here risks reloading whatever the focused window happens
+  // to be showing instead of the web view that was named.
+  if (hadUnreachableWindows)
+    throw new Error(`Could not reload ${describeMatcher(matcher)}: some windows were unreachable.`);
 
   // Webview not found in any window — fall back to focused window (may be a new webview)
   const webViewShard = await getTargetWebViewShard();
@@ -284,7 +286,15 @@ async function reloadWebView(
 async function getOpenWebViewDefinition(
   webViewId: string,
 ): Promise<SavedWebViewDefinition | undefined> {
-  return (await findOwner({ kind: 'id', webViewId }, 'getOpenWebViewDefinition'))?.definition;
+  const matcher: OwnerMatcher = { kind: 'id', webViewId };
+  const { owner, hadUnreachableWindows } = await findOwner(matcher, 'getOpenWebViewDefinition');
+  // A window that could not be asked may be the one holding this web view, so an unresolved owner
+  // is not evidence it does not exist.
+  if (hadUnreachableWindows)
+    throw new Error(
+      `Could not getOpenWebViewDefinition ${describeMatcher(matcher)}: some windows were unreachable.`,
+    );
+  return owner?.definition;
 }
 
 /** Everything the windows that answered have open, and the ready windows that did not answer */
