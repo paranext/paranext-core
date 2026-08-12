@@ -94,6 +94,19 @@ export const simpleLayout: LayoutBase = {
                   state: {},
                 },
               },
+              {
+                id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
+                tabType: TAB_TYPE_WEBVIEW,
+                data: {
+                  // Literal because the renderer cannot import the extension's `findWebViewType`.
+                  // Must equal `findWebViewType` in
+                  // extensions/src/platform-scripture/src/find.web-view-provider.ts.
+                  webViewType: 'platformScripture.find',
+                  id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
+                  contentType: 'react',
+                  state: {},
+                },
+              },
             ] as SavedTabInfo[],
           },
         ],
