@@ -555,7 +555,45 @@ committed.
 **Agents:** `fix-train` agents, brief in `references/agent-briefs.md`. Serialize fixes that
 touch the same files; parallelize across branches only when they do not share a worktree.
 
-Rules that apply to every fix:
+**The method comes from Superpowers; this phase supplies the constraints.** What this skill knows
+that nothing else does is the feedback lifecycle — sweeping every surface, verifying adversarially,
+triaging, gating, replying, posting, recording. Design-and-implementation discipline is a different
+subject and it is already written down, so run it rather than restating a thinner version of it
+here, per `.claude/rules/agent-authoring-link-dont-paraphrase.md`: `superpowers:brainstorming` →
+`superpowers:writing-plans` → `superpowers:test-driven-development`, with the orchestrator choosing
+the execution shape — `superpowers:subagent-driven-development` in this session, which is what the
+`fix-train` fan-out already is, or `superpowers:executing-plans` in a separate one. Scale it to the
+ruling: a one-line correction needs the TDD skill and nothing above it; a reshape the user ruled
+"do it now" earns the whole flow. Where those skills are unavailable in the session, the rules
+below are the floor rather than a summary of what was skipped.
+
+**The rulings enter that flow as fixed constraints, not as inputs to question.** This is the one
+seam where the two skills pull against each other, and it is worth stating flatly because nesting
+them naively gets it backwards: brainstorming exists to widen a solution space, and G1 exists to
+close one. Brainstorming designs *within* the rulings — the ruling fixes what is being built and
+where it lands, and the flow decides how. If it surfaces a reason a ruling is wrong, that is an
+**escalation**: stop, and put it to the user as a new G1 decision item per *Presenting a gate*. It
+is never a decision the flow takes for itself. Implement **only** what the ruling says; everything
+else found along the way is reported, not fixed — scope creep past a gate is this phase's failure
+mode, and a design step that re-opens a settled question is scope creep wearing a method's clothes.
+
+**Seed the flow with the packet, then filter its questions.** A brainstorming skill asks its
+questions whether or not the answers are already settled, so the orchestrator answers from
+`03-rulings.md`, `02-triage.md`, `01-verification/` and the code everything they answer, and puts
+only genuine gaps to the user. Observed on the 2026-08-12 round: of the design questions the flow
+raised, most were answerable from the packet and the code, and one was a real product call that
+needed the user. Passing them all through unfiltered turns one gate into a dozen, and a user asked
+twelve questions stops reading the twelfth.
+
+**The seam is the end of P3.** Superpowers' tail overlaps what follows — `test-driven-development`
+is the red-first rule below, and `superpowers:verification-before-completion` resembles P5's
+battery — but resemblance is not equivalence, and P4 and P5 stay here. P4 is adversarial
+verification of a *review tool's* own findings, which is P1's rubric turned on this round's own
+work rather than a generic completion check; P5 is repo-specific — the predicted `papi.d.ts` delta
+stated before `build:types` runs, `references/e2e-recipe.md`, live verification in the running app.
+Delegating those away swaps a battery that knows this repo for one that does not.
+
+Rules that apply to every fix, whichever flow produced it:
 
 - **Red-first** for every behavior change: a test that fails for the stated reason before the
   fix, passes after. A fix with no failing-first test is not done.
