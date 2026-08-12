@@ -82,12 +82,11 @@ import {
 } from '@main/services/web-view.service-router';
 import {
   addWindow,
-  countWindowsNotClosing,
   doesNavigationReplaceRendererRegistrations,
   getFocusedWindowId,
   getTargetWindowId,
   getWindows,
-  isWindowClosing,
+  isWindowClosing as isWindowMarkedClosing,
   markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
@@ -99,6 +98,7 @@ import {
   assignEntryToWindow,
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
+  isWindowPendingContent,
   loadWindowLayouts,
   markWindowPendingContent,
   setMainWindowId,
@@ -382,7 +382,12 @@ async function main() {
   // Same reasoning as above: a window can report itself empty as soon as it exists, so the handler
   // that decides what happens next must already be registered
   const handleWindowEmptied = createWindowEmptinessHandler({
-    countWindows: countWindowsNotClosing,
+    // Excludes pending-content windows as well as closing ones: a window created for specific
+    // content that has not yet arrived is not a real window yet, and the very operation filling it
+    // can still fail and take it away — it must never stand in as the last window.
+    countWindows: () =>
+      getWindows().filter(({ id }) => !isWindowMarkedClosing(id) && !isWindowPendingContent(id))
+        .length,
     closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
     markWindowClosing,
   });
@@ -817,7 +822,7 @@ async function main() {
       if (
         details.reason === 'clean-exit' ||
         newWindow.isDestroyed() ||
-        isWindowClosing(windowId) ||
+        isWindowMarkedClosing(windowId) ||
         isAppShuttingDown()
       )
         return;

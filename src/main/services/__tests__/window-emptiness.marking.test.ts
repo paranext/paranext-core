@@ -77,3 +77,29 @@ describe('marking a window closing at the moment its close is decided', () => {
     expect(closeWindow).not.toHaveBeenCalled();
   });
 });
+
+describe('a pending-content window is not a reason to close the last real window', () => {
+  test('window A alone with a pending-content window is answered open-home, not closing', () => {
+    // Mirrors the composition wired in main.ts: `countWindows` excludes both closing and
+    // pending-content windows from the tracked set, so a window whose content has not yet arrived
+    // can never stand in as a second "real" window in this arithmetic.
+    vi.useFakeTimers();
+    const trackedIds = [1, 2];
+    const closingIds = new Set<number>();
+    const pendingContentIds = new Set<number>([2]);
+    const countWindows = vi.fn(
+      () => trackedIds.filter((id) => !closingIds.has(id) && !pendingContentIds.has(id)).length,
+    );
+    const closeWindow = vi.fn();
+    const markWindowClosing = vi.fn((windowId: number) => closingIds.add(windowId));
+    const handler = createWindowEmptinessHandler({ countWindows, closeWindow, markWindowClosing });
+
+    const response = handler(1, 'emptied-by-removal');
+
+    expect(response).toEqual({ action: 'open-home' });
+    expect(markWindowClosing).not.toHaveBeenCalledWith(1);
+
+    vi.runAllTimers();
+    expect(closeWindow).not.toHaveBeenCalled();
+  });
+});
