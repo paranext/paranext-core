@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
     loggerWarn: vi.fn(),
+    loggerDebug: vi.fn(),
     shardAnnouncementListeners,
     onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
       shardAnnouncementListeners.create.push(listener);
@@ -66,7 +67,7 @@ vi.mock('@shared/services/network-object.service', () => ({
 }));
 vi.mock('@shared/services/network.service', () => ({ getNetworkEvent: () => vi.fn() }));
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { info: vi.fn(), warn: mocks.loggerWarn, error: vi.fn() },
+  logger: { info: vi.fn(), warn: mocks.loggerWarn, debug: mocks.loggerDebug, error: vi.fn() },
 }));
 
 /** Capture the router object registered under the generic name */
@@ -271,8 +272,9 @@ describe('web view service router', () => {
   });
 
   test('two matching web views resolve to the routing target rather than the older window', async () => {
-    // App-wide uniqueness means two matches is already a violated invariant, but the router still
-    // has to pick the same one every time rather than whichever window answered first
+    // Two windows each having one open web view of a type is the ordinary simple-mode state, not a
+    // violated invariant, but the router still has to pick the same one every time rather than
+    // whichever window answered first
     const older = windowShard([{ id: 'wv-old', webViewType: 'comments' }]);
     const target = windowShard([{ id: 'wv-here', webViewType: 'comments' }]);
     older.openWebView.mockResolvedValue('wv-old');
@@ -284,7 +286,23 @@ describe('web view service router', () => {
     const result = await router.openWebView('comments', undefined, { existingId: '?' });
 
     expect(result).toBe('wv-here');
-    expect(mocks.loggerWarn).toHaveBeenCalledWith(expect.stringContaining('more than one'));
+    expect(mocks.loggerDebug).toHaveBeenCalledWith(expect.stringContaining('comments'));
+    expect(mocks.loggerWarn).not.toHaveBeenCalled();
+  });
+
+  test('two windows both answering the same id search is a warned invariant violation', async () => {
+    // Unlike a type search, an id search matching in more than one window means the per-window id
+    // scoping that is supposed to make ids unique app-wide was bypassed somehow
+    const older = windowShard(['dup-id']);
+    const target = windowShard(['dup-id']);
+    withWindows({ 1: older, 2: target });
+    mocks.getTargetWindowId.mockReturnValue(2);
+    const router = await getRouter();
+
+    await router.reloadWebView('someType', 'dup-id');
+
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(expect.stringContaining('dup-id'));
+    expect(mocks.loggerDebug).not.toHaveBeenCalled();
   });
 
   test('finds a `?` match even when a window that could not be asked sorts ahead of it', async () => {

@@ -290,9 +290,13 @@ step, no automation. Just a record.
   owner/target-selection logic in each router is now load-bearing, and two rules fell out of getting
   it wrong first. Fan-outs ask only the windows that can answer (`getReadyWindowIds`), because
   forwarding to a window whose renderer has not registered costs that call the network service's
-  whole registration retry. And an owner probe that could not reach a window fails the call rather
-  than falling back to the routing target: "could not ask" is not "answered no", and the window that
-  did not answer may be the one that owns the web view. The main-side piece is a **service router**
+  whole registration retry. Whether an owner probe that could not reach a window fails the call,
+  answers not-found, or degrades to the routing target is a decision each caller makes by weighing
+  what guessing wrong costs there: an `existingId` search that would create refuses to guess, since
+  a wrong guess mints a duplicate of a view meant to be unique app-wide; a probe that creates
+  nothing answers not-found, since "could not ask" costs it nothing there; and a layout target
+  degrades to the routing target with a warning, since a wrong guess there costs only placement.
+  The main-side piece is a **service router**
   (`*.service-router.ts`) and the per-window implementation it forwards to is a **service shard**
   (`*.service-shard.ts`); both are documented in `Architecture.md` § "Service router and service
   shard".
