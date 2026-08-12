@@ -259,7 +259,7 @@ step, no automation. Just a record.
   `network-object.service.ts`; see ADR-0009). A window-scoped service therefore has to tolerate its
   own registrations outliving its window for a moment, and consumers have to tolerate resolving one
   that is already gone. The scoped ids remain the registration name (`object:{id}.{method}` derives
-  from them) but are no longer how anything FINDS a window's implementation — see ADR-0011.
+  from them) but are no longer how anything FINDS a window's implementation — see ADR-0013.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0008: Generic-name service routers in main forward to the focused/owning window's scoped service

@@ -263,8 +263,13 @@ export function focusWindow(windowId: number): void {
   try {
     if (trackedWindow.window.isMinimized()) trackedWindow.window.restore();
     trackedWindow.window.focus();
+    // Windows can refuse a client-initiated activation, and Electron reports neither the refusal
+    // nor the success — `focus()` returns nothing and no event follows. Flashing unconditionally is
+    // the only degradation available: where activation was refused it is the whole signal, and
+    // where it succeeded the window is already in front.
+    trackedWindow.window.flashFrame(true);
   } catch (e) {
-    // A window can be destroyed between the check above and either call. Raising a window is
+    // A window can be destroyed between the check above and any of these calls. Raising a window is
     // feedback about where something already happened, so failing to raise must not fail the
     // operation that asked for it.
     logger.warn(`Could not raise window ${windowId}: ${getErrorMessage(e)}`);
