@@ -13,6 +13,7 @@ import {
 } from '@main/services/__tests__/service-router-test.util';
 import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
+import type { SavedWebViewDefinition } from '@shared/models/web-view.model';
 import type { WebViewServiceType } from '@shared/services/web-view.service-model';
 
 const mocks = vi.hoisted(() => {
@@ -69,13 +70,20 @@ async function getRouter() {
   return getRegisteredRouter<WebViewServiceType>(mocks.networkObjectSet, startWebViewServiceRouter);
 }
 
-/** A per-window WebView service shard whose web views are the given ids */
-function windowShard(openWebViewIds: string[]) {
+/**
+ * A per-window WebView service shard whose web views are the given ids, or full definitions for
+ * tests that need more than an id — a type search reads `webViewType` off of what
+ * `getAllOpenWebViewDefinitions` returns.
+ */
+function windowShard(openWebViews: (string | SavedWebViewDefinition)[]) {
+  const definitions = openWebViews.map((entry) =>
+    typeof entry === 'string' ? { id: entry } : entry,
+  );
   return {
     getOpenWebViewDefinition: vi.fn(async (id: string) =>
-      openWebViewIds.includes(id) ? { id } : undefined,
+      definitions.find((definition) => definition.id === id),
     ),
-    getAllOpenWebViewDefinitions: vi.fn(async () => openWebViewIds.map((id) => ({ id }))),
+    getAllOpenWebViewDefinitions: vi.fn(async () => definitions),
     // Typed the way the real method is — it answers with nothing when the open did not happen
     openWebView: vi.fn<() => Promise<string | undefined>>(async () => 'opened'),
     reloadWebView: vi.fn(async () => 'reloaded'),
@@ -230,6 +238,20 @@ describe('web view service router', () => {
 
     expect(owner.openWebView).toHaveBeenCalled();
     expect(focused.openWebView).not.toHaveBeenCalled();
+  });
+
+  test('existingId "?" finds a matching web view in a window other than the routing target', async () => {
+    const targetWindow = windowShard([]);
+    const owner = windowShard([{ id: 'wv-2', webViewType: 'comments' }]);
+    owner.openWebView.mockResolvedValue('wv-2');
+    withWindows({ 1: targetWindow, 2: owner });
+    const router = await getRouter();
+
+    const result = await router.openWebView('comments', undefined, { existingId: '?' });
+
+    expect(result).toBe('wv-2');
+    expect(owner.openWebView).toHaveBeenCalled();
+    expect(targetWindow.openWebView).not.toHaveBeenCalled();
   });
 
   describe('a layout that names a tab to open next to', () => {
