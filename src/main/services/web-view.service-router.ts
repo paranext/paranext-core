@@ -624,15 +624,22 @@ const webViewServiceRouter: WebViewServiceType = {
 async function openSettingsForWebView(webViewId?: WebViewId): Promise<void> {
   // The id is optional on this command, and arguments arrive untyped over the network
   if (typeof webViewId === 'string') {
-    // A window that could not be asked is treated as one that answered no, unlike the existingId
-    // search: guessing wrong there mints a second copy of a view meant to be unique, while guessing
-    // wrong here opens a settings tab in the window the user is in, which is where an unroutable
-    // request was always going to land.
-    const { owner } = await findOwner({ kind: 'id', webViewId }, 'openSettings');
+    const { owner, hadUnreachableWindows } = await findOwner(
+      { kind: 'id', webViewId },
+      'openSettings',
+    );
     if (owner) {
       await owner.shard.openSettingsTab(owner.definition.projectId);
       return;
     }
+    // "Could not ask" is not "nobody has it", and the difference matters more here than the fallback
+    // below suggests: the project comes off the owning definition, so running this in the focused
+    // window instead opens settings against whichever project THAT window happens to be showing.
+    // Failing is the honest answer when the window holding the web view is the one that went unasked.
+    if (hadUnreachableWindows)
+      throw new Error(
+        `Could not openSettings ${describeMatcher({ kind: 'id', webViewId })}: some windows were unreachable.`,
+      );
   }
   await (await getTargetWebViewShard()).openSettingsTab(undefined);
 }
