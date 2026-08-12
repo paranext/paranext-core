@@ -247,10 +247,13 @@ move must be re-acquired.
 
 `existingId: '?'` reuse is **cross-window** (experimental): the search covers every window,
 prefers the window the user is working in when more than one matches, and raises the window
-where the match was found. The optional, **experimental** `existingProjectId` limits a `'?'`
-search to web views showing that project (combining it with a concrete `existingId` — or with no
-`existingId` at all — is an error). Like reuse by id, a `'?'` search fails rather than guessing
-when any window cannot be asked — a wrong guess would duplicate a view meant to be unique.
+where the match was found. The optional, **experimental** `existingProjectId` limits that search —
+in every window, not just the one the call was headed for — to web views showing that project, so
+a match for the project asked for outranks a web view of the same type showing another one
+(combining it with a concrete `existingId` — or with no `existingId` at all — is an error). What a
+window that cannot be asked means depends on the call: an open that would create refuses to guess
+and fails, since guessing wrong duplicates a view meant to be unique, while a passive probe
+(`createNewIfNotFound: false`) simply answers not-found.
 
 ### Styling Requirements
 
