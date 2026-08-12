@@ -15,6 +15,7 @@ import { Find, FIND_LOCALIZED_STRING_KEYS, type BookResultEntry } from './find.c
 import { replacementContainsStructuralMarker } from './structure-protection.util';
 import { LocalizedBookData, SearchTextType } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
 /**
  * `Find` is the find/replace UI for a Scripture project: a search input with recent searches, a
@@ -202,6 +203,8 @@ type HarnessConfig = {
   activeMode?: 'find' | 'replace';
   /** Hide the find/replace toggle entirely (simple interface mode — find-only). */
   hideModeToggle?: boolean;
+  /** Initial replace-preview options (layout/shape/color/etc.); defaults to the standard defaults. */
+  previewOptions?: PreviewOptions;
   /** Initial scope. */
   scope?: Scope;
   /** Initial selected books for the `selectedBooks` scope. */
@@ -247,6 +250,9 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const [activeMode, setActiveMode] = useState<'find' | 'replace'>(config.activeMode ?? 'find');
   const [replaceTerm, setReplaceTerm] = useState(config.replaceTerm ?? 'Yahweh');
   const [preserveCase, setPreserveCase] = useState(false);
+  const [previewOptions, setPreviewOptions] = useState<PreviewOptions>(
+    config.previewOptions ?? DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  );
 
   const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
 
@@ -445,6 +451,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       isRegexAllowed={isRegexAllowed}
       activeMode={activeMode}
       hideModeToggle={config.hideModeToggle}
+      previewOptions={previewOptions}
+      onPreviewOptionsChange={setPreviewOptions}
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
       isReplacing={false}

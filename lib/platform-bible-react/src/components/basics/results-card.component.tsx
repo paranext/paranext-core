@@ -67,6 +67,9 @@ export function ResultsCard({
   // Only mount the DropdownMenu (and its portal) once the card has been hovered or selected.
   // This prevents dozens of DropdownMenuContent portals from mounting and crashing on teardown
   // when the webview is closed while many results are visible.
+  // NOTE: this is a workaround that avoids mounting the portals, not a fix for the underlying
+  // portal-teardown crash in the dropdown/portal layer; if that root cause is fixed this deferral
+  // can be removed.
   const [hasBeenHovered, setHasBeenHovered] = useState(false);
 
   return (
@@ -106,6 +109,10 @@ export function ResultsCard({
                     className="tw:m-1 tw:h-6 tw:w-6"
                     variant="ghost"
                     size="icon"
+                    // Stop click/focus from bubbling to the card wrapper: onClick would call
+                    // onSelect, and focus would reach the enclosing card/consumer wrapper (e.g.
+                    // SearchResult's onFocus, which selects and previews the result) — neither should
+                    // fire just because the user reached for this card's dropdown menu button.
                     onClick={(e) => e.stopPropagation()}
                     onFocus={(e) => e.stopPropagation()}
                   >

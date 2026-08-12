@@ -11,11 +11,10 @@ const config = defineConfig({
   testDir: './tests',
   // Smoke and isolated tests use launch fixtures (app/papi/comment/isolated) that spawn their own
   // Electron instance; CDP tests connect to an already-running app. They cannot mix, so exclude
-  // both here — run the isolated suite via `npm run test:e2e:isolated`.
-  // _example/ contains reference templates, not runnable tests.
-  // Find tests were migrated to launch fixtures and live under isolated/find; run them via
+  // both here — run the isolated suite (which includes the find tests under isolated/find) via
   // `npm run test:e2e:isolated`.
-  testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**', '**/find/**'],
+  // _example/ contains reference templates, not runnable tests.
+  testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**'],
   fullyParallel: false,
   workers: 1,
   reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],

@@ -7,7 +7,7 @@
  *
  * Run via: `npm run test:e2e:isolated`
  *
- * OR more specifically `npm run test:e2e:isolated -- find-replace.spec-e2e.ts`
+ * OR more specifically `npm run test:e2e:isolated -- find-replace.spec.ts`
  */
 
 import { Frame, FrameLocator, Locator, Page } from '@playwright/test';

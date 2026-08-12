@@ -38,7 +38,7 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Find, FIND_LOCALIZED_STRING_KEYS } from './find/find.component';
-import { isSimpleInterfaceMode } from './find/find.utils';
+import { applyPreserveCase, isSimpleInterfaceMode } from './find/find.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
@@ -73,26 +73,6 @@ const SEARCH_DEBOUNCE_DELAY_MS = 500;
 const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
-
-/**
- * Applies preserve-case transformation to the replacement text based on the casing of the matched
- * text:
- *
- * - ALL CAPS match → ALL CAPS replacement
- * - Title Case match (first letter capital) → Title Case replacement
- * - Otherwise → replacement as-is
- */
-function applyPreserveCase(matchedText: string, replacementText: string): string {
-  if (!replacementText || !matchedText) return replacementText;
-  if (matchedText === matchedText.toUpperCase() && matchedText !== matchedText.toLowerCase()) {
-    return replacementText.toUpperCase();
-  }
-  const firstChar = matchedText[0];
-  if (firstChar === firstChar.toUpperCase() && firstChar !== firstChar.toLowerCase()) {
-    return replacementText[0].toUpperCase() + replacementText.slice(1);
-  }
-  return replacementText;
-}
 
 /**
  * Returns a promise that resolves after `ms` milliseconds. The cancel function stored in
@@ -420,6 +400,18 @@ global.webViewComponent = function FindWebView({
     }
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
+
+  // Whether the project preserves invisible characters literally in USFM. Forwarded to the result
+  // cards so the "Show invisible" preview renders the USFM tilde `~` as a literal tilde (true) vs. an
+  // NBSP stand-in (false). Matches the setting the finder PDPE reads for the search itself.
+  const [allowInvisibleCharactersPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.allowInvisibleCharacters',
+    false,
+  );
+  const allowInvisibleCharacters: boolean = isPlatformError(allowInvisibleCharactersPossiblyError)
+    ? false
+    : allowInvisibleCharactersPossiblyError;
 
   const availableBooksIds = useMemo(() => {
     return getBookIdsFromBooksPresent(booksPresent).filter(
@@ -999,6 +991,16 @@ global.webViewComponent = function FindWebView({
       if (editorWebViewId && editorWebViewController) {
         // Preview the match in the editor (select + highlight) without stealing focus, so the user
         // can keep navigating results. Double-click / reference-click shift focus to the editor.
+        //
+        // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): if the editor tab is
+        // inactive, the preview scroll no-ops (no layout in a display:none iframe) and does NOT catch
+        // up on activation. This is a deliberate no-op, not an oversight: (1) PAPI exposes no way for
+        // this panel to observe the *editor's* visibility (useViewVisibility only sees this panel's
+        // own iframe), so a deferred catch-up isn't implementable here; (2) selection + annotation
+        // are data-driven, so they persist and render when the editor is shown — only the preview
+        // scroll is geometry; and (3) the explicit "go there" path (handleOpenAtResult) calls
+        // setFocus to activate the editor and re-runs selectRange, which scrolls correctly. A silent
+        // preview while the editor is hidden has nothing to preview, so doing nothing is correct.
         try {
           editorWebViewController
             .selectRange({ start: searchResult.start, end: searchResult.end })
@@ -1435,6 +1437,7 @@ global.webViewComponent = function FindWebView({
       scope={scope}
       verseRef={verseRefSetting}
       booksPresent={booksPresent}
+      allowInvisibleCharacters={allowInvisibleCharacters}
       selectedBookIds={selectedBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}

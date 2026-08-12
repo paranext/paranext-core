@@ -5,6 +5,12 @@
 
 @use './simple-mode';
 
+// Semi-transparent amber for the Find current-result highlight, shared by the base rule and the
+// ::selection re-apply below. Deliberately a fixed amber rather than a theme token: it must read on
+// top of the ::selection primary/secondary colors and stay distinct from them in both light and
+// dark mode (see the find-result-highlight rules).
+$find-current-result-highlight-bg: rgb(255 213 0 / 40%);
+
 // Platform.Bible modifications
 
 // NOTE: `height: 100%` / `overflow-y: auto` below are currently inert. Wrapper divs between the
@@ -49,7 +55,7 @@
 // of the ::selection color above (selectRange selects the same match) and stays distinct from the
 // primary/secondary selection in both light and dark mode.
 .editor-typed-mark-external-find-result-highlight {
-  background-color: rgb(255 213 0 / 40%);
+  background-color: $find-current-result-highlight-bg;
   border-radius: 2px;
 }
 
@@ -59,7 +65,7 @@
 // glyphs inside the find-result mark so the current result stays amber regardless of pane focus.
 .editor-typed-mark-external-find-result-highlight::selection,
 .editor-typed-mark-external-find-result-highlight ::selection {
-  background-color: rgb(255 213 0 / 40%);
+  background-color: $find-current-result-highlight-bg;
 }
 
 // focus ring

@@ -27,22 +27,20 @@ import { launchElectronApp, teardownElectronApp } from './helpers';
 export const WEB_COPY_PROJECT_ID = '0123456789ABCDEF0123456789ABCDEF01234567';
 
 /**
- * Create (or reset) the testWEB project directory. Copies WEB assets to
- * `~/.platform.bible/projects/Paratext 9 Projects/testWEB`, patches the GUID to
- * WEB_COPY_PROJECT_ID, and sets Editable=T so replace tests can write to it. The directory is
- * deleted and re-created on each worker run to prevent test pollution from previous replace
- * operations.
+ * Create a fresh testWEB project inside the given isolated project-root folder. Copies the bundled
+ * WEB assets to `<projectsDir>/testWEB`, patches the GUID to WEB_COPY_PROJECT_ID, and sets
+ * Editable=T so replace tests can write to it.
+ *
+ * The projects folder is a throwaway temp dir (see the fixture below) that the app is pointed at
+ * via `PLATFORM_BIBLE_PROJECT_ROOT_FOLDER`, so this NEVER touches the developer's real project
+ * root.
+ *
+ * @param projectsDir Isolated project-root folder to create testWEB inside.
  */
-function setupWEBCopyProject(): void {
+function setupWEBCopyProject(projectsDir: string): void {
   const rootDir = path.resolve(__dirname, '../..');
   const webAssetsDir = path.join(rootDir, 'c-sharp', 'assets', 'WEB');
-  const projectsDir = path.join(os.homedir(), '.platform.bible', 'projects', 'Paratext 9 Projects');
   const copyDir = path.join(projectsDir, 'testWEB');
-
-  if (fs.existsSync(copyDir)) {
-    fs.rmSync(copyDir, { recursive: true, force: true });
-    console.log('[find tests] Removed existing testWEB project directory');
-  }
 
   if (!fs.existsSync(webAssetsDir)) {
     throw new Error(`WEB assets not found at ${webAssetsDir}`);
@@ -76,13 +74,23 @@ export const test = appTest.extend<{}, { electronApp: ElectronApplication }>({
     // Playwright fixtures require destructured parameter even when no dependencies are needed
     // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
-      // Reset testWEB to a clean state before each worker's app launch. Replace operations from a
-      // previous run would otherwise persist because the C# backend skips re-copying when the
-      // directory already exists.
-      setupWEBCopyProject();
-      const ctx = await launchElectronApp({ devNoisy: 'false' });
-      await use(ctx.electronApp);
-      await teardownElectronApp(ctx);
+      // Build an isolated, throwaway project root and populate it with a fresh, editable testWEB.
+      // Pointing the app at it via PLATFORM_BIBLE_PROJECT_ROOT_FOLDER keeps the suite from ever
+      // reading or writing the developer's real projects, and the fresh copy each worker run
+      // prevents pollution from a previous run's replace operations.
+      const projectsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'find-e2e-projects-'));
+      setupWEBCopyProject(projectsDir);
+      // DEV_NOISY=false so test extensions (helloRock3, etc.) don't open webviews and shift the
+      // `iframe.web-view nth(0)` selectors; envOverrides is spread last so both win over the defaults.
+      const ctx = await launchElectronApp({
+        envOverrides: { DEV_NOISY: 'false', PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: projectsDir },
+      });
+      try {
+        await use(ctx.electronApp);
+      } finally {
+        await teardownElectronApp(ctx);
+        fs.rmSync(projectsDir, { recursive: true, force: true });
+      }
     },
     { scope: 'worker' },
   ],

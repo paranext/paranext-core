@@ -1,5 +1,6 @@
 import { DataProviderEngine } from '@papi/backend';
 import type { DataProviderUpdateInstructions, IDataProviderEngine } from '@papi/core';
+import { MutexMap } from 'platform-bible-utils';
 import type { FindHistoryDataTypes } from 'platform-scripture';
 
 /** Maximum number of items retained in the find search history */
@@ -34,6 +35,12 @@ export class FindHistoryDataProviderEngine
   implements IDataProviderEngine<FindHistoryDataTypes>
 {
   #storage: FindHistoryUserStorage;
+
+  /**
+   * Serializes each project's history read-modify-write (see {@link addHistoryItem}) so concurrent
+   * calls don't clobber each other. Keyed by storage key so different projects don't serialize.
+   */
+  #historyMutexes = new MutexMap();
 
   constructor(storage: FindHistoryUserStorage) {
     super();
@@ -80,13 +87,18 @@ export class FindHistoryDataProviderEngine
    */
   async addHistoryItem(item: string, projectId?: string): Promise<void> {
     if (!item) return;
-    const history = await this.getHistory(projectId);
-    const historyWithoutItem = history.filter((existingItem) => existingItem !== item);
-    // papi layers over `set<data_type>` methods, so this also notifies History subscribers
-    await this.setHistory(projectId, [
-      item,
-      ...historyWithoutItem.slice(0, MAX_FIND_HISTORY_ITEMS - 1),
-    ]);
+    // Guard the read-modify-write so two near-simultaneous calls — two Find panels, or the debounced
+    // save racing the unmount flush — don't drop an item. Keyed per project's storage key.
+    const storageKey = getStorageKey(FIND_HISTORY_STORAGE_KEY, projectId);
+    await this.#historyMutexes.get(storageKey).runExclusive(async () => {
+      const history = await this.getHistory(projectId);
+      const historyWithoutItem = history.filter((existingItem) => existingItem !== item);
+      // papi layers over `set<data_type>` methods, so this also notifies History subscribers
+      await this.setHistory(projectId, [
+        item,
+        ...historyWithoutItem.slice(0, MAX_FIND_HISTORY_ITEMS - 1),
+      ]);
+    });
   }
 
   /**

@@ -1,4 +1,4 @@
-import { ArrowRight, Eye } from 'lucide-react';
+import { AlignLeft, ArrowRight, Eye, SquareSplitVertical } from 'lucide-react';
 import {
   Button,
   Label,
@@ -71,43 +71,6 @@ type ReplacePreviewOptionsProps = {
   onOpenChange?: (open: boolean) => void;
 };
 
-function InlineLayoutIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <line x1="3" y1="8" x2="21" y2="8" />
-      <line x1="3" y1="14" x2="14" y2="14" />
-      <line x1="3" y1="20" x2="14" y2="20" />
-    </svg>
-  );
-}
-
-function BlockLayoutIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <rect x="3" y="3" width="18" height="18" rx="1" />
-      <line x1="3" y1="12" x2="21" y2="12" />
-    </svg>
-  );
-}
-
 /** Small styled swatch used to preview highlight shapes and colors inside the picker */
 function Swatch({
   findClass,
@@ -132,8 +95,8 @@ function Swatch({
 
 const LAYOUT_ICONS = {
   arrow: () => <ArrowRight className="tw:h-4 tw:w-4" />,
-  inline: () => <InlineLayoutIcon className="tw:h-4 tw:w-4" />,
-  block: () => <BlockLayoutIcon className="tw:h-4 tw:w-4" />,
+  inline: () => <AlignLeft className="tw:h-4 tw:w-4" />,
+  block: () => <SquareSplitVertical className="tw:h-4 tw:w-4" />,
 } as const;
 
 export function ReplacePreviewOptions({
@@ -145,7 +108,7 @@ export function ReplacePreviewOptions({
 }: ReplacePreviewOptionsProps) {
   const { layout, highlightShape, color, monospace, showInvisible } = previewOptions;
 
-  const set = <K extends keyof PreviewOptions>(key: K, value: PreviewOptions[K]) =>
+  const updateOption = <K extends keyof PreviewOptions>(key: K, value: PreviewOptions[K]) =>
     setPreviewOptions({ ...previewOptions, [key]: value });
 
   return (
@@ -179,9 +142,7 @@ export function ReplacePreviewOptions({
                 value === 'inline' ||
                 value === 'block'
               ) {
-                set('layout', value);
-              } else if (value === '') {
-                set('layout', layout);
+                updateOption('layout', value);
               }
             }}
             className="tw:w-full"
@@ -215,7 +176,7 @@ export function ReplacePreviewOptions({
             value={highlightShape}
             onValueChange={(value) => {
               if (value === 'bar' || value === 'rounded' || value === 'plain') {
-                set('highlightShape', value);
+                updateOption('highlightShape', value);
               }
             }}
             className="tw:gap-1"
@@ -255,7 +216,7 @@ export function ReplacePreviewOptions({
             value={color}
             onValueChange={(value) => {
               if (value === 'red-cyan' || value === 'red-green' || value === 'grey-blue') {
-                set('color', value);
+                updateOption('color', value);
               }
             }}
             className="tw:gap-1"
@@ -309,7 +270,7 @@ export function ReplacePreviewOptions({
           <Switch
             id="previewMonospace"
             checked={monospace}
-            onCheckedChange={(checked) => set('monospace', checked)}
+            onCheckedChange={(checked) => updateOption('monospace', checked)}
           />
         </div>
 
@@ -329,7 +290,7 @@ export function ReplacePreviewOptions({
           <Switch
             id="previewShowInvisible"
             checked={showInvisible}
-            onCheckedChange={(checked) => set('showInvisible', checked)}
+            onCheckedChange={(checked) => updateOption('showInvisible', checked)}
           />
         </div>
       </PopoverContent>

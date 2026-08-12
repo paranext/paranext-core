@@ -977,6 +977,12 @@ export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((...args
 	/**
 	 * Cancel any pending debounced invocation. The promise returned by the most recent call rejects
 	 * with an error whose message is {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}.
+	 *
+	 * IMPORTANT: because cancellation _rejects_ that promise, every call whose result you might later
+	 * cancel MUST handle its rejection (await in a try/catch, or attach a `.catch`, filtering on
+	 * {@link DEBOUNCE_CANCELED_ERROR_MESSAGE} to distinguish cancellation from a real error).
+	 * Fire-and-forget callers that ignore the returned promise will get an unhandled promise
+	 * rejection when `cancel()` runs.
 	 */
 	cancel: () => void;
 };

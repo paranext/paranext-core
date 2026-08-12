@@ -52,6 +52,7 @@ import {
 } from './search-result.component';
 import { SearchResultsInBook } from './search-results-in-book.component';
 import {
+  REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
   ReplacePreviewOptions,
   ReplacePreviewOptionsStrings,
 } from './replace-preview-options.component';
@@ -65,6 +66,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_allowRegex%',
   '%webView_find_cancelSearch%',
   '%webView_find_capitalization%',
+  '%webView_find_clearSearch%',
   '%webView_find_errorOccurred%',
   '%webView_find_findTab%',
   '%webView_find_matchCase%',
@@ -90,31 +92,15 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_restrictions_wholeWord%',
   '%webView_find_result%',
   '%webView_find_searchPlaceholder%',
+  '%webView_find_searchPrompt%',
   '%webView_find_showing%',
   '%webView_find_showingResults%',
   '%webView_find_showingResultsOfMore%',
   '%webView_find_showRecentSearches%',
   '%webView_find_toggleFilters%',
   '%webView_find_verseTextOnly%',
-  '%webView_find_previewOptions_toggle%',
-  '%webView_find_previewOptions_layout%',
-  '%webView_find_previewOptions_layout_arrow%',
-  '%webView_find_previewOptions_layout_inline%',
-  '%webView_find_previewOptions_layout_block%',
-  '%webView_find_previewOptions_shape%',
-  '%webView_find_previewOptions_shape_bar%',
-  '%webView_find_previewOptions_shape_rounded%',
-  '%webView_find_previewOptions_shape_plain%',
-  '%webView_find_previewOptions_color%',
-  '%webView_find_previewOptions_color_redCyan%',
-  '%webView_find_previewOptions_color_redGreen%',
-  '%webView_find_previewOptions_color_greyBlue%',
-  '%webView_find_previewOptions_monospace%',
-  '%webView_find_previewOptions_monospaceDescription%',
-  '%webView_find_previewOptions_showInvisible%',
-  '%webView_find_previewOptions_showInvisibleDescription%',
-  '%webView_find_previewOptions_swatchOld%',
-  '%webView_find_previewOptions_swatchNew%',
+  // Preview-options keys live with their component; spread them so the two lists can't drift.
+  ...REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
 ] as const;
 
 /**
@@ -573,16 +559,26 @@ export function Find({
               className={`tw:w-full tw:min-w-16 tw:text-ellipsis tw:!pl-8 scripture-font ${searchTerm ? 'tw:!pe-8' : 'tw:!pr-4'}`}
             />
             {searchTerm && (
-              <button
-                type="button"
-                onClick={() => {
-                  onSearchTermChange('');
-                  onStopSearch(true);
-                }}
-                className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground tw:hover:text-foreground tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer"
-              >
-                <X className="tw:h-4 tw:w-4" />
-              </button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={localizedStrings['%webView_find_clearSearch%']}
+                      onClick={() => {
+                        onSearchTermChange('');
+                        onStopSearch(true);
+                      }}
+                      className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground tw:hover:text-foreground tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer"
+                    >
+                      <X className="tw:h-4 tw:w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{localizedStrings['%webView_find_clearSearch%']}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
           <RecentSearches
@@ -811,6 +807,13 @@ export function Find({
         onScroll={onResultsScroll}
         onKeyDown={handleResultsKeyDown}
       >
+        {/* Idle placeholder: no search has run yet (e.g. first open, or after clearing the search),
+            so the results region would otherwise be blank. */}
+        {results.length === 0 && searchStatus === undefined && (
+          <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4 tw:text-center tw:text-sm tw:font-light tw:text-muted-foreground">
+            {localizedStrings['%webView_find_searchPrompt%']}
+          </div>
+        )}
         {(() => {
           // Only the first book that has a replaced result gets the cancel handler.
           // All replaced rows share one pending operation, so only one Cancel button
