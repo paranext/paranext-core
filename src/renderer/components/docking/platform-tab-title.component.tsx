@@ -3,6 +3,8 @@ import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-shard';
+import { WebViewId } from '@shared/models/web-view.model';
+import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { windowService } from '@shared/services/window.service';
 import {
@@ -86,6 +88,16 @@ const handleFloatTab = async (tabId: string) => {
   }
 };
 
+const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
+  try {
+    await sendCommand('platform.moveWebViewToNewWindow', webViewIdToMove);
+  } catch (error) {
+    logger.error(
+      `Failed to move web view ${webViewIdToMove} to a new window: ${getErrorMessage(error)}`,
+    );
+  }
+};
+
 /**
  * Custom tab title for all tabs in Platform
  *
@@ -115,15 +127,20 @@ export function PlatformTabTitle({
 
   const tabAria: LocalizeKey = '%tab_aria_tab%';
   const floatTabKey: LocalizeKey = '%tab_contextMenu_floatTab%';
+  const moveTabToNewWindowKey: LocalizeKey = '%tab_contextMenu_moveTabToNewWindow%';
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
-      () => (isLocalizeKey(text) ? [text, tabAria, floatTabKey] : [tabAria, floatTabKey]),
+      () =>
+        isLocalizeKey(text)
+          ? [text, tabAria, floatTabKey, moveTabToNewWindowKey]
+          : [tabAria, floatTabKey, moveTabToNewWindowKey],
       [text],
     ),
   );
   const title = isLocalizeKey(text) ? localizedStrings[text] : text;
   const tabLabel = localizedStrings[tabAria];
   const floatTabText = localizedStrings[floatTabKey];
+  const moveTabToNewWindowText = localizedStrings[moveTabToNewWindowKey];
 
   // Handle applying and removing the CSS styles for flashing
   useEffect(() => {
@@ -492,6 +509,14 @@ export function PlatformTabTitle({
       <ContextMenuTrigger>{titleWithTooltip}</ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuItem onClick={() => handleFloatTab(id)}>{floatTabText}</ContextMenuItem>
+        {/* Windows are a Power-mode feature; Simple mode's move command path is a no-op, so the
+            item would be a dead button there. Non-WebView tabs (webViewId undefined) have nothing
+            to move. */}
+        {isPowerMode && webViewId ? (
+          <ContextMenuItem onClick={() => handleMoveTabToNewWindow(webViewId)}>
+            {moveTabToNewWindowText}
+          </ContextMenuItem>
+        ) : undefined}
       </ContextMenuContent>
     </ContextMenu>
   );
