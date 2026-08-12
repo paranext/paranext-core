@@ -18,6 +18,7 @@ import type {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
+import { getOpenFindTriggerArgs } from './find-trigger.util';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
@@ -43,6 +44,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
  * resolved resource's USJ + text direction) are passed as callbacks.
  */
 globalThis.webViewComponent = function ModelTextPanelWebView({
+  id: webViewId,
   projectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
@@ -128,6 +130,32 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       updateWebViewDefinition({ title: baseTitle });
     }
   }, [modelTextSmallName, localizedStrings, updateWebViewDefinition]);
+
+  // Ctrl+F opens Find for the MODEL RESOURCE shown in this panel (the resource's project id, not
+  // this panel's own editable project). No-op while no resource is resolved so Find never falls
+  // back to the container project. macOS intentionally uses Ctrl (not Cmd), matching the editor.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.key.toLowerCase() !== 'f') return;
+      event.preventDefault();
+      const args = getOpenFindTriggerArgs(
+        webViewId,
+        modelResourceProjectId,
+        window.getSelection()?.toString() ?? '',
+      );
+      if (!args) return;
+      papi.commands
+        .sendCommand(
+          'platformScripture.openFind',
+          args.webViewId,
+          args.selectedText,
+          args.sourceProjectId,
+        )
+        .catch((e) => logger.warn(`Failed to open Find from model text panel: ${getErrorMessage(e)}`));
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [webViewId, modelResourceProjectId]);
 
   // --- Operation callbacks ---
 
