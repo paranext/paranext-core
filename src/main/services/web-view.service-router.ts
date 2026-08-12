@@ -197,6 +197,12 @@ async function findOwner(
  * The dock's "+" button passes the tab group it sits in through a command, so by the time that open
  * arrives here it has been round the extension host and which window it belongs in is a question
  * only the tab group id can answer.
+ *
+ * Tab-group ids are not app-unique: rc-dock mints them from a module-level counter (`nextId()` in
+ * `Algorithm.js`) that every renderer starts at zero and increments independently, so several
+ * windows routinely hold the same one. Routing by it can therefore only ever prefer the right
+ * window, never identify it, which is why callers treat the routing target as load-bearing here
+ * rather than as a tie-break.
  */
 function getLayoutTargetTabId(layout?: Layout): string | undefined {
   if (layout?.type === 'panel' || layout?.type === 'replace-tab') return layout.targetTabId;
