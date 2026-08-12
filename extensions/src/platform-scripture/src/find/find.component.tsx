@@ -483,10 +483,10 @@ export function Find({
     }
   }, [scope, selectedBookIds, verseRef, localizedBookData]);
 
-  // Configuration for the per-result replace preview. Only present in replace mode with a
-  // replacement term entered, mirroring when a preview is meaningful.
-  const replaceConfig =
-    activeMode === 'replace' && replaceTerm ? { term: replaceTerm, preserveCase } : undefined;
+  // Configuration for the per-result replace preview. Present whenever in replace mode — including
+  // an empty replacement term, so the "replace with nothing" (deletion) preview can render its
+  // deletion bar rather than silently showing no preview.
+  const replaceConfig = activeMode === 'replace' ? { term: replaceTerm, preserveCase } : undefined;
 
   // Map the flat localized-string bag into the shape the preview-options picker expects.
   const previewOptionsStrings: ReplacePreviewOptionsStrings = {

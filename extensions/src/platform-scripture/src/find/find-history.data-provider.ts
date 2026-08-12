@@ -6,8 +6,8 @@ import type { FindHistoryDataTypes } from 'platform-scripture';
 /** Maximum number of items retained in the find search history */
 export const MAX_FIND_HISTORY_ITEMS = 15;
 
-// Storage keys are shared with the pre-data-provider implementation so existing user data carries
-// over. A project-specific entry appends `_${projectId}` to the base key.
+// Base user-storage keys for the find history and last-search-term. A project-specific entry
+// appends `_${projectId}` to the base key.
 const FIND_HISTORY_STORAGE_KEY = 'findRecentSearches';
 const FIND_LAST_SEARCH_TERM_STORAGE_KEY = 'findLastSearchTerm';
 

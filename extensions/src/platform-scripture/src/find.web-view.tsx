@@ -693,10 +693,16 @@ global.webViewComponent = function FindWebView({
         setSearchStatus(undefined);
         setSearchError(undefined);
         setFocusedResultIndex(undefined);
+        // There is no focused result anymore, so remove the current-result highlight from the editor.
+        // The cleanup effect only removes it on controller change / unmount, so clearing (or starting
+        // a new search) would otherwise leave a stale amber highlight painted with nothing selected.
+        editorWebViewController
+          ?.runAnnotationAction('find-current-result', 'removed')
+          .catch(() => {});
         await abandonFindJob();
       } else await stopFindJob();
     },
-    [abandonFindJob, stopFindJob],
+    [abandonFindJob, stopFindJob, editorWebViewController],
   );
 
   const loadMoreResults = useCallback(async () => {

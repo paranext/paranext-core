@@ -79,6 +79,9 @@ export function ResultsCard({
       onClick={onSelect}
       onKeyDown={handleKeyDown}
       onMouseEnter={() => setHasBeenHovered(true)}
+      // Also reveal on focus so keyboard-only users tabbing to an unselected card can reach the
+      // "More options" dropdown, which otherwise mounts only on hover or selection.
+      onFocus={() => setHasBeenHovered(true)}
       role="button"
       tabIndex={0}
       aria-pressed={isSelected}

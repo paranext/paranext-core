@@ -317,12 +317,13 @@ async function openFind(
     { ...options, existingId: '?', createNewIfNotFound: false },
   );
 
-  // If found an existing web view, then reloads it only if the project definition is different
+  // If found an existing web view, reload it when the project differs OR when the caller supplied
+  // text to pre-fill (e.g. Ctrl+F with a selection) — reloading is how initialSearchText reaches the
+  // existing panel's search box; without it the selection would be dropped for an already-open panel.
   if (findWebViewId) {
     const existingFindWebViewDefinition =
       await papi.webViews.getOpenWebViewDefinition(findWebViewId);
-    // If the existing web view has a project id different to the current one, then prompts a reload
-    if (existingFindWebViewDefinition?.projectId !== projectId) {
+    if (existingFindWebViewDefinition?.projectId !== projectId || selectedText) {
       await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
     }
   } else {

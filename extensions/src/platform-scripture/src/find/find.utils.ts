@@ -11,7 +11,7 @@ import { FindOptions } from 'platform-scripture';
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
   '\u0020': '·', // regular space → middle dot
   '\u00a0': '[Nbsp]', // non-breaking space — distinguished from regular space
-  '\u200b': '​‹ZW›', // zero-width space
+  '\u200b': '‹ZW›', // zero-width space
   '\u200c': '‹ZWN›', // zero-width non-joiner
   '\u200d': '‹ZWJ›', // zero-width joiner
   '\u200e': '‹LRM›', // left-to-right mark

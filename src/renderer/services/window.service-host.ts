@@ -349,7 +349,9 @@ class WindowDataProviderEngine
 
     // Update the tracked focus in this service based on what is actually focused
     if (newSetFocusSpecifier === 'detect') {
-      // Need to debounce because it takes a sec for the focus to change in the DOM
+      // Need to debounce because it takes a sec for the focus to change in the DOM. The debounced
+      // function resolves `undefined` when a leading-edge call is superseded (coalesced) before it
+      // runs; coalesce that to `false` so this method always returns a boolean per its contract.
       return (await this.#setDetectFocusInternalDebounced()) ?? false;
     }
 

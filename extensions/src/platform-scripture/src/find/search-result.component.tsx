@@ -243,7 +243,9 @@ export default function SearchResult({
     return (
       <>
         {displayText(beforeText)}
-        <span className={findHighlightClass}>{displayText(preserveTrailingSpaces(text))}</span>
+        {/* <mark> exposes the match as highlighted text to assistive tech; findHighlightClass sets
+            its own bg + text color, overriding the UA default mark styling. */}
+        <mark className={findHighlightClass}>{displayText(preserveTrailingSpaces(text))}</mark>
         {displayText(afterText)}
       </>
     );
