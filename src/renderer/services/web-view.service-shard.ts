@@ -2901,10 +2901,15 @@ export const openWebView = async (
  */
 async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
   try {
+    const windowId = getWindowIdOrThrow();
+    logger.debug(`Window ${windowId} reporting its dock emptied to main (reason: ${reason})`);
     const response = await sendNetworkRequest<[number, WindowEmptiedReason], WindowEmptiedResponse>(
       WINDOW_EMPTIED_REQUEST_TYPE,
-      getWindowIdOrThrow(),
+      windowId,
       reason,
+    );
+    logger.debug(
+      `Window ${windowId}'s reported emptiness was answered with action: ${response.action}`,
     );
     if (response.action !== 'open-home') return;
     await openWebView('platformGetResources.home', { type: 'tab' });
@@ -2931,9 +2936,15 @@ async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
  */
 export async function handleDockEmptiedByRemoval(layout: LayoutInfo): Promise<void> {
   if (!hasAnyTabs(layout)) {
+    logger.debug(
+      `Window ${globalThis.windowId}'s dock has no tabs left anywhere; reporting the emptiness to main`,
+    );
     await reportDockEmptied('emptied-by-removal');
     return;
   }
+  logger.debug(
+    `Window ${globalThis.windowId}'s dock lost its last docked tab, but tabs remain elsewhere (float/maximized/window); docking Home locally instead of reporting`,
+  );
   try {
     await openWebView('platformGetResources.home', { type: 'tab' });
   } catch (e) {

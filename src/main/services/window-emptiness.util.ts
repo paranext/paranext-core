@@ -81,14 +81,30 @@ export function createWindowEmptinessHandler(deps: {
       return { action: 'open-home' };
     }
 
-    if (reason === 'born-empty') return { action: 'open-home' };
+    if (reason === 'born-empty') {
+      logger.debug(`windowLayout:emptied window ${windowId} reason ${reason}: answering open-home`);
+      return { action: 'open-home' };
+    }
 
     // Repeat-answer idempotence — see the set's own doc comment
-    if (closingWindowIds.has(windowId)) return { action: 'closing' };
+    if (closingWindowIds.has(windowId)) {
+      logger.debug(
+        `windowLayout:emptied window ${windowId} reason ${reason}: already closing, answering closing again`,
+      );
+      return { action: 'closing' };
+    }
 
     const remainingWindows = deps.countWindows();
-    if (remainingWindows <= 1) return { action: 'open-home' };
+    if (remainingWindows <= 1) {
+      logger.debug(
+        `windowLayout:emptied window ${windowId} reason ${reason} saw ${remainingWindows} window(s) remaining: answering open-home`,
+      );
+      return { action: 'open-home' };
+    }
 
+    logger.debug(
+      `windowLayout:emptied window ${windowId} reason ${reason} saw ${remainingWindows} windows remaining: answering closing`,
+    );
     closingWindowIds.add(windowId);
     // Marked before the close is even scheduled: from this decision on, the window must not
     // count toward anyone's last-window arithmetic
