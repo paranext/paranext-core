@@ -89,8 +89,11 @@ type MoveShard = {
 /**
  * Register the shard over a dock layout stand-in that answers `getWebViewDefinition` with a fixed
  * definition (or `undefined`) regardless of the id it is asked for — matching the harness's other
- * dock-layout stand-ins (e.g. `setDetachedScrRef`'s), which don't validate call arguments either —
- * and tracks `removeTabFromDock`/`addWebViewToDock` calls so capture/adopt tests can assert on
+ * dock-layout stand-ins (e.g. `setDetachedScrRef`'s), which don't validate call arguments either.
+ * The real dock looks the id up exactly, so the stand-in is deliberately looser than what it stands
+ * in for: it answers whatever definition the test set up, whichever id it is handed. That keeps the
+ * capture tests about what the shard does with the definition it got back, not about lookup. It
+ * also tracks `removeTabFromDock`/`addWebViewToDock` calls so capture/adopt tests can assert on
  * them.
  */
 async function shardOverDockLayout(webViewDefinition: WebViewDefinition | undefined) {
@@ -199,8 +202,9 @@ describe('captureAndCloseWebView', () => {
     vi.mocked(getFullWebViewStateById).mockReturnValue({});
     const { shard, removedTabIds } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
 
-    // Ask for the unscoped id — the dock stand-in still answers with the window-scoped definition,
-    // just like the real dock resolving either spelling to the one tab it holds
+    // Ask for the unscoped id. The dock stand-in does not validate the id it is asked for, so it
+    // still answers with the window-scoped definition; what this pins is that the close goes
+    // through the definition's own id rather than the id the caller asked with
     await shard.captureAndCloseWebView('abc');
 
     expect(removedTabIds).toEqual(['abc-w2']);

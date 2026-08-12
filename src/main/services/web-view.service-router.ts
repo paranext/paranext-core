@@ -461,8 +461,9 @@ type MoveWebViewTarget = number | 'new';
  * instead.
  *
  * @returns Id of the web view in its new window (the same id it had)
- * @throws If no window holds the web view, if the target window does not exist, or if the target
- *   open failed — the error says where the web view ended up (see {@link recoverAfterFailedMove})
+ * @throws If no window holds the web view, if the target window does not exist or is closing, or if
+ *   the target open failed — the error says where the web view ended up (see
+ *   {@link recoverAfterFailedMove})
  */
 async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Promise<WebViewId> {
   const owner = await findOwner(webViewId, 'move');
@@ -491,6 +492,12 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
   } else {
     // The web view is already there; closing and reopening it would be churn for nothing
     if (target === owner.windowId) return webViewId;
+    // A window whose close has been decided is a stale target the caller cannot know about:
+    // adopting into it would report success and then lose the view when the close lands
+    if (isWindowClosing(target))
+      throw new Error(
+        `Cannot move webview ${webViewId} to window ${target}: that window is closing.`,
+      );
     // Resolved before anything closes: an unknown target must fail the move with the web view
     // untouched
     targetShard = await resolveShardForWindow(
@@ -557,6 +564,9 @@ async function recoverAfterFailedMove(
   captured: SavedWebViewDefinition,
   targetDescription: string,
 ): Promise<never> {
+  logger.debug(
+    `Reopening webview ${webViewId} after its failed move to ${targetDescription}. Captured definition: ${JSON.stringify(captured)}`,
+  );
   let reopenedIn: string | undefined;
   if (!isWindowClosing(owner.windowId)) {
     try {
