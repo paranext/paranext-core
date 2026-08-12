@@ -46,9 +46,6 @@ interface CommentListWebViewOptions extends OpenWebViewOptions {
   initialScopeFilter: ScopeFilter | undefined;
 }
 
-/** Map of projectId to comment list web view id for reusing existing web views */
-const activeCommentListsByProject = new Map<string, string>();
-
 /** WebView Factory for the Comment List web view with controller support */
 class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebViewType> {
   constructor() {
@@ -65,11 +62,6 @@ class CommentListWebViewFactory extends WebViewFactory<typeof commentListWebView
       );
 
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
-
-    // Track this web view by project ID so we can reuse it later
-    if (projectId) {
-      activeCommentListsByProject.set(projectId, savedWebView.id);
-    }
 
     // Kick off the (independent) title localization now so it runs concurrently with the
     // project-name lookup below instead of serially before it.
@@ -233,8 +225,6 @@ async function openCommentList(
   let triggerProjectId: string | undefined;
   let tabIdFromWebViewId: string | undefined;
   let editorScrollGroupId: CommentListWebViewOptions['editorScrollGroupId'];
-  /** The ID of the comment list WebView that was opened or focused */
-  let commentListWebViewId: string | undefined;
 
   logger.debug('Opening comment list');
 
@@ -274,57 +264,38 @@ async function openCommentList(
     return undefined;
   }
 
-  // Check if there's already an open comment list for this project
-  const existingWebViewId = activeCommentListsByProject.get(projectId);
-  if (existingWebViewId) {
-    logger.debug(`Found existing comment list for project ${projectId}: ${existingWebViewId}`);
+  // Find the project's comment list wherever it lives in the dock — including in another window —
+  // or create one if none is open anywhere. The dock layouts are the reuse authority, so this one
+  // call replaces any local bookkeeping: a `'?'` search scoped by `existingProjectId` finds the
+  // project's list regardless of which window it was last opened or moved to. The initial
+  // filters/scope are seeded into the web view state so a freshly-created view mounts
+  // already-filtered.
+  const webViewOptions: CommentListWebViewOptions = {
+    projectId,
+    editorScrollGroupId,
+    editorWebViewId,
+    initialFilters: options.filtersToSet,
+    initialScopeFilter: effectiveScopeFilterToSet,
+  };
+  const commentListWebViewId = await papi.webViews.openWebView(
+    commentListWebViewType,
+    { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
+    {
+      ...webViewOptions,
+      existingId: '?',
+      existingProjectId: projectId,
+      bringToFront: true,
+      createNewIfNotFound: true,
+    },
+  );
 
-    // Bring the existing web view to the front. Pass createNewIfNotFound: false so we can detect
-    // when the webview is no longer in the dock layout (returns undefined in that case).
-    const foundWebViewId = await papi.webViews.openWebView(
-      commentListWebViewType,
-      { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
-      { existingId: existingWebViewId, bringToFront: true, createNewIfNotFound: false },
-    );
-
-    if (foundWebViewId) {
-      commentListWebViewId = existingWebViewId;
-    } else {
-      // The previously cached webview is no longer in the dock layout (e.g., the layout was
-      // reset). Clear the cache so the code below creates a fresh webview.
-      logger.warn(
-        `Comment list webview ${existingWebViewId} not found in layout for project ${projectId}; ` +
-          `clearing cache and creating a new one`,
-      );
-      activeCommentListsByProject.delete(projectId);
-    }
-  }
-
-  let createdNew = false;
-  if (!commentListWebViewId) {
-    // No existing comment list, so create a new one. The initial filters/scope are seeded into the
-    // web view state so the view mounts already-filtered — no post-open setFilters is needed.
-    createdNew = true;
-    const webViewOptions: CommentListWebViewOptions = {
-      projectId,
-      editorScrollGroupId,
-      editorWebViewId,
-      initialFilters: options.filtersToSet,
-      initialScopeFilter: effectiveScopeFilterToSet,
-    };
-    commentListWebViewId = await papi.webViews.openWebView(
-      commentListWebViewType,
-      { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
-      webViewOptions,
-    );
-  }
-
-  // Post-open controller actions. A newly-created view already has its filters seeded, so it only
-  // needs a thread selection; a reused view needs setFilters to apply the requested view. Only fetch
-  // the controller when there is actually something to send — so a filters-only open of a NEW view
-  // skips it entirely and can't fail on a transient controller-lookup miss.
-  const needsSetFilters =
-    !createdNew && (!!options.filtersToSet || effectiveScopeFilterToSet !== undefined);
+  // Post-open controller actions. A freshly-created view already has its filters seeded via state
+  // (above), so a post-open setFilters is a harmless, idempotent re-send there — its message is
+  // dropped if the view's listener isn't mounted yet, and reapplies the same values if it is; either
+  // way the view ends up in the requested state. Only fetch the controller when there is actually
+  // something to send — so a filters-only open skips it entirely and can't fail on a transient
+  // controller-lookup miss.
+  const needsSetFilters = !!options.filtersToSet || effectiveScopeFilterToSet !== undefined;
   const needsSelectThread = !!options.threadIdToSelect;
   if (commentListWebViewId && (needsSetFilters || needsSelectThread)) {
     const commentListController = await papi.webViews.getWebViewController(
@@ -427,17 +398,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  // Subscribe to web view updates to clean up tracking when comment list is closed
-  const webViewUpdateUnsub = papi.webViews.onDidCloseWebView((event) => {
-    // Check if this was one of our tracked comment lists
-    activeCommentListsByProject.forEach((webViewId, projectIdKey) => {
-      if (webViewId === event.webView.id) {
-        activeCommentListsByProject.delete(projectIdKey);
-        logger.debug(`Removed tracking for closed comment list: ${event.webView.id}`);
-      }
-    });
-  });
-
   const openCommentListPromise = papi.commands.registerCommand(
     'legacyCommentManager.openCommentList',
     openCommentList,
@@ -525,7 +485,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openCommentListPanelPromise,
     await selectCommentThreadInPanelPromise,
     await commentsUsjPdpefPromise,
-    webViewUpdateUnsub,
   );
 
   // Potentially helpful code if you need to see comments without the UI
