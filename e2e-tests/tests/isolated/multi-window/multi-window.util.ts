@@ -42,10 +42,18 @@ export const FAULT_MARKERS = [
 ];
 
 /**
- * A warn/error-severity line reporting a name collision in the central registry. The same phrases
- * appear at debug severity on the EXPECTED step-aside paths (a second window losing the app-global
- * hosting race logs "… already registered" as debug), so severity is part of the pattern: only
- * warn/error occurrences indicate a window failing to scope its per-window services.
+ * A warn/error-severity line reporting a name collision in the central registry: a window failing
+ * to scope its per-window services.
+ *
+ * Severity is part of the pattern because these phrases reach the captured output two different
+ * ways. They are LOGGED, at warn, by `rpc-client.ts` (`registerMethod`, when a client already has
+ * the method) and by `rpc-websocket-listener.ts` (a method and a network event colliding on one
+ * name) — a logger line is the registry reporting a collision, which is the fault this hunts. They
+ * are also THROWN, inside error messages built by `network-object.service.ts`,
+ * `data-provider.service.ts`, `web-view-provider.service.ts` and `network.service.ts`, and thrown
+ * text reaches this capture at whatever severity its catcher chooses to print it, or untagged
+ * inside a stack trace. Bounding the match to warn/error keeps it on the lines that REPORT a
+ * collision rather than on the same words quoted in passing.
  */
 export const DUPLICATE_REGISTRATION_PATTERN =
   /\[(warn|error)\][^\n]*(already registered|rejected by the central registry)/;
