@@ -16,6 +16,18 @@ import { isWebViewVisible } from './overlay-coordinates';
 /** Must match DEBOUNCE_COOLDOWN_MS in overlay.service-host.ts */
 const DEBOUNCE_COOLDOWN_MS = 50;
 
+/** Payload of the app-window input network event the main process emits */
+type AppWindowInputEvent = { kind: 'mouseDown' | 'escape' };
+
+/**
+ * Callbacks the service registered on the app-window input network event. Hoisted so the
+ * `@shared/services/network.service` mock factory (hoisted above the imports) can push into it.
+ */
+const { appWindowInputSubscribers } = vi.hoisted(() => {
+  const subscribers: ((event: AppWindowInputEvent) => void)[] = [];
+  return { appWindowInputSubscribers: subscribers };
+});
+
 // Mock dependencies
 vi.mock('./overlay-validation', () => ({
   validateCommandPaletteRequest: vi.fn(),
@@ -72,6 +84,14 @@ vi.mock('@shared/services/localization.service', () => ({
   localizationService: {
     getLocalizedStrings: vi.fn(() => Promise.resolve({})),
   },
+}));
+
+// Capture the app-window input subscription instead of connecting to the real network
+vi.mock('@shared/services/network.service', () => ({
+  getNetworkEvent: vi.fn(() => (callback: (event: AppWindowInputEvent) => void) => {
+    appWindowInputSubscribers.push(callback);
+    return () => {};
+  }),
 }));
 
 // Import the service after mocks are set up
@@ -1112,6 +1132,176 @@ describe('overlay.service-host', () => {
       expect(result).toBeUndefined();
 
       vi.useRealTimers();
+    });
+  });
+
+  describe('app-window input dismissal', () => {
+    const paletteRequest: CommandPaletteRequest = { items: [{ id: 'ft', label: 'Footnote' }] };
+    const popoverRequest: PopoverRequest = {
+      anchor: { x: 5, y: 5 },
+      content: { type: 'text', body: 'Popover body' },
+    };
+
+    /**
+     * Time to advance past both OVERLAY_CREATION_GRACE_MS (300ms) and the parent-document
+     * pointerdown correlation window, so neither the just-created overlays nor a pointerdown
+     * recorded by an earlier test influences the decision under test.
+     */
+    const PAST_GRACE_AND_CORRELATION_MS = 400;
+
+    /** Time to advance past the deferred mouseDown decision */
+    const PAST_INPUT_DEFER_MS = 50;
+
+    beforeEach(async () => {
+      vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
+      // Only track the subscription this test's startOverlayService call registers
+      appWindowInputSubscribers.length = 0;
+      const { startOverlayService } = await import('./overlay.service-host');
+      await startOverlayService();
+    });
+
+    /** Deliver an app-window input signal the way the main process's network event would */
+    function emitAppWindowInput(kind: AppWindowInputEvent['kind']): void {
+      expect(appWindowInputSubscribers.length).toBeGreaterThan(0);
+      appWindowInputSubscribers.forEach((subscriber) => subscriber({ kind }));
+    }
+
+    /**
+     * Dispatch a pointerdown in the PARENT document (what a click outside every WebView iframe
+     * produces), either on overlay content or on an unrelated element.
+     */
+    function dispatchParentDocumentPointerDown(location: 'insideOverlay' | 'outsideOverlay'): void {
+      const target = document.createElement('div');
+      if (location === 'insideOverlay') target.setAttribute('data-overlay-command-palette', '');
+      document.body.appendChild(target);
+      target.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      target.remove();
+    }
+
+    it('should dismiss overlays on a mouseDown with no parent-document pointerdown (click inside a WebView iframe)', async () => {
+      vi.useFakeTimers();
+
+      const contextMenuPromise = overlayService.showContextMenu('ext.testWebView', 'iframe-click');
+      await Promise.resolve();
+      const palettePromise = overlayService.showCommandPalette(paletteRequest, 'iframe-click');
+      const popoverId = await overlayService.showPopover(popoverRequest, 'iframe-click');
+      expectPopoverId(popoverId);
+      const popoverDismissed = overlayService.onPopoverDismissed(popoverId);
+      expect(getOverlays()).toHaveLength(3);
+
+      vi.advanceTimersByTime(PAST_GRACE_AND_CORRELATION_MS);
+      emitAppWindowInput('mouseDown');
+      vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+
+      await expect(contextMenuPromise).resolves.toBeUndefined();
+      await expect(palettePromise).resolves.toBeUndefined();
+      await expect(popoverDismissed).resolves.toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('should not dismiss overlays when the mouseDown correlates with a parent-document pointerdown on overlay content', async () => {
+      vi.useFakeTimers();
+
+      const palettePromise = overlayService.showCommandPalette(paletteRequest, 'palette-click');
+
+      vi.advanceTimersByTime(PAST_GRACE_AND_CORRELATION_MS);
+      dispatchParentDocumentPointerDown('insideOverlay');
+      emitAppWindowInput('mouseDown');
+      vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+
+      expect(getOverlays().filter((o) => o.type === 'commandPalette')).toHaveLength(1);
+
+      // Clean up
+      getOverlays().forEach((overlay) => overlay.resolve(undefined));
+      await expect(palettePromise).resolves.toBeUndefined();
+    });
+
+    it('should dismiss overlays when the mouseDown correlates with a parent-document pointerdown outside overlay content', async () => {
+      vi.useFakeTimers();
+
+      const palettePromise = overlayService.showCommandPalette(paletteRequest, 'outside-click');
+
+      vi.advanceTimersByTime(PAST_GRACE_AND_CORRELATION_MS);
+      dispatchParentDocumentPointerDown('outsideOverlay');
+      emitAppWindowInput('mouseDown');
+      vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+
+      await expect(palettePromise).resolves.toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('should dismiss overlays immediately on an escape signal', async () => {
+      vi.useFakeTimers();
+
+      const contextMenuPromise = overlayService.showContextMenu('ext.testWebView', 'escape-signal');
+      await Promise.resolve();
+      const palettePromise = overlayService.showCommandPalette(paletteRequest, 'escape-signal');
+      const popoverId = await overlayService.showPopover(popoverRequest, 'escape-signal');
+      expectPopoverId(popoverId);
+      const popoverDismissed = overlayService.onPopoverDismissed(popoverId);
+
+      vi.advanceTimersByTime(PAST_GRACE_AND_CORRELATION_MS);
+      emitAppWindowInput('escape');
+
+      await expect(contextMenuPromise).resolves.toBeUndefined();
+      await expect(palettePromise).resolves.toBeUndefined();
+      await expect(popoverDismissed).resolves.toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('should keep a dismissOnClickOutside: false popover open on mouseDown but close it on escape', async () => {
+      vi.useFakeTimers();
+
+      const stickyRequest: PopoverRequest = { ...popoverRequest, dismissOnClickOutside: false };
+      const popoverId = await overlayService.showPopover(stickyRequest, 'sticky-popover');
+      expectPopoverId(popoverId);
+      const popoverDismissed = overlayService.onPopoverDismissed(popoverId);
+      const palettePromise = overlayService.showCommandPalette(paletteRequest, 'sticky-popover');
+
+      vi.advanceTimersByTime(PAST_GRACE_AND_CORRELATION_MS);
+      emitAppWindowInput('mouseDown');
+      vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+
+      // The palette goes; the popover that opted out of click-outside dismissal stays
+      await expect(palettePromise).resolves.toBeUndefined();
+      expect(getOverlays().filter((o) => o.type === 'popover')).toHaveLength(1);
+
+      // Escape closes it, matching the popover component's own Escape handler, which dismisses
+      // regardless of dismissOnClickOutside
+      emitAppWindowInput('escape');
+
+      await expect(popoverDismissed).resolves.toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('should not dismiss an overlay created within the creation grace period', async () => {
+      vi.useFakeTimers();
+
+      const palettePromise = overlayService.showCommandPalette(paletteRequest, 'grace-webview');
+
+      // Still inside OVERLAY_CREATION_GRACE_MS (300ms) — the click that opened the overlay must
+      // not close it again
+      vi.advanceTimersByTime(100);
+      emitAppWindowInput('mouseDown');
+      vi.advanceTimersByTime(PAST_INPUT_DEFER_MS);
+      emitAppWindowInput('escape');
+
+      expect(getOverlays().filter((o) => o.type === 'commandPalette')).toHaveLength(1);
+
+      // Clean up
+      getOverlays().forEach((overlay) => overlay.resolve(undefined));
+      await expect(palettePromise).resolves.toBeUndefined();
+    });
+
+    it('should do no work on an input signal while no overlays are open', () => {
+      vi.useFakeTimers();
+
+      expect(getOverlays()).toHaveLength(0);
+      emitAppWindowInput('mouseDown');
+      emitAppWindowInput('escape');
+
+      // The deferred mouseDown decision is never scheduled
+      expect(vi.getTimerCount()).toBe(0);
     });
   });
 

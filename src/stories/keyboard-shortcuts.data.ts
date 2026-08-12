@@ -167,6 +167,21 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/platform-macos-menubar.data.ts'],
   },
   {
+    id: 'dismiss-overlays',
+    purpose:
+      'Dismiss open context menus, command palettes, and popovers (works in every frame, including web views)',
+    category: 'Menus',
+    context: 'Main process (global)',
+    // Announced without preventDefault, so the focused frame still receives Escape and may act on
+    // it too — e.g. the scripture editor's marker palette closes its own session
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: [
+      'src/main/main.ts',
+      'src/main/app-window-input.util.ts',
+      'src/renderer/services/overlays/overlay.service-host.ts',
+    ],
+  },
+  {
     id: 'dev-tools',
     purpose: 'Open developer tools',
     category: 'Developer',

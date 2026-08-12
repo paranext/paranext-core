@@ -65,7 +65,34 @@ export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string
   return undefined;
 }
 
-/** Specific item that is intended to be focused at the top level of the window */
+/**
+ * A raw input gesture in the app window that transient overlays (context menus, command palettes,
+ * dismissable popovers) treat as a request to dismiss.
+ *
+ * - `'mouseDown'` — a mouse button went down anywhere in the window
+ * - `'escape'` — the Escape key went down anywhere in the window
+ */
+export type AppWindowInputKind = 'mouseDown' | 'escape';
+
+/** Payload of the {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} network event */
+export type AppWindowInputEvent = {
+  /** Which input gesture happened */
+  kind: AppWindowInputKind;
+};
+
+/**
+ * Name of the network event the main process emits for every mouse-down and every Escape key-down
+ * in the app window.
+ *
+ * The main process's `before-mouse-event`/`before-input-event` hooks see input in EVERY frame,
+ * including WebView iframes whose events never reach the parent document. Overlays render in the
+ * parent document, so this event is the only way they learn that a click landed inside a WebView.
+ * Escape is announced without `preventDefault`, so the focused frame still receives the key and can
+ * act on it too.
+ */
+export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
+
+/** Specific item that is intended to be focused in the top-level app window */
 export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
 
 /** Instructions that indicate how to change the focus within the window */
