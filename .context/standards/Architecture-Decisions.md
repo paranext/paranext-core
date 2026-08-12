@@ -854,7 +854,8 @@ step, no automation. Just a record.
   window when that one closes — rejected: it makes losing the host cheaper to recover from without
   making it impossible, and the state still sits behind a window the user can close at any moment.
   (b) A service router for scroll groups — rejected: a router picks one window to answer, and no
-  window has the right answer for state that belongs to all of them. (c) Route every read through main and drop the sync API — rejected: the UI
+  window has the right answer for state that belongs to all of them. (c) Route every read through
+  main and drop the sync API — rejected: the UI
   reads a group's reference during render and inside keystroke handlers, where there is no room to
   await. (d) Keep versification conversion with the state in main — rejected: the hot-path consumer
   is in the renderer, so converting in main would add a hop per navigation AND leave the renderer
