@@ -376,7 +376,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
           args.selectedText,
           args.sourceProjectId,
         )
-        .catch((e) => logger.warn(`Failed to open Find from resource panel: ${getErrorMessage(e)}`));
+        .catch((e) =>
+          logger.warn(`Failed to open Find from resource panel: ${getErrorMessage(e)}`),
+        );
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);

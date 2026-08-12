@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  resolveFindInvocation,
-  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-} from './open-find.utils';
+import { resolveFindInvocation, SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './open-find.utils';
 
 describe('resolveFindInvocation', () => {
   const editorDef = {
@@ -19,19 +16,27 @@ describe('resolveFindInvocation', () => {
   };
 
   it('uses the definition projectId when no explicit source is given (editor path)', () => {
-    expect(resolveFindInvocation(editorDef, 'wv-editor', undefined).projectId).toBe('proj-container');
+    expect(resolveFindInvocation(editorDef, 'wv-editor', undefined).projectId).toBe(
+      'proj-container',
+    );
   });
 
   it('prefers the explicit source projectId over the definition projectId (panel path)', () => {
-    expect(resolveFindInvocation(panelDef, 'wv-panel', 'resource-proj').projectId).toBe('resource-proj');
+    expect(resolveFindInvocation(panelDef, 'wv-panel', 'resource-proj').projectId).toBe(
+      'resource-proj',
+    );
   });
 
   it('forwards editorWebViewId only for the scripture editor web view type', () => {
-    expect(resolveFindInvocation(editorDef, 'wv-editor', undefined).editorWebViewIdForFind).toBe('wv-editor');
+    expect(resolveFindInvocation(editorDef, 'wv-editor', undefined).editorWebViewIdForFind).toBe(
+      'wv-editor',
+    );
   });
 
   it('does NOT forward editorWebViewId for a non-editor panel (prevents the controller hang)', () => {
-    expect(resolveFindInvocation(panelDef, 'wv-panel', 'resource-proj').editorWebViewIdForFind).toBeUndefined();
+    expect(
+      resolveFindInvocation(panelDef, 'wv-panel', 'resource-proj').editorWebViewIdForFind,
+    ).toBeUndefined();
   });
 
   it('passes through scroll group and triggering tab id', () => {
