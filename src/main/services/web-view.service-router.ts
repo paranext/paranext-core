@@ -95,12 +95,23 @@ const getTargetWebViewShard = createTargetShardResolver(
  */
 type OwnerMatcher =
   | { kind: 'id'; webViewId: WebViewId }
-  | { kind: 'type'; webViewType: WebViewType };
+  | {
+      kind: 'type';
+      webViewType: WebViewType;
+      /**
+       * Narrows the search to web views showing this project. Left out, a type matches whatever
+       * project it is showing.
+       *
+       * @experimental The project filter is new; searching by type is long-established.
+       */
+      projectId?: string;
+    };
 
 function describeMatcher(matcher: OwnerMatcher): string {
-  return matcher.kind === 'id'
-    ? `webview ${matcher.webViewId}`
-    : `a ${matcher.webViewType} web view`;
+  if (matcher.kind === 'id') return `webview ${matcher.webViewId}`;
+  return matcher.projectId === undefined
+    ? `a ${matcher.webViewType} web view`
+    : `a ${matcher.webViewType} web view showing project ${matcher.projectId}`;
 }
 
 /**
@@ -191,7 +202,9 @@ async function findOwner(
           matcher.kind === 'id'
             ? await webViewShard.getOpenWebViewDefinition(matcher.webViewId)
             : (await webViewShard.getAllOpenWebViewDefinitions()).find(
-                (candidate) => candidate.webViewType === matcher.webViewType,
+                (candidate) =>
+                  candidate.webViewType === matcher.webViewType &&
+                  (matcher.projectId === undefined || candidate.projectId === matcher.projectId),
               );
         if (definition) return { windowId, shard: webViewShard, definition };
         return undefined;
@@ -699,11 +712,25 @@ async function openWebView(
   layout?: Layout,
   options?: OpenWebViewOptions,
 ): Promise<WebViewId | undefined> {
+  // `existingProjectId` only qualifies a '?' search; a concrete existingId already names one
+  // exact web view, and no existingId at all names no search for it to limit, so combining it
+  // with either is contradictory. Caught here rather than only in the window shard so that a
+  // contradiction never sends a fan-out to every window on the way to being refused.
+  if (options?.existingProjectId !== undefined && options.existingId !== '?')
+    throw new Error(
+      options.existingId === undefined
+        ? "openWebView: existingProjectId requires existingId: '?'; it was not given at all."
+        : `openWebView: existingProjectId only qualifies an existingId of '?'; existingId ${JSON.stringify(options.existingId)} already names an exact web view.`,
+    );
+
   // If an existingId is provided, search all windows for the webview's owner
   if (options?.existingId) {
+    // A project filter narrows which web views count as a match before the search picks among the
+    // windows that have one, so a match for the asked-for project outranks the routing target's
+    // preference for a web view of the type showing something else
     const matcher: OwnerMatcher =
       options.existingId === '?'
-        ? { kind: 'type', webViewType }
+        ? { kind: 'type', webViewType, projectId: options.existingProjectId }
         : { kind: 'id', webViewId: options.existingId };
     const { owner, hadUnreachableWindows } = await findOwner(matcher, 'openWebView');
     if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
