@@ -198,12 +198,14 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-find',
     purpose: 'Open the find dialog',
     category: 'Navigation',
-    context: 'Scripture editor web view',
-    // macOS intentionally uses ⌃F (not the usual ⌘F) to match the handler in
-    // platform-scripture-editor.web-view.tsx.
+    context: 'Scripture editor, model text, Bible text, and commentary web views',
+    // macOS intentionally uses ⌃F (not the usual ⌘F) to match the handlers in the scripture editor
+    // and the model text / resource panels.
     keys: { macOS: '⌃F', windows: 'Ctrl+F', linux: 'Ctrl+F' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/model-text-panel.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/resource-text-panel.web-view.tsx',
     ],
   },
   {

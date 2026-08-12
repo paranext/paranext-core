@@ -40,6 +40,7 @@ import type {
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
+import { getOpenFindTriggerArgs } from './find-trigger.util';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
@@ -153,6 +154,7 @@ function ResourceSelectorDropdown({
 }
 
 globalThis.webViewComponent = function ResourceTextPanel({
+  id: webViewId,
   projectId,
   updateWebViewDefinition,
   useWebViewState,
@@ -323,16 +325,21 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const selectedRef =
     filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
 
-  let resourceProjectId: string | undefined;
-  let dblMatch: (typeof dblResources)[number] | undefined;
   const [isSelecting, setIsSelecting] = useState(false);
 
-  if (isDblResourceReference(selectedRef)) {
-    dblMatch = findCachedDblResource(selectedRef, dblResources);
-    resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
-  } else if (isProjectReference(selectedRef)) {
-    resourceProjectId = selectedRef.id;
-  }
+  // Wrapped in useMemo so resourceProjectId has a stable identity for the Ctrl+F useEffect deps
+  // array — it is the source passed to Find (the displayed resource, not this panel's projectId).
+  const { resourceProjectId, dblMatch } = useMemo(() => {
+    let resolvedProjectId: string | undefined;
+    let resolvedDblMatch: (typeof dblResources)[number] | undefined;
+    if (isDblResourceReference(selectedRef)) {
+      resolvedDblMatch = findCachedDblResource(selectedRef, dblResources);
+      resolvedProjectId = resolvedDblMatch?.installed ? resolvedDblMatch.projectId : undefined;
+    } else if (isProjectReference(selectedRef)) {
+      resolvedProjectId = selectedRef?.id;
+    }
+    return { resourceProjectId: resolvedProjectId, dblMatch: resolvedDblMatch };
+  }, [selectedRef, dblResources]);
 
   // Auto-install a selected DBL resource matched in the catalog but not installed locally yet
   // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual
@@ -348,6 +355,32 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Keyed on the resource's project id (not the user's projectId prop) since the resource is what
   // gets rendered in this iframe.
   useCommentaryMarkerStyles(resourceProjectId);
+
+  // Ctrl+F opens Find for the RESOURCE shown in this panel (Bible text or commentary) — the
+  // selected resource's project id, not this panel's own container project. No-op while no
+  // resource is resolved. macOS intentionally uses Ctrl (not Cmd), matching the editor.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || event.key.toLowerCase() !== 'f') return;
+      event.preventDefault();
+      const args = getOpenFindTriggerArgs(
+        webViewId,
+        resourceProjectId,
+        window.getSelection()?.toString() ?? '',
+      );
+      if (!args) return;
+      papi.commands
+        .sendCommand(
+          'platformScripture.openFind',
+          args.webViewId,
+          args.selectedText,
+          args.sourceProjectId,
+        )
+        .catch((e) => logger.warn(`Failed to open Find from resource panel: ${getErrorMessage(e)}`));
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [webViewId, resourceProjectId]);
 
   // #endregion
 
