@@ -27,6 +27,9 @@ const buttonVariants = cva(
         destructive:
           'tw:bg-destructive/10 tw:text-destructive tw:hover:bg-destructive/20 tw:focus-visible:border-destructive/40 tw:focus-visible:ring-destructive/20 tw:dark:bg-destructive/20 tw:dark:hover:bg-destructive/30 tw:dark:focus-visible:ring-destructive/40',
         link: 'tw:text-primary tw:underline-offset-4 tw:hover:underline',
+        // CUSTOM: Added 'subtle' variant — no background, muted color at rest, foreground on hover.
+        // Use when a button should visually recede into the layout by default.
+        subtle: 'tw:text-muted-foreground tw:hover:text-foreground',
       },
       size: {
         default:
