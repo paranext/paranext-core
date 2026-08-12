@@ -145,6 +145,11 @@ describe('moveWebView', () => {
     expect(target.adoptWebView).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
     );
+    // Close-before-adopt, not merely both-happened: a one-instance web view cannot be opened in the
+    // target while the source instance is alive, so capturing has to finish before the target adopts
+    expect(owner.captureAndCloseWebView.mock.invocationCallOrder[0]).toBeLessThan(
+      target.adoptWebView.mock.invocationCallOrder[0],
+    );
     expect(movedId).toBe('view-1');
   });
 
@@ -190,6 +195,19 @@ describe('moveWebView', () => {
     }
   });
 
+  test('a target window whose close is already decided fails the move before anything closes', async () => {
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    withWindows({ 2: owner, 3: target });
+    mocks.isWindowClosing.mockImplementation((windowId: number) => windowId === 3);
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow(/that window is closing/);
+
+    // Adopting into a window on its way out would report success and then lose the view
+    expect(owner.captureAndCloseWebView).not.toHaveBeenCalled();
+    expect(target.adoptWebView).not.toHaveBeenCalled();
+  });
+
   test('an unknown web view fails the move', async () => {
     withWindows({ 2: windowShard([]) });
 
@@ -221,6 +239,11 @@ describe('moveWebView', () => {
     expect(owner.captureAndCloseWebView).toHaveBeenCalledWith('view-1');
     expect(created.adoptWebView).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
+    );
+    // Close-before-adopt holds for the fresh window too: the capture has to finish before the
+    // window created for the view adopts it
+    expect(owner.captureAndCloseWebView.mock.invocationCallOrder[0]).toBeLessThan(
+      created.adoptWebView.mock.invocationCallOrder[0],
     );
     expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith(7);
     expect(movedId).toBe('view-1');
