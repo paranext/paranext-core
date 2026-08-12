@@ -254,6 +254,28 @@ describe('web view service router', () => {
     expect(targetWindow.openWebView).not.toHaveBeenCalled();
   });
 
+  test('a probe returns not-found rather than throwing when a window could not be asked', async () => {
+    // Nothing claimed the web view, and window 2 could not be asked at all — a probe has nothing
+    // to lose by treating that as not-found rather than failing the call
+    withWindows({ 1: windowShard([]), 2: windowShard([]) }, { unreadyWindowIds: [2] });
+    const router = await getRouter();
+
+    await expect(
+      router.openWebView('comments', undefined, { existingId: '?', createNewIfNotFound: false }),
+    ).resolves.toBeUndefined();
+  });
+
+  test('an open that would create refuses to guess when a window could not be asked', async () => {
+    // The window that could not be asked may be the one already holding this web view, so
+    // creating here risks minting a second copy of a view meant to be unique app-wide
+    withWindows({ 1: windowShard([]), 2: windowShard([]) }, { unreadyWindowIds: [2] });
+    const router = await getRouter();
+
+    await expect(
+      router.openWebView('comments', undefined, { existingId: '?', createNewIfNotFound: true }),
+    ).rejects.toThrow(/unreachable/i);
+  });
+
   describe('a layout that names a tab to open next to', () => {
     // A layout naming a target tab names the window that tab is in just as surely as `existingId`
     // does, and the tab it names is routinely in a window other than the one the user is working in
