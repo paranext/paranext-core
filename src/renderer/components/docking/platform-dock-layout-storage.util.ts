@@ -671,12 +671,14 @@ export function getWebViewDefinition(
  *
  * @param dockLayout The rc-dock dock layout React component ref
  * @param webViewType The web view type to search for
+ * @param projectId Optionally limited to web views showing a given project. @experimental parameter
  * @returns The WebViewDefinition of a matching web view, or `undefined` if no web view of that type
  *   is open
  */
 export function findFirstWebViewDefinitionByType(
   dockLayout: DockLayout,
   webViewType: string,
+  projectId?: string,
 ): WebViewDefinition | undefined {
   const found = dockLayout.find((item) => {
     // Still have to check isTab because of a bug https://github.com/ticlo/rc-dock/pull/253
@@ -689,10 +691,14 @@ export function findFirstWebViewDefinitionByType(
     const tabInfo = item as RCDockTabInfo;
     if (tabInfo.tabType !== TAB_TYPE_WEBVIEW) return false;
 
-    return (
-      getWebViewDefinitionFromTab(tabInfo, 'findFirstWebViewDefinitionByType').webViewType ===
-      webViewType
+    const definitionCandidate = getWebViewDefinitionFromTab(
+      tabInfo,
+      'findFirstWebViewDefinitionByType',
     );
+    if (definitionCandidate.webViewType !== webViewType) return false;
+    if (projectId !== undefined && definitionCandidate.projectId !== projectId) return false;
+
+    return true;
   }, Filter.AnyTab);
 
   if (!found || !isTab(found)) return undefined;

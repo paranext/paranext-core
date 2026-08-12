@@ -299,10 +299,15 @@ export type PapiDockLayout = {
    * Find the ID of the first open web view whose `webViewType` matches the one supplied.
    *
    * @param webViewType The web view type to search for
+   * @param projectId Optionally limited to web views showing a given project. @experimental
+   *   parameter
    * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
    *   type is open
    */
-  findFirstWebViewDefinitionByType: (webViewType: string) => WebViewDefinition | undefined;
+  findFirstWebViewDefinitionByType: (
+    webViewType: string,
+    projectId?: string,
+  ) => WebViewDefinition | undefined;
   /**
    * Add or update a tab in the layout
    *
