@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
+    loggerWarn: vi.fn(),
     shardAnnouncementListeners,
     onDidCreateNetworkObject: vi.fn((listener: (details: NetworkObjectDetails) => void) => {
       shardAnnouncementListeners.create.push(listener);
@@ -64,6 +65,9 @@ vi.mock('@shared/services/network-object.service', () => ({
   onDidDisposeNetworkObject: mocks.onDidDisposeNetworkObject,
 }));
 vi.mock('@shared/services/network.service', () => ({ getNetworkEvent: () => vi.fn() }));
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { info: vi.fn(), warn: mocks.loggerWarn, error: vi.fn() },
+}));
 
 /** Capture the router object registered under the generic name */
 async function getRouter() {
@@ -252,6 +256,23 @@ describe('web view service router', () => {
     expect(result).toBe('wv-2');
     expect(owner.openWebView).toHaveBeenCalled();
     expect(targetWindow.openWebView).not.toHaveBeenCalled();
+  });
+
+  test('two matching web views resolve to the routing target rather than the older window', async () => {
+    // App-wide uniqueness means two matches is already a violated invariant, but the router still
+    // has to pick the same one every time rather than whichever window answered first
+    const older = windowShard([{ id: 'wv-old', webViewType: 'comments' }]);
+    const target = windowShard([{ id: 'wv-here', webViewType: 'comments' }]);
+    older.openWebView.mockResolvedValue('wv-old');
+    target.openWebView.mockResolvedValue('wv-here');
+    withWindows({ 1: older, 2: target });
+    mocks.getTargetWindowId.mockReturnValue(2);
+    const router = await getRouter();
+
+    const result = await router.openWebView('comments', undefined, { existingId: '?' });
+
+    expect(result).toBe('wv-here');
+    expect(mocks.loggerWarn).toHaveBeenCalledWith(expect.stringContaining('more than one'));
   });
 
   test('a probe returns not-found rather than throwing when a window could not be asked', async () => {
