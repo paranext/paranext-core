@@ -91,10 +91,12 @@ describe('RpcEventRegistry — checkAnnouncement', () => {
 });
 
 /**
- * A window that closes takes its network event registrations down with it — the socket's close
- * handler calls `unregisterAll` for that client. A surviving window taking an app-global service
- * over re-registers the same single-source event names, so the cleanup has to leave those names
- * genuinely free rather than merely empty.
+ * A client that goes away takes its network event registrations down with it — the socket's close
+ * handler calls `unregisterAll` for that client. The same names come back afterwards: a reloaded
+ * window replays the URL carrying its own `windowId`, so it re-registers the very same
+ * window-scoped event names, and `platform.restartExtensionHost` registers the extension host's on
+ * a fresh process. So the cleanup has to leave those names genuinely free rather than merely
+ * empty.
  */
 describe('RpcEventRegistry — re-registration after a client socket closes', () => {
   const departedClient = { id: 'departed' };
