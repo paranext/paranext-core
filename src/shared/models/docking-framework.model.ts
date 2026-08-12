@@ -299,10 +299,11 @@ export type PapiDockLayout = {
    * Find the ID of the first open web view whose `webViewType` matches the one supplied.
    *
    * @param webViewType The web view type to search for
-   * @param projectId Optionally limited to web views showing a given project. @experimental
-   *   parameter
+   * @param projectId Optionally limits the search to web views showing a given project
    * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
    *   type is open
+   * @experimental The optional `projectId` filter is new; the rest of this member is
+   *   long-established.
    */
   findFirstWebViewDefinitionByType: (
     webViewType: string,
