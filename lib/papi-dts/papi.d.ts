@@ -873,6 +873,16 @@ declare module 'shared/models/web-view.model' {
      */
     existingId?: string | '?';
     /**
+     * Limit an `existingId: '?'` search to web views showing this project.
+     *
+     * Only meaningful with `existingId: '?'` — a concrete `existingId` already names one exact web
+     * view, so combining it with a project filter is contradictory and is rejected as an error.
+     * Without this, `'?'` matches any web view of the type regardless of project.
+     *
+     * @experimental
+     */
+    existingProjectId?: string;
+    /**
      * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
      * relevant if `existingId` is provided. If `existingId` is not provided, this property is
      * ignored.
@@ -3872,10 +3882,15 @@ declare module 'shared/models/docking-framework.model' {
      * Find the ID of the first open web view whose `webViewType` matches the one supplied.
      *
      * @param webViewType The web view type to search for
+     * @param projectId Optionally limited to web views showing a given project. @experimental
+     *   parameter
      * @returns The WebViewDefinition of the matching web view, or `undefined` if no web view of that
      *   type is open
      */
-    findFirstWebViewDefinitionByType: (webViewType: string) => WebViewDefinition | undefined;
+    findFirstWebViewDefinitionByType: (
+      webViewType: string,
+      projectId?: string,
+    ) => WebViewDefinition | undefined;
     /**
      * Add or update a tab in the layout
      *
@@ -4732,10 +4747,10 @@ declare module 'papi-shared-types' {
      * Move a web view to a window created for it.
      *
      * A move closes the web view in the window that holds it and reopens it — same id, same
-     * `useWebViewState` state — in the target window. Consumers see a close event in the source
-     * and an open event in the target, and the web view controller is disposed and re-created:
-     * a held controller reference must be re-acquired after a move. In Simple mode — single-window
-     * by design — there is no other window to move to, and this does nothing.
+     * `useWebViewState` state — in the target window. Consumers see a close event in the source and
+     * an open event in the target, and the web view controller is disposed and re-created: a held
+     * controller reference must be re-acquired after a move. In Simple mode — single-window by
+     * design — there is no other window to move to, and this does nothing.
      *
      * @param webViewId Web view to move
      * @returns Id of the web view in its new window (the same id it had)
@@ -4746,9 +4761,9 @@ declare module 'papi-shared-types' {
      * Move a web view to an existing window, named by its runtime window id (see
      * `platform.getFocusedWindowId`; window ids are reused across sessions — never persist one).
      *
-     * Same semantics as `platform.moveWebViewToNewWindow`, and: moving a web view to the window
-     * it is already in does nothing, and naming a window that does not exist is an error that
-     * leaves the web view where it is.
+     * Same semantics as `platform.moveWebViewToNewWindow`, and: moving a web view to the window it
+     * is already in does nothing, and naming a window that does not exist is an error that leaves
+     * the web view where it is.
      *
      * @param webViewId Web view to move
      * @param targetWindowId Window to move it to
