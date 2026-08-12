@@ -30,10 +30,8 @@ import { logger } from '@shared/services/logger.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
-import {
-  WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
-  WebViewServiceShardType,
-} from '@shared/models/service-shard.model';
+import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
+import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import { getNetworkEvent } from '@shared/services/network.service';
 import {
   CloseWebViewEvent,
@@ -51,10 +49,9 @@ import {
  * The WebView service shard each window registers, found by network object type and window
  * attribute rather than by rebuilding the window-scoped name the window registered under.
  */
-const webViewShards = createServiceShardIndex<WebViewServiceShardType>({
+const webViewShards = createServiceShardIndex<WebViewServiceShard>({
   objectType: WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
-  resolveShard: (networkObjectId) =>
-    networkObjectService.get<WebViewServiceShardType>(networkObjectId),
+  resolveShard: (networkObjectId) => networkObjectService.get<WebViewServiceShard>(networkObjectId),
 });
 
 /**
@@ -66,9 +63,7 @@ const webViewShards = createServiceShardIndex<WebViewServiceShardType>({
  *
  * @param windowId The Electron BrowserWindow ID
  */
-export async function getWebViewShard(
-  windowId: number,
-): Promise<WebViewServiceShardType | undefined> {
+export async function getWebViewShard(windowId: number): Promise<WebViewServiceShard | undefined> {
   return webViewShards.getShard(windowId);
 }
 
@@ -101,7 +96,7 @@ type WindowShard = {
    * went.
    */
   windowId: number;
-  shard: WebViewServiceShardType;
+  shard: WebViewServiceShard;
 };
 
 /** The window that owns a web view, and the definition the ownership search already fetched */

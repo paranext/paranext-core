@@ -1,6 +1,5 @@
 /**
- * How a service shard says what it is and which window it belongs to, and what a shard answers
- * beyond the public surface of the service it implements.
+ * How a service shard says what it is and which window it belongs to.
  *
  * A shard is one window's implementation of a service. Every window registers its own, so a router
  * in the main process has to be able to find the shard for a particular window. It does that by
@@ -10,12 +9,10 @@
  * shard".
  *
  * The types live here rather than in each service's model because those models are part of the
- * public PAPI surface, and neither how the platform's own windows find each other nor what they ask
- * each other on the way is.
+ * public PAPI surface, and how the platform's own windows find each other is not.
  */
 
 import { NetworkObjectDetails } from '@shared/models/network-object.model';
-import type { WebViewServiceType } from '@shared/services/web-view.service-model';
 
 /** Network object type the WebView service shard registers under, one per window */
 export const WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE = 'webViewServiceShard';
@@ -30,24 +27,6 @@ export const NOTIFICATION_SERVICE_SHARD_OBJECT_TYPE = 'notificationServiceShard'
  * registration.
  */
 export const WINDOW_SERVICE_SHARD_OBJECT_TYPE = 'windowServiceShard';
-
-/**
- * The WebView service as a window's shard implements it: the public surface plus the questions only
- * its router asks. Kept off {@link WebViewServiceType} so it is not part of what an extension sees.
- */
-export type WebViewServiceShardType = WebViewServiceType & {
-  /**
-   * Whether this window's dock holds the tab or tab group with the given ID.
-   *
-   * The router asks each window this to send an open whose layout names a tab or tab group to the
-   * window that has it. Every kind of tab counts, so an id belonging to something that is not a
-   * WebView is answered too.
-   *
-   * @param tabOrTabGroupId ID of the tab or tab group to look for
-   * @returns `true` if this window's dock holds it, `false` otherwise
-   */
-  dockContainsTab(tabOrTabGroupId: string): Promise<boolean>;
-};
 
 /** Attributes every service shard registers, so a router can tell which window it belongs to */
 export type ServiceShardAttributes = {
