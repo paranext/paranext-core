@@ -195,4 +195,15 @@ describe("openWebView's '?' reuse search", () => {
       }),
     ).rejects.toThrow(/existingProjectId/);
   });
+
+  test('existingProjectId with no existingId at all is rejected with a message naming the missing id', async () => {
+    // Omitting existingId altogether is the same contradiction as naming a concrete one — there is
+    // no '?' search for existingProjectId to limit — but the message has to say so instead of
+    // claiming a nonexistent id "already names an exact web view"
+    const module = await openWebViewOver([]);
+
+    await expect(
+      module.openWebView('test.type', { type: 'tab' } as Layout, { existingProjectId: 'B' }),
+    ).rejects.toThrow(/existingProjectId requires existingId/);
+  });
 });
