@@ -151,7 +151,9 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
           args.selectedText,
           args.sourceProjectId,
         )
-        .catch((e) => logger.warn(`Failed to open Find from model text panel: ${getErrorMessage(e)}`));
+        .catch((e) =>
+          logger.warn(`Failed to open Find from model text panel: ${getErrorMessage(e)}`),
+        );
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
