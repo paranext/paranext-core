@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import DockLayout, { LayoutBase } from 'rc-dock';
+import DockLayout, { LayoutBase, LayoutData, TabData } from 'rc-dock';
 import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import {
   FloatLayout,
@@ -284,6 +284,37 @@ describe('Dock Layout Component', () => {
         addWebViewToDock(webView, layout, false, dockLayout);
 
         expect(warn).toHaveBeenCalledWith(expect.stringContaining('unknownTabId'));
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('should name the target tab group it could not find rather than dropping it silently', () => {
+      // A maximized tab group is reachable here even though `findTabGroupById` only searches
+      // dockbox and floatbox: `containsTab` (used to route the open to this window in the first
+      // place) also searches maxbox, so a target that is maximized elsewhere lands in this branch.
+      const warn = vi.spyOn(logger, 'warn');
+      // A stand-in tab for every `find` lookup except the new tab's own id, which must miss so this
+      // is treated as an add rather than an update. The stand-in gives the previous-tab fallback
+      // (used once the tab group search below comes up empty) somewhere to place the new tab.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const standInTab = { id: 'stand-in-tab' } as unknown as TabData;
+      when(mockDockLayout.find(anything())).thenCall((idOrPredicate: string | unknown) =>
+        idOrPredicate === 'myId' ? undefined : standInTab,
+      );
+      when(mockDockLayout.getLayout()).thenReturn(
+        // Empty dockbox/floatbox so the tab group search below finds nothing.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        { dockbox: { children: [] } } as unknown as LayoutData,
+      );
+      const dockLayout = instance(mockDockLayout);
+      const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
+      const layout: Layout = { type: 'tab', parentTabGroupId: 'unknownTabGroupId' };
+
+      try {
+        addWebViewToDock(webView, layout, false, dockLayout);
+
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('unknownTabGroupId'));
       } finally {
         warn.mockRestore();
       }
