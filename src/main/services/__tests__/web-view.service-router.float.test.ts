@@ -22,10 +22,10 @@ import type { Layout } from '@shared/models/docking-framework.model';
  * re-asserted for a `'float'` layout so a future branch on `layout?.type === 'float'` cannot
  * silently change any of that.
  *
- * Deliberately does not touch the `existingId: '?'` reuse search (`findOwnerByType`) or the raise
- * gate it feeds — that routing is being reworked elsewhere, and pinning its behavior here would
- * couple this file to work in flight. The concrete-`existingId` case below goes through `findOwner`
- * instead, which is a different, stable code path.
+ * Deliberately does not touch the `existingId: '?'` reuse search (the owner search's `{ kind:
+ * 'type' }` matcher) or the raise gate it feeds — that search is pinned by the router's own suites,
+ * and re-asserting it here would only duplicate them. The concrete-`existingId` case below goes
+ * through the `{ kind: 'id' }` matcher instead, which is a different code path.
  */
 const mocks = vi.hoisted(() => {
   // Where the router's shard index parks its subscriptions. Plain arrays rather than the subscribe
@@ -174,8 +174,11 @@ describe('float layouts are untouched by multi-window routing', () => {
   });
 
   test('a float open is never mistaken for a window-layout open: it degrades to nothing when only the window rung is wired up wrong', async () => {
-    // The window creator is deliberately left unwired. A float open must not need it — only
-    // openWebViewInNewWindow (the 'window'-layout rung) throws when windowCreator is missing.
+    // No creator is wired here, but the one the tests above wired is module-level state that
+    // outlives them, so it is still in place — a float open must not care either way. What this
+    // pins is that the open takes the ordinary focused-window rung and answers with an id: only
+    // openWebViewInNewWindow (the 'window'-layout rung) ever reads the creator, and a float open
+    // never reaches that rung.
     const focused = windowShard([]);
     withWindows({ 1: focused });
     const router = await getRouter();
