@@ -3953,6 +3953,174 @@ declare module 'shared/services/web-view.service-model' {
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
 }
+declare module 'shared/services/window.service-model' {
+  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { DirectionFromTab } from 'shared/models/docking-framework.model';
+  /**
+   *
+   * This name is used to register the window data provider on the papi. You can use this name to
+   * find the data provider when accessing it using the useData hook
+   */
+  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
+  export const windowServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the window data provider on the papi. You can use this name to
+     * find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.windowServiceDataProvider';
+  }>;
+  /** Focus of the app window is on a WebView iframe with the specified id */
+  export type FocusSubjectWebView = {
+    focusType: 'webView';
+    /** ID of the WebView in focus (its tab ID is the same) */
+    id: string;
+  };
+  /**
+   * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
+   *
+   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
+   * focused in the WebView's iframe
+   */
+  export type FocusSubjectTab = {
+    focusType: 'tab';
+    /** The type of tab. `webView` if it is a WebView tab. */
+    tabType: 'webView' | string;
+    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
+    id: string;
+  };
+  /** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
+  export type FocusSubjectOther = {
+    focusType: 'other';
+  };
+  /** Current item that is the subject of top-level app window focus */
+  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  /**
+   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
+   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
+   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
+   * for focus subjects that do not refer to a web view.
+   *
+   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
+   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
+   * focus subject shapes change.
+   */
+  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
+  /**
+   * A raw input gesture in the app window that transient overlays (context menus, command palettes,
+   * dismissable popovers) treat as a request to dismiss.
+   *
+   * - `'mouseDown'` — a mouse button went down anywhere in the window
+   * - `'escape'` — the Escape key went down anywhere in the window
+   */
+  export type AppWindowInputKind = 'mouseDown' | 'escape';
+  /** Payload of the {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} network event */
+  export type AppWindowInputEvent = {
+    /** Which input gesture happened */
+    kind: AppWindowInputKind;
+  };
+  /**
+   * Name of the network event the main process emits for every mouse-down and every Escape key-down
+   * in the app window.
+   *
+   * The main process's `before-mouse-event`/`before-input-event` hooks see input in EVERY frame,
+   * including WebView iframes whose events never reach the parent document. Overlays render in the
+   * parent document, so this event is the only way they learn that a click landed inside a WebView.
+   * Escape is announced without `preventDefault`, so the focused frame still receives the key and can
+   * act on it too.
+   */
+  export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
+  /** Specific item that is intended to be focused in the top-level app window */
+  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
+  /** Instructions that indicate how to change the app window focus */
+  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
+  export type WindowDataTypes = {
+    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [windowServiceProviderName]: IWindowService;
+    }
+  }
+  /**
+   *
+   * Service that allows to interact with the main application window
+   */
+  export type IWindowService = {
+    /**
+     *
+     * Get information about the current subject of focus in the main app window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the main app window's current subject of focus
+     */
+    getFocus(selector: undefined): Promise<FocusSubject>;
+    /**
+     *
+     * Get information about the current subject of focus in the main app window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the main app window's current subject of focus
+     */
+    getFocus(): Promise<FocusSubject>;
+    /**
+     * Sets the subject of focus in the main app window.
+     *
+     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Sets the subject of focus in the main app window.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     *
+     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
+     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
+     *   `'detect'`.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      selector: undefined,
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the main app window's subject of focus is changed
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the updated localized menuContent for this selector. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeFocus(
+      selector: undefined,
+      callback: (focusSubject: FocusSubject | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof windowServiceObjectToProxy &
+    IDataProvider<WindowDataTypes>;
+}
 declare module 'shared/models/web-view-provider.model' {
   import {
     WebViewDefinition,
@@ -4309,6 +4477,7 @@ declare module 'papi-shared-types' {
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
+  import type { AppWindowInputEvent } from 'shared/services/window.service-model';
   import { WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -5123,6 +5292,14 @@ declare module 'papi-shared-types' {
   interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
+    /**
+     * Emitted by the main process for every mouse-down and every Escape key-down anywhere in the
+     * app window, including inside WebView iframes. Transient overlays (context menus, command
+     * palettes, dismissable popovers) dismiss on it.
+     *
+     * @experimental
+     */
+    'platform.onDidAppWindowInput': AppWindowInputEvent;
     /** Emitted when the Scripture reference for a scroll group changes. */
     'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
     /**
@@ -10162,150 +10339,6 @@ declare module 'shared/services/project-settings.service-model' {
   export type AllProjectSettingsValidators = {
     [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
   };
-}
-declare module 'shared/services/window.service-model' {
-  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
-  import {
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import { DirectionFromTab } from 'shared/models/docking-framework.model';
-  /**
-   *
-   * This name is used to register the window data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
-   */
-  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
-  export const windowServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the window data provider on the papi. You can use this name to
-     * find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.windowServiceDataProvider';
-  }>;
-  /** Focus of the app window is on a WebView iframe with the specified id */
-  export type FocusSubjectWebView = {
-    focusType: 'webView';
-    /** ID of the WebView in focus (its tab ID is the same) */
-    id: string;
-  };
-  /**
-   * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
-   *
-   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
-   * focused in the WebView's iframe
-   */
-  export type FocusSubjectTab = {
-    focusType: 'tab';
-    /** The type of tab. `webView` if it is a WebView tab. */
-    tabType: 'webView' | string;
-    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
-    id: string;
-  };
-  /** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
-  export type FocusSubjectOther = {
-    focusType: 'other';
-  };
-  /** Current item that is the subject of top-level app window focus */
-  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
-  /**
-   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
-   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
-   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
-   * for focus subjects that do not refer to a web view.
-   *
-   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
-   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
-   * focus subject shapes change.
-   */
-  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
-  /** Specific item that is intended to be focused in the top-level app window */
-  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
-  /** Instructions that indicate how to change the app window focus */
-  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
-  export type WindowDataTypes = {
-    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [windowServiceProviderName]: IWindowService;
-    }
-  }
-  /**
-   *
-   * Service that allows to interact with the main application window
-   */
-  export type IWindowService = {
-    /**
-     *
-     * Get information about the current subject of focus in the main app window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
-     */
-    getFocus(selector: undefined): Promise<FocusSubject>;
-    /**
-     *
-     * Get information about the current subject of focus in the main app window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
-     */
-    getFocus(): Promise<FocusSubject>;
-    /**
-     * Sets the subject of focus in the main app window.
-     *
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Sets the subject of focus in the main app window.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     *
-     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
-     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
-     *   `'detect'`.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      selector: undefined,
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Subscribe to run a callback function when the main app window's subject of focus is changed
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param callback Function to run with the updated localized menuContent for this selector. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-     */
-    subscribeFocus(
-      selector: undefined,
-      callback: (focusSubject: FocusSubject | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    typeof windowServiceObjectToProxy &
-    IDataProvider<WindowDataTypes>;
 }
 declare module '@papi/core' {
   /** Exporting empty object so people don't have to put 'type' in their import statements */

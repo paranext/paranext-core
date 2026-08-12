@@ -9,9 +9,16 @@
  * - Focus save/restore via window service getFocus/setFocus
  * - Aria-live announcements for cross-iframe screen reader accessibility
  * - Auto-dismiss on scroll, tab change, and window blur (context menus/popovers)
+ * - Auto-dismiss on any mouse-down or Escape anywhere in the app window, including inside WebView
+ *   iframes, via the main process's app-window input event
  */
 
-import { FocusSubject } from '@shared/services/window.service-model';
+import {
+  AppWindowInputEvent,
+  EVENT_NAME_ON_DID_APP_WINDOW_INPUT,
+  FocusSubject,
+} from '@shared/services/window.service-model';
+import { getNetworkEvent } from '@shared/services/network.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { windowService } from '@shared/services/window.service';
 import { localizationService } from '@shared/services/localization.service';
@@ -75,6 +82,21 @@ const OVERLAY_CREATION_GRACE_MS = 300;
 
 /** Timestamp of the most recent overlay creation */
 let lastOverlayCreatedAt = 0;
+
+/** Whether an overlay was created too recently for an auto-dismiss listener to act on it */
+function isWithinOverlayCreationGrace(): boolean {
+  return Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS;
+}
+
+/**
+ * Selector matching every parent-document element that is overlay CONTENT: the overlay host's
+ * portal container plus popovers and command palettes, which render through Radix portals directly
+ * under `document.body` when they are anchored, outside the host div. Kept in one constant so the
+ * focus-change and app-window-input listeners cannot drift apart on what counts as interacting with
+ * an overlay rather than clicking away from it.
+ */
+const OVERLAY_CONTENT_SELECTOR =
+  '[data-overlay-host], [data-overlay-popover], [data-overlay-command-palette], [data-radix-popper-content-wrapper]';
 
 /** Tracks the last invocation time per overlay type per webViewId */
 const lastInvocationTime = new Map<string, number>();
@@ -219,6 +241,26 @@ function dismissAll(...types: OverlayEntry['type'][]): void {
   const typeSet = new Set(types);
   getOverlays().forEach((overlay) => {
     if (typeSet.has(overlay.type)) {
+      resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
+    }
+  });
+}
+
+/**
+ * Dismiss the overlays that clicking away or pressing Escape closes: context menus, command
+ * palettes, and popovers. Modal dialogs are exempt — they are dismissed by their own shell.
+ *
+ * A popover that opted out with `dismissOnClickOutside: false` survives a click away but not
+ * Escape, matching the popover component's own Escape handler, which dismisses regardless of that
+ * option (the option governs click-outside, not the key).
+ */
+function dismissTransientOverlays(trigger: 'clickAway' | 'escape'): void {
+  dismissAll('contextMenu', 'commandPalette');
+  getOverlays().forEach((overlay) => {
+    if (
+      overlay.type === 'popover' &&
+      (trigger === 'escape' || overlay.request.dismissOnClickOutside !== false)
+    ) {
       resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
     }
   });
@@ -800,7 +842,70 @@ export const overlayService: IOverlayService = {
 
 // ── Event Listeners for Auto-Dismiss ──
 
-/** Set up scroll, tab change, and blur listeners */
+/**
+ * How long the dismissal decision for an app-window mouse-down signal waits before it is made. The
+ * main process's `before-mouse-event` hook fires BEFORE any frame processes the click, so its
+ * network event can arrive ahead of the parent document's own pointerdown listener. The wait lets
+ * that pointerdown be recorded first, so a click on overlay content is recognized as one, and is
+ * short enough to stay imperceptible.
+ */
+const APP_WINDOW_INPUT_DEFER_MS = 30;
+
+/**
+ * How recent a parent-document pointerdown must be to count as the same gesture as an app-window
+ * mouse-down signal. Wide enough to absorb network-event delivery jitter and a busy renderer; short
+ * enough that the PREVIOUS click's record is not mistaken for this one when the user clicks the
+ * parent document and then a WebView iframe in quick succession.
+ */
+const PARENT_POINTER_DOWN_CORRELATION_MS = 150;
+
+/**
+ * The most recent pointerdown seen in the parent document, where overlays render. Clicks inside a
+ * WebView iframe never reach the parent document, so their absence here is what identifies an
+ * app-window mouse-down signal as having landed inside a WebView.
+ */
+let lastParentPointerDown: { time: number; insideOverlay: boolean } | undefined;
+
+/**
+ * Dismiss transient overlays on a mouse-down or Escape anywhere in the app window, as announced by
+ * the main process. Its input hooks see every frame, including WebView iframes whose events never
+ * reach the parent document, so this is what closes an overlay when the user clicks or presses
+ * Escape inside a WebView.
+ *
+ * Dismissing is idempotent (an overlay resolves once), so overlapping with the handling a frame
+ * does for itself — Radix's outside-click dismissal, a WebView's own Escape handling — is safe.
+ */
+function handleAppWindowInput(event: AppWindowInputEvent): void {
+  // Every mouse-down in the app arrives here, so nothing open is the common path
+  if (getOverlays().length === 0) return;
+
+  if (event.kind === 'escape') {
+    if (isWithinOverlayCreationGrace()) return;
+    dismissTransientOverlays('escape');
+    return;
+  }
+
+  setTimeout(() => {
+    // Re-checked after the wait: the click may have opened an overlay of its own (the marker-glyph
+    // popover), which must not be closed by the very click that opened it
+    if (getOverlays().length === 0 || isWithinOverlayCreationGrace()) return;
+
+    const recentParentPointerDown =
+      lastParentPointerDown &&
+      Date.now() - lastParentPointerDown.time < PARENT_POINTER_DOWN_CORRELATION_MS
+        ? lastParentPointerDown
+        : undefined;
+    // Clicking overlay content (a palette item, a popover's body) is interacting with the overlay,
+    // not clicking away from it. Everything else dismisses, including a click with no recent
+    // parent-document pointerdown — that one landed inside a WebView iframe, which is always
+    // outside the overlay.
+    if (recentParentPointerDown?.insideOverlay) return;
+
+    dismissTransientOverlays('clickAway');
+  }, APP_WINDOW_INPUT_DEFER_MS);
+}
+
+/** Set up scroll, tab change, blur, and app-window input listeners */
 function registerAutoDismissListeners(): void {
   // Dismiss context menus and popovers on scroll (capturing phase to catch scroll events from
   // any element in the parent document's DOM tree). Note: scroll events inside iframes don't
@@ -823,20 +928,32 @@ function registerAutoDismissListeners(): void {
     { capture: true },
   );
 
-  // Dismiss context menus, command palettes, and popovers on window blur
+  // Dismiss context menus, command palettes, and popovers (except those with
+  // dismissOnClickOutside: false) on window blur
   window.addEventListener('blur', () => {
     // Skip if an overlay was just created — focus shifts from panel activation can trigger blur
-    if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
+    if (isWithinOverlayCreationGrace()) return;
 
-    dismissAll('contextMenu', 'commandPalette');
-    // Popovers with dismissOnClickOutside: false may persist across blur
-    const allOverlays = getOverlays();
-    allOverlays.forEach((overlay) => {
-      if (overlay.type === 'popover' && overlay.request.dismissOnClickOutside !== false) {
-        resolveAndRemoveOverlay(overlay.id, overlay.type, undefined);
-      }
-    });
+    dismissTransientOverlays('clickAway');
   });
+
+  // Record every parent-document pointerdown, and whether it landed on overlay content, so an
+  // app-window mouse-down signal can tell a click in the parent document from one inside a WebView
+  // iframe. Capture phase so a handler that stops propagation cannot hide the click.
+  document.addEventListener(
+    'pointerdown',
+    (e) => {
+      lastParentPointerDown = {
+        time: Date.now(),
+        insideOverlay: e.target instanceof Element && !!e.target.closest(OVERLAY_CONTENT_SELECTOR),
+      };
+    },
+    { capture: true },
+  );
+
+  // Dismiss overlays on a mouse-down or Escape anywhere in the app window, including inside
+  // WebView iframes
+  getNetworkEvent(EVENT_NAME_ON_DID_APP_WINDOW_INPUT)(handleAppWindowInput);
 
   // Dismiss overlays when the focused tab changes
   let lastFocusId: string | undefined;
@@ -853,21 +970,14 @@ function registerAutoDismissListeners(): void {
 
       // Skip if an overlay was just created — right-clicking a different panel causes focus
       // changes that would otherwise immediately dismiss the just-created context menu
-      if (Date.now() - lastOverlayCreatedAt < OVERLAY_CREATION_GRACE_MS) return;
+      if (isWithinOverlayCreationGrace()) return;
 
       // Focus moving INTO an overlay is not a reason to dismiss it (previously, clicking a focused
-      // palette's own search input closed the palette). Overlays live
-      // in the parent document, so focusing one is classified as leaving the webview by
-      // detectFocus — check whether the newly active element actually sits inside the overlay
-      // host (OverlayHost's portal container) or a Radix popover portal (anchored palettes render
-      // through PopoverPrimitive.Portal directly under document.body, outside the host div).
+      // palette's own search input closed the palette). Overlays live in the parent document, so
+      // focusing one is classified as leaving the webview by detectFocus — check whether the newly
+      // active element actually sits inside overlay content.
       const active = document.activeElement;
-      if (
-        active &&
-        (active.closest('[data-overlay-host]') ??
-          active.closest('[data-radix-popper-content-wrapper]'))
-      )
-        return;
+      if (active?.closest(OVERLAY_CONTENT_SELECTOR)) return;
 
       dismissAll('contextMenu', 'commandPalette', 'popover');
     })
