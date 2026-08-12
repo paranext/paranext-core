@@ -296,6 +296,13 @@ HAS_HOOKS · CLEAN`; `DRAFT` is in the schema but deprecated and no longer retur
 reads `BLOCKED`. `mergeable` is `MERGEABLE · CONFLICTING · UNKNOWN`. Re-introspect rather than
 trusting this list: `gh api graphql -f query='{__type(name:"MergeStateStatus"){enumValues{name}}}'`.)*
 
+**What you write down here is a dated snapshot with a shelf life, not a standing fact** — so date
+it and record the head SHA beside every value. A round spends hours at G1 while a human decides,
+and in that window a PR below the stack merges, a stack gets restacked, or the author pushes. A
+base-state record read at P0 and *trusted* at P3 then describes a tree that no longer exists,
+which is precisely the case this check was added to catch. P3 re-pins before it implements (see
+P3), and any later phase acting on this record re-derives it rather than reading it.
+
 Where a rebase is a prerequisite, it is **not** a task the round can carry alongside the fixes. It
 precedes fix-work and it changes G1 sizing, because every cost estimate is an estimate against the
 wrong tree until it happens — so **size those items as provisional at P2 and say so at G1**, and
@@ -571,6 +578,32 @@ committed.
 **Agents:** `fix-train` agents, brief in `references/agent-briefs.md`. Serialize fixes that
 touch the same files; parallelize across branches only when they do not share a worktree.
 
+**Re-pin the evidence first — the orchestrator's step, before any agent is dispatched.** P1 cited
+every finding at an explicit ref; G1 then took as long as the human took. Measured on the run this
+step was written from (2026-08-12): ~2.5 hours at the gate, during which another session merged a
+PR below the stack and rebased both PRs, moving both heads. Every citation was then at a
+superseded ref.
+
+The check is cheap because it is narrow — the **cited files**, not the diff:
+
+```bash
+gh pr view <n> -R paranext/paranext-core --json headRefOid --jq .headRefOid   # per PR
+git -C <repo-root> fetch origin -q
+git -C <repo-root> diff --name-only <recorded-ref> <new-head> -- <the cited files>
+```
+
+Run it per PR the round covers and record the outcome in the packet — old ref, new head, and which
+cited files moved — beside `03-rulings.md`. On that run it reported **1 of 13** cited files
+changed: 12 findings were untouched and cost nothing to keep, and the one that moved was the file a
+ruling was about, with a non-cosmetic change. That asymmetry is the point — one diff separates
+re-verifying a single item from implementing a whole round's rulings against code that no longer
+says what the verdicts said.
+
+**A cited file that changed sends its item back to P1**, and back through G1 if the re-verified
+verdict moved, before it returns to P3. It is not implemented on the strength of a verdict taken at
+a ref that is gone. If a head moved at all, the P0 base-state record is stale too — re-derive it
+rather than reading it.
+
 **Superpowers is a hard dependency of this phase — check it here, and stop if it is missing.**
 The method below is not this skill's own, and there is no degraded version of it to fall back on:
 `superpowers:brainstorming`, `superpowers:writing-plans`, `superpowers:test-driven-development`
@@ -627,6 +660,14 @@ verification of a *review tool's* own findings, which is P1's rubric turned on t
 work rather than a generic completion check; P5 is repo-specific — the predicted `papi.d.ts` delta
 stated before `build:types` runs, `references/e2e-recipe.md`, live verification in the running app.
 Delegating those away swaps a battery that knows this repo for one that does not.
+
+**The base-state check runs before the first fix commit, whoever is committing.** The commands, the
+stop conditions, the ban on rebasing on your own initiative, and why `mergeStateStatus` cannot
+answer the behind-question are in the Fix-train brief in `references/agent-briefs.md` — run them
+from there rather than reconstructing them. They live in the brief because a fan-out agent needs
+them in hand, but they are a property of the phase: a round whose fixes happen in the main session
+with no fix-train agent skips them entirely unless the phase itself asks. A failed check goes back
+to the user per P0; no phase of this skill rebases.
 
 Rules that apply to every fix, whichever flow produced it:
 
