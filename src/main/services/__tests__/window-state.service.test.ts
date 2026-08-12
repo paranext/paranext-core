@@ -343,10 +343,10 @@ describe('window state tracking', () => {
     });
 
     test('a subscriber that throws does not take the rest of a closed window’s sweep with it', () => {
-      // Removing the window is the first thing the `closed` handler does, and telling the rest of
-      // the app the window is gone is the next — the only signal a surviving window gets that an
-      // app-global service it was consuming needs a new host. A throw escaping the removal skips
-      // that, so nothing takes over and nothing reclaims what the window was hosting.
+      // Removing the window is the first thing the `closed` handler does, and announcing that the
+      // routing target moved is the last thing that removal does — the one signal the service
+      // routers get that they must stop aiming at a window which no longer exists. A throw escaping
+      // the removal skips the rest of the sweep, leaving routing pinned to a destroyed window.
       const closing = fakeWindow(1);
       addWindow(closing);
       markWindowReady(1);

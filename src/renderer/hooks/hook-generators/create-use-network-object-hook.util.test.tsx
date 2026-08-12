@@ -43,69 +43,70 @@ function makeNetworkObject(label: string) {
   };
 }
 
-// An app-global network object hosted by one window is re-published by another window when that one
-// goes away, under the same name. A hook holding the old one is told it was disposed, and what it
-// should serve from then on is whatever answers to that name now.
+// A network object is looked up by name, and the process answering that name can be replaced under
+// it — `platform.restartExtensionHost` registers the same data provider names on a fresh process.
+// A hook holding the old object is told it was disposed, and what it should serve from then on is
+// whatever answers to that name now.
 describe('useNetworkObject hooks after the object they hold is disposed', () => {
-  it('resolves the object again, so a re-published one reaches the component', async () => {
-    const firstHost = makeNetworkObject('first host');
-    const secondHost = makeNetworkObject('second host');
+  it('resolves the name again, so the object registered under it next reaches the component', async () => {
+    const firstRegistration = makeNetworkObject('first registration');
+    const secondRegistration = makeNetworkObject('second registration');
     const getNetworkObject = vi
       .fn()
-      .mockResolvedValueOnce(firstHost.networkObject)
-      .mockResolvedValue(secondHost.networkObject);
+      .mockResolvedValueOnce(firstRegistration.networkObject)
+      .mockResolvedValue(secondRegistration.networkObject);
     const useNetworkObject = createUseNetworkObjectHook(getNetworkObject);
 
-    const { result } = renderHook(() => useNetworkObject('TheAppGlobalObject'));
-    await waitFor(() => expect(result.current).toBe(firstHost.networkObject));
+    const { result } = renderHook(() => useNetworkObject('TheNetworkObject'));
+    await waitFor(() => expect(result.current).toBe(firstRegistration.networkObject));
 
-    act(() => firstHost.dispose());
+    act(() => firstRegistration.dispose());
 
-    await waitFor(() => expect(result.current).toBe(secondHost.networkObject));
+    await waitFor(() => expect(result.current).toBe(secondRegistration.networkObject));
   });
 
   it('serves nothing while there is nothing to serve, rather than the disposed object', async () => {
-    const firstHost = makeNetworkObject('first host');
+    const firstRegistration = makeNetworkObject('first registration');
     const getNetworkObject = vi
       .fn()
-      .mockResolvedValueOnce(firstHost.networkObject)
+      .mockResolvedValueOnce(firstRegistration.networkObject)
       .mockResolvedValue(undefined);
     const useNetworkObject = createUseNetworkObjectHook(getNetworkObject);
 
-    const { result } = renderHook(() => useNetworkObject('TheAppGlobalObject'));
-    await waitFor(() => expect(result.current).toBe(firstHost.networkObject));
+    const { result } = renderHook(() => useNetworkObject('TheNetworkObject'));
+    await waitFor(() => expect(result.current).toBe(firstRegistration.networkObject));
 
-    act(() => firstHost.dispose());
+    act(() => firstRegistration.dispose());
 
     // Calls on a disposed object's proxy throw, so handing it back would be worse than nothing
     await waitFor(() => expect(result.current).toBeUndefined());
   });
 
-  // The disposal drives exactly one lookup, and the window taking the object over may not have
-  // published it yet when that lookup runs. Without a second trigger the component serves nothing
+  // The disposal drives exactly one lookup, and whatever answers the name next may not have
+  // registered yet when that lookup runs. Without a second trigger the component serves nothing
   // for the rest of its life over a gap that closed a moment later.
-  it('looks the name up again when a window publishes under it after the gap', async () => {
-    const firstHost = makeNetworkObject('first host');
-    const secondHost = makeNetworkObject('second host');
+  it('looks the name up again when something is published under it after the gap', async () => {
+    const firstRegistration = makeNetworkObject('first registration');
+    const secondRegistration = makeNetworkObject('second registration');
     const getNetworkObject = vi
       .fn()
-      .mockResolvedValueOnce(firstHost.networkObject)
-      // The lookup the disposal drives lands before any window has re-published the name
+      .mockResolvedValueOnce(firstRegistration.networkObject)
+      // The lookup the disposal drives lands before anything has registered under the name again
       .mockResolvedValueOnce(undefined)
-      .mockResolvedValue(secondHost.networkObject);
+      .mockResolvedValue(secondRegistration.networkObject);
     const useNetworkObject = createUseNetworkObjectHook(getNetworkObject);
 
-    const { result } = renderHook(() => useNetworkObject('TheAppGlobalObject'));
-    await waitFor(() => expect(result.current).toBe(firstHost.networkObject));
-    act(() => firstHost.dispose());
+    const { result } = renderHook(() => useNetworkObject('TheNetworkObject'));
+    await waitFor(() => expect(result.current).toBe(firstRegistration.networkObject));
+    act(() => firstRegistration.dispose());
     await waitFor(() => expect(result.current).toBeUndefined());
 
     // A publication under some other name says nothing about the name this hook wants
     act(() => publishNetworkObject('SomeOtherObject'));
     await waitFor(() => expect(getNetworkObject).toHaveBeenCalledTimes(2));
 
-    act(() => publishNetworkObject('TheAppGlobalObject'));
+    act(() => publishNetworkObject('TheNetworkObject'));
 
-    await waitFor(() => expect(result.current).toBe(secondHost.networkObject));
+    await waitFor(() => expect(result.current).toBe(secondRegistration.networkObject));
   });
 });
