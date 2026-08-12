@@ -544,7 +544,9 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    *
    * Only meaningful with `existingId: '?'` — a concrete `existingId` already names one exact web
    * view, so combining it with a project filter is contradictory and is rejected as an error.
-   * Without this, `'?'` matches any web view of the type regardless of project.
+   * Without this, `'?'` matches any web view of the type regardless of project. Providing this
+   * without any `existingId` at all is the same contradiction — there is no `'?'` search for it to
+   * limit — and is rejected the same way.
    *
    * @experimental
    */

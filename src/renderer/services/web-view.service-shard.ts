@@ -2843,10 +2843,13 @@ export const openWebView = async (
   const optionsDefaulted = getWebViewOptionsDefaults(options);
 
   // `existingProjectId` only qualifies a '?' search; a concrete existingId already names one
-  // exact web view, so combining it with a project filter is contradictory.
+  // exact web view, and no existingId at all names no search for it to limit, so combining it
+  // with either is contradictory.
   if (optionsDefaulted.existingProjectId !== undefined && optionsDefaulted.existingId !== '?')
     throw new Error(
-      `openWebView: existingProjectId only qualifies an existingId of '?'; existingId ${JSON.stringify(optionsDefaulted.existingId)} already names an exact web view.`,
+      optionsDefaulted.existingId === undefined
+        ? "openWebView: existingProjectId requires existingId: '?'; it was not given at all."
+        : `openWebView: existingProjectId only qualifies an existingId of '?'; existingId ${JSON.stringify(optionsDefaulted.existingId)} already names an exact web view.`,
     );
 
   // Find existing webView if one exists and handle it if it does
