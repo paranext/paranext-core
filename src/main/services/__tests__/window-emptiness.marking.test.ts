@@ -105,3 +105,35 @@ describe('a pending-content window is not a reason to close the last real window
     expect(closeWindow).not.toHaveBeenCalled();
   });
 });
+
+describe('an abandoned window is not a reason to close the last working window', () => {
+  test('window A alone with an abandoned window is answered open-home, not closing', async () => {
+    // Mirrors the composition wired in main.ts, which excludes abandoned windows from the tracked
+    // set alongside the closing and pending-content ones. A window whose renderer died and will
+    // never be reloaded is still on screen and still tracked — deliberately, since closing it would
+    // rewrite the persisted window layout without it — but nothing runs in it any more, so counting
+    // it as a second real window would close the only window the user can still work in.
+    vi.useFakeTimers();
+    const trackedIds = [1, 2];
+    const closingIds = new Set<number>();
+    const pendingContentIds = new Set<number>();
+    const abandonedIds = new Set<number>([2]);
+    const countWindows = vi.fn(
+      () =>
+        trackedIds.filter(
+          (id) => !closingIds.has(id) && !pendingContentIds.has(id) && !abandonedIds.has(id),
+        ).length,
+    );
+    const closeWindow = vi.fn();
+    const markWindowClosing = vi.fn((windowId: number) => closingIds.add(windowId));
+    const handler = createWindowEmptinessHandler({ countWindows, closeWindow, markWindowClosing });
+
+    const response = await handler(1, 'emptied-by-removal');
+
+    expect(response).toEqual({ action: 'open-home' });
+    expect(markWindowClosing).not.toHaveBeenCalledWith(1);
+
+    vi.runAllTimers();
+    expect(closeWindow).not.toHaveBeenCalled();
+  });
+});
