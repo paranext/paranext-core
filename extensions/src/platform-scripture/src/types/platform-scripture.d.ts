@@ -2507,8 +2507,9 @@ declare module 'papi-shared-types' {
      * @param sourceProjectId Explicit project/resource id to search, overriding the project
      *   resolved from `editorWebViewId`. Passed by resource panels (model text, Bible texts,
      *   commentaries) whose displayed resource differs from the tab's own project.
-     * @returns Id of the find web view (existing or newly opened), or `undefined` if no editor web
-     *   view id was provided or the web view has no project (nothing is opened in that case).
+     * @returns Id of the find web view (existing or newly opened), or `undefined` when no project
+     *   can be resolved — no `sourceProjectId` was given and the triggering web view has no project
+     *   — in which case nothing is opened.
      */
     'platformScripture.openFind': (
       editorWebViewId?: string | undefined,
