@@ -37,6 +37,12 @@ type CommandLineArgumentAliases = {
  *   denying and diverting to the default browser, so Q5 can be observed: does renderer-initiated
  *   window creation still crash on Electron 39.8.8? Not intended to ship — denying is a deliberate
  *   security posture. Only on main process
+ * - SpikePanelWindow - PT-4314 spike only. Creates every window after the first with `type: 'panel'`
+ *   (an NSPanel on macOS) so the panel candidate for pinning can be observed: does a panel float
+ *   above the app's own windows without floating above other applications, and does it keep its
+ *   Cmd+backtick entry? A window's type is fixed at creation, which is why this is a launch switch
+ *   rather than a runtime toggle like the other PT-4314 candidates. Not intended to ship. Only on
+ *   main process
  */
 export enum CommandLineArgs {
   Extensions = 'extensions',
@@ -50,6 +56,7 @@ export enum CommandLineArgs {
   Maximize = 'maximize',
   SpikeParentWindow = 'spike_parent_window',
   SpikeAllowWindowOpen = 'spike_allow_window_open',
+  SpikePanelWindow = 'spike_panel_window',
 }
 
 /**
@@ -68,6 +75,7 @@ export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
   [CommandLineArgs.Maximize]: ['--maximize'],
   [CommandLineArgs.SpikeParentWindow]: ['--spikeParentWindow', '--spike-parent-window'],
   [CommandLineArgs.SpikeAllowWindowOpen]: ['--spikeAllowWindowOpen', '--spike-allow-window-open'],
+  [CommandLineArgs.SpikePanelWindow]: ['--spikePanelWindow', '--spike-panel-window'],
 };
 
 /** Get the index of the next command-line argument after the startIndex */

@@ -555,6 +555,16 @@ async function main() {
       ...(!isFirstWindow && getCommandLineSwitch(CommandLineArgs.SpikeParentWindow)
         ? { parent: windows[0] }
         : {}),
+      // PT-4314 spike, enabled only by --spikePanelWindow. Makes secondary windows panels (an
+      // NSPanel on macOS), the native idiom for a utility window that floats over its own app and
+      // yields when the app is left — which is exactly PT-4284's "above Paratext only" requirement.
+      // A window's type is fixed at creation, so unlike the other PT-4314 candidates this cannot be
+      // a runtime toggle. Watch for the failure that killed `parent:`: panels are conventionally
+      // excluded from the window cycle too, so this may lose the Cmd+backtick entry for the same
+      // structural reason.
+      ...(!isFirstWindow && getCommandLineSwitch(CommandLineArgs.SpikePanelWindow)
+        ? { type: 'panel' }
+        : {}),
       // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
       ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
       // re-add window controls
@@ -690,6 +700,118 @@ async function main() {
       // eslint-disable-next-line no-null/no-null
       newWindow.setParentWindow(isOwned ? null : windows[0]);
       logger.info(`PT-4276 spike: window ${windowId} is now ${isOwned ? 'independent' : 'owned'}`);
+    });
+
+    // PT-4314 spike: candidate pin mechanisms, cycled with Ctrl+Alt+K (Control-Option-K on macOS) on
+    // a focused secondary window. PT-4276 ruled `parent:` ownership out on macOS — an owned window is
+    // permanently dropped from the Cmd+backtick cycle and clearing ownership never gives the entry
+    // back — so PT-4314 asks whether anything else holds a window above the MAIN Paratext window
+    // without reparenting it. PT-4284 forbids true always-on-top ("above Paratext only — not above
+    // other applications"), so a candidate that floats over the user's browser fails even when it
+    // looks right against Paratext alone. Each mode is torn down before the next is applied, so
+    // cycling can never leave two mechanisms stacked and mistaken for one. Not intended to ship.
+    const spikePinModes = ['off', 'aot-normal', 'aot-floating', 'move-top', 'active-aot'];
+    let spikePinModeIndex = 0;
+    /** Undoes whatever the active pin mode installed. Undefined while the mode is 'off' */
+    let clearSpikePinMode: (() => void) | undefined;
+
+    const applySpikePinMode = (mode: string) => {
+      clearSpikePinMode?.();
+      clearSpikePinMode = undefined;
+
+      const mainWindow = windows[0];
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+
+      if (mode === 'aot-normal') {
+        // Candidate 1a. Always-on-top pinned to the NORMAL window level. Levels are a window-server
+        // concept and rank across applications, so every level above normal outranks other apps'
+        // windows and fails PT-4284 by construction. 'normal' is the one that might not: if Electron
+        // implements it as a persistent raise WITHIN the normal level, the result is above-own-app
+        // ordering, which is what PT-4284 asks for. If it does, note that this is the 'move-top'
+        // candidate under another name, not an independent result.
+        newWindow.setAlwaysOnTop(true, 'normal');
+        clearSpikePinMode = () => {
+          if (!newWindow.isDestroyed()) newWindow.setAlwaysOnTop(false);
+        };
+      } else if (mode === 'aot-floating') {
+        // Candidate 1b, expected to FAIL and included deliberately as the reference for what failure
+        // looks like. This is true always-on-top: the window should sit above the browser and every
+        // other application. Capturing it is what makes a passing candidate's screenshot meaningful
+        // — "above Paratext only" and "above everything" look identical if Paratext is all that is
+        // on screen, so the comparison needs both shots.
+        newWindow.setAlwaysOnTop(true, 'floating');
+        clearSpikePinMode = () => {
+          if (!newWindow.isDestroyed()) newWindow.setAlwaysOnTop(false);
+        };
+      } else if (mode === 'move-top') {
+        // Candidate 2. Re-raise this window whenever the main window comes forward, declaring no
+        // window level at all. `moveTop()` raises without taking focus, so the main window keeps the
+        // keystrokes. Nothing is reparented, which is the whole point: reparenting is what inflicted
+        // the permanent damage in PT-4276. Watch for flicker — the main window is briefly on top
+        // between the click and this raise, on every single click into it — and for gaps, since
+        // focus is not the only way a window comes forward (Mission Control, Cmd+backtick, spaces).
+        const raiseAboveMain = () => {
+          if (!newWindow.isDestroyed()) newWindow.moveTop();
+        };
+        mainWindow.on('focus', raiseAboveMain);
+        mainWindow.on('show', raiseAboveMain);
+        mainWindow.on('restore', raiseAboveMain);
+        raiseAboveMain();
+        clearSpikePinMode = () => {
+          if (mainWindow.isDestroyed()) return;
+          mainWindow.removeListener('focus', raiseAboveMain);
+          mainWindow.removeListener('show', raiseAboveMain);
+          mainWindow.removeListener('restore', raiseAboveMain);
+        };
+      } else if (mode === 'active-aot') {
+        // Candidate 3. True always-on-top, but only while Paratext is the frontmost application:
+        // the moment the user switches to their browser the level drops back to normal, so the
+        // pinned window never covers another app. That is PT-4284's semantics reached from the
+        // opposite direction — scope the mechanism in time rather than looking for a level that
+        // understands app boundaries. Watch the switch itself: the window is briefly above other
+        // apps until 'did-resign-active' lands, and the drop may be visible.
+        const floatAboveApp = () => {
+          if (!newWindow.isDestroyed()) newWindow.setAlwaysOnTop(true, 'floating');
+        };
+        const dropToNormal = () => {
+          if (!newWindow.isDestroyed()) newWindow.setAlwaysOnTop(false);
+        };
+        app.on('did-become-active', floatAboveApp);
+        app.on('did-resign-active', dropToNormal);
+        // The chord can only have been pressed while Paratext was frontmost, so the app is active
+        // now and no 'did-become-active' is coming to start this off.
+        floatAboveApp();
+        clearSpikePinMode = () => {
+          app.removeListener('did-become-active', floatAboveApp);
+          app.removeListener('did-resign-active', dropToNormal);
+          dropToNormal();
+        };
+      }
+    };
+
+    newWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return;
+      // Matched on `code` for the same reason as the PT-4276 chord above: Option composes characters
+      // on macOS, so `key` would never match there.
+      if (!input.control || !input.alt || input.code !== 'KeyK') return;
+      event.preventDefault();
+      // Every candidate positions this window relative to the first one, so the first window has
+      // nothing to be pinned above.
+      if (isFirstWindow) {
+        logger.info('PT-4314 spike: ignoring pin mode toggle on the first window');
+        return;
+      }
+      spikePinModeIndex = (spikePinModeIndex + 1) % spikePinModes.length;
+      const mode = spikePinModes[spikePinModeIndex];
+      applySpikePinMode(mode);
+      logger.info(`PT-4314 spike: window ${windowId} pin mode is now "${mode}"`);
+    });
+
+    // A mode that installed listeners on the MAIN window or on `app` would outlive this window
+    // otherwise, and fire against a destroyed BrowserWindow.
+    newWindow.once('closed', () => {
+      clearSpikePinMode?.();
+      clearSpikePinMode = undefined;
     });
 
     /**
