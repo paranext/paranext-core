@@ -327,8 +327,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   const [isSelecting, setIsSelecting] = useState(false);
 
-  // Wrapped in useMemo so resourceProjectId has a stable identity for the Ctrl+F useEffect deps
-  // array — it is the source passed to Find (the displayed resource, not this panel's projectId).
+  // resourceProjectId is the search source passed to Find (the displayed resource, not this panel's
+  // projectId). Computed in a useMemo so it's a stable const for the Ctrl+F effect deps and the DBL
+  // lookup isn't repeated on every render.
   const { resourceProjectId, dblMatch } = useMemo(() => {
     let resolvedProjectId: string | undefined;
     let resolvedDblMatch: (typeof dblResources)[number] | undefined;
@@ -336,7 +337,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
       resolvedDblMatch = findCachedDblResource(selectedRef, dblResources);
       resolvedProjectId = resolvedDblMatch?.installed ? resolvedDblMatch.projectId : undefined;
     } else if (isProjectReference(selectedRef)) {
-      resolvedProjectId = selectedRef?.id;
+      resolvedProjectId = selectedRef.id;
     }
     return { resourceProjectId: resolvedProjectId, dblMatch: resolvedDblMatch };
   }, [selectedRef, dblResources]);
