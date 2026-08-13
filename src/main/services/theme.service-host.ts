@@ -220,11 +220,26 @@ function takePendingPersist(): Map<string, unknown> | undefined {
   return claimed;
 }
 
-/** Write the claimed values to the store, now. Throws whatever the store throws. */
+/**
+ * Write the claimed values to the store, now. Throws whatever the store throws.
+ *
+ * {@link HAS_USER_THEME_STATE_KEY} is written LAST whatever order its value was scheduled in, and
+ * that order is load-bearing rather than incidental. There is no atomicity across keys, so a
+ * failure part-way through strands one of them — and this is the key that decides how the rest are
+ * read at the next start. Written last, a stranded write leaves the marker unset and the whole
+ * write is simply retried. Written first — which is what insertion order gives, because
+ * {@link noteUserThemeChange} runs before the setter it marks — it vouches for a value that was
+ * never stored: the next start reads state a user chose, refuses a renderer's still-pending
+ * handover, and the renderer drops the only copy on being told so.
+ * {@link ThemeDataProviderEngine.migrateStoredThemeState} orders its own write the same way.
+ */
 function writeValuesNow(values: Map<string, unknown>): void {
   values.forEach((value, storageKey) => {
+    if (storageKey === HAS_USER_THEME_STATE_KEY) return;
     localStorage.setItem(storageKey, serialize(value));
   });
+  if (values.has(HAS_USER_THEME_STATE_KEY))
+    localStorage.setItem(HAS_USER_THEME_STATE_KEY, serialize(values.get(HAS_USER_THEME_STATE_KEY)));
 }
 
 /**
