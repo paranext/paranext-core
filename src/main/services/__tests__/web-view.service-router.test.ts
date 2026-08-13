@@ -732,6 +732,48 @@ describe('web view service router', () => {
       expect(creator.closeWindow).toHaveBeenCalledWith(7);
     });
 
+    test('degrades to a tab when a `?` search could not be answered', async () => {
+      // The search fell through without an answer, so this open may well be about to mint a second
+      // copy of a web view the app means to have one of. A tab in the window the user is looking at
+      // is a duplicate they can see and close; a whole window popping up on top of everything is
+      // not, and the window it duplicates may be sitting behind it on another monitor.
+      const target = windowShard([]);
+      withWindows({ 1: target, 2: windowShard([]) }, { unreachableWindowIds: [2] });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      await router.openWebView('comments', { type: 'window' }, { existingId: '?' });
+
+      expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
+      // Substituted, not skipped: the window that ends up serving this must be handed a layout it
+      // can act on, and rc-dock acts on `window` by popping the tab out on its own
+      expect(target.openWebView).toHaveBeenCalledWith(
+        'comments',
+        { type: 'tab' },
+        { existingId: '?' },
+      );
+    });
+
+    test('still opens a window when the `?` search came back clean', async () => {
+      // Every window answered and none had one: the caller asked for a window and gets a window
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      withWindows({ 1: focused, 7: created });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      await router.openWebView('comments', { type: 'window' }, { existingId: '?' });
+
+      expect(creator.createPendingContentWindow).toHaveBeenCalled();
+      expect(created.openWebView).toHaveBeenCalledWith(
+        'comments',
+        { type: 'tab' },
+        { existingId: '?' },
+      );
+    });
+
     test('a probe that declined creation resolves not-found without a window ever appearing', async () => {
       // A passive reuse probe can carry a window layout: the layout only says where a CREATED web
       // view would go, and this caller declined creation. The reuse search found nothing, so the
