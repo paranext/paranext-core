@@ -363,7 +363,19 @@ function applyReferenceHistoryToCache(
   // Announced as a copy because the cached object is mutated in place by the predicting writers,
   // while a consumer that holds what it was handed (the toolbar buttons keep it in React state and
   // memoize on its identity) would otherwise see its own value change underneath it mid-render.
-  onDidChangeReferenceHistoryEmitter.emit({ scrollGroupId, history: deepClone(history) });
+  // Isolated for the same reason as the reference announcement: both `setScrRefSync` and
+  // `navigateReferenceHistorySync` call this AFTER moving the cache and BEFORE
+  // `sendPredictedWriteToHost`, so a plain emit lets one throwing subscriber unwind the caller with
+  // the cache already moved and the write never sent — and reconcile only runs on a write that WAS
+  // sent, so nothing would correct it. `onDidChangeReferenceHistory` is public.
+  onDidChangeReferenceHistoryEmitter.emitIsolated(
+    { scrollGroupId, history: deepClone(history) },
+    (e, subscriberIndex) => {
+      logger.error(
+        `Subscriber ${subscriberIndex} threw while being told scroll group ${scrollGroupId}'s reference history changed: ${getErrorMessage(e)}`,
+      );
+    },
+  );
 }
 
 /**
@@ -376,10 +388,19 @@ function applyReferenceHistoryToCache(
  */
 function resetCachedReferenceHistory(scrollGroupId: ScrollGroupId): void {
   cachedReferenceHistories.delete(scrollGroupId);
-  onDidChangeReferenceHistoryEmitter.emit({
-    scrollGroupId,
-    history: deepClone(getOrCreateCachedReferenceHistory(scrollGroupId)),
-  });
+  // Isolated so one throwing subscriber cannot cost the others their correction — this is the
+  // announcement that tells consumers a trail they were shown never happened.
+  onDidChangeReferenceHistoryEmitter.emitIsolated(
+    {
+      scrollGroupId,
+      history: deepClone(getOrCreateCachedReferenceHistory(scrollGroupId)),
+    },
+    (e, subscriberIndex) => {
+      logger.error(
+        `Subscriber ${subscriberIndex} threw while being told scroll group ${scrollGroupId}'s reference history was reset: ${getErrorMessage(e)}`,
+      );
+    },
+  );
 }
 
 // #endregion
