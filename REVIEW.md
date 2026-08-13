@@ -57,9 +57,12 @@ generated output — it is never hand-edited.
   and `as Type` assertions need a comment explaining why fixing the code is worse. Prefer
   `@ts-expect-error` with the error code over `@ts-ignore`.
   — see `.claude/rules/code-quality/eslint-disable-discipline.md`
-- **Transient references in source comments.** Ticket IDs (`PT-1234`), PR numbers, and
-  before/after-the-fix framing do not belong in code comments. Keep the explanation; drop the
-  token. (Team convention; no rules file yet.)
+- **Backward-facing references in source comments.** Change narration ("previously", "this PR",
+  "the review found") and backward-facing ticket or PR citations rot the moment the branch
+  merges. Forward-facing pointers are the documented exception and must **not** be flagged:
+  `TODO (PT-XXXX)`, "until PT-XXXX lands", "PT-XXXX's scope". The test is whether the reference
+  would still help a reader who never saw this change land.
+  — see `.context/standards/Code-Style-Guide.md`, "Comments describe the code, not its history"
 
 ## Do not flag
 
