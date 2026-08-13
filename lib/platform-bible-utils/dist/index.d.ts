@@ -515,6 +515,8 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	/**
 	 * Function that runs the subscriptions for the event in isolation from each other. Added here so
 	 * children can override {@link emitIsolated} and still call the base functionality.
+	 *
+	 * @experimental
 	 */
 	protected emitIsolatedFn(event: T, handleSubscriberError: (error: unknown, subscriberIndex: number) => void): void;
 	/** Check to make sure this emitter is not disposed. Throw if it is */
