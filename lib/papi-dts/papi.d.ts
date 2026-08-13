@@ -2750,6 +2750,12 @@ declare module 'shared/models/network-object.model' {
    * call that method. This is because we don't want users of network objects to dispose of them. Only
    * the caller of `networkObjectService.set` should be able to dispose of the network object.
    *
+   * WARNING: this object's proxy is revoked as soon as the `onDidDispose` handlers return — the
+   * handlers are not awaited. An `async` handler may therefore read and call the object freely before
+   * its first `await`, but everything it touches afterward throws `TypeError: Cannot perform 'get' on
+   * a proxy that has been revoked`. Capture whatever you need (property values, results of calls you
+   * start immediately) before awaiting anything.
+   *
    * @see {@link networkObjectService}
    */
   export type NetworkObject<T extends NetworkableObject> = Omit<CanHaveOnDidDispose<T>, 'dispose'> &
@@ -5719,6 +5725,15 @@ declare module 'shared/services/data-provider.service' {
   import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.interface';
   import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   /**
+   * Gets the id for the data provider network object with the given name Don't add the suffix to the
+   * provider name if it's already there to avoid duplication
+   *
+   * Exported because anything that has a provider NAME and needs to recognize that provider's network
+   * object — `useDataProvider`'s re-lookup listener, for one — has to derive the id the same way this
+   * service does rather than assume the name is the id.
+   */
+  export const getDataProviderObjectId: (providerName: string) => string;
+  /**
    *
    * Indicate if we are aware of an existing data provider with the given name. If a data provider
    * with the given name is somewhere else on the network, this function won't tell you about it
@@ -8289,7 +8304,7 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   export default useDialogCallback;
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
-  import { NetworkObject } from 'shared/models/network-object.model';
+  import { NetworkObject, NetworkObjectDetails } from 'shared/models/network-object.model';
   /**
    * This function takes in a getNetworkObject function and creates a hook with that function in it
    * which will return a network object
@@ -8302,6 +8317,16 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
    *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
    *       (result of this hook, if you want this hook to just return the network object again)
    *
+   * @param doesCreatedNetworkObjectMatchSource Function that decides whether a network object that
+   *   was just created on the network means the hook should look its source up again. Defaults to
+   *   comparing the new object's id to the `networkObjectSource`.
+   *
+   *   - MUST be supplied by any caller whose `networkObjectSource` is not literally the id the object is
+   *       registered under — a data provider name becomes `{name}-data`, a web view id becomes
+   *       `webViewController{id}`, and so on. Left at the default, such a hook's re-lookup listener
+   *       compares two strings that can never be equal, so it never fires and the hook is left with
+   *       the single re-lookup a disposal drives.
+   *
    * @returns A function that takes in a networkObjectSource and returns a NetworkObject
    */
   export function createUseNetworkObjectHook<THookParams extends unknown[]>(
@@ -8309,6 +8334,10 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
     mapParametersToNetworkObjectSource?: (
       ...args: THookParams
     ) => string | NetworkObject<object> | undefined,
+    doesCreatedNetworkObjectMatchSource?: (
+      networkObjectDetails: NetworkObjectDetails,
+      networkObjectSource: string,
+    ) => boolean,
   ): (...args: THookParams) => NetworkObject<object> | undefined;
   export default createUseNetworkObjectHook;
 }
