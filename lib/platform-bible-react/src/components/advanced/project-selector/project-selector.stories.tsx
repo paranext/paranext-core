@@ -131,6 +131,35 @@ export const SingleProject: Story = {
   },
 };
 
+export const ShortNameTriggerLabel: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    return (
+      <div className="tw:w-80">
+        <ProjectSelector
+          mode="project"
+          projects={sampleProjects}
+          openTabs={sampleOpenTabs}
+          selection={{ projectId }}
+          onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+          buttonPlaceholder="Select a project"
+          ariaLabel="Project"
+          triggerLabelFormat="shortName"
+          buttonClassName="tw:w-full"
+        />
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`triggerLabelFormat="shortName"` (the default) renders only the selected project\'s short name in the trigger. Compare with `WideTriggerLabel` at the same width to see the `{shortName} - {fullName}` variant. The popover rows still render the two-line short/full name layout regardless of this setting.',
+      },
+    },
+  },
+};
+
 export const WideTriggerLabel: Story = {
   render: () => {
     const [projectId, setProjectId] = useState<string | undefined>('esvus16');
