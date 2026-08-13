@@ -714,6 +714,74 @@ describe('loadLayout reports a dock that landed empty', () => {
       expect(addWebViewToDockCalls).toEqual([]);
     });
   });
+
+  describe('the arrival flag the main process re-checks a report against', () => {
+    /** The shard object this window registered, as the main process's router calls it */
+    async function registeredShard() {
+      const { networkObjectService } = await import('@shared/services/network-object.service');
+      const set = networkObjectService.set as unknown as ReturnType<typeof vi.fn>;
+      const lastSetCall = set.mock.calls[set.mock.calls.length - 1];
+      return lastSetCall[1] as {
+        hasContentArrivedSinceEmptyReport: () => Promise<boolean>;
+        openSettingsTab: (projectIdToLimitSettings?: string) => Promise<unknown>;
+      };
+    }
+
+    test('says content arrived once Home is docked in answer to the report', async () => {
+      respondToGetLayoutAndEmptied({ kind: 'empty' }, { action: 'open-home' });
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, addWebViewToDockCalls } =
+        makeDockLayoutThatTracksAdds(layoutWithAnchor());
+
+      module.registerDockLayout(dockLayout);
+      await vi.waitFor(() => expect(addWebViewToDockCalls.length).toBeGreaterThan(0));
+
+      // The report went out while this dock was empty and Home landed after it. A main process
+      // still deciding what to do about that report has to be able to see it is out of date.
+      await expect((await registeredShard()).hasContentArrivedSinceEmptyReport()).resolves.toBe(
+        true,
+      );
+    });
+
+    test('says nothing arrived while the window is as empty as it reported', async () => {
+      respondToGetLayoutAndEmptied({ kind: 'empty' }, { action: 'closing' });
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, addWebViewToDockCalls } =
+        makeDockLayoutThatTracksAdds(layoutWithAnchor());
+
+      module.registerDockLayout(dockLayout);
+      await vi.waitFor(() =>
+        expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+      );
+      await flushMicrotasks();
+
+      expect(addWebViewToDockCalls).toEqual([]);
+      await expect((await registeredShard()).hasContentArrivedSinceEmptyReport()).resolves.toBe(
+        false,
+      );
+    });
+
+    test('a settings tab counts as content arriving, the same as a web view', async () => {
+      respondToGetLayoutAndEmptied(
+        { kind: 'entry', layout: layoutWithTab('t1') },
+        { action: 'closing' },
+      );
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, loadedLayouts } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+      // A settings tab goes in through `addTabToDock`, which the shared stand-in does not carry
+      (dockLayout as unknown as { addTabToDock: unknown }).addTabToDock = vi.fn(() => ({
+        type: 'float',
+      }));
+      module.registerDockLayout(dockLayout);
+      await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+      const shard = await registeredShard();
+      await expect(shard.hasContentArrivedSinceEmptyReport()).resolves.toBe(false);
+
+      await shard.openSettingsTab();
+
+      await expect(shard.hasContentArrivedSinceEmptyReport()).resolves.toBe(true);
+    });
+  });
 });
 
 describe('loadLayout when the saved-layout request fails', () => {

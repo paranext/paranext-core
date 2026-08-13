@@ -5,6 +5,10 @@
  * exist. A window emptied by removal closes — windows are equal siblings, and one with nothing in
  * it has nothing to be — unless it is the last window standing, which docks Home instead (closing
  * it would exit the application). A window born empty always docks Home.
+ *
+ * A report describes a moment that has already passed by the time it is answered, so a close is
+ * decided against a fresh reading rather than against the report alone — see
+ * {@link WindowEmptinessHandlerDependencies.hasContentArrivedSinceEmptyReport}.
  */
 
 import { getErrorMessage } from 'platform-bible-utils';
@@ -22,27 +26,20 @@ function isWindowEmptiedReason(reason: unknown): reason is WindowEmptiedReason {
  * Answers a window reporting its dock empty, and takes `handleWindowGone` for the moment a window
  * has actually gone away — the handler counts a window it has told to close as already gone, and
  * only the wiring knows when that has come true.
+ *
+ * Asynchronous because deciding a close asks the reporting window whether it is still empty, and
+ * because decisions are taken one at a time (see {@link createWindowEmptinessHandler}).
  */
 export type WindowEmptinessHandler = ((
   windowId: unknown,
   reason: unknown,
-) => WindowEmptiedResponse) & {
+) => Promise<WindowEmptiedResponse>) & {
   /** Tell the handler the window with this id is gone. Ids it is not tracking are ignored. */
   handleWindowGone: (windowId: number) => void;
 };
 
-/**
- * Build a `windowLayout:emptied` handler over the given dependencies.
- *
- * @param deps.countWindows Number of windows currently open, NOT already closing, and NOT still
- *   pending content (see `isWindowPendingContent`) — main process's authority
- * @param deps.closeWindow Close the window with the given id
- * @param deps.markWindowClosing Record that this window's close has been decided
- * @returns A handler taking the reporting window's id and why it is empty (both `unknown`, as they
- *   arrive over the wire unvalidated), answering what that window should do — see
- *   {@link WindowEmptinessHandler} for the `handleWindowGone` the wiring must call
- */
-export function createWindowEmptinessHandler(deps: {
+/** What {@link createWindowEmptinessHandler} needs to answer a window reporting its dock empty */
+export type WindowEmptinessHandlerDependencies = {
   /**
    * Number of windows currently open, NOT already closing, and NOT still pending content (a window
    * created for specific content that has not yet arrived — see `isWindowPendingContent`) — main
@@ -65,7 +62,50 @@ export function createWindowEmptinessHandler(deps: {
    * Optional so a caller composing only this handler's own decisions can omit it.
    */
   isWindowClosing?: (windowId: number) => boolean;
-}): WindowEmptinessHandler {
+  /**
+   * Whether anything reached the reporting window's dock after it sent the report — asked of that
+   * window, which is the only place that knows.
+   *
+   * A report describes a moment that has already passed by the time this handler answers it: a
+   * routed open or a move's adopt can land in the window while the report is in flight, and closing
+   * it then takes content the user is looking at with it.
+   *
+   * Answering `false` means "close it", and covers BOTH "still empty" and "could not tell": the
+   * report was the window's own word about its own dock, and a question that could not be asked is
+   * no reason to leave an empty window standing. The wiring is what decides not to ask — a window
+   * that cannot serve a request answers `false` without a round trip.
+   *
+   * Optional so a caller with no way to reach the window can compose the handler without it; every
+   * report is then taken at its word.
+   */
+  hasContentArrivedSinceEmptyReport?: (windowId: number) => Promise<boolean>;
+};
+
+/**
+ * How long the re-check may take before the report is taken at its word.
+ *
+ * Bounded and never retried: a window that is slow to answer is holding up every other window's
+ * decision behind it (they are taken one at a time), and the answer it owes is one a renderer reads
+ * out of a variable.
+ */
+const CONTENT_RECHECK_TIMEOUT_MS = 2000;
+
+/**
+ * Build a `windowLayout:emptied` handler over the given dependencies.
+ *
+ * Decisions are serialized — one in flight at a time, in the order the reports arrived. Two windows
+ * emptying at the same moment would otherwise both read "2 windows exist" (neither has closed yet)
+ * and both be told to close, leaving the app with no window at all; and two reports from ONE window
+ * would both slip past the repeat-answer guard, the second close tripping main's force-close escape
+ * hatch. Serializing is what makes each decision read the mark the decision before it wrote.
+ *
+ * @returns A handler taking the reporting window's id and why it is empty (both `unknown`, as they
+ *   arrive over the wire unvalidated), answering what that window should do — see
+ *   {@link WindowEmptinessHandler} for the `handleWindowGone` the wiring must call
+ */
+export function createWindowEmptinessHandler(
+  deps: WindowEmptinessHandlerDependencies,
+): WindowEmptinessHandler {
   /**
    * Windows already told "closing" that are still open.
    *
@@ -82,7 +122,40 @@ export function createWindowEmptinessHandler(deps: {
    */
   const closingWindowIds = new Set<number>();
 
-  const handleWindowEmptied = (windowId: unknown, reason: unknown): WindowEmptiedResponse => {
+  /**
+   * Ask the reporting window whether content reached it since it sent the report, bounded so one
+   * unresponsive window cannot hold up every decision behind it. A throw, a timeout, and a plain
+   * "no" all mean the same thing here — see the dependency's own doc comment.
+   */
+  const hasContentArrivedSinceEmptyReport = async (windowId: number): Promise<boolean> => {
+    if (!deps.hasContentArrivedSinceEmptyReport) return false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        deps.hasContentArrivedSinceEmptyReport(windowId),
+        new Promise<boolean>((resolve) => {
+          timeout = setTimeout(() => {
+            logger.warn(
+              `Window ${windowId} did not say whether it is still empty within ${CONTENT_RECHECK_TIMEOUT_MS}ms; taking its report at its word`,
+            );
+            resolve(false);
+          }, CONTENT_RECHECK_TIMEOUT_MS);
+        }),
+      ]);
+    } catch (e) {
+      logger.warn(
+        `Could not ask window ${windowId} whether it is still empty; taking its report at its word: ${getErrorMessage(e)}`,
+      );
+      return false;
+    } finally {
+      if (timeout) clearTimeout(timeout);
+    }
+  };
+
+  const decideWhatHappensToWindow = async (
+    windowId: unknown,
+    reason: unknown,
+  ): Promise<WindowEmptiedResponse> => {
     if (typeof windowId !== 'number' || !isWindowEmptiedReason(reason)) {
       logger.warn(
         `windowLayout:emptied called with invalid arguments (windowId: ${windowId}, reason: ${reason}); answering open-home`,
@@ -116,6 +189,17 @@ export function createWindowEmptinessHandler(deps: {
       return { action: 'open-home' };
     }
 
+    // Everything above is decided from what the main process knows. This is the one question only
+    // the reporting window can answer, and it is asked BEFORE anything is marked: `markWindowClosing`
+    // writes the shared registry the user's own close handler also writes, so a mark made here
+    // could not be taken back — unmarking would clear a mark a real close had set in the meantime.
+    if (await hasContentArrivedSinceEmptyReport(windowId)) {
+      logger.debug(
+        `windowLayout:emptied window ${windowId} reason ${reason}: content arrived after the report, answering stay`,
+      );
+      return { action: 'stay' };
+    }
+
     logger.debug(
       `windowLayout:emptied window ${windowId} reason ${reason} saw ${remainingWindows} windows remaining: answering closing`,
     );
@@ -137,6 +221,25 @@ export function createWindowEmptinessHandler(deps: {
       }
     }, 0);
     return { action: 'closing' };
+  };
+
+  /**
+   * The decision in flight, if any. Every report links its decision off this one, so no decision
+   * ever reads the window count while another is still deciding what to write into it — see
+   * {@link createWindowEmptinessHandler}.
+   */
+  let decisionChain: Promise<unknown> = Promise.resolve();
+
+  const handleWindowEmptied = (
+    windowId: unknown,
+    reason: unknown,
+  ): Promise<WindowEmptiedResponse> => {
+    const decision = decisionChain.then(() => decideWhatHappensToWindow(windowId, reason));
+    // The chain carries the caught version of each decision, never the one handed to the caller: a
+    // rejection left on it would be inherited by every report for the rest of the session, and this
+    // handler must never be able to stop answering.
+    decisionChain = decision.catch(() => undefined);
+    return decision;
   };
 
   return Object.assign(handleWindowEmptied, {

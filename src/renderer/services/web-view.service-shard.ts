@@ -1854,6 +1854,27 @@ function applyAndLogLegacyColorVarTransforms(
 }
 
 /**
+ * Whether anything has been docked in this window since it last told the main process its dock was
+ * empty ({@link reportDockEmptied} resets it immediately before reporting).
+ *
+ * The main process asks this before acting on an emptiness report, because the report describes a
+ * moment that has already passed by the time it is answered: a routed open or a move's adopt can
+ * land here while the report is in flight, and closing the window then takes content the user is
+ * looking at with it.
+ *
+ * A flag rather than a live reading of the dock, because there is no moment at which the dock can
+ * be read for this. The report is sent from the layout-change handler, where
+ * `dockLayoutRef.current` still holds the layout the dock is changing FROM — so a reading taken
+ * then describes the state before the removal that emptied it, and would answer "content is here"
+ * for every emptied window in the app. Known blind spot, unchanged from before this flag existed: a
+ * dialog or another float arriving in the gap is not a dock add and does not set it.
+ *
+ * A retry of the same report does not reset it again: content that arrives while a report is still
+ * being retried has still arrived.
+ */
+let didContentArriveSinceEmptyReport = false;
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -2293,6 +2314,10 @@ async function openOrReloadWebView(
     throw e;
   }
 
+  // The dock took it: whatever this window may have just told the main process about being empty is
+  // now out of date — see `didContentArriveSinceEmptyReport`
+  didContentArriveSinceEmptyReport = true;
+
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
   // inform web view consumers that we added a new web view
   if (finalLayout)
@@ -2408,6 +2433,10 @@ const REPORT_DOCK_EMPTIED_RETRY_DELAY_MS = 2_000;
  * is the one answer only the main process may give.
  */
 async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
+  // Immediately before the report goes out, so that from here on the flag answers exactly the
+  // question the main process asks with it: has anything reached this dock since it said it was
+  // empty — see `didContentArriveSinceEmptyReport`
+  didContentArriveSinceEmptyReport = false;
   let response: WindowEmptiedResponse | undefined;
   for (let attempt = 1; attempt <= REPORT_DOCK_EMPTIED_ATTEMPTS; attempt += 1) {
     try {
@@ -2510,6 +2539,11 @@ export async function reloadWebView(
 /** See {@link WebViewServiceShard.dockContainsTab} */
 async function dockContainsTab(tabOrTabGroupId: string): Promise<boolean> {
   return (await getDockLayout()).containsTab(tabOrTabGroupId);
+}
+
+/** See {@link WebViewServiceShard.hasContentArrivedSinceEmptyReport} */
+async function hasContentArrivedSinceEmptyReport(): Promise<boolean> {
+  return didContentArriveSinceEmptyReport;
 }
 
 // #endregion openWebView and reloadWebView
@@ -2706,7 +2740,7 @@ const papiWebViewService: WebViewServiceType = {
 async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layout | undefined> {
   const settingsTabId = newGuid();
 
-  return addTab<SettingsTabData>(
+  const layout = await addTab<SettingsTabData>(
     {
       id: settingsTabId,
       tabType: TAB_TYPE_SETTINGS_TAB,
@@ -2720,6 +2754,9 @@ async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layou
       floatSize: { height: 600, width: 1000 },
     },
   );
+  // The other way content reaches this window — see `didContentArriveSinceEmptyReport`
+  didContentArriveSinceEmptyReport = true;
+  return layout;
 }
 
 /** See {@link WebViewServiceShard.captureAndCloseWebView} */
@@ -2823,6 +2860,7 @@ async function setDetachedScrRef(
 const webViewServiceShard: WebViewServiceShard = {
   ...papiWebViewService,
   dockContainsTab,
+  hasContentArrivedSinceEmptyReport,
   openSettingsTab,
   setDetachedScrRef,
   captureAndCloseWebView,
