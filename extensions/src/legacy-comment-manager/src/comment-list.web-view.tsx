@@ -284,6 +284,13 @@ global.webViewComponent = function CommentListWebView({
    * it. Lets an incoming `setFilters` message compare against the view's current values so a
    * same-value re-send (see `resolveSetFiltersMessage`) can skip the `useState`/`useWebViewState`
    * setter entirely instead of minting a new-but-equal `CommentFilters` object.
+   *
+   * The message handler ALSO writes this ref, synchronously, whenever it accepts a message: web
+   * view messages are buffered and can replay as a burst with no render between them, and the
+   * effect below only lands after a render — so without the synchronous write, every message in a
+   * burst would compare against the pre-burst state, and a real change that happens to equal that
+   * stale snapshot would be skipped for good. The effect remains the path that folds in the user's
+   * own filter changes (the panel's setters write state directly, not through here).
    */
   const currentViewRef = useRef({ filters, scopeFilter });
   useEffect(() => {
@@ -397,9 +404,17 @@ global.webViewComponent = function CommentListWebView({
         // mint a new-but-equal CommentFilters object, invalidating the CommentThreads selector's
         // identity-based useMemo below and forcing an unnecessary PDP unsubscribe/resubscribe,
         // re-query, and skeleton flash.
+        // Each accepted axis is folded into the ref synchronously so the next message of a burst
+        // compares against what THIS message applied, not a pre-burst snapshot — see the ref's doc
         const resolved = resolveSetFiltersMessage(data, currentViewRef.current);
-        if (resolved.filtersChanged) setFilters(resolved.filters);
-        if (resolved.scopeFilterChanged) setScopeFilter(resolved.scopeFilter);
+        if (resolved.filtersChanged) {
+          currentViewRef.current = { ...currentViewRef.current, filters: resolved.filters };
+          setFilters(resolved.filters);
+        }
+        if (resolved.scopeFilterChanged) {
+          currentViewRef.current = { ...currentViewRef.current, scopeFilter: resolved.scopeFilter };
+          setScopeFilter(resolved.scopeFilter);
+        }
       }
     };
 
