@@ -490,8 +490,10 @@ export async function quitAppAndWaitForExit(
 /**
  * The graceful-quit epilogue shared by the multi-window suites: trigger a real quit and wait for
  * the OS process to exit (see {@link quitAppAndWaitForExit}), assert the exit was clean (code 0, no
- * signal), then sweep everything the given capture recorded for {@link FAULT_MARKERS} and for
- * warn/error-severity duplicate registrations ({@link DUPLICATE_REGISTRATION_PATTERN}).
+ * signal), assert the capture actually saw the quit ({@link APP_QUITTING_LOG}, so the sweeps that
+ * follow cannot pass vacuously against an empty corpus), then sweep everything the given capture
+ * recorded for {@link FAULT_MARKERS} and for warn/error-severity duplicate registrations
+ * ({@link DUPLICATE_REGISTRATION_PATTERN}).
  *
  * @param label Prefix for the step-log line recording the exit (e.g. `'phase 1'`).
  */
