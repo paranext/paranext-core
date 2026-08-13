@@ -458,11 +458,30 @@ export async function writeNow(windowIdsInOrder: readonly number[]): Promise<voi
 }
 
 /**
+ * Told whenever a window's pending-content mark changes. Wired by `main.ts` during startup, before
+ * any window exists; until then, nothing listens — see {@link setPendingContentChangeListener}.
+ */
+let handlePendingContentChanged: () => void = () => {};
+
+/**
+ * Wire the listener told when a pending-content mark changes.
+ *
+ * The mark is one of the routing target's inputs — a window still waiting for its content is passed
+ * over for new work — but it lives here rather than with the window tracker, which reads it through
+ * an injected predicate so it does not import this service. That leaves the tracker with nothing to
+ * notice a window gaining or losing the mark, so the change is announced from this side instead.
+ */
+export function setPendingContentChangeListener(listener: () => void): void {
+  handlePendingContentChanged = listener;
+}
+
+/**
  * Mark a window as created-for-content: its layout get answers `pending-content` (start truly
  * empty) until the window pushes its first real layout.
  */
 export function markWindowPendingContent(windowId: number): void {
   pendingContentWindowIds.add(windowId);
+  handlePendingContentChanged();
 }
 
 /**
@@ -471,6 +490,7 @@ export function markWindowPendingContent(windowId: number): void {
  */
 export function clearWindowPendingContent(windowId: number): void {
   pendingContentWindowIds.delete(windowId);
+  handlePendingContentChanged();
 }
 
 /**
@@ -521,8 +541,9 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
   // enter the persisted structure even when a pusher skipped its own reconciliation
   tracked.layout = reconcileSavedLayout(layoutRecord);
   // This push is the window's real content arriving, so it stops being pending-content — a
-  // second get request must be answered with the entry it just saved, not told to wait again
-  pendingContentWindowIds.delete(windowId);
+  // second get request must be answered with the entry it just saved, not told to wait again.
+  // Announced like any other change to the mark: the window becomes one routed work can go to.
+  if (pendingContentWindowIds.delete(windowId)) handlePendingContentChanged();
   scheduleWrite();
 }
 
