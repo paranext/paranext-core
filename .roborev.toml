@@ -9,9 +9,11 @@
 
 # Generated output carries no review signal and consumes the prompt budget. This repo tracks
 # build output under nested paths (lib/platform-bible-react/dist, lib/platform-bible-utils/dist),
-# so the pattern must be path-independent rather than a bare "dist/". Lockfiles are already
-# excluded by roborev's built-in defaults and do not need listing here.
-exclude_patterns = ["lib/papi-dts/papi.d.ts", "**/dist/**", "*.min.js", "*.map"]
+# so patterns need a leading "**/" rather than a bare "dist/" or "*.min.js": exclusions are
+# applied as git :(exclude,glob) pathspecs, where "*" does not cross "/". This matches the form
+# roborev uses for its own built-in defaults. Lockfiles are already excluded by those defaults
+# and do not need listing here.
+exclude_patterns = ["lib/papi-dts/papi.d.ts", "**/dist/**", "**/*.min.js", "**/*.map"]
 
 # Work-in-progress commits get reviewed once the real commit lands. Matching is
 # case-insensitive, so casing variants do not need separate entries.

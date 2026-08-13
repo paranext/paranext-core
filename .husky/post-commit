@@ -13,10 +13,14 @@
 # and review target into a single review.
 #
 # Husky runs hooks under `sh -e`, so failures are swallowed explicitly: a review is never
-# allowed to fail a commit that has already been made. Stderr is deliberately NOT discarded --
-# a misconfigured agent makes every review fail, and silently swallowing that leaves a
-# developer believing their commits are reviewed when nothing is running.
+# allowed to fail a commit that has already been made.
+#
+# Stderr is deliberately NOT discarded, but note what this does and does not catch. This
+# command only enqueues; a non-zero exit means the daemon is down or unreachable. An
+# unavailable *review agent* is rejected by the daemon with a 503 and still exits 0 here --
+# that failure surfaces only in ~/.roborev/post-commit.log. Verify agent configuration with
+# `roborev check-agents` at setup time, not from this hook.
 command -v roborev >/dev/null 2>&1 || exit 0
 roborev post-commit >/dev/null || {
-  echo "roborev: could not enqueue a review (try 'roborev check-agents')" >&2
+  echo "roborev: could not enqueue a review (is the daemon running? 'roborev daemon status')" >&2
 }
