@@ -42,8 +42,14 @@ across the multi-window stack):
   nothing to reject. Reject-side coverage is where this hides.
 - **A negative assertion with nothing to be a negative of.** `expect(log).not.toMatch(...)` passes
   just as happily against output that never arrived. Assert a positive control first — something
-  proving the corpus could have matched. The control may need to differ per site: a line emitted
-  once at startup cannot control a sweep scoped to a window created later.
+  proving the corpus could have matched.
+
+  **The control must be emitted AFTER the capture starts, not merely be certain to occur.**
+  Certainty is the easy half and it is not the test. An app's startup logging is guaranteed to
+  happen and is still invisible to a capture that attaches once the app is already running — so a
+  control chosen for being unmissable can be absent from every run on every branch. Anchor on
+  something the test itself causes. The control may also need to differ per site: one taken after a
+  quit cannot control a sweep that runs before it.
 
 Both read as MORE rigorous than a weaker test would, which is why reading them never catches it.
 
