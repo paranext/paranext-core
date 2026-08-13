@@ -279,10 +279,23 @@ async function runCommitFlow({
     await Promise.resolve();
     await Promise.resolve();
     // Let the engine's post-commit async passes (caret snap, note-content re-tokenization)
-    // settle so the outcome read is the state the user would actually see.
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    // settle so the outcome read is the state the user would actually see. Waits for the tree to
+    // QUIESCE rather than sleeping a fixed span: a 50ms guess raced the re-tokenization under
+    // full-suite load and read a mid-flight tree (a `\fq` char still carrying an `unmatched`
+    // node, before the `\ft*` closer landed), which surfaced as an intermittent failure.
+    let previousTree = '';
+    let stableReads = 0;
+    await vi.waitFor(
+      () => {
+        const currentTree = readCommitOutcome(lexical, marker).tree;
+        stableReads = currentTree === previousTree ? stableReads + 1 : 0;
+        previousTree = currentTree;
+        // Several consecutive identical reads, not just two: the engine's passes are scheduled
+        // far enough apart that two samples can both land in the same mid-flight state.
+        if (stableReads < 4) throw new Error('editor state is still settling');
+      },
+      { timeout: 5_000, interval: 25 },
+    );
   });
 
   const outcome = readCommitOutcome(lexical, marker);
