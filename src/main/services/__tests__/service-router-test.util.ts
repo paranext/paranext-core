@@ -29,8 +29,11 @@ export interface ShardAnnouncementListeners {
 export interface RoutingWindowMocks {
   /** Mock of `getReadyWindowIds`, which reports only the windows a fan-out can get an answer from */
   getReadyWindowIds: Mock;
-  /** Mock of `getNotReadyWindowIds`, which reports the tracked windows a fan-out cannot ask */
-  getNotReadyWindowIds: Mock;
+  /**
+   * Mock of `getUnreachableWindowIds`, which reports the tracked windows that were serving requests
+   * and stopped — the ones a fan-out cannot ask but must still account for
+   */
+  getUnreachableWindowIds: Mock;
   /** Mock of `networkObjectService.get`, which resolves a window's shard by network object id */
   networkObjectGet: Mock;
   /** Where the router's shard index parked its subscriptions, so tests can announce to it */
@@ -57,27 +60,35 @@ function getShardNetworkObjectId(windowId: number): string {
  * Wire the given windows, each serving the shard given for it, and announce each shard the way its
  * window's renderer does when it registers.
  *
- * Windows listed in `unreadyWindowIds` are tracked but have not registered their shards — the state
- * a window is in from the moment it is shown until its renderer finishes starting. Their shards are
- * still resolvable here on purpose: a fan-out that asks them anyway should be visible as a call
- * that was made, not hidden behind an unresolvable name.
+ * Neither kind of window listed in `options` can be asked, and their shards are still resolvable
+ * here on purpose: a fan-out that asks one anyway should be visible as a call that was made, not
+ * hidden behind an unresolvable name. What separates them is what the app owes them — see each
+ * option.
  *
  * @param mocks The suite's mocked window state and network object lookups
  * @param shardObjectType Network object type this suite's shards register under
  * @param shardsByWindowId Shard each window serves, keyed by window ID
- * @param options.unreadyWindowIds Windows to track without marking them able to answer
+ * @param options.startingWindowIds Windows tracked whose renderer has not registered anything yet —
+ *   the state every window is in from the moment it is shown until its renderer finishes starting.
+ *   Not asked, and NOT unreachable: nothing has ever been opened in them.
+ * @param options.unreachableWindowIds Windows that were serving requests and stopped — a crashed
+ *   renderer, a page being replaced, a window on its way out. Not asked, and unreachable: what they
+ *   had open is still there, and only they could have listed it.
  */
 export function withWindows(
   mocks: RoutingWindowMocks,
   shardObjectType: string,
   shardsByWindowId: Record<number, unknown>,
-  options?: { unreadyWindowIds?: number[] },
+  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
 ): void {
   const windowIds = Object.keys(shardsByWindowId).map(Number);
-  const unreadyWindowIds = options?.unreadyWindowIds ?? [];
-  mocks.getReadyWindowIds.mockReturnValue(windowIds.filter((id) => !unreadyWindowIds.includes(id)));
-  mocks.getNotReadyWindowIds.mockReturnValue(
-    windowIds.filter((id) => unreadyWindowIds.includes(id)),
+  const startingWindowIds = options?.startingWindowIds ?? [];
+  const unreachableWindowIds = options?.unreachableWindowIds ?? [];
+  mocks.getReadyWindowIds.mockReturnValue(
+    windowIds.filter((id) => !startingWindowIds.includes(id) && !unreachableWindowIds.includes(id)),
+  );
+  mocks.getUnreachableWindowIds.mockReturnValue(
+    windowIds.filter((id) => unreachableWindowIds.includes(id)),
   );
   mocks.networkObjectGet.mockImplementation(async (networkObjectId: string) => {
     const windowId = Number(networkObjectId.split('-').pop());

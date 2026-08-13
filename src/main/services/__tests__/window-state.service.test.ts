@@ -7,7 +7,9 @@ import {
   getFocusedWindowId,
   getReadyWindowIds,
   getTargetWindowId,
+  getUnreachableWindowIds,
   getWindows,
+  isWindowClosing,
   isWindowReady,
   markWindowClosing,
   markWindowNotReady,
@@ -645,7 +647,95 @@ describe('window state tracking', () => {
     });
   });
 
+  describe('telling a window that never started from one that stopped serving', () => {
+    // Both are simply "not ready", and the routers have to treat them oppositely: the first has
+    // never held a web view and can be passed over, while the second may be holding the very thing
+    // a call just named and so has to fail the call rather than be answered for.
+
+    test('does not count a window whose renderer has not registered yet', () => {
+      // Every window is in this state for the seconds its renderer takes to start — every
+      // `File > New Window`, and the whole of app startup. Counting it there would fail every
+      // routed search in the app for the whole of it.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady(1);
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+    });
+
+    test('counts a window that was serving requests and stopped', () => {
+      // A crashed renderer, or a page being replaced. Its web views are still open in a window the
+      // user can see, and only that window could ever list them.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady(1);
+      markWindowReady(2);
+
+      markWindowNotReady(2);
+
+      expect(getUnreachableWindowIds()).toEqual([2]);
+    });
+
+    test('stops counting it once it is serving again', () => {
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      markWindowNotReady(1);
+
+      markWindowReady(1);
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+    });
+
+    test('does not let a recycled window id inherit the closed window’s history', () => {
+      // Electron reuses BrowserWindow ids. A new window arriving with a closed one's id has its own
+      // renderer to start, and remembering that the ID had served before would make it look, for
+      // the whole of its startup, like a window that had been serving and died — failing every
+      // routed search in the app until it registers.
+      const closed = fakeWindow(1);
+      addWindow(closed);
+      markWindowReady(1);
+      removeWindow(closed, 1);
+
+      addWindow(fakeWindow(1));
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+    });
+
+    test('drops a window that stopped serving when it finally goes away', () => {
+      const crashed = fakeWindow(1);
+      addWindow(crashed);
+      markWindowReady(1);
+      markWindowNotReady(1);
+
+      removeWindow(crashed, 1);
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+    });
+  });
+
   describe('windows on their way out', () => {
+    test('reports whether one specific window is on its way out', () => {
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+
+      markWindowClosing(2);
+
+      expect(isWindowClosing(1)).toBe(false);
+      expect(isWindowClosing(2)).toBe(true);
+    });
+
+    test('stops reporting a window as closing once it is gone', () => {
+      // Electron reuses window ids, so a leftover flag would tell the next window to take this id
+      // that it is already on its way out
+      const closing = fakeWindow(1);
+      addWindow(closing);
+      markWindowClosing(1);
+
+      removeWindow(closing, 1);
+
+      expect(isWindowClosing(1)).toBe(false);
+    });
+
     test('reports the app going down when the only window closes', () => {
       addWindow(fakeWindow(1));
 
