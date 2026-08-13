@@ -4943,14 +4943,18 @@ declare module 'papi-shared-types' {
     /**
      * Move a web view to a window created for it.
      *
-     * A move closes the web view in the window that holds it and reopens it — same id, same
+     * A move closes the web view in the window that holds it and reopens it — same
      * `useWebViewState` state — in the target window. Consumers see a close event in the source and
      * an open event in the target, and the web view controller is disposed and re-created: a held
-     * controller reference must be re-acquired after a move. In Simple mode — single-window by
-     * design — there is no other window to move to, and this does nothing.
+     * controller reference must be re-acquired after a move. The returned id is the authoritative
+     * id of the web view after the move, and it can differ from the id passed in: a web view
+     * restored from a persisted layout carries a window-scoped id, and a move does not carry that
+     * scope along — so use the returned id for anything after the move. In Simple mode —
+     * single-window by design — there is no other window to move to, and this does nothing.
      *
      * @param webViewId Web view to move
-     * @returns Id of the web view in its new window (the same id it had)
+     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
+     *   see above
      * @experimental
      */
     'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
@@ -4964,7 +4968,8 @@ declare module 'papi-shared-types' {
      *
      * @param webViewId Web view to move
      * @param targetWindowId Window to move it to
-     * @returns Id of the web view in its new window (the same id it had)
+     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
+     *   see `platform.moveWebViewToNewWindow`
      * @experimental
      */
     'platform.moveWebViewToWindow': (
