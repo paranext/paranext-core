@@ -1038,6 +1038,22 @@ describe('web view service router', () => {
       expect(focused.openWebView).not.toHaveBeenCalled();
     });
 
+    test('opens over a replace-tab target that is no web view while another window is unreachable', async () => {
+      // A replace-tab target is routinely a settings tab or a dialog, which an ownership lookup
+      // cannot see by construction — so treating its "nobody" as inconclusive took every such open
+      // down for as long as one window stayed unreachable, which for a crashed renderer is the rest
+      // of the session. A dock that positively holds the target settles where this goes, and a
+      // window that could not answer cannot make that answer wrong.
+      const focused = windowShard([], ['settings-tab']);
+      const crashed = windowShard([]);
+      withWindows({ 1: focused, 2: crashed }, { unreachableWindowIds: [2] });
+      const router = await getRouter();
+
+      await router.openWebView('someType', { type: 'replace-tab', targetTabId: 'settings-tab' });
+
+      expect(focused.openWebView).toHaveBeenCalled();
+    });
+
     test('still falls back to the focused window when every window answers no to a replace-tab target', async () => {
       // The owner search only sees web views. A replace-tab target can be a settings tab or
       // dialog, which no window will claim — the focused window is still the right guess then.
