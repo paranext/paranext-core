@@ -782,10 +782,27 @@ step, no automation. Just a record.
   - **Display-only, and it needs an explicit guard.** The resolved verse is never written back to
     the scroll group — writing it back would yank the Scripture Editor off the intro the user came
     from. This does not happen for free: `Editorial`'s `ScriptureReferencePlugin` mounts even when
-    `isReadonly` is set (gated only on `scrRef && onScrRefChange`) and reports any selection whose
-    verse differs from `scrRef`. Fall-forward makes that mismatch permanent, so `ResourceCell`
-    swallows the echo. Without the guard one click writes verse 1 — and, because the slice drops
-    chapter chrome, chapter 1, turning Luke 5:0 into Luke 1:1.
+    `isReadonly` is set (`Editor.tsx` gates it on `scrRef && onScrRefChange` only) and reports any
+    selection whose verse differs from `scrRef`. Fall-forward makes that mismatch permanent, so
+    `ResourceCell` swallows the echo. Without the guard one click writes verse 1 — and, because the
+    slice drops chapter chrome, `$findAndSetChapterAndVerse`'s
+    `parseInt(chapterNode?.getNumber() ?? '1', 10)` yields chapter 1, turning Luke 5:0 into
+    Luke 1:1.
+
+    **The guard belongs in the consumer, not upstream in the plugin** (raised in review of #2663;
+    verified against `@eten-tech-foundation/platform-editor` ~0.8.14). Gating the plugin on
+    `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
+    **bidirectional** — `$moveCursorToVerseStart` applies `scrRef` to the caret, and
+    `$findAndSetChapterAndVerse` reports the caret back — and read-only surfaces need both halves.
+    Not mounting it when read-only would break navigation-to-verse in every read-only editor (the
+    Resource Viewer, this grid's chapter mode) and would break read-only click-to-sync, which
+    **these very cells rely on at every normal verse**. `isReadonly` is therefore the wrong
+    predicate: a read-only editor reporting its caret position is correct behavior, not the bug.
+    The bug is narrower and entirely host-made — *we* hand the editor verse 1's USJ while telling it
+    verse 0, so the only component that knows the reference is a deliberate lie is the one that told
+    it. Whoever creates the mismatch owns swallowing it. The generalizable fix, if a third surface
+    ever wants one, is not an `isReadonly` gate but for the promoted helper to carry the guard with
+    it (see Consequences) — the rule and its guard are one unit.
   - **Chapter surfaces are exempt.** Anything rendering a whole chapter shows verse-0 front matter
     directly: the Text Collection's chapter mode, its chapter-context split, its single-resource
     path (`ScriptureTextGrid` renders one shown resource as `viewMode="chapter"`, so verse-0
@@ -805,21 +822,57 @@ step, no automation. Just a record.
   every other view off the intro. (c) *Put the rule inside `sliceUsjToVerse`* — rejected: the
   decision is about the **reference**, not the USJ, and the accessible-name site needs it without
   having any USJ; burying a copy there would centralize nothing while making
-  `sliceUsjToVerse(usj, 0)` silently return verse 1.
+  `sliceUsjToVerse(usj, 0)` silently return verse 1. (d) *Fall forward only when verse 0 has no
+  content of its own* — a content-aware rule (raised in review of #2663). The distinction it draws is
+  real in the source: a `\d` superscription is one short line that a one-verse-tall cell renders
+  fine, whereas book/chapter intros and outlines are what genuinely cannot be rendered there. Under
+  it, PT9 parity would hold where it actually matters (the intro case), `<` from Psalms verse 1 would
+  produce a visible change instead of a silent one, and no real Scripture would be hidden in verse
+  view. Rejected on cost and consistency: the helper would need the chapter USJ, and the
+  accessible-name site in `ScriptureTextGrid` has none — it names the row before any resource has
+  fetched anything — which is exactly why the rule is reference-only. Making it content-aware would
+  either force a USJ through the naming path or split the rule in two (a USJ-aware version for cells,
+  a reference-only version for labels), and per-resource content-awareness would make the *same*
+  reference fall forward in one cell and not in its neighbor, so a row of cells would disagree about
+  which verse they are showing. Worth revisiting if the superscription case draws real complaints,
+  since it is the one place this decision hides genuine content.
 - **Consequences:** verse-0 content is not shown in verse view — deliberately. It stays one click
   away via the chapter-context split, which renders the chapter unsliced; that escape hatch is what
   makes the trade acceptable, so **revisit if the chapter-context split is ever removed or made
   non-obvious**. Verse 0 and verse 1 now render identically and carry the same accessible name, so
-  stepping backward across that boundary produces no visible or announced change — accepted, since
-  the alternative is a row of ghost text at every chapter boundary. Note this is not one silent step
-  but a **silent dead end**: with no `bounds`, `getPreviousVerseRef` returns the same
-  `{chapterNum, verseNum: 0}` ref every time, so once the toolbar's previous-verse button lands on
-  verse 0 in a chapter > 1 it is inert, and fall-forward removes its last remaining cue. The pin
-  predates this decision; fixing it means passing `bounds` at that call site
-  (`book-chapter-control.navigation.ts`), which is out of scope here. Any future single-verse surface
-  must call `resolveDisplayVerseNum` — `sliceUsjToVerse` is deliberately mechanical and slices a raw
-  verse 0 to nothing (pinned by a test). Note the helper is currently private to
-  `platform-scripture-editor`; a surface in another extension cannot import it, so **promote it to
+  stepping backward across that boundary produces no visible or announced change **within the grid**
+  — accepted, since the alternative is a row of ghost text at every chapter boundary.
+
+  **Verse 0 becomes unobservable inside the Text Collection, including to assistive tech** (raised
+  in review of #2663). At a verse-0 reference the row label announces "MAT 5:1", the cells render
+  verse 1, and nothing in the grid states that the shared reference is actually 5:0 — so a
+  screen-reader user has no in-grid signal that they are at the boundary. This is a genuine accepted
+  cost of naming the row after what it displays, not an oversight: the alternative is a label that
+  announces a verse the cells demonstrably do not show, which is worse. Two things keep it from
+  being a true silent dead end, and both live outside the grid: the BCV control still displays the
+  real reference (`5:0`), and its **previous-verse button is disabled** at verse 0, which is an
+  announced state change rather than an inert control — `isNoOpNavigation` in
+  `book-chapter-control.navigation.ts` disables a step that would return the same ref, pinned by the
+  `'Is disabled when at verse 0'` test in `book-chapter-control.navigation.test.ts`. (An earlier
+  draft of this ADR called the button "inert" and claimed fall-forward removed its "last remaining
+  cue"; that was wrong on both counts and is corrected here.) What the button cannot do is roll
+  backward to the previous chapter's last verse: with no `bounds`, `getPreviousVerseRef` floors at
+  `{chapterNum, verseNum: 0}` in every chapter rather than only chapter 1, so the reference dead-ends
+  there. That pin predates this decision and is now tracked as
+  [PT-4379](https://paratextstudio.atlassian.net/browse/PT-4379) — out of scope here because the fix
+  is not passing an argument but threading an async, PAPI-built `ScriptureBounds` through a
+  `platform-bible-react` component into every consumer of the BCV control.
+
+  Any future single-verse surface must call `resolveDisplayVerseNum` — `sliceUsjToVerse` is
+  deliberately mechanical and slices a raw verse 0 to nothing (pinned by a test) — and must carry the
+  write-back guard with it. The helper is currently private to `platform-scripture-editor`, so a
+  surface in another extension cannot import it; **promote it to
   `lib/platform-bible-utils/src/scripture/` (which already owns `getPreviousVerseRef`, the producer
-  of verse-0 refs) at the second consumer** rather than re-typing the rule.
+  of verse-0 refs) at the second consumer _of this rule_** rather than re-typing it. The qualifier is
+  load-bearing: "second consumer" counted as surfaces would be wrong, because other surfaces already
+  handle verse-0 references under deliberately different rules — review of #2663 cites the
+  interlinearizer extension, which treats verse 0 as tokenizable content to be kept rather than
+  routed around, because it renders a whole chapter. A whole-chapter surface should look like the
+  chapter-surface exemption above, not like this rule. Promoting on a surface count would turn a
+  deliberate single-verse-vs-whole-chapter difference into apparent drift from a shared util.
 - **Source:** PT-4061 (B3), which resolves PT-3133; Ian Hewerdine confirmed parity 2026-08-05.
