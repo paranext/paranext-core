@@ -967,6 +967,40 @@ describe('web view service router', () => {
       expect(focused.openWebView).not.toHaveBeenCalled();
     });
 
+    test('fails when the window holding a panel layout`s target tab is already closing', async () => {
+      // Same rule a named targetWindowId gets: a window whose close has been decided is a stale
+      // target the caller cannot know about, and routing content into it would report success and
+      // then lose it when the close lands. The layout named the tab, not the window, so the caller
+      // has even less way of knowing.
+      const focused = windowShard([]);
+      const closingOwner = windowShard(['target-tab']);
+      withWindows({ 1: focused, 2: closingOwner });
+      mocks.isWindowClosing.mockImplementation((windowId: number) => windowId === 2);
+      const router = await getRouter();
+
+      await expect(
+        router.openWebView('someType', { type: 'panel', targetTabId: 'target-tab' }),
+      ).rejects.toThrow(/that window is closing/);
+
+      expect(closingOwner.openWebView).not.toHaveBeenCalled();
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('fails when the window holding a replace-tab target is already closing', async () => {
+      const focused = windowShard([]);
+      const closingOwner = windowShard(['target-tab']);
+      withWindows({ 1: focused, 2: closingOwner });
+      mocks.isWindowClosing.mockImplementation((windowId: number) => windowId === 2);
+      const router = await getRouter();
+
+      await expect(
+        router.openWebView('someType', { type: 'replace-tab', targetTabId: 'target-tab' }),
+      ).rejects.toThrow(/that window is closing/);
+
+      expect(closingOwner.openWebView).not.toHaveBeenCalled();
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
     test('still falls back to the focused window when every window answers no to a replace-tab target', async () => {
       // The owner search only sees web views. A replace-tab target can be a settings tab or
       // dialog, which no window will claim — the focused window is still the right guess then.
