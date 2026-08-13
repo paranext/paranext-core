@@ -24,7 +24,7 @@ const mocks = vi.hoisted(() => {
   return {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
-    getNotReadyWindowIds: vi.fn(),
+    getUnreachableWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     getFocusedWindowId: vi.fn(),
     focusWindow: vi.fn(),
@@ -47,7 +47,7 @@ const mocks = vi.hoisted(() => {
 /** Wire windows whose WebView service shards are the given objects */
 function withWindows(
   shardsByWindowId: Record<number, unknown>,
-  options?: { unreadyWindowIds?: number[] },
+  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
 ) {
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
 }
@@ -55,7 +55,7 @@ function withWindows(
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
-  getNotReadyWindowIds: mocks.getNotReadyWindowIds,
+  getUnreachableWindowIds: mocks.getUnreachableWindowIds,
   isWindowReady: mocks.isWindowReady,
   getFocusedWindowId: mocks.getFocusedWindowId,
   focusWindow: mocks.focusWindow,
@@ -112,7 +112,7 @@ describe('web view service router', () => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
-    mocks.getNotReadyWindowIds.mockReturnValue([]);
+    mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
     mocks.getFocusedWindowId.mockReturnValue(1);
   });
@@ -170,30 +170,52 @@ describe('web view service router', () => {
     expect(all.map((definition) => definition.id).sort()).toEqual(['a', 'b', 'c']);
   });
 
-  test('does not ask a window that has not registered its services yet, but says it could not', async () => {
-    // A window is tracked from the moment it is shown; asking it before its renderer registers
-    // stalls the whole fan-out for the network service's registration retry to learn nothing. Not
-    // asking it is not the same as it answering "nothing open" — a window also leaves the ready set
-    // by crashing or reloading, and that one may have had editors with unsaved work in it.
+  test('does not ask a window that stopped serving requests, but says it could not', async () => {
+    // Asking a window whose renderer is gone stalls the whole fan-out for the network service's
+    // registration retry to learn nothing. Not asking it is not the same as it answering "nothing
+    // open": it was serving a moment ago and may have had editors with unsaved work in it.
+    const serving = windowShard(['a']);
+    const crashed = windowShard([]);
+    withWindows({ 1: serving, 2: crashed }, { unreachableWindowIds: [2] });
+
+    const { definitions, unreachableWindowIds } =
+      await getAllOpenWebViewDefinitionsWithReachability();
+
+    expect(crashed.getAllOpenWebViewDefinitions).not.toHaveBeenCalled();
+    expect(definitions.map((definition) => definition.id)).toEqual(['a']);
+    expect(unreachableWindowIds).toEqual([2]);
+  });
+
+  test('does not report a window whose renderer has not registered anything as unreachable', async () => {
+    // A window that has never been ready has never had a web view in it, so an empty answer for it
+    // is the truth rather than a gap. Reporting it would make the whole read fail for the seconds
+    // every new window takes to start.
     const serving = windowShard(['a']);
     const starting = windowShard([]);
-    withWindows({ 1: serving, 2: starting }, { unreadyWindowIds: [2] });
+    withWindows({ 1: serving, 2: starting }, { startingWindowIds: [2] });
 
     const { definitions, unreachableWindowIds } =
       await getAllOpenWebViewDefinitionsWithReachability();
 
     expect(starting.getAllOpenWebViewDefinitions).not.toHaveBeenCalled();
     expect(definitions.map((definition) => definition.id)).toEqual(['a']);
-    expect(unreachableWindowIds).toEqual([2]);
+    expect(unreachableWindowIds).toEqual([]);
   });
 
-  test('refuses to answer with a list that leaves out a window that has not registered yet', async () => {
+  test('refuses to answer with a list that leaves out a window that stopped serving requests', async () => {
     // The merged read is treated as the whole picture, and a window that could not be asked is
     // indistinguishable in it from a window with nothing open
-    withWindows({ 1: windowShard(['a']), 2: windowShard([]) }, { unreadyWindowIds: [2] });
+    withWindows({ 1: windowShard(['a']), 2: windowShard([]) }, { unreachableWindowIds: [2] });
     const router = await getRouter();
 
     await expect(router.getAllOpenWebViewDefinitions()).rejects.toThrow('unreachable');
+  });
+
+  test('answers with the whole picture while another window is still starting', async () => {
+    withWindows({ 1: windowShard(['a']), 2: windowShard([]) }, { startingWindowIds: [2] });
+    const router = await getRouter();
+
+    expect((await router.getAllOpenWebViewDefinitions()).map(({ id }) => id)).toEqual(['a']);
   });
 
   test('refuses to answer with a partial list when a ready window could not be asked', async () => {
@@ -323,7 +345,10 @@ describe('web view service router', () => {
   test('a probe returns not-found rather than throwing when a window could not be asked', async () => {
     // Nothing claimed the web view, and window 2 could not be asked at all — a probe has nothing
     // to lose by treating that as not-found rather than failing the call
-    withWindows({ 1: windowShard([]), 2: windowShard([]) }, { unreadyWindowIds: [2] });
+    const target = windowShard([]);
+    // What the real shard answers for a probe it cannot satisfy
+    target.openWebView.mockResolvedValue(undefined);
+    withWindows({ 1: target, 2: windowShard([]) }, { unreachableWindowIds: [2] });
     const router = await getRouter();
 
     await expect(
@@ -331,15 +356,93 @@ describe('web view service router', () => {
     ).resolves.toBeUndefined();
   });
 
-  test('an open that would create refuses to guess when a window could not be asked', async () => {
-    // The window that could not be asked may be the one already holding this web view, so
+  test('an open that names a web view refuses to guess when a window could not be asked', async () => {
+    // The window that could not be asked may be the one already holding this exact web view, so
     // creating here risks minting a second copy of a view meant to be unique app-wide
-    withWindows({ 1: windowShard([]), 2: windowShard([]) }, { unreadyWindowIds: [2] });
+    withWindows({ 1: windowShard([]), 2: windowShard([]) }, { unreachableWindowIds: [2] });
     const router = await getRouter();
 
     await expect(
-      router.openWebView('comments', undefined, { existingId: '?', createNewIfNotFound: true }),
+      router.openWebView('comments', undefined, {
+        existingId: 'named-view',
+        createNewIfNotFound: true,
+      }),
     ).rejects.toThrow(/unreachable/i);
+  });
+
+  test('an open that names a web view refuses to guess with createNewIfNotFound left off', async () => {
+    // Creating is the default, and no production caller passes the flag at all — so the refusal has
+    // to hold for an absent flag, not only for an explicit `true`
+    withWindows({ 1: windowShard([]), 2: windowShard([]) }, { unreachableWindowIds: [2] });
+    const router = await getRouter();
+
+    await expect(
+      router.openWebView('comments', undefined, { existingId: 'named-view' }),
+    ).rejects.toThrow(/unreachable/i);
+  });
+
+  test('a `?` open lands in the routing target rather than failing when a window could not be asked', async () => {
+    // `?` means "the one in the app", and every caller of it is an entry point the user just
+    // clicked. Refusing would make Open Comments, Get Resources and Find do nothing at all for as
+    // long as one window is unreachable — for a crashed renderer, the rest of the session. A second
+    // copy opening where the user is looking is the cheaper way to be wrong.
+    const target = windowShard([]);
+    withWindows({ 1: target, 2: windowShard([]) }, { unreachableWindowIds: [2] });
+    const router = await getRouter();
+
+    await expect(router.openWebView('comments', undefined, { existingId: '?' })).resolves.toBe(
+      'opened',
+    );
+    expect(target.openWebView).toHaveBeenCalled();
+  });
+
+  test('an open that names a web view goes ahead while another window is still starting', async () => {
+    // The whole of a window's startup used to fail every one of these: opening a project in the
+    // Scripture editor, Open Comments, Get Resources. A window that has never registered anything
+    // has never held a web view, so it cannot be the one already showing this id.
+    const target = windowShard([]);
+    withWindows({ 1: target, 2: windowShard([]) }, { startingWindowIds: [2] });
+    const router = await getRouter();
+
+    await expect(
+      router.openWebView('comments', undefined, { existingId: 'named-view' }),
+    ).resolves.toBe('opened');
+    expect(target.openWebView).toHaveBeenCalled();
+  });
+
+  test('a `?` search ignores an open web view of a different type in another window', async () => {
+    // A type search matches on `webViewType`, and the other window's only web view is not one.
+    // Treating whatever it has open as the match would raise that window and hand the caller back
+    // an unrelated tab.
+    const target = windowShard([]);
+    const other = windowShard([{ id: 'wv-notes', webViewType: 'notes' }]);
+    withWindows({ 1: target, 2: other });
+    const router = await getRouter();
+
+    await router.openWebView('comments', undefined, { existingId: '?' });
+
+    expect(other.openWebView).not.toHaveBeenCalled();
+    expect(target.openWebView).toHaveBeenCalled();
+  });
+
+  test('picks the lowest window id when the routing target owns no match', async () => {
+    // Two windows hold a web view of this type and the call is headed for neither, so the answer
+    // has to be the same one every time rather than whichever window replied first — hence window
+    // id order, not answer order.
+    const lower = windowShard([{ id: 'wv-lower', webViewType: 'comments' }]);
+    const higher = windowShard([{ id: 'wv-higher', webViewType: 'comments' }]);
+    lower.openWebView.mockResolvedValue('wv-lower');
+    higher.openWebView.mockResolvedValue('wv-higher');
+    withWindows({ 1: lower, 2: higher });
+    // The order windows are asked in is not window id order here, and must not decide the answer
+    mocks.getReadyWindowIds.mockReturnValue([2, 1]);
+    mocks.getTargetWindowId.mockReturnValue(99);
+    const router = await getRouter();
+
+    const result = await router.openWebView('comments', undefined, { existingId: '?' });
+
+    expect(result).toBe('wv-lower');
+    expect(higher.openWebView).not.toHaveBeenCalled();
   });
 
   describe('a layout that names a tab to open next to', () => {
@@ -448,18 +551,36 @@ describe('web view service router', () => {
     });
 
     test('still opens when a window that could not be asked might have had the target', async () => {
-      // The `existingId` search fails the call here, because guessing wrong there mints a second
-      // copy of a web view meant to be unique. Guessing wrong about a layout target costs placement
-      // and nothing else — and a window stays unaskable for as long as its renderer takes to start,
-      // or forever if it crashed, so failing would take every tab-naming open down with it
+      // An `existingId` naming one specific web view fails the call, because guessing wrong there
+      // mints a second copy of a view meant to be unique. Guessing wrong about a layout target costs
+      // placement and nothing else — and a crashed window stays unaskable for the rest of the
+      // session, so failing would take every tab-naming open down with it
       const focused = windowShard([]);
-      const starting = windowShard(['target-tab']);
-      withWindows({ 1: focused, 2: starting }, { unreadyWindowIds: [2] });
+      const crashed = windowShard(['target-tab']);
+      withWindows({ 1: focused, 2: crashed }, { unreachableWindowIds: [2] });
       const router = await getRouter();
 
       await router.openWebView('someType', { type: 'panel', targetTabId: 'target-tab' });
 
       expect(focused.openWebView).toHaveBeenCalled();
+    });
+
+    test('picks the lowest window id when the call is headed for neither holder', async () => {
+      // Same tie-break as the `existingId` search: two windows hold the tab group, the call is
+      // headed for neither, and the answer has to be the same one every time rather than whichever
+      // window replied first
+      const lower = windowShard([], ['+1']);
+      const higher = windowShard([], ['+1']);
+      withWindows({ 1: lower, 2: higher });
+      // The order windows are asked in is not window id order here, and must not decide the answer
+      mocks.getReadyWindowIds.mockReturnValue([2, 1]);
+      mocks.getTargetWindowId.mockReturnValue(99);
+      const router = await getRouter();
+
+      await router.openWebView('comments', { type: 'tab', parentTabGroupId: '+1' });
+
+      expect(lower.openWebView).toHaveBeenCalled();
+      expect(higher.openWebView).not.toHaveBeenCalled();
     });
 
     test('does not go looking for an owner when the layout names nothing', async () => {
@@ -569,6 +690,22 @@ describe('web view service router', () => {
       expect(mocks.focusWindow).not.toHaveBeenCalled();
     });
 
+    test('does not raise the owning window when bringToFront is the only thing declined', async () => {
+      // The opt-out that decides this is `bringToFront`, and nothing else: a caller that declined
+      // only the raise — leaving `createNewIfNotFound` at its default — must not be raised at
+      // either level. Pinning this separately from the probe above is what keeps the gate from
+      // silently reading the other flag.
+      const owner = windowShard([{ id: 'wv-2', webViewType: 'comments' }]);
+      owner.openWebView.mockResolvedValue('wv-2');
+      withWindows({ 1: windowShard([]), 2: owner });
+      const router = await getRouter();
+
+      await router.openWebView('comments', undefined, { existingId: '?', bringToFront: false });
+
+      expect(owner.openWebView).toHaveBeenCalled();
+      expect(mocks.focusWindow).not.toHaveBeenCalled();
+    });
+
     test('raises the owning window when the caller explicitly asks to be brought to front', async () => {
       const owner = windowShard([{ id: 'wv-2', webViewType: 'comments' }]);
       owner.openWebView.mockResolvedValue('wv-2');
@@ -610,7 +747,7 @@ describe('web view service router', () => {
     // Mirrors "still answers when another window claims the web view" below for reloadWebView — a
     // match found in one window short-circuits regardless of another window being unreachable
     const owner = windowShard(['owned-view']);
-    withWindows({ 1: owner, 2: windowShard([]) }, { unreadyWindowIds: [2] });
+    withWindows({ 1: owner, 2: windowShard([]) }, { unreachableWindowIds: [2] });
     const router = await getRouter();
 
     await expect(router.getOpenWebViewDefinition('owned-view')).resolves.toEqual({
@@ -618,16 +755,28 @@ describe('web view service router', () => {
     });
   });
 
-  test('does not ask a window that has not registered its services yet who owns a web view, and will not fall back to focus', async () => {
+  test('refuses to answer that nobody owns a web view while a window that stopped serving may hold it', async () => {
+    // The window that could not be asked is the one holding the web view here. Answering
+    // "undefined" would tell the caller it does not exist, and the caller acts on that — by opening
+    // a second copy, or by dropping what it was doing to it.
+    const crashed = windowShard(['owned-view']);
+    withWindows({ 1: windowShard([]), 2: crashed }, { unreachableWindowIds: [2] });
+    const router = await getRouter();
+
+    await expect(router.getOpenWebViewDefinition('owned-view')).rejects.toThrow(/unreachable/);
+    expect(crashed.getOpenWebViewDefinition).not.toHaveBeenCalled();
+  });
+
+  test('does not ask a window that stopped serving requests who owns a web view, and will not fall back to focus', async () => {
     // The window that could not be asked is the one holding the web view here, which is exactly why
     // falling back to focus is wrong: it would reload whatever the focused window is showing
     const focused = windowShard([]);
-    const starting = windowShard(['owned-view']);
-    withWindows({ 1: focused, 2: starting }, { unreadyWindowIds: [2] });
+    const crashed = windowShard(['owned-view']);
+    withWindows({ 1: focused, 2: crashed }, { unreachableWindowIds: [2] });
     const router = await getRouter();
 
     await expect(router.reloadWebView('someType', 'owned-view')).rejects.toThrow('unreachable');
-    expect(starting.getOpenWebViewDefinition).not.toHaveBeenCalled();
+    expect(crashed.getOpenWebViewDefinition).not.toHaveBeenCalled();
     expect(focused.reloadWebView).not.toHaveBeenCalled();
   });
 

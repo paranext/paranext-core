@@ -11,9 +11,9 @@
 import {
   focusWindow,
   getFocusedWindowId,
-  getNotReadyWindowIds,
   getReadyWindowIds,
   getTargetWindowId,
+  getUnreachableWindowIds,
   isWindowReady,
 } from '@main/services/window-state.service';
 import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
@@ -111,8 +111,9 @@ type WebViewOwner = WindowShard & {
  * back with something different.
  *
  * Only ready windows are asked: a window that has not registered its services cannot answer, and
- * asking it stalls the search for the network service's whole registration retry. It still counts
- * as a window that could not be asked — see below.
+ * asking it stalls the search for the network service's whole registration retry. One that was
+ * serving requests until a moment ago still counts as a window that could not be asked — see
+ * below.
  *
  * Does not decide what an unresolved owner means. `owner` comes back undefined both when every
  * window answered and none owns it, and when some window could not be asked at all — those two are
@@ -124,15 +125,20 @@ async function findOwner(
   matcher: OwnerMatcher,
   operation: string,
 ): Promise<{ owner: WebViewOwner | undefined; hadUnreachableWindows: boolean }> {
-  // A tracked window that has not registered its services is skipped by the search below rather
+  // A tracked window that was serving requests and stopped is skipped by the search below rather
   // than answering it, which makes it a window that could not be asked. Letting the search come
-  // back "nobody owns this" while such a window exists would send the operation to the focused
-  // window, and the web view it named may be sitting in the window that never got asked.
-  const notReadyWindowIds = getNotReadyWindowIds();
-  let hadServiceErrors = notReadyWindowIds.length > 0;
+  // back "nobody owns this" while such a window exists would send the operation to the routing
+  // target, and the web view it named may be sitting in the window that never got asked.
+  //
+  // A window whose renderer has not registered anything YET is skipped too, and does not count:
+  // nothing has ever been opened in it, so it cannot be holding what this search is looking for.
+  // Counting it would fail every search here for the seconds a window takes to start — every
+  // `File > New Window`, and the whole of app startup.
+  const unreachableWindowIds = getUnreachableWindowIds();
+  let hadServiceErrors = unreachableWindowIds.length > 0;
   if (hadServiceErrors)
     logger.warn(
-      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so they could not be asked about ${describeMatcher(matcher)} for ${operation}`,
+      `Windows ${unreachableWindowIds.join(', ')} stopped serving requests, so they could not be asked about ${describeMatcher(matcher)} for ${operation}`,
     );
   const owners = await Promise.all(
     getReadyWindowIds().map(async (windowId) => {
@@ -175,12 +181,15 @@ async function findOwner(
   const owner =
     matches.find((candidate) => candidate.windowId === targetWindowId) ??
     matches.sort((a, b) => a.windowId - b.windowId)[0];
-  // App-wide uniqueness is a real invariant for an `id` matcher: `withWindowScopedWebViewIds`
-  // suffixes every id with its window at creation, so two windows answering the same id search
-  // means that scoping was bypassed somehow. It is not an invariant for a `type` matcher: simple
-  // mode loads the same static layout into every window with no per-window scoping, so several
-  // windows each having one open web view of a given type is the ordinary multi-window state, not
-  // a violation, and is not worth alarming a log reader over.
+  // Both matchers mean "the one in the app", and they differ in what backs that up rather than in
+  // what they intend. For an `id` matcher it is enforced: `withWindowScopedWebViewIds` suffixes
+  // every id with its window at creation, so two windows answering the same id search means that
+  // scoping was bypassed somehow — worth alarming a log reader over. `existingId: '?'` says the
+  // same thing about a TYPE: callers reach for it precisely for the views the app means to have one
+  // of app-wide. Nothing enforces that one — simple mode loads the same static layout into every
+  // window with no per-window scoping — so a second copy is a state the app can be observed in, not
+  // one it intends. Reported at debug for that reason: it says which copy was picked without
+  // claiming something is broken.
   if (matches.length > 1) {
     if (matcher.kind === 'id')
       logger.warn(
@@ -234,11 +243,13 @@ function getLayoutTargetTabId(layout?: Layout): string | undefined {
 async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard | undefined> {
   // Every window that could not be asked is warned about and then treated as one that does not hold
   // the target — see the doc comment above for why that is the right call for a layout target
-  // specifically.
-  const notReadyWindowIds = getNotReadyWindowIds();
-  if (notReadyWindowIds.length > 0)
+  // specifically. A window whose renderer has not registered anything yet is not even worth the
+  // warning: its dock holds nothing, so it is a window with a real answer rather than one that
+  // could not be asked.
+  const unreachableWindowIds = getUnreachableWindowIds();
+  if (unreachableWindowIds.length > 0)
     logger.warn(
-      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so they could not be asked whether they hold '${targetTabId}' for openWebView beside a layout target`,
+      `Windows ${unreachableWindowIds.join(', ')} stopped serving requests, so they could not be asked whether they hold '${targetTabId}' for openWebView beside a layout target`,
     );
   const holders = await Promise.all(
     getReadyWindowIds().map(async (windowId) => {
@@ -333,14 +344,25 @@ async function openWebView(
         : { kind: 'id', webViewId: options.existingId };
     const { owner, hadUnreachableWindows } = await findOwner(matcher, 'openWebView');
     if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
-    // "Could not ask" is not "answered no". Opening blind here is what mints a second copy of a view
-    // meant to be unique app-wide, so only the path that would create refuses to guess; a caller that
-    // creates nothing is told nothing was found, which is true and costs it nothing.
-    if (hadUnreachableWindows && options.createNewIfNotFound !== false)
-      throw new Error(
-        `Could not openWebView ${describeMatcher(matcher)}: some windows were unreachable.`,
-      );
-    if (hadUnreachableWindows) return undefined;
+    // "Could not ask" is not "answered no" — but what to do about that depends on which question
+    // went unanswered, because the two matchers fail in opposite directions.
+    //
+    // A named id is one specific web view somewhere in the app. Opening blind is what mints a second
+    // copy of a view meant to be unique, and the caller asked for THAT one, so the path that would
+    // create refuses to guess; a caller that creates nothing is told nothing was found, which is
+    // true and costs it nothing.
+    if (hadUnreachableWindows && matcher.kind === 'id') {
+      if (options.createNewIfNotFound !== false)
+        throw new Error(
+          `Could not openWebView ${describeMatcher(matcher)}: some windows were unreachable.`,
+        );
+      return undefined;
+    }
+    // A `?` search names a type, and every caller of it is an entry point the user just clicked —
+    // Open Comments, Get Resources, Find. Refusing there means the click does nothing at all for as
+    // long as one window is unreachable, which for a crashed renderer is the rest of the session.
+    // Guessing wrong costs a second copy of the view, in the window the user is looking at, where
+    // they can see and close it. Falling through to open where the user is beats not opening.
   }
 
   // A layout naming a tab or tab group names the window that holds it, so it routes the same way an
@@ -392,11 +414,15 @@ async function getOpenWebViewDefinition(
   return undefined;
 }
 
-/** Everything the windows that answered have open, and the ready windows that did not answer */
+/** Everything the windows that answered have open, and the windows that should have but did not */
 export type OpenWebViewDefinitionsByReachability = {
   /** Open web view definitions merged from every window that answered */
   definitions: SavedWebViewDefinition[];
-  /** Ready windows that failed to answer, so their web views are missing from `definitions` */
+  /**
+   * Windows that were serving requests but failed to answer, so their web views are missing from
+   * `definitions`. A window whose renderer has never registered anything is not in here — it has
+   * nothing open, which `definitions` already says.
+   */
   unreachableWindowIds: number[];
 };
 
@@ -416,16 +442,18 @@ export type OpenWebViewDefinitionsByReachability = {
 export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<OpenWebViewDefinitionsByReachability> {
   const unreachableWindowIds: number[] = [];
 
-  // A tracked window that has not registered its services is not in the list fanned out to below,
-  // so nothing else here would ever mention it. Leaving it out entirely makes a window that is
-  // alive with a dozen editors in it come back identical to a window that does not exist — and a
-  // window drops out of the ready set by crashing or reloading, not only by still starting up.
-  const notReadyWindowIds = getNotReadyWindowIds();
-  if (notReadyWindowIds.length > 0) {
+  // A tracked window that is not ready is not in the list fanned out to below, so nothing else here
+  // would ever mention it. For a window that was serving requests and stopped — a crashed renderer,
+  // a page being replaced — leaving it out entirely makes a window that is alive with a dozen
+  // editors in it come back identical to a window that does not exist, so it is reported instead.
+  // A window whose renderer has not registered anything yet reports nothing because it has nothing:
+  // an empty answer for it is the truth, not a gap.
+  const windowIdsThatStoppedServing = getUnreachableWindowIds();
+  if (windowIdsThatStoppedServing.length > 0) {
     logger.warn(
-      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so what they have open could not be read. They are reported as unreachable rather than as having nothing open.`,
+      `Windows ${windowIdsThatStoppedServing.join(', ')} stopped serving requests, so what they have open could not be read. They are reported as unreachable rather than as having nothing open.`,
     );
-    unreachableWindowIds.push(...notReadyWindowIds);
+    unreachableWindowIds.push(...windowIdsThatStoppedServing);
   }
 
   const definitionsPerWindow = await Promise.all(
