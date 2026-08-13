@@ -41,9 +41,10 @@ export type WindowEmptinessHandler = ((
 /** What {@link createWindowEmptinessHandler} needs to answer a window reporting its dock empty */
 export type WindowEmptinessHandlerDependencies = {
   /**
-   * Number of windows currently open, NOT already closing, and NOT still pending content (a window
-   * created for specific content that has not yet arrived — see `isWindowPendingContent`) — main
-   * process's authority
+   * Number of windows that could still be the one the user is left with — main process's authority.
+   * Several kinds of window are excluded; `countWindowsThatCouldBeTheLastOne` states the rule in
+   * full and is what main wires here. Re-listing the exclusions here would give a future composer a
+   * second version to read and a way to rebuild a count that misses one.
    */
   countWindows: () => number;
   /** Close the window with the given id */

@@ -91,10 +91,18 @@ function firstTabIdOf(layout: LayoutInfo | undefined): string | undefined {
 
 type ServiceModule = typeof import('@main/services/window-layout-persistence.service');
 
+/**
+ * The instance {@link startService} last handed out, so teardown can reach the module state a test
+ * left behind. Each test re-imports the service, so only the instance it ran against can cancel
+ * what that instance scheduled.
+ */
+let serviceUnderTest: ServiceModule | undefined;
+
 /** Fresh service instance (module state reset) with its request handlers registered */
 async function startService(): Promise<ServiceModule> {
   const service = await import('@main/services/window-layout-persistence.service');
   await service.initializeWindowLayoutPersistence();
+  serviceUnderTest = service;
   return service;
 }
 
@@ -122,6 +130,12 @@ describe('window layout persistence service', () => {
   });
 
   afterEach(() => {
+    // A layout push schedules a write on a real 500 ms debounce, and re-importing the service for
+    // the next test does not cancel it: the orphaned timer fires into whichever test is running and
+    // records a call on the file-wide writeFile mock. Removing a window cancels the pending write
+    // unconditionally, so an id no window ever had defuses whatever this test left scheduled.
+    serviceUnderTest?.handleWindowRemoved(-1);
+    serviceUnderTest = undefined;
     vi.useRealTimers();
   });
 
@@ -481,8 +495,6 @@ describe('window layout persistence service', () => {
       kind: 'entry',
       layout: pushed,
     });
-    // Defuse the debounced write the push scheduled so it cannot leak into another test
-    service.handleWindowRemoved(81);
   });
 
   test('clearWindowPendingContent un-marks a window so it answers as if never marked', async () => {
@@ -527,8 +539,6 @@ describe('window layout persistence service', () => {
     await registeredHandler('windowLayout:save')(88, layoutWithTab('routed'));
 
     expect(announceRoutingTargetChange).toHaveBeenCalled();
-    // Defuse the debounced write the push scheduled so it cannot leak into another test
-    service.handleWindowRemoved(88);
   });
 
   test('marking an untracked window pending content does not change its (empty) answer', async () => {
@@ -674,8 +684,6 @@ describe('window layout persistence service', () => {
     await flush;
 
     expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual(['late']);
-    // Defuse the debounced write the late push scheduled so it cannot leak into another test
-    service.handleWindowRemoved(11);
   });
 
   test('loading waits for an in-flight write so the plan reflects the newest structure', async () => {
