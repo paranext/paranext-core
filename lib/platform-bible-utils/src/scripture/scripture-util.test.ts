@@ -1,6 +1,7 @@
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon } from '@sillsdev/scripture';
 import {
+  ALL_BOOK_IDS,
   areUsjContentsEqualExceptWhitespace,
   collectUsjMarkers,
   compareScrRefs,
@@ -795,5 +796,23 @@ describe('collectUsjMarkers', () => {
   it('ignores marker-less nodes and bare text', () => {
     const doc = makeUsj(['just text', { type: 'unknown' }, { type: 'para', marker: 'q1' }]);
     expect(collectUsjMarkers(doc)).toEqual(['q1']);
+  });
+});
+
+describe('ALL_BOOK_IDS', () => {
+  it('lists the canon in canonical order', () => {
+    expect(ALL_BOOK_IDS[0]).toBe('GEN');
+    expect(ALL_BOOK_IDS).toContain('REV');
+    expect(ALL_BOOK_IDS.length).toBeGreaterThan(60);
+  });
+
+  it('leaves out the books Canon considers obsolete', () => {
+    // The fallback book list navigation commands use when a project reports no books present. An
+    // obsolete id here would let a go-to-book step land on a book no project can open.
+    const obsoleteBookIds = ALL_BOOK_IDS.filter((bookId) =>
+      Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+    );
+
+    expect(obsoleteBookIds).toEqual([]);
   });
 });
