@@ -37,18 +37,43 @@ export type ProjectSelectorProject = {
    */
   versificationName?: string;
   /**
-   * Locale-stable type key for the "Group by type" option. Free-form string so the same field
-   * carries both project types (e.g. `"Standard"`, `"BackTranslation"`, `"StudyBible"` — see PT9's
-   * `ProjectType` enum surfaced by the C# `ProjectListResult.projectType`) and DBL resource types
-   * (`"ScriptureResource"`, `"CommentaryResource"`, `"EnhancedResource"`, `"XmlResource"`,
-   * `"SourceLanguageResource"` — see `ResourceType` in `platform-bible-utils`). The selector does
-   * not enforce a taxonomy; it groups by exact key equality and uses `typeName` for display.
+   * Locale-stable type key for the "Group by type" option.
+   *
+   * **This field is a free-form `string` on purpose — the selector does NOT enforce a taxonomy.**
+   * It groups rows by exact key equality (case-sensitive) and displays them under whatever
+   * {@link typeName} the caller supplies. No enum, no union, no wire contract, and no localization
+   * key set for the values is defined by this component.
+   *
+   * ### Why free-form?
+   *
+   * Rows in a single picker can come from more than one already-established taxonomy, and none of
+   * them are owned by `platform-bible-react`:
+   *
+   * - **Paratext project types** — the PT9 `ProjectType` enum, surfaced by the C# ParatextData
+   *   library via `ScrText.Settings.TranslationInfo.Type.InternalValue` and forwarded on the wire
+   *   as `ProjectListResult.projectType` (see `c-sharp/ManageBooks/ProjectSummary.cs`). Values
+   *   include `"Standard"`, `"BackTranslation"`, `"Auxiliary"`, `"Daughter"`, `"StudyBible"`,
+   *   `"StudyBibleAdditions"`, `"ConsultantNotes"`, `"Transliteration"`,
+   *   `"TransliterationWithEncoder"`.
+   * - **DBL resource types** — the `ResourceType` union in `platform-bible-utils`
+   *   (`lib/platform-bible-utils/src/resources.model.ts`): `"ScriptureResource"`,
+   *   `"CommentaryResource"`, `"EnhancedResource"`, `"XmlResource"`, `"SourceLanguageResource"`.
+   *
+   * Constraining `type` to a hard-coded union would either duplicate one of those taxonomies (and
+   * quickly drift from its source of truth) or invent a new one, and neither buys the selector
+   * anything — grouping only needs equality.
+   *
+   * If a future consumer wants type-safety on the caller side, the recommended shape is a typed
+   * literal at the call site (e.g. `type: 'Standard' satisfies string`), not a widening of this
+   * type. Escalating this to a union is a deliberate, future decision — not something to add
+   * ad-hoc.
    */
   type?: string;
   /**
    * Human-readable label for {@link type} used as the section header in type-grouping mode. Falls
-   * back to the raw `type` key when absent. Callers should provide a localized string (e.g. `"Back
-   * translation"`, `"Study Bible"`, `"Scripture resource"`).
+   * back to the raw `type` key when absent. Callers own the mapping from `type` to `typeName` and
+   * should provide a localized string (e.g. `"Back translation"`, `"Study Bible"`, `"Scripture
+   * resource"`). The selector does not resolve labels itself — see {@link type} for the rationale.
    */
   typeName?: string;
   /**

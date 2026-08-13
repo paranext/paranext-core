@@ -507,7 +507,33 @@ export const AllGroupingOptions: Story = {
     docs: {
       description: {
         story:
-          'Default `availableGroupings` = `["openTabs", "language", "lastUsed", "type"]`. Open the funnel icon (top-right of the popover) to switch between "None" and each grouping. "By last used" sorts recently-used items newest-first inside the "Recently used" section; items without a timestamp fall into "Other". "By type" bins by PT9 ProjectType (Standard, BackTranslation, StudyBible) and DBL ResourceType (ScriptureResource, CommentaryResource) using the `typeName` fields for section labels. Empty buckets are hidden.',
+          'Default `availableGroupings` = `["openTabs", "lastUsed", "language", "versification", "type"]`. Open the funnel icon (top-right of the popover) to switch between "None" and each grouping. **"Last used"** sorts recently-used items newest-first inside the "Recently used" section; items without a timestamp fall into "Other". **"Type"** bins by whatever taxonomy the caller supplied in the `type` field — this fixture mixes PT9 ProjectType keys (Standard, BackTranslation, StudyBible) and DBL ResourceType keys (ScriptureResource, CommentaryResource) using `typeName` for the section labels. The selector treats `type` as a free-form string and does not enforce a taxonomy — see the JSDoc on `ProjectSelectorProject.type` for the full rationale. Empty buckets are hidden.',
+      },
+    },
+  },
+};
+
+export const NoGroupingOptions: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>(undefined);
+    return (
+      <ProjectSelector
+        mode="project"
+        projects={typedProjects}
+        openTabs={sampleOpenTabs}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        availableGroupings={[]}
+        buttonPlaceholder="Select"
+        ariaLabel="Project or resource"
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`availableGroupings={[]}` hides the entire "Group by" section (and the filter funnel button, if there are also no filter toggles applicable to the mode). The initial grouping resolves to `"none"` because `"openTabs"` is not in the array, so the popover opens as a flat list. Useful for a stripped-down picker where the caller already ordered/segmented the input.',
       },
     },
   },

@@ -93,19 +93,21 @@ export type ProjectSelectorLocalizedStrings = {
   searchPlaceholder?: string;
   /** Accessible label for the filter menu icon button. Defaults to `"Filter"`. */
   filterAriaLabel?: string;
-  /** Filter menu: section heading for the grouping toggle. Defaults to `"Group"`. */
+  /** Filter menu: section heading for the grouping toggle. Defaults to `"Group by"`. */
   groupSectionLabel?: string;
   /** Filter menu: section heading for the filter toggles. Defaults to `"Filter"`. */
   filterSectionLabel?: string;
-  /** Filter menu: "None" radio item under the Group section. Defaults to `"None"`. */
+  /** Filter menu: "None" radio item under the Group by section. Defaults to `"None"`. */
   filterGroupNone?: string;
-  /** Filter menu: "By open tabs" item under the Group section. Defaults to `"By open tabs"`. */
+  /** Filter menu: "Open tabs" item under the Group by section. Defaults to `"Open tabs"`. */
   filterGroupByOpenTabs?: string;
-  /** Filter menu: "By language" item under the Group section. Defaults to `"By language"`. */
+  /** Filter menu: "Language" item under the Group by section. Defaults to `"Language"`. */
   filterGroupByLanguage?: string;
-  /** Filter menu: "By last used" item under the Group section. Defaults to `"By last used"`. */
+  /** Filter menu: "Last used" item under the Group by section. Defaults to `"Last used"`. */
   filterGroupByLastUsed?: string;
-  /** Filter menu: "By type" item under the Group section. Defaults to `"By type"`. */
+  /** Filter menu: "Versification" item under the Group by section. Defaults to `"Versification"`. */
+  filterGroupByVersification?: string;
+  /** Filter menu: "Type" item under the Group by section. Defaults to `"Type"`. */
   filterGroupByType?: string;
   /** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
   filterShowSelectedOnly?: string;
@@ -155,13 +157,14 @@ export type ProjectSelectorLocalizedStrings = {
 const DEFAULT_STRINGS: Required<ProjectSelectorLocalizedStrings> = {
   searchPlaceholder: 'Search projects & resources',
   filterAriaLabel: 'Filter',
-  groupSectionLabel: 'Group',
+  groupSectionLabel: 'Group by',
   filterSectionLabel: 'Filter',
   filterGroupNone: 'None',
-  filterGroupByOpenTabs: 'By open tabs',
-  filterGroupByLanguage: 'By language',
-  filterGroupByLastUsed: 'By last used',
-  filterGroupByType: 'By type',
+  filterGroupByOpenTabs: 'Open tabs',
+  filterGroupByLanguage: 'Language',
+  filterGroupByLastUsed: 'Last used',
+  filterGroupByVersification: 'Versification',
+  filterGroupByType: 'Type',
   filterShowSelectedOnly: 'Show selected only',
   openTabsSectionHeading: 'Opened project & resource tabs',
   otherProjectsSectionHeading: 'Your projects & resources',
@@ -203,25 +206,29 @@ function scrollGroupLetterFromMap(id: ScrollGroupId): string {
  * The set of grouping options the filter menu can offer. Each corresponds to a partition function
  * in `project-selector.rows` and requires the corresponding field on `ProjectSelectorProject`:
  *
- * - `openTabs` — uses `openTabs` prop; the historical default.
- * - `language` — uses `language`.
+ * - `openTabs` — uses the `openTabs` prop; the historical default.
  * - `lastUsed` — uses `lastUsedAt` (ms epoch).
+ * - `language` — uses `language`.
+ * - `versification` — uses `versificationId` / `versificationName`; pair with
+ *   `priorityVersificationId` to pin the caller's active bucket to the top.
  * - `type` — uses `type` / `typeName`.
- *
- * `versification` is intentionally not in this union — versification grouping is controlled by its
- * own `groupByVersification` prop and hides the grouping selector when active.
  */
-export type ProjectSelectorGroupingOption = 'openTabs' | 'language' | 'lastUsed' | 'type';
+export type ProjectSelectorGroupingOption =
+  | 'openTabs'
+  | 'lastUsed'
+  | 'language'
+  | 'versification'
+  | 'type';
 
 /**
  * Default `availableGroupings` when the caller does not pass the prop. Order matters — this list
- * defines the order the options appear in the filter menu. `openTabs` is first so it also serves as
- * the default active grouping when the caller does not pass `defaultGrouping`.
+ * defines the order the options appear in the filter menu.
  */
 const DEFAULT_GROUPINGS: readonly ProjectSelectorGroupingOption[] = [
   'openTabs',
-  'language',
   'lastUsed',
+  'language',
+  'versification',
   'type',
 ];
 
@@ -245,22 +252,23 @@ type CommonProps = {
   isLoading?: boolean;
   localizedStrings?: ProjectSelectorLocalizedStrings;
   /**
-   * Grouping options exposed in the filter menu, in the order they appear. Defaults to all four
-   * (`['openTabs', 'language', 'lastUsed', 'type']`) so existing callers get every grouping without
-   * changing props. Pass a subset to hide the ones your data doesn't support (e.g. `['openTabs']`
-   * if none of your rows carry `type`/`lastUsedAt`).
+   * Grouping options exposed in the filter menu, in the order they appear. Defaults to all five
+   * (`['openTabs', 'lastUsed', 'language', 'versification', 'type']`) so existing callers get every
+   * grouping without changing props. Pass a subset to hide the ones your data doesn't support (e.g.
+   * `['openTabs']` if none of your rows carry `type`/`lastUsedAt`), or an empty array to hide the
+   * filter menu entirely.
    */
   availableGroupings?: readonly ProjectSelectorGroupingOption[];
   /**
-   * The grouping selected on initial mount. When absent, defaults to the first entry in
-   * `availableGroupings` (i.e. `'openTabs'` for the default array). Pass `'none'` to open with a
-   * flat list. Ignored if the value is not present in `availableGroupings`.
+   * The grouping selected on initial mount. When absent, defaults to `'openTabs'` if the array
+   * includes it, otherwise `'none'`. Pass `'none'` to explicitly open with a flat list. A value not
+   * present in `availableGroupings` falls through to the same default.
    */
   defaultGrouping?: ProjectSelectorGroupingOption | 'none';
   /**
    * Legacy shorthand for `defaultGrouping`. When `false`, opens with `'none'`; when `true` or
-   * absent, uses the resolved default from `availableGroupings`. Prefer `defaultGrouping` for new
-   * code. Superseded silently if both are set.
+   * absent, uses the resolved default. Prefer `defaultGrouping` for new code. Superseded silently
+   * if both are set.
    *
    * @deprecated Use {@link defaultGrouping} instead.
    */
@@ -274,17 +282,9 @@ type CommonProps = {
    */
   hideTriggerChevron?: boolean;
   /**
-   * When true, rows are grouped by `versificationId` (with the `priorityVersificationId` bucket
-   * pinned to the top). The "Group by open tabs" toggle is hidden — the two grouping modes are
-   * mutually exclusive in the same picker. When `groupByVersification` is enabled, the consumer
-   * should ensure each {@link ProjectSelectorProject} carries `versificationId` and
-   * `versificationName`.
-   */
-  groupByVersification?: boolean;
-  /**
-   * Versification id whose bucket should render first in versification grouping mode (typically the
-   * caller's active project's versification). Optional — when absent, all buckets sort
-   * alphabetically by `versificationName`.
+   * Versification id whose bucket should render first when the active grouping is `versification`
+   * (typically the caller's active project's versification). Ignored under any other grouping.
+   * Optional — when absent, versification buckets sort alphabetically by `versificationName`.
    */
   priorityVersificationId?: string;
 };
@@ -569,8 +569,9 @@ function isGroupingChoice(value: string): value is GroupingChoice {
   return (
     value === 'none' ||
     value === 'openTabs' ||
-    value === 'language' ||
     value === 'lastUsed' ||
+    value === 'language' ||
+    value === 'versification' ||
     value === 'type'
   );
 }
@@ -595,6 +596,8 @@ function groupingLabel(
       return strings.filterGroupByLanguage;
     case 'lastUsed':
       return strings.filterGroupByLastUsed;
+    case 'versification':
+      return strings.filterGroupByVersification;
     case 'type':
       return strings.filterGroupByType;
     default:
@@ -640,29 +643,29 @@ function FilterMenu({
         className="tw:w-56"
         style={{ zIndex: Z_INDEX_ABOVE_SELECTOR_POPOVER }}
       >
-        <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={activeGrouping}
-          onValueChange={(value) => {
-            if (isGroupingChoice(value)) onChangeGrouping(value);
-          }}
-        >
-          <DropdownMenuRadioItem value="none" onSelect={(event) => event.preventDefault()}>
-            {strings.filterGroupNone}
-          </DropdownMenuRadioItem>
-          {availableGroupings.map((option) => (
-            <DropdownMenuRadioItem
-              key={option}
-              value={option}
-              onSelect={(event) => event.preventDefault()}
+        {availableGroupings.length > 0 && (
+          <>
+            <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={activeGrouping}
+              onValueChange={(value) => {
+                if (isGroupingChoice(value)) onChangeGrouping(value);
+              }}
             >
-              {groupingLabel(option, strings)}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
+              {/* No `onSelect={preventDefault}` here — picking a grouping should close the menu
+                  immediately, so the user sees the newly grouped list without a second click. */}
+              <DropdownMenuRadioItem value="none">{strings.filterGroupNone}</DropdownMenuRadioItem>
+              {availableGroupings.map((option) => (
+                <DropdownMenuRadioItem key={option} value={option}>
+                  {groupingLabel(option, strings)}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </>
+        )}
         {onChangeShowSelectedOnly && (
           <>
-            <DropdownMenuSeparator />
+            {availableGroupings.length > 0 && <DropdownMenuSeparator />}
             <DropdownMenuLabel>{strings.filterSectionLabel}</DropdownMenuLabel>
             <DropdownMenuCheckboxItem
               checked={Boolean(showSelectedOnly)}
@@ -700,16 +703,19 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const availableGroupings = props.availableGroupings ?? DEFAULT_GROUPINGS;
-  // Mount-time initializer only — the same lazy resolution the useState hook uses. We do NOT
-  // re-derive when props change, since that would fight a user who has since picked a different
-  // grouping. Callers control the initial value; the component owns the interactive one.
+  // Mount-time initializer only — we do NOT re-derive when props change, since that would fight a
+  // user who has since picked a different grouping. Callers control the initial value; the
+  // component owns the interactive one.
   const [activeGrouping, setActiveGrouping] = useState<GroupingChoice>(() => {
     if (props.defaultGrouping) {
       if (props.defaultGrouping === 'none') return 'none';
       if (availableGroupings.includes(props.defaultGrouping)) return props.defaultGrouping;
     }
     if (props.defaultGroupByOpenTabs === false) return 'none';
-    return availableGroupings[0] ?? 'none';
+    // Fall back to 'openTabs' when it's on the menu, otherwise 'none'. Deliberately NOT
+    // availableGroupings[0] — a caller who restricts to e.g. ['language','type'] should still open
+    // in flat mode, not silently pick 'language'.
+    return availableGroupings.includes('openTabs') ? 'openTabs' : 'none';
   });
   const [showSelectedOnly, setShowSelectedOnly] = useState(false);
 
@@ -785,28 +791,26 @@ export function ProjectSelector(props: ProjectSelectorProps) {
     return result;
   }, [rows, query, props.mode, showSelectedOnly]);
 
-  // When the caller opts into versification grouping (`groupByVersification`), sections are
-  // partitioned by versificationId with the priority bucket pinned to the top. The grouping
-  // selector is intentionally hidden in this mode (see FilterMenu below) — versification grouping
-  // is mutually exclusive with the other grouping options in the same picker.
+  // Section partitioning dispatches on the active grouping. Versification is just another option
+  // here — `priorityVersificationId` still lets the caller pin their active project's bucket to
+  // the top, but only when the active grouping happens to be 'versification'.
   const sections = useMemo(() => {
-    if (props.groupByVersification) {
-      return partitionByVersification(
-        filteredRows,
-        props.priorityVersificationId,
-        strings.versificationUnknownSectionHeading,
-      );
-    }
     switch (activeGrouping) {
       case 'openTabs':
         return partitionAndSort(filteredRows, true);
-      case 'language':
-        return partitionByLanguage(filteredRows, strings.languageUnknownSectionHeading);
       case 'lastUsed':
         return partitionByLastUsed(
           filteredRows,
           strings.lastUsedRecentSectionHeading,
           strings.lastUsedOtherSectionHeading,
+        );
+      case 'language':
+        return partitionByLanguage(filteredRows, strings.languageUnknownSectionHeading);
+      case 'versification':
+        return partitionByVersification(
+          filteredRows,
+          props.priorityVersificationId,
+          strings.versificationUnknownSectionHeading,
         );
       case 'type':
         return partitionByType(filteredRows, strings.typeUnknownSectionHeading);
@@ -817,7 +821,6 @@ export function ProjectSelector(props: ProjectSelectorProps) {
   }, [
     filteredRows,
     activeGrouping,
-    props.groupByVersification,
     props.priorityVersificationId,
     strings.versificationUnknownSectionHeading,
     strings.languageUnknownSectionHeading,
@@ -1092,7 +1095,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                   className="tw:border-0"
                 />
               </div>
-              {!props.groupByVersification && (
+              {(availableGroupings.length > 0 || props.mode === 'project-multi') && (
                 <FilterMenu
                   availableGroupings={availableGroupings}
                   activeGrouping={activeGrouping}
