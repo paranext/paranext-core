@@ -40,7 +40,7 @@ import type {
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { getOpenFindTriggerArgs } from './find-trigger.util';
+import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
@@ -356,33 +356,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // gets rendered in this iframe.
   useCommentaryMarkerStyles(resourceProjectId);
 
-  // Ctrl+F opens Find for the RESOURCE shown in this panel (Bible text or commentary) — the
-  // selected resource's project id, not this panel's own container project. No-op while no
-  // resource is resolved. macOS intentionally uses Ctrl (not Cmd), matching the editor.
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (!event.ctrlKey || event.key.toLowerCase() !== 'f') return;
-      event.preventDefault();
-      const args = getOpenFindTriggerArgs(
-        webViewId,
-        resourceProjectId,
-        window.getSelection()?.toString() ?? '',
-      );
-      if (!args) return;
-      papi.commands
-        .sendCommand(
-          'platformScripture.openFind',
-          args.webViewId,
-          args.selectedText,
-          args.sourceProjectId,
-        )
-        .catch((e) =>
-          logger.warn(`Failed to open Find from resource panel: ${getErrorMessage(e)}`),
-        );
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [webViewId, resourceProjectId]);
+  // Ctrl+F opens Find for the displayed resource.
+  useOpenFindShortcut(webViewId, resourceProjectId);
 
   // #endregion
 
