@@ -746,6 +746,26 @@ describe('web view service router', () => {
       expect(focused.openWebView).not.toHaveBeenCalled();
     });
 
+    test('refuses a window layout combined with a target window id before any search runs', async () => {
+      // The contradiction is in the arguments alone, so what it is refused for cannot depend on
+      // whether a reuse search happened to find a match — and a call that cannot be honored must
+      // not fan a search out to every window on its way to being refused
+      const owner = windowShard(['existing-view']);
+      withWindows({ 1: windowShard([]), 2: owner });
+      const router = await getRouter();
+
+      await expect(
+        router.openWebView(
+          'someType',
+          { type: 'window' },
+          { targetWindowId: 1, existingId: 'existing-view' },
+        ),
+      ).rejects.toThrow('one or the other');
+
+      expect(owner.getOpenWebViewDefinition).not.toHaveBeenCalled();
+      expect(owner.openWebView).not.toHaveBeenCalled();
+    });
+
     test('clears the pending-content mark when the routed open succeeds', async () => {
       const focused = windowShard([]);
       const created = windowShard([]);
@@ -869,6 +889,26 @@ describe('web view service router', () => {
 
       expect(named.openWebView).not.toHaveBeenCalled();
       expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('refuses a target window id with a replace-tab layout before any search runs', async () => {
+      // Same pure-argument contradiction as the window layout above: a reuse search that finds the
+      // web view returns from the owner rung without ever reaching this check, so enforcement would
+      // otherwise depend on what the docks happened to hold
+      const owner = windowShard(['existing-view']);
+      withWindows({ 1: windowShard([]), 2: owner });
+      const router = await getRouter();
+
+      await expect(
+        router.openWebView(
+          'someType',
+          { type: 'replace-tab', targetTabId: 'target-tab' },
+          { targetWindowId: 1, existingId: 'existing-view' },
+        ),
+      ).rejects.toThrow('names its own window');
+
+      expect(owner.getOpenWebViewDefinition).not.toHaveBeenCalled();
+      expect(owner.openWebView).not.toHaveBeenCalled();
     });
   });
 
