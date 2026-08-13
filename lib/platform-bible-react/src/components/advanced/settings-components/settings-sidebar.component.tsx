@@ -22,7 +22,21 @@ export type SelectedSettingsSidebarItem = {
   projectId?: string;
 };
 
-export type ProjectInfo = { projectId: string; projectName: string };
+export type ProjectInfo = {
+  projectId: string;
+  /**
+   * Short project name — the trigger label for the `<ProjectSelector>` and the primary line of each
+   * popover row. Sourced from the `platform.name` project setting.
+   */
+  projectName: string;
+  /**
+   * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
+   * popover rows. Sourced from the `platform.fullName` project setting. When absent or equal to
+   * `projectName`, the row falls back to a single-line layout (matching the {@link ProjectSelector}
+   * de-dup rule for `fullName === shortName`).
+   */
+  projectFullName?: string;
+};
 
 export type SettingsSidebarProps = {
   /** Optional id for testing */
@@ -87,15 +101,17 @@ export function SettingsSidebar({
   );
 
   // Adapt the public `ProjectInfo[]` shape to `ProjectSelectorProject[]` for the canonical
-  // <ProjectSelector> trigger. We only have a single name string in the public API, so reuse it
-  // as both `shortName` (the trigger label) and `fullName` (the popover row's secondary line).
-  // The public prop shape is intentionally preserved so downstream consumers don't need to change.
+  // <ProjectSelector> trigger. `projectFullName` is optional — when the caller supplies it, each
+  // row renders a two-line layout (short name over muted full name), matching how other project
+  // selectors in the app (manage-books, checks side panel) display projects. When only the short
+  // name is available, we mirror it into `fullName` so the selector's `fullName === shortName`
+  // de-dup collapses the row to a single line.
   const projectSelectorProjects = useMemo<ProjectSelectorProject[]>(
     () =>
       projectInfo.map((info) => ({
         id: info.projectId,
         shortName: info.projectName,
-        fullName: info.projectName,
+        fullName: info.projectFullName ?? info.projectName,
       })),
     [projectInfo],
   );
