@@ -88,6 +88,7 @@ import {
   markWindowReady,
   removeWindow,
   setFocusedWindowId,
+  setWindowPendingContentPredicate,
 } from '@main/services/window-state.service';
 import {
   assignEntryToWindow,
@@ -369,6 +370,13 @@ async function main() {
   // Window layout persistence must register its request handlers before any window exists so a
   // renderer's layout load can never race the registration
   await initializeWindowLayoutPersistence();
+
+  // The routing target passes over a window that is still waiting for its routed content the same
+  // way it passes over one whose close has begun: the window takes OS focus the moment it is
+  // shown, and anything focus-routed into it before its content arrives is destroyed if the
+  // operation that created it fails and closes it. Injected because the pending-content mark lives
+  // with window-layout persistence, which the window-state tracker does not import.
+  setWindowPendingContentPredicate(isWindowPendingContent);
 
   // Same reasoning as above: a window can report itself empty as soon as it exists, so the handler
   // that decides what happens next must already be registered
