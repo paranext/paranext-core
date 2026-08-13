@@ -574,9 +574,20 @@ export function markWindowReady(windowId: number): void {
  * mutation here — routing proxies hold a resolved service for the target window and have nothing
  * else to tell them it moved.
  *
+ * An id that is not tracked is ignored. A window's own close handler always runs while the window
+ * is still tracked, so nothing legitimate arrives here for one that has gone — but a window that
+ * has gone can still have a report in flight (its dock empties during teardown, and the answer to
+ * that is a close). Electron reuses window ids, so recording such a mark would leave the next
+ * window to take this id born closing: passed over by routing, and told 'closing' when it reports
+ * its own emptiness, with no close ever scheduled for it.
+ *
  * @param windowId Window that is on its way out
  */
 export function markWindowClosing(windowId: number): void {
+  if (!trackedWindows.some((tracked) => tracked.windowId === windowId)) {
+    logger.warn(`Ignoring a closing mark for window ${windowId}, which is not tracked`);
+    return;
+  }
   closingWindowIds.add(windowId);
   announceRoutingTargetIfChanged();
 }
