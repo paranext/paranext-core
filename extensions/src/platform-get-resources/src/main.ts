@@ -204,6 +204,21 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
     // Exclude any resource whose project ID matches a DBL catalog entry (by exact projectId or by
     // the startsWith(dblEntryUid) convention Paratext uses when naming project directories).
     const dblEntries = cachedResources ?? [];
+    // Temporary debug: log read-only projects and why each is included or excluded
+    const readOnlyMetadata = allMetadata.filter((m) => m.isEditable === false);
+    logger.info(
+      `DEBUG getLocalNonDblResources: ${readOnlyMetadata.length} read-only projects, dblEntries.length=${dblEntries.length}`,
+    );
+    readOnlyMetadata.forEach((m) => {
+      const matchingDblEntry = dblEntries.find(
+        (r) =>
+          (r.projectId !== '' && r.projectId === m.id) ||
+          (r.dblEntryUid !== '' && m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
+      );
+      logger.info(
+        `DEBUG localNonDbl: id=${m.id} name=${m.name} isEditable=${m.isEditable} matchedDblEntry=${matchingDblEntry?.dblEntryUid ?? 'none'}`,
+      );
+    });
     const nonDblMetadata = allMetadata.filter((m) => {
       if (m.isEditable !== false) return false;
       const matchingDblEntry = dblEntries.find(
