@@ -84,13 +84,13 @@ import {
 import {
   addWindow,
   announceRoutingTargetChange,
+  countWindowsThatCouldBeTheLastOne,
   doesNavigationReplaceRendererRegistrations,
   getFocusedWindowId,
   getTargetWindowId,
   getWindows,
   handleWindowBlurred,
   isWindowClosing as isWindowMarkedClosing,
-  isWindowAbandoned,
   isWindowReady,
   markWindowAbandoned,
   markWindowClosing,
@@ -400,20 +400,9 @@ async function main() {
   // Same reasoning as above: a window can report itself empty as soon as it exists, so the handler
   // that decides what happens next must already be registered
   const handleWindowEmptied = createWindowEmptinessHandler({
-    // Excludes pending-content windows as well as closing ones: a window created for specific
-    // content that has not yet arrived is not a real window yet, and the very operation filling it
-    // can still fail and take it away — it must never stand in as the last window.
-    //
-    // Abandoned windows are excluded for the mirror image of that reason. One is still on screen
-    // and still tracked, deliberately: closing it would rewrite the persisted window layout
-    // without it and take away the user's one remaining recovery. But its renderer is dead and no
-    // reload is coming, so nothing will ever run in it again — counting it as a real window would
-    // let the last window the user can actually work in be closed out from under them.
-    countWindows: () =>
-      getWindows().filter(
-        ({ id }) =>
-          !isWindowMarkedClosing(id) && !isWindowPendingContent(id) && !isWindowAbandoned(id),
-      ).length,
+    // Which windows may stand in as another window's reason to close is the window-state tracker's
+    // rule, whole — see `countWindowsThatCouldBeTheLastOne` for what it leaves out and why
+    countWindows: countWindowsThatCouldBeTheLastOne,
     closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
     markWindowClosing,
     // The shared registry, not only this handler's own decisions: a window the user is closing can
