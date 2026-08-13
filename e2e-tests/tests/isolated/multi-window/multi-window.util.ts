@@ -58,6 +58,32 @@ export const FAULT_MARKERS = [
 export const DUPLICATE_REGISTRATION_PATTERN =
   /\[(warn|error)\][^\n]*(already registered|rejected by the central registry)/;
 
+/**
+ * A line every run produces once its routers claim their names — the positive control for
+ * {@link DUPLICATE_REGISTRATION_PATTERN}.
+ *
+ * `expect(log).not.toMatch(...)` passes just as happily against output that never arrived. The
+ * capture explicitly does not include anything written before it was attached, so a mis-placed
+ * offset, a capture wired up late, or a run that died before registering anything all yield a
+ * silently vacuous pass on the collision sweep. Asserting this first means the sweep has something
+ * to be a negative OF: the registry was exercised, and it reported no collision.
+ *
+ * This exact phrase is logged at info by `web-view.service-router.ts` when the router finishes
+ * registering, which is on the startup path of every window-bearing run.
+ */
+export const ROUTER_REGISTERED_LOG = 'WebView service router registered';
+
+/**
+ * The first thing any renderer logs (`src/renderer/index.tsx`) — the positive control for a
+ * collision sweep over a SLICE of the capture rather than the whole of it.
+ *
+ * {@link ROUTER_REGISTERED_LOG} is a main-process line emitted once at app startup, so it is not in
+ * the output that follows a later mark. When the sweep is scoped to one window's startup, this is
+ * what proves that startup's output actually landed in the slice — a mark taken a moment too late
+ * would otherwise yield an empty slice and a passing assertion.
+ */
+export const RENDERER_STARTING_LOG = 'Starting renderer';
+
 // #endregion
 
 // #region app output capture
@@ -479,6 +505,9 @@ export async function quitAndExpectCleanExit(
 
   const log = output.text();
   FAULT_MARKERS.forEach((marker) => expect(log).not.toContain(marker));
+  // Positive control first: prove the capture actually holds this run's startup output, so the
+  // negative sweeps below are asserting something rather than passing on an empty string.
+  expect(log).toContain(ROUTER_REGISTERED_LOG);
   expect(log).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 }
 
