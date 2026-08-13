@@ -898,6 +898,21 @@ describe('window state tracking', () => {
       expect(isWindowClosing(1)).toBe(false);
     });
 
+    test('ignores a closing mark for a window that is no longer tracked', () => {
+      // A window that has gone away can still have a report in flight — its dock emptying during
+      // teardown is answered after it is gone. Electron reuses window ids, so recording that mark
+      // would leave the next window to take this id born closing: passed over by routing, and told
+      // 'closing' when it reports its own emptiness, with no close ever scheduled for it.
+      const gone = fakeWindow(1);
+      addWindow(gone);
+      removeWindow(gone, 1);
+
+      markWindowClosing(1);
+
+      addWindow(fakeWindow(1));
+      expect(isWindowClosing(1)).toBe(false);
+    });
+
     test('reports the app going down when the only window closes', () => {
       addWindow(fakeWindow(1));
 
