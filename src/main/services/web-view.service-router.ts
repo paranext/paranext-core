@@ -555,7 +555,10 @@ function raiseMoveTarget(target: MoveWebViewTarget): void {
  * target while the source instance is alive, because reuse logic would find and raise the source
  * instead.
  *
- * @returns Id of the web view in its new window (the same id it had)
+ * @returns Authoritative id of the web view in its new window. Can differ from the id passed in: a
+ *   web view restored from a persisted layout carries a window-scoped id, and the capture strips
+ *   that scope rather than carry one window's scope into another — callers use the returned id for
+ *   anything after the move
  * @throws If no window holds the web view, if the target window does not exist or is closing, or if
  *   the target open failed — the error says where the web view ended up (see
  *   {@link recoverAfterFailedMove})
@@ -737,7 +740,10 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
       ],
       result: {
         name: 'return value',
-        summary: 'Id of the web view in its new window (the same id it had)',
+        summary:
+          'Authoritative id of the web view in its new window. Can differ from the passed ' +
+          'webViewId (a web view restored from a persisted layout carries a window-scoped id ' +
+          'the move does not keep) — use the returned id for anything after the move',
         schema: { type: 'string' },
       },
     },
@@ -764,7 +770,10 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
       ],
       result: {
         name: 'return value',
-        summary: 'Id of the web view in its new window (the same id it had)',
+        summary:
+          'Authoritative id of the web view in its new window. Can differ from the passed ' +
+          'webViewId (a web view restored from a persisted layout carries a window-scoped id ' +
+          'the move does not keep) — use the returned id for anything after the move',
         schema: { type: 'string' },
       },
     },
