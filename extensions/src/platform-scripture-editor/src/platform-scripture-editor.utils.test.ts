@@ -2430,21 +2430,32 @@ function createFinalizeMockPapi() {
     }
     return undefined;
   });
+  // Defaults to 'simple' - matches the common case (the switch this replays side effects for only
+  // ever originates from a Power -> Simple mode change), so most tests don't need to set it.
+  const mockSettingsGet = vi.fn().mockResolvedValue('simple');
   // Must cast since the mock only includes the papi properties finalizeProjectSwitch uses.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: mockSendCommand },
     dataProviders: { get: mockDataProvidersGet },
+    settings: { get: mockSettingsGet },
     logger: { warn: mockWarn },
   } as unknown as typeof PapiBackend;
-  return { papi, mockSendCommand, mockWarn, mockRecordProjectOpened, mockDataProvidersGet };
+  return {
+    papi,
+    mockSendCommand,
+    mockWarn,
+    mockRecordProjectOpened,
+    mockDataProvidersGet,
+    mockSettingsGet,
+  };
 }
 
 describe('finalizeProjectSwitch', () => {
   it('syncs the incoming project only via syncProjects (finalizeProjectSwitch has no outgoing project by design)', async () => {
     const { papi, mockSendCommand } = createFinalizeMockPapi();
 
-    await finalizeProjectSwitch(papi, 'proj-1', true, undefined);
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
     expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
       'proj-1',
@@ -2454,20 +2465,33 @@ describe('finalizeProjectSwitch', () => {
     );
   });
 
-  it('calls applyForProject when isEditable is true', async () => {
+  it('does not await the sync before returning - a hung sync must not block applyForProject or recordProjectOpened', async () => {
+    const { papi, mockSendCommand, mockRecordProjectOpened } = createFinalizeMockPapi();
+    // Never resolves - simulates a slow/hung Send/Receive.
+    mockSendCommand.mockImplementation(() => new Promise(() => {}));
+    const applyForProject = vi.fn().mockResolvedValue(undefined);
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(applyForProject).toHaveBeenCalledWith('proj-1');
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('calls applyForProject when still in Simple mode', async () => {
     const { papi } = createFinalizeMockPapi();
     const applyForProject = vi.fn().mockResolvedValue(undefined);
 
-    await finalizeProjectSwitch(papi, 'proj-1', true, applyForProject);
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
 
     expect(applyForProject).toHaveBeenCalledWith('proj-1');
   });
 
-  it('does not call applyForProject when isEditable is false', async () => {
-    const { papi } = createFinalizeMockPapi();
+  it('does not call applyForProject when the user has since switched back to Power mode', async () => {
+    const { papi, mockSettingsGet } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
     const applyForProject = vi.fn().mockResolvedValue(undefined);
 
-    await finalizeProjectSwitch(papi, 'proj-1', false, applyForProject);
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
 
     expect(applyForProject).not.toHaveBeenCalled();
   });
@@ -2475,13 +2499,22 @@ describe('finalizeProjectSwitch', () => {
   it('does not throw when applyForProject is undefined', async () => {
     const { papi } = createFinalizeMockPapi();
 
-    await expect(finalizeProjectSwitch(papi, 'proj-1', true, undefined)).resolves.toBeUndefined();
+    await expect(finalizeProjectSwitch(papi, 'proj-1', undefined)).resolves.toBeUndefined();
   });
 
   it('records the project as recently opened', async () => {
     const { papi, mockRecordProjectOpened } = createFinalizeMockPapi();
 
-    await finalizeProjectSwitch(papi, 'proj-1', true, undefined);
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('records the project as recently opened even when no longer in Simple mode', async () => {
+    const { papi, mockSettingsGet, mockRecordProjectOpened } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
 
     expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
   });
@@ -2490,7 +2523,7 @@ describe('finalizeProjectSwitch', () => {
     const { papi, mockWarn, mockRecordProjectOpened } = createFinalizeMockPapi();
     mockRecordProjectOpened.mockRejectedValue(new Error('storage write failed'));
 
-    await expect(finalizeProjectSwitch(papi, 'proj-1', true, undefined)).resolves.toBeUndefined();
+    await expect(finalizeProjectSwitch(papi, 'proj-1', undefined)).resolves.toBeUndefined();
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
   });
 });

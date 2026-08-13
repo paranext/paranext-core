@@ -39,6 +39,7 @@ import {
   SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS,
   SavedWebViewDefinition,
   SavedWebViewDefinitionOmittedKeys,
+  SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   WEB_VIEW_CONTENT_TYPE,
   WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
   WebViewDefinition,
@@ -47,7 +48,7 @@ import {
   WebViewId,
   WebViewType,
 } from '@shared/models/web-view.model';
-import { registerCommand, sendCommand } from '@shared/services/command.service';
+import { sendCommand } from '@shared/services/command.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
@@ -55,7 +56,6 @@ import { startWorkspaceUpdate } from '@renderer/services/workspace-updating-stor
 import {
   getLastOpenedProject,
   setLastOpenedProject,
-  LastOpenedProject,
 } from '@renderer/services/last-opened-project-cache';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
@@ -1004,6 +1004,34 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
  * @param dockLayout Dock layout element to register along with other important properties
  * @returns Function used to unregister this dock layout
  */
+/**
+ * Keeps `last-opened-project-cache` current with the Simple-mode Scripture Editor tab's real
+ * project, whenever it resolves — whether that's from a Power → Simple switch completing, or the
+ * user picking a different project while already in Simple mode. Filtered to the fixed
+ * Simple-layout Scripture Editor tab id (`SIMPLE_LAYOUT_TAB_IDS`), which a Power-mode editor tab
+ * can never carry, so this needs no `isPowerMode` check to stay accurate.
+ *
+ * Excludes published resources from the cache: `platform.isPublished` is stable, cheap metadata, so
+ * checking it here keeps a resource from ever becoming a Power → Simple switch's fast-path target.
+ */
+function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
+  if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
+  if (!SIMPLE_LAYOUT_TAB_IDS.includes(webView.id)) return;
+  const { projectId } = webView;
+  if (!projectId) return;
+  projectLookupService
+    .getMetadataForProject(projectId)
+    .then((metadata) => {
+      if (metadata.isPublished) return undefined;
+      return setLastOpenedProject({ id: projectId });
+    })
+    .catch((err) => {
+      logger.warn(
+        `Could not resolve metadata for project ${projectId} before caching it as the last-opened Simple-mode project: ${getErrorMessage(err)}`,
+      );
+    });
+}
+
 export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // Save the current async var so we know if it changed before we unsubscribed
   const currentPapiDockLayoutVar = papiDockLayoutVar;
@@ -1018,6 +1046,13 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // awaits settings reads (supplement flags), and an unhandled rejection here would leave the dock
   // unloaded (blank window).
   loadLayout().catch((err) => logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`));
+
+  const unsubscribeOnDidOpenWebViewForCache = onDidOpenWebView((event) =>
+    cacheLastOpenedSimpleProject(event.webView),
+  );
+  const unsubscribeOnDidUpdateWebViewForCache = onDidUpdateWebView((event) =>
+    cacheLastOpenedSimpleProject(event.webView),
+  );
 
   // Reload the layout whenever `platform.interfaceMode` changes so the user-facing mode switcher
   // (see `UserProfilePopover`) can swap layouts live without a restart. Use
@@ -1080,6 +1115,9 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
     if (papiDockLayoutVar !== currentPapiDockLayoutVar)
       throw new Error('Tried to unregister an old dock layout');
 
+    unsubscribeOnDidOpenWebViewForCache();
+    unsubscribeOnDidUpdateWebViewForCache();
+
     unsubscribeRequested = true;
     if (unsubscribeInterfaceMode) {
       const unsub = unsubscribeInterfaceMode;
@@ -1113,37 +1151,25 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
  * layout — same code path power mode uses on restore — and renders project content immediately,
  * with no empty-placeholder → reload round-trip.
  *
- * Fast path: `getLastOpenedProject` returns the cached id synchronously (populated reactively from
- * `useProjectPickerData`), then a tightly-bounded re-check of its editability runs before the
- * layout swap (see {@link resolveFastPathIsEditable} for why this exists and why it's cheap - it's
- * defense-in-depth, not expected to change the cached value in practice).
+ * Fast path: `getLastOpenedProject` returns the cached id synchronously (kept current by the
+ * Scripture Editor tab event subscription further down this file).
  *
- * Slow path: cold start (no cache yet) — fall back to the async recents-provider lookup, plus one
- * more await to resolve the resolved project's real editability (see `resolveProjectIsEditable`).
- * Both lookups are bounded by {@link COLD_START_LOOKUP_TIMEOUT_MS}.
+ * Slow path: cold start (no cache yet) — fall back to {@link getMostRecentUsableProjectId}, which
+ * walks the recents list trying each candidate until one isn't a published resource, bounded
+ * overall by {@link COLD_START_LOOKUP_TIMEOUT_MS}.
  *
- * Fallback: if neither cache nor recents can produce a project, load the bare `simpleLayout` and
- * let the picker do the slow legacy path.
- *
- * Both paths resolve real editability rather than assuming the target project is editable: the
- * cached/most-recent project can be a read-only Resource Viewer. See
- * {@link buildSimpleLayoutForProject}'s `isReadOnly` param.
+ * Fallback: if neither cache nor recents can produce a usable project, load the bare `simpleLayout`
+ * and let the picker do the slow legacy path.
  */
 /**
- * Bound on `getMostRecentProjectId`/`resolveProjectIsEditable` while resolving the Simple-mode
- * cold-start path (no cached last-opened project). Without this, a slow or not-yet-registered PDP
- * factory can leave `projectLookupService.getMetadataForProject` waiting up to 20s for a factory
- * plus a further startup-grace retry loop (see `project-lookup.service-model.ts`), stalling the
- * whole switch for tens of seconds - defeating the point of this being the "fast" switch path.
+ * Bound on the whole {@link getMostRecentUsableProjectId} walk (recents fetch plus every candidate's
+ * `isPublished` check) while resolving the Simple-mode cold-start path (no cached last-opened
+ * project). Without this, a slow or not-yet-registered PDP factory can leave
+ * `projectLookupService.getMetadataForProject` waiting up to 20s for a factory plus a further
+ * startup-grace retry loop (see `project-lookup.service-model.ts`), stalling the whole switch for
+ * tens of seconds - defeating the point of this being the "fast" switch path.
  */
 export const COLD_START_LOOKUP_TIMEOUT_MS = 3000;
-
-/**
- * Bound on the fast path's editability re-check (see {@link resolveFastPathIsEditable}). Tighter
- * than {@link COLD_START_LOOKUP_TIMEOUT_MS} since this is defense-in-depth on the path that's
- * supposed to be fast, not a lookup this path fundamentally needs to wait on.
- */
-export const FAST_PATH_EDITABILITY_RECHECK_TIMEOUT_MS = 1000;
 
 /**
  * Bound on {@link waitForNextPaint}. A double `requestAnimationFrame` normally resolves in well
@@ -1161,11 +1187,10 @@ export const PAINT_WAIT_TIMEOUT_MS = 500;
 const LOOKUP_TIMED_OUT = Symbol('lookup-timed-out');
 
 /**
- * Races an async lookup against a bound. Both `getMostRecentProjectId` and
- * `resolveProjectIsEditable` already catch their own errors internally and never reject, so a plain
- * `Promise.race` (rather than `waitForDuration` from `platform-bible-utils`, which collapses a
- * timeout and a resolved `undefined` to the same result) is enough to distinguish the two outcomes
- * for logging.
+ * Races an async lookup against a bound. `getMostRecentUsableProjectId` already catches its own
+ * errors internally and never rejects, so a plain `Promise.race` (rather than `waitForDuration`
+ * from `platform-bible-utils`, which collapses a timeout and a resolved `undefined` to the same
+ * result) is enough to distinguish the two outcomes for logging.
  */
 async function withTimeout<T>(
   fn: () => Promise<T>,
@@ -1173,38 +1198,6 @@ async function withTimeout<T>(
 ): Promise<T | typeof LOOKUP_TIMED_OUT> {
   const timedOut: Promise<typeof LOOKUP_TIMED_OUT> = wait(timeoutMs).then(() => LOOKUP_TIMED_OUT);
   return Promise.race([fn(), timedOut]);
-}
-
-/**
- * Re-checks a cached project's editability against live metadata, with a tight bound. This is
- * defense-in-depth, not a load-bearing correctness fix: `platform.isEditable` reflects whether a
- * project is a resource vs. a normal translation project (essentially fixed at creation), not a
- * per-session permission that Send/Receive can revoke - a repo-wide grep of the Paratext data model
- * found no Send/Receive path that changes it for an already-cached project. This check exists only
- * in case that assumption is wrong in some case this investigation missed, so on error or timeout
- * it falls back to the cached value (not a hardcoded default) and logs a warning - a recurring
- * warning here is a signal to revisit the assumption above, not routine/expected noise.
- */
-async function resolveFastPathIsEditable(cached: LastOpenedProject): Promise<boolean> {
-  const cachedIsEditable = cached.isEditable !== false;
-  try {
-    const result = await withTimeout(async () => {
-      const metadata = await projectLookupService.getMetadataForProject(cached.id);
-      return metadata.isEditable !== false;
-    }, FAST_PATH_EDITABILITY_RECHECK_TIMEOUT_MS);
-    if (result === LOOKUP_TIMED_OUT) {
-      logger.warn(
-        `Timed out after ${FAST_PATH_EDITABILITY_RECHECK_TIMEOUT_MS}ms re-checking editability for cached project ${cached.id} on the fast Simple-mode switch path; trusting the cached value (${cachedIsEditable}). If this recurs, see the comment on resolveFastPathIsEditable.`,
-      );
-      return cachedIsEditable;
-    }
-    return result;
-  } catch (err) {
-    logger.warn(
-      `Could not re-check editability for cached project ${cached.id} on the fast Simple-mode switch path (${getErrorMessage(err)}); trusting the cached value (${cachedIsEditable}). If this recurs, see the comment on resolveFastPathIsEditable.`,
-    );
-    return cachedIsEditable;
-  }
 }
 
 /**
@@ -1217,12 +1210,11 @@ export async function handleSwitchToSimpleMode(
 ): Promise<void> {
   // Raised here, before any lookup - not just before the layout swap inside
   // `runProjectBoundSimpleSwitch` - so the still-visible Power layout is blocked from interaction
-  // for the whole switch, including the fast path's editability re-check and the cold-start path's
-  // recents lookup, both of which otherwise give no feedback that a switch is even happening. A
-  // live per-webview "editing disabled" signal on the active Power editor would be more targeted,
-  // but has no reactive channel today (`setFullWebViewStateById` only seeds state before a webview
-  // mounts, not for an already-mounted one) - raising the overlay this early is the practical
-  // stand-in.
+  // for the whole switch, including the cold-start path's recents lookup, which otherwise gives no
+  // feedback that a switch is even happening. A live per-webview "editing disabled" signal on the
+  // active Power editor would be more targeted, but has no reactive channel today
+  // (`setFullWebViewStateById` only seeds state before a webview mounts, not for an already-mounted
+  // one) - raising the overlay this early is the practical stand-in.
   const releaseWorkspaceUpdate = startWorkspaceUpdate();
   // Force React to commit + browser to paint the overlay BEFORE any lookup, otherwise the show can
   // batch with later state changes and the overlay never actually appears on screen. Bounded: see
@@ -1232,44 +1224,31 @@ export async function handleSwitchToSimpleMode(
   // below knows whether (and for which project) to finalize the switch's side effects. Left
   // `undefined` for every path that didn't actually load a project-bound layout.
   let switchedProjectId: string | undefined;
-  let switchedProjectIsEditable = false;
   try {
     const cached = getLastOpenedProject();
     if (cached) {
-      const isEditable = await resolveFastPathIsEditable(cached);
-      await runProjectBoundSimpleSwitch(cached.id, !isEditable, generation);
+      await runProjectBoundSimpleSwitch(cached.id, generation);
       switchedProjectId = cached.id;
-      switchedProjectIsEditable = isEditable;
       return;
     }
 
-    const resolvedId = await withTimeout(getMostRecentProjectId, COLD_START_LOOKUP_TIMEOUT_MS);
+    const resolvedId = await withTimeout(
+      getMostRecentUsableProjectId,
+      COLD_START_LOOKUP_TIMEOUT_MS,
+    );
     if (resolvedId === LOOKUP_TIMED_OUT) {
       logger.warn(
-        `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving the most recent project while switching to Simple mode; loading the bare layout instead.`,
+        `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving a usable most-recent project while switching to Simple mode; loading the bare layout instead.`,
       );
     }
     if (!resolvedId || resolvedId === LOOKUP_TIMED_OUT) {
       await loadLayoutWithWarning(generation);
       return;
     }
-
-    const isEditable = await withTimeout(
-      () => resolveProjectIsEditable(resolvedId),
-      COLD_START_LOOKUP_TIMEOUT_MS,
-    );
-    if (isEditable === LOOKUP_TIMED_OUT) {
-      logger.warn(
-        `Timed out after ${COLD_START_LOOKUP_TIMEOUT_MS}ms resolving editability for project ${resolvedId} while switching to Simple mode; loading the bare layout instead.`,
-      );
-      await loadLayoutWithWarning(generation);
-      return;
-    }
     // Populate the cache so the next switch can take the fast path.
-    setLastOpenedProject({ id: resolvedId, isEditable });
-    await runProjectBoundSimpleSwitch(resolvedId, !isEditable, generation);
+    setLastOpenedProject({ id: resolvedId });
+    await runProjectBoundSimpleSwitch(resolvedId, generation);
     switchedProjectId = resolvedId;
-    switchedProjectIsEditable = isEditable;
   } catch (err) {
     // Belt-and-suspenders: `runProjectBoundSimpleSwitch` already recovers from its own failures
     // internally (see its try/catch/finally), so this is only reached if something upstream of it
@@ -1293,27 +1272,8 @@ export async function handleSwitchToSimpleMode(
     // whole try/catch/finally: the fast path above returns early from inside `try`, and `finally`
     // is the only place that still runs on every path, early return included.
     if (switchedProjectId && generation === switchGeneration) {
-      finalizeProjectSwitch(switchedProjectId, switchedProjectIsEditable);
+      finalizeProjectSwitch(switchedProjectId);
     }
-  }
-}
-
-/**
- * Resolves whether a project's Scripture text is editable, for baking the correct `isReadOnly` into
- * the simple-mode layout. Mirrors the "missing means editable" default used elsewhere for
- * `ProjectMetadata.isEditable` (see `use-project-picker-data.hook.ts`); a lookup failure is treated
- * the same way, since falling back to editable (rather than blocking the switch) matches how this
- * function is only ever used on the already-slow cold-start path.
- */
-export async function resolveProjectIsEditable(projectId: string): Promise<boolean> {
-  try {
-    const metadata = await projectLookupService.getMetadataForProject(projectId);
-    return metadata.isEditable !== false;
-  } catch (err) {
-    logger.warn(
-      `Could not resolve editability for project ${projectId} while switching to Simple mode, defaulting to editable: ${getErrorMessage(err)}`,
-    );
-    return true;
   }
 }
 
@@ -1335,11 +1295,7 @@ async function loadLayoutWithWarning(generation: number): Promise<void> {
   }
 }
 
-async function runProjectBoundSimpleSwitch(
-  projectId: string,
-  isReadOnly: boolean,
-  generation: number,
-): Promise<void> {
+async function runProjectBoundSimpleSwitch(projectId: string, generation: number): Promise<void> {
   if (generation !== switchGeneration) return; // superseded before this switch even started
 
   // The tracker is acquired *inside* `try` (not before it) so a throw from it still reaches
@@ -1362,7 +1318,7 @@ async function runProjectBoundSimpleSwitch(
       onDidUpdateWebView,
     });
 
-    const projectBoundLayout = buildSimpleLayoutForProject(projectId, isReadOnly);
+    const projectBoundLayout = buildSimpleLayoutForProject(projectId);
     // `loadLayout`'s explicit-layout branch deliberately does not apply the default-layout
     // supplement (a caller passing an explicit layout owns its full contents) - so this caller
     // must merge it in itself, mirroring what `loadLayout`'s own no-arg branch does. Without this,
@@ -1432,16 +1388,61 @@ function waitForNextPaint(): Promise<void> {
   });
 }
 
-async function getMostRecentProjectId(): Promise<string | undefined> {
+/**
+ * Resolves the most-recently-opened project id that's usable as a Simple-mode switch target, trying
+ * each entry in `recentlyOpenedProjects` (most-recent first, already capped at
+ * `MAX_RECENT_PROJECTS` by the provider) in order until one isn't a published resource, or the list
+ * is exhausted. Mirrors `tryOpenFromRecentlyOpened`'s same try-next-candidate pattern in
+ * `platform-scripture-editor.utils.ts` (the default project picker's own recents fallback) - but
+ * scoped to what this fast-path switch needs: a project id, not an opened editor. A published
+ * resource is never a valid target here, matching `cacheLastOpenedSimpleProject`'s exclusion on the
+ * live event-driven cache-write path - this is a different mechanism (a one-shot recents read, not
+ * a webview event), so it needs its own check to stay consistent with that one.
+ *
+ * The whole walk (recents fetch + every candidate's metadata lookup) shares one bound from the
+ * caller ({@link COLD_START_LOOKUP_TIMEOUT_MS}, via `withTimeout`), not a bound per candidate -
+ * otherwise a full walk of a slow list could take several times the intended "fast path" budget.
+ */
+async function getMostRecentUsableProjectId(): Promise<string | undefined> {
   try {
     const recentsProvider = await dataProviderService.get(
       'platformScripture.recentlyOpenedProjects',
     );
     if (!recentsProvider) return undefined;
     const recents = await recentsProvider.getRecentProjects(undefined);
-    return Array.isArray(recents) ? recents[0] : undefined;
+    if (!Array.isArray(recents)) return undefined;
+    // `reduce` with a Promise accumulator (rather than a `for` loop) tries each candidate
+    // sequentially: each callback awaits the previous result before deciding whether to check the
+    // next candidate, so this doesn't check every candidate in parallel - it stops at the first
+    // usable one. Mirrors `tryOpenFromRecentlyOpened`'s identical accumulator in
+    // `platform-scripture-editor.utils.ts`.
+    return await recents.reduce(async (prev: Promise<string | undefined>, candidateId: string) => {
+      const usableId = await prev;
+      if (usableId !== undefined) return usableId;
+      const isPublished = await resolveProjectIsPublished(candidateId);
+      return isPublished ? undefined : candidateId;
+    }, Promise.resolve<string | undefined>(undefined));
   } catch {
     return undefined;
+  }
+}
+
+/**
+ * Resolves whether a candidate project from {@link getMostRecentUsableProjectId} is a published
+ * (read-only) resource. Defaults to `false` on a lookup failure, matching `platform.isPublished`'s
+ * own "absent means not a resource" default (see `project-metadata.model.ts`) - the safer
+ * assumption is to proceed with the candidate rather than silently skip it over a transient lookup
+ * error.
+ */
+async function resolveProjectIsPublished(projectId: string): Promise<boolean> {
+  try {
+    const metadata = await projectLookupService.getMetadataForProject(projectId);
+    return metadata.isPublished === true;
+  } catch (err) {
+    logger.warn(
+      `Could not resolve whether project ${projectId} is a published resource while switching to Simple mode, assuming it is not: ${getErrorMessage(err)}`,
+    );
+    return false;
   }
 }
 
@@ -1461,22 +1462,17 @@ async function getMostRecentProjectId(): Promise<string | undefined> {
  * already-fast, already-rendered switch — a future cold-start caller of this same machinery should
  * re-evaluate rather than assume the same non-blocking-after-release shape fits, since cold start
  * has no already-rendered UI whose perceived latency this is protecting.
- *
- * @param isEditable The project's own `platform.isEditable` setting (Scripture-editable project vs.
- *   read-only resource), not whether the current user's role can edit it.
  */
-function finalizeProjectSwitch(projectId: string, isEditable: boolean): void {
+function finalizeProjectSwitch(projectId: string): void {
   // This command comes from an extension and is not typed in CommandHandlers.
   // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-  (sendCommand as any)(
-    'platformScriptureEditor.finalizeProjectSwitch',
-    projectId,
-    isEditable,
-  ).catch((err: unknown) => {
-    logger.warn(
-      `Failed to finalize project switch for project ${projectId} after Simple-mode switch: ${getErrorMessage(err)}`,
-    );
-  });
+  (sendCommand as any)('platformScriptureEditor.finalizeProjectSwitch', projectId).catch(
+    (err: unknown) => {
+      logger.warn(
+        `Failed to finalize project switch for project ${projectId} after Simple-mode switch: ${getErrorMessage(err)}`,
+      );
+    },
+  );
 }
 
 // #endregion Dock layouts

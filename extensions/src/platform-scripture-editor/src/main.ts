@@ -386,15 +386,13 @@ async function open(
       options,
     };
 
-    // If in simple interface mode and opening an editable project, open/update the related panels
-    // (model text, bible texts, commentaries, comments). Gated on isEditable: the related panels
-    // follow the active translation project, so opening a read-only published resource in the
-    // editor column must not switch them over to the resource.
-    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable) {
+    // If in Simple interface mode, open/update the related panels (model text, Bible texts,
+    // commentaries, comments) and auto-apply the admin's shared layout for the project being
+    // opened (re-arm the buffered panels, focus the desired col-3 tab). Note: A manual/later
+    // sync's held change is applied via the notification's "Apply now" rather than automatically
+    // here.
+    if (interfaceMode === 'simple' && projectForWebView.projectId) {
       await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
-      // Auto-apply the admin's shared layout for the project being opened/switched to: re-arm the
-      // buffered panels and focus the col-3 tab. A manual sync's held change is applied via the
-      // notification's "Apply now" instead.
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
     }
 
@@ -1479,8 +1477,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
   const finalizeProjectSwitchPromise = papi.commands.registerCommand(
     'platformScriptureEditor.finalizeProjectSwitch',
-    (projectId, isEditable) =>
-      finalizeProjectSwitch(papi, projectId, isEditable, (id) =>
+    (projectId) =>
+      finalizeProjectSwitch(papi, projectId, (id) =>
         sharedLayoutReceiver ? sharedLayoutReceiver.applyForProject(id) : Promise.resolve(),
       ),
     {
@@ -1493,13 +1491,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             required: true,
             summary: 'The project now showing in the Scripture Editor',
             schema: { type: 'string' },
-          },
-          {
-            name: 'isEditable',
-            required: true,
-            summary:
-              "The project's own platform.isEditable setting (Scripture-editable project vs. read-only resource), not whether the current user's role can edit it",
-            schema: { type: 'boolean' },
           },
         ],
         result: { name: 'return value', schema: { type: 'null' } },

@@ -15,6 +15,14 @@ import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
 import { ChevronsUpDown } from 'lucide-react';
 import { TabType } from './docking-framework-internal.model';
 import { PanelExtraContent } from './panel-extra-content.component';
+import { HEADLESS_GROUP, TAB_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.constants';
+
+// Re-exported for existing consumers of these group-name constants from this module; the
+// definitions themselves live in `dock-tab-group.constants.ts` so `simple-layout.data.ts` can use
+// them without importing this file (which pulls in the dialogs barrel, and from there a cycle back
+// through `use-project-picker-data.hook.ts` to `web-view.service-host.ts`, which imports the simple
+// layout builder that `simple-layout.data.ts` feeds).
+export { TAB_GROUP, TAB_GROUP_RESOURCES, HEADLESS_GROUP };
 
 /**
  * The default initial size for floating tabs in CSS `px` units. Can be overridden by tabTypes'
@@ -34,23 +42,6 @@ const DOCK_FLOAT_OFFSET = 28;
  */
 const MAX_FLOAT_WIDTH_FRACTION = 0.8;
 const MAX_FLOAT_HEIGHT_FRACTION = 0.85;
-// NOTE: 'card' is a built-in style. We can likely remove it when we create a full theme for
-// Platform.
-// Appears in DOM as `dock-style-card` and `dock-style-platform-bible`.
-export const TAB_GROUP = 'card platform-bible';
-
-// Simple-mode column groups. Different groups can't share a panel, so giving simple-mode columns
-// distinct groups prevents tabs from being dragged between columns (rc-dock's tabLocked only blocks
-// drag-to-create-new-panel, not drag-between-existing-panels). The 'card platform-bible' prefix
-// preserves shared CSS styling — see the .dock-style-* selectors.
-export const TAB_GROUP_RESOURCES = 'card platform-bible resources';
-
-/**
- * Group for simple-mode columns whose tab bar should be invisible (home, editor). Tabs in this
- * group are locked and the dock-bar is hidden via CSS in `dock-layout-wrapper.component.scss`. The
- * `'platform-bible'` token keeps the shared `.dock-style-platform-bible` styling rules in play.
- */
-export const HEADLESS_GROUP = 'headless platform-bible';
 
 /**
  * Build the rc-dock group config for `TAB_GROUP`. The shape depends on `platform.interfaceMode`:

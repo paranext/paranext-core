@@ -6,6 +6,11 @@ import type {
   PapiDockLayout,
   SavedTabInfo,
 } from '@shared/models/docking-framework.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import {
+  EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
+  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+} from '@shared/services/web-view.service-model';
 import { serialize } from 'platform-bible-utils';
 
 // The service host logs through the shared logger, which warns on every call when it cannot tell
@@ -55,10 +60,32 @@ vi.mock('@renderer/services/local-storage.service', () => ({
 
 // web-view.service-host.ts creates buffered network event emitters and network-backed events at
 // module load (`getNetworkEvent`, `createBufferedNetworkEventEmitter`). Stub the network layer so
-// importing the module never tries to talk to a real websocket.
+// importing the module never tries to talk to a real websocket. `getNetworkEvent` is a controllable
+// fake (not a bare no-op): most subscribers (e.g. the tabs-resolved tracker) never need their
+// callback invoked, but the Simple-mode project-cache subscription tests below need to fire a
+// specific event by name to simulate a webview open/update.
+const { getNetworkEventMock, emitNetworkEvent, clearNetworkEventHandlers } = vi.hoisted(() => {
+  type Handler = (event: unknown) => void;
+  const handlersByEventName = new Map<string, Set<Handler>>();
+  return {
+    getNetworkEventMock: vi.fn((eventName: string) => (callback: Handler) => {
+      let handlers = handlersByEventName.get(eventName);
+      if (!handlers) {
+        handlers = new Set();
+        handlersByEventName.set(eventName, handlers);
+      }
+      handlers.add(callback);
+      return () => handlers?.delete(callback) ?? false;
+    }),
+    emitNetworkEvent: (eventName: string, event: unknown) => {
+      handlersByEventName.get(eventName)?.forEach((handler) => handler(event));
+    },
+    clearNetworkEventHandlers: () => handlersByEventName.clear(),
+  };
+});
 vi.mock('@shared/services/network.service', () => ({
   createBufferedNetworkEventEmitter: () => ({ emit: vi.fn(), dispose: vi.fn() }),
-  getNetworkEvent: () => vi.fn(() => () => true),
+  getNetworkEvent: getNetworkEventMock,
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -128,15 +155,14 @@ vi.mock('@shared/services/command.service', () => ({
   sendCommand: sendCommandMock,
 }));
 
-// `buildSimpleLayoutForProject`'s `isReadOnly` argument is the value `handleSwitchToSimpleMode`
-// computes from the resolved project's real editability, so capturing it here is the primary
-// assertion point below. `SIMPLE_LAYOUT_TAB_IDS` is mocked to `[]` so the (real,
-// separately-tested) tabs-resolved tracker resolves immediately instead of waiting on webview
-// open/update events that never fire in this test. The dockbox includes a
-// `platformScriptureEditor.bibleTexts` tab, matching `ANCHOR_WEB_VIEW_TYPE` above, so the real
-// (unmocked) default-layout-supplement merge logic has a matching anchor to attach the mocked
-// supplement's `SUPPLEMENT_TAB_ID` tab to (see the merge tests below) - the merge/filter logic
-// itself is real production code, only the supplement's own content is mocked.
+// Capturing `buildSimpleLayoutForProject`'s `projectId` argument is the primary assertion point
+// below. `SIMPLE_LAYOUT_TAB_IDS` is mocked to `[]` so the (real, separately-tested) tabs-resolved
+// tracker resolves immediately instead of waiting on webview open/update events that never fire in
+// this test. The dockbox includes a `platformScriptureEditor.bibleTexts` tab, matching
+// `ANCHOR_WEB_VIEW_TYPE` above, so the real (unmocked) default-layout-supplement merge logic has a
+// matching anchor to attach the mocked supplement's `SUPPLEMENT_TAB_ID` tab to (see the merge tests
+// below) - the merge/filter logic itself is real production code, only the supplement's own
+// content is mocked.
 const { buildSimpleLayoutForProjectMock, simpleLayoutTabIdsMock, visibleSimpleLayoutTabIdsMock } =
   vi.hoisted(() => {
     // Mutable (not frozen empty) so individual tests can populate it to exercise logic keyed off
@@ -147,7 +173,7 @@ const { buildSimpleLayoutForProjectMock, simpleLayoutTabIdsMock, visibleSimpleLa
     const simpleLayoutTabIds: string[] = [];
     const visibleSimpleLayoutTabIds: string[] = [];
     return {
-      buildSimpleLayoutForProjectMock: vi.fn((projectId: string, isReadOnly: boolean) => ({
+      buildSimpleLayoutForProjectMock: vi.fn((projectId: string) => ({
         dockbox: {
           mode: 'horizontal' as const,
           children: [
@@ -167,7 +193,6 @@ const { buildSimpleLayoutForProjectMock, simpleLayoutTabIdsMock, visibleSimpleLa
           ],
         },
         builtForProjectId: projectId,
-        builtIsReadOnly: isReadOnly,
       })),
       simpleLayoutTabIdsMock: simpleLayoutTabIds,
       visibleSimpleLayoutTabIdsMock: visibleSimpleLayoutTabIds,
@@ -350,6 +375,15 @@ async function importHost() {
   return import('@renderer/services/web-view.service-host');
 }
 
+// File-wide, not per-describe: several describes register a dock layout (which subscribes to
+// webview open/update events for the last-opened-project cache), and few of them ever call the
+// returned unregister function. Without this, a still-subscribed handler from an earlier test
+// would keep firing (and writing to the real localStorage-backed cache) when a later test emits an
+// event, independent of which describe block either test lives in.
+afterEach(() => {
+  clearNetworkEventHandlers();
+});
+
 describe('handleSwitchToSimpleMode', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -361,6 +395,9 @@ describe('handleSwitchToSimpleMode', () => {
     settingsSubscribeMock.mockReset();
     settingsSubscribeMock.mockImplementation(async () => async () => true);
     getMetadataForProjectMock.mockReset();
+    // Absent isPublished means "not published" (see project-metadata.model.ts), so the default
+    // fixture is a normal, cacheable project unless a test overrides it.
+    getMetadataForProjectMock.mockResolvedValue({});
     dataProviderGetMock.mockReset();
     dataProviderGetMock.mockResolvedValue(undefined);
     sendCommandMock.mockReset();
@@ -374,106 +411,37 @@ describe('handleSwitchToSimpleMode', () => {
     localStorage.clear();
   });
 
-  it('fast path: builds a read-only layout when the cached project is not editable', async () => {
+  it('fast path: builds the layout for the cached project id', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-readonly', isEditable: false });
+    setLastOpenedProject({ id: 'proj-cached' });
 
     await host.handleSwitchToSimpleMode();
 
-    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-readonly', true);
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-cached');
     expect(fakeDockLayout.loadLayout).toHaveBeenCalledWith(
-      expect.objectContaining({ builtForProjectId: 'proj-readonly', builtIsReadOnly: true }),
+      expect.objectContaining({ builtForProjectId: 'proj-cached' }),
     );
     // The fast path must never fall through to the slow-path recents *lookup*
     // (getMostRecentProjectId's getRecentProjects call) - proven by the cached id reaching
     // buildSimpleLayoutForProject directly above. dataProviderGetMock is legitimately still called
     // with this same id post-switch, for the unrelated recordProjectOpened side effect (see the
     // dedicated tests for that behavior below).
+    expect(getMetadataForProjectMock).not.toHaveBeenCalled();
   });
-
-  it('fast path: builds an editable layout when the cached project is editable', async () => {
-    const host = await importHost();
-    const fakeDockLayout = createFakeDockLayout();
-    host.registerDockLayout(fakeDockLayout);
-    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-editable', isEditable: true });
-
-    await host.handleSwitchToSimpleMode();
-
-    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-editable', false);
-  });
-
-  it('fast path: treats a cache entry with no isEditable field as editable', async () => {
-    const host = await importHost();
-    const fakeDockLayout = createFakeDockLayout();
-    host.registerDockLayout(fakeDockLayout);
-    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-unknown' });
-
-    await host.handleSwitchToSimpleMode();
-
-    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-unknown', false);
-  });
-
-  it('fast path: uses the freshly re-checked editability when it disagrees with the cache', async () => {
-    const host = await importHost();
-    const fakeDockLayout = createFakeDockLayout();
-    host.registerDockLayout(fakeDockLayout);
-    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-drifted', isEditable: true });
-    getMetadataForProjectMock.mockResolvedValue({ isEditable: false });
-
-    await host.handleSwitchToSimpleMode();
-
-    expect(getMetadataForProjectMock).toHaveBeenCalledWith('proj-drifted');
-    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-drifted', true);
-  });
-
-  it('fast path: falls back to the cached editability and warns when the re-check rejects', async () => {
-    const host = await importHost();
-    const fakeDockLayout = createFakeDockLayout();
-    host.registerDockLayout(fakeDockLayout);
-    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-recheck-fails', isEditable: true });
-    getMetadataForProjectMock.mockRejectedValue(new Error('PDP unavailable'));
-
-    await host.handleSwitchToSimpleMode();
-
-    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-recheck-fails', false);
-    const { logger } = await import('@shared/services/logger.service');
-    expect(logger.warn).toHaveBeenCalled();
-  });
-
-  it('fast path: falls back to the cached editability and warns when the re-check hangs past its bound', async () => {
-    const host = await importHost();
-    const fakeDockLayout = createFakeDockLayout();
-    host.registerDockLayout(fakeDockLayout);
-    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-recheck-hangs', isEditable: false });
-    // Never resolves within this test's lifetime - simulates a hung PDP-factory wait.
-    getMetadataForProjectMock.mockImplementation(() => new Promise(() => {}));
-
-    await host.handleSwitchToSimpleMode();
-
-    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-recheck-hangs', true);
-    const { logger } = await import('@shared/services/logger.service');
-    expect(logger.warn).toHaveBeenCalled();
-  }, 3000);
 
   it('fast path: the tabs-resolved tracker only waits on VISIBLE_SIMPLE_LAYOUT_TAB_IDS, not the full SIMPLE_LAYOUT_TAB_IDS list', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-visible-tabs', isEditable: true });
-    getMetadataForProjectMock.mockResolvedValue({ isEditable: true });
-    // Populate the full (5-tab) list with an id that never fires an open/update event (the
-    // network-event mocks at the top of this file are no-ops). Leave the visible-only list empty.
-    // If the switch is still tracking the full list, it will block on the tracker's real timeout;
-    // if it correctly narrowed to the (empty) visible list, it resolves on the next tick.
+    setLastOpenedProject({ id: 'proj-visible-tabs' });
+    // Populate the full (5-tab) list with an id that never fires an open/update event (nothing in
+    // this test emits one). Leave the visible-only list empty. If the switch is still tracking the
+    // full list, it will block on the tracker's real timeout; if it correctly narrowed to the
+    // (empty) visible list, it resolves on the next tick.
     simpleLayoutTabIdsMock.push('hidden-tab-not-in-visible-list');
 
     const start = Date.now();
@@ -491,8 +459,7 @@ describe('handleSwitchToSimpleMode', () => {
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-visible-tabs-timeout', isEditable: true });
-    getMetadataForProjectMock.mockResolvedValue({ isEditable: true });
+    setLastOpenedProject({ id: 'proj-visible-tabs-timeout' });
     // Non-empty visible-tab list whose id never fires an open/update event - forces the tracker to
     // resolve via its real (production) timeout rather than immediately.
     visibleSimpleLayoutTabIdsMock.push('visible-tab-1');
@@ -503,7 +470,7 @@ describe('handleSwitchToSimpleMode', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
   }, 6000);
 
-  it('slow path: resolves the most recent project, looks up real editability, and seeds the cache', async () => {
+  it('slow path: resolves the most recent project and seeds the cache', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
@@ -513,50 +480,74 @@ describe('handleSwitchToSimpleMode', () => {
         ? { getRecentProjects }
         : undefined,
     );
-    getMetadataForProjectMock.mockResolvedValue({ isEditable: false });
 
     await host.handleSwitchToSimpleMode();
 
-    expect(getMetadataForProjectMock).toHaveBeenCalledWith('proj-recent');
-    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-recent', true);
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-recent');
 
     const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    expect(getLastOpenedProject()).toEqual({ id: 'proj-recent', isEditable: false });
+    expect(getLastOpenedProject()).toEqual({ id: 'proj-recent' });
   });
 
-  it('slow path: an editable resolved project builds a non-read-only layout', async () => {
+  it('slow path: tries the next recent candidate when the most-recent one is a published resource', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
+    const getRecentProjects = vi.fn(async () => ['proj-resource', 'proj-editable-fallback']);
     dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
       dataProviderId === 'platformScripture.recentlyOpenedProjects'
-        ? { getRecentProjects: vi.fn(async () => ['proj-recent-editable']) }
+        ? { getRecentProjects }
         : undefined,
     );
-    getMetadataForProjectMock.mockResolvedValue({ isEditable: true });
+    getMetadataForProjectMock.mockImplementation(async (projectId: string) =>
+      projectId === 'proj-resource' ? { isPublished: true } : {},
+    );
 
     await host.handleSwitchToSimpleMode();
 
-    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-recent-editable', false);
+    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-editable-fallback');
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    expect(getLastOpenedProject()).toEqual({ id: 'proj-editable-fallback' });
   });
 
-  it('slow path failure: defaults to editable and logs a warning when the metadata lookup rejects', async () => {
+  it('slow path: falls back to the bare layout when every recent candidate is a published resource, and does not cache any of them', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
+    const getRecentProjects = vi.fn(async () => ['proj-resource-1', 'proj-resource-2']);
     dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
       dataProviderId === 'platformScripture.recentlyOpenedProjects'
-        ? { getRecentProjects: vi.fn(async () => ['proj-lookup-fails']) }
+        ? { getRecentProjects }
         : undefined,
     );
-    getMetadataForProjectMock.mockRejectedValue(new Error('metadata lookup failed'));
+    getMetadataForProjectMock.mockResolvedValue({ isPublished: true });
 
     await host.handleSwitchToSimpleMode();
 
-    expect(buildSimpleLayoutForProjectMock).toHaveBeenCalledWith('proj-lookup-fails', false);
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    expect(getLastOpenedProject()).toBeUndefined();
+  });
+
+  it('slow path: falls back to the bare layout and warns if resolving whether the project is published hangs past the cold-start bound', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const getRecentProjects = vi.fn(async () => ['proj-recent-slow-published-check']);
+    dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
+      dataProviderId === 'platformScripture.recentlyOpenedProjects'
+        ? { getRecentProjects }
+        : undefined,
+    );
+    // Never resolves within this test's lifetime - simulates a hung PDP-factory wait.
+    getMetadataForProjectMock.mockImplementation(() => new Promise(() => {}));
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
     const { logger } = await import('@shared/services/logger.service');
-    expect(logger.warn).toHaveBeenCalled();
-  });
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
+  }, 5000);
 
   it('fallback: with no cache and no resolvable recent project, skips the project-bound layout entirely', async () => {
     const host = await importHost();
@@ -567,7 +558,6 @@ describe('handleSwitchToSimpleMode', () => {
     await host.handleSwitchToSimpleMode();
 
     expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
-    expect(getMetadataForProjectMock).not.toHaveBeenCalled();
   });
 
   it('slow path: falls back to the bare layout and warns if resolving the most recent project hangs past the cold-start bound', async () => {
@@ -589,26 +579,6 @@ describe('handleSwitchToSimpleMode', () => {
     await host.handleSwitchToSimpleMode();
 
     expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
-    expect(getMetadataForProjectMock).not.toHaveBeenCalled();
-    const { logger } = await import('@shared/services/logger.service');
-    expect(logger.warn).toHaveBeenCalled();
-  }, 5000);
-
-  it('slow path: falls back to the bare layout and warns if resolving editability hangs past the cold-start bound', async () => {
-    const host = await importHost();
-    const fakeDockLayout = createFakeDockLayout();
-    host.registerDockLayout(fakeDockLayout);
-    dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
-      dataProviderId === 'platformScripture.recentlyOpenedProjects'
-        ? { getRecentProjects: vi.fn(async () => ['proj-slow-editability']) }
-        : undefined,
-    );
-    // Never resolves - simulates a hung PDP-factory wait inside getMetadataForProject.
-    getMetadataForProjectMock.mockImplementation(() => new Promise(() => {}));
-
-    await host.handleSwitchToSimpleMode();
-
-    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
     const { logger } = await import('@shared/services/logger.service');
     expect(logger.warn).toHaveBeenCalled();
   }, 5000);
@@ -623,7 +593,7 @@ describe('handleSwitchToSimpleMode', () => {
       return false;
     });
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-supplement', isEditable: true });
+    setLastOpenedProject({ id: 'proj-supplement' });
 
     await host.handleSwitchToSimpleMode();
 
@@ -645,7 +615,7 @@ describe('handleSwitchToSimpleMode', () => {
     host.registerDockLayout(fakeDockLayout);
     // Default settingsGetMock (from beforeEach) resolves every flag setting to false.
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-no-supplement', isEditable: true });
+    setLastOpenedProject({ id: 'proj-no-supplement' });
 
     await host.handleSwitchToSimpleMode();
 
@@ -666,23 +636,20 @@ describe('handleSwitchToSimpleMode', () => {
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-stale', isEditable: true });
+    setLastOpenedProject({ id: 'proj-stale' });
 
     // Start two overlapping switches without awaiting the first - simulates the user changing
     // their mind mid-switch. Both calls' synchronous prefixes (including capturing their own
     // switch generation) run before either call's first await resumes, so the ordering here is
     // deterministic, not racy.
     const firstSwitch = host.handleSwitchToSimpleMode();
-    setLastOpenedProject({ id: 'proj-latest', isEditable: true });
+    setLastOpenedProject({ id: 'proj-latest' });
     const secondSwitch = host.handleSwitchToSimpleMode();
     await Promise.all([firstSwitch, secondSwitch]);
 
     // The superseded (first) switch must never even build a layout for the stale project, let
     // alone load one.
-    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalledWith(
-      'proj-stale',
-      expect.anything(),
-    );
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalledWith('proj-stale');
     expect(fakeDockLayout.loadLayout).toHaveBeenCalledWith(
       expect.objectContaining({ builtForProjectId: 'proj-latest' }),
     );
@@ -704,7 +671,7 @@ describe('handleSwitchToSimpleMode', () => {
       JSON.stringify({ dockbox: { mode: 'horizontal', children: [] }, marker: 'power-layout' }),
     );
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-1', isEditable: true });
+    setLastOpenedProject({ id: 'proj-1' });
 
     await host.handleSwitchToSimpleMode();
 
@@ -763,7 +730,7 @@ describe('handleSwitchToSimpleMode', () => {
     });
     host.registerDockLayout(fakeDockLayout);
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-1', isEditable: true });
+    setLastOpenedProject({ id: 'proj-1' });
 
     await host.handleSwitchToSimpleMode();
 
@@ -784,11 +751,8 @@ describe('handleSwitchToSimpleMode', () => {
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-1', isEditable: true });
+    setLastOpenedProject({ id: 'proj-1' });
     const { getWorkspaceUpdating } = await import('@renderer/services/workspace-updating-store');
-    // Hang the fast-path re-check indefinitely so overlay state can be observed mid-switch,
-    // instead of racing to check it before the real (~1s-bounded) work settles on its own.
-    getMetadataForProjectMock.mockImplementation(() => new Promise(() => {}));
 
     const switchPromise = host.handleSwitchToSimpleMode();
     // No await has happened yet inside handleSwitchToSimpleMode's synchronous prefix, so the
@@ -804,8 +768,7 @@ describe('handleSwitchToSimpleMode', () => {
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-hidden-window', isEditable: true });
-    getMetadataForProjectMock.mockResolvedValue({ isEditable: true });
+    setLastOpenedProject({ id: 'proj-hidden-window' });
     // Simulate a hidden/occluded window: Chromium's backgroundThrottling stops rAF callbacks from
     // ever firing (it doesn't remove requestAnimationFrame or make it throw - the callback just
     // never runs), so a bare double-rAF wait with no bound would hang here forever.
@@ -827,8 +790,7 @@ describe('handleSwitchToSimpleMode', () => {
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
     const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-side-effects', isEditable: true });
-    getMetadataForProjectMock.mockResolvedValue({ isEditable: true });
+    setLastOpenedProject({ id: 'proj-side-effects' });
 
     await host.handleSwitchToSimpleMode();
 
@@ -838,24 +800,6 @@ describe('handleSwitchToSimpleMode', () => {
     expect(sendCommandMock).toHaveBeenCalledWith(
       'platformScriptureEditor.finalizeProjectSwitch',
       'proj-side-effects',
-      true,
-    );
-  });
-
-  it('fast path: passes the re-checked isEditable to finalizeProjectSwitch', async () => {
-    const host = await importHost();
-    const fakeDockLayout = createFakeDockLayout();
-    host.registerDockLayout(fakeDockLayout);
-    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
-    setLastOpenedProject({ id: 'proj-drifted-editable', isEditable: true });
-    getMetadataForProjectMock.mockResolvedValue({ isEditable: false });
-
-    await host.handleSwitchToSimpleMode();
-
-    expect(sendCommandMock).toHaveBeenCalledWith(
-      'platformScriptureEditor.finalizeProjectSwitch',
-      'proj-drifted-editable',
-      false,
     );
   });
 
@@ -871,39 +815,149 @@ describe('handleSwitchToSimpleMode', () => {
   });
 });
 
-describe('resolveProjectIsEditable', () => {
+describe('Scripture Editor tab events keep last-opened-project-cache current', () => {
+  const FIXED_SIMPLE_EDITOR_TAB_ID = 'simple-editor-tab';
+
   beforeEach(() => {
     vi.resetModules();
+    clearNetworkEventHandlers();
+    localStorage.clear();
+    settingsGetMock.mockReset();
+    settingsGetMock.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'simple' : false,
+    );
+    settingsSubscribeMock.mockReset();
+    settingsSubscribeMock.mockImplementation(async () => async () => true);
     getMetadataForProjectMock.mockReset();
-  });
-
-  it('returns true when the project metadata reports isEditable: true', async () => {
-    const host = await importHost();
-    getMetadataForProjectMock.mockResolvedValue({ isEditable: true });
-
-    await expect(host.resolveProjectIsEditable('proj-1')).resolves.toBe(true);
-  });
-
-  it('returns false when the project metadata reports isEditable: false', async () => {
-    const host = await importHost();
-    getMetadataForProjectMock.mockResolvedValue({ isEditable: false });
-
-    await expect(host.resolveProjectIsEditable('proj-1')).resolves.toBe(false);
-  });
-
-  it('defaults to true (editable) when isEditable is absent from the metadata', async () => {
-    const host = await importHost();
+    // Absent isPublished means "not published" (see project-metadata.model.ts), so the default
+    // fixture is a normal, cacheable project unless a test overrides it.
     getMetadataForProjectMock.mockResolvedValue({});
-
-    await expect(host.resolveProjectIsEditable('proj-1')).resolves.toBe(true);
+    simpleLayoutTabIdsMock.length = 0;
+    simpleLayoutTabIdsMock.push(FIXED_SIMPLE_EDITOR_TAB_ID);
   });
 
-  it('defaults to true (editable) and logs a warning when the lookup rejects', async () => {
-    const host = await importHost();
-    getMetadataForProjectMock.mockRejectedValue(new Error('boom'));
+  afterEach(() => {
+    localStorage.clear();
+  });
 
-    await expect(host.resolveProjectIsEditable('proj-1')).resolves.toBe(true);
+  it('caches the project when the fixed Simple editor tab opens', async () => {
+    const host = await importHost();
+    host.registerDockLayout(createFakeDockLayout());
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+      webView: {
+        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-simple-opened',
+      },
+    });
+
+    await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-simple-opened' }));
+  });
+
+  it('caches the project when the fixed Simple editor tab updates to a different project', async () => {
+    const host = await importHost();
+    host.registerDockLayout(createFakeDockLayout());
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW, {
+      webView: {
+        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-simple-updated',
+      },
+    });
+
+    await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-simple-updated' }));
+  });
+
+  it('does not cache a Power-mode editor tab, whose id is never one of the fixed Simple-layout ids', async () => {
+    const host = await importHost();
+    host.registerDockLayout(createFakeDockLayout());
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+      webView: {
+        id: 'power-mode-editor-tab',
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-power',
+      },
+    });
+
+    expect(getMetadataForProjectMock).not.toHaveBeenCalled();
+    expect(getLastOpenedProject()).toBeUndefined();
+  });
+
+  it('does not cache a non-editor tab, even if it happens to carry a fixed Simple-layout tab id', async () => {
+    const host = await importHost();
+    host.registerDockLayout(createFakeDockLayout());
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+      webView: {
+        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        webViewType: 'platformScriptureEditor.bibleTexts',
+        projectId: 'proj-not-editor',
+      },
+    });
+
+    expect(getMetadataForProjectMock).not.toHaveBeenCalled();
+    expect(getLastOpenedProject()).toBeUndefined();
+  });
+
+  it('never caches a published resource as the last-opened Simple-mode project', async () => {
+    const host = await importHost();
+    host.registerDockLayout(createFakeDockLayout());
+    getMetadataForProjectMock.mockResolvedValue({ isPublished: true });
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+      webView: {
+        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-resource',
+      },
+    });
+
+    await vi.waitFor(() => expect(getMetadataForProjectMock).toHaveBeenCalledWith('proj-resource'));
+    expect(getLastOpenedProject()).toBeUndefined();
+  });
+
+  it('logs a warning and does not cache when the metadata lookup rejects', async () => {
+    const host = await importHost();
+    host.registerDockLayout(createFakeDockLayout());
+    getMetadataForProjectMock.mockRejectedValue(new Error('PDP unavailable'));
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
     const { logger } = await import('@shared/services/logger.service');
-    expect(logger.warn).toHaveBeenCalled();
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+      webView: {
+        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-lookup-fails',
+      },
+    });
+
+    await vi.waitFor(() => expect(logger.warn).toHaveBeenCalled());
+    expect(getLastOpenedProject()).toBeUndefined();
+  });
+
+  it('stops caching after the dock layout is unregistered', async () => {
+    const host = await importHost();
+    const unregister = host.registerDockLayout(createFakeDockLayout());
+    unregister();
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+      webView: {
+        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-after-unregister',
+      },
+    });
+
+    expect(getMetadataForProjectMock).not.toHaveBeenCalled();
+    expect(getLastOpenedProject()).toBeUndefined();
   });
 });

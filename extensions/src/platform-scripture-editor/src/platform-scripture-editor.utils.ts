@@ -1037,26 +1037,32 @@ export async function syncOnProjectSwitch(
  * `resolveOpenEditorDispatch`). Used by Platform.Bible core's Power -> Simple mode switch, which
  * bakes `projectId` directly into a cloned layout instead of routing through `open()`.
  *
+ * Called non-blocking, well after the switch's overlay has already released (see the caller in
+ * `web-view.service-host.ts`), so by the time this actually runs the user may have already switched
+ * back to Power mode. Mirrors `open()`'s own `needsOverlay` block (main.ts): the sync is
+ * fire-and-forget (`syncOnProjectSwitch` already catches its own errors, and awaiting it here would
+ * delay the shared-layout apply and `recordProjectOpened` by however long a deep Send/Receive
+ * takes, with `recordProjectOpened` never running at all if the user quits mid-sync); and
+ * `applyForProject` re-checks `platform.interfaceMode` fresh immediately before running, since
+ * applying while no longer in Simple mode would wrongly manipulate the Power layout instead of
+ * being a no-op.
+ *
  * @param papi Backend PAPI instance.
  * @param projectId The project now showing in the Scripture Editor.
- * @param isEditable The project's own `platform.isEditable` setting — i.e. whether it is a
- *   Scripture-editable project rather than a read-only resource (DBL/published), NOT whether the
- *   current user's role can edit it. Mirrors `open()`'s behavior of auto-applying the shared layout
- *   only when the project is editable; read-only resources should never have a shared layout
- *   applied.
  * @param applyForProject Callback invoking `SharedLayoutReceiver.applyForProject`. Injected rather
  *   than imported directly, since the receiver is a stateful instance owned by main.ts.
  */
 export async function finalizeProjectSwitch(
   papi: typeof PapiBackend,
   projectId: string,
-  isEditable: boolean,
   applyForProject: ((projectId: string) => Promise<void>) | undefined,
 ): Promise<void> {
-  // Mirrors open()'s own gating: incoming sync fires regardless of isEditable; there's no outgoing
-  // project here since this replaces the whole Simple layout, not one editor tab within it.
-  await syncOnProjectSwitch(papi, projectId, undefined);
-  if (isEditable) await applyForProject?.(projectId);
+  // There's no outgoing project here since this replaces the whole Simple layout, not one editor
+  // tab within it.
+  syncOnProjectSwitch(papi, projectId, undefined);
+  if ((await papi.settings.get('platform.interfaceMode')) === 'simple') {
+    await applyForProject?.(projectId);
+  }
   try {
     const recentlyOpenedProjects = await papi.dataProviders.get(
       'platformScripture.recentlyOpenedProjects',

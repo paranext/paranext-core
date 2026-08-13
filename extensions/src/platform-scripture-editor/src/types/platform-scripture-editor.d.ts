@@ -833,15 +833,8 @@ declare module 'papi-shared-types' {
      * `openScriptureEditor`.
      *
      * @param projectId The project now showing in the Scripture Editor.
-     * @param isEditable The project's own `platform.isEditable` setting — i.e. whether it is a
-     *   Scripture-editable project rather than a read-only resource (DBL/published), NOT whether
-     *   the current user's role can edit it. Gates the shared-layout auto-apply, matching
-     *   `openScriptureEditor`'s own behavior.
      */
-    'platformScriptureEditor.finalizeProjectSwitch': (
-      projectId: string,
-      isEditable: boolean,
-    ) => Promise<void>;
+    'platformScriptureEditor.finalizeProjectSwitch': (projectId: string) => Promise<void>;
     /**
      * Opens the model text panel WebView for a translation project
      *

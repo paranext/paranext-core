@@ -3,8 +3,6 @@ import { useEvent, usePromise } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-host';
-import { setLastOpenedProject } from '@renderer/services/last-opened-project-cache';
-import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
@@ -118,8 +116,6 @@ export type ProjectPickerData = {
 };
 
 export function useProjectPickerData(): ProjectPickerData {
-  const isPowerMode = useIsPowerMode();
-
   // Two independent refresh generations, so cheap "which project is active?" updates don't drag in
   // the expensive project-metadata fan-out:
   // - metadataRefreshCounter invalidates the shared metadata fetch. Bumped only by events that can
@@ -382,42 +378,6 @@ export function useProjectPickerData(): ProjectPickerData {
     }, [getAllMetadata]),
     [],
   );
-
-  // Cache the current Scripture editor's project so a future power → simple switch can show the
-  // overlay with the right name and build the simple layout without awaiting the recents provider
-  // + PDP chain. Best-effort: read by `handleSwitchToSimpleMode` in `web-view.service-host`.
-  // `isEditable` is cached alongside the id because `currentSimpleProject` is "whichever
-  // scripture-editor web view is active" (`findFirstEditorWebViewDefinition`), which is not
-  // necessarily editable — it can be a read-only Resource Viewer. Baking that project into the
-  // simple layout must preserve its real read-only state instead of assuming editable.
-  //
-  // Only write while in Simple mode: this cache represents "the last project selected/loaded in
-  // Simple mode", and this hook also runs in Power mode (e.g. via the always-mounted toolbar), where
-  // `currentSimpleProject` tracks whichever editor tab happens to be active rather than a deliberate
-  // Simple-mode selection. Without this guard, opening/switching project tabs in Power mode would
-  // silently overwrite the project Simple mode should return to.
-  //
-  // Skip the write entirely when `currentSimpleProjectError` is set: the `currentSimpleProject`
-  // promise's catch branch (above) resolves to a degraded placeholder with no `isEditable` field
-  // rather than rejecting, so without this guard a transient metadata-fetch failure (e.g. a project
-  // locked mid-Send/Receive) would overwrite a previously-known `isEditable: false` with "no info" —
-  // silently downgrading a cached non-editable project back to editable.
-  useEffect(() => {
-    if (!currentSimpleProject?.id || currentSimpleProjectError || isPowerMode) return;
-    const name = currentSimpleProject.fullName || currentSimpleProject.shortName || undefined;
-    setLastOpenedProject({
-      id: currentSimpleProject.id,
-      name,
-      isEditable: currentSimpleProject.isEditable,
-    });
-  }, [
-    currentSimpleProject?.id,
-    currentSimpleProject?.fullName,
-    currentSimpleProject?.shortName,
-    currentSimpleProject?.isEditable,
-    currentSimpleProjectError,
-    isPowerMode,
-  ]);
 
   const recentIdSet = useMemo(
     () => new Set(safeRecentIds.map((id: string) => normalizeProjectId(id))),
