@@ -33,6 +33,20 @@ Every test must be capable of failing. Verify by:
 2. Run the test - it MUST fail
 3. If it passes without implementation, rewrite it
 
+**Reverting is not enough for two common shapes** (three instances found in one day, 2026-08-13,
+across the multi-window stack):
+
+- **A predicate the test never asks to reject.** Mutate the expression itself — `() => true`,
+  invert a comparison, delete a sort — and confirm RED. Six tests stayed green when a web-view
+  type predicate was replaced with `() => true`, because every test gave the non-matching windows
+  nothing to reject. Reject-side coverage is where this hides.
+- **A negative assertion with nothing to be a negative of.** `expect(log).not.toMatch(...)` passes
+  just as happily against output that never arrived. Assert a positive control first — something
+  proving the corpus could have matched. The control may need to differ per site: a line emitted
+  once at startup cannot control a sweep scoped to a window created later.
+
+Both read as MORE rigorous than a weaker test would, which is why reading them never catches it.
+
 ## Test Quality (Not Enforceable by Lint)
 
 - Test behavior (WHAT), not implementation (HOW)
