@@ -37,6 +37,11 @@ export const createRpcHandler = async (): Promise<IRpcMethodRegistrar> => ({
   unregisterMethod: async () => true,
   registerEvent: async () => true,
   unregisterEvent: async () => true,
+  // `networkService.initialize()` subscribes to this immediately after `createRpcHandler()`, so it
+  // has to exist or every story whose tree touches the network service dies with
+  // "jsonRpc.onDidDisconnectClient is not a function". Nothing ever connects here, so nothing can
+  // ever disconnect: hand back an unsubscriber that reports success, like the other members do.
+  onDidDisconnectClient: () => () => true,
 });
 
 export default createRpcHandler;
