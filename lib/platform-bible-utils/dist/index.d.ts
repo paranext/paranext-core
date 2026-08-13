@@ -500,6 +500,12 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 * news. Prefer {@link emit} everywhere else: a caller that can still act on a throw should see
 	 * it.
 	 *
+	 * This does not await `async` subscribers. It routes their rejections — a subscriber whose
+	 * promise rejects reaches `handleSubscriberError` the same way a synchronous throw does — but it
+	 * does not sequence them: this returns as soon as every subscriber has been _started_, with any
+	 * async subscriber still suspended at its first `await`. An emitter that tears something down
+	 * right after emitting therefore tears it down out from under those subscribers.
+	 *
 	 * @param event Event data to provide to subscribed callbacks
 	 * @param handleSubscriberError Run with the error a subscriber threw and that subscriber's
 	 *   position in the subscription order. Must not throw; a throw from it stops the remaining
