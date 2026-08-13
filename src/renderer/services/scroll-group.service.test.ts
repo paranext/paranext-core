@@ -460,6 +460,36 @@ describe('optimistic scr ref writes', () => {
     expect(host.setScrRef).toHaveBeenCalledWith(1, MARK, 'projA');
   });
 
+  it('still sends the write to the host when a subscriber throws', async () => {
+    const service = await startService();
+    // `onDidUpdateScrRef` is public, so any extension or web view can be this subscriber
+    service.onDidUpdateScrRef(() => {
+      throw new Error('subscriber blew up');
+    });
+
+    expect(service.setScrRefSync(1, MARK, 'projA')).toBe(true);
+
+    await settlePendingWork();
+    // Without isolation the throw unwinds the caller between the cache write and the host write, so
+    // the window is left permanently ahead of the host — reconcile only runs on a write that was
+    // actually sent, so nothing would ever correct it.
+    expect(host.setScrRef).toHaveBeenCalledWith(1, MARK, 'projA');
+  });
+
+  it('tells the remaining subscribers even when an earlier one throws', async () => {
+    const service = await startService();
+    const seen: unknown[] = [];
+    service.onDidUpdateScrRef(() => {
+      throw new Error('subscriber blew up');
+    });
+    service.onDidUpdateScrRef((update) => seen.push(update));
+
+    service.setScrRefSync(1, MARK, 'projA');
+
+    await settlePendingWork();
+    expect(seen).toHaveLength(1);
+  });
+
   it('returns false and skips the host write when the cache says nothing changed', async () => {
     const service = await startService({
       scrRefs: { 1: MARK },
