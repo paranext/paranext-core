@@ -42,12 +42,14 @@ the archive for your platform plus `SHA256SUMS` from
 on your `PATH`:
 
 ```bash
-sha256sum -c SHA256SUMS --ignore-missing    # macOS: shasum -a 256 -c SHA256SUMS --ignore-missing
+ARCHIVE=roborev_<version>_<platform>.tar.gz
+grep "$ARCHIVE" SHA256SUMS | sha256sum -c -    # macOS: shasum -a 256 -c -
 ```
 
 Use the checking form (`-c`), not the digest-printing form — printing a hash you never compare
-is not verification. Both commands exit non-zero if the archive is missing from `SHA256SUMS`
-or its digest does not match.
+is not verification. Checking the named archive specifically also fails loudly when that name
+is absent from the manifest; `sha256sum -c SHA256SUMS --ignore-missing` would instead pass on
+some *other* listed file that happens to be in the directory.
 
 Linux users can install the published `.deb` or `.rpm` instead. The upstream
 `curl -fsSL https://roborev.io/install.sh | bash` one-liner also works, but read the script

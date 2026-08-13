@@ -22,5 +22,5 @@
 # `roborev check-agents` at setup time, not from this hook.
 command -v roborev >/dev/null 2>&1 || exit 0
 roborev post-commit >/dev/null || {
-  echo "roborev: could not enqueue a review (is the daemon running? 'roborev daemon status')" >&2
+  echo "roborev: could not enqueue a review (is the daemon running? 'roborev status')" >&2
 }
