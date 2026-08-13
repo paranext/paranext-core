@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => {
   return {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
-    getNotReadyWindowIds: vi.fn(),
+    getUnreachableWindowIds: vi.fn(),
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
     loggerWarn: vi.fn(),
@@ -38,7 +38,7 @@ const mocks = vi.hoisted(() => {
 /** Wire windows whose notification service shards are the given objects */
 function withWindows(
   shardsByWindowId: Record<number, unknown>,
-  options?: { unreadyWindowIds?: number[] },
+  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
 ) {
   withWindowsServingShards(
     mocks,
@@ -51,7 +51,7 @@ function withWindows(
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
-  getNotReadyWindowIds: mocks.getNotReadyWindowIds,
+  getUnreachableWindowIds: mocks.getUnreachableWindowIds,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
@@ -90,7 +90,7 @@ describe('notification service router', () => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
-    mocks.getNotReadyWindowIds.mockReturnValue([]);
+    mocks.getUnreachableWindowIds.mockReturnValue([]);
   });
 
   test('sends to a window that registered its shard after the router started', async () => {
@@ -162,7 +162,7 @@ describe('notification service router', () => {
     // background task's fire-and-forget dismissal for the network service's registration retry
     const showing = windowShard(['notification-1']);
     const starting = windowShard([]);
-    withWindows({ 1: showing, 2: starting }, { unreadyWindowIds: [2] });
+    withWindows({ 1: showing, 2: starting }, { startingWindowIds: [2] });
     const router = await getRouter();
 
     await router.dismiss('notification-1');

@@ -56,6 +56,19 @@ const mostRecentlyFocusedWindowIds: number[] = [];
 const readyWindowIds = new Set<number>();
 
 /**
+ * IDs of the windows whose renderer has registered its window service at least once since the
+ * window was created. Deliberately NOT cleared when a window stops being ready — see
+ * {@link markWindowNotReady}.
+ *
+ * "Has not started yet" and "was serving requests and stopped" are the same absence from
+ * {@link readyWindowIds}, and consumers have to tell them apart: the first is the state every window
+ * spends its first seconds in, where treating it as a window that could not be asked fails
+ * everything the user does for the whole of a startup; the second is a window that may be holding
+ * the very web view a call just named. Nothing else in this module separates them.
+ */
+const everReadyWindowIds = new Set<number>();
+
+/**
  * IDs of the windows whose close has begun but which are still tracked.
  *
  * A window stays tracked until Electron reports it as actually gone, which is long after every
@@ -152,21 +165,26 @@ export function getReadyWindowIds(): number[] {
 }
 
 /**
- * IDs of the windows that are tracked but cannot currently answer a routed call, in creation order.
+ * IDs of the windows that were answering routed calls and are not any more, in creation order.
  *
- * The other half of {@link getReadyWindowIds}, and the half a fan-out has to say something about:
- * skipping these windows leaves them out of the answer entirely, so a window that is alive with
- * work open in it comes back indistinguishable from a window that does not exist. A fan-out reports
- * them as windows it could not ask rather than as windows with nothing to say.
+ * The half of {@link getReadyWindowIds}'s complement that a fan-out has to say something about, and
+ * only that half. Skipping one of these leaves it out of the answer entirely, so a window that is
+ * alive with work open in it comes back indistinguishable from a window that does not exist — a
+ * fan-out reports them as windows it could not ask rather than as windows with nothing to say.
  *
- * A window is in here while its renderer is still starting, and again if that renderer stops
- * serving requests — see {@link markWindowNotReady}. Those two cannot be told apart from here, and a
- * fan-out must not try: the second is exactly the case where the window had something open.
+ * A window whose renderer has never registered anything is NOT in here, even though it is just as
+ * unaskable. It has never had a web view, a notification, or a dialog in it, so leaving it out of
+ * an answer loses nothing that was ever there — and every window is in that state for the seconds
+ * its renderer takes to start, so counting it would make every routed search in the app refuse to
+ * answer for the whole of every window's startup.
+ *
+ * @returns Tracked windows that are not currently ready but have been ready at some point since
+ *   they were created — see {@link everReadyWindowIds} and {@link markWindowNotReady}
  */
-export function getNotReadyWindowIds(): number[] {
+export function getUnreachableWindowIds(): number[] {
   return trackedWindows
     .map(({ windowId }) => windowId)
-    .filter((windowId) => !readyWindowIds.has(windowId));
+    .filter((windowId) => !readyWindowIds.has(windowId) && everReadyWindowIds.has(windowId));
 }
 
 /**
@@ -332,9 +350,12 @@ export function removeWindow(window: BrowserWindow, windowId: number): void {
   const trackedIndex = trackedWindows.findIndex((tracked) => tracked.window === window);
   if (trackedIndex >= 0) trackedWindows.splice(trackedIndex, 1);
   readyWindowIds.delete(windowId);
-  // Electron reuses window IDs, so leaving this behind would tell a future window's close that a
-  // window which no longer exists is on its way out
+  // Electron reuses window IDs, so leaving either of these behind would speak for a window that no
+  // longer exists: the closing flag would tell a future window's close it is already on its way out,
+  // and the ever-ready flag would make the next window to take this ID look, for the whole of its
+  // startup, like one that had been serving requests and died.
   closingWindowIds.delete(windowId);
+  everReadyWindowIds.delete(windowId);
   const focusOrderIndex = mostRecentlyFocusedWindowIds.indexOf(windowId);
   if (focusOrderIndex >= 0) mostRecentlyFocusedWindowIds.splice(focusOrderIndex, 1);
   if (focusedWindowId === windowId) focusedWindowId = undefined;
@@ -363,6 +384,7 @@ export function setFocusedWindowId(windowId: number | undefined): void {
  */
 export function markWindowReady(windowId: number): void {
   readyWindowIds.add(windowId);
+  everReadyWindowIds.add(windowId);
   announceRoutingTargetIfChanged();
 }
 
@@ -379,6 +401,18 @@ export function markWindowReady(windowId: number): void {
 export function markWindowClosing(windowId: number): void {
   closingWindowIds.add(windowId);
   announceRoutingTargetIfChanged();
+}
+
+/**
+ * Whether a window's close has begun, so nothing should try to put it back to work.
+ *
+ * Answered from what the window's own close handler recorded rather than from the BrowserWindow,
+ * which is not destroyed until long after the close started — see {@link markWindowClosing}.
+ *
+ * @param windowId Window to ask about
+ */
+export function isWindowClosing(windowId: number): boolean {
+  return closingWindowIds.has(windowId);
 }
 
 /**
@@ -407,6 +441,10 @@ export function areAllWindowsClosing(): boolean {
  * retry against handlers that no longer exist. The window stays tracked: it is still a window, and
  * it becomes routable again through {@link markWindowReady} once its renderer registers.
  *
+ * {@link everReadyWindowIds} deliberately keeps this window, which is what makes it come back from
+ * here as a window that could not be asked rather than as one that never had anything to say. Only
+ * the window going away clears that.
+ *
  * @param windowId Window whose renderer stopped serving requests
  */
 export function markWindowNotReady(windowId: number): void {
@@ -421,6 +459,7 @@ export function markWindowNotReady(windowId: number): void {
 export function resetForTesting(): void {
   trackedWindows.length = 0;
   readyWindowIds.clear();
+  everReadyWindowIds.clear();
   closingWindowIds.clear();
   mostRecentlyFocusedWindowIds.length = 0;
   focusedWindowId = undefined;

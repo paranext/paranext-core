@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
   return {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
-    getNotReadyWindowIds: vi.fn(),
+    getUnreachableWindowIds: vi.fn(),
     registerRequestHandler: vi.fn(),
     request: vi.fn(),
     networkObjectGet: vi.fn(),
@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => {
 /** Wire windows whose WebView service shards are the given objects */
 function withWindows(
   shardsByWindowId: Record<number, unknown>,
-  options?: { unreadyWindowIds?: number[] },
+  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
 ) {
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
 }
@@ -47,7 +47,7 @@ function withWindows(
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
-  getNotReadyWindowIds: mocks.getNotReadyWindowIds,
+  getUnreachableWindowIds: mocks.getUnreachableWindowIds,
 }));
 vi.mock('@shared/services/network.service', () => ({
   registerRequestHandler: mocks.registerRequestHandler,
@@ -73,12 +73,13 @@ function windowShard(openWebViewIds: string[]) {
 
 /**
  * Wire windows whose scoped WebViewServices own the given web view ids, so a command carrying a web
- * view id can be routed by ownership. Windows named in `unreadyWindowIds` are tracked but have not
- * registered their services yet.
+ * view id can be routed by ownership. Windows named in `startingWindowIds` are tracked but have not
+ * registered their services yet; windows named in `unreachableWindowIds` were serving requests and
+ * stopped.
  */
 function withWindowsOwning(
   webViewIdsByWindowId: Record<number, string[]>,
-  options?: { unreadyWindowIds?: number[] },
+  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
 ) {
   const servicesByWindowId = Object.fromEntries(
     Object.entries(webViewIdsByWindowId).map(([windowId, ownedIds]) => [
@@ -105,7 +106,7 @@ describe('renderer-hosted request service routers', () => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(2);
     mocks.getReadyWindowIds.mockReturnValue([]);
-    mocks.getNotReadyWindowIds.mockReturnValue([]);
+    mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.networkObjectGet.mockResolvedValue(undefined);
     mocks.registerRequestHandler.mockResolvedValue(vi.fn());
     mocks.request.mockResolvedValue('result');
@@ -221,19 +222,31 @@ describe('renderer-hosted request service routers', () => {
     expect(mocks.request).toHaveBeenCalledWith('command:platform.goToNextChapter-2', 'owned-view');
   });
 
-  test('does not ask a window that has not registered its services yet, and will not fall back to focus', async () => {
-    // A window is tracked from the moment it is shown, and asking one that cannot answer costs the
-    // network service's whole registration retry — seconds of stall on a user's click — to learn
-    // nothing. Not asking it does not make it a window that answered: the web view named here is
-    // the one sitting in it, and falling back to focus would open the settings against whatever
-    // project the focused window happens to be showing.
-    const services = withWindowsOwning({ 2: [], 3: ['owned-view'] }, { unreadyWindowIds: [3] });
+  test('does not ask a window that stopped serving requests, and will not fall back to focus', async () => {
+    // Asking a window that cannot answer costs the network service's whole registration retry —
+    // seconds of stall on a user's click — to learn nothing. Not asking it does not make it a window
+    // that answered: the web view named here is the one sitting in it, and falling back to focus
+    // would open the settings against whatever project the focused window happens to be showing.
+    const services = withWindowsOwning({ 2: [], 3: ['owned-view'] }, { unreachableWindowIds: [3] });
 
     await expect(
       registrations().get('command:platform.openSettings')?.handler('owned-view'),
     ).rejects.toThrow('unreachable');
     expect(services[3].getOpenWebViewDefinition).not.toHaveBeenCalled();
     expect(mocks.request).not.toHaveBeenCalled();
+  });
+
+  test('routes to the focused window rather than failing while another window is still starting', async () => {
+    // A window that has not registered its services yet has never had a web view in it, so it
+    // cannot be the owner of the one named here. Counting it as a window that could not be asked
+    // would fail every web-view-id command in the app for the seconds each new window takes to
+    // start — every `File > New Window`, and the whole of app startup.
+    const services = withWindowsOwning({ 2: [], 3: [] }, { startingWindowIds: [3] });
+
+    await registrations().get('command:platform.openSettings')?.handler('unknown-view');
+
+    expect(services[3].getOpenWebViewDefinition).not.toHaveBeenCalled();
+    expect(mocks.request).toHaveBeenCalledWith('command:platform.openSettings-2', 'unknown-view');
   });
 
   test('fails the call rather than running it in the wrong window when a window cannot be asked', async () => {

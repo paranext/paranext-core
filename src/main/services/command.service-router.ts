@@ -12,9 +12,9 @@
  */
 
 import {
-  getNotReadyWindowIds,
   getReadyWindowIds,
   getTargetWindowId,
+  getUnreachableWindowIds,
 } from '@main/services/window-state.service';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { logger } from '@shared/services/logger.service';
@@ -87,27 +87,30 @@ const WEB_VIEW_ID_COMMAND_NAMES: ReadonlySet<string> = new Set(webViewIdCommandN
  * view id that no longer exists anywhere would want anyway.
  *
  * Only ready windows are asked: a window that has not registered its services cannot answer, and
- * asking it stalls the call for the network service's whole registration retry. It still counts as
- * a window that could not be asked — see below.
+ * asking it stalls the call for the network service's whole registration retry. One that was
+ * serving requests until a moment ago still counts as a window that could not be asked — see
+ * below.
  *
  * @param webViewId Web view id the call named
  * @param requestName Request being routed, for logging
- * @throws If no window claimed the web view and some window could not be asked, since the owner may
- *   be the window that did not answer
+ * @throws If no window claimed the web view and some window that had been serving requests could
+ *   not be asked, since the owner may be the window that did not answer
  */
 async function findWebViewOwnerWindowId(
   webViewId: WebViewId,
   requestName: string,
 ): Promise<number | undefined> {
-  // A tracked window that has not registered its services is skipped by the search below rather
+  // A tracked window that was serving requests and stopped is skipped by the search below rather
   // than answering it, so it is a window that could not be asked. It has to count as one, or the
   // fallback runs the call in the focused window while the web view it named sits in the window
-  // nothing asked.
-  const notReadyWindowIds = getNotReadyWindowIds();
-  let hadServiceErrors = notReadyWindowIds.length > 0;
+  // nothing asked. A window whose renderer has not registered anything yet is skipped too and does
+  // not count: no web view has ever been opened in it, so it cannot be the owner — and counting it
+  // would fail every one of these commands for the seconds each new window takes to start.
+  const unreachableWindowIds = getUnreachableWindowIds();
+  let hadServiceErrors = unreachableWindowIds.length > 0;
   if (hadServiceErrors)
     logger.warn(
-      `Windows ${notReadyWindowIds.join(', ')} have not registered their services, so they could not be asked about web view ${webViewId} while routing ${requestName}`,
+      `Windows ${unreachableWindowIds.join(', ')} stopped serving requests, so they could not be asked about web view ${webViewId} while routing ${requestName}`,
     );
   const ownerWindowIds = await Promise.all(
     getReadyWindowIds().map(async (id) => {
