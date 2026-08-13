@@ -49,7 +49,14 @@ export class FindWebViewProvider implements IWebViewProvider {
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
       state: {
         ...savedWebView.state,
-        editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
+        // Use the caller's value when openFind supplies it (it always sets the key) so a panel
+        // trigger can CLEAR a stale editor id; a `??` here would resurrect an editor id from a prior
+        // open-from-editor and re-point Find at the wrong (or a closed) editor. Content
+        // reload/restore omits the key, so the saved value is preserved there.
+        editorWebViewId:
+          'editorWebViewId' in getWebViewOptions
+            ? getWebViewOptions.editorWebViewId
+            : savedWebView.state?.editorWebViewId,
         ...(getWebViewOptions.initialSearchText
           ? { findSearchTerm: getWebViewOptions.initialSearchText }
           : {}),
