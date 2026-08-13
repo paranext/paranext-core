@@ -7,6 +7,7 @@ import { useState } from 'react';
 import type { ScrollGroupId } from 'platform-bible-utils';
 import {
   ProjectSelector,
+  type ProjectSelectorGroupingOption,
   type ProjectSelectorOpenTab,
   type ProjectSelectorProjectPair,
   type ProjectSelectorProject,
@@ -382,6 +383,159 @@ export const PerRowDisabled: Story = {
       description: {
         story:
           'Two projects (`ESV16UK`, `TP1`) are marked disabled with a `disabledReason`. They render muted, are not selectable (Up/Down navigation skips them), and the reason surfaces in the row tooltip. Use this to surface read-only or otherwise-unusable projects without filtering them out of the list.',
+      },
+    },
+  },
+};
+
+// #endregion
+
+// #region grouping options (type / language / last used)
+
+// Fixed base so `lastUsedAt` values are stable across renders (Storybook re-runs).
+const NOW = 1_720_000_000_000;
+const DAY = 24 * 60 * 60 * 1000;
+
+// A richer fixture that carries `type`/`typeName` (mixing PT9 ProjectType keys with DBL
+// ResourceType keys) and `lastUsedAt` on a subset of rows so every grouping option produces
+// visibly distinct sections.
+const typedProjects: ProjectSelectorProject[] = [
+  {
+    id: 'esvus16',
+    shortName: 'ESVUS16',
+    fullName: 'English Standard Version (US) 2016',
+    language: 'English',
+    languageCode: 'en-US',
+    type: 'Standard',
+    typeName: 'Standard translation',
+    lastUsedAt: NOW - 1 * DAY,
+  },
+  {
+    id: 'tp1',
+    shortName: 'TP1',
+    fullName: 'Test Project 1',
+    language: 'English',
+    languageCode: 'en',
+    type: 'Standard',
+    typeName: 'Standard translation',
+  },
+  {
+    id: 'hpux-bt',
+    shortName: 'HPUXBT',
+    fullName: 'Hawaii Pidgin — Back Translation',
+    language: 'English',
+    languageCode: 'en',
+    type: 'BackTranslation',
+    typeName: 'Back translation',
+    lastUsedAt: NOW - 3 * DAY,
+  },
+  {
+    id: 'sb-esv',
+    shortName: 'ESVSB',
+    fullName: 'ESV Study Bible',
+    language: 'English',
+    languageCode: 'en',
+    type: 'StudyBible',
+    typeName: 'Study Bible',
+    lastUsedAt: NOW - 10 * DAY,
+  },
+  {
+    id: 'na28',
+    shortName: 'NA28',
+    fullName: 'Nestle-Aland 28th Edition',
+    language: 'Greek',
+    languageCode: 'el',
+    type: 'ScriptureResource',
+    typeName: 'Scripture resource',
+    lastUsedAt: NOW - 2 * DAY,
+  },
+  {
+    id: 'bhs',
+    shortName: 'BHS',
+    fullName: 'Biblia Hebraica Stuttgartensia',
+    language: 'Hebrew',
+    languageCode: 'he',
+    type: 'ScriptureResource',
+    typeName: 'Scripture resource',
+  },
+  {
+    id: 'mhc',
+    shortName: 'MHC',
+    fullName: "Matthew Henry's Commentary",
+    language: 'English',
+    languageCode: 'en',
+    type: 'CommentaryResource',
+    typeName: 'Commentary',
+    lastUsedAt: NOW - 20 * DAY,
+  },
+  {
+    id: 'schl1951',
+    shortName: 'SCHL1951',
+    fullName: 'Schlachter 1951',
+    language: 'German',
+    languageCode: 'de',
+    type: 'Standard',
+    typeName: 'Standard translation',
+  },
+  {
+    // Intentionally missing `type` and `lastUsedAt` to exercise the "unknown" bucket and
+    // "Other" bucket in their respective groupings.
+    id: 'legacy',
+    shortName: 'LEGACY',
+    fullName: 'Legacy Uncategorized Project',
+    language: 'English',
+    languageCode: 'en',
+  },
+];
+
+export const AllGroupingOptions: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    return (
+      <ProjectSelector
+        mode="project"
+        projects={typedProjects}
+        openTabs={sampleOpenTabs}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        buttonPlaceholder="Select a project or resource"
+        ariaLabel="Project or resource"
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Default `availableGroupings` = `["openTabs", "language", "lastUsed", "type"]`. Open the funnel icon (top-right of the popover) to switch between "None" and each grouping. "By last used" sorts recently-used items newest-first inside the "Recently used" section; items without a timestamp fall into "Other". "By type" bins by PT9 ProjectType (Standard, BackTranslation, StudyBible) and DBL ResourceType (ScriptureResource, CommentaryResource) using the `typeName` fields for section labels. Empty buckets are hidden.',
+      },
+    },
+  },
+};
+
+export const RestrictedGroupingOptions: Story = {
+  render: () => {
+    const [projectId, setProjectId] = useState<string | undefined>(undefined);
+    const availableGroupings: ProjectSelectorGroupingOption[] = ['language', 'type'];
+    return (
+      <ProjectSelector
+        mode="project"
+        projects={typedProjects}
+        openTabs={sampleOpenTabs}
+        selection={{ projectId }}
+        onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+        availableGroupings={availableGroupings}
+        defaultGrouping="type"
+        buttonPlaceholder="Select"
+        ariaLabel="Project or resource"
+      />
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`availableGroupings={["language", "type"]}` narrows the filter menu to just those two. `defaultGrouping="type"` opens with type-grouping active. Pass this when the calling surface doesn\'t have data for "By open tabs" or "By last used", or when you want the picker constrained to a specific mental model.',
       },
     },
   },
