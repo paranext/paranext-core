@@ -336,6 +336,22 @@ async function registerWindow(simpleLayout: LayoutInfo) {
   return { dockLayout, loadedLayouts };
 }
 
+/**
+ * The shard object this window registered, as the main process's router calls it. Only the members
+ * a test reaches for are named; the shard's own type carries the rest.
+ */
+async function registeredShard() {
+  const { networkObjectService } = await import('@shared/services/network-object.service');
+  const set = networkObjectService.set as unknown as ReturnType<typeof vi.fn>;
+  const lastSetCall = set.mock.calls[set.mock.calls.length - 1];
+  return lastSetCall[1] as {
+    hasContentArrivedSinceEmptyReport: () => Promise<boolean>;
+    openSettingsTab: (projectIdToLimitSettings?: string) => Promise<unknown>;
+    openWebView: (webViewType: string) => Promise<string | undefined>;
+    adoptWebView: (savedWebViewDefinition: unknown) => Promise<string | undefined>;
+  };
+}
+
 /** Register a dock layout and return the layout the initial load landed on */
 async function loadLayoutInWindow(simpleLayout: LayoutInfo) {
   const { loadedLayouts } = await registerWindow(simpleLayout);
@@ -1830,17 +1846,6 @@ describe('loadLayout reports a dock that landed empty', () => {
   });
 
   describe('the arrival flag the main process re-checks a report against', () => {
-    /** The shard object this window registered, as the main process's router calls it */
-    async function registeredShard() {
-      const { networkObjectService } = await import('@shared/services/network-object.service');
-      const set = networkObjectService.set as unknown as ReturnType<typeof vi.fn>;
-      const lastSetCall = set.mock.calls[set.mock.calls.length - 1];
-      return lastSetCall[1] as {
-        hasContentArrivedSinceEmptyReport: () => Promise<boolean>;
-        openSettingsTab: (projectIdToLimitSettings?: string) => Promise<unknown>;
-      };
-    }
-
     test('says content arrived once Home is docked in answer to the report', async () => {
       respondToGetLayoutAndEmptied({ kind: 'empty' }, { action: 'open-home' });
       const module = await primeWebViewOpenPath();
@@ -2009,6 +2014,63 @@ describe('loadLayout when the saved-layout request fails', () => {
       expect.anything(),
       expect.anything(),
     );
+  });
+});
+
+describe('a window the main process has told is closing', () => {
+  /**
+   * Stand the shard up in a window whose emptiness report was answered `closing`.
+   *
+   * Deliberately without a web view provider or a theme stubbed in: an open or an adopt that got as
+   * far as the provider would fail with a `TypeError` off the empty service mock instead of the
+   * refusal these tests are about, so the refusal has to happen before any of that to pass.
+   */
+  async function windowToldItIsClosing() {
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+    respondToGetLayout({ kind: 'empty' });
+    const module = await import('@renderer/services/web-view.service-shard');
+    await module.startWebViewServiceShard();
+    const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+    await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+    await vi.waitFor(() =>
+      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+    );
+    // Let the answer to that report land before anything asks this window to do work
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    return registeredShard();
+  }
+
+  test('refuses a web view moved into it rather than losing it with the window', async () => {
+    const shard = await windowToldItIsClosing();
+
+    await expect(
+      shard.adoptWebView({ id: 'moved-view', webViewType: 'test.type' }),
+    ).rejects.toThrow(/closing/);
+  });
+
+  test('refuses to open a web view in itself', async () => {
+    const shard = await windowToldItIsClosing();
+
+    await expect(shard.openWebView('test.type')).rejects.toThrow(/closing/);
+  });
+
+  test('throws rather than answering nothing, which would read as a provider declining', async () => {
+    const shard = await windowToldItIsClosing();
+    // A provider that declines every open, so that a shard which did NOT refuse would resolve
+    // `undefined` here rather than throw. `undefined` is the established "the provider chose not to
+    // create it" answer, and the router acts on it by cleaning up as though the open had been
+    // considered and turned down — which is not what happened.
+    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+    (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
+      async () => ({ getWebView: async () => undefined }),
+    );
+
+    await expect(shard.openWebView('test.type')).rejects.toThrow();
   });
 });
 

@@ -130,6 +130,9 @@ function windowShard(
     openWebView: vi.fn<() => Promise<string | undefined>>(async () => 'opened'),
     reloadWebView: vi.fn(async () => 'reloaded'),
     openSettingsTab: vi.fn(async () => undefined),
+    // A window with nothing docked in it since its last emptiness report, which is what a window
+    // created to receive routed content is until the content arrives
+    hasContentArrivedSinceEmptyReport: vi.fn(async () => false),
   };
 }
 
@@ -554,6 +557,27 @@ describe('web view service router', () => {
     expect(higher.openWebView).not.toHaveBeenCalled();
   });
 
+  test('refuses to reuse a web view in a window whose close was decided while it was being found', async () => {
+    // The search asks every window, which takes as long as the slowest of them — long enough for
+    // the window that answered to be told it is closing in the meantime. Opening into it anyway
+    // reports success and then loses the tab when the close lands.
+    const focused = windowShard([]);
+    const owner = windowShard(['named-view']);
+    owner.getOpenWebViewDefinition.mockImplementation(async (id: string) => {
+      mocks.isWindowClosing.mockImplementation((windowId: number) => windowId === 2);
+      return id === 'named-view' ? { id } : undefined;
+    });
+    withWindows({ 1: focused, 2: owner });
+    const router = await getRouter();
+
+    await expect(
+      router.openWebView('comments', undefined, { existingId: 'named-view' }),
+    ).rejects.toThrow(/that window is closing/);
+
+    expect(owner.openWebView).not.toHaveBeenCalled();
+    expect(focused.openWebView).not.toHaveBeenCalled();
+  });
+
   describe('a window layout opens into a new window', () => {
     test('creates a window and opens the web view in it', async () => {
       const focused = windowShard([]);
@@ -799,6 +823,49 @@ describe('web view service router', () => {
 
       // The window closes instead, which clears the pending-content mark via removal — clearing
       // it here too would be redundant and, worse, would race a removal that has not happened yet.
+      expect(mocks.clearWindowPendingContent).not.toHaveBeenCalled();
+    });
+
+    test('keeps a created window that gained content while its open was failing', async () => {
+      // An open whose request timed out can still have landed in the window afterwards. Closing on
+      // the timeout would destroy a web view that is open in front of the user, and this is the
+      // only window that knows.
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      created.openWebView.mockRejectedValue(new Error('the request timed out'));
+      created.hasContentArrivedSinceEmptyReport.mockResolvedValue(true);
+      withWindows({ 1: focused, 7: created });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      await expect(router.openWebView('someType', { type: 'window' })).rejects.toThrow(
+        'the request timed out',
+      );
+
+      expect(creator.closeWindow).not.toHaveBeenCalled();
+      // Without this the window would stay unroutable and reload as pending forever, waiting for
+      // content that is already in it
+      expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith(7);
+    });
+
+    test('closes a created window that cannot say whether content arrived', async () => {
+      // The opposite failure rule to the emptiness re-check: a wrongly kept pending-content window
+      // never reports born-empty and never docks Home, so it is a blank window with no way back.
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      created.openWebView.mockRejectedValue(new Error('the request timed out'));
+      created.hasContentArrivedSinceEmptyReport.mockRejectedValue(new Error('unreachable'));
+      withWindows({ 1: focused, 7: created });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      await expect(router.openWebView('someType', { type: 'window' })).rejects.toThrow(
+        'the request timed out',
+      );
+
+      expect(creator.closeWindow).toHaveBeenCalledWith(7);
       expect(mocks.clearWindowPendingContent).not.toHaveBeenCalled();
     });
   });

@@ -408,6 +408,14 @@ async function openWebViewInOwningWindow(
   layout?: Layout,
   options?: OpenWebViewOptions,
 ): Promise<WebViewId | undefined> {
+  // Read again here, at the last moment before the window is asked to do the work. Finding this
+  // window meant asking every window in the app, which takes as long as the slowest of them — long
+  // enough for this one's close to have been decided since any earlier read, including the one the
+  // caller's own rung took.
+  if (isWindowClosing(owner.windowId))
+    throw new Error(
+      `Cannot open ${webViewType} in window ${owner.windowId}: that window is closing.`,
+    );
   const openedWebViewId = await owner.shard.openWebView(webViewType, layout, options);
   const isCrossWindow = owner.windowId !== getTargetWindowId();
   // A caller who opted out of bringToFront is opting out at the window level too: the shard already
@@ -440,7 +448,30 @@ async function openInFreshWindow(
   // Closes the window this call created, at most once, and never lets a failure to close replace
   // the reason the window is being closed in the first place — a window that fails to close is a
   // leak to warn about, not grounds to hide why the open itself did not succeed.
-  const closeAbandonedWindow = () => {
+  //
+  // Asks the window first whether anything reached it in the meantime: an open whose request timed
+  // out can still have landed afterwards, and this window is the only place that knows. Every other
+  // outcome closes, including one where the question itself could not be answered — a
+  // pending-content window kept by mistake never reports itself born-empty and never docks Home, so
+  // it stands there blank with nothing to heal it, which is worse than closing one window too many.
+  const closeAbandonedWindow = async () => {
+    try {
+      const shard = await webViewShards.getShard(windowId);
+      if (await shard?.hasContentArrivedSinceEmptyReport()) {
+        logger.warn(
+          `Window ${windowId}'s new-window open did not succeed, but content reached the window anyway; leaving it open.`,
+        );
+        // It is holding content, so it is a window routed work can go to — and it must stop
+        // restoring as a window still waiting for content that has already arrived. Changing the
+        // mark announces the routing-target change itself, so nothing else has to.
+        clearWindowPendingContent(windowId);
+        return;
+      }
+    } catch (recheckError) {
+      logger.warn(
+        `Could not ask window ${windowId} whether content reached it before closing it: ${getErrorMessage(recheckError)}`,
+      );
+    }
     try {
       creator.closeWindow(windowId);
     } catch (closeError) {
@@ -459,14 +490,15 @@ async function openInFreshWindow(
     );
     openedWebViewId = await open(shard);
   } catch (e) {
-    closeAbandonedWindow();
+    await closeAbandonedWindow();
     throw e;
   }
 
   if (openedWebViewId === undefined) {
     // The provider chose not to create the web view — the established "it did not happen"
-    // answer. The window it would have lived in has no reason to exist.
-    closeAbandonedWindow();
+    // answer. The window it would have lived in has no reason to exist, and a decline never docked
+    // anything, so the re-check inside cannot mistake this open's own content for an interloper.
+    await closeAbandonedWindow();
   } else {
     // The routed content is in the window now. Un-mark it, so a reload before its first layout
     // push restores as an ordinary (empty) window instead of waiting forever for content that
@@ -672,6 +704,12 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
   webViewMovesInFlight.add(moveInFlight);
   try {
     try {
+      // Read again at the last moment: the capture above closed the source tab, and everything
+      // between the target check at the top of this move and here has been cross-process work the
+      // target's close could have been decided during. Throwing hands the web view to the recovery
+      // below rather than into a window that is about to take it away.
+      if (typeof target === 'number' && isWindowClosing(target))
+        throw new Error(`window ${target}'s close was decided while the move was in flight`);
       const movedWebViewId =
         targetShard !== undefined
           ? await targetShard.adoptWebView(captured)
