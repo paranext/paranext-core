@@ -950,10 +950,11 @@ describe('web view service router', () => {
 
     test('fails a replace-tab open when a window that could not be asked might hold the target', async () => {
       // Unlike `panel`, replacing IS the operation: sending it to a guessed window risks a
-      // throw after the provider has already run. Same reachability rule as `existingId`.
+      // throw after the provider has already run. Same reachability rule as a concrete
+      // `existingId`: a window that stopped serving requests may be the one holding the target.
       const focused = windowShard([]);
-      const starting = windowShard(['target-tab']);
-      withWindows({ 1: focused, 2: starting }, { unreadyWindowIds: [2] });
+      const crashed = windowShard(['target-tab']);
+      withWindows({ 1: focused, 2: crashed }, { unreachableWindowIds: [2] });
       const router = await getRouter();
 
       await expect(
