@@ -429,38 +429,63 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
   const letter =
     row.scrollGroupId !== undefined ? scrollGroupLetterFromMap(row.scrollGroupId) : undefined;
 
-  const tooltipBoundBut =
-    row.isBoundButClosed && letter
-      ? strings.boundButClosedTooltip.replace('{group}', letter)
-      : undefined;
+  // Single scroll-group tooltip line covering every case the row can be in. Bound-but-closed
+  // rows use the caller's `boundButClosedTooltip` template (with the letter substituted in) and
+  // render italic. Open-tab rows show `{scrRefLabel} ({letter})` when a ref label is available,
+  // otherwise just the letter. `project`-mode rows aggregate multiple open scroll groups into a
+  // comma-joined list to mirror the chip strip on the right side of the row.
+  let scrollGroupLine: string | undefined;
+  let scrollGroupLineIsItalic = false;
+  if (row.isBoundButClosed && letter) {
+    scrollGroupLine = strings.boundButClosedTooltip.replace('{group}', letter);
+    scrollGroupLineIsItalic = true;
+  } else if (letter) {
+    scrollGroupLine = row.scrollGroupScrRefLabel
+      ? `${row.scrollGroupScrRefLabel} (${letter})`
+      : letter;
+  } else if (row.openGroups.length > 0) {
+    scrollGroupLine = row.openGroups.map(scrollGroupLetterFromMap).join(', ');
+  }
+
+  // Compose the language line as a single string so it renders as one row (with the code, when
+  // present, muted in parentheses). Handles both partial-data cases (only language, only code)
+  // without emitting a stray parenthesis.
+  let languageLine: ReactNode;
+  if (row.language && row.languageCode) {
+    languageLine = (
+      <>
+        {row.language}
+        <span className="tw:text-muted-foreground"> ({row.languageCode})</span>
+      </>
+    );
+  } else if (row.language) {
+    languageLine = row.language;
+  } else if (row.languageCode) {
+    languageLine = row.languageCode;
+  }
 
   return (
     <Tooltip open={isHovered} delayDuration={400}>
       <TooltipTrigger asChild>{rowNode}</TooltipTrigger>
       <TooltipContent
-        side="top"
-        align="center"
+        // side="right" — hovered rows sit inside the selector's popover; a top-side tooltip
+        // frequently overlapped the row above (or the search bar for the topmost row). Right-side
+        // places the tooltip clear of the popover's content column and reads as a canonical
+        // "row-details" affordance.
+        side="right"
+        align="start"
         sideOffset={8}
         collisionPadding={16}
-        className="tw:max-w-xs tw:text-center"
+        className="tw:max-w-xs tw:text-start"
         style={{ zIndex: Z_INDEX_OVERLAY }}
       >
         <div className="tw:font-semibold">{row.fullName}</div>
-        {tooltipHasLanguage && (
-          <div className="tw:text-sm">
-            {row.language}
-            {row.languageCode && (
-              <span className="tw:text-muted-foreground"> ({row.languageCode})</span>
-            )}
+        {languageLine && <div className="tw:text-sm">{languageLine}</div>}
+        {scrollGroupLine && (
+          <div className={cn('tw:text-sm', scrollGroupLineIsItalic && 'tw:italic')}>
+            {scrollGroupLine}
           </div>
         )}
-        {!row.isBoundButClosed && row.scrollGroupScrRefLabel && letter && (
-          <div className="tw:text-sm">
-            {row.scrollGroupScrRefLabel}
-            <span className="tw:text-muted-foreground"> ({letter})</span>
-          </div>
-        )}
-        {tooltipBoundBut && <div className="tw:text-sm tw:italic">{tooltipBoundBut}</div>}
         {row.isDisabled && row.disabledReason && (
           <div className="tw:text-sm tw:italic tw:text-muted-foreground">{row.disabledReason}</div>
         )}
