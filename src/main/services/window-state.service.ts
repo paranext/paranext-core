@@ -187,6 +187,41 @@ export function getWindows(): BrowserWindow[] {
   return trackedWindows.filter(({ window }) => !window.isDestroyed()).map(({ window }) => window);
 }
 
+/**
+ * How many windows could still be the one the user is left with — the arithmetic behind the answer
+ * a window gets when it reports its dock empty.
+ *
+ * Such a window closes unless it is the last one standing, which docks Home instead, so this is the
+ * complete rule for which windows may stand in as another window's reason to close:
+ *
+ * - A window whose close has begun is on its way out — see {@link markWindowClosing}. Two windows
+ *   emptying at the same moment would otherwise each count the other as a reason to close and both
+ *   go, leaving the app with no window at all.
+ * - A window still waiting for the content it was created to receive has nothing in it yet, and the
+ *   operation filling it can still fail and close it again — see
+ *   {@link setWindowPendingContentPredicate}.
+ * - A window nothing will ever run in again is still on screen and still tracked, deliberately —
+ *   closing it would rewrite the persisted window layout without it, taking away the user's one
+ *   remaining recovery — but its renderer is dead and no reload is coming, so counting it would let
+ *   the last window the user can actually work in be closed out from under them. See
+ *   {@link markWindowAbandoned}.
+ *
+ * The whole rule lives here rather than being composed by the caller: every input is this module's,
+ * and a composed copy is a rule that can drift from the one under test.
+ *
+ * Destroyed windows are left out for the same reason {@link getWindows} filters them — a window
+ * stays tracked until its `closed` handler runs.
+ */
+export function countWindowsThatCouldBeTheLastOne(): number {
+  return trackedWindows.filter(
+    ({ windowId, window }) =>
+      !window.isDestroyed() &&
+      !closingWindowIds.has(windowId) &&
+      !isWindowPendingContent(windowId) &&
+      !abandonedWindowIds.has(windowId),
+  ).length;
+}
+
 /** Whether a window's renderer has registered its window service, so routing to it can succeed */
 export function isWindowReady(windowId: number): boolean {
   return readyWindowIds.has(windowId);
