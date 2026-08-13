@@ -22,7 +22,7 @@ const mocks = vi.hoisted(() => {
   return {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
-    getNotReadyWindowIds: vi.fn(),
+    getUnreachableWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     isWindowClosing: vi.fn(),
     getFocusedWindowId,
@@ -56,7 +56,7 @@ const mocks = vi.hoisted(() => {
 /** Wire windows whose WebView service shards are the given objects */
 function withWindows(
   shardsByWindowId: Record<number, unknown>,
-  options?: { unreadyWindowIds?: number[] },
+  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
 ) {
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
 }
@@ -64,7 +64,7 @@ function withWindows(
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
-  getNotReadyWindowIds: mocks.getNotReadyWindowIds,
+  getUnreachableWindowIds: mocks.getUnreachableWindowIds,
   isWindowReady: mocks.isWindowReady,
   isWindowClosing: mocks.isWindowClosing,
   getFocusedWindowId: mocks.getFocusedWindowId,
@@ -133,7 +133,7 @@ describe('moveWebView', () => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
-    mocks.getNotReadyWindowIds.mockReturnValue([]);
+    mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
     mocks.isWindowClosing.mockReturnValue(false);
     mocks.getFocusedWindowId.mockReturnValue(1);

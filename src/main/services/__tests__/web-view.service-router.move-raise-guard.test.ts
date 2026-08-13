@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
   return {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
-    getNotReadyWindowIds: vi.fn(),
+    getUnreachableWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     isWindowClosing: vi.fn(),
     // Independent of getFocusedWindowId here, unlike the derived mock the other move suites use:
@@ -56,7 +56,7 @@ function withWindows(shardsByWindowId: Record<number, unknown>) {
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
-  getNotReadyWindowIds: mocks.getNotReadyWindowIds,
+  getUnreachableWindowIds: mocks.getUnreachableWindowIds,
   isWindowReady: mocks.isWindowReady,
   isWindowClosing: mocks.isWindowClosing,
   getFocusedWindowId: mocks.getFocusedWindowId,
@@ -112,7 +112,7 @@ describe('the cross-application focus guard on a move', () => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
-    mocks.getNotReadyWindowIds.mockReturnValue([]);
+    mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
     mocks.isWindowClosing.mockReturnValue(false);
     mocks.settingsGet.mockResolvedValue('power');
