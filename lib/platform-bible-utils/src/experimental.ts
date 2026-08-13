@@ -9,6 +9,7 @@
 // as separate, independent API surfaces with different support levels.
 
 export {
+  ALL_BOOK_IDS,
   BOOKS_PRESENT_DEFAULT,
   DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
   getBookIdsFromBooksPresent,

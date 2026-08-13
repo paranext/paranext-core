@@ -10,6 +10,18 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
  */
 export declare const BOOKS_PRESENT_DEFAULT = "";
 /**
+ * Book ids for all books that are not considered obsolete in the SIL Canon library, in canonical
+ * order.
+ *
+ * The list to fall back on when a project cannot say which books it has (see
+ * {@link getBookIdsFromBooksPresent}). It lives here rather than beside the book-picking UI because
+ * the navigation commands that share it run in the main process, which cannot import a React
+ * library.
+ *
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare const ALL_BOOK_IDS: string[];
+/**
  * Converts a `platformScripture.booksPresent` flag string ('1' per present book, indexed by
  * canonical book number) into the list of present book ids
  *
