@@ -72,6 +72,8 @@ vi.mock('@main/services/window-state.service', () => ({
   // No test here names a closing window; the routed-open guard just needs an answer
   isWindowClosing: () => false,
   getFocusedWindowId: mocks.getFocusedWindowId,
+  // No test here is about the cross-window raise; the app holding focus is what allows one
+  isApplicationFocused: () => true,
   focusWindow: mocks.focusWindow,
 }));
 vi.mock('@shared/services/network-object.service', () => ({

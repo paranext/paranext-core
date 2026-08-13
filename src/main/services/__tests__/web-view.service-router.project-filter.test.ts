@@ -63,6 +63,8 @@ vi.mock('@main/services/window-state.service', () => ({
   getUnreachableWindowIds: mocks.getUnreachableWindowIds,
   isWindowReady: mocks.isWindowReady,
   getFocusedWindowId: mocks.getFocusedWindowId,
+  // No test here is about the cross-window raise; the app holding focus is what allows one
+  isApplicationFocused: () => true,
   focusWindow: mocks.focusWindow,
 }));
 vi.mock('@shared/services/network-object.service', () => ({

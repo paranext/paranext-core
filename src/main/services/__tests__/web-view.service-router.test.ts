@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
     isWindowReady: vi.fn(),
     isWindowClosing: vi.fn(),
     getFocusedWindowId: vi.fn(),
+    isApplicationFocused: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
@@ -70,6 +71,7 @@ vi.mock('@main/services/window-state.service', () => ({
   isWindowReady: mocks.isWindowReady,
   isWindowClosing: mocks.isWindowClosing,
   getFocusedWindowId: mocks.getFocusedWindowId,
+  isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
@@ -169,6 +171,7 @@ describe('web view service router', () => {
     mocks.isWindowReady.mockReturnValue(true);
     mocks.isWindowClosing.mockReturnValue(false);
     mocks.getFocusedWindowId.mockReturnValue(1);
+    mocks.isApplicationFocused.mockReturnValue(true);
     mocks.settingsGet.mockResolvedValue('power');
   });
 
@@ -1106,8 +1109,13 @@ describe('web view service router', () => {
     test('does not take focus from another application', async () => {
       // An open routed here is not necessarily something the user just asked for — an extension can
       // re-open a web view by id at any moment — so with the app in the background, raising a
-      // window would pull it in front of whatever the user is actually working in
-      mocks.getFocusedWindowId.mockReturnValue(undefined);
+      // window would pull it in front of whatever the user is actually working in.
+      //
+      // The focused window id stays SET while the app is in the background — it answers "the window
+      // the user was last working in", which is what routing falls back to — so it is the
+      // application-focus answer, and only that, which says whether a raise may happen here.
+      mocks.getFocusedWindowId.mockReturnValue(1);
+      mocks.isApplicationFocused.mockReturnValue(false);
       withWindows({ 1: windowShard([]), 2: windowShard(['existing-view']) });
       const router = await getRouter();
 
