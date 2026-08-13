@@ -879,23 +879,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 const index = noteOps ? findNoteIndexByOps(editorRef, noteOps) : undefined;
                 if (index !== undefined) setFootnotePaneFocusRequest({ index });
                 else
-                logger.warn(
-                  `noteCallerOnClick: clearing stale editing session for note ${editingNoteKey.current}`,
-                );
-                editingNoteIsNew.current = false;
-                editingNoteKey.current = undefined;
-                editingNoteOps.current = undefined;
-              }
-              if (decision.action === 'ignore-expanded' || decision.action === 'ignore-popover-open')
-                return;
-
-              // Pane rendered → focus/highlight the note there (PT9 navigate-to-note) instead of
-              // opening the popover, regardless of the auto-show setting.
-              if (decision.action === 'focus-pane') {
-                const noteOps = getNoteOps();
-                const index = noteOps ? findNoteIndexByOps(editorRef, noteOps) : undefined;
-                if (index !== undefined) setFootnotePaneFocusRequest({ index });
-                else
                   logger.warn(
                     'noteCallerOnClick: note not found among editor notes; pane focus request dropped',
                   );

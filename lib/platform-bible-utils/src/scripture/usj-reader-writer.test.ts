@@ -2,7 +2,12 @@
 // Disabling no-irregular-whitespace: test data includes irregular whitespace that we test on purpose.
 // Disabling camelcase and naming-convention: test data uses 3_1 to indicate USFM 3.1.
 /* eslint-disable no-useless-escape, no-irregular-whitespace, camelcase, @typescript-eslint/naming-convention */
-import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import {
+  MarkerObject,
+  Usj,
+  USJ_TYPE,
+  USJ_VERSION,
+} from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import fs from 'fs';
 import path from 'path';
@@ -32,6 +37,19 @@ import {
   UsjVerseRefBookLocation,
   UsjVerseRefChapterLocation,
 } from './usj-reader-writer.model';
+
+/**
+ * `closed` is a USX/USJ attribute ParatextData records on closer-less char spans (`\fr`, `\ft`,
+ * ...). It is not declared on `MarkerObject`, so build such spans through a widened local type —
+ * scripture-editors models it the same way with its own `ClosableMarkerObject`.
+ */
+type ClosableMarkerObject = MarkerObject & { closed?: string };
+
+/** A char marker span carrying `closed="false"`, i.e. one the source USFM never closed. */
+function closedFalseChar(marker: string, content: string[]): MarkerObject {
+  const char: ClosableMarkerObject = { type: 'char', marker, closed: 'false', content };
+  return char;
+}
 
 // #region set up file path variables
 
@@ -1893,17 +1911,14 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
           type: 'para',
           marker: 'p',
           content: [
-            { type: 'char', marker: 'bd', closed: 'false', content: ['implicitly closed'] },
+            closedFalseChar('bd', ['implicitly closed']),
             ' then ',
             { type: 'char', marker: 'bd', content: ['explicitly closed'] },
             {
               type: 'note',
               marker: 'f',
               caller: '+',
-              content: [
-                { type: 'char', marker: 'fr', closed: 'false', content: ['1.1 '] },
-                { type: 'char', marker: 'ft', closed: 'false', content: ['note text'] },
-              ],
+              content: [closedFalseChar('fr', ['1.1 ']), closedFalseChar('ft', ['note text'])],
             },
             ' after.',
           ],
@@ -1940,10 +1955,10 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
               marker: 'f',
               caller: '+',
               content: [
-                { type: 'char', marker: 'fr', closed: 'false', content: ['1:1 '] },
-                { type: 'char', marker: 'ft', closed: 'false', content: ['a '] },
-                { type: 'char', marker: 'fp', closed: 'false', content: ['b '] },
-                { type: 'char', marker: 'fp', closed: 'false', content: ['c'] },
+                closedFalseChar('fr', ['1:1 ']),
+                closedFalseChar('ft', ['a ']),
+                closedFalseChar('fp', ['b ']),
+                closedFalseChar('fp', ['c']),
               ],
             },
           ],

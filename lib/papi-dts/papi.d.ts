@@ -945,6 +945,21 @@ declare module 'shared/global-this.model' {
     var updateWebViewDefinition: UpdateWebViewDefinition;
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
+    /**
+     * Whether to emit startup timing marks (see `markStartup`). Off by default; enabled per launch
+     * via the `PT_STARTUP_MARKS=true` environment variable. Propagated to all processes the same way
+     * as `isNoisyDevModeEnabled`.
+     */
+    var startupMarks: boolean;
+    /**
+     * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
+     * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
+     * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
+     * `platform.getFocusedWindowId`). `undefined` until the renderer reads the URL parameter.
+     *
+     * @experimental
+     */
+    var windowId: string | undefined;
   }
   /** Type of Platform.Bible process */
   export enum ProcessType {
@@ -1022,6 +1037,22 @@ declare module 'shared/data/rpc.model' {
   } from 'json-rpc-2.0';
   /** Port to use for the WebSocket */
   export const WEBSOCKET_PORT = 8876;
+  /**
+   * How many times to try sending a request before giving up if the request is not yet registered.
+   * Exported so callers that layer their own retry policy on top of {@link requestWithRetry}'s cadence
+   * (e.g. the Power-mode startup sync's boot-race loop) can derive from this shared policy instead of
+   * re-declaring the literal and silently diverging if it is ever retuned.
+   *
+   * @experimental
+   */
+  export const MAX_REQUEST_ATTEMPTS = 10;
+  /**
+   * How long in ms to wait between request attempts if the request is not yet registered. Exported
+   * for the same derive-don't-duplicate reason as {@link MAX_REQUEST_ATTEMPTS}.
+   *
+   * @experimental
+   */
+  export const REQUEST_ATTEMPT_WAIT_TIME_MS = 1000;
   /**
    * Whether an RPC object is setting up or has finished setting up its connection and is ready to
    * communicate on the network
@@ -1152,6 +1183,30 @@ declare module 'shared/data/rpc.model' {
   export const GET_METHODS = 'rpc.discover';
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
+  /**
+   * Builds the exact prefix that `network.service`'s `doRequest` embeds in the message it throws for
+   * a JSON-RPC _error response_ with the given `code` — the full thrown message is this prefix
+   * followed by `: <error message>`.
+   *
+   * Exported so the few callers that must classify these thrown errors by message (there is no richer
+   * machine-readable marker for a "method not found" response) derive the format from this single
+   * producer instead of hand-copying the literal. Hand-copied copies silently drift: reformat the
+   * producer and a separate matcher/fixture keeps matching its old string while real errors stop
+   * matching, and the tests stay green. Everything routing through this function stays in lockstep.
+   *
+   * @param code The JSON-RPC error code from the error response being classified
+   * @returns The exact message prefix `doRequest` uses for an error response with that `code`
+   * @experimental
+   */
+  export function getJsonRpcRequestErrorMessagePrefix(code: number): string;
+  /**
+   * Prefix that `network.service`'s `doRequest` embeds in the message it throws when a request times
+   * out client-side before any response arrives. Exported for the same drift-prevention reason as
+   * {@link getJsonRpcRequestErrorMessagePrefix}.
+   *
+   * @experimental
+   */
+  export const JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX = 'JSON-RPC Request timed out:';
 }
 declare module 'shared/models/openrpc.model' {
   import type { JSONSchema7 } from 'json-schema';
@@ -1954,6 +2009,23 @@ declare module 'shared/data/network-event-names' {
    * one.
    */
   export const MULTI_SOURCE_EVENT_NAMES: ReadonlySet<string>;
+  /**
+   * Name of the platform-internal network event the main process emits when a window closes. The
+   * payload is the closed window's Electron window id.
+   *
+   * The main process owns window-lifecycle truth, so it is the only emitter — this is a single-source
+   * event and deliberately absent from {@link MULTI_SOURCE_EVENT_NAMES}. It is a plain string rather
+   * than a `NetworkEvents` declaration because it is core plumbing between the main process and the
+   * renderer service hosts, not part of the `@papi/*` surface.
+   *
+   * Renderers need this because a closing window tears its RPC connection down without disposing the
+   * network objects it hosted: nothing emits `object:onDidDisposeNetworkObject` on a socket close, so
+   * app-global services hosted by one window (the theme engine, the scroll group service) have no
+   * other signal that their host went away.
+   *
+   * @experimental
+   */
+  export const EVENT_NAME_ON_DID_CLOSE_WINDOW = 'platform:onDidCloseWindow';
 }
 declare module 'main/services/rpc-event-registry' {
   import { SingleNotificationDocumentation } from 'shared/models/openrpc.model';
@@ -2158,6 +2230,13 @@ declare module 'shared/services/network.service' {
    * Send a request on the network without retrying if the handler is not yet registered. Use for
    * requests where immediate failure is preferable to waiting, such as commands sent during app
    * shutdown.
+   *
+   * WARNING: the no-retry flag only holds in the main process (whose `RpcServer` /
+   * `RpcWebSocketListener` honor it). From any other process the flag does not cross the wire:
+   * `RpcClient.request` drops it, and main re-dispatches the incoming request through its
+   * registration-race retry loop (up to 10 attempts, 1 s apart) before failing. So a renderer-side
+   * `requestNoRetry` to an unregistered handler still costs ~9 s and 10 warning logs in main before
+   * it rejects.
    *
    * @param requestType The type of request
    * @param args Arguments to send in the request (put in request.contents)
@@ -2403,6 +2482,34 @@ declare module 'shared/services/network-object.service' {
   export const onDidCreateNetworkObject: PlatformEvent<NetworkObjectDetails>;
   /** Event that fires with a network object ID when that object is disposed locally or remotely */
   export const onDidDisposeNetworkObject: PlatformEvent<string>;
+  /**
+   * Drop every cached registration for a network object living in another process that can no longer
+   * be reached, as if that object had been disposed.
+   *
+   * This is platform-internal core plumbing between the process that hosted a departed network object
+   * and the processes still holding registrations for it, not part of the `@papi/*` surface.
+   *
+   * Disposal is normally announced by the process that owns the object, but a process that goes away
+   * abruptly — most commonly a window the user closed — never gets to announce anything. Its
+   * registered methods are dropped from the central registry, yet every other process still holds a
+   * registration pointing at it. That cached registration is why the name looks taken to
+   * {@link set}/`registerEngine`, so app-global services hosted by one window can only be re-hosted
+   * elsewhere once it is cleared.
+   *
+   * Only remote registrations are considered, and only ones the network confirms are gone, so a call
+   * made while every object is still alive changes nothing. Runs under the same per-ID lock as
+   * {@link get} so a concurrent lookup cannot resurrect the registration mid-sweep.
+   *
+   * Reachability is decided with the same probe {@link get} uses, which retries a missing handler on
+   * the main process's registration-race cadence. Confirming a genuinely gone object therefore takes
+   * a few seconds — deliberately, since erring the other way would revoke a proxy that consumers are
+   * still legitimately using. Objects that are alive answer on the first attempt, so a sweep costs
+   * nothing when nothing has gone away.
+   *
+   * @returns IDs of the network objects that were forgotten
+   * @experimental
+   */
+  export const forgetUnreachableRemoteObjects: () => Promise<string[]>;
   interface IDisposableObject {
     dispose?: UnsubscriberAsync;
   }
@@ -3784,6 +3891,7 @@ declare module 'shared/services/web-view.service-model' {
     WebViewType,
   } from 'shared/models/web-view.model';
   import { Layout } from 'shared/models/docking-framework.model';
+  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   import { PlatformEvent } from 'platform-bible-utils';
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
   import { NetworkObject } from 'shared/models/network-object.model';
@@ -3870,6 +3978,9 @@ declare module 'shared/services/web-view.service-model' {
      * @param webViewId The ID of the WebView whose saved properties to get
      * @returns Saved properties of the WebView definition with the specified ID or undefined if not
      *   found
+     * @throws If no window claimed the WebView and some window could not be asked. The WebView may be
+     *   in the window that did not answer, so `undefined` there would be indistinguishable from the
+     *   WebView genuinely not existing.
      */
     getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
     /**
@@ -3886,6 +3997,9 @@ declare module 'shared/services/web-view.service-model' {
      * actual WebView definitions.
      *
      * @returns Saved properties of every open WebView. Empty array if no WebViews are open.
+     * @throws If any window could not be asked what it has open. Callers read this as the complete
+     *   picture, and a window that could not answer is indistinguishable in the result from one with
+     *   nothing open, so a short list is refused rather than passed off as the whole landscape.
      */
     getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]>;
     /**
@@ -3952,6 +4066,46 @@ declare module 'shared/services/web-view.service-model' {
     webView: SavedWebViewDefinition;
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+  /**
+   * Command names that are hosted by the renderer process and need to be registered with
+   * window-scoped suffixes in a multi-window setup. The main process registers proxy commands under
+   * the generic names that forward to the focused window's scoped handler.
+   *
+   * @experimental
+   */
+  export const RENDERER_HOSTED_COMMAND_NAMES: readonly [
+    'platform.about',
+    'platform.openSettings',
+    'platform.openProjectSettings',
+    'platform.openUserSettings',
+    'platform.usersnapSubmitIdea',
+    'platform.usersnapReportIssue',
+    'platform.isUsersnapFormCurrentlyOpen',
+    'platform.closeOpenUsersnapForm',
+    'platform.goToNextChapter',
+    'platform.goToPreviousChapter',
+    'platform.goToNextBook',
+    'platform.goToPreviousBook',
+    'platform.goToNextVerse',
+    'platform.goToPreviousVerse',
+    'platform.openBookChapterControl',
+    'platform.navigateLeftInReferenceHistory',
+    'platform.navigateRightInReferenceHistory',
+  ];
+  /**
+   * OpenRPC documentation for renderer-hosted commands, keyed by the generic (unscoped) command name.
+   *
+   * The documentation belongs to the generic name because that is the command consumers call; the
+   * window-scoped names the renderers actually register under (e.g. `platform.goToNextChapter-1`) are
+   * an implementation detail of multi-window routing and are deliberately left undocumented. The main
+   * process attaches these when it registers the routing proxies.
+   *
+   * @experimental
+   */
+  export const RENDERER_HOSTED_COMMAND_DOCS: Record<
+    (typeof RENDERER_HOSTED_COMMAND_NAMES)[number],
+    SingleMethodDocumentation
+  >;
 }
 declare module 'shared/services/window.service-model' {
   import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
@@ -3976,14 +4130,14 @@ declare module 'shared/services/window.service-model' {
      */
     dataProviderName: 'platform.windowServiceDataProvider';
   }>;
-  /** Focus of the app window is on a WebView iframe with the specified id */
+  /** Focus of the window is on a WebView iframe with the specified id */
   export type FocusSubjectWebView = {
     focusType: 'webView';
     /** ID of the WebView in focus (its tab ID is the same) */
     id: string;
   };
   /**
-   * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
+   * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
    *
    * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
    * focused in the WebView's iframe
@@ -3995,11 +4149,11 @@ declare module 'shared/services/window.service-model' {
     /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
     id: string;
   };
-  /** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
+  /** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
   export type FocusSubjectOther = {
     focusType: 'other';
   };
-  /** Current item that is the subject of top-level app window focus */
+  /** Current item that is the subject of top-level focus in the window */
   export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
   /**
    * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
@@ -4053,7 +4207,7 @@ declare module 'shared/services/window.service-model' {
   export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
   /** Specific item that is intended to be focused in the top-level app window */
   export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
-  /** Instructions that indicate how to change the app window focus */
+  /** Instructions that indicate how to change the focus within the window */
   export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
   export type WindowDataTypes = {
     Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
@@ -4065,29 +4219,29 @@ declare module 'shared/services/window.service-model' {
   }
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service that allows to interact with the current application window
    */
   export type IWindowService = {
     /**
      *
-     * Get information about the current subject of focus in the main app window
+     * Get information about the current subject of focus in the current window
      *
      * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
+     * @returns Information about the current window's current subject of focus
      */
     getFocus(selector: undefined): Promise<FocusSubject>;
     /**
      *
-     * Get information about the current subject of focus in the main app window
+     * Get information about the current subject of focus in the current window
      *
      * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the main app window's current subject of focus
+     * @returns Information about the current window's current subject of focus
      */
     getFocus(): Promise<FocusSubject>;
     /**
-     * Sets the subject of focus in the main app window.
+     * Sets the subject of focus in the current window.
      *
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
      *   the window to update the current focus based on what is actually focused in the window (only
      *   necessary when an action happens that changes the focus but the window service does not
      *   detect already). In most cases, you will not need to set `'detect'` manually.
@@ -4098,10 +4252,10 @@ declare module 'shared/services/window.service-model' {
       focusSubject: SetFocusSpecifier,
     ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
     /**
-     * Sets the subject of focus in the main app window.
+     * Sets the subject of focus in the current window.
      *
      * @param selector `undefined`. Does not have to be provided
-     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
      *   the window to update the current focus based on what is actually focused in the window (only
      *   necessary when an action happens that changes the focus but the window service does not
      *   detect already). In most cases, you will not need to set `'detect'` manually.
@@ -4117,7 +4271,7 @@ declare module 'shared/services/window.service-model' {
       focusSubject: SetFocusSpecifier,
     ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
     /**
-     * Subscribe to run a callback function when the main app window's subject of focus is changed
+     * Subscribe to run a callback function when the current window's subject of focus is changed
      *
      * @param selector `undefined`. Does not have to be provided
      * @param callback Function to run with the updated localized menuContent for this selector. If
@@ -4379,6 +4533,16 @@ declare module 'shared/models/web-view-factory.model' {
     private readonly webViewControllersMutexMap;
     private readonly webViewControllersCleanupList;
     private readonly webViewControllersById;
+    /**
+     * Whether {@link dispose} has run, so nothing this factory registers will ever be cleaned up
+     * again.
+     *
+     * `dispose` cannot take the per-web-view locks — it is not about any one web view — so a
+     * controller already being created can finish after it and land on a cleanup list that has
+     * already been drained, which tears that controller down on arrival. Returning a web view
+     * definition at that point would produce a web view whose controller is already dead.
+     */
+    private isDisposed;
     constructor(webViewType: WebViewType);
     /**
      * Receives a {@link SavedWebViewDefinition} and fills it out into a full {@link WebViewDefinition},
@@ -4530,6 +4694,18 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
+    /**
+     * Create a new application window
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.createWindow': () => Promise<void>;
+    /**
+     * Get the ID of the currently focused window, or undefined if no window is focused
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getFocusedWindowId': () => Promise<number | undefined>;
     /** Increase the zoom level of the entire UI */
     'platform.zoomIn': () => Promise<void>;
     /** Decrease the zoom level of the entire UI */
@@ -4715,6 +4891,26 @@ declare module 'papi-shared-types' {
      * @default `simple`
      */
     'platform.interfaceMode': 'simple' | 'power';
+    /**
+     * Whether the simple-mode first-run setup wizard has been completed. Hidden; managed by the
+     * first-run state machine, not user-configurable. `false` (default) means onboarding has not
+     * finished and the wizard should gate the app on the next simple-mode startup.
+     */
+    'platform.firstRunComplete': boolean;
+    /**
+     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
+     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
+     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
+     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     */
+    'platform.syncOnStartup': boolean;
+    /**
+     * Whether to re-show the registration reminder at startup for an already-onboarded Simple-mode
+     * user whose Paratext registration has become invalid. `true` (default) keeps showing the
+     * reminder; `false` suppresses it (set by the wizard's "Don't show this on startup again"
+     * checkbox). Only consulted for completed users; the fresh-user onboarding flow ignores it.
+     */
+    'platform.showRegistrationReminderOnStartup': boolean;
   }
   /**
    * Names for each user setting available on the papi.
@@ -5285,6 +5481,42 @@ declare module 'papi-shared-types' {
      * ID.
      */
     'object:onDidDisposeNetworkObject': string;
+    /**
+     * Emitted when the set of available projects changes (a project is added or removed) or when a
+     * project's display metadata (name/fullName/language/languageTag/isEditable) changes. Consumers
+     * refetch cheap project metadata; there is no payload. Multi-source so any project-providing
+     * process/factory may announce it (the .NET data provider emits it today). Keep the name in
+     * sync with `LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE` (C#).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    'platform.onDidChangeProjects': undefined;
+    /**
+     * Emitted when the Scripture reference for a scroll group changes. Multi-source because every
+     * open window navigates its own UI and announces the result — a scroll group is app-wide, so
+     * each window must be able to tell the others where it moved to.
+     */
+    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /**
+     * Emitted when a scroll group's back/forward reference history changes. Multi-source for the
+     * same reason as {@link MultiSourceNetworkEvents['scrollGroup:onDidUpdateScrRef']}.
+     *
+     * @experimental
+     */
+    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
+    /**
+     * Multi-source because web views belong to the window that opened them, so every window
+     * announces its own.
+     *
+     * @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead.
+     */
+    'webView:onDidAddWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is created in any window. */
+    'webView:onDidOpenWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is updated in any window. */
+    'webView:onDidUpdateWebView': UpdateWebViewEvent;
+    /** Emitted when a WebView is closed in any window. */
+    'webView:onDidCloseWebView': CloseWebViewEvent;
   };
   /**
    * Mapping of network event names to their payload types. Extensions augment this to declare their
@@ -5315,22 +5547,6 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platform.onDidAppWindowInput': AppWindowInputEvent;
-    /** Emitted when the Scripture reference for a scroll group changes. */
-    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
-    /**
-     * Emitted when a scroll group's back/forward reference history changes.
-     *
-     * @experimental
-     */
-    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
-    /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
-    'webView:onDidAddWebView': OpenWebViewEvent;
-    /** Emitted when a WebView is created. */
-    'webView:onDidOpenWebView': OpenWebViewEvent;
-    /** Emitted when a WebView is updated. */
-    'webView:onDidUpdateWebView': UpdateWebViewEvent;
-    /** Emitted when a WebView is closed. */
-    'webView:onDidCloseWebView': CloseWebViewEvent;
   }
   /** Union of all known network event names (keys of {@link NetworkEvents}). */
   type NetworkEventTypes = keyof NetworkEvents;
@@ -5403,7 +5619,30 @@ declare module 'shared/services/internet.service' {
 declare module 'shared/models/notification.service-model' {
   import { CommandHandlers } from 'papi-shared-types';
   import { LocalizeKey } from 'platform-bible-utils';
+  import type { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   export type Severity = 'info' | 'warning' | 'error';
+  /**
+   * The placements a notification can appear in, as a frozen array so it can be the single source of
+   * truth for both the {@link NotificationPosition} type and the notification service's OpenRPC
+   * `position` enum ({@link NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS} spreads from this).
+   *
+   * @experimental
+   */
+  export const NOTIFICATION_POSITIONS: readonly [
+    'top-left',
+    'top-center',
+    'top-right',
+    'bottom-left',
+    'bottom-center',
+    'bottom-right',
+  ];
+  /**
+   * Where a notification is shown on screen. Mirrors the placements the host toast library supports.
+   * Omit to use the app's default placement.
+   *
+   * @experimental
+   */
+  export type NotificationPosition = (typeof NOTIFICATION_POSITIONS)[number];
   /** Data needed to display a notification to the user */
   export interface PlatformNotification {
     /**
@@ -5415,7 +5654,9 @@ declare module 'shared/models/notification.service-model' {
     /** Severity of the notification */
     severity: Severity;
     /**
-     * Optional label for users to click when the notification shows.
+     * Optional label for users to click when the notification shows. Always rendered as the
+     * notification's PRIMARY action button - the visually emphasized one - while
+     * {@link secondaryClickCommandLabel} always gets the muted secondary styling.
      *
      * Automatically localized if this is a {@link LocalizeKey}.
      */
@@ -5429,7 +5670,91 @@ declare module 'shared/models/notification.service-model' {
      * The command handler should have the type signature {@link NotificationClickCommandHandler}.
      */
     clickCommand?: keyof CommandHandlers;
-    /** Optional ID of a previous notification to update instead of showing a new notification */
+    /**
+     * Optional label for a second action button, shown alongside {@link clickCommandLabel}. Provide
+     * this together with {@link secondaryClickCommand} to give the notification two actions.
+     *
+     * Always rendered as the visually SECONDARY button (muted styling, like the shadcn `secondary`
+     * button variant) so the {@link clickCommandLabel} button keeps the emphasis - the platform
+     * decides each button's styling from which field it came from, never from ordering.
+     *
+     * Automatically localized if this is a {@link LocalizeKey}.
+     *
+     * @experimental
+     */
+    secondaryClickCommandLabel?: string | LocalizeKey;
+    /**
+     * Optional command to run if users click on the secondary label in the notification. Like
+     * {@link clickCommand}, the command is sent one argument:
+     *
+     * - NotificationId: The ID of the notification that was clicked
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     *
+     * @experimental
+     */
+    secondaryClickCommand?: keyof CommandHandlers;
+    /**
+     * Optional command to run if the user dismisses the notification themselves - by swiping/dragging
+     * it away, or by clicking the close button (if the host ever enables one). Sent no arguments
+     * other than the notification id, like {@link clickCommand}:
+     *
+     * - NotificationId: The ID of the notification that was dismissed
+     *
+     * The command handler should have the type signature {@link NotificationClickCommandHandler}.
+     *
+     * IMPORTANT: this fires when the user dismisses the notification themselves (swiping/dragging it
+     * away, or clicking a close button if the host ever enables one) AND when the notification
+     * auto-closes because its `duration` elapsed - a timeout is treated as an implicit dismissal, so
+     * a must-answer toast that times out still runs this command instead of vanishing silently. It
+     * does NOT fire when the notification is dismissed programmatically via
+     * {@link INotificationService.dismiss}, nor when the user clicks {@link clickCommand} /
+     * {@link secondaryClickCommand}. Use this to treat a swipe-away (or timeout) as an explicit
+     * decision - e.g. pairing it with a "postpone" command lets a two-button, must-answer-style toast
+     * keep {@link dismissible} `true` (see the warning on {@link dismissible}). If you need the toast
+     * to persist until the user actually answers, also set `duration` to `0`.
+     *
+     * @experimental
+     */
+    dismissClickCommand?: keyof CommandHandlers;
+    /**
+     * Optional placement of the notification on screen. When omitted, the app's default placement is
+     * used.
+     *
+     * @experimental
+     */
+    position?: NotificationPosition;
+    /**
+     * Whether the user can dismiss the notification directly (e.g. by swiping/dragging it away, or
+     * via a close button). Defaults to `true`.
+     *
+     * The host toast library (Sonner) gates both the {@link secondaryClickCommand} button and the
+     * user-dismiss gesture that fires {@link dismissClickCommand} on this same flag, so a naive
+     * `dismissible: false` would silently turn those controls into dead buttons. To prevent that, the
+     * platform IGNORES `dismissible: false` when the notification renders a secondary action button
+     * (a {@link secondaryClickCommand} paired with its {@link secondaryClickCommandLabel}) or has a
+     * {@link dismissClickCommand} - the notification stays user-dismissible so those controls keep
+     * working. `dismissible: false` therefore only takes effect on a notification with no secondary
+     * button and no dismiss command. For a notification the user must explicitly answer, prefer
+     * leaving `dismissible: true` and using {@link dismissClickCommand} so a swipe-away still counts
+     * as a real (e.g. "postpone") decision.
+     *
+     * NOTE: `dismissible: false` does not keep the notification on screen. Auto-close is governed
+     * solely by `duration` (when omitted, 10-35 seconds computed from message length), so a
+     * non-dismissible notification still auto-closes on that timer. Also set `duration` to `0` (or
+     * less) if the notification must stay up until it is answered or programmatically dismissed via
+     * {@link INotificationService.dismiss}.
+     *
+     * @experimental
+     */
+    dismissible?: boolean;
+    /**
+     * Optional ID of a previous notification to update instead of showing a new notification.
+     *
+     * On an update (a `send` reusing an id that is still showing), any optional field you omit keeps
+     * the value it had on the previous `send` for that id - omitting a field never clears it. Pass
+     * the field explicitly to change it.
+     */
     notificationId?: string | number;
     /**
      * Optional duration in milliseconds for how long the notification is displayed. To make the
@@ -5470,6 +5795,17 @@ declare module 'shared/models/notification.service-model' {
     dismiss(notificationId: string | number): Promise<void>;
   }
   export const NotificationServiceNetworkObjectName = 'NotificationService';
+  /**
+   * OpenRPC documentation for the notification service network object.
+   *
+   * Attached in two places: each window's renderer registers its window-scoped name (e.g.
+   * `NotificationService-1`) with these docs, and the main process attaches the same docs when it
+   * registers its routing proxy under the generic {@link NotificationServiceNetworkObjectName} — the
+   * name consumers actually call — so the public name does not show undocumented in `rpc.discover`.
+   *
+   * @experimental
+   */
+  export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentation;
 }
 declare module 'shared/services/notification.service' {
   import { type INotificationService } from 'shared/models/notification.service-model';
@@ -5869,6 +6205,51 @@ declare module 'shared/models/project-metadata.model' {
      * project.
      */
     projectInterfaces: ProjectInterfaces[];
+    /**
+     * Short display name of the project. Absent when the producing Project Data Provider Factory does
+     * not supply it; consumers should fall back to {@link id}.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    name?: string;
+    /**
+     * Full display name of the project. Absent when not supplied; consumers should fall back to
+     * {@link name}, then {@link id}.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    fullName?: string;
+    /**
+     * Language of the project (raw setting value). Absent when not supplied (no language to show).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    language?: string;
+    /**
+     * BCP-47 language tag of the project. Absent when not supplied (no language to show).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    languageTag?: string;
+    /**
+     * Whether the project's primary content (e.g. Scripture text) is editable.
+     *
+     * **Absence is NOT the same as `false`.** An absent value means the registered default of
+     * `platform.isEditable`, which is `true` - i.e. a factory that omits this field means "editable".
+     * Only an explicit `false` (e.g. a read-only published resource) marks a project non-editable.
+     * Consumers must treat missing as editable (test `isEditable !== false`), never `isEditable ??
+     * false`.
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    isEditable?: boolean;
+    /**
+     * Whether the project is a published (read-only) resource. An absent value means the registered
+     * default of `platform.isPublished`, which is `false` (not a published resource).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    isPublished?: boolean;
   };
   export type ProjectDataProviderFactoryMetadataInfo = {
     /**
@@ -5975,12 +6356,13 @@ declare module 'shared/models/project-lookup.service-model' {
   } from 'shared/models/project-metadata.model';
   import { ProjectInterfaces } from 'papi-shared-types';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
+  import { normalizeProjectId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
   /**
    * Transform the well-known pdp factory id into an id for its network object to use
    *
    * @param pdpFactoryId Id extensions use to identify this pdp factory
-   * @returns Id for then network object for this pdp factory
+   * @returns Id for the network object for this pdp factory
    */
   export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string): string;
   /**
@@ -6130,6 +6512,7 @@ declare module 'shared/models/project-lookup.service-model' {
     includeProjectInterfaces: string | undefined;
     includePdpFactoryIds: string | undefined;
   };
+  export { normalizeProjectId };
   /**
    * Determines whether the given project interfaces are included based on specified inclusion and
    * exclusion rules.
@@ -6703,6 +7086,13 @@ declare module 'node/utils/util' {
    * @returns True if the process is running in noisy dev mode, false otherwise
    */
   export const isNoisyDevModeEnvVariableSet: () => boolean;
+  /**
+   * Determines if startup timing marks are requested for this launch
+   *
+   * @returns True if the `PT_STARTUP_MARKS` environment variable requests startup timing marks, false
+   *   otherwise
+   */
+  export const isStartupMarksEnvVariableSet: () => boolean;
 }
 declare module 'node/services/node-file-system.service' {
   /** File system calls from Node */
@@ -7153,6 +7543,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export const PROJECT_PICKER_DIALOG_TYPE = 'platform.projectPicker';
+  /** The tabType for the share layout dialog in `share-layout.dialog.tsx` */
+  export const SHARE_LAYOUT_DIALOG_TYPE = 'platform.shareLayoutDialog';
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -7198,6 +7590,11 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export type ProjectPickerOptions = DialogOptions;
+  /** Options to provide when showing the Share Layout dialog */
+  export type ShareLayoutDialogOptions = DialogOptions & {
+    /** The project whose layout is being shared */
+    projectId: string;
+  };
   /** Options to provide when showing a confirm dialog */
   export type ConfirmDialogOptions = DialogOptions & {
     /** The message body displayed in the dialog. Required for confirm dialogs. */
@@ -7239,6 +7636,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
      *   used. It is not yet a stable contract.
      */
     [PROJECT_PICKER_DIALOG_TYPE]: DialogDataTypes<ProjectPickerOptions, string>;
+    [SHARE_LAYOUT_DIALOG_TYPE]: DialogDataTypes<ShareLayoutDialogOptions, boolean>;
   }
   /** All dialog types that have DialogDefinition entries */
   export type DialogTabTypes = keyof DialogTypes;
@@ -7314,6 +7712,26 @@ declare module 'shared/services/dialog.service-model' {
   }
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';
+  /**
+   * Exhaustiveness gate. A `DialogService` method missing here is a compile error naming it, which is
+   * what forces this list to keep up: without an entry the method gets no scoped registration and no
+   * routing proxy, and the startup assertion cannot see the gap because it only iterates the list. A
+   * method that is deliberately NOT renderer-hosted belongs here with a comment saying so, rather
+   * than being left out silently.
+   */
+  const RENDERER_HOSTED_DIALOG_REQUEST_NAME_SET: {
+    readonly showDialog: true;
+    readonly selectProject: true;
+    readonly showAboutDialog: true;
+  };
+  /**
+   * Dialog requests served by the renderer process. A dialog belongs to the window the user is
+   * working in, so each renderer registers these under window-scoped names and the main process
+   * registers proxies under the generic names that forward to the focused window.
+   *
+   * @experimental
+   */
+  export const RENDERER_HOSTED_DIALOG_REQUEST_NAMES: (keyof typeof RENDERER_HOSTED_DIALOG_REQUEST_NAME_SET)[];
 }
 declare module 'shared/services/dialog.service' {
   import { DialogService } from 'shared/services/dialog.service-model';
@@ -8410,6 +8828,36 @@ declare module 'shared/data/platform.data' {
   export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /**
+   * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
+   *
+   * @experimental
+   */
+  export const WINDOW_ID = 'windowId';
+  /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
+  export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
+  /**
+   * Prefix that identifies a startup timing mark in the logs (see
+   * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
+   * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without
+   * dragging in logger side effects. Keep identical to the C# emitter (`StartupTiming`).
+   */
+  export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
+  /**
+   * Name of the mark each process emits first, right after start. The main process's copy is the
+   * run-boundary the startup-waterfall parser uses to slice a multi-launch log down to the latest run
+   * (see `.erb/scripts/startup-waterfall.util.ts`'s `selectLatestRun`). Emitters: `src/main/main.ts`
+   * and `src/extension-host/extension-host.ts`.
+   */
+  export const STARTUP_MARK_PROCESS_START = 'process-start';
+  /**
+   * Process tag (the `<proc>` field of a mark) of the main process - the value of `ProcessType.Main`.
+   * Lives here as a bare literal (not `ProcessType.Main`) so the import-free startup-waterfall CLI
+   * can identify the run boundary without importing `global-this.model` (which pulls in React and
+   * aliases the CLI can't resolve). Keep in sync with `ProcessType.Main` in
+   * `src/shared/global-this.model.ts`.
+   */
+  export const STARTUP_MARK_MAIN_PROCESS_TAG = 'main';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */
@@ -8418,6 +8866,21 @@ declare module 'shared/data/platform.data' {
   export const DEFAULT_ZOOM_FACTOR = 1;
   export const MIN_ZOOM_FACTOR = 0.5;
   export const MAX_ZOOM_FACTOR = 3;
+  /**
+   * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
+   * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
+   * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
+   * deliberately long.
+   *
+   * Consumed by the main process (`shutdown-tasks.ts`), which uses it to bound how long app shutdown
+   * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
+   * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
+   * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
+   * when the backend says so rather than on a renderer-side timer.
+   *
+   * @experimental
+   */
+  export const AUTO_SYNC_MAX_DURATION_MS: number;
 }
 declare module 'shared/log-error.model' {
   /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
@@ -8470,6 +8933,8 @@ declare module 'shared/services/localization.service-model' {
       Record<string, LanguageInfo>,
       never
     >;
+    /** @experimental */
+    SetupDialogLanguages: DataProviderDataType<undefined, Record<string, LanguageInfo>, never>;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -8510,6 +8975,15 @@ declare module 'shared/services/localization.service-model' {
      */
     retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
     /**
+     * Get the interface languages that have setup-dialog localizations (used by the first-run
+     * language picker). A language qualifies when it has ≥90% of the English setup-dialog
+     * (`%firstRun_*%`) keys.
+     *
+     * @returns Qualifying user-interface languages, keyed by raw locale tag
+     * @experimental
+     */
+    getSetupDialogLanguages: () => Promise<Record<string, LanguageInfo>>;
+    /**
      * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
      * provide localized strings in contributions
      */
@@ -8526,6 +9000,13 @@ declare module 'shared/services/localization.service-model' {
     setAvailableInterfaceLanguages(): Promise<
       DataProviderUpdateInstructions<LocalizationDataDataTypes>
     >;
+    /**
+     * This data cannot be changed. Trying to use this setter will always throw. It is derived from
+     * the loaded localization data.
+     *
+     * @experimental
+     */
+    setSetupDialogLanguages(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
   } & OnDidDispose &
     typeof localizationServiceObjectToProxy & {
       /**
@@ -8974,9 +9455,15 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
 }
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
   import { PlatformError } from 'platform-bible-utils';
-  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import {
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
+  import { PROJECT_INTERFACE_PLATFORM_BASE } from 'shared/models/project-data-provider.model';
   import {
     IBaseProjectDataProvider,
+    ProjectInterfaceDataTypes,
     ProjectSettingNames,
     ProjectSettingTypes,
   } from 'papi-shared-types';
@@ -9010,11 +9497,14 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    *       {@link PlatformError} if the Project Data Provider throws an error. You can call
    *       {@link isPlatformError} on this value to check if it is an error.
    *   - `setSetting`: asynchronous function to request that the Project Data Provider update the project
-   *       setting with the specified key. Returns `true` if successful. Note that this function does
-   *       not update the data. The Project Data Provider sends out an update to this subscription if
-   *       it successfully updates data.
+   *       setting with the specified key. Returns a promise that resolves to the update instructions
+   *       once the write completes, and rejects if the write is rejected (e.g. by the Send/Receive
+   *       write-gate) — await it (or attach a `.catch`) to observe write failures. Note that this
+   *       function does not update the data. The Project Data Provider sends out an update to this
+   *       subscription if it successfully updates data.
    *   - `resetSetting`: asynchronous function to request that the Project Data Provider reset the project
-   *       setting
+   *       setting. Returns a promise that resolves to `true` if successfully reset, and rejects if
+   *       the reset is rejected.
    *   - `isLoading`: whether the setting value is awaiting retrieval from the Project Data Provider
    *
    * @throws When subscription callback function is called with an update that has an unexpected
@@ -9027,8 +9517,18 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
     setting: ProjectSettingTypes[ProjectSettingName] | PlatformError,
-    setSetting: ((newSetting: ProjectSettingTypes[ProjectSettingName]) => void) | undefined,
-    resetSetting: (() => void) | undefined,
+    setSetting:
+      | ((
+          newSetting: ProjectSettingTypes[ProjectSettingName],
+        ) => Promise<
+          DataProviderUpdateInstructions<
+            ExtractDataProviderDataTypes<
+              ProjectInterfaceDataTypes[typeof PROJECT_INTERFACE_PLATFORM_BASE]
+            >
+          >
+        >)
+      | undefined,
+    resetSetting: (() => Promise<boolean>) | undefined,
     isLoading: boolean,
   ];
   export default useProjectSetting;
@@ -10952,6 +11452,32 @@ declare module 'shared/services/theme.service-model' {
      */
     getCurrentThemeSync(): ThemeDefinitionExpanded;
   };
+  /**
+   * Build a `subscribeCurrentTheme` that follows the theme engine when it moves to another window.
+   *
+   * The theme is app-global, so exactly one window hosts its engine and every other process consumes
+   * it as a remote data provider. A data provider subscription re-fetches the data through the
+   * provider object it was created with, and the provider pointing at a window is revoked when that
+   * window closes. The update events themselves keep arriving — they travel on a network event named
+   * after the provider, which the window that takes the engine over publishes under that same name —
+   * so a subscription made before the handover would report the revoked provider's failure on every
+   * theme change and never deliver another theme.
+   *
+   * Subscribing again through `getThemeProvider` when the provider is disposed hands the subscription
+   * to whichever window hosts the engine now. The subscription to the departed provider is dropped
+   * first, since it would otherwise go on failing on every change. The replacement retrieves the
+   * current theme immediately whatever the caller asked for, because the theme can change during the
+   * handover and no event this subscriber can still hear would report it.
+   *
+   * @param getThemeProvider Resolves the theme provider this process should be talking to right now.
+   *   Must resolve the window hosting the engine now rather than a remembered one — both theme
+   *   service facades re-arm their cached resolution when the provider they hold is disposed.
+   * @returns `subscribeCurrentTheme` for a theme service facade to serve in place of the provider's
+   * @experimental
+   */
+  export function createReattachingSubscribeCurrentTheme(
+    getThemeProvider: () => Promise<IThemeService>,
+  ): IThemeService['subscribeCurrentTheme'];
 }
 declare module 'shared/services/theme.service' {
   import { IThemeService } from 'shared/services/theme.service-model';
@@ -11373,7 +11899,7 @@ declare module '@papi/backend' {
     notifications: INotificationService;
     /**
      *
-     * Service that allows to interact with the main application window
+     * Service that allows to interact with the current application window
      */
     window: IWindowService;
   };
@@ -11631,7 +12157,7 @@ declare module '@papi/backend' {
   export const notifications: INotificationService;
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service that allows to interact with the current application window
    */
   export const window: IWindowService;
 }
@@ -11950,6 +12476,37 @@ declare module 'renderer/services/theme.service-host' {
       userThemes: ThemeFamiliesById,
       saveUserThemes: (userThemes: ThemeFamiliesById) => void,
     );
+    /**
+     * Replace the engine's live state with freshly loaded values and rebuild the served theme list
+     * from them.
+     *
+     * Run when this window takes over serving the engine from a closed host: the engine otherwise
+     * still holds the state this window loaded at startup, and serving (then eventually re-saving)
+     * that snapshot would silently roll back everything the previous host changed since.
+     *
+     * Static rather than an instance method because every non-`#`-private method on the engine is
+     * exposed to consumers when the engine is registered (see the note on the save methods above),
+     * and reloading state is a host-side lifecycle operation, not part of the theme data API. A
+     * static stays off the instance while still being able to reach the `#` members it needs.
+     *
+     * @param engine The engine whose state to replace
+     * @param currentTheme Freshly loaded current theme
+     * @param shouldMatchSystem Freshly loaded setting for matching the system theme
+     * @param currentSystemTheme The system theme as it is right now. Re-read alongside the persisted
+     *   values because only the hosting window listens for system theme changes, so a window that
+     *   spent its life attached carries the snapshot from its own load — and rebuilding the current
+     *   theme below against that stale value could flip the freshly loaded theme back to the wrong
+     *   type
+     * @param userThemes Freshly loaded user-defined theme families
+     * @experimental
+     */
+    static reloadState(
+      engine: ThemeDataProviderEngine,
+      currentTheme: ThemeDefinitionExpanded,
+      shouldMatchSystem: boolean,
+      currentSystemTheme: 'light' | 'dark',
+      userThemes: ThemeFamiliesById,
+    ): void;
     getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
     setCurrentTheme(
       newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,
@@ -11967,6 +12524,7 @@ declare module 'renderer/services/theme.service-host' {
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     dispose(): Promise<boolean>;
   }
+  /** Set up this window's access to the app-wide theme service. Safe to call more than once */
   export function initialize(): Promise<void>;
   /** This is an internal-only export for testing purposes and should not be used in development */
   export const testingThemeService: {
@@ -12224,7 +12782,7 @@ declare module '@papi/frontend' {
     notifications: INotificationService;
     /**
      *
-     * Service that allows to interact with the main application window
+     * Service that allows to interact with the current application window
      */
     window: IWindowService;
     /**
@@ -12393,7 +12951,7 @@ declare module '@papi/frontend' {
   export const notifications: INotificationService;
   /**
    *
-   * Service that allows to interact with the main application window
+   * Service that allows to interact with the current application window
    */
   export const window: IWindowService;
   /**
