@@ -481,6 +481,8 @@ describe('window layout persistence service', () => {
       kind: 'entry',
       layout: pushed,
     });
+    // Defuse the debounced write the push scheduled so it cannot leak into another test
+    service.handleWindowRemoved(81);
   });
 
   test('clearWindowPendingContent un-marks a window so it answers as if never marked', async () => {
@@ -525,6 +527,8 @@ describe('window layout persistence service', () => {
     await registeredHandler('windowLayout:save')(88, layoutWithTab('routed'));
 
     expect(announceRoutingTargetChange).toHaveBeenCalled();
+    // Defuse the debounced write the push scheduled so it cannot leak into another test
+    service.handleWindowRemoved(88);
   });
 
   test('marking an untracked window pending content does not change its (empty) answer', async () => {
