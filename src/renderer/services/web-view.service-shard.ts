@@ -2493,6 +2493,38 @@ function applyAndLogLegacyColorVarTransforms(
 let didContentArriveSinceEmptyReport = false;
 
 /**
+ * Whether the main process has answered one of this window's emptiness reports with `closing`.
+ *
+ * Work aimed at a window in that state is refused rather than done: an open or an adopt that lands
+ * here after the close is decided is destroyed with the window moments later, and for an adopt that
+ * means a web view the user moved is simply gone — its source tab closed before the target was
+ * asked. Refusing sends it back up the router's recovery ladder, which reopens it somewhere that
+ * will still be there.
+ *
+ * Never cleared, mirroring the main process's own record of decided closes: nothing un-decides a
+ * close, the window goes away instead. This covers only the closes this window was told about — the
+ * user clicking the window's close button, and a quit, are decided in the main process and never
+ * announced to the renderer, so the router's own reads of that record are what cover those.
+ */
+let isWindowToldToClose = false;
+
+/**
+ * Refuse work aimed at a window whose close has been decided — see {@link isWindowToldToClose}.
+ *
+ * Throws rather than answering `undefined`, which is the established "the web view provider chose
+ * not to create it" answer: a router reading that would clean up as though the open had been
+ * considered and turned down, instead of taking the web view somewhere it can live.
+ *
+ * @param operation What was being asked of this window, for the error message
+ */
+function throwIfWindowIsClosing(operation: string): void {
+  if (!isWindowToldToClose) return;
+  throw new Error(
+    `web-view.service-shard: window ${globalThis.windowId} cannot ${operation}: the main process has told this window that it is closing.`,
+  );
+}
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -2968,6 +3000,9 @@ export const openWebView = async (
   layout: Layout = { type: 'tab' },
   options: OpenWebViewOptions = {},
 ): Promise<WebViewId | undefined> => {
+  // Ahead of everything, including the provider: a window on its way out must not run a web view
+  // provider's side effects for a tab that is about to be destroyed with it
+  throwIfWindowIsClosing(`open web view ${webViewType}`);
   await waitForInitialize();
 
   const optionsDefaulted = getWebViewOptionsDefaults(options);
@@ -3094,7 +3129,12 @@ async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
     }
   }
 
-  if (response && response.action !== 'open-home') return;
+  if (response) {
+    // Latched here, at the one moment this window is told its close has been decided — see
+    // `isWindowToldToClose`
+    if (response.action === 'closing') isWindowToldToClose = true;
+    if (response.action !== 'open-home') return;
+  }
   if (!response)
     logger.warn(
       `An empty dock went unanswered after ${REPORT_DOCK_EMPTIED_ATTEMPTS} attempts; docking Home here rather than leaving the window blank`,
@@ -3414,6 +3454,9 @@ async function captureAndCloseWebView(
 async function adoptWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
 ): Promise<WebViewId | undefined> {
+  // Ahead of everything, including the state seeding below: a move that lands in a window on its
+  // way out loses the web view outright, since its source tab closed before this window was asked
+  throwIfWindowIsClosing(`adopt web view ${savedWebViewDefinition.id}`);
   await waitForInitialize();
   await waitForLayoutLoadToSettle();
   // Seeded before the provider runs: the moved view's state must be in this window's storage
