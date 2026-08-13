@@ -20,6 +20,7 @@ export function useOpenFindShortcut(
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!event.ctrlKey || event.key.toLowerCase() !== 'f') return;
+      // Intercept Ctrl+F like the editor's handler; a panel with no resource resolved then no-ops below.
       event.preventDefault();
       const args = getOpenFindTriggerArgs(
         webViewId,

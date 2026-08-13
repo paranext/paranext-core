@@ -49,3 +49,12 @@ describe('resolveFindInvocation', () => {
     expect(resolveFindInvocation(undefined, undefined, undefined).projectId).toBeUndefined();
   });
 });
+
+describe('SCRIPTURE_EDITOR_WEBVIEW_TYPE', () => {
+  it('pins this extension’s mirrored copy to the editor web view type literal', () => {
+    // The gate above compares against this constant. It is a mirror of the editor's own
+    // SCRIPTURE_EDITOR_WEBVIEW_TYPE (packages can't import each other's source); pinning the literal
+    // catches an accidental edit to this copy that would silently break the editor gate.
+    expect(SCRIPTURE_EDITOR_WEBVIEW_TYPE).toBe('platformScriptureEditor.react');
+  });
+});
