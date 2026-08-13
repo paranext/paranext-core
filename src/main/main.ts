@@ -81,6 +81,7 @@ import {
   getFocusedWindowId,
   getTargetWindowId,
   getWindows,
+  handleWindowBlurred,
   isWindowClosing as isWindowMarkedClosing,
   markWindowAbandoned,
   markWindowClosing,
@@ -729,6 +730,11 @@ async function main() {
     // Track which window is focused for multi-window command routing
     newWindow.on('focus', () => {
       setFocusedWindowId(windowId);
+    });
+    // The other half of focus tracking: a blur with no focus following it is the whole application
+    // going to the background, which is what isApplicationFocused answers from
+    newWindow.on('blur', () => {
+      handleWindowBlurred(windowId);
     });
 
     // Set our custom protocol handler to load assets from extensions

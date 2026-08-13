@@ -31,6 +31,17 @@ const trackedWindows: TrackedWindow[] = [];
 let focusedWindowId: number | undefined;
 
 /**
+ * Whether the window named by {@link focusedWindowId} still holds OS focus. Cleared by that window's
+ * blur instead of clearing `focusedWindowId` itself, because the two answer different questions:
+ * everything reading the focused window id wants "the window the user was last working in" —
+ * routing fallbacks, the focused-window command that resolves which window `papi.window` means from
+ * the extension host — and that answer has to survive the whole application going to the
+ * background. What must NOT survive it is {@link isApplicationFocused}, the guard for operations
+ * that would take OS focus from whatever the user is doing.
+ */
+let doesFocusedWindowHoldOsFocus = false;
+
+/**
  * IDs of the windows that have held focus, most recently focused first.
  *
  * Routing needs "the window the user was last working in", which a single `focusedWindowId` scalar
@@ -494,19 +505,48 @@ export function removeWindow(window: BrowserWindow, windowId: number): void {
   abandonedWindowIds.delete(windowId);
   const focusOrderIndex = mostRecentlyFocusedWindowIds.indexOf(windowId);
   if (focusOrderIndex >= 0) mostRecentlyFocusedWindowIds.splice(focusOrderIndex, 1);
-  if (focusedWindowId === windowId) focusedWindowId = undefined;
+  if (focusedWindowId === windowId) {
+    focusedWindowId = undefined;
+    doesFocusedWindowHoldOsFocus = false;
+  }
   announceRoutingTargetIfChanged();
 }
 
 /** Set the focused window ID (called from BrowserWindow focus events) */
 export function setFocusedWindowId(windowId: number | undefined): void {
   focusedWindowId = windowId;
+  doesFocusedWindowHoldOsFocus = windowId !== undefined;
   if (windowId !== undefined) {
     const focusOrderIndex = mostRecentlyFocusedWindowIds.indexOf(windowId);
     if (focusOrderIndex >= 0) mostRecentlyFocusedWindowIds.splice(focusOrderIndex, 1);
     mostRecentlyFocusedWindowIds.unshift(windowId);
   }
   announceRoutingTargetIfChanged();
+}
+
+/**
+ * Record that a window lost OS focus (called from BrowserWindow blur events).
+ *
+ * Only a blur from the window currently recorded as focused counts: when focus moves between two of
+ * this app's windows, Electron delivers the loser's blur and the winner's focus as separate events,
+ * and the pair can arrive with the focus first — a blur naming any other window is news about a
+ * handover that has already been recorded, not about the application losing focus.
+ */
+export function handleWindowBlurred(windowId: number): void {
+  if (windowId === focusedWindowId) doesFocusedWindowHoldOsFocus = false;
+}
+
+/**
+ * Whether any window of this application currently holds OS focus.
+ *
+ * This answers "may this operation take focus from what the user is doing?" — raising a window is
+ * fine while the user is already in this app and wrong while they are working in another
+ * application. {@link getFocusedWindowId} deliberately answers a different question ("the window the
+ * user was last working in") and stays set while the app is in the background, so it cannot guard
+ * against cross-application focus stealing.
+ */
+export function isApplicationFocused(): boolean {
+  return focusedWindowId !== undefined && doesFocusedWindowHoldOsFocus;
 }
 
 /**
@@ -636,6 +676,7 @@ export function resetForTesting(): void {
   closingWindowIds.clear();
   mostRecentlyFocusedWindowIds.length = 0;
   focusedWindowId = undefined;
+  doesFocusedWindowHoldOsFocus = false;
   announcedRoutingTarget = { windowId: undefined, isReady: false };
   isWindowPendingContent = () => false;
 }
