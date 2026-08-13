@@ -342,11 +342,21 @@ async function loadLayoutInWindow(simpleLayout: LayoutInfo) {
   return loadedLayouts[loadedLayouts.length - 1];
 }
 
-/** Answer `windowLayout:get` with the given response; every other request resolves undefined */
+/**
+ * Answer `windowLayout:get` with the given response and `windowLayout:emptied` with `closing`;
+ * every other request resolves undefined.
+ *
+ * The emptied answer matters even for tests that are not about emptiness: several of them load a
+ * layout with no tabs in it, and a report the shard cannot read an action out of is a failed
+ * attempt — which puts the report into a retry loop that runs for seconds, fire-and-forget, past
+ * the end of the test that started it.
+ */
 function respondToGetLayout(response: unknown) {
-  mocks.networkRequest.mockImplementation(async (requestType: string) =>
-    requestType === 'windowLayout:get' ? response : undefined,
-  );
+  mocks.networkRequest.mockImplementation(async (requestType: string) => {
+    if (requestType === 'windowLayout:get') return response;
+    if (requestType === 'windowLayout:emptied') return { action: 'closing' };
+    return undefined;
+  });
 }
 
 /**
@@ -1672,7 +1682,14 @@ describe('loadLayout reports a dock that landed empty', () => {
   });
 
   describe('when the emptied round trip fails', () => {
-    /** Every `windowLayout:emptied` report made so far */
+    /**
+     * Every `windowLayout:emptied` report made so far.
+     *
+     * The request mock is shared by the whole file, and a report's retries are fire-and-forget, so
+     * counting reports here only says something about THIS test as long as no other test leaves a
+     * report retrying (see `respondToGetLayout`) — an abandoned retry lands in whichever test is
+     * running when its delay elapses.
+     */
     function emptiedReports() {
       return mocks.networkRequest.mock.calls.filter(
         ([requestType]) => requestType === 'windowLayout:emptied',
