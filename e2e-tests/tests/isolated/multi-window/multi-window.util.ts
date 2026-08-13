@@ -59,28 +59,30 @@ export const DUPLICATE_REGISTRATION_PATTERN =
   /\[(warn|error)\][^\n]*(already registered|rejected by the central registry)/;
 
 /**
- * A line every run produces once its routers claim their names — the positive control for
- * {@link DUPLICATE_REGISTRATION_PATTERN}.
+ * Logged by `main.ts` on the way down — the positive control for a collision sweep that runs after
+ * a quit.
  *
- * `expect(log).not.toMatch(...)` passes just as happily against output that never arrived. The
- * capture explicitly does not include anything written before it was attached, so a mis-placed
- * offset, a capture wired up late, or a run that died before registering anything all yield a
- * silently vacuous pass on the collision sweep. Asserting this first means the sweep has something
- * to be a negative OF: the registry was exercised, and it reported no collision.
+ * `expect(log).not.toMatch(...)` passes just as happily against output that never arrived, so each
+ * sweep asserts something present first, to prove it examined a real corpus.
  *
- * This exact phrase is logged at info by `web-view.service-router.ts` when the router finishes
- * registering, which is on the startup path of every window-bearing run.
+ * A control must be emitted AFTER {@link captureAppOutput} attaches, not merely be certain to
+ * happen. The capture hooks `electronApp.process().stdout` once the app is already running, so
+ * every main-process startup line — service registrations included — is emitted before it and is
+ * never in the corpus at all. This line is not: {@link quitAndExpectCleanExit} performs the quit
+ * that produces it, so it always lands mid-capture.
  */
-export const ROUTER_REGISTERED_LOG = 'WebView service router registered';
+export const APP_QUITTING_LOG = 'Main process is quitting';
 
 /**
  * The first thing any renderer logs (`src/renderer/index.tsx`) — the positive control for a
  * collision sweep over a SLICE of the capture rather than the whole of it.
  *
- * {@link ROUTER_REGISTERED_LOG} is a main-process line emitted once at app startup, so it is not in
- * the output that follows a later mark. When the sweep is scoped to one window's startup, this is
- * what proves that startup's output actually landed in the slice — a mark taken a moment too late
- * would otherwise yield an empty slice and a passing assertion.
+ * {@link APP_QUITTING_LOG} controls a sweep taken after a quit; this one controls a sweep scoped to
+ * a window's startup, where the quit has not happened yet. A mark taken a moment too late would
+ * otherwise yield an empty slice and a passing assertion.
+ *
+ * Note this window is created DURING the test, so its renderer's first line lands well after the
+ * capture attached — which is what makes it usable as a control at all.
  */
 export const RENDERER_STARTING_LOG = 'Starting renderer';
 
@@ -505,9 +507,9 @@ export async function quitAndExpectCleanExit(
 
   const log = output.text();
   FAULT_MARKERS.forEach((marker) => expect(log).not.toContain(marker));
-  // Positive control first: prove the capture actually holds this run's startup output, so the
-  // negative sweeps below are asserting something rather than passing on an empty string.
-  expect(log).toContain(ROUTER_REGISTERED_LOG);
+  // Positive control first: the quit above produces this line, so its absence means the capture
+  // holds nothing and the sweeps below would be asserting against an empty string.
+  expect(log).toContain(APP_QUITTING_LOG);
   expect(log).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 }
 
