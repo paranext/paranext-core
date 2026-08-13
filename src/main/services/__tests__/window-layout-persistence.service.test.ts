@@ -658,6 +658,26 @@ describe('window layout persistence service', () => {
     ]);
   });
 
+  test('removing an id no window ever had still cancels the pending write', async () => {
+    // This suite's teardown defuses whatever a test left scheduled by removing an id nothing is
+    // tracking, which only works while the cancel happens for every id rather than only for one
+    // that was found. Tightening the removal to skip unknown ids would leave the test above green
+    // and silently turn that teardown into a no-op, letting debounced writes bleed between tests
+    // again.
+    vi.useFakeTimers();
+    const service = await startService();
+    await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
+    service.setMainWindowId(11);
+    await service.writeNow([11]);
+    expect(mocks.writeFile).toHaveBeenCalledTimes(1);
+
+    service.updateWindowBounds(11, { bounds: { x: 9, y: 9, width: 900, height: 900 } });
+    service.handleWindowRemoved(-1);
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(mocks.writeFile).toHaveBeenCalledTimes(1);
+  });
+
   test('a layout pushed while a flush waits behind an in-flight write still lands in the flush', async () => {
     const service = await startService();
     await loadAndAssignAll(service, [{ layout: layoutWithTab('one'), isMain: true }], 11);
