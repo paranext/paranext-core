@@ -757,7 +757,6 @@ class ThemeDataProviderEngine
       offeredShouldMatchSystem,
       offeredUserThemes,
     );
-    hasOwnThemeState = true;
 
     // Persist what was adopted BEFORE recording that the migration ran, and write the values before
     // either marker. The store is one file per key with no atomicity across them, so an order that
@@ -791,6 +790,12 @@ class ThemeDataProviderEngine
       );
       throw e;
     }
+    // Set only now that the store holds it. Set before the write, a failed write would leave this
+    // process claiming state of its own that it never persisted, and the guard at the top of this
+    // function would answer the NEXT window's offer with "refused" — which deletes it, because a
+    // window told "refused" discards its copy. The rejection above is only worth anything while the
+    // offer it rejected can still be made again.
+    hasOwnThemeState = true;
     logger.info('Theme service host adopted previously stored theme state');
     // Announced, unlike the scroll group's adoption, because a window is already rendering by the
     // time this runs. It painted the same values it is offering here, so this is normally a no-op
