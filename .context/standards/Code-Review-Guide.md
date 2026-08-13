@@ -42,8 +42,12 @@ the archive for your platform plus `SHA256SUMS` from
 on your `PATH`:
 
 ```bash
-sha256sum -c SHA256SUMS --ignore-missing    # macOS: shasum -a 256 <archive>
+sha256sum -c SHA256SUMS --ignore-missing    # macOS: shasum -a 256 -c SHA256SUMS --ignore-missing
 ```
+
+Use the checking form (`-c`), not the digest-printing form — printing a hash you never compare
+is not verification. Both commands exit non-zero if the archive is missing from `SHA256SUMS`
+or its digest does not match.
 
 Linux users can install the published `.deb` or `.rpm` instead. The upstream
 `curl -fsSL https://roborev.io/install.sh | bash` one-liner also works, but read the script
@@ -60,8 +64,13 @@ roborev agent-hook install --agent claude               # optional: mid-session 
 ```
 
 Do not skip `roborev check-agents`. A configured-but-unreachable agent makes every review fail,
-and the failure is easy to miss — commits look completely normal while nothing is reviewed.
-Reviews run on **your own** agent subscription and consume your quota.
+and that failure is genuinely invisible from the outside: the daemon rejects the enqueue with a
+503, the post-commit hook still exits 0, and commits look completely normal while nothing is
+ever reviewed. Reviews run on **your own** agent subscription and consume your quota.
+
+**Confirm it is actually working.** After your first commit, run `roborev list` — you should
+see a job for that commit. An empty list means reviews are not being enqueued; check
+`~/.roborev/post-commit.log`, which records the real reason.
 
 If you install the agent hook, raise the default thresholds in `~/.roborev/config.toml` — the
 shipped defaults interrupt every five turns, and the default instruction uses Codex's
