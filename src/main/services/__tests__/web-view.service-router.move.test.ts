@@ -266,6 +266,20 @@ describe('moveWebView', () => {
     expect(owner.captureAndCloseWebView).not.toHaveBeenCalled();
   });
 
+  test('an unreadable interface mode fails the move rather than reporting it done', async () => {
+    // Only Simple mode means "there is nowhere else to move to, so leave it alone". A mode that
+    // could not be read is not that answer: treating it as one resolves the move successfully
+    // having moved nothing, so the caller — and the tab-title notification it drives — tells the
+    // user the web view is in a new window while it sits exactly where it was.
+    mocks.settingsGet.mockRejectedValue(new Error('settings service is down'));
+    const owner = windowShard(['view-1']);
+    withWindows({ 2: owner });
+
+    await expect(moveWebView('view-1', 'new')).rejects.toThrow(/interface mode/);
+
+    expect(owner.captureAndCloseWebView).not.toHaveBeenCalled();
+  });
+
   test('a capture that comes back empty fails the move', async () => {
     const owner = windowShard(['view-1']);
     owner.captureAndCloseWebView.mockResolvedValue(undefined);

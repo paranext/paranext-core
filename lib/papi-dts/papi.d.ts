@@ -3857,7 +3857,9 @@ declare module 'shared/models/docking-framework.model' {
    * Information about opening a tab in its own application window.
    *
    * In Simple mode — which is single-window by design — this degrades to `'tab'`: the web view opens
-   * as a normal tab in the window the user is working in.
+   * as a normal tab in the window the user is working in. An interface mode that cannot be read takes
+   * the same degraded path rather than failing the open, so a caller in Power mode can get a tab
+   * instead of a window when the mode read fails.
    *
    * @experimental This type is unstable and may change or disappear without notice
    */
