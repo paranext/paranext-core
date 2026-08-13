@@ -72,6 +72,7 @@ import {
   runShutdownTasksOnce,
 } from '@main/services/shutdown-latch.service';
 import {
+  getWebViewShard,
   setWebViewWindowCreator,
   startWebViewServiceRouter,
 } from '@main/services/web-view.service-router';
@@ -84,6 +85,7 @@ import {
   getWindows,
   handleWindowBlurred,
   isWindowClosing as isWindowMarkedClosing,
+  isWindowReady,
   markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
@@ -399,6 +401,17 @@ async function main() {
     // The shared registry, not only this handler's own decisions: a window the user is closing can
     // report empty mid-teardown, and it must get the same "closing" answer instead of a second close
     isWindowClosing: isWindowMarkedClosing,
+    // The reporting window's own reading, asked only when a close is otherwise about to be decided
+    hasContentArrivedSinceEmptyReport: async (windowId) => {
+      // A window that is not serving requests cannot be asked, and waiting on one that will never
+      // answer would hold up every window's decision behind it. `false` is what the handler reads
+      // as "could not tell", which closes the window — the report was its own word about its own
+      // dock.
+      if (!isWindowReady(windowId)) return false;
+      const shard = await getWebViewShard(windowId);
+      if (!shard) return false;
+      return shard.hasContentArrivedSinceEmptyReport();
+    },
   });
   await networkService.registerRequestHandler(
     WINDOW_EMPTIED_REQUEST_TYPE,
@@ -423,7 +436,8 @@ async function main() {
         ],
         result: {
           name: 'return value',
-          summary: 'Whether the window should dock Home, or that it is being closed',
+          summary:
+            'Whether the window should dock Home, that it is being closed, or that it should stay as it is because content reached it after it reported',
           schema: { type: 'object' },
         },
       },
