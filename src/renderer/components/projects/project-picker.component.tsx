@@ -23,12 +23,6 @@ export type ProjectItem = {
   language?: string;
   /** Full localized language name shown as a tooltip over {@link language} (e.g. "English"). */
   languageDisplayName?: string;
-  /**
-   * Mirrors `ProjectMetadata.isEditable`. Not rendered by the picker itself; carried through so
-   * `useProjectPickerData` can cache the current project's real editability for the power → simple
-   * mode switch (see `last-opened-project-cache.ts`).
-   */
-  isEditable?: boolean;
 };
 
 /** Localization string keys used by {@link ProjectPicker}. */

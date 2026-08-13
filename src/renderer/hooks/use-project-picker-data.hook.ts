@@ -90,10 +90,6 @@ function metadataToProjectItem(m: ProjectMetadata): ProjectItem {
     shortName: m.name ?? m.id,
     language: resolved?.tag,
     languageDisplayName: resolved?.displayName,
-    // `isEditable` is optional on `ProjectMetadata`; a factory that omits it must be treated as
-    // editable to match the registered contribution default (true) for `platform.isEditable` (see
-    // the recents filter below for the full reasoning).
-    isEditable: m.isEditable !== false,
   };
 }
 

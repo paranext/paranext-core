@@ -655,6 +655,34 @@ describe('handleSwitchToSimpleMode', () => {
     );
   });
 
+  it('a superseded switch finalizes its project at most once, not once per switch that resolved to it', async () => {
+    // Both switches below end up resolving `cached.id` to the same project: `getLastOpenedProject`
+    // is read from the same (real, shared) localStorage-backed cache in both, and the first
+    // switch's read happens after its own first await - by which point the second `setLastOpenedProject`
+    // call below has already landed. So without the `finally` block's own generation re-check, the
+    // superseded (first) switch's `switchedProjectId` still gets set (its inner
+    // `runProjectBoundSimpleSwitch` call returns early on the generation mismatch without loading a
+    // layout, but `handleSwitchToSimpleMode` itself has no way to know that) and it would finalize
+    // the same project a second time.
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-stale' });
+
+    const firstSwitch = host.handleSwitchToSimpleMode();
+    setLastOpenedProject({ id: 'proj-latest' });
+    const secondSwitch = host.handleSwitchToSimpleMode();
+    await Promise.all([firstSwitch, secondSwitch]);
+
+    const finalizeCalls = sendCommandMock.mock.calls.filter(
+      ([command]) => command === 'platformScriptureEditor.finalizeProjectSwitch',
+    );
+    expect(finalizeCalls).toEqual([
+      ['platformScriptureEditor.finalizeProjectSwitch', 'proj-latest'],
+    ]);
+  });
+
   it('never persists the Simple-mode layout to the Power storage key, even when currentInterfaceMode currently reads power', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
