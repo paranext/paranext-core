@@ -149,11 +149,21 @@ internal class DblResourcesDataProvider(
             new DblResourcePasswordProvider()
         );
         _resources = allResources.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
-        var excludedResources = allResources.Except(_resources).Select(r => r.Name).ToList();
-        excludedResources.Sort();
-        Console.WriteLine(
-            $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources)}\n"
+        var excludedResources = allResources.Except(_resources).ToList();
+        excludedResources.Sort(
+            (a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase)
         );
+        Console.WriteLine(
+            $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources.Select(r => r.Name))}\n"
+        );
+        // Temporary debug: log name+Id for excluded resources to find actual UIDs
+        var tnnExcluded = excludedResources
+            .Where(r => r.Name.Equals("tnn", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var r in tnnExcluded)
+            Console.WriteLine(
+                $"DEBUG excluded tnn: Name={r.Name} Id={r.DBLEntryUid.Id} ToString={r.DBLEntryUid}"
+            );
     }
 
     /// <summary>
