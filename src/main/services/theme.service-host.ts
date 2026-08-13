@@ -477,9 +477,14 @@ class ThemeDataProviderEngine
       const unsubscribe = await engine.#onDidUpdateAllThemes((allThemeFamilies) => {
         // Keep the payload as received — no user themes merged in — for `adoptMigratedState` to
         // rebuild from (see `#themeFamiliesFromLastUpdate`)
-        if (!isPlatformError(allThemeFamilies))
+        if (!isPlatformError(allThemeFamilies)) {
           engine.#themeFamiliesFromLastUpdate = allThemeFamilies;
-        engine.#startExtensionThemesGracePeriod();
+          // Started only by a payload that IS the list. What ends the grace period is the judgement
+          // that a current theme missing from the list is gone rather than late, and an error
+          // carries no list to be missing from — the timer would fire against nothing at all and
+          // reset the user's theme to the default, persisted, for a list that never arrived.
+          engine.#startExtensionThemesGracePeriod();
+        }
         const dataTypesToUpdate = engine.#updateAllThemeFamiliesNoUpdate(allThemeFamilies);
         // Notify others if theme data changed
         if (dataTypesToUpdate) engine.notifyUpdate(dataTypesToUpdate);
