@@ -2815,19 +2815,30 @@ export async function openOrReloadWebView(
   };
 
   let finalLayout: Layout | undefined;
+  const dockLayoutVar = await getDockLayout();
   try {
-    finalLayout = (await getDockLayout()).addWebViewToDock(
+    finalLayout = dockLayoutVar.addWebViewToDock(
       finalWebView,
       layout,
       optionsDefaulted.bringToFront,
     );
   } catch (e) {
+    // A throw can leave this web view's own tab in the dock: a definition its tab loader refuses
+    // surfaces as an error tab under a fresh id, and the add throws with the named web view's
+    // live tab still docked — reloading an open web view with a bad definition lands here.
+    // Emitting the close event and evicting state then would gut a view the user still sees, so
+    // that failure is logged and rethrown with the dock and the state untouched.
+    if (dockLayoutVar.getWebViewDefinition(webView.id) !== undefined) {
+      logger.error(
+        `Could not update webview ${webView.id} (type ${webView.webViewType}) in the dock; its existing tab is unchanged. ${getErrorMessage(e)}`,
+      );
+      throw e;
+    }
     // The provider has already run: a controller may be registered in the extension host, a
     // nonce minted, and state persisted — and no close event will ever fire for a tab that
     // never joined the dock. Emit the close event ourselves (controller disposal and nonce
     // cleanup both subscribe to it) and evict the state, so a failed add leaves nothing
-    // behind. An already-open tab updates in place and returns before any throwing branch,
-    // so a throw here always means the tab never existed.
+    // behind. A tab still in the dock was caught above, so from here the tab never existed.
     onDidCloseWebViewBufferedEmitter.emit({
       webView: convertWebViewDefinitionToSaved(finalWebView),
     });
