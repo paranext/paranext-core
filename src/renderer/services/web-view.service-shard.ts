@@ -1062,12 +1062,29 @@ async function loadLayout(
     return;
   }
   const { layout: persistedLayout, isPendingContent } = persistedResult;
+  /**
+   * Whether web views arrived in the dock while this load was reading what to restore. Only a load
+   * that began against an empty dock can answer yes, and for it the answer means everything it read
+   * is stale: it asked what an empty window should start with, and a web view adopted or opened
+   * during the read (a routed move lands in a fresh window while its saved-layout request is still
+   * retrying) is in the dock but not in the answer. Applying the answer anyway would wipe that web
+   * view — with no close event, since {@link emitCloseEventsForWebViewsRemovedByLayoutLoad} only
+   * covers web views that were open when the load began.
+   */
+  const didDockGainWebViewsDuringLoad = () =>
+    webViewsBeforeLoad.length === 0 && dockLayoutVar.getAllWebViewDefinitions().length > 0;
   // Every layout gets its web view ids scoped to this window, including one restored from
   // persistence: a saved entry's ids carry the window id of the session that saved them (window
   // ids are not stable across restarts), and the legacy pre-multi-window layout carries unscoped
   // ids. Re-scoping replaces the suffix rather than stacking another one, so it is safe on both.
   const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
   if (isPendingContent) {
+    if (didDockGainWebViewsDuringLoad()) {
+      logger.debug(
+        'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
+      );
+      return;
+    }
     // A window created to receive one specific web view, routed separately, starts with nothing
     // else — skip the default-layout supplement entirely, without even fetching its flags.
     dockLayoutVar.loadLayout(layoutToLoad);
@@ -1088,6 +1105,13 @@ async function loadLayout(
     // request above can take seconds. The newer load has already loaded, or is about to load, the
     // layout that belongs there.
     logger.debug('Dropping a layout load that a newer one superseded before it reached the dock');
+    return;
+  }
+  // Same checkpoint for content that arrived instead of a newer load — see the guard's declaration
+  if (didDockGainWebViewsDuringLoad()) {
+    logger.debug(
+      'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
+    );
     return;
   }
   if (enabledEntries.length === 0) {
