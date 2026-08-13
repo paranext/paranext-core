@@ -320,6 +320,7 @@ function makeDockLayout(simpleLayout: LayoutInfo) {
       loadedLayouts.push(layout);
     },
     getAllWebViewDefinitions: () => [],
+    getWebViewDefinition: () => undefined,
     simpleLayout,
     testLayout: simpleLayout,
   } as unknown as PapiDockLayout;
