@@ -4,6 +4,7 @@ import {
   addWindow,
   areAllWindowsClosing,
   doesNavigationReplaceRendererRegistrations,
+  focusWindow,
   getFocusedWindowId,
   getReadyWindowIds,
   getTargetWindowId,
@@ -39,6 +40,41 @@ function fakeWindow(id: number): BrowserWindow {
   // service under test touches
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return { id, isDestroyed: () => false } as BrowserWindow;
+}
+
+/**
+ * Stand-in for a BrowserWindow that can be raised, recording what {@link focusWindow} did to it in
+ * the order it did it.
+ *
+ * @param id Window id
+ * @param options.doesActivationSucceed What the OS does with a client-initiated activation:
+ *   `focus()` makes `isFocused()` true when the OS honors it, and leaves it false when Windows
+ *   refuses it
+ * @param options.isMinimized Whether the window starts minimized
+ */
+function raisableWindow(
+  id: number,
+  options?: { doesActivationSucceed?: boolean; isMinimized?: boolean },
+): { window: BrowserWindow; calls: string[] } {
+  const doesActivationSucceed = options?.doesActivationSucceed ?? true;
+  const calls: string[] = [];
+  let isFocused = false;
+  const window = {
+    id,
+    isDestroyed: () => false,
+    isMinimized: () => options?.isMinimized ?? false,
+    restore: () => calls.push('restore'),
+    focus: () => {
+      calls.push('focus');
+      isFocused = doesActivationSucceed;
+    },
+    isFocused: () => isFocused,
+    flashFrame: (flash: boolean) => calls.push(`flashFrame(${flash})`),
+  };
+  // Constructing a real BrowserWindow needs the Electron runtime; these are the members raising a
+  // window touches
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { window: window as unknown as BrowserWindow, calls };
 }
 
 /**
@@ -710,6 +746,65 @@ describe('window state tracking', () => {
       removeWindow(crashed, 1);
 
       expect(getUnreachableWindowIds()).toEqual([]);
+    });
+  });
+
+  describe('raising a window', () => {
+    test('takes the flash back down when the activation lands', () => {
+      // The flash is for a raise the OS refused. Leaving it up after a successful one flashes the
+      // taskbar at the user for a window that is already in front of them — which, hand-tested on
+      // native Windows, is ~5 flashes on the ordinary cross-window open.
+      const { window, calls } = raisableWindow(1, { isMinimized: true });
+      addWindow(window);
+
+      focusWindow(1);
+
+      // Restored first, or a merely focused window stays minimized; flashed before focusing,
+      // because Windows does not cancel a flash on activation and one started afterwards could not
+      // be taken back down
+      expect(calls).toEqual(['restore', 'flashFrame(true)', 'focus', 'flashFrame(false)']);
+    });
+
+    test('leaves the flash up when Windows refuses the activation', () => {
+      // `focus()` reports neither the refusal nor the success, so `isFocused()` right after it is
+      // the only thing that tells them apart. Where the raise was refused the flash is the whole
+      // signal the user gets that something happened in another window.
+      const { window, calls } = raisableWindow(1, { doesActivationSucceed: false });
+      addWindow(window);
+
+      focusWindow(1);
+
+      expect(calls).toEqual(['flashFrame(true)', 'focus']);
+    });
+
+    test('does not fail the operation that asked for the raise', () => {
+      // A window can be destroyed between the tracked-list lookup and any of these calls. Raising is
+      // feedback about where something already happened, so it must not take the operation with it.
+      const throwsOnFocus = {
+        id: 1,
+        isDestroyed: () => false,
+        isMinimized: () => false,
+        flashFrame: () => {},
+        focus: () => {
+          throw new TypeError('Object has been destroyed');
+        },
+      };
+      // Constructing a real BrowserWindow needs the Electron runtime; these are the members raising
+      // a window touches
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      addWindow(throwsOnFocus as unknown as BrowserWindow);
+
+      expect(() => focusWindow(1)).not.toThrow();
+    });
+
+    test('does nothing for a window that is already gone', () => {
+      const { window, destroyForTest } = destroyableWindow(1);
+      addWindow(window);
+      destroyForTest();
+
+      // Every member but `isDestroyed` throws on a destroyed window, so reaching any of them here
+      // would show up as a throw rather than as a silent misfire
+      expect(() => focusWindow(1)).not.toThrow();
     });
   });
 
