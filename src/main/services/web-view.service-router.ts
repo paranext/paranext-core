@@ -557,15 +557,18 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
 
   let targetShard: WebViewServiceShard | undefined;
   if (target === 'new') {
-    // Same read and same fail-closed degrade as opening into a new window: in Simple mode —
+    // Same read as opening into a new window, but not the same degrade. In Simple mode —
     // single-window by design — there is no other window to move to, and the view already is a
-    // tab in the only window there is, so there is nothing to do
-    let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+    // tab in the only window there is, so there is nothing to do. A mode that could not be READ is
+    // not that answer: resolving as though it were reports a move that did not happen, and the
+    // caller has nothing to tell it apart from one that did — the tab-title notification driven by
+    // this result would tell the user their web view is in a new window while it sits where it was.
+    let interfaceMode: SettingTypes['platform.interfaceMode'];
     try {
       interfaceMode = await settingsService.get('platform.interfaceMode');
     } catch (e) {
-      logger.warn(
-        `Could not read platform.interfaceMode for a move; leaving the web view where it is: ${getErrorMessage(e)}`,
+      throw new Error(
+        `Cannot move webview ${webViewId} to a new window: the interface mode could not be read (${getErrorMessage(e)}).`,
       );
     }
     if (interfaceMode !== 'power') return webViewId;
