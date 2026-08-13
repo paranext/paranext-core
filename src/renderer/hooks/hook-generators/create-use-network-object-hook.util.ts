@@ -20,6 +20,22 @@ function mapParametersToNetworkObjectSourceDefault(
 }
 
 /**
+ * Whether a network object that has just been created on the network is one that would change what
+ * a hook looking for `networkObjectSource` can serve. The default answer only fits a hook whose
+ * source IS the network object's id.
+ *
+ * @param networkObjectDetails Details of the network object that was just created
+ * @param networkObjectSource String name the hook was asked for
+ * @returns Whether to look the source up again
+ */
+function doesCreatedNetworkObjectMatchSourceDefault(
+  networkObjectDetails: NetworkObjectDetails,
+  networkObjectSource: string,
+) {
+  return networkObjectDetails.id === networkObjectSource;
+}
+
+/**
  * This function takes in a getNetworkObject function and creates a hook with that function in it
  * which will return a network object
  *
@@ -31,6 +47,16 @@ function mapParametersToNetworkObjectSourceDefault(
  *   - Note: `networkObjectSource` is string name of the network object to get OR `networkObject`
  *       (result of this hook, if you want this hook to just return the network object again)
  *
+ * @param doesCreatedNetworkObjectMatchSource Function that decides whether a network object that
+ *   was just created on the network means the hook should look its source up again. Defaults to
+ *   comparing the new object's id to the `networkObjectSource`.
+ *
+ *   - MUST be supplied by any caller whose `networkObjectSource` is not literally the id the object is
+ *       registered under — a data provider name becomes `{name}-data`, a web view id becomes
+ *       `webViewController{id}`, and so on. Left at the default, such a hook's re-lookup listener
+ *       compares two strings that can never be equal, so it never fires and the hook is left with
+ *       the single re-lookup a disposal drives.
+ *
  * @returns A function that takes in a networkObjectSource and returns a NetworkObject
  */
 export function createUseNetworkObjectHook<THookParams extends unknown[]>(
@@ -38,6 +64,10 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
   mapParametersToNetworkObjectSource?: (
     ...args: THookParams
   ) => string | NetworkObject<object> | undefined,
+  doesCreatedNetworkObjectMatchSource: (
+    networkObjectDetails: NetworkObjectDetails,
+    networkObjectSource: string,
+  ) => boolean = doesCreatedNetworkObjectMatchSourceDefault,
 ): (...args: THookParams) => NetworkObject<object> | undefined {
   return function useNetworkObject(...args: THookParams): NetworkObject<object> | undefined {
     const mapParameters =
@@ -125,9 +155,12 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
     // something being published under the name it wants and look again when it is.
     //
     // Only armed after a disposal: before that, every network object the app creates at startup
-    // would trigger a fresh lookup for a name whose first lookup is still in flight. Objects whose
-    // name is not what the hook was asked for (a project data provider is looked up by project id,
-    // not by the id its network object is registered under) fall back to the single re-lookup.
+    // would trigger a fresh lookup for a name whose first lookup is still in flight.
+    //
+    // What counts as "something being published under the name it wants" is the caller's to say,
+    // because for most of these hooks the name they are asked for is not the id the object is
+    // registered under. Answering that here by comparing the two directly would compare strings
+    // that can never be equal.
     // Note: do nothing if we already received a network object, but still run this hook.
     // (We must make sure to run the same number of hooks in all code paths.)
     useEvent(
@@ -136,7 +169,10 @@ export function createUseNetworkObjectHook<THookParams extends unknown[]>(
         : undefined,
       useCallback(
         (networkObjectDetails: NetworkObjectDetails) => {
-          if (networkObjectDetails.id === networkObjectSource)
+          if (
+            isString(networkObjectSource) &&
+            doesCreatedNetworkObjectMatchSource(networkObjectDetails, networkObjectSource)
+          )
             setLookupAttempt((previousAttempt) => previousAttempt + 1);
         },
         [networkObjectSource],
