@@ -285,17 +285,35 @@ global.webViewComponent = function CommentListWebView({
    * same-value re-send (see `resolveSetFiltersMessage`) can skip the `useState`/`useWebViewState`
    * setter entirely instead of minting a new-but-equal `CommentFilters` object.
    *
-   * The message handler ALSO writes this ref, synchronously, whenever it accepts a message: web
-   * view messages are buffered and can replay as a burst with no render between them, and the
-   * effect below only lands after a render — so without the synchronous write, every message in a
-   * burst would compare against the pre-burst state, and a real change that happens to equal that
-   * stale snapshot would be skipped for good. The effect remains the path that folds in the user's
-   * own filter changes (the panel's setters write state directly, not through here).
+   * EVERY path that changes the view writes this ref synchronously — the message handler below and
+   * the panel's own change handlers alike. The effect only lands after a render, and both a
+   * buffered burst of messages and a message arriving on the heels of a panel change happen with no
+   * render in between: whatever comes next would compare against the state from before, and a real
+   * change that happens to equal that stale snapshot would be skipped for good. The effect stays as
+   * the backstop that folds in any state change reaching this component another way.
    */
   const currentViewRef = useRef({ filters, scopeFilter });
   useEffect(() => {
     currentViewRef.current = { filters, scopeFilter };
   }, [filters, scopeFilter]);
+
+  /** Apply a filter change the user made in the panel — see {@link currentViewRef} for the ref */
+  const handleFiltersChange = useCallback(
+    (newFilters: CommentFilters) => {
+      currentViewRef.current = { ...currentViewRef.current, filters: newFilters };
+      setFilters(newFilters);
+    },
+    [setFilters],
+  );
+
+  /** Apply a scope change the user made in the panel — see {@link currentViewRef} for the ref */
+  const handleScopeFilterChange = useCallback(
+    (newScopeFilter: ScopeFilter) => {
+      currentViewRef.current = { ...currentViewRef.current, scopeFilter: newScopeFilter };
+      setScopeFilter(newScopeFilter);
+    },
+    [setScopeFilter],
+  );
 
   const isViewVisible = useViewVisibility();
 
@@ -664,11 +682,11 @@ global.webViewComponent = function CommentListWebView({
         threads={safeCommentThreads}
         currentUser={currentUserName}
         filters={filters}
-        onFiltersChange={setFilters}
+        onFiltersChange={handleFiltersChange}
         // Pass the coerced value so the displayed dropdown value stays in sync with the hidden
         // option and the query when this list can't scope to the current chapter.
         scopeFilter={effectiveScopeFilter}
-        onScopeFilterChange={setScopeFilter}
+        onScopeFilterChange={handleScopeFilterChange}
         // When false (a cross-project open with no live reference), the "current chapter" option
         // stays hidden rather than scoping to an unrelated ref.
         canScopeToCurrentChapter={canScopeToCurrentChapter}

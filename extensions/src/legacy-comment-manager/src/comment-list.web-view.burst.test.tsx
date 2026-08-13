@@ -15,7 +15,13 @@ import {
 // vi.hoisted to avoid a temporal-dead-zone reference.
 const mocks = vi.hoisted(() => {
   /** Every set of props the stubbed CommentListPanel has been rendered with, in order */
-  const panelPropsLog: { filters: CommentFilters; scopeFilter: ScopeFilter }[] = [];
+  const panelPropsLog: {
+    filters: CommentFilters;
+    scopeFilter: ScopeFilter;
+    // The panel's own change handlers, so a test can make the filter change the user makes
+    onFiltersChange: (filters: CommentFilters) => void;
+    onScopeFilterChange: (scopeFilter: ScopeFilter) => void;
+  }[] = [];
   // Stable across renders: the message-listener effect lists these among its deps, and fresh
   // functions every render would re-subscribe it mid-test for reasons the tests are not about
   const bcvSyncScroll = {
@@ -63,7 +69,12 @@ vi.mock('./use-bcv-sync-scroll.hook', () => ({
 // filters the web view actually has applied
 vi.mock('./comment-list.component', () => ({
   COMMENT_LIST_PANEL_EXTRA_STRING_KEYS: [],
-  CommentListPanel: (props: { filters: CommentFilters; scopeFilter: ScopeFilter }) => {
+  CommentListPanel: (props: {
+    filters: CommentFilters;
+    scopeFilter: ScopeFilter;
+    onFiltersChange: (filters: CommentFilters) => void;
+    onScopeFilterChange: (scopeFilter: ScopeFilter) => void;
+  }) => {
     mocks.panelPropsLog.push(props);
     return undefined;
   },
@@ -165,6 +176,34 @@ describe('setFilters messages replayed in a burst', () => {
       expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS);
       expect(latestPanelProps().scopeFilter).toBe(UNFILTERED);
     });
+  });
+
+  it('applies a message equal to the state a panel change just left behind', async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    // The user narrows the list from the panel, and a message arrives before React has re-rendered
+    // — a reopen that resets the view to exactly what it held before that change. Comparing it
+    // against a snapshot taken before the panel change makes it look like a no-op, so the user's
+    // narrowed filters stay applied and the programmatic open shows the wrong view for good.
+    act(() => {
+      latestPanelProps().onFiltersChange({ ...DEFAULT_COMMENT_FILTERS, resolved: 'resolved' });
+      dispatchSetFilters({});
+    });
+
+    await waitFor(() => expect(latestPanelProps().filters).toEqual(DEFAULT_COMMENT_FILTERS));
+  });
+
+  it('applies a message equal to the scope a panel change just left behind', async () => {
+    renderCommentListWebView();
+    await waitFor(() => expect(latestPanelProps()).toBeDefined());
+
+    act(() => {
+      latestPanelProps().onScopeFilterChange('current-chapter');
+      dispatchSetFilters({});
+    });
+
+    await waitFor(() => expect(latestPanelProps().scopeFilter).toBe(UNFILTERED));
   });
 
   it('still skips a genuinely identical repeat, minting no new filters object', async () => {
