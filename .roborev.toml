@@ -7,11 +7,15 @@
 # The review agent is deliberately NOT pinned here. Agent choice is per-developer (and costs
 # that developer's own quota), so it belongs in ~/.roborev/config.toml, not in a shared file.
 
-# Generated output carries no review signal and consumes the prompt budget.
-exclude_patterns = ["lib/papi-dts/papi.d.ts", "dist/", "*.min.js"]
+# Generated output carries no review signal and consumes the prompt budget. This repo tracks
+# build output under nested paths (lib/platform-bible-react/dist, lib/platform-bible-utils/dist),
+# so the pattern must be path-independent rather than a bare "dist/". Lockfiles are already
+# excluded by roborev's built-in defaults and do not need listing here.
+exclude_patterns = ["lib/papi-dts/papi.d.ts", "**/dist/**", "*.min.js", "*.map"]
 
-# Work-in-progress commits get reviewed once the real commit lands.
-excluded_commit_patterns = ["wip:", "fixup!", "[skip review]"]
+# Work-in-progress commits get reviewed once the real commit lands. Matching is
+# case-insensitive, so casing variants do not need separate entries.
+excluded_commit_patterns = ["wip:", "fixup!", "squash!", "[skip review]"]
 
 # Keep the queue to commits that actually need attention.
 auto_close_passing_reviews = true

@@ -35,17 +35,33 @@ installed it are unaffected — no hook output, no delay, no failed commits.
 
 Everything below is per-developer and per-machine; none of it can be committed.
 
+**1. Install the binary.** Prefer a versioned, checksum-verified release over piping a remote
+script into a shell — this machine holds repository credentials and AI-agent tokens. Download
+the archive for your platform plus `SHA256SUMS` from
+[roborev releases](https://github.com/kenn-io/roborev/releases), verify it, then put `roborev`
+on your `PATH`:
+
 ```bash
-curl -fsSL https://roborev.io/install.sh | bash   # 1. install the binary
-roborev config set --global default_agent claude-code   # 2. pick your review agent
-roborev daemon restart
-roborev skills install                            # 3. optional: /roborev-fix, /roborev-refine
-roborev agent-hook install --agent claude         # 4. optional: mid-session fix reminders
+sha256sum -c SHA256SUMS --ignore-missing    # macOS: shasum -a 256 <archive>
 ```
 
-Step 2 matters: `roborev check-agents` lists which agents your machine can actually reach, and
-reviews fail silently if the configured agent is unavailable. Reviews run on **your own** agent
-subscription and consume your quota.
+Linux users can install the published `.deb` or `.rpm` instead. The upstream
+`curl -fsSL https://roborev.io/install.sh | bash` one-liner also works, but read the script
+first if you use it.
+
+**2. Configure and verify your agent, then optionally add the agent integration.**
+
+```bash
+roborev config set --global default_agent claude-code   # pick your review agent
+roborev daemon restart
+roborev check-agents                                    # confirm the agent is reachable
+roborev skills install                                  # optional: /roborev-fix, /roborev-refine
+roborev agent-hook install --agent claude               # optional: mid-session fix reminders
+```
+
+Do not skip `roborev check-agents`. A configured-but-unreachable agent makes every review fail,
+and the failure is easy to miss — commits look completely normal while nothing is reviewed.
+Reviews run on **your own** agent subscription and consume your quota.
 
 If you install the agent hook, raise the default thresholds in `~/.roborev/config.toml` — the
 shipped defaults interrupt every five turns, and the default instruction uses Codex's
