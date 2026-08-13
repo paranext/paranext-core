@@ -108,4 +108,36 @@ describe('useNetworkObject hooks after the object they hold is disposed', () => 
 
     await waitFor(() => expect(result.current).toBe(secondHost.networkObject));
   });
+
+  // Almost no caller is asked for the id its object is registered under — a data provider name
+  // becomes `{name}-data`, a web view id becomes `webViewController{id}` — so which publication
+  // means "the thing this hook wants is back" is the caller's to answer.
+  it('lets the caller decide which published object answers to the name it was asked for', async () => {
+    const firstHost = makeNetworkObject('first host');
+    const secondHost = makeNetworkObject('second host');
+    const getNetworkObject = vi
+      .fn()
+      .mockResolvedValueOnce(firstHost.networkObject)
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValue(secondHost.networkObject);
+    const useNetworkObject = createUseNetworkObjectHook(
+      getNetworkObject,
+      undefined,
+      (networkObjectDetails, networkObjectSource) =>
+        networkObjectDetails.id === `${networkObjectSource}-suffixed`,
+    );
+
+    const { result } = renderHook(() => useNetworkObject('TheAppGlobalObject'));
+    await waitFor(() => expect(result.current).toBe(firstHost.networkObject));
+    act(() => firstHost.dispose());
+    await waitFor(() => expect(result.current).toBeUndefined());
+
+    // The source string itself is not what this caller's objects are registered under
+    act(() => publishNetworkObject('TheAppGlobalObject'));
+    await waitFor(() => expect(getNetworkObject).toHaveBeenCalledTimes(2));
+
+    act(() => publishNetworkObject('TheAppGlobalObject-suffixed'));
+
+    await waitFor(() => expect(result.current).toBe(secondHost.networkObject));
+  });
 });
