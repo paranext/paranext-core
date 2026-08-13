@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
+import { notificationService } from '@shared/services/notification.service';
 import { PlatformTabTitle } from './platform-tab-title.component';
 
 // #region mocks
@@ -53,6 +54,10 @@ vi.mock('@shared/services/logger.service', () => ({
 
 vi.mock('@shared/services/window.service', () => ({
   windowService: { dataProviderName: 'platform.windowServiceDataProvider' },
+}));
+
+vi.mock('@shared/services/notification.service', () => ({
+  notificationService: { send: vi.fn(async () => 'notification-1') },
 }));
 
 vi.mock('@shared/services/command.service', () => ({
@@ -141,5 +146,36 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
         expect.stringContaining('Failed to move web view web-view-1 to a new window'),
       ),
     );
+  });
+
+  it('a rejected move is surfaced to the user as an error notification', async () => {
+    // The move rejects with the tab somewhere the user did not ask for; a log line alone leaves
+    // them staring at a menu item that silently did nothing
+    vi.mocked(sendCommand).mockRejectedValue(new Error('window creation failed'));
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByText('Move tab to new window'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTabToNewWindow_failed%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
+  it('a successful move shows no notification', async () => {
+    vi.mocked(notificationService.send).mockClear();
+    vi.mocked(sendCommand).mockResolvedValue('web-view-1');
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByText('Move tab to new window'));
+
+    await waitFor(() =>
+      expect(sendCommand).toHaveBeenCalledWith('platform.moveWebViewToNewWindow', 'web-view-1'),
+    );
+    expect(notificationService.send).not.toHaveBeenCalled();
   });
 });
