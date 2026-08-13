@@ -10,6 +10,7 @@
 
 import {
   focusWindow,
+  getAbandonedWindowIds,
   getFocusedWindowId,
   getReadyWindowIds,
   getTargetWindowId,
@@ -422,8 +423,22 @@ export type OpenWebViewDefinitionsByReachability = {
    * Windows that were serving requests but failed to answer, so their web views are missing from
    * `definitions`. A window whose renderer has never registered anything is not in here — it has
    * nothing open, which `definitions` already says.
+   *
+   * Transient by nature: the window is being reloaded, and it answers again once it comes back.
    */
   unreachableWindowIds: number[];
+  /**
+   * Windows nothing will ever run in again — their renderer died and the reload path gave up — so
+   * their web views are missing from `definitions` and will not appear in a later read either.
+   *
+   * Kept apart from `unreachableWindowIds` rather than folded into it, because the two mean
+   * opposite things about what to do next. A caller that refuses to act on an incomplete answer is
+   * right to refuse while a window is coming back and wrong to refuse forever, so this list must
+   * never reach the ones that throw. A caller that reports coverage — the shutdown sync — needs it
+   * for the opposite reason: the projects open in a given-up window genuinely never synced, and
+   * dropping it here would let the last line of that session's log claim clean coverage.
+   */
+  abandonedWindowIds: number[];
 };
 
 /**
@@ -456,6 +471,16 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
     unreachableWindowIds.push(...windowIdsThatStoppedServing);
   }
 
+  // Reported, but never as unreachable. Their web views are gone the same way, and the callers that
+  // report coverage have to hear about them — but they are tracked until the user closes them, so
+  // putting them in the list above would make the readers that refuse a partial answer refuse every
+  // one of these reads for the rest of the session.
+  const abandonedWindowIds = getAbandonedWindowIds();
+  if (abandonedWindowIds.length > 0)
+    logger.warn(
+      `Windows ${abandonedWindowIds.join(', ')} were given up on after their renderer died, so what they had open cannot be read and will not become readable.`,
+    );
+
   const definitionsPerWindow = await Promise.all(
     getReadyWindowIds().map(async (windowId) => {
       try {
@@ -480,7 +505,7 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
       }
     }),
   );
-  return { definitions: definitionsPerWindow.flat(), unreachableWindowIds };
+  return { definitions: definitionsPerWindow.flat(), unreachableWindowIds, abandonedWindowIds };
 }
 
 /**
@@ -521,6 +546,12 @@ export async function getOpenWebViewDefinitionsForWindow(
  * window that could not be asked is indistinguishable in the result from one with nothing open. A
  * ready window failing is exceptional, so failing loudly is better than acting on tabs whose
  * existence was never established.
+ *
+ * Only the unreachable windows do that, deliberately. Throwing is worth its cost because it is
+ * temporary — the window is being reloaded and answers again once it comes back. A window that was
+ * given up on stays tracked until the user closes it, so throwing for one would take every read
+ * here down for the rest of the session, which is the poisoning this list of two states exists to
+ * avoid.
  */
 async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]> {
   const { definitions, unreachableWindowIds } =

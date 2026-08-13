@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
     getUnreachableWindowIds: vi.fn(),
+    getAbandonedWindowIds: vi.fn(),
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
     loggerWarn: vi.fn(),
@@ -52,6 +53,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
   getUnreachableWindowIds: mocks.getUnreachableWindowIds,
+  getAbandonedWindowIds: mocks.getAbandonedWindowIds,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
@@ -91,6 +93,7 @@ describe('notification service router', () => {
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
+    mocks.getAbandonedWindowIds.mockReturnValue([]);
   });
 
   test('sends to a window that registered its shard after the router started', async () => {
