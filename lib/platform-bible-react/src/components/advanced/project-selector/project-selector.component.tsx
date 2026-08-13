@@ -476,7 +476,18 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
         align="start"
         sideOffset={8}
         collisionPadding={16}
-        className="tw:max-w-xs tw:text-start"
+        // `flex-col items-start` overrides shadcn TooltipContent's base `inline-flex items-center
+        // gap-1.5` so the info lines stack vertically instead of laying out as columns. `gap-0.5`
+        // gives them modest breathing room. See `shadcn-ui/tooltip.tsx` for the base classes.
+        className="tw:max-w-xs tw:flex-col tw:items-start tw:gap-0.5 tw:text-start"
+        // `showArrow={false}` — shadcn's TooltipContent arrow renders as an unclipped rotated
+        // square (a diamond) on `side="left"`/`"right"`. The tooltip file explicitly documents
+        // this: top/bottom get a clip-path that reduces the diamond to a triangle, but left/right
+        // deliberately keep the plain diamond ("no consumer today needs a bordered left/right
+        // arrow"). That renders as a small rectangle poking out of the tooltip — not the pointer
+        // shape we want. Suppressing the arrow entirely is the pragmatic fix; the tooltip's
+        // relationship to the hovered row is clear from position and hover-open behaviour.
+        showArrow={false}
         style={{ zIndex: Z_INDEX_OVERLAY }}
       >
         <div className="tw:font-semibold">{row.fullName}</div>
