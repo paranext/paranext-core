@@ -340,7 +340,19 @@ function applyScrRefToCache(
   cachedScrRefs[scrollGroupId] = scrRefClone;
   cachedScrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
   rememberScrollGroupStateForReload();
-  onDidUpdateScrRefEmitter.emit({ scrollGroupId, scrRef: scrRefClone, sourceProjectId });
+  // Isolated, because this runs between the cache write and the write being sent to the host: a
+  // plain emit lets one throwing subscriber unwind the caller after the cache moved but before
+  // `sendPredictedWriteToHost` runs, and nothing would ever correct that — reconcile only runs on a
+  // write that WAS sent. `onDidUpdateScrRef` is public, so any extension or web view can be that
+  // subscriber.
+  onDidUpdateScrRefEmitter.emitIsolated(
+    { scrollGroupId, scrRef: scrRefClone, sourceProjectId },
+    (e, subscriberIndex) => {
+      logger.error(
+        `Subscriber ${subscriberIndex} threw while being told scroll group ${scrollGroupId} moved: ${getErrorMessage(e)}`,
+      );
+    },
+  );
 }
 
 function applyReferenceHistoryToCache(
@@ -946,7 +958,17 @@ function subscribeToScrollGroupUpdates(): void {
       cachedScrRefs[scrollGroupId] = scrRef;
       cachedScrRefSourceProjectIds[scrollGroupId] = sourceProjectId;
       rememberScrollGroupStateForReload();
-      onDidUpdateScrRefEmitter.emit({ scrollGroupId, scrRef, sourceProjectId });
+      // Isolated so one throwing subscriber cannot cost the others their announcement, and cannot
+      // skip `drainGroupsAwaitingResync` below — this is the host's echo, the only notice a waiting
+      // group gets that its reference landed.
+      onDidUpdateScrRefEmitter.emitIsolated(
+        { scrollGroupId, scrRef, sourceProjectId },
+        (e, subscriberIndex) => {
+          logger.error(
+            `Subscriber ${subscriberIndex} threw while being told scroll group ${scrollGroupId} moved: ${getErrorMessage(e)}`,
+          );
+        },
+      );
       drainGroupsAwaitingResync();
     },
   );
@@ -985,11 +1007,20 @@ async function seedCacheFromHost(): Promise<void> {
     if (!scrRef) return;
     const groupId = Number(scrollGroupId);
     cachedScrRefs[groupId] = scrRef;
-    onDidUpdateScrRefEmitter.emit({
-      scrollGroupId: groupId,
-      scrRef,
-      sourceProjectId: cachedScrRefSourceProjectIds[groupId],
-    });
+    // Isolated so one throwing subscriber cannot stop the remaining groups in this snapshot being
+    // announced at all — a `forEach` over a plain emit loses every group after the first throw.
+    onDidUpdateScrRefEmitter.emitIsolated(
+      {
+        scrollGroupId: groupId,
+        scrRef,
+        sourceProjectId: cachedScrRefSourceProjectIds[groupId],
+      },
+      (e, subscriberIndex) => {
+        logger.error(
+          `Subscriber ${subscriberIndex} threw while being told scroll group ${groupId} moved: ${getErrorMessage(e)}`,
+        );
+      },
+    );
   });
   // After the references, so a consumer reacting to a history change reads the reference it belongs
   // to rather than the one this window came up with.
