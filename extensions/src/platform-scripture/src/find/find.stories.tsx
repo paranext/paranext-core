@@ -2,6 +2,7 @@ import { Usj, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { Scope, SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
@@ -11,7 +12,12 @@ import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { alertCommand } from '../../../../../.storybook/story.utils';
-import { Find, FIND_LOCALIZED_STRING_KEYS, type BookResultEntry } from './find.component';
+import {
+  Find,
+  FIND_LOCALIZED_STRING_KEYS,
+  type BookResultEntry,
+  type FindProject,
+} from './find.component';
 import { replacementContainsStructuralMarker } from './structure-protection.util';
 import { LocalizedBookData, SearchTextType } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
@@ -37,6 +43,22 @@ const scopeSelectorLocalizedStrings = getLocalizedStrings([...SCOPE_SELECTOR_STR
 const searchResultLocalizedStrings = getLocalizedStrings([...SEARCH_RESULT_LOCALIZED_STRING_KEYS]);
 
 const DEFAULT_SEARCH_TERM = 'God';
+
+/** Sample projects for the project selector — not wired to real search data. */
+const STORY_PROJECTS: FindProject[] = [
+  { id: 'web', shortName: 'WEB', fullName: 'World English Bible' },
+  { id: 'esv', shortName: 'ESV', fullName: 'English Standard Version' },
+];
+
+/**
+ * Sample open tabs — WEB is open in two scroll groups, demonstrating the picker's disambiguation
+ * between duplicate instances of the same project.
+ */
+const STORY_OPEN_TABS: ProjectSelectorOpenTab[] = [
+  { projectId: 'web', scrollGroupId: 0 },
+  { projectId: 'web', scrollGroupId: 1 },
+  { projectId: 'esv', scrollGroupId: 2 },
+];
 
 // Seed USX for the books we search across, so results can render verse context and the search
 // engine has real text to scan.
@@ -224,6 +246,8 @@ type HarnessConfig = {
    * a paragraph/verse/chapter marker disables Replace with an explanatory tooltip.
    */
   isStructureProtected?: boolean;
+  /** Showcase the empty state when no scripture project is open anywhere. */
+  noOpenProjects?: boolean;
 };
 
 /**
@@ -238,6 +262,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
 
   const [searchTerm, setSearchTerm] = useState(config.searchTerm ?? DEFAULT_SEARCH_TERM);
   const [recentSearches, setRecentSearches] = useState<string[]>(['Lord', 'beginning']);
+  const [selectedProjectId, setSelectedProjectId] = useState('web');
+  const [selectedScrollGroupId, setSelectedScrollGroupId] = useState(0);
   const [scope, setScope] = useState<Scope>(config.scope ?? 'selectedBooks');
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>(
     config.selectedBookIds ?? ['GEN', 'JHN'],
@@ -438,6 +464,16 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       localizedStrings={localizedStrings}
       scopeSelectorLocalizedStrings={scopeSelectorLocalizedStrings}
       searchResultLocalizedStrings={searchResultLocalizedStrings}
+      projects={config.noOpenProjects ? [] : STORY_PROJECTS}
+      selectedProjectId={selectedProjectId}
+      selectedScrollGroupId={selectedScrollGroupId}
+      openTabs={config.noOpenProjects ? [] : STORY_OPEN_TABS}
+      noOpenProjects={config.noOpenProjects ?? false}
+      onSelectProjectScrollGroup={(newProjectId, newScrollGroupId) => {
+        setSelectedProjectId(newProjectId);
+        setSelectedScrollGroupId(newScrollGroupId);
+      }}
+      onOpenProjectInGroup={() => {}}
       searchTerm={searchTerm}
       recentSearches={recentSearches}
       scope={scope}
@@ -574,4 +610,12 @@ export const StructureProtected: Story = {
   decorators: [
     createDecorator({ activeMode: 'replace', isStructureProtected: true, replaceTerm: '\\p text' }),
   ],
+};
+
+/**
+ * No scripture project is open anywhere. The project selector and the results area both show a "no
+ * open projects" placeholder instead of their normal content.
+ */
+export const NoOpenProjects: Story = {
+  decorators: [createDecorator({ live: false, results: [], noOpenProjects: true })],
 };

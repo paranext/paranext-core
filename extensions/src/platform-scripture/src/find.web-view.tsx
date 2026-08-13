@@ -12,7 +12,8 @@ import {
 } from '@papi/frontend/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { Scope, SCOPE_SELECTOR_STRING_KEYS, sonner } from 'platform-bible-react';
+import { Scope, SCOPE_SELECTOR_STRING_KEYS, sonner, usePromise } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
   debounce,
   DEBOUNCE_CANCELED_ERROR_MESSAGE,
@@ -23,6 +24,8 @@ import {
   isPlatformError,
   LocalizeKey,
   Mutex,
+  normalizeProjectId,
+  ScrollGroupId,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
 import {
@@ -37,8 +40,12 @@ import {
   WordRestriction,
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Find, FIND_LOCALIZED_STRING_KEYS } from './find/find.component';
-import { applyPreserveCase, isSimpleInterfaceMode } from './find/find.utils';
+import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
+import {
+  applyPreserveCase,
+  isSimpleInterfaceMode,
+  resolveSelectedProjectScrollGroup,
+} from './find/find.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
@@ -49,6 +56,7 @@ import {
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './find/search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
+import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -73,6 +81,28 @@ const SEARCH_DEBOUNCE_DELAY_MS = 500;
 const HISTORY_DEBOUNCE_DELAY_MS = 5000;
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
+
+/**
+ * Web-view types that should count as "open" project tabs for the project picker's "Open Tabs"
+ * grouping. Mirrors `checks-side-panel.web-view.tsx` / `manage-books.web-view.tsx`: only the
+ * scripture editor binds a project to a scroll group in a user-meaningful way. Without this filter,
+ * every project-bound web view (including this Find panel itself) would falsely mark a project as
+ * open.
+ */
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
+
+/**
+ * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
+ * `@papi`-free utils) so the utils stay importable by the presentational component and its story.
+ */
+async function getProjectNames(
+  projectId: string,
+): Promise<Pick<FindProject, 'shortName' | 'fullName'>> {
+  const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+  const projectShortName = await pdp.getSetting('platform.name');
+  const projectFullName = await pdp.getSetting('platform.fullName');
+  return { shortName: projectShortName, fullName: projectFullName };
+}
 
 /**
  * Returns a promise that resolves after `ms` milliseconds. The cancel function stored in
@@ -119,6 +149,7 @@ global.webViewComponent = function FindWebView({
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
+  updateWebViewDefinition,
 }: WebViewProps) {
   // Each instance needs its own mutex — a module-level mutex would cause operations from one Find
   // panel to block another if two panels are open for different projects simultaneously.
@@ -256,9 +287,100 @@ global.webViewComponent = function FindWebView({
 
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
 
+  // #region Project selector
+
+  // Project data loading — fetched once for all scripture projects/resources so names/canonical
+  // ids are available immediately once a project opens; filtered down to only open ones below.
+  type ProjectNamesById = { [id: string]: Pick<FindProject, 'shortName' | 'fullName'> };
+  const [projectIdsAndNames]: [ProjectNamesById, boolean] = usePromise(
+    useCallback(async () => {
+      const projectDict: ProjectNamesById = {};
+
+      const allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectInterfaces: ['Scripture', 'Paratext'],
+      });
+
+      await Promise.all(
+        allMetadata.map(async (metadata) => {
+          const names = await getProjectNames(metadata.id);
+          if (!names) return;
+          projectDict[metadata.id] = names;
+        }),
+      );
+
+      return projectDict;
+    }, []),
+    useMemo(() => ({}), []),
+  );
+
+  // Filter to scripture editor tabs only — without this filter, every project-bound web view
+  // (e.g. this Find panel itself) would falsely mark a project as "open" in the picker's "Open
+  // Tabs" grouping.
+  const editorWebViewFilter = useCallback(
+    (webView: { webViewType: string }) => SCRIPTURE_EDITOR_WEB_VIEW_TYPES.has(webView.webViewType),
+    [],
+  );
+  const allOpenProjectTabs = useOpenProjectTabs(editorWebViewFilter);
+  const noOpenProjects = allOpenProjectTabs.length === 0;
+
+  // Find's project picker only ever lists projects that are open in an editor tab (a project
+  // isn't a candidate to search until it's actually open): once a project's last tab closes, the
+  // reassignment effect below moves the selection to another open project before this list update
+  // even renders, so there is no "selected but not listed" gap to bridge here.
+  const openProjectIds = useMemo(() => {
+    const ids = new Set<string>();
+    allOpenProjectTabs.forEach((tab) => ids.add(normalizeProjectId(tab.projectId)));
+    return ids;
+  }, [allOpenProjectTabs]);
+
+  const projects = useMemo<FindProject[]>(
+    () =>
+      Object.entries(projectIdsAndNames)
+        .filter(([id]) => openProjectIds.has(normalizeProjectId(id)))
+        .map(([id, names]) => ({ id, ...names })),
+    [projectIdsAndNames, openProjectIds],
+  );
+
+  const projectSelectorOpenTabs = useMemo<ProjectSelectorOpenTab[]>(
+    () =>
+      allOpenProjectTabs.map((tab) => ({
+        projectId: tab.projectId,
+        scrollGroupId: tab.scrollGroupId,
+      })),
+    [allOpenProjectTabs],
+  );
+
+  // The specific open tab's scroll group Find currently targets — distinct from `projectId`
+  // (which project Find searches) because the same project can be open in more than one tab. Kept
+  // in web-view state so a reload / close-reopen resumes the same targeted tab.
+  const [selectedScrollGroupId, setSelectedScrollGroupId] = useWebViewState<
+    ScrollGroupId | undefined
+  >('findSelectedScrollGroupId', undefined);
+
+  // Set by `handleSelectProjectScrollGroup` (defined below, once `abandonFindJob` exists) and
+  // consumed by an effect keyed on `findPdp` once the switch takes effect — see that effect for
+  // why a plain "did projectId change" comparison isn't used instead.
+  const pendingProjectSwitchRerunRef = useRef(false);
+
+  // Which open editor tab a Find result click should scroll: the exact tab the project selector
+  // has selected. Deterministic (not a heuristic) because the reassignment effect below guarantees
+  // `(projectId, selectedScrollGroupId)` always names an open tab whenever one exists anywhere.
+  // `undefined` only when `noOpenProjects` — nothing to scroll.
+  const targetEditorWebViewId = useMemo(() => {
+    if (!projectId || selectedScrollGroupId === undefined) return undefined;
+    const normalizedProjectId = normalizeProjectId(projectId);
+    return allOpenProjectTabs.find(
+      (tab) =>
+        normalizeProjectId(tab.projectId) === normalizedProjectId &&
+        tab.scrollGroupId === selectedScrollGroupId,
+    )?.webViewId;
+  }, [projectId, selectedScrollGroupId, allOpenProjectTabs]);
+
+  // #endregion
+
   const editorWebViewController = useWebViewController(
     'platformScriptureEditor.react',
-    editorWebViewId,
+    targetEditorWebViewId,
   );
 
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
@@ -475,6 +597,83 @@ global.webViewComponent = function FindWebView({
       logger.error(`Error acquiring mutex to abandon find job: ${getErrorMessage(error)}`);
     }
   }, [findPdp, findPdpMutex, setActiveJobId]);
+
+  // Switching projects mutates `projectId` in place (matching `checks-side-panel.web-view.tsx`)
+  // rather than reloading the panel: `papi.webViews.reloadWebView`'s options type from inside a
+  // web view (`@papi/frontend`) is deliberately narrow and does not accept provider-specific
+  // fields like `projectId` — that richer form only exists extension-host-side, where `openFind`
+  // uses it. Unlike Checks' `checkAggregator` (a single non-project-scoped provider), Find's job
+  // lives on a project-scoped PDP (`useProjectDataProvider(..., projectId)`), so switching
+  // `projectId` swaps `findPdp` to a fresh provider instance. `abandonFindJob` is called here,
+  // BEFORE `updateWebViewDefinition` propagates the new `projectId`, so its closure still holds
+  // the OLD `findPdp` and can actually reach the in-flight job — once `projectId` changes, no
+  // callback in this component can reach the old PDP anymore.
+  const handleSelectProjectScrollGroup = useCallback(
+    (newProjectId: string, newScrollGroupId: ScrollGroupId) => {
+      if (newProjectId !== projectId) {
+        abandonFindJob();
+        setResults([]);
+        loadedResultsLengthRef.current = 0;
+        setNumberOfHiddenResults(0);
+        setFocusedResultIndex(undefined);
+        setSearchStatus(undefined);
+        setSearchError(undefined);
+        setSearchProgress(0);
+        pendingProjectSwitchRerunRef.current = true;
+        updateWebViewDefinition({ projectId: newProjectId });
+      }
+      setSelectedScrollGroupId(newScrollGroupId);
+    },
+    [projectId, abandonFindJob, updateWebViewDefinition, setSelectedScrollGroupId],
+  );
+
+  // Restricting the picker to only open projects means the selection can go stale the instant a
+  // tab closes (or, on first mount, before an initial pick has been made at all). Re-resolves
+  // whenever the set of open tabs changes and applies the result if it differs from the current
+  // selection — reassigning to another open tab of the same project (or, if the whole project
+  // closed, to whatever other project is still open) with no user action required. A no-op when
+  // the current selection is already valid, or when no projects are open anywhere.
+  useEffect(() => {
+    if (!projectId) return;
+    const resolved = resolveSelectedProjectScrollGroup(
+      projectId,
+      selectedScrollGroupId,
+      allOpenProjectTabs,
+      editorWebViewId,
+    );
+    if (!resolved) return;
+    // `resolved.projectId` may carry `useOpenProjectTabs`'s lowercased casing when it names a
+    // fallback project (canonical ids are UPPERCASE) — resolve back to the canonical id so
+    // `updateWebViewDefinition`/`findPdp` stay keyed consistently.
+    const canonicalProjectId =
+      projects.find(
+        (project) => normalizeProjectId(project.id) === normalizeProjectId(resolved.projectId),
+      )?.id ?? resolved.projectId;
+    if (canonicalProjectId === projectId && resolved.scrollGroupId === selectedScrollGroupId)
+      return;
+    handleSelectProjectScrollGroup(canonicalProjectId, resolved.scrollGroupId);
+  }, [
+    projectId,
+    selectedScrollGroupId,
+    allOpenProjectTabs,
+    editorWebViewId,
+    projects,
+    handleSelectProjectScrollGroup,
+  ]);
+
+  // Required by `ProjectSelector`'s `projectScrollGroup` mode, but unreachable in practice: the
+  // picker only ever lists open projects (no "not open" rows) and the reassignment effect above
+  // moves the selection away from a pair before its tab-closed state could render a "bound but
+  // closed" row either. Kept as a defensive no-op rather than a non-null assertion so a future
+  // change to the row-filtering logic fails loudly instead of silently opening tabs.
+  const handleOpenProjectInGroup = useCallback(
+    (openProjectId: string, openScrollGroupId: ScrollGroupId) => {
+      logger.warn(
+        `Find: onOpenProjectInGroup unexpectedly called for ${openProjectId}/${openScrollGroupId} — the project picker should only ever list open projects.`,
+      );
+    },
+    [],
+  );
 
   const beginFindJob = useCallback(
     async (findOptions: FindOptions) => {
@@ -904,6 +1103,20 @@ global.webViewComponent = function FindWebView({
     }, SEARCH_DEBOUNCE_DELAY_MS),
   );
 
+  // Re-run the current search term against the new project once `handleSelectProject` has
+  // switched it: `findPdp` only takes on the new project's identity after this render, so the
+  // rerun can't happen inside `handleSelectProject` itself. Gated by the ref `handleSelectProject`
+  // sets (rather than comparing `projectId` to its previous value) because this must fire
+  // specifically for a user-initiated project switch, not for `findPdp` re-identifying itself for
+  // any other reason.
+  useEffect(() => {
+    if (!pendingProjectSwitchRerunRef.current) return;
+    pendingProjectSwitchRerunRef.current = false;
+    if (!findPdp || searchTermRef.current.trim() === '') return;
+    explicitSearchPendingRef.current = true;
+    handleStartSearchRef.current(true);
+  }, [findPdp]);
+
   // Auto-search with debounce when the search term or any filter changes
   useEffect(() => {
     if (isInitialAutoSearchRef.current) {
@@ -994,7 +1207,7 @@ global.webViewComponent = function FindWebView({
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
-      if (editorWebViewId && editorWebViewController) {
+      if (targetEditorWebViewId && editorWebViewController) {
         // Preview the match in the editor (select + highlight) without stealing focus, so the user
         // can keep navigating results. Double-click / reference-click shift focus to the editor.
         //
@@ -1023,7 +1236,7 @@ global.webViewComponent = function FindWebView({
         }
       }
     },
-    [editorWebViewController, editorWebViewId, setVerseRefSetting],
+    [editorWebViewController, targetEditorWebViewId, setVerseRefSetting],
   );
 
   /** Navigate to a result AND shift focus to the editor (double-click / reference-click). */
@@ -1031,14 +1244,14 @@ global.webViewComponent = function FindWebView({
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
-      if (editorWebViewId && editorWebViewController) {
-        papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+      if (targetEditorWebViewId && editorWebViewController) {
+        papi.window.setFocus({ focusType: 'webView', id: targetEditorWebViewId });
         // Await selectRange before setAnnotation so the websocket is settled (avoids
         // "Tried to send payload while not connected" races).
         editorWebViewController
           .selectRange({ start: searchResult.start, end: searchResult.end })
           .then(() => {
-            if (editorWebViewId && editorWebViewController)
+            if (targetEditorWebViewId && editorWebViewController)
               return editorWebViewController.setAnnotation(
                 { start: searchResult.start, end: searchResult.end },
                 'find-result-highlight',
@@ -1049,7 +1262,7 @@ global.webViewComponent = function FindWebView({
           .catch((e) => logger.warn(`Find: failed to update editor: ${getErrorMessage(e)}`));
       }
     },
-    [editorWebViewController, editorWebViewId, setVerseRefSetting],
+    [editorWebViewController, targetEditorWebViewId, setVerseRefSetting],
   );
 
   const handleHideResult = useCallback((index: number) => {
@@ -1438,6 +1651,13 @@ global.webViewComponent = function FindWebView({
       localizedStrings={localizedStrings}
       scopeSelectorLocalizedStrings={scopeSelectorLocalizedStrings}
       searchResultLocalizedStrings={searchResultLocalizedStrings}
+      projects={projects}
+      selectedProjectId={projectId}
+      selectedScrollGroupId={selectedScrollGroupId}
+      openTabs={projectSelectorOpenTabs}
+      noOpenProjects={noOpenProjects}
+      onSelectProjectScrollGroup={handleSelectProjectScrollGroup}
+      onOpenProjectInGroup={handleOpenProjectInGroup}
       searchTerm={searchTerm}
       recentSearches={recentSearches}
       scope={scope}

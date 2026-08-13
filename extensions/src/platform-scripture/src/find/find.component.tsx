@@ -35,11 +35,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { ScopeWithRange } from 'platform-bible-react/experimental';
+import {
+  ProjectSelector,
+  ProjectSelectorOpenTab,
+  ProjectSelectorProject,
+  ScopeWithRange,
+} from 'platform-bible-react/experimental';
 import {
   formatReplacementString,
   LanguageStrings,
   LocalizedStringValue,
+  ScrollGroupId,
 } from 'platform-bible-utils';
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import React, { useCallback, useMemo, useRef } from 'react';
@@ -77,6 +83,10 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_preserveCase%',
   '%webView_find_preserveCase_tooltip%',
   '%webView_find_previousResult%',
+  '%webView_find_noOpenProjects_results%',
+  '%webView_find_projectFilter_noOpenProjects%',
+  '%webView_find_projectFilter_noProjectsFound%',
+  '%webView_find_projectFilter_projectsAndResources%',
   '%webView_find_recent%',
   '%webView_find_replace%',
   '%webView_find_replaceAll%',
@@ -109,6 +119,16 @@ export const FIND_LOCALIZED_STRING_KEYS = [
  */
 export type BookResultEntry = { result: HidableFindResult; originalIndex: number };
 
+/** A project (or resource) the user can select for Find to operate on. */
+export type FindProject = {
+  /** Unique id of the project. */
+  id: string;
+  /** Short display name (e.g. an abbreviation). */
+  shortName: string;
+  /** Full display name. */
+  fullName: string;
+};
+
 /** Props for the {@link Find} presentational component. */
 export type FindProps = {
   /** Localized strings for the find/replace UI; resolve via {@link FIND_LOCALIZED_STRING_KEYS}. */
@@ -122,6 +142,34 @@ export type FindProps = {
   searchResultLocalizedStrings: {
     [localizedKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
+
+  // Project selection
+  /**
+   * Scripture projects/resources the user can select for Find to operate on — only those currently
+   * open in an editor tab; Find has nothing to scroll for a project that isn't open.
+   */
+  projects: FindProject[];
+  /** Id of the project Find currently operates on, or `undefined` if none is selected. */
+  selectedProjectId: string | undefined;
+  /**
+   * The specific open tab (by scroll group) Find currently targets, or `undefined` before an
+   * initial selection has been made.
+   */
+  selectedScrollGroupId: ScrollGroupId | undefined;
+  /** Currently-open scripture editor tabs backing the `projects` list above. */
+  openTabs: ProjectSelectorOpenTab[];
+  /**
+   * True when no scripture project is open in any editor tab. The project selector and the results
+   * area both show a "no open projects" placeholder instead of their normal content.
+   */
+  noOpenProjects: boolean;
+  /** Called when the user selects a different open project/tab for Find to operate on. */
+  onSelectProjectScrollGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+  /**
+   * Required by the underlying project picker but expected never to fire: the picker only ever
+   * lists open projects, so there is nothing for it to open.
+   */
+  onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
 
   // Search/replace input + filter state
   /** The current search term. */
@@ -264,6 +312,13 @@ export function Find({
   localizedStrings,
   scopeSelectorLocalizedStrings,
   searchResultLocalizedStrings,
+  projects,
+  selectedProjectId,
+  selectedScrollGroupId,
+  openTabs,
+  noOpenProjects,
+  onSelectProjectScrollGroup,
+  onOpenProjectInGroup,
   searchTerm,
   recentSearches,
   scope,
@@ -512,10 +567,44 @@ export function Find({
     swatchNew: localizedStrings['%webView_find_previewOptions_swatchNew%'],
   };
 
+  const sortedProjects = useMemo<ProjectSelectorProject[]>(
+    () =>
+      [...projects]
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
+        .map((project) => ({
+          id: project.id,
+          shortName: project.shortName,
+          fullName: project.fullName,
+        })),
+    [projects],
+  );
+
   return (
     <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
+        {/* Project selector — always visible; lets the user see and change which project Find
+            operates on (and, by extension, which open tab a result click will scroll). */}
+        <div data-testid="find-project-trigger">
+          <ProjectSelector
+            mode="projectScrollGroup"
+            projects={sortedProjects}
+            openTabs={openTabs}
+            selection={{ projectId: selectedProjectId, scrollGroupId: selectedScrollGroupId }}
+            onChangeSelection={({ projectId: nextId, scrollGroupId: nextScrollGroupId }) =>
+              onSelectProjectScrollGroup(nextId, nextScrollGroupId)
+            }
+            onOpenProjectInGroup={onOpenProjectInGroup}
+            buttonPlaceholder={localizedStrings['%webView_find_projectFilter_noOpenProjects%']}
+            commandEmptyMessage={localizedStrings['%webView_find_projectFilter_noProjectsFound%']}
+            ariaLabel={localizedStrings['%webView_find_projectFilter_projectsAndResources%']}
+            buttonVariant="outline"
+            buttonClassName="tw:w-full tw:font-normal"
+            popoverContentClassName="tw:w-[300px]"
+            alignDropDown="start"
+          />
+        </div>
+
         {/* Find/Replace mode toggle — hidden in simple interface mode, where replace is not offered
             and the panel is find-only. */}
         {!hideModeToggle && (
@@ -808,10 +897,13 @@ export function Find({
         onKeyDown={handleResultsKeyDown}
       >
         {/* Idle placeholder: no search has run yet (e.g. first open, or after clearing the search),
-            so the results region would otherwise be blank. */}
+            so the results region would otherwise be blank. When no project is open anywhere, that
+            takes priority over the generic prompt — there's nothing to search yet regardless. */}
         {results.length === 0 && searchStatus === undefined && (
           <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4 tw:text-center tw:text-sm tw:font-light tw:text-muted-foreground">
-            {localizedStrings['%webView_find_searchPrompt%']}
+            {noOpenProjects
+              ? localizedStrings['%webView_find_noOpenProjects_results%']
+              : localizedStrings['%webView_find_searchPrompt%']}
           </div>
         )}
         {(() => {

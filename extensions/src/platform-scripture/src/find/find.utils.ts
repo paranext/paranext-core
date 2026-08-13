@@ -2,7 +2,9 @@ import {
   escapeStringRegexp,
   isPlatformError,
   isSelectableInvisibleCharOrWhiteSpace,
+  normalizeProjectId,
   PlatformError,
+  ScrollGroupId,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
 import { FindOptions } from 'platform-scripture';
@@ -111,6 +113,76 @@ export function applyPreserveCase(matchedText: string, replacementText: string):
  */
 export function isSimpleInterfaceMode(interfaceMode: 'simple' | 'power' | PlatformError): boolean {
   return isPlatformError(interfaceMode) || interfaceMode !== 'power';
+}
+
+/** A currently open scripture-editor tab, as tracked by `useOpenProjectTabs`. */
+export type OpenScrollGroupTab = {
+  projectId: string;
+  scrollGroupId: ScrollGroupId;
+  webViewId: string;
+};
+
+/** A `(projectId, scrollGroupId)` pair Find's project selector has selected. */
+export type SelectedProjectScrollGroup = {
+  projectId: string;
+  scrollGroupId: ScrollGroupId;
+};
+
+/**
+ * Resolves which `(project, scroll group)` pair Find's project selector should have selected, given
+ * the currently open scripture-editor tabs. Restricting the picker to only open projects means the
+ * selection can go stale the moment a tab closes, so this is re-run whenever the set of open tabs
+ * changes.
+ *
+ * - Returns the current selection unchanged when its tab is still open.
+ * - Otherwise prefers another open tab of the SAME project — trying `preferredWebViewId` (the tab
+ *   that originally opened Find, so a reload/first mount resumes exactly where it was) before any
+ *   other tab of that project — since the project itself hasn't changed, only which tab a result
+ *   click targets.
+ * - Falls back to the first remaining open tab of any project once the current project has no open
+ *   tabs left at all.
+ * - Returns `undefined` when no tabs are open anywhere.
+ *
+ * @param currentProjectId Find's current project id.
+ * @param currentScrollGroupId The currently selected scroll group, or `undefined` before an initial
+ *   selection has been made.
+ * @param openTabs Currently open scripture-editor tabs.
+ * @param preferredWebViewId A tab id to prefer when resolving a same-project fallback (typically
+ *   the tab that originally opened Find).
+ */
+export function resolveSelectedProjectScrollGroup(
+  currentProjectId: string,
+  currentScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenScrollGroupTab[],
+  preferredWebViewId: string | undefined,
+): SelectedProjectScrollGroup | undefined {
+  const normalizedCurrentProjectId = normalizeProjectId(currentProjectId);
+  const matchesCurrentProject = (tab: OpenScrollGroupTab) =>
+    normalizeProjectId(tab.projectId) === normalizedCurrentProjectId;
+
+  if (
+    currentScrollGroupId !== undefined &&
+    openTabs.some((tab) => matchesCurrentProject(tab) && tab.scrollGroupId === currentScrollGroupId)
+  ) {
+    return { projectId: currentProjectId, scrollGroupId: currentScrollGroupId };
+  }
+
+  const preferredTab =
+    preferredWebViewId !== undefined
+      ? openTabs.find((tab) => tab.webViewId === preferredWebViewId && matchesCurrentProject(tab))
+      : undefined;
+  if (preferredTab) {
+    return { projectId: currentProjectId, scrollGroupId: preferredTab.scrollGroupId };
+  }
+
+  const sameProjectTab = openTabs.find(matchesCurrentProject);
+  if (sameProjectTab) {
+    return { projectId: currentProjectId, scrollGroupId: sameProjectTab.scrollGroupId };
+  }
+
+  const fallbackTab = openTabs[0];
+  if (!fallbackTab) return undefined;
+  return { projectId: fallbackTab.projectId, scrollGroupId: fallbackTab.scrollGroupId };
 }
 
 /**

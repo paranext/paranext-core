@@ -5,6 +5,8 @@ import {
   buildSearchRegex,
   CharacterCategorizer,
   isSimpleInterfaceMode,
+  OpenScrollGroupTab,
+  resolveSelectedProjectScrollGroup,
 } from './find.utils';
 
 /** Default character categorizer matching the project-settings defaults used in production */
@@ -360,5 +362,73 @@ describe('buildSearchRegex – trailing space', () => {
     );
     // "Abraham." ends the sentence — no space follows
     expect(matchAll(regex, 'the son of Abraham.')).toEqual([]);
+  });
+});
+
+describe('resolveSelectedProjectScrollGroup', () => {
+  const tab = (
+    projectId: string,
+    scrollGroupId: number,
+    webViewId: string,
+  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId });
+
+  it('keeps the current selection unchanged when its tab is still open', () => {
+    const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 1, 'wv-2')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 0,
+    });
+  });
+
+  it('matches the open tab case-insensitively against the current project id', () => {
+    const openTabs = [tab('proj-a', 0, 'wv-1')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 0,
+    });
+  });
+
+  it('falls back to another open tab of the same project when the current pair closed', () => {
+    const openTabs = [tab('PROJ-A', 1, 'wv-2')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 1,
+    });
+  });
+
+  it('prefers the tab matching preferredWebViewId over other tabs of the same project', () => {
+    const openTabs = [tab('PROJ-A', 1, 'wv-2'), tab('PROJ-A', 2, 'wv-3')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, 'wv-3')).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 2,
+    });
+  });
+
+  it('ignores preferredWebViewId when it belongs to a different project', () => {
+    const openTabs = [tab('PROJ-A', 1, 'wv-2'), tab('PROJ-B', 2, 'wv-3')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, 'wv-3')).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 1,
+    });
+  });
+
+  it('resolves an initial (undefined) scroll group by preferring preferredWebViewId', () => {
+    const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-A', 1, 'wv-2')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', undefined, openTabs, 'wv-2')).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 1,
+    });
+  });
+
+  it('falls back to a different project entirely once the current project has no open tabs', () => {
+    const openTabs = [tab('PROJ-B', 3, 'wv-9')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-B',
+      scrollGroupId: 3,
+    });
+  });
+
+  it('returns undefined when no tabs are open anywhere', () => {
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, [], undefined)).toBeUndefined();
   });
 });
