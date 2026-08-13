@@ -33,6 +33,29 @@ Every test must be capable of failing. Verify by:
 2. Run the test - it MUST fail
 3. If it passes without implementation, rewrite it
 
+**Reverting is not enough for two common shapes** (three instances found in one day, 2026-08-13,
+across the multi-window stack):
+
+- **A predicate the test never asks to reject.** Mutate the expression itself — `() => true`,
+  invert a comparison, delete a sort — and confirm RED. Six tests stayed green when a web-view
+  type predicate was replaced with `() => true`, because every test gave the non-matching windows
+  nothing to reject. Reject-side coverage is where this hides.
+- **A negative assertion with nothing to be a negative of.** `expect(log).not.toMatch(...)` passes
+  just as happily against output that never arrived. Assert a positive control first — something
+  proving the corpus could have matched.
+
+  **The control must be something the corpus could have seen, not merely something certain to
+  occur.** Certainty is the easy half and it is not the test. A line emitted before the capture
+  attached — or, for a sweep over a slice, before that slice's mark — proves nothing, however
+  reliably the app logs it. An app's startup logging is guaranteed to happen and is still invisible
+  to a capture that attaches once the app is already running, so a control chosen for being
+  unmissable can be absent from every run on every branch; whole-log sweeps are no safer than
+  slice-scoped ones here, since a capture created in the test body starts empty either way. Anchor
+  on something the test itself causes. The control may also need to differ per site: one taken
+  after a quit cannot control a sweep that runs before it.
+
+Both read as MORE rigorous than a weaker test would, which is why reading them never catches it.
+
 ## Test Quality (Not Enforceable by Lint)
 
 - Test behavior (WHAT), not implementation (HOW)

@@ -79,6 +79,26 @@ declare module 'shared/services/scroll-group.service-model' {
    */
   export const EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY: 'scrollGroup:onDidChangeReferenceHistory';
   /**
+   * `localStorage` key the scroll group state is persisted under: every group's Scripture reference.
+   *
+   * Named here rather than in the host because two processes spell it: main's host, which owns the
+   * store, and the renderer, whose one-time handover reads the copy left in its own `localStorage`
+   * from when a renderer held this state. Those are two different stores under one key name, and the
+   * handover only finds anything if the name stays identical in both.
+   *
+   * @experimental
+   */
+  export const SCR_REFS_STORAGE_KEY = 'scroll-group.service-host.scrRefs';
+  /**
+   * `localStorage` key the scroll group state is persisted under: the project whose versification
+   * each group's reference is expressed in. Spelled in two processes for the same reason as
+   * {@link SCR_REFS_STORAGE_KEY}.
+   *
+   * @experimental
+   */
+  export const SCR_REF_SOURCE_PROJECT_IDS_STORAGE_KEY =
+    'scroll-group.service-host.scrRefSourceProjectIds';
+  /**
    * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
    * means this should be synced with the scroll group sharing that number. If this value is an
    * object, that means it is an independent Scripture reference and should not be synced with any
@@ -138,6 +158,35 @@ declare module 'shared/services/scroll-group.service-model' {
     /** The new history state (a copy, safe to keep) */
     history: ReferenceHistory;
   };
+  /**
+   * Per-scroll-group values keyed by {@link ScrollGroupId}. Serialized as a plain object, so a group
+   * that has never been touched is simply absent rather than present-and-`undefined`.
+   *
+   * @experimental
+   */
+  export type ScrollGroupMap<T> = {
+    [scrollGroupId: ScrollGroupId]: T | undefined;
+  };
+  /**
+   * The scroll group state that survives an app restart: each group's Scripture reference and the
+   * project whose versification that reference is expressed in. Reference history is deliberately NOT
+   * here — it is session-only (see {@link ReferenceHistory}).
+   *
+   * @experimental
+   */
+  export type PersistedScrollGroupState = {
+    scrRefs: ScrollGroupMap<SerializedVerseRef>;
+    scrRefSourceProjectIds: ScrollGroupMap<string>;
+  };
+  /**
+   * The whole scroll group state at one instant, for a consumer that keeps a local cache of it and
+   * needs to (re)seed that cache in one round trip rather than asking per group.
+   *
+   * @experimental
+   */
+  export type ScrollGroupSnapshot = PersistedScrollGroupState & {
+    referenceHistories: ScrollGroupMap<ReferenceHistory>;
+  };
   /** Parts of the Scroll Group Service that are exposed through the network object */
   export interface IScrollGroupRemoteService {
     /**
@@ -147,6 +196,11 @@ declare module 'shared/services/scroll-group.service-model' {
      * NOTE: this returns the raw stored reference without versification conversion. If your consumer
      * displays or navigates in a specific project's versification, use {@link getScrRefForProject}
      * instead so mixed-versification projects land on the right verse.
+     *
+     * NOTE: a window's own synchronous writers move that window's UI before the host has answered, so
+     * a caller in another process can read a reference the window it is looking at has already left.
+     * The host's `onDidUpdateScrRef` is what everything converges on; subscribe to it rather than
+     * polling if you need to follow a group.
      *
      * @param scrollGroupId Scroll group whose Scripture reference to get. Defaults to 0
      * @returns Scripture reference associated with the provided scroll group, in its source project's
@@ -204,6 +258,52 @@ declare module 'shared/services/scroll-group.service-model' {
      */
     navigateReferenceHistory(scrollGroupId: ScrollGroupId, offset: number): Promise<boolean>;
   }
+  /**
+   * Scroll group operations that exist for the platform's own cache-keeping rather than for
+   * consumers. They are deliberately kept off {@link IScrollGroupService}, so `papi.scrollGroups` does
+   * not offer them.
+   *
+   * That is the whole guarantee, and it is a discoverability one rather than a privacy one: these
+   * ride on the same network object as {@link IScrollGroupRemoteService} under the same name, so any
+   * process that resolves the object itself can call them. That reachability is why they are
+   * `@experimental` on both surfaces (TSDoc here, `x-experimental` in the registration's OpenRPC
+   * document) rather than pretending to be private.
+   *
+   * @experimental
+   */
+  export interface IScrollGroupInternalService {
+    /**
+     * Get every scroll group's current reference, source project, and reference history at once, so a
+     * process keeping a local cache can (re)seed it in one round trip rather than one per group.
+     *
+     * @returns Copy of the whole scroll group state, safe to keep
+     * @experimental
+     */
+    getScrollGroupSnapshot(): Promise<ScrollGroupSnapshot>;
+    /**
+     * Hand over scroll group state persisted somewhere the host cannot read, so the host can adopt it
+     * into its own store. Idempotent: the first offer to be adopted wins and every later one is
+     * refused, so several callers offering their own copies cannot interleave into a mixture of
+     * them.
+     *
+     * Resolving is terminal for the caller either way: `true` means the state now lives in the host's
+     * store, `false` means the host already has state that beats the offer. In both cases the
+     * caller's copy is dead and should be discarded. A rejection means neither — the offer can be
+     * made again.
+     *
+     * @param state Previously persisted scroll group state
+     * @returns `true` if the offer was adopted, `false` if it was refused
+     * @experimental
+     */
+    migrateStoredScrollGroupState(state: PersistedScrollGroupState): Promise<boolean>;
+  }
+  /**
+   * Everything the scroll group service host registers on its network object: what consumers call
+   * plus the platform's own cache-keeping operations.
+   *
+   * @experimental
+   */
+  export type IScrollGroupHostService = IScrollGroupRemoteService & IScrollGroupInternalService;
   /**
    *
    * Provides functions related to scroll groups and Scripture references at those scroll groups
@@ -2558,6 +2658,22 @@ declare module 'shared/services/network-object.service' {
   /** Sets up the service. Only runs once and always returns the same promise after that */
   const initialize: () => Promise<void>;
   /**
+   * The request type one method of a network object is served under.
+   *
+   * This module decides that format, so anything that has to name a single method of a network object
+   * from the outside — attaching a custom request timeout to it, for instance — derives the name here
+   * rather than spelling it a second time somewhere a change to the format would never reach.
+   *
+   * @param networkObjectId ID the network object was registered under
+   * @param methodName Method on that object to name
+   * @returns The request type that method's calls travel on
+   * @experimental This export is unstable and may change shape or disappear without notice
+   */
+  export const getNetworkObjectMethodRequestType: (
+    networkObjectId: string,
+    methodName: string,
+  ) => `${string}:${string}`;
+  /**
    * Search locally known network objects for the given ID. Don't look on the network for more
    * objects.
    *
@@ -3970,7 +4086,6 @@ declare module 'shared/services/web-view.service-model' {
     WebViewType,
   } from 'shared/models/web-view.model';
   import { Layout } from 'shared/models/docking-framework.model';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   import { PlatformEvent } from 'platform-bible-utils';
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
   import { NetworkObject } from 'shared/models/network-object.model';
@@ -4145,46 +4260,6 @@ declare module 'shared/services/web-view.service-model' {
     webView: SavedWebViewDefinition;
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
-  /**
-   * Command names that are hosted by the renderer process and need to be registered with
-   * window-scoped suffixes in a multi-window setup. The main process registers service routers under
-   * the generic names that forward to the focused window's scoped handler.
-   *
-   * @experimental
-   */
-  export const RENDERER_HOSTED_COMMAND_NAMES: readonly [
-    'platform.about',
-    'platform.openSettings',
-    'platform.openProjectSettings',
-    'platform.openUserSettings',
-    'platform.usersnapSubmitIdea',
-    'platform.usersnapReportIssue',
-    'platform.isUsersnapFormCurrentlyOpen',
-    'platform.closeOpenUsersnapForm',
-    'platform.goToNextChapter',
-    'platform.goToPreviousChapter',
-    'platform.goToNextBook',
-    'platform.goToPreviousBook',
-    'platform.goToNextVerse',
-    'platform.goToPreviousVerse',
-    'platform.openBookChapterControl',
-    'platform.navigateLeftInReferenceHistory',
-    'platform.navigateRightInReferenceHistory',
-  ];
-  /**
-   * OpenRPC documentation for renderer-hosted commands, keyed by the generic (unscoped) command name.
-   *
-   * The documentation belongs to the generic name because that is the command consumers call; the
-   * window-scoped names the renderers actually register under (e.g. `platform.goToNextChapter-1`) are
-   * an implementation detail of multi-window routing and are deliberately left undocumented. The main
-   * process attaches these when it registers the service routers.
-   *
-   * @experimental
-   */
-  export const RENDERER_HOSTED_COMMAND_DOCS: Record<
-    (typeof RENDERER_HOSTED_COMMAND_NAMES)[number],
-    SingleMethodDocumentation
-  >;
 }
 declare module 'shared/models/web-view-provider.model' {
   import {
@@ -4683,28 +4758,34 @@ declare module 'papi-shared-types' {
     /**
      * Navigate the reference history in the physical "left" direction. Acts on the same scroll
      * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
-     * and the on-screen history buttons can never disagree. The renderer resolves the physical
-     * direction to a logical one for the current UI layout direction: left = back in LTR, forward
-     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
-     * dispatches this directly so it never needs to know the UI direction or the active scroll
-     * group.
+     * and the on-screen history buttons can never disagree. The window supplies its UI layout
+     * direction and the physical direction is resolved to a logical one against it: left = back in
+     * LTR, forward in RTL (the pair swaps, physical-direction preserving). The main-process
+     * keyboard handler dispatches this directly so it never needs to know the UI direction or the
+     * active scroll group.
      *
      * @returns `true` if navigation happened; `false` when there is no history in that direction or
      *   the active web view has no scroll group (a detached ref)
+     * @throws If there is no window to navigate in, or the window could not say what to navigate.
+     *   `false` reports only that there was nowhere to move to, never that the command could not be
+     *   run.
      * @experimental
      */
     'platform.navigateLeftInReferenceHistory': () => Promise<boolean>;
     /**
      * Navigate the reference history in the physical "right" direction. Acts on the same scroll
      * group the top toolbar follows (the active web view's scroll group), so a keyboard shortcut
-     * and the on-screen history buttons can never disagree. The renderer resolves the physical
-     * direction to a logical one for the current UI layout direction: right = forward in LTR, back
-     * in RTL (the pair swaps, physical-direction preserving). The main-process keyboard handler
-     * dispatches this directly so it never needs to know the UI direction or the active scroll
-     * group.
+     * and the on-screen history buttons can never disagree. The window supplies its UI layout
+     * direction and the physical direction is resolved to a logical one against it: right = forward
+     * in LTR, back in RTL (the pair swaps, physical-direction preserving). The main-process
+     * keyboard handler dispatches this directly so it never needs to know the UI direction or the
+     * active scroll group.
      *
      * @returns `true` if navigation happened; `false` when there is no history in that direction or
      *   the active web view has no scroll group (a detached ref)
+     * @throws If there is no window to navigate in, or the window could not say what to navigate.
+     *   `false` reports only that there was nowhere to move to, never that the command could not be
+     *   run.
      * @experimental
      */
     'platform.navigateRightInReferenceHistory': () => Promise<boolean>;
@@ -7610,26 +7691,6 @@ declare module 'shared/services/dialog.service-model' {
   }
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';
-  /**
-   * Exhaustiveness gate. A `DialogService` method missing here is a compile error naming it, which is
-   * what forces this list to keep up: without an entry the method gets no scoped registration and no
-   * routing proxy, and the startup assertion cannot see the gap because it only iterates the list. A
-   * method that is deliberately NOT renderer-hosted belongs here with a comment saying so, rather
-   * than being left out silently.
-   */
-  const RENDERER_HOSTED_DIALOG_REQUEST_NAME_SET: {
-    readonly showDialog: true;
-    readonly selectProject: true;
-    readonly showAboutDialog: true;
-  };
-  /**
-   * Dialog requests served by the renderer process. A dialog belongs to the window the user is
-   * working in, so each renderer registers these under window-scoped names and the main process
-   * registers service routers under the generic names that forward to the focused window.
-   *
-   * @experimental
-   */
-  export const RENDERER_HOSTED_DIALOG_REQUEST_NAMES: (keyof typeof RENDERER_HOSTED_DIALOG_REQUEST_NAME_SET)[];
 }
 declare module 'shared/services/dialog.service' {
   import { DialogService } from 'shared/services/dialog.service-model';
@@ -8521,7 +8582,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   export const useData: UseDataHook;
   export default useData;
 }
-declare module 'renderer/services/reference-history.util' {
+declare module 'shared/services/reference-history.util' {
   import {
     ReferenceHistory,
     ReferenceHistoryEntry,
@@ -8529,9 +8590,15 @@ declare module 'renderer/services/reference-history.util' {
   /**
    * Maximum number of entries a scroll group's history keeps in total, counting the current location
    * (matches Paratext 9). The back stack therefore holds at most this many minus one.
+   *
+   * @experimental
    */
   export const REFERENCE_HISTORY_MAX_DEPTH = 20;
-  /** Create a new, empty reference history */
+  /**
+   * Create a new, empty reference history
+   *
+   * @experimental
+   */
   export function createEmptyReferenceHistory(): ReferenceHistory;
   /**
    * Record a navigation to `entry` in `history` (mutates `history`). Matches Paratext 9
@@ -8539,6 +8606,8 @@ declare module 'renderer/services/reference-history.util' {
    * current entry in place (preserving the forward stack); a genuinely new chapter pushes the old
    * current onto the back stack, clears the forward stack, caps same-book runs, and trims to
    * {@link REFERENCE_HISTORY_MAX_DEPTH} total entries.
+   *
+   * @experimental
    */
   export function recordNavigation(history: ReferenceHistory, entry: ReferenceHistoryEntry): void;
   /**
@@ -8549,42 +8618,155 @@ declare module 'renderer/services/reference-history.util' {
    *
    * @returns The destination entry (the new current), or `undefined` (history unchanged) when
    *   `offset` is 0, non-integer, or out of range
+   * @experimental
    */
   export function navigateHistory(
     history: ReferenceHistory,
     offset: number,
   ): ReferenceHistoryEntry | undefined;
 }
-declare module 'renderer/services/name-taken-error.util' {
+declare module 'shared/data/platform.data' {
   /**
-   * Whether a failure to register something under a name says that the name is already taken, as
-   * opposed to saying that the registration itself went wrong.
-   *
-   * The app-global service hosts (the theme engine, the scroll group service) let every window race
-   * for the same name and treat losing as the routine outcome. That is only true for this one kind of
-   * failure: a request that timed out, an object that already carried an `onDidDispose`, or a network
-   * service that has already shut down all arrive at the same `catch` and would otherwise be reported
-   * as the expected result at a severity nothing reads.
-   *
-   * Recognized by message text because that is all the throw sites give — see
-   * {@link NAME_TAKEN_MESSAGES} for which text and why each one means what it does. Erring towards
-   * "not taken" only ever adds a warning to a step-aside that still happens; erring the other way
-   * would report a real failure as the routine outcome, so the list is deliberately exact rather than
-   * generous.
+   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
+   * Platform.Bible core
+   */
+  export const PLATFORM_NAMESPACE = 'platform';
+  /** Query parameter passed to the renderer. Determines which log level to use */
+  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
+  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
+  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
+  /**
+   * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
    *
    * @experimental
    */
-  export function isNameTakenError(errorMessage: string): boolean;
-  export default isNameTakenError;
+  export const WINDOW_ID = 'windowId';
+  /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
+  export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
+  /**
+   * Query parameter key used to pass the serialized scroll group state main holds at the moment a
+   * window is created, so that window's synchronous readers are right on its first render instead of
+   * showing the default reference until a round trip returns.
+   *
+   * Absent when main has nothing to pass — a profile that has never navigated, or one whose state is
+   * still only in a renderer's own store awaiting its one-time handover. A renderer that does not
+   * find it falls back to what it can read for itself, and then to the default.
+   *
+   * @experimental
+   */
+  export const SCROLL_GROUP_STATE_QUERY_PARAMETER = 'scrollGroupState';
+  /**
+   * Query parameter key used to pass the serialized current theme main holds at the moment a window
+   * is created, so that window paints its first frame — and bakes its web views' stylesheets — with
+   * the theme the app is actually on instead of the default followed by a flash.
+   *
+   * Absent when main has nothing to pass — a profile that has never chosen a theme, or one whose
+   * theme is still only in a renderer's own store awaiting its one-time handover. A renderer that
+   * does not find it falls back to what it can read for itself, and then to the default.
+   *
+   * @experimental
+   */
+  export const THEME_STATE_QUERY_PARAMETER = 'themeState';
+  /** How a query parameter's text maps to the value the app uses. */
+  type UrlParameterKind = 'flag' | 'integer' | 'enum' | 'serialized';
+  /** What a reader needs to turn one query parameter's text into a value it can trust. */
+  type UrlParameterSpec = {
+    kind: UrlParameterKind;
+    default?: string;
+    allowed?: readonly string[];
+  };
+  /**
+   * Every query parameter passed to a renderer, keyed by its parameter name, and what its text means:
+   * a `flag` is present-or-absent (any value, including none, means true), an `integer` or `enum` is
+   * a single value read at face value, and `serialized` is the output of platform-bible-utils'
+   * `serialize`, opaque to this table.
+   *
+   * Declarative on purpose, not a table of encode/decode functions: this module is import-free so the
+   * `ts-node` startup-waterfall CLI can read it without pulling in the logger, and codec functions
+   * would need `serialize`/`deserialize` from platform-bible-utils, a runtime import. `deserialize`
+   * returns `any`, so a `serialized` entry is exactly as much of an unchecked cast at its read site
+   * as an `enum` one — the table exists so both kinds of drift are visible in the same place instead
+   * of only the ones a linter happens to flag.
+   *
+   * @experimental
+   */
+  export const URL_PARAMETERS: Readonly<Record<string, UrlParameterSpec>>;
+  /**
+   * Prefix that identifies a startup timing mark in the logs (see
+   * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
+   * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without
+   * dragging in logger side effects. Keep identical to the C# emitter (`StartupTiming`).
+   */
+  export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
+  /**
+   * Name of the mark each process emits first, right after start. The main process's copy is the
+   * run-boundary the startup-waterfall parser uses to slice a multi-launch log down to the latest run
+   * (see `.erb/scripts/startup-waterfall.util.ts`'s `selectLatestRun`). Emitters: `src/main/main.ts`
+   * and `src/extension-host/extension-host.ts`.
+   */
+  export const STARTUP_MARK_PROCESS_START = 'process-start';
+  /**
+   * Process tag (the `<proc>` field of a mark) of the main process - the value of `ProcessType.Main`.
+   * Lives here as a bare literal (not `ProcessType.Main`) so the import-free startup-waterfall CLI
+   * can identify the run boundary without importing `global-this.model` (which pulls in React and
+   * aliases the CLI can't resolve). Keep in sync with `ProcessType.Main` in
+   * `src/shared/global-this.model.ts`.
+   */
+  export const STARTUP_MARK_MAIN_PROCESS_TAG = 'main';
+  /** ID of the default theme family for use in the application */
+  export const DEFAULT_THEME_FAMILY = '';
+  /** Type of the default theme for use in the application */
+  export const DEFAULT_THEME_TYPE = 'light';
+  /** Constants related to zoom factor of entire application */
+  export const DEFAULT_ZOOM_FACTOR = 1;
+  export const MIN_ZOOM_FACTOR = 0.5;
+  export const MAX_ZOOM_FACTOR = 3;
+  /**
+   * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
+   * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
+   * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
+   * deliberately long.
+   *
+   * Consumed by the main process (`shutdown-tasks.ts`), which uses it to bound how long app shutdown
+   * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
+   * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
+   * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
+   * when the backend says so rather than on a renderer-side timer.
+   *
+   * @experimental
+   */
+  export const AUTO_SYNC_MAX_DURATION_MS: number;
 }
-declare module 'renderer/services/scroll-group.service-host' {
+declare module 'renderer/services/window-creation-state.util' {
+  /**
+   * Record the state this window now holds under the query parameter main created it with, so a
+   * reload of this document seeds from it rather than from the state the window was created with.
+   *
+   * Call from wherever the cache is updated — by the host's events, and by a locally predicted write.
+   *
+   * Written straight through rather than coalesced the way the host's store is: this is a
+   * same-document history entry, not an fsync, and not on the event loop the whole app's JSON-RPC
+   * traffic shares. It is skipped when the query already says this, which is what keeps a predicted
+   * write and the host's echo of it from writing twice, and a run of changes that really are
+   * different (dragging a colour picker through a user theme) costs one serialize and one
+   * `replaceState` per change in each window — the same order as re-rendering the change itself.
+   *
+   * @param parameterName Query parameter main passes this state on, e.g.
+   *   `SCROLL_GROUP_STATE_QUERY_PARAMETER`
+   * @param state State to serialize into that parameter
+   * @experimental
+   */
+  export function refreshWindowCreationState(parameterName: string, state: unknown): void;
+}
+declare module 'renderer/services/scroll-group.service' {
   import {
+    IScrollGroupService,
     ReferenceHistory,
     ReferenceHistoryUpdateInfo,
     ScrollGroupUpdateInfo,
   } from 'shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
-  import { type PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
+  import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   /**
    * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
    * placeholder and will be refactored significantly in
@@ -8599,6 +8781,65 @@ declare module 'renderer/services/scroll-group.service-host' {
    * frame change from a verse change.
    */
   export const onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+  /** Event that emits when a scroll group's reference history changes */
+  export const onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
+  /** See {@link IScrollGroupRemoteService.getScrRef} */
+  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
+  /**
+   * Get the id of the project whose versification the scroll group's `scrRef` is expressed in.
+   *
+   * @param scrollGroupId Scroll group whose source project id to read. If `undefined`, defaults to 0
+   * @returns The source project id, or `undefined` when the source frame is unknown — e.g. the group
+   *   was never set with a source, or its ref came from an external writer whose versification is not
+   *   known
+   */
+  export function getScrRefSourceProjectIdSync(scrollGroupId?: ScrollGroupId): string | undefined;
+  /** See {@link IScrollGroupRemoteService.getReferenceHistory} */
+  export function getReferenceHistorySync(scrollGroupId?: ScrollGroupId): ReferenceHistory;
+  /**
+   * See {@link IScrollGroupRemoteService.setScrRef}
+   *
+   * Predicts the host's answer from this window's copy and returns it immediately, so a caller that
+   * branches on "did it change" (e.g. `use-scroll-group-scr-ref.hook.ts`) does not have to await. The
+   * prediction can only be wrong while a change from another window is still in flight — the same
+   * instant-race the single host has always resolved by arrival order — and the loser converges on
+   * the host's next event either way.
+   *
+   * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
+   *   unknown / canonical English.
+   */
+  export function setScrRefSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    scrRef: SerializedVerseRef,
+    sourceProjectId?: string,
+  ): boolean;
+  /**
+   * See {@link IScrollGroupRemoteService.navigateReferenceHistory}
+   *
+   * Predicted from this window's copy of the history the same way {@link setScrRefSync} predicts a
+   * reference change, so the back/forward buttons move the moment they are clicked. The host runs the
+   * same navigation against the authoritative history and announces the result; if it declines the
+   * move — its history is not where this window thought it was — the group is resynced from it.
+   */
+  export function navigateReferenceHistorySync(
+    scrollGroupId: ScrollGroupId | undefined,
+    offset: number,
+  ): boolean;
+  /**
+   * Navigate a scroll group's reference history in a PHYSICAL direction (`'left'` / `'right'`),
+   * resolving it to a logical back/forward for the current UI layout direction (RTL swaps the pair,
+   * via {@link resolveReferenceHistoryDirection}). Backs the top toolbar's history buttons, which know
+   * which way the user pointed rather than which way that is through the history.
+   *
+   * The mapping is made here because layout direction is renderer state: `readDirection` reads the
+   * document, which only this process has. The host exposes logical back/forward only. The
+   * `platform.navigateLeft/RightInReferenceHistory` commands make the same mapping in the main
+   * process, from the layout direction the window reports in its navigation context.
+   */
+  export function navigateReferenceHistoryPhysicalSync(
+    scrollGroupId: ScrollGroupId | undefined,
+    physicalDirection: 'left' | 'right',
+  ): boolean;
   /**
    * Event that emits when a tracked project's versification changes mid-session (see
    * {@link ensureVersificationSubscribed}). Does NOT emit for the initial subscription load — only for
@@ -8607,37 +8848,6 @@ declare module 'renderer/services/scroll-group.service-host' {
   export const onDidChangeVersification: PlatformEvent<{
     projectId: string;
   }>;
-  /** Event that emits when a scroll group's reference history changes */
-  export const onDidChangeReferenceHistory: PlatformEvent<ReferenceHistoryUpdateInfo>;
-  /** See {@link IScrollGroupRemoteService.getReferenceHistory} */
-  export function getReferenceHistorySync(scrollGroupId?: ScrollGroupId): ReferenceHistory;
-  /** See {@link IScrollGroupRemoteService.navigateReferenceHistory} */
-  export function navigateReferenceHistorySync(
-    scrollGroupId: ScrollGroupId | undefined,
-    offset: number,
-  ): boolean;
-  /**
-   * Navigate a scroll group's reference history in a PHYSICAL direction (`'left'` / `'right'`),
-   * resolving it to a logical back/forward for the current UI layout direction (RTL swaps the pair,
-   * via {@link resolveReferenceHistoryDirection}). Backs the `navigateLeft/RightInReferenceHistory`
-   * commands so the main-process keyboard handler can dispatch the physical key directly and stay
-   * direction-agnostic.
-   */
-  export function navigateReferenceHistoryPhysicalSync(
-    scrollGroupId: ScrollGroupId | undefined,
-    physicalDirection: 'left' | 'right',
-  ): boolean;
-  /** See {@link IScrollGroupRemoteService.getScrRef} */
-  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
-  /**
-   * Get the id of the project whose versification the scroll group's stored `scrRef` is expressed in.
-   *
-   * @param scrollGroupId Scroll group whose source project id to read. If `undefined`, defaults to 0
-   * @returns The source project id, or `undefined` when the source frame is unknown — e.g. the group
-   *   was never set with a source, or its ref came from an external writer whose versification is not
-   *   known
-   */
-  export function getScrRefSourceProjectIdSync(scrollGroupId?: ScrollGroupId): string | undefined;
   /**
    * Synchronous, best-effort companion to {@link getScrRefForProject}: returns the already-computed
    * conversion into `projectId`'s versification if one is cached, otherwise the raw stored reference.
@@ -8659,11 +8869,15 @@ declare module 'renderer/services/scroll-group.service-host' {
    *
    * The group stores its reference in the versification of whichever project last set it (see
    * {@link getScrRefSourceProjectIdSync}); this resolves that frame and converts to `projectId`'s
-   * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer —
-   * in any process — gets a reference it can use directly. Returns the raw stored reference unchanged
-   * when no conversion is needed: the source frame is unknown, or already matches `projectId`. On any
-   * conversion failure it falls back to the raw reference (and does not permanently suppress the
-   * project — the failure may be transient).
+   * versification via the `platformScripture.mapVerseRefBetweenProjects` command, so every consumer
+   * gets a reference it can use directly. Returns the raw reference unchanged when no conversion is
+   * needed: the source frame is unknown, or already matches `projectId`. On any conversion failure it
+   * falls back to the raw reference (and does not permanently suppress the project — the failure may
+   * be transient).
+   *
+   * Converts the reference this window currently holds, so a conversion started right after a
+   * predicted navigation describes the verse actually on screen rather than one the host has not
+   * caught up to yet.
    *
    * @param scrollGroupId Scroll group whose reference to convert. If `undefined`, defaults to 0
    * @param projectId Project into whose versification to convert the reference
@@ -8674,31 +8888,35 @@ declare module 'renderer/services/scroll-group.service-host' {
     projectId: string,
   ): Promise<SerializedVerseRef>;
   /**
-   * See {@link IScrollGroupRemoteService.setScrRef}
+   * Start this window's scroll group service: subscribe to the host's announcements, hand over any
+   * state stored before the host existed, then seed from the host.
    *
-   * The user-facing setter: writes the ref (via {@link writeScrRef}) AND records the change in the
-   * scroll group's reference history. Reference-history navigation itself does NOT go through here —
-   * it calls {@link writeScrRef} directly, since its stacks already reflect the move.
+   * Subscribing first so a change made while the rest is in flight is not lost, and handing over
+   * before seeding so the first seed after an upgrade carries the reference the user left off at.
    *
-   * @param sourceProjectId Project whose versification `scrRef` is expressed in. `undefined` =
-   *   unknown / canonical English.
-   */
-  export function setScrRefSync(
-    scrollGroupId: ScrollGroupId | undefined,
-    scrRef: SerializedVerseRef,
-    sourceProjectId?: string,
-  ): boolean;
-  /**
-   * Register the network object that backs the scroll group service.
+   * Nothing here is allowed to fail this window's startup. The cache is already usable — it was
+   * filled from what came with the window before React rendered, and the subscription above keeps it
+   * current — so a host that is slow or missing costs freshness, not correctness, and must not take
+   * down the unrelated services that start alongside this one. Until the seed succeeds every write is
+   * sent to the host regardless of what the cache predicts (see {@link setScrRefSync}), which is what
+   * keeps a never-seeded window honest.
    *
-   * The reference-history navigation commands are NOT registered here: the physical left/right
-   * keyboard commands (`platform.navigateLeft/RightInReferenceHistory`) live in
-   * `scroll-group-navigation.commands.ts` (they resolve the active toolbar scroll group, which needs
-   * the window service this state module deliberately does not import). Programmatic offset
-   * navigation is exposed through this network object's `navigateReferenceHistory` method below
-   * rather than a duplicate command.
+   * Call once at renderer startup.
    */
   export function startScrollGroupService(): Promise<void>;
+  /**
+   * This window's scroll group service — what `papi.scrollGroups` resolves to in the renderer.
+   *
+   * Deliberately NOT the shared network proxy: inside one window there is one answer about where a
+   * scroll group is, and it is this module's. A web view holds both this and the hooks (`window.papi`
+   * comes from the window that hosts it), so serving the two from different places would let
+   * `papi.scrollGroups.getScrRef` report a verse the same web view's own UI has already moved away
+   * from, for as long as a predicted write is in flight. Other processes read the host directly,
+   * which is the authority both of these agree with.
+   *
+   * @experimental
+   */
+  export const rendererScrollGroupService: IScrollGroupService;
 }
 declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
@@ -8751,70 +8969,6 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
     sourceProjectId: string | undefined,
   ];
   export default useScrollGroupScrRef;
-}
-declare module 'shared/data/platform.data' {
-  /**
-   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
-   * Platform.Bible core
-   */
-  export const PLATFORM_NAMESPACE = 'platform';
-  /** Query parameter passed to the renderer. Determines which log level to use */
-  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
-  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
-  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
-  /**
-   * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
-   *
-   * @experimental
-   */
-  export const WINDOW_ID = 'windowId';
-  /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
-  export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
-  /**
-   * Prefix that identifies a startup timing mark in the logs (see
-   * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
-   * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without
-   * dragging in logger side effects. Keep identical to the C# emitter (`StartupTiming`).
-   */
-  export const STARTUP_MARK_PREFIX = 'STARTUP_MARK';
-  /**
-   * Name of the mark each process emits first, right after start. The main process's copy is the
-   * run-boundary the startup-waterfall parser uses to slice a multi-launch log down to the latest run
-   * (see `.erb/scripts/startup-waterfall.util.ts`'s `selectLatestRun`). Emitters: `src/main/main.ts`
-   * and `src/extension-host/extension-host.ts`.
-   */
-  export const STARTUP_MARK_PROCESS_START = 'process-start';
-  /**
-   * Process tag (the `<proc>` field of a mark) of the main process - the value of `ProcessType.Main`.
-   * Lives here as a bare literal (not `ProcessType.Main`) so the import-free startup-waterfall CLI
-   * can identify the run boundary without importing `global-this.model` (which pulls in React and
-   * aliases the CLI can't resolve). Keep in sync with `ProcessType.Main` in
-   * `src/shared/global-this.model.ts`.
-   */
-  export const STARTUP_MARK_MAIN_PROCESS_TAG = 'main';
-  /** ID of the default theme family for use in the application */
-  export const DEFAULT_THEME_FAMILY = '';
-  /** Type of the default theme for use in the application */
-  export const DEFAULT_THEME_TYPE = 'light';
-  /** Constants related to zoom factor of entire application */
-  export const DEFAULT_ZOOM_FACTOR = 1;
-  export const MIN_ZOOM_FACTOR = 0.5;
-  export const MAX_ZOOM_FACTOR = 3;
-  /**
-   * Upper bound (10 minutes) on how long a single app-driven ("automatic") Send/Receive is allowed to
-   * run — one the app starts itself rather than the user driving it from the Send/Receive dialog
-   * (which has its own progress and Cancel). A sync of a large repo can run for minutes, so this is
-   * deliberately long.
-   *
-   * Consumed by the main process (`shutdown-tasks.ts`), which uses it to bound how long app shutdown
-   * waits on its final sync. It also conceptually matches the C# write gate's stall watchdog, which
-   * bounds the same "one automatic Send/Receive" window. The renderer does not time blocking locally
-   * — it reads the backend write gate's snapshot (`auto-sync-blocking-store.ts`), so blocking clears
-   * when the backend says so rather than on a renderer-side timer.
-   *
-   * @experimental
-   */
-  export const AUTO_SYNC_MAX_DURATION_MS: number;
 }
 declare module 'shared/log-error.model' {
   /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
@@ -10636,6 +10790,100 @@ declare module 'shared/services/project-settings.service-model' {
     [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
   };
 }
+declare module 'shared/services/theme-data.service-model' {
+  import {
+    OnDidDispose,
+    UnsubscriberAsync,
+    PlatformError,
+    ThemeFamiliesByIdExpanded,
+  } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  /**
+   *
+   * This name is used to register the theme data data provider on the papi. You can use this name
+   * to find the data provider when accessing it using the useData hook
+   */
+  export const themeDataServiceProviderName = 'platform.themeDataServiceDataProvider';
+  export const themeDataServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the theme data data provider on the papi. You can use this name
+     * to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.themeDataServiceDataProvider';
+  }>;
+  /**
+   * Data types this data provider serves
+   *
+   * @experimental
+   */
+  export type ThemeDataDataTypes = {
+    AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [themeDataServiceProviderName]: IThemeDataService;
+    }
+  }
+  /**
+   * Service that provides aggregated theme contributions from the platform and extensions. Serves
+   * theme contribution info to the theme service
+   *
+   * @experimental
+   */
+  export type IThemeDataService = {
+    /**
+     *
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
+    /**
+     *
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide themes in contributions
+     */
+    setAllThemes(
+      selector: undefined,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataDataTypes>>;
+    /**
+     * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
+     * callback function is executed.
+     *
+     * @param selector `undefined`
+     * @param callback The function that will be called when a theme is added/updated/removed. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribeAllThemes(
+      selector: undefined,
+      callback: (allThemes: ThemeFamiliesByIdExpanded | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof themeDataServiceObjectToProxy &
+    IDataProvider<ThemeDataDataTypes>;
+}
 declare module 'shared/services/window.service-model' {
   import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
   import {
@@ -10902,6 +11150,10 @@ declare module '@papi/core' {
   } from 'shared/services/scroll-group.service-model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type {
+    IThemeDataService,
+    ThemeDataDataTypes,
+  } from 'shared/services/theme-data.service-model';
+  export type {
     FocusSubject,
     SetFocusSubject,
     SetFocusSpecifier,
@@ -11114,6 +11366,31 @@ declare module 'shared/services/theme.service-model' {
    */
   export const USER_THEME_FAMILY_PREFIX = 'user-';
   /**
+   * `localStorage` key the current application theme is persisted under.
+   *
+   * Named here rather than in the host because two processes spell it: main's host, which owns the
+   * store, and the renderer, whose one-time handover reads the copy left in its own `localStorage`
+   * from when a renderer held this state. Those are two different stores under one key name, and the
+   * handover only finds anything if the name stays identical in both.
+   *
+   * @experimental
+   */
+  export const CURRENT_THEME_STORAGE_KEY = 'theme.service-host.currentTheme';
+  /**
+   * `localStorage` key the setting for matching the system-wide light/dark theme is persisted under.
+   * Spelled in two processes for the same reason as {@link CURRENT_THEME_STORAGE_KEY}.
+   *
+   * @experimental
+   */
+  export const SHOULD_MATCH_SYSTEM_STORAGE_KEY = 'theme.service-host.shouldMatchSystem';
+  /**
+   * `localStorage` key the user-defined theme families are persisted under. Spelled in two processes
+   * for the same reason as {@link CURRENT_THEME_STORAGE_KEY}.
+   *
+   * @experimental
+   */
+  export const USER_THEMES_STORAGE_KEY = 'theme.service-host.userThemes';
+  /**
    *
    * This name is used to register the theme service data provider on the papi. You can use this
    * name to find the data provider when accessing it using the useData hook
@@ -11146,6 +11423,22 @@ declare module 'shared/services/theme.service-model' {
      * `shouldMatchSystem` to false
      */
     type?: string;
+  };
+  /**
+   * The theme state that survives an app restart: the current theme, whether the theme type follows
+   * the system-wide light/dark setting, and the user-defined theme families. Every member is optional
+   * because this describes what a store happened to hold, and a store that predates the theme service
+   * host can be missing any of them.
+   *
+   * @experimental
+   */
+  export type PersistedThemeState = {
+    /** The current application theme, or `undefined` if none was stored */
+    currentTheme?: ThemeDefinitionExpanded;
+    /** Whether the theme type follows the system-wide theme, or `undefined` if none was stored */
+    shouldMatchSystem?: boolean;
+    /** The user-defined theme families, or `undefined` if none were stored */
+    userThemes?: ThemeFamiliesById;
   };
   /** ThemeDataTypes handles getting and setting the application theme. */
   export type ThemeDataTypes = {
@@ -11378,31 +11671,41 @@ declare module 'shared/services/theme.service-model' {
     getCurrentThemeSync(): ThemeDefinitionExpanded;
   };
   /**
-   * Build a `subscribeCurrentTheme` that follows the theme engine when it moves to another window.
+   * Theme operations that exist for the platform's own state-keeping rather than for consumers. They
+   * are deliberately kept off {@link IThemeService}, so `papi.themes` does not offer them.
    *
-   * The theme is app-global, so exactly one window hosts its engine and every other process consumes
-   * it as a remote data provider. A data provider subscription re-fetches the data through the
-   * provider object it was created with, and the provider pointing at a window is revoked when that
-   * window closes. The update events themselves keep arriving — they travel on a network event named
-   * after the provider, which the window that takes the engine over publishes under that same name —
-   * so a subscription made before the handover would report the revoked provider's failure on every
-   * theme change and never deliver another theme.
+   * That is the whole guarantee, and it is a discoverability one rather than a privacy one: these
+   * ride on the same data provider as {@link IThemeService} under the same name, so any process that
+   * resolves the provider itself can call them. That reachability is why they are `@experimental` on
+   * both surfaces (TSDoc here, `x-experimental` in the registration's OpenRPC document) rather than
+   * pretending to be private.
    *
-   * Subscribing again through `getThemeProvider` when the provider is disposed hands the subscription
-   * to whichever window hosts the engine now. The subscription to the departed provider is dropped
-   * first, since it would otherwise go on failing on every change. The replacement retrieves the
-   * current theme immediately whatever the caller asked for, because the theme can change during the
-   * handover and no event this subscriber can still hear would report it.
-   *
-   * @param getThemeProvider Resolves the theme provider this process should be talking to right now.
-   *   Must resolve the window hosting the engine now rather than a remembered one — both theme
-   *   service facades re-arm their cached resolution when the provider they hold is disposed.
-   * @returns `subscribeCurrentTheme` for a theme service facade to serve in place of the provider's
    * @experimental
    */
-  export function createReattachingSubscribeCurrentTheme(
-    getThemeProvider: () => Promise<IThemeService>,
-  ): IThemeService['subscribeCurrentTheme'];
+  export interface IThemeServiceInternal {
+    /**
+     * Hand over theme state persisted somewhere the host cannot read, so the host can adopt it into
+     * its own store. Idempotent: the first offer to be adopted wins and every later one is refused,
+     * so several callers offering their own copies cannot interleave into a mixture of them.
+     *
+     * Resolving is terminal for the caller either way: `true` means the state now lives in the host's
+     * store, `false` means the host already has state that beats the offer (or the offer carried
+     * nothing usable). In both cases the caller's copy is dead and should be discarded. A rejection
+     * means neither — the offer can be made again.
+     *
+     * @param state Previously persisted theme state
+     * @returns `true` if the offer was adopted, `false` if it was refused
+     * @experimental
+     */
+    migrateStoredThemeState(state: PersistedThemeState): Promise<boolean>;
+  }
+  /**
+   * Everything the theme service host registers on its data provider: what consumers call plus the
+   * platform's own state-keeping operations.
+   *
+   * @experimental
+   */
+  export type IThemeHostService = IThemeService & IThemeServiceInternal;
 }
 declare module 'shared/services/theme.service' {
   import { IThemeService } from 'shared/services/theme.service-model';
@@ -12264,202 +12567,87 @@ declare module 'renderer/services/overlays/overlay.service-host' {
   /** Initialize the overlay service. Called during renderer startup. */
   export function startOverlayService(): Promise<void>;
 }
-declare module 'shared/services/theme-data.service-model' {
+declare module 'shared/utils/built-in-themes.util' {
   import {
-    OnDidDispose,
-    UnsubscriberAsync,
-    PlatformError,
-    ThemeFamiliesByIdExpanded,
-  } from 'platform-bible-utils';
-  import {
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from '@papi/core';
-  /**
-   *
-   * This name is used to register the theme data data provider on the papi. You can use this name
-   * to find the data provider when accessing it using the useData hook
-   */
-  export const themeDataServiceProviderName = 'platform.themeDataServiceDataProvider';
-  export const themeDataServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the theme data data provider on the papi. You can use this name
-     * to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.themeDataServiceDataProvider';
-  }>;
-  export type ThemeDataDataTypes = {
-    AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [themeDataServiceProviderName]: IThemeDataService;
-    }
-  }
-  /**
-   * Service that provides aggregated theme contributions from the platform and extensions. Serves
-   * theme contribution info to the theme service
-   */
-  export type IThemeDataService = {
-    /**
-     *
-     * Retrieves information about all themes (including theme families) available in the app. These
-     * are provided by the platform and by extensions.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the currently selected theme
-     */
-    getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
-    /**
-     *
-     * Retrieves information about all themes (including theme families) available in the app. These
-     * are provided by the platform and by extensions.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the currently selected theme
-     */
-    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide themes in contributions
-     */
-    setAllThemes(
-      selector: undefined,
-      value: never,
-    ): Promise<DataProviderUpdateInstructions<ThemeDataDataTypes>>;
-    /**
-     * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
-     * callback function is executed.
-     *
-     * @param selector `undefined`
-     * @param callback The function that will be called when a theme is added/updated/removed. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber that should be called whenever the subscription should be deleted
-     */
-    subscribeAllThemes(
-      selector: undefined,
-      callback: (allThemes: ThemeFamiliesByIdExpanded | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    typeof themeDataServiceObjectToProxy &
-    IDataProvider<ThemeDataDataTypes>;
-}
-declare module 'shared/services/theme-data.service' {
-  import { IThemeDataService } from 'shared/services/theme-data.service-model';
-  export const themeDataService: IThemeDataService;
-  export default themeDataService;
-}
-declare module 'renderer/services/theme.service-host' {
-  import {
-    ThemeDataTypes,
-    IThemeServiceLocal,
-    CurrentThemeSpecifier,
-  } from 'shared/services/theme.service-model';
-  import {
-    DataProviderEngine,
-    IDataProviderEngine,
-  } from 'shared/models/data-provider-engine.model';
-  import { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
-  import {
-    PlatformEvent,
-    ThemeFamiliesByIdExpanded,
     ThemeDefinitionExpanded,
     ThemeFamiliesById,
-    PlatformEventAsync,
-    PlatformError,
+    ThemeFamiliesByIdExpanded,
+    ThemeFamily,
   } from 'platform-bible-utils';
-  class ThemeDataProviderEngine
-    extends DataProviderEngine<ThemeDataTypes>
-    implements IDataProviderEngine<ThemeDataTypes>
-  {
-    #private;
-    currentTheme: ThemeDefinitionExpanded;
-    shouldMatchSystem: boolean;
-    currentSystemTheme: 'light' | 'dark';
-    userThemes: ThemeFamiliesById;
-    private unsubscribeEventListeners;
-    constructor(
-      currentTheme: ThemeDefinitionExpanded,
-      saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
-      shouldMatchSystem: boolean,
-      saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-      onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded | PlatformError>,
-      currentSystemTheme: 'light' | 'dark',
-      onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
-      userThemes: ThemeFamiliesById,
-      saveUserThemes: (userThemes: ThemeFamiliesById) => void,
-    );
-    /**
-     * Replace the engine's live state with freshly loaded values and rebuild the served theme list
-     * from them.
-     *
-     * Run when this window takes over serving the engine from a closed host: the engine otherwise
-     * still holds the state this window loaded at startup, and serving (then eventually re-saving)
-     * that snapshot would silently roll back everything the previous host changed since.
-     *
-     * Static rather than an instance method because every non-`#`-private method on the engine is
-     * exposed to consumers when the engine is registered (see the note on the save methods above),
-     * and reloading state is a host-side lifecycle operation, not part of the theme data API. A
-     * static stays off the instance while still being able to reach the `#` members it needs.
-     *
-     * @param engine The engine whose state to replace
-     * @param currentTheme Freshly loaded current theme
-     * @param shouldMatchSystem Freshly loaded setting for matching the system theme
-     * @param currentSystemTheme The system theme as it is right now. Re-read alongside the persisted
-     *   values because only the hosting window listens for system theme changes, so a window that
-     *   spent its life attached carries the snapshot from its own load — and rebuilding the current
-     *   theme below against that stale value could flip the freshly loaded theme back to the wrong
-     *   type
-     * @param userThemes Freshly loaded user-defined theme families
-     * @experimental
-     */
-    static reloadState(
-      engine: ThemeDataProviderEngine,
-      currentTheme: ThemeDefinitionExpanded,
-      shouldMatchSystem: boolean,
-      currentSystemTheme: 'light' | 'dark',
-      userThemes: ThemeFamiliesById,
-    ): void;
-    getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
-    setCurrentTheme(
-      newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,
-      newThemeSpecifierPossiblyNotProvided?: CurrentThemeSpecifier,
-    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
-    getShouldMatchSystem(): Promise<boolean>;
-    setShouldMatchSystem(
-      newShouldMatchSystemPossiblyUndefinedSelector: boolean | undefined,
-      newShouldMatchSystemPossiblyNotProvided?: boolean,
-    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
-    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
-    setAllThemes(
-      newUserThemesPossiblyUndefinedSelector: Partial<ThemeFamiliesById> | undefined,
-      newUserThemesPossiblyNotProvided?: Partial<ThemeFamiliesById>,
-    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
-    dispose(): Promise<boolean>;
-  }
-  /** Set up this window's access to the app-wide theme service. Safe to call more than once */
-  export function initialize(): Promise<void>;
-  /** This is an internal-only export for testing purposes and should not be used in development */
-  export const testingThemeService: {
-    implementThemeDataProviderEngine: (
-      currentTheme: ThemeDefinitionExpanded,
-      saveCurrentTheme: () => void,
-      shouldMatchSystem: boolean,
-      saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-      onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded>,
-      currentSystemTheme: 'light' | 'dark',
-      onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
-      userThemes: ThemeFamiliesById,
-      saveUserThemes: (userThemes: ThemeFamiliesById) => void,
-    ) => ThemeDataProviderEngine;
-  };
+  /**
+   * Raw un-expanded themes that are built into the software
+   *
+   * @experimental
+   */
+  export const THEMES_DATA_OBJECT: ThemeFamiliesById;
+  /**
+   * Runs {@link expandThemeContribution} on the provided theme families to expand them. Uses the
+   * default built-in theme family to back up the `cssVariables` of the provided theme families
+   *
+   * @param themeFamiliesById Theme families to expand
+   * @returns Expanded theme families
+   * @experimental
+   */
+  export function expandThemeFamiliesByIdWithDefault(
+    themeFamiliesById: ThemeFamiliesById,
+  ): ThemeFamiliesByIdExpanded;
+  /**
+   * The theme to fall back on when nothing else is known — a profile that has never chosen one, or a
+   * stored choice that could not be read
+   *
+   * @experimental
+   */
+  export const DEFAULT_THEME: ThemeDefinitionExpanded;
+  /**
+   * The user-defined theme family every other user-defined family is filled in from
+   *
+   * @experimental
+   */
+  export const DEFAULT_USER_THEME_FAMILY: ThemeFamily;
+}
+declare module 'renderer/services/theme.service' {
+  import { IThemeServiceLocal } from 'shared/services/theme.service-model';
+  import { PlatformEvent, ThemeDefinitionExpanded } from 'platform-bible-utils';
+  /**
+   * Event that emits with the new current theme whenever it changes.
+   *
+   * For this window's own consumers — the document's theme stylesheet — which need the cache to have
+   * been updated by the time they react, so subscribing to the host separately would be a race
+   * between two deliveries of the same change.
+   *
+   * @experimental
+   */
+  export const onDidChangeCurrentTheme: PlatformEvent<ThemeDefinitionExpanded>;
+  /**
+   * The current application theme, synchronously, for the UI that cannot await a round trip: the
+   * document's stylesheet on first load and the stylesheet baked into a new web view's `srcdoc`.
+   *
+   * @experimental
+   */
+  export function getCurrentThemeSync(): ThemeDefinitionExpanded;
+  /**
+   * Start this window's theme service: hand over any theme state stored before the host existed, then
+   * subscribe to the host so this window's copy stays current.
+   *
+   * Handing over first so the subscription's immediate delivery already carries whatever was adopted,
+   * rather than the state main had a moment before. A handover that fails must not cost this window
+   * the subscription — that would cost it every theme change for the rest of the session, where the
+   * failed handover only costs it the theme the user left off at.
+   *
+   * Neither half is allowed to fail this window's startup. The cache is already usable — it was
+   * filled before React rendered — so a host that is slow or missing costs freshness, not
+   * correctness, and must not take down the unrelated services that start alongside this one.
+   *
+   * Only the FIRST subscribe attempt is awaited. This is one of the promises the renderer's startup
+   * batch waits on (see `index.tsx`), and the retries back off over several seconds — so awaiting
+   * them would put that whole backoff in front of the dock layout in exactly the case where the app
+   * is already slow. Nothing downstream depends on the subscription being live.
+   *
+   * Call once at renderer startup.
+   *
+   * @experimental
+   */
+  export function startThemeService(): Promise<void>;
   /**
    * Theme service that is available locally in the renderer only and can perform synchronous
    * operations

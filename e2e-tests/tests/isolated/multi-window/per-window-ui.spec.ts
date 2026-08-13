@@ -51,6 +51,7 @@ import { openScriptureEditorForProject } from '../../../fixtures/scripture-edito
 import {
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
+  RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
   captureAppOutput,
   createSecondWindow,
@@ -333,8 +334,12 @@ test.describe('per-window UI isolation', () => {
     // ── Modal dialog through the generic request lands in the FOCUSED window ───────────────────
     // Window 2 still holds focus. The pending request resolves only when the dialog is answered
     // or dismissed, so it is held un-awaited while the DOM assertions run.
+    // Waiting on window 2's dialog shard, not on a routing wire name: main claims the generic
+    // `dialog:showDialog` before any window exists, so its presence says nothing about whether the
+    // window that should show the dialog can serve it yet. What follows asserts the observable
+    // outcome — which window renders it, and that Escape resolves the request with null.
     await waitForPapiMethodRegistered(
-      new RegExp(`^dialog:showDialog-${window2Id}$`),
+      new RegExp(`^object:DialogService-${window2Id}\\.showDialog$`),
       WEBSOCKET_PORT,
       60_000,
     );
@@ -453,6 +458,10 @@ test.describe('per-window UI isolation', () => {
 
     // ── No faults or cross-window registration collisions anywhere in the exercised flows ──────
     const wholeLog = output.text();
+    // Positive control before BOTH negative sweeps — see RENDERER_STARTING_LOG. Without it they
+    // pass just as happily against output that never arrived as against output with no faults in
+    // it, and the fault sweep is one of the assertions it backs, not an exception to it.
+    expect(wholeLog).toContain(RENDERER_STARTING_LOG);
     FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
     expect(wholeLog).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
   });

@@ -6,20 +6,21 @@
  * Each renderer registers its window service shard under a window-scoped name so several windows
  * can coexist, which would otherwise leave the generic name — the one declared in `papi.d.ts` and
  * used by `useData('platform.windowServiceDataProvider', …)` — registered by nobody. This restores
- * it, matching what `web-view.service-router.ts`, `notification.service-router.ts`, and
- * `command.service-router.ts` do for their own services.
+ * it, matching what `web-view.service-router.ts` and `notification.service-router.ts` do for their
+ * own services.
  *
  * The router/shard pattern does not depend on the transport: this one is a data provider on both
  * sides because the window service has subscription semantics, while the others are plain network
  * objects. See `.context/standards/Architecture.md` § "Service router and service shard".
  *
- * Unlike those three, a data provider also has to keep subscribers current, which means re-emitting
- * updates from two sources: the window it currently routes to, and the routing target moving to
- * another window (which changes the answer without any window's data having changed).
+ * Unlike those routers, a data provider also has to keep subscribers current, which means
+ * re-emitting updates from two sources: the window it currently routes to, and the routing target
+ * moving to another window (which changes the answer without any window's data having changed).
  */
 
 import { getTargetWindowId, onDidChangeRoutingTarget } from '@main/services/window-state.service';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
+import { createTargetWindowShardResolver } from '@main/services/target-shard-resolver.util';
 import { WINDOW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
@@ -35,6 +36,7 @@ import {
   WindowDataTypes,
   windowServiceProviderName,
 } from '@shared/services/window.service-model';
+import { WindowServiceShard } from '@shared/models/window.service-shard.model';
 import { getErrorMessage, Mutex, Unsubscriber, UnsubscriberAsync } from 'platform-bible-utils';
 
 /**
@@ -50,11 +52,11 @@ export type GetWindowService = (windowId: number) => Promise<IWindowService | un
  * These shards are data providers rather than plain network objects, which changes only how they
  * are resolved; they are discovered exactly like every other shard.
  */
-const windowServiceShards = createServiceShardIndex<IWindowService>({
+const windowServiceShards = createServiceShardIndex<WindowServiceShard>({
   objectType: WINDOW_SERVICE_SHARD_OBJECT_TYPE,
   // What the index holds is the shard's network object id, which for a data provider already ends
   // in the suffix `getByType` would otherwise append (see `getDataProviderObjectId`)
-  resolveShard: (networkObjectId) => getDataProviderByType<IWindowService>(networkObjectId),
+  resolveShard: (networkObjectId) => getDataProviderByType<WindowServiceShard>(networkObjectId),
 });
 
 /**
@@ -70,9 +72,24 @@ const windowServiceShards = createServiceShardIndex<IWindowService>({
  *
  * @param windowId The Electron BrowserWindow ID
  */
-export async function getWindowServiceShard(windowId: number): Promise<IWindowService | undefined> {
+export async function getWindowServiceShard(
+  windowId: number,
+): Promise<WindowServiceShard | undefined> {
   return windowServiceShards.getShard(windowId);
 }
+
+/**
+ * Get the window service shard of the window the user is currently working in, along with that
+ * window's id — throwing, with the reason, when no window can answer.
+ *
+ * This is how the main process's navigation commands ask a window what to act on. They act on the
+ * answer afterwards, so they need the window that gave it; and an unreachable window has to reach
+ * the caller as a failure rather than as a navigation that quietly did nothing.
+ */
+export const getTargetWindowServiceShard = createTargetWindowShardResolver(
+  windowServiceProviderName,
+  windowServiceShards,
+);
 
 /**
  * Fires with a window id when that window registers its window service shard.

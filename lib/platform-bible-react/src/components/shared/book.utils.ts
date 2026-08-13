@@ -1,5 +1,6 @@
 import { Canon } from '@sillsdev/scripture';
 import { includes, Section } from 'platform-bible-utils';
+import { ALL_BOOK_IDS } from 'platform-bible-utils/experimental';
 
 /**
  * Gets the long name of a Bible section from its enum value
@@ -97,10 +98,13 @@ export function getLocalizedBookId(
   return localizedId ?? bookId.toUpperCase();
 }
 
-/** Book IDs for all books that are not considered obsolete in the SIL Canon library */
-export const ALL_BOOK_IDS = Canon.allBookIds.filter(
-  (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
-);
+/**
+ * Book IDs for all books that are not considered obsolete in the SIL Canon library.
+ *
+ * Re-exported from `platform-bible-utils`, which owns the list: the main process shares it with the
+ * book-picking UI and cannot import a React library.
+ */
+export { ALL_BOOK_IDS };
 
 /** English names for all books that are not considered obsolete in the SIL Canon library */
 export const ALL_ENGLISH_BOOK_NAMES = Object.fromEntries(
