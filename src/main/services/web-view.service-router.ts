@@ -111,6 +111,39 @@ function describeMatcher(matcher: OwnerMatcher): string {
     : `a ${matcher.webViewType} web view showing project ${matcher.projectId}`;
 }
 
+/** A web view a move has taken out of one window and not yet put into another */
+type WebViewMoveInFlight = {
+  /** Ids the view answers to for the length of the move: the one named, and the captured one */
+  webViewIds: WebViewId[];
+  webViewType: WebViewType;
+  /** Project the captured view was showing, if any */
+  projectId?: string;
+};
+
+/**
+ * Moves that have closed a web view in its source window and not yet opened it in its target.
+ *
+ * For that gap the web view is open in no window at all, so every window answers an ownership
+ * search truthfully and the search still comes back wrong: the view exists, and a caller that
+ * creates on a miss mints a second copy of one the app means to have exactly one of.
+ *
+ * Deliberately nothing to wait on. A search that lands in the gap is told the question could not be
+ * answered right now — which is what {@link findOwner}'s `hadUnreachableWindows` already means — so
+ * every caller keeps the weighing it already applies to that: a passive probe answers not-found,
+ * and a caller that creates opens where the user is rather than refuse for the length of a move.
+ */
+const webViewMovesInFlight = new Set<WebViewMoveInFlight>();
+
+/** Whether a move in flight is holding the web view a search is looking for */
+function isMatchedByMoveInFlight(matcher: OwnerMatcher): boolean {
+  return [...webViewMovesInFlight].some((move) =>
+    matcher.kind === 'id'
+      ? move.webViewIds.includes(matcher.webViewId)
+      : move.webViewType === matcher.webViewType &&
+        (matcher.projectId === undefined || move.projectId === matcher.projectId),
+  );
+}
+
 /**
  * The main-process window facilities the window-layout rung needs. Injected by `main.ts` after it
  * defines its window-creating closure — this router starts before that closure exists.
@@ -242,6 +275,14 @@ async function findOwner(
       logger.debug(
         `Found ${matches.length} open '${matcher.webViewType}' web views (${matches.map((match) => match.definition.id).join(', ')}); using the one in window ${owner.windowId}.`,
       );
+  }
+  // Asked only once nothing was found: a window that holds the view settles the search, and a move
+  // registered for a view some window still holds has not reached its capture yet.
+  if (!owner && isMatchedByMoveInFlight(matcher)) {
+    logger.warn(
+      `${describeMatcher(matcher)} is between windows on a move, so no window holds it right now; ${operation} is told the question could not be answered rather than that nothing has it`,
+    );
+    hadServiceErrors = true;
   }
   return { owner, hadUnreachableWindows: hadServiceErrors };
 }
@@ -616,40 +657,53 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
       `Cannot move webview ${webViewId}: window ${owner.windowId} no longer had it when the move tried to capture it.`,
     );
 
+  // From here the web view is open in NO window until the target takes it, or until recovery
+  // puts it back — see `webViewMovesInFlight`, which is what keeps a search landing in that gap
+  // from being told the view does not exist.
+  const moveInFlight: WebViewMoveInFlight = {
+    webViewIds: [webViewId, captured.id],
+    webViewType: captured.webViewType,
+    projectId: captured.projectId,
+  };
+  webViewMovesInFlight.add(moveInFlight);
   try {
-    const movedWebViewId =
-      targetShard !== undefined
-        ? await targetShard.adoptWebView(captured)
-        : await openInFreshWindow(webViewId, (shard) => shard.adoptWebView(captured));
-    if (movedWebViewId !== undefined) {
-      raiseMoveTarget(target);
-      return movedWebViewId;
-    }
-    logger.warn(
-      `Moving webview ${webViewId} to ${targetDescription} did not happen: the provider did not recreate it there. Reopening it where it can go.`,
-    );
-  } catch (e) {
-    // A timed-out adopt may have succeeded after its request expired, and only the target knows —
-    // see findWebViewAdoptedAfterTimeout. The new-window path is deliberately not probed: its own
-    // failure handling has already closed the window it created, so there is nothing left holding
-    // the view there.
-    if (targetShard !== undefined && isRequestTimedOutError(e)) {
-      const lateAdoptedWebViewId = await findWebViewAdoptedAfterTimeout(
-        targetShard,
-        captured.id,
-        targetDescription,
-      );
-      if (lateAdoptedWebViewId !== undefined) {
+    try {
+      const movedWebViewId =
+        targetShard !== undefined
+          ? await targetShard.adoptWebView(captured)
+          : await openInFreshWindow(webViewId, (shard) => shard.adoptWebView(captured));
+      if (movedWebViewId !== undefined) {
         raiseMoveTarget(target);
-        return lateAdoptedWebViewId;
+        return movedWebViewId;
       }
+      logger.warn(
+        `Moving webview ${webViewId} to ${targetDescription} did not happen: the provider did not recreate it there. Reopening it where it can go.`,
+      );
+    } catch (e) {
+      // A timed-out adopt may have succeeded after its request expired, and only the target knows —
+      // see findWebViewAdoptedAfterTimeout. The new-window path is deliberately not probed: its own
+      // failure handling has already closed the window it created, so there is nothing left holding
+      // the view there.
+      if (targetShard !== undefined && isRequestTimedOutError(e)) {
+        const lateAdoptedWebViewId = await findWebViewAdoptedAfterTimeout(
+          targetShard,
+          captured.id,
+          targetDescription,
+        );
+        if (lateAdoptedWebViewId !== undefined) {
+          raiseMoveTarget(target);
+          return lateAdoptedWebViewId;
+        }
+      }
+      logger.warn(
+        `Moving webview ${webViewId} to ${targetDescription} failed: ${getErrorMessage(e)}. Reopening it where it can go.`,
+      );
     }
-    logger.warn(
-      `Moving webview ${webViewId} to ${targetDescription} failed: ${getErrorMessage(e)}. Reopening it where it can go.`,
-    );
-  }
 
-  return recoverAfterFailedMove(webViewId, owner, captured, targetDescription);
+    return await recoverAfterFailedMove(webViewId, owner, captured, targetDescription);
+  } finally {
+    webViewMovesInFlight.delete(moveInFlight);
+  }
 }
 
 /**
