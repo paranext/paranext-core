@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
     getUnreachableWindowIds: vi.fn(),
     getAbandonedWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
+    isWindowClosing: vi.fn(),
     getFocusedWindowId: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
@@ -67,6 +68,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getUnreachableWindowIds: mocks.getUnreachableWindowIds,
   getAbandonedWindowIds: mocks.getAbandonedWindowIds,
   isWindowReady: mocks.isWindowReady,
+  isWindowClosing: mocks.isWindowClosing,
   getFocusedWindowId: mocks.getFocusedWindowId,
   focusWindow: mocks.focusWindow,
 }));
@@ -165,6 +167,7 @@ describe('web view service router', () => {
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
+    mocks.isWindowClosing.mockReturnValue(false);
     mocks.getFocusedWindowId.mockReturnValue(1);
     mocks.settingsGet.mockResolvedValue('power');
   });
@@ -702,6 +705,29 @@ describe('web view service router', () => {
       expect(creator.closeWindow).toHaveBeenCalledWith(7);
     });
 
+    test('a probe that declined creation resolves not-found without a window ever appearing', async () => {
+      // A passive reuse probe can carry a window layout: the layout only says where a CREATED web
+      // view would go, and this caller declined creation. The reuse search found nothing, so the
+      // answer is "not found" — reaching the window creator first would pop up (and focus) a real
+      // window just for its shard to decline and the scaffold to close it again.
+      const focused = windowShard([]);
+      withWindows({ 1: focused, 2: windowShard([]) });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      const router = await getRouter();
+
+      await expect(
+        router.openWebView(
+          'comments',
+          { type: 'window' },
+          { existingId: '?', createNewIfNotFound: false },
+        ),
+      ).resolves.toBeUndefined();
+
+      expect(creator.createPendingContentWindow).not.toHaveBeenCalled();
+      expect(focused.openWebView).not.toHaveBeenCalled();
+    });
+
     test('refuses a window layout combined with a target window id', async () => {
       const focused = windowShard([]);
       withWindows({ 1: focused });
@@ -804,6 +830,24 @@ describe('web view service router', () => {
 
       expect(existingOwner.openWebView).toHaveBeenCalled();
       expect(named.openWebView).not.toHaveBeenCalled();
+    });
+
+    test('a named window whose close is already decided fails the open before anything opens', async () => {
+      // Same rule the move commands apply to their target: a window whose close has been decided
+      // is a stale target the caller cannot know about — opening into it would report success and
+      // then lose the web view when the close lands
+      const focused = windowShard([]);
+      const named = windowShard([]);
+      withWindows({ 1: focused, 2: named });
+      mocks.isWindowClosing.mockImplementation((windowId: number) => windowId === 2);
+      const router = await getRouter();
+
+      await expect(
+        router.openWebView('someType', { type: 'tab' }, { targetWindowId: 2 }),
+      ).rejects.toThrow(/that window is closing/);
+
+      expect(named.openWebView).not.toHaveBeenCalled();
+      expect(focused.openWebView).not.toHaveBeenCalled();
     });
 
     test('refuses a target window id combined with a replace-tab layout', async () => {

@@ -754,6 +754,12 @@ async function openWebView(
       throw new Error(
         `Cannot open ${webViewType}: a 'window' layout asks for a new window, but targetWindowId names an existing one. Pass one or the other.`,
       );
+    // A caller that declined creation only wanted the reuse search above, which found nothing (its
+    // own not-found and unreachable answers are decided up there). A window layout from here on
+    // only ever creates, so the decline is honored before any window exists — a created window is
+    // shown and takes OS focus the moment it appears, which no passive probe may cause just for
+    // its shard to decline the open and the scaffold to close the window again.
+    if (options?.existingId && options.createNewIfNotFound === false) return undefined;
     return openWebViewInNewWindow(webViewType, options);
   }
 
@@ -763,6 +769,13 @@ async function openWebView(
     if (layout?.type === 'replace-tab')
       throw new Error(
         `Cannot open ${webViewType}: a replace-tab layout names its own window through its target tab, so targetWindowId cannot also name one. Pass one or the other.`,
+      );
+    // A window whose close has been decided is a stale target the caller cannot know about — same
+    // rule the move commands apply: opening into it would report success and then lose the web
+    // view when the close lands
+    if (isWindowClosing(options.targetWindowId))
+      throw new Error(
+        `Cannot open ${webViewType} in window ${options.targetWindowId}: that window is closing.`,
       );
 
     const shard = await resolveShardForWindow(
