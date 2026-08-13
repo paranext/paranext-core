@@ -63,6 +63,7 @@ import {
   getTargetWindowId,
   getWindows,
   isWindowClosing,
+  markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
   markWindowReady,
@@ -714,6 +715,22 @@ async function main() {
         logger.error(
           `Window ${windowId} renderer died ${reloadDecision.reloadsAlreadySpent} times in a row despite being reloaded each time, so it is being left down. Close the window and open a new one.`,
         );
+        // The reload was the only thing that would ever have put this window back in the app, so
+        // the window has to stop being treated as one that is coming back. `markWindowNotReady`
+        // above leaves it looking like a window that is mid-recovery, and every fan-out in the app
+        // refuses to answer while one of those exists — for a window that is never recovering, that
+        // is the rest of the session.
+        //
+        // Marked whatever the window had managed to do before it died. A renderer that never got as
+        // far as registering leaves nothing behind for the fan-outs to refuse over, but it is the
+        // same window in the same state, and one flag recorded on both paths is what keeps this
+        // from needing a second mechanism for the case that is harder to see.
+        //
+        // The window is deliberately left open and tracked. It is still on screen with the user's
+        // tabs' worth of layout behind it, and closing it here would rewrite the persisted window
+        // layout without it — taking away the one recovery they have left, which is to quit and
+        // relaunch.
+        markWindowAbandoned(windowId);
         return;
       }
       crashReloadBudget = reloadDecision.budget;

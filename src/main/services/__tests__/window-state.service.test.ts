@@ -5,13 +5,16 @@ import {
   areAllWindowsClosing,
   doesNavigationReplaceRendererRegistrations,
   focusWindow,
+  getAbandonedWindowIds,
   getFocusedWindowId,
   getReadyWindowIds,
   getTargetWindowId,
   getUnreachableWindowIds,
   getWindows,
+  isWindowAbandoned,
   isWindowClosing,
   isWindowReady,
+  markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
   markWindowReady,
@@ -746,6 +749,70 @@ describe('window state tracking', () => {
       removeWindow(crashed, 1);
 
       expect(getUnreachableWindowIds()).toEqual([]);
+    });
+  });
+
+  describe('windows nothing will ever run in again', () => {
+    // "Unreachable" is a window the reload path is still working on: it stopped serving, but its
+    // dock layout is held here and its tabs really do come back, so a fan-out has to refuse to
+    // answer for it. Abandoned is the end of that road — the reloads ran out, no page will ever
+    // register from this window again — and a state nothing can leave has to stop poisoning every
+    // fan-out in the app for the rest of the session.
+
+    test('stops counting a window as unreachable once the reload path gives up on it', () => {
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      markWindowNotReady(1);
+
+      markWindowAbandoned(1);
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+      expect(getAbandonedWindowIds()).toEqual([1]);
+      expect(isWindowAbandoned(1)).toBe(true);
+    });
+
+    test('records a window given up on before its renderer ever registered', () => {
+      // A renderer that dies at load never reaches ready, so it was never unreachable either — but
+      // it is still tracked, and it is just as dead as the one that had been serving
+      addWindow(fakeWindow(1));
+
+      markWindowAbandoned(1);
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+      expect(getAbandonedWindowIds()).toEqual([1]);
+    });
+
+    test('does not let a recycled window id inherit the abandoned mark', () => {
+      // Electron reuses BrowserWindow ids. A new window arriving with a given-up window's id has
+      // its own renderer to start, and remembering the abandonment would write it off before it
+      // ever loaded.
+      const abandoned = fakeWindow(1);
+      addWindow(abandoned);
+      markWindowReady(1);
+      markWindowNotReady(1);
+      markWindowAbandoned(1);
+
+      removeWindow(abandoned, 1);
+      addWindow(fakeWindow(1));
+
+      expect(isWindowAbandoned(1)).toBe(false);
+      expect(getAbandonedWindowIds()).toEqual([]);
+    });
+
+    test('stops treating a window as abandoned once it is serving again', () => {
+      // Nothing in the app is expected to revive a given-up window, but a renderer registering is
+      // proof it did — a manual reload from the dev tools, an Electron recovery we did not ask for.
+      // Whatever the route back, the window is a live window again, and a later crash has to make
+      // it unreachable rather than land on a stale terminal mark.
+      addWindow(fakeWindow(1));
+      markWindowAbandoned(1);
+
+      markWindowReady(1);
+
+      expect(getAbandonedWindowIds()).toEqual([]);
+      expect(isWindowAbandoned(1)).toBe(false);
+      markWindowNotReady(1);
+      expect(getUnreachableWindowIds()).toEqual([1]);
     });
   });
 
