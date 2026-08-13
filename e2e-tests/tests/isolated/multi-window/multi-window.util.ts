@@ -74,15 +74,16 @@ export const DUPLICATE_REGISTRATION_PATTERN =
 export const APP_QUITTING_LOG = 'Main process is quitting';
 
 /**
- * The first thing any renderer logs (`src/renderer/index.tsx`) — the positive control for a
- * collision sweep over a SLICE of the capture rather than the whole of it.
+ * The first thing any renderer logs (`src/renderer/index.tsx`) — the positive control for any sweep
+ * whose corpus begins before a window is created during the test, whether that corpus is a slice
+ * taken from a mark or the whole log of a test that has not quit.
  *
- * {@link APP_QUITTING_LOG} controls a sweep taken after a quit; this one controls a sweep scoped to
- * a window's startup, where the quit has not happened yet. A mark taken a moment too late would
- * otherwise yield an empty slice and a passing assertion.
+ * {@link APP_QUITTING_LOG} controls sweeps taken after a quit; this one controls the sweeps where
+ * the quit has not happened yet. A mark taken a moment too late would otherwise yield an empty
+ * slice and a passing assertion.
  *
- * Note this window is created DURING the test, so its renderer's first line lands well after the
- * capture attached — which is what makes it usable as a control at all.
+ * Note the window this refers to is created DURING the test, so its renderer's first line lands
+ * well after the capture attached — which is what makes it usable as a control at all.
  */
 export const RENDERER_STARTING_LOG = 'Starting renderer';
 
@@ -506,10 +507,12 @@ export async function quitAndExpectCleanExit(
   expect(exitResult.code).toBe(0);
 
   const log = output.text();
-  FAULT_MARKERS.forEach((marker) => expect(log).not.toContain(marker));
-  // Positive control first: the quit above produces this line, so its absence means the capture
-  // holds nothing and the sweeps below would be asserting against an empty string.
+  // Positive control before BOTH negative sweeps: the quit above produces this line, so its
+  // absence means the capture holds nothing and everything below would pass without examining
+  // anything. It has to precede the fault sweep too — that sweep is a negative assertion this
+  // control backs, not an exception to it.
   expect(log).toContain(APP_QUITTING_LOG);
+  FAULT_MARKERS.forEach((marker) => expect(log).not.toContain(marker));
   expect(log).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 }
 
