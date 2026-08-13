@@ -34,6 +34,11 @@ export interface RoutingWindowMocks {
    * and stopped — the ones a fan-out cannot ask but must still account for
    */
   getUnreachableWindowIds: Mock;
+  /**
+   * Mock of `getAbandonedWindowIds`, which reports the tracked windows nothing will ever run in
+   * again — the ones a fan-out cannot ask and must stop waiting for
+   */
+  getAbandonedWindowIds: Mock;
   /** Mock of `networkObjectService.get`, which resolves a window's shard by network object id */
   networkObjectGet: Mock;
   /** Where the router's shard index parked its subscriptions, so tests can announce to it */
@@ -74,21 +79,38 @@ function getShardNetworkObjectId(windowId: number): string {
  * @param options.unreachableWindowIds Windows that were serving requests and stopped — a crashed
  *   renderer, a page being replaced, a window on its way out. Not asked, and unreachable: what they
  *   had open is still there, and only they could have listed it.
+ * @param options.abandonedWindowIds Windows whose renderer died and will not be reloaded again. Not
+ *   asked, and deliberately NOT unreachable — the real `getUnreachableWindowIds` excludes them,
+ *   because a window nothing is coming back from would otherwise make every fan-out refuse to
+ *   answer for the rest of the session. What was lost with them is reported separately.
  */
 export function withWindows(
   mocks: RoutingWindowMocks,
   shardObjectType: string,
   shardsByWindowId: Record<number, unknown>,
-  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
+  options?: {
+    startingWindowIds?: number[];
+    unreachableWindowIds?: number[];
+    abandonedWindowIds?: number[];
+  },
 ): void {
   const windowIds = Object.keys(shardsByWindowId).map(Number);
   const startingWindowIds = options?.startingWindowIds ?? [];
   const unreachableWindowIds = options?.unreachableWindowIds ?? [];
+  const abandonedWindowIds = options?.abandonedWindowIds ?? [];
   mocks.getReadyWindowIds.mockReturnValue(
-    windowIds.filter((id) => !startingWindowIds.includes(id) && !unreachableWindowIds.includes(id)),
+    windowIds.filter(
+      (id) =>
+        !startingWindowIds.includes(id) &&
+        !unreachableWindowIds.includes(id) &&
+        !abandonedWindowIds.includes(id),
+    ),
   );
   mocks.getUnreachableWindowIds.mockReturnValue(
     windowIds.filter((id) => unreachableWindowIds.includes(id)),
+  );
+  mocks.getAbandonedWindowIds.mockReturnValue(
+    windowIds.filter((id) => abandonedWindowIds.includes(id)),
   );
   mocks.networkObjectGet.mockImplementation(async (networkObjectId: string) => {
     const windowId = Number(networkObjectId.split('-').pop());
