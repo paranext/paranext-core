@@ -1097,18 +1097,37 @@ describe('web view service router', () => {
       expect(shards[1].openSettingsTab).toHaveBeenCalledWith(undefined);
     });
 
-    test('fails the call rather than running it in the wrong window when a window cannot be asked', async () => {
+    test('fails the call rather than running it in the wrong window when a window stopped serving', async () => {
       // Falling back to focus here opens the settings for a web view in a window that does not have
-      // it, against whichever project that window happens to be showing
+      // it, against whichever project that window happens to be showing. The window that stopped
+      // serving is the one holding the web view, so nobody left can say which project that is.
       const shards = {
         1: windowShardWithProjects({}),
         2: windowShardWithProjects({ 'owned-view': 'project-2' }),
       };
-      withWindows(shards, { unreadyWindowIds: [2] });
+      withWindows(shards, { unreachableWindowIds: [2] });
       const openSettings = await getCommandHandler('platform.openSettings');
 
       await expect(openSettings('owned-view')).rejects.toThrow('unreachable');
       expect(shards[1].openSettingsTab).not.toHaveBeenCalled();
+      expect(shards[2].openSettingsTab).not.toHaveBeenCalled();
+    });
+
+    test('still opens settings while a window is merely starting', async () => {
+      // A window whose renderer has not registered anything yet holds no web view, so it cannot be
+      // the one holding this id. Failing on its account would break every openSettings for the
+      // seconds a window takes to start.
+      const shards = {
+        1: windowShardWithProjects({}),
+        2: windowShardWithProjects({ 'owned-view': 'project-2' }),
+      };
+      withWindows(shards, { startingWindowIds: [2] });
+      const openSettings = await getCommandHandler('platform.openSettings');
+
+      await expect(openSettings('owned-view')).resolves.toBeUndefined();
+      // Nobody who could be asked claims the id, so this is the "no window owns it" fallback
+      expect(shards[1].openSettingsTab).toHaveBeenCalledWith(undefined);
+      expect(shards[2].getOpenWebViewDefinition).not.toHaveBeenCalled();
     });
 
     test.each([
