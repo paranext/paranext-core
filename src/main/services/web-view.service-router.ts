@@ -12,7 +12,6 @@
 import {
   focusWindow,
   getAbandonedWindowIds,
-  getFocusedWindowId,
   getReadyWindowIds,
   getTargetWindowId,
   getUnreachableWindowIds,
@@ -369,12 +368,7 @@ async function openWebViewInOwningWindow(
   // honours this for the tab it raises inside its own window, and an OS-level raise the caller did
   // not ask for is the louder half of the same action. Skipping it here is what keeps a passive
   // probe from pulling a window to the front every time it runs.
-  if (
-    openedWebViewId &&
-    isCrossWindow &&
-    getFocusedWindowId() !== undefined &&
-    options?.bringToFront !== false
-  )
+  if (openedWebViewId && isCrossWindow && isApplicationFocused() && options?.bringToFront !== false)
     focusWindow(owner.windowId);
   return openedWebViewId;
 }
