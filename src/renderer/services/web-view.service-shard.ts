@@ -927,6 +927,69 @@ async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEnt
 let layoutLoadGeneration = 0;
 
 /**
+ * The layout load currently in flight, if any.
+ *
+ * A load replaces the dock's ENTIRE contents with what it read before it started, so a web view
+ * that arrives while one is in flight is wiped by it — and silently: the close events a load emits
+ * are diffed against that same pre-arrival reading, so nothing disposes the controller, the nonce
+ * and the state the arriving web view already registered. A load's own checkpoints catch this only
+ * when it began against an EMPTY dock; a reload of a window that already has content in it cannot
+ * tell what arrived during it from what it is replacing. Anything docking into this window waits
+ * here instead.
+ */
+let layoutLoadInFlight: Promise<void> | undefined;
+
+/**
+ * How long {@link waitForLayoutLoadToSettle} waits for a load in flight. A load is a settings read
+ * and one request to the main process, so this is generous for what it exists for — and a load
+ * still retrying that request outruns it, which is the better trade in both directions: waiting
+ * longer stalls a move the user is watching, and refusing to dock loses the web view outright
+ * rather than possibly.
+ */
+const LAYOUT_LOAD_SETTLE_WAIT_MS = 2_000;
+
+/**
+ * Register the load about to run as the one anything docking into this window waits for, and answer
+ * how to end that registration. See {@link layoutLoadInFlight}.
+ */
+function beginTrackedLayoutLoad(): () => void {
+  let endLoad: () => void = () => {};
+  const load = new Promise<void>((resolve) => {
+    endLoad = resolve;
+  });
+  layoutLoadInFlight = load;
+  return () => {
+    // Not when a newer load has taken over: that one is what a waiter has to wait for now
+    if (layoutLoadInFlight === load) layoutLoadInFlight = undefined;
+    endLoad();
+  };
+}
+
+/**
+ * Wait, bounded, for the layout loads in flight to finish — see {@link layoutLoadInFlight}. Loads
+ * rather than load: one superseded while this waits hands the dock to a newer one, and it is
+ * whichever load actually reaches the dock that this exists to stay out of the way of.
+ */
+async function waitForLayoutLoadToSettle(): Promise<void> {
+  let loadInFlight = layoutLoadInFlight;
+  if (!loadInFlight) return;
+  logger.debug('Waiting for the layout load in flight before docking into this window');
+  const giveUp = wait(LAYOUT_LOAD_SETTLE_WAIT_MS).then(() => 'timed-out' as const);
+  while (loadInFlight) {
+    // Sequential by nature: each load in flight has to settle before the next can be waited on
+    // eslint-disable-next-line no-await-in-loop
+    const outcome = await Promise.race([loadInFlight.then(() => undefined), giveUp]);
+    if (outcome === 'timed-out') {
+      logger.warn(
+        `A layout load did not settle within ${LAYOUT_LOAD_SETTLE_WAIT_MS} ms; docking into this window anyway`,
+      );
+      return;
+    }
+    loadInFlight = layoutLoadInFlight;
+  }
+}
+
+/**
  * The {@link layoutLoadGeneration} of the load whose layout the dock actually holds. Set at each
  * point {@link loadLayout} hands a layout to the dock, so while it trails `layoutLoadGeneration` a
  * load is still on its way and the dock holds something OTHER than the layout this window should be
@@ -999,157 +1062,167 @@ async function loadLayout(
   // Capture the web views open before the load so close events can be emitted for the ones the
   // new layout drops (see `emitCloseEventsForWebViewsRemovedByLayoutLoad`)
   const webViewsBeforeLoad = dockLayoutVar.getAllWebViewDefinitions();
-  if (layout) {
-    // NOTE: this branch intentionally does NOT apply the default-layout supplement — a caller
-    // passing an explicit layout owns its full contents. A caller that wants supplement tabs
-    // merged in must do it itself before calling `loadLayout` (see `runProjectBoundSimpleSwitch`
-    // for an example, via `getEnabledSupplementEntries` + `mergeDefaultLayoutSupplement`).
-    // Cross the rc-dock / shared-model boundary with one cast at this edge so callers don't have
-    // to. Matches the convention in `platform-dock-layout.component.tsx`.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const layoutAsInfo = layout as unknown as LayoutInfo;
-    // Bumping the generation above is what lets this call cancel an in-flight no-argument load that
-    // would otherwise land on top of it — when THIS is the newer load, the checkpoint below passes
-    // and the older one drops its answer instead.
-    if (isSuperseded()) {
-      // The reverse ordering: a newer load reached the dock while this one was still awaiting it.
-      // Writing now would replace the dock with content the user has already moved past AND regress
-      // `layoutLoadGenerationInDock` below `layoutLoadGeneration`, which holds every subsequent
-      // push with nothing scheduled to reconcile the dock. The caller owning this layout does not
-      // make it current; only being the newest load does.
-      logger.debug('Dropping an explicit layout load that a newer one superseded');
+  // Anything docking into this window waits for a load that has content to lose — see
+  // `layoutLoadInFlight`. A load that began against an EMPTY dock needs no waiter: its own
+  // checkpoints below drop it rather than wipe what arrived, and a routed open or move into a
+  // brand-new window would otherwise wait on that window's own startup load every time.
+  const endTrackedLoad = webViewsBeforeLoad.length > 0 ? beginTrackedLayoutLoad() : undefined;
+  try {
+    if (layout) {
+      // NOTE: this branch intentionally does NOT apply the default-layout supplement — a caller
+      // passing an explicit layout owns its full contents. A caller that wants supplement tabs
+      // merged in must do it itself before calling `loadLayout` (see `runProjectBoundSimpleSwitch`
+      // for an example, via `getEnabledSupplementEntries` + `mergeDefaultLayoutSupplement`).
+      // Cross the rc-dock / shared-model boundary with one cast at this edge so callers don't have
+      // to. Matches the convention in `platform-dock-layout.component.tsx`.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const layoutAsInfo = layout as unknown as LayoutInfo;
+      // Bumping the generation above is what lets this call cancel an in-flight no-argument load that
+      // would otherwise land on top of it — when THIS is the newer load, the checkpoint below passes
+      // and the older one drops its answer instead.
+      if (isSuperseded()) {
+        // The reverse ordering: a newer load reached the dock while this one was still awaiting it.
+        // Writing now would replace the dock with content the user has already moved past AND regress
+        // `layoutLoadGenerationInDock` below `layoutLoadGeneration`, which holds every subsequent
+        // push with nothing scheduled to reconcile the dock. The caller owning this layout does not
+        // make it current; only being the newest load does.
+        logger.debug('Dropping an explicit layout load that a newer one superseded');
+        return;
+      }
+      dockLayoutVar.loadLayout(layoutAsInfo);
+      layoutLoadGenerationInDock = thisGeneration;
+      emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutAsInfo);
+      // `loadLayout` doesn't run `onLayoutChange` on a programmatic load, so persist manually —
+      // unless the caller explicitly opted out (see the `options.persist` doc above).
+      if (options?.persist !== false) await saveLayout(layoutAsInfo);
       return;
     }
-    dockLayoutVar.loadLayout(layoutAsInfo);
-    layoutLoadGenerationInDock = thisGeneration;
-    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutAsInfo);
-    // `loadLayout` doesn't run `onLayoutChange` on a programmatic load, so persist manually —
-    // unless the caller explicitly opted out (see the `options.persist` doc above).
-    if (options?.persist !== false) await saveLayout(layoutAsInfo);
-    return;
-  }
 
-  // Pick the layout by interface mode (runs at startup and on every `platform.interfaceMode` change;
-  // see the subscription in `registerDockLayout`):
-  // - Power mode: this window's saved layout from the main process's window-layouts structure (see
-  //   `getPersistedLayout` for the legacy and empty fallbacks).
-  // - Simple mode: always the static `simpleLayout`. `saveLayout` no-ops in simple mode, so changes
-  //   there are ephemeral and never clobber the saved power layout.
-  const interfaceMode = await settingsService.get('platform.interfaceMode');
-  if (isSuperseded()) {
-    // A newer load owns the cache and the dock now. Seeding the cache with this reading would tell
-    // `saveLayout` the wrong mode, which either drops the user's power-mode layout changes on the
-    // floor or lets simple-mode changes clobber their saved power layout.
-    logger.debug('Dropping a layout load that a newer one superseded while it read the mode');
-    return;
-  }
-  // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
-  // subsequent `saveLayout`) sees the current mode without another settings round-trip.
-  currentInterfaceMode = interfaceMode;
-  // Simple mode never calls `getPersistedLayout` — the static `simpleLayout` never signals pending
-  // content, so this always keeps the default-layout supplement.
-  const persistedResult =
-    interfaceMode === 'simple'
-      ? { layout: dockLayoutVar.simpleLayout, isPendingContent: false }
-      : await getPersistedLayout(dockLayoutVar.testLayout, isSuperseded);
-  if (persistedResult === undefined) {
-    // The only reason `getPersistedLayout` withholds a layout: a newer load started while it was
-    // waiting on the main process. Withholding rather than answering "empty" is what keeps this
-    // from being a dock wipe if the checkpoint below is ever moved.
-    logger.debug(
-      'Dropping a layout load that a newer one superseded while it read the saved layout',
-    );
-    return;
-  }
-  const { layout: persistedLayout, isPendingContent } = persistedResult;
-  /**
-   * Whether web views arrived in the dock while this load was reading what to restore. Only a load
-   * that began against an empty dock can answer yes, and for it the answer means everything it read
-   * is stale: it asked what an empty window should start with, and a web view adopted or opened
-   * during the read (a routed move lands in a fresh window while its saved-layout request is still
-   * retrying) is in the dock but not in the answer. Applying the answer anyway would wipe that web
-   * view — with no close event, since {@link emitCloseEventsForWebViewsRemovedByLayoutLoad} only
-   * covers web views that were open when the load began.
-   */
-  const didDockGainWebViewsDuringLoad = () =>
-    webViewsBeforeLoad.length === 0 && dockLayoutVar.getAllWebViewDefinitions().length > 0;
-  // Every layout gets its web view ids scoped to this window, including one restored from
-  // persistence: a saved entry's ids carry the window id of the session that saved them (window
-  // ids are not stable across restarts), and the legacy pre-multi-window layout carries unscoped
-  // ids. Re-scoping replaces the suffix rather than stacking another one, so it is safe on both.
-  const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
-  if (isPendingContent) {
+    // Pick the layout by interface mode (runs at startup and on every `platform.interfaceMode` change;
+    // see the subscription in `registerDockLayout`):
+    // - Power mode: this window's saved layout from the main process's window-layouts structure (see
+    //   `getPersistedLayout` for the legacy and empty fallbacks).
+    // - Simple mode: always the static `simpleLayout`. `saveLayout` no-ops in simple mode, so changes
+    //   there are ephemeral and never clobber the saved power layout.
+    const interfaceMode = await settingsService.get('platform.interfaceMode');
+    if (isSuperseded()) {
+      // A newer load owns the cache and the dock now. Seeding the cache with this reading would tell
+      // `saveLayout` the wrong mode, which either drops the user's power-mode layout changes on the
+      // floor or lets simple-mode changes clobber their saved power layout.
+      logger.debug('Dropping a layout load that a newer one superseded while it read the mode');
+      return;
+    }
+    // Seed/refresh the cache before loading so any `onLayoutChange` that the load triggers (and every
+    // subsequent `saveLayout`) sees the current mode without another settings round-trip.
+    currentInterfaceMode = interfaceMode;
+    // Simple mode never calls `getPersistedLayout` — the static `simpleLayout` never signals pending
+    // content, so this always keeps the default-layout supplement.
+    const persistedResult =
+      interfaceMode === 'simple'
+        ? { layout: dockLayoutVar.simpleLayout, isPendingContent: false }
+        : await getPersistedLayout(dockLayoutVar.testLayout, isSuperseded);
+    if (persistedResult === undefined) {
+      // The only reason `getPersistedLayout` withholds a layout: a newer load started while it was
+      // waiting on the main process. Withholding rather than answering "empty" is what keeps this
+      // from being a dock wipe if the checkpoint below is ever moved.
+      logger.debug(
+        'Dropping a layout load that a newer one superseded while it read the saved layout',
+      );
+      return;
+    }
+    const { layout: persistedLayout, isPendingContent } = persistedResult;
+    /**
+     * Whether web views arrived in the dock while this load was reading what to restore. Only a
+     * load that began against an empty dock can answer yes, and for it the answer means everything
+     * it read is stale: it asked what an empty window should start with, and a web view adopted or
+     * opened during the read (a routed move lands in a fresh window while its saved-layout request
+     * is still retrying) is in the dock but not in the answer. Applying the answer anyway would
+     * wipe that web view — with no close event, since
+     * {@link emitCloseEventsForWebViewsRemovedByLayoutLoad} only covers web views that were open
+     * when the load began.
+     */
+    const didDockGainWebViewsDuringLoad = () =>
+      webViewsBeforeLoad.length === 0 && dockLayoutVar.getAllWebViewDefinitions().length > 0;
+    // Every layout gets its web view ids scoped to this window, including one restored from
+    // persistence: a saved entry's ids carry the window id of the session that saved them (window
+    // ids are not stable across restarts), and the legacy pre-multi-window layout carries unscoped
+    // ids. Re-scoping replaces the suffix rather than stacking another one, so it is safe on both.
+    const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
+    if (isPendingContent) {
+      if (didDockGainWebViewsDuringLoad()) {
+        logger.debug(
+          'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
+        );
+        return;
+      }
+      // A window created to receive one specific web view, routed separately, starts with nothing
+      // else — skip the default-layout supplement entirely, without even fetching its flags.
+      dockLayoutVar.loadLayout(layoutToLoad);
+      emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
+      return;
+    }
+    // Supplement tabs join the layout below, after the scoping pass above has already run over it, so
+    // scope each supplement tab itself — its id comes from a build-baked file and would otherwise be
+    // the same in every window. Scoping here rather than re-scoping the merged layout also keeps the
+    // merge's dedup working: it matches by exact id, so an unscoped supplement id would never match
+    // the scoped copy already in a restored layout and the tab would be appended again on every load.
+    const enabledEntries = (await getEnabledSupplementEntries()).map((entry) => ({
+      ...entry,
+      tab: withWindowScopedWebViewIdInTab(entry.tab),
+    }));
+    if (isSuperseded()) {
+      // Point of no return: everything below replaces the dock's whole contents, and the saved-layout
+      // request above can take seconds. The newer load has already loaded, or is about to load, the
+      // layout that belongs there.
+      logger.debug('Dropping a layout load that a newer one superseded before it reached the dock');
+      return;
+    }
+    // Same checkpoint for content that arrived instead of a newer load — see the guard's declaration
     if (didDockGainWebViewsDuringLoad()) {
       logger.debug(
         'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
       );
       return;
     }
-    // A window created to receive one specific web view, routed separately, starts with nothing
-    // else — skip the default-layout supplement entirely, without even fetching its flags.
-    dockLayoutVar.loadLayout(layoutToLoad);
-    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
-    return;
-  }
-  // Supplement tabs join the layout below, after the scoping pass above has already run over it, so
-  // scope each supplement tab itself — its id comes from a build-baked file and would otherwise be
-  // the same in every window. Scoping here rather than re-scoping the merged layout also keeps the
-  // merge's dedup working: it matches by exact id, so an unscoped supplement id would never match
-  // the scoped copy already in a restored layout and the tab would be appended again on every load.
-  const enabledEntries = (await getEnabledSupplementEntries()).map((entry) => ({
-    ...entry,
-    tab: withWindowScopedWebViewIdInTab(entry.tab),
-  }));
-  if (isSuperseded()) {
-    // Point of no return: everything below replaces the dock's whole contents, and the saved-layout
-    // request above can take seconds. The newer load has already loaded, or is about to load, the
-    // layout that belongs there.
-    logger.debug('Dropping a layout load that a newer one superseded before it reached the dock');
-    return;
-  }
-  // Same checkpoint for content that arrived instead of a newer load — see the guard's declaration
-  if (didDockGainWebViewsDuringLoad()) {
-    logger.debug(
-      'Dropping a layout load that began against an empty dock: web views arrived while it read the saved layout',
+    if (enabledEntries.length === 0) {
+      // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
+      dockLayoutVar.loadLayout(layoutToLoad);
+      layoutLoadGenerationInDock = thisGeneration;
+      emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
+      reportIfLoadedLayoutIsEmpty(layoutToLoad);
+      return;
+    }
+    // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
+    // persists the merged layout, so a supplement tab saved while its flag was on lingers after a
+    // flag-off run — provider-less, though closable, since the merge drops an entry's Simple-mode
+    // `isClosable: false` pin outside simple mode. (Changing a tab's id across versions likewise
+    // leaves a duplicate, since we dedup by exact id.) Fix when power mode lands: drop persisted
+    // supplement tabs whose provider is no longer registered.
+    // LayoutInfo is intentionally opaque in the shared model; cross to the concrete rc-dock shape here,
+    // mirroring platform-dock-layout.component.tsx
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const layoutToLoadAsBase = layoutToLoad as unknown as LayoutBase;
+    const supplementedLayout = mergeDefaultLayoutSupplement(
+      layoutToLoadAsBase,
+      enabledEntries,
+      // The mode this layout belongs to. Each entry describes a tab's place in simple mode's fixed
+      // columns, and this merge also runs against power mode's persisted layout, so the merge needs to
+      // be told which one it is looking at rather than assuming the entries' home mode.
+      interfaceMode,
+      (entry, message) =>
+        logger.warn(`mergeDefaultLayoutSupplement: supplement tab '${entry.tab.id}': ${message}`),
     );
-    return;
-  }
-  if (enabledEntries.length === 0) {
-    // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
-    dockLayoutVar.loadLayout(layoutToLoad);
+    // convert back to the opaque LayoutInfo the dock layout API expects
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const supplementedLayoutInfo = supplementedLayout as unknown as LayoutInfo;
+    dockLayoutVar.loadLayout(supplementedLayoutInfo);
     layoutLoadGenerationInDock = thisGeneration;
-    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
-    reportIfLoadedLayoutIsEmpty(layoutToLoad);
-    return;
+    // Emit close events for pre-existing web views the (supplemented) layout dropped
+    emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, supplementedLayoutInfo);
+    reportIfLoadedLayoutIsEmpty(supplementedLayoutInfo);
+  } finally {
+    endTrackedLoad?.();
   }
-  // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
-  // persists the merged layout, so a supplement tab saved while its flag was on lingers after a
-  // flag-off run — provider-less, though closable, since the merge drops an entry's Simple-mode
-  // `isClosable: false` pin outside simple mode. (Changing a tab's id across versions likewise
-  // leaves a duplicate, since we dedup by exact id.) Fix when power mode lands: drop persisted
-  // supplement tabs whose provider is no longer registered.
-  // LayoutInfo is intentionally opaque in the shared model; cross to the concrete rc-dock shape here,
-  // mirroring platform-dock-layout.component.tsx
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const layoutToLoadAsBase = layoutToLoad as unknown as LayoutBase;
-  const supplementedLayout = mergeDefaultLayoutSupplement(
-    layoutToLoadAsBase,
-    enabledEntries,
-    // The mode this layout belongs to. Each entry describes a tab's place in simple mode's fixed
-    // columns, and this merge also runs against power mode's persisted layout, so the merge needs to
-    // be told which one it is looking at rather than assuming the entries' home mode.
-    interfaceMode,
-    (entry, message) =>
-      logger.warn(`mergeDefaultLayoutSupplement: supplement tab '${entry.tab.id}': ${message}`),
-  );
-  // convert back to the opaque LayoutInfo the dock layout API expects
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const supplementedLayoutInfo = supplementedLayout as unknown as LayoutInfo;
-  dockLayoutVar.loadLayout(supplementedLayoutInfo);
-  layoutLoadGenerationInDock = thisGeneration;
-  // Emit close events for pre-existing web views the (supplemented) layout dropped
-  emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, supplementedLayoutInfo);
-  reportIfLoadedLayoutIsEmpty(supplementedLayoutInfo);
 }
 
 /**
@@ -3308,6 +3381,7 @@ async function adoptWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
 ): Promise<WebViewId | undefined> {
   await waitForInitialize();
+  await waitForLayoutLoadToSettle();
   // Seeded before the provider runs: the moved view's state must be in this window's storage
   // for the view to read, including when the provider does not echo state back. A provider
   // that returns state still wins — the open persists the provider's state after this

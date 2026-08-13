@@ -229,3 +229,77 @@ describe('the initial layout load against a dock that gained content mid-load', 
     expect(getCloseEmitter().emit).not.toHaveBeenCalled();
   });
 });
+
+describe('a mid-session layout load racing an adopt', () => {
+  /** Let every already-scheduled continuation run, so a negative can be asserted */
+  async function settle() {
+    for (let turn = 0; turn < 3; turn += 1)
+      // Draining is inherently sequential
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+  }
+
+  test('the adopt waits for the load instead of docking into a dock about to be replaced', async () => {
+    // The empty-dock checkpoints cannot help here: this window already has content, so the reload
+    // cannot tell what arrived during it from what it is replacing. It would apply its pre-adopt
+    // answer over the adopted web view — and silently, since the close events it emits are diffed
+    // against that same pre-adopt snapshot, leaving the controller, nonce and state that web view
+    // registered with nothing to dispose them.
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    // A load reads the mode for itself, so the notification and the read have to agree — otherwise
+    // the load lands on the mode the user just left and the next notification looks like a no-op
+    let interfaceMode = 'power';
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    let releaseLayoutGet: (response: unknown) => void = () => {};
+    let doesLayoutGetHang = false;
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType !== 'windowLayout:get') return undefined;
+      if (!doesLayoutGetHang) return { kind: 'empty' };
+      return new Promise((resolve) => {
+        releaseLayoutGet = resolve;
+      });
+    });
+
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { networkObjectService } = await import('@shared/services/network-object.service');
+    const { dockLayout, loadedLayouts, dockedWebViews } = makeLiveDockLayout();
+    module.registerDockLayout(dockLayout);
+    await module.startWebViewServiceShard();
+    await primeProvider();
+    await vi.waitFor(() => expect(loadedLayouts.length).toBe(1));
+    const [, publishedShard] = vi.mocked(networkObjectService.set).mock.calls[0];
+    const shard = publishedShard as unknown as AdoptShard;
+    await shard.adoptWebView({ id: 'settled-view', webViewType: 'test.type' });
+
+    // The user switches interface mode, and the reload hangs on the saved-layout request
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    interfaceMode = 'simple';
+    await interfaceModeCallback('simple');
+    interfaceMode = 'power';
+    doesLayoutGetHang = true;
+    const reloading = interfaceModeCallback('power');
+    await settle();
+
+    // A move lands in this window while that reload is in flight
+    const adopting = shard.adoptWebView({ id: 'moved-view', webViewType: 'test.type' });
+    await settle();
+
+    expect(dockedWebViews.map((webView) => webView.id)).not.toContain('moved-view');
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+
+    await expect(adopting).resolves.toBe('moved-view');
+    expect(dockedWebViews.map((webView) => webView.id)).toContain('moved-view');
+  });
+});
