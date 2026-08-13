@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => {
   return {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
-    getNotReadyWindowIds: vi.fn(),
+    getUnreachableWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     getFocusedWindowId: vi.fn(),
     focusWindow: vi.fn(),
@@ -52,7 +52,7 @@ const mocks = vi.hoisted(() => {
 /** Wire windows whose WebView service shards are the given objects */
 function withWindows(
   shardsByWindowId: Record<number, unknown>,
-  options?: { unreadyWindowIds?: number[] },
+  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
 ) {
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
 }
@@ -60,7 +60,7 @@ function withWindows(
 vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
-  getNotReadyWindowIds: mocks.getNotReadyWindowIds,
+  getUnreachableWindowIds: mocks.getUnreachableWindowIds,
   isWindowReady: mocks.isWindowReady,
   getFocusedWindowId: mocks.getFocusedWindowId,
   focusWindow: mocks.focusWindow,
@@ -116,7 +116,7 @@ describe("a '?' reuse search limited to a project", () => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
-    mocks.getNotReadyWindowIds.mockReturnValue([]);
+    mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
     mocks.getFocusedWindowId.mockReturnValue(1);
     mocks.settingsGet.mockResolvedValue('power');
@@ -212,9 +212,13 @@ describe("a '?' reuse search limited to a project", () => {
   });
 
   test('answers a filtered probe not-found when a window could not be asked, like an unfiltered one', async () => {
-    // Per-caller reachability, unchanged by the filter: a probe creates nothing, so treating a
-    // window it could not ask as not-found costs it nothing
-    withWindows({ 1: windowShard([]), 2: windowShard([]) }, { unreadyWindowIds: [2] });
+    // The `?` reachability policy, unchanged by the filter: a `?` search that could not ask every
+    // window falls through to the routing target rather than failing, and a probe that declined
+    // creation gets the target shard's own not-found answer
+    const target = windowShard([]);
+    // What the real shard answers for a probe it cannot satisfy
+    target.openWebView.mockResolvedValue(undefined);
+    withWindows({ 1: target, 2: windowShard([]) }, { unreachableWindowIds: [2] });
     const router = await getRouter();
 
     await expect(
@@ -226,10 +230,12 @@ describe("a '?' reuse search limited to a project", () => {
     ).resolves.toBeUndefined();
   });
 
-  test('fails a filtered open that would create when a window could not be asked, like an unfiltered one', async () => {
-    // The window that could not be asked may be the one already showing this project, so creating
-    // here risks a second copy of a view meant to be unique
-    withWindows({ 1: windowShard([]), 2: windowShard([]) }, { unreadyWindowIds: [2] });
+  test('a filtered open that would create lands in the routing target when a window could not be asked, like an unfiltered one', async () => {
+    // The `?` reachability policy, unchanged by the filter: refusing while any window is
+    // unreachable would make the entry point do nothing at all, so the open falls through to the
+    // window the user is looking at — a second copy there is the cheaper way to be wrong
+    const target = windowShard([]);
+    withWindows({ 1: target, 2: windowShard([]) }, { unreachableWindowIds: [2] });
     const router = await getRouter();
 
     await expect(
@@ -238,6 +244,7 @@ describe("a '?' reuse search limited to a project", () => {
         existingProjectId: 'project-B',
         createNewIfNotFound: true,
       }),
-    ).rejects.toThrow(/unreachable/i);
+    ).resolves.toBe('opened');
+    expect(target.openWebView).toHaveBeenCalled();
   });
 });
