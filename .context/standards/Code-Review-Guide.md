@@ -42,8 +42,8 @@ the archive for your platform plus `SHA256SUMS` from
 on your `PATH`:
 
 ```bash
-ARCHIVE=roborev_<version>_<platform>.tar.gz
-grep "$ARCHIVE" SHA256SUMS | sha256sum -c -    # macOS: shasum -a 256 -c -
+ARCHIVE="roborev_<version>_<platform>.tar.gz"   # fill in your version and platform
+grep -F "$ARCHIVE" SHA256SUMS | sha256sum -c -  # macOS: shasum -a 256 -c -
 ```
 
 Use the checking form (`-c`), not the digest-printing form — printing a hash you never compare
