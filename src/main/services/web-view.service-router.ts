@@ -823,16 +823,31 @@ async function openWebView(
   layout?: Layout,
   options?: OpenWebViewOptions,
 ): Promise<WebViewId | undefined> {
+  // Contradictions among the arguments themselves, decided together and before anything else runs.
+  // A call that cannot be honored must not fan a search out to every window on the way to being
+  // refused — and, since a search that finds a match returns from the owner rung below, checking
+  // any of these later would make enforcement depend on what the docks happened to hold.
+
   // `existingProjectId` only qualifies a '?' search; a concrete existingId already names one
   // exact web view, and no existingId at all names no search for it to limit, so combining it
-  // with either is contradictory. Caught here rather than only in the window shard so that a
-  // contradiction never sends a fan-out to every window on the way to being refused.
+  // with either is contradictory. Caught here rather than only in the window shard.
   if (options?.existingProjectId !== undefined && options.existingId !== '?')
     throw new Error(
       options.existingId === undefined
         ? "openWebView: existingProjectId requires existingId: '?'; it was not given at all."
         : `openWebView: existingProjectId only qualifies an existingId of '?'; existingId ${JSON.stringify(options.existingId)} already names an exact web view.`,
     );
+
+  if (options?.targetWindowId !== undefined) {
+    if (layout?.type === 'window')
+      throw new Error(
+        `Cannot open ${webViewType}: a 'window' layout asks for a new window, but targetWindowId names an existing one. Pass one or the other.`,
+      );
+    if (layout?.type === 'replace-tab')
+      throw new Error(
+        `Cannot open ${webViewType}: a replace-tab layout names its own window through its target tab, so targetWindowId cannot also name one. Pass one or the other.`,
+      );
+  }
 
   // If an existingId is provided, search all windows for the webview's owner
   if (options?.existingId) {
@@ -867,10 +882,6 @@ async function openWebView(
   }
 
   if (layout?.type === 'window') {
-    if (options?.targetWindowId !== undefined)
-      throw new Error(
-        `Cannot open ${webViewType}: a 'window' layout asks for a new window, but targetWindowId names an existing one. Pass one or the other.`,
-      );
     // A caller that declined creation only wanted the reuse search above, which found nothing (its
     // own not-found and unreachable answers are decided up there). A window layout from here on
     // only ever creates, so the decline is honored before any window exists — a created window is
@@ -883,10 +894,6 @@ async function openWebView(
   // A named window outranks placement inference: the caller said where. It never outranks
   // `existingId` reuse above — an existing view stays wherever it lives.
   if (options?.targetWindowId !== undefined) {
-    if (layout?.type === 'replace-tab')
-      throw new Error(
-        `Cannot open ${webViewType}: a replace-tab layout names its own window through its target tab, so targetWindowId cannot also name one. Pass one or the other.`,
-      );
     // A window whose close has been decided is a stale target the caller cannot know about — same
     // rule the move commands apply: opening into it would report success and then lose the web
     // view when the close lands
