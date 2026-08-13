@@ -6,6 +6,7 @@ import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.serv
 import { WebViewId } from '@shared/models/web-view.model';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
+import { notificationService } from '@shared/services/notification.service';
 import { windowService } from '@shared/services/window.service';
 import {
   ContextMenu,
@@ -95,6 +96,19 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
     logger.error(
       `Failed to move web view ${webViewIdToMove} to a new window: ${getErrorMessage(error)}`,
     );
+    // This menu item is a user action, and the move's rejection is the only signal that the tab is
+    // not where they asked (it reopens where it can — the rejection message the log keeps says
+    // where), so the failure has to reach the user, not only the log
+    try {
+      await notificationService.send({
+        message: '%tab_contextMenu_moveTabToNewWindow_failed%',
+        severity: 'error',
+      });
+    } catch (notificationError) {
+      logger.warn(
+        `Could not notify the user that moving web view ${webViewIdToMove} failed: ${getErrorMessage(notificationError)}`,
+      );
+    }
   }
 };
 
