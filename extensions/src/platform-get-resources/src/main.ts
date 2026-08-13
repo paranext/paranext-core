@@ -70,75 +70,90 @@ async function startBackgroundFetchResources(): Promise<void> {
   });
 }
 
-async function getCachedResources(): Promise<DblResourceData[] | undefined> {
-  if (cachedResources !== undefined) {
-    try {
-      // Checks to make sure all the `installed` flags are accurate.
-      // Filter to `platform.base` rather than `platformScripture.USJ_Chapter` so that
-      // locally-installed resources that don't implement USJ (e.g. VULGP83, TNN, TND, HBK)
-      // are found and their installed flags are correctly set to true.
-      let isChanged = false;
-      let localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+/**
+ * Syncs installed flags on `cachedResources` against live project metadata from C#. Runs in the
+ * background so it never blocks a dialog open. Updates `cachedResources` and writes to storage when
+ * flags change.
+ *
+ * Waits for the C# Paratext PDPF to register resource projects before syncing — without this retry,
+ * a call that resolves before the factory finishes would see no isEditable=false projects and
+ * incorrectly mark installed resources as not-installed.
+ */
+async function syncInstalledFlags(): Promise<void> {
+  if (cachedResources === undefined) return;
+  try {
+    let localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platform.base'],
+    });
+    const MAX_RETRIES = 5;
+    for (
+      let attempt = 0;
+      attempt < MAX_RETRIES && !localProjectMetadata.some((m) => m.isEditable === false);
+      attempt++
+    ) {
+      // eslint-disable-next-line no-await-in-loop
+      await wait(500);
+      // eslint-disable-next-line no-await-in-loop
+      localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platform.base'],
       });
-      // Wait for the C# Paratext PDPF to register all resource projects before syncing
-      // installed flags. Without this retry, a dialog opened early (before the factory has
-      // finished registering) would see no isEditable=false projects and leave resources
-      // like TNN/TND/HBK with installed=false, causing them to appear in "Available to
-      // Download" instead of "Installed". Mirrors the same retry in getLocalNonDblResources.
-      const MAX_RETRIES = 5;
-      for (
-        let attempt = 0;
-        attempt < MAX_RETRIES && !localProjectMetadata.some((m) => m.isEditable === false);
-        attempt++
-      ) {
-        // eslint-disable-next-line no-await-in-loop
-        await wait(500);
-        // eslint-disable-next-line no-await-in-loop
-        localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-          includeProjectInterfaces: ['platform.base'],
-        });
-      }
-      const newCachedResources = cachedResources.map((resource) => {
-        const matchingLocalProject = localProjectMetadata.find((localProject) =>
-          // If the `projectId` is defined then tries to use that
-          resource.projectId
-            ? resource.projectId === localProject.id
-            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
-              // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
-              resource.dblEntryUid !== '' &&
-              localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
-        );
-
-        const isInstalled = matchingLocalProject !== undefined;
-        if (isInstalled !== resource.installed) {
-          isChanged = true;
-          return {
-            ...resource,
-            installed: isInstalled,
-            updateAvailable: false,
-            projectId: matchingLocalProject?.id ?? '',
-          };
-        }
-
-        return resource;
-      });
-
-      // If a change was detected updates the cache
-      if (isChanged) {
-        cachedResources = newCachedResources;
-        // Writes the updated cached resources to user data
-        if (executionToken)
-          await papi.storage.writeUserData(
-            executionToken,
-            RESOURCES_CACHE_KEY,
-            JSON.stringify(cachedResources),
-          );
-      }
-    } catch (error: unknown) {
-      logger.warn(`Error getting cached resources: ${getErrorMessage(error)}`);
     }
+    // If the retry loop exhausted without finding any isEditable=false project, C# hasn't
+    // registered yet. Skip the sync entirely — syncing against an empty project list would
+    // incorrectly mark all installed resources as not-installed and corrupt the cache.
+    if (!localProjectMetadata.some((m) => m.isEditable === false)) return;
 
+    // Re-check cachedResources after the await — fetchAndCacheResources may have updated it
+    if (cachedResources === undefined) return;
+
+    let isChanged = false;
+    const newCachedResources = cachedResources.map((resource) => {
+      const matchingLocalProject = localProjectMetadata.find((localProject) =>
+        // If the `projectId` is defined then tries to use that
+        resource.projectId
+          ? resource.projectId === localProject.id
+          : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
+            // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
+            resource.dblEntryUid !== '' &&
+            localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
+      );
+
+      const isInstalled = matchingLocalProject !== undefined;
+      if (isInstalled !== resource.installed) {
+        isChanged = true;
+        return {
+          ...resource,
+          installed: isInstalled,
+          updateAvailable: false,
+          projectId: matchingLocalProject?.id ?? '',
+        };
+      }
+
+      return resource;
+    });
+
+    if (isChanged) {
+      cachedResources = newCachedResources;
+      if (executionToken)
+        await papi.storage.writeUserData(
+          executionToken,
+          RESOURCES_CACHE_KEY,
+          JSON.stringify(cachedResources),
+        );
+    }
+  } catch (error: unknown) {
+    logger.warn(`Error syncing installed flags: ${getErrorMessage(error)}`);
+  }
+}
+
+async function getCachedResources(): Promise<DblResourceData[] | undefined> {
+  if (cachedResources !== undefined) {
+    // Run the installed-flag sync in the background so the dialog open is never blocked by
+    // getMetadataForAllProjects retries (which can exceed the 30-second JSON-RPC timeout when
+    // the C# PDPF is still initializing). The next dialog open picks up the updated flags.
+    syncInstalledFlags().catch((e) =>
+      logger.warn(`Background installed-flag sync failed: ${getErrorMessage(e)}`),
+    );
     return cachedResources;
   }
 
@@ -166,13 +181,13 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
   try {
     // Retry until at least one isEditable=false project appears — mirrors the reasoning in
     // fetchDownloadedResources (frontend): a call that resolves before the C# Paratext factory has
-    // registered returns only TypeScript-only PDPFs and misses all C# resource projects. Capping
-    // at 5 attempts (each with a 500 ms back-off) avoids blocking forever during tests or when the
-    // data provider is genuinely absent.
+    // registered returns only TypeScript-only PDPFs and misses all C# resource projects. Capped at
+    // 2 attempts (1 s total) to stay well under the 30-second JSON-RPC timeout; if C# still hasn't
+    // registered after 1 s, return an empty list rather than risk a timeout.
     let allMetadata = await papi.projectLookup.getMetadataForAllProjects({
       includeProjectInterfaces: ['platform.base'],
     });
-    const MAX_RETRIES = 5;
+    const MAX_RETRIES = 2;
     for (
       let attempt = 0;
       attempt < MAX_RETRIES && !allMetadata.some((m) => m.isEditable === false);
