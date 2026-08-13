@@ -18,13 +18,18 @@ const mocks = vi.hoisted(() => {
   // Where the router's shard index parks its subscriptions — module state that outlives one test,
   // same reasoning as the pre-existing `web-view.service-router.test.ts`.
   const shardAnnouncementListeners: ShardAnnouncementListeners = { create: [], dispose: [] };
+  const getFocusedWindowId = vi.fn();
   return {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
     getNotReadyWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     isWindowClosing: vi.fn(),
-    getFocusedWindowId: vi.fn(),
+    getFocusedWindowId,
+    // The real answer is false only while no window holds OS focus, which in this suite is exactly
+    // when getFocusedWindowId answers undefined — derived so the focus-driven tests keep meaning
+    // what they say
+    isApplicationFocused: vi.fn(() => getFocusedWindowId() !== undefined),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
@@ -63,6 +68,7 @@ vi.mock('@main/services/window-state.service', () => ({
   isWindowReady: mocks.isWindowReady,
   isWindowClosing: mocks.isWindowClosing,
   getFocusedWindowId: mocks.getFocusedWindowId,
+  isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
