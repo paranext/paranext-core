@@ -304,21 +304,29 @@ function makeGoToCommandHandler(
         return;
       }
 
-      // Both of these need only the project id the ask above already reported, so they run before
-      // the app-global lock rather than inside it — the acquisition started here and awaited later
-      // (by getScriptureBounds, which does need the in-lock ref), the books-present fetch finished
-      // here. They neither read nor write the reference that lock protects, and their round trips
-      // are the bulk of what it would otherwise hold against every other window.
+      // Both of these need only the project id the ask above already reported, so both START here,
+      // before the app-global lock, and their round trips overlap acquiring it. They neither read
+      // nor write the reference that lock protects, and their round trips are the bulk of what it
+      // would otherwise hold against every other window.
       const versificationPdpPromise =
         needsBounds && target.projectId ? acquireVersificationPdp(target.projectId) : undefined;
       // Mark an early rejection as handled so it cannot surface as an unhandled rejection while
       // the round trips below are still in flight; the failure is actually handled (with a debug
       // log and versification-unaware fallback) where getScriptureBounds awaits this promise
       versificationPdpPromise?.catch(() => {});
-      const availableBooks = await getAvailableBooks(target.projectId);
+      // Started, not awaited. Awaiting the books-present fetch here would serialize it AHEAD of the
+      // reference read, and that read is itself a round trip whenever the scroll group's source
+      // project differs from the target's — so a single press would pay both in sequence. Held keys
+      // make per-run latency the auto-repeat rate limiter within a window, so that is user-visible.
+      // Awaited below beside the reference read instead, which costs the lock only whatever time is
+      // actually left. It never rejects (it falls back to the whole canon), so it needs no guard.
+      const availableBooksPromise = getAvailableBooks(target.projectId);
 
       await navigationCommandMutex.runExclusive(async () => {
-        const currentRef = await getCurrentRef(target);
+        const [currentRef, availableBooks] = await Promise.all([
+          getCurrentRef(target),
+          availableBooksPromise,
+        ]);
         const bounds =
           versificationPdpPromise && target.projectId
             ? await getScriptureBounds(
