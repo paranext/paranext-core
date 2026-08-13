@@ -6,9 +6,12 @@ import {
   testingWebViewServiceRouter,
 } from '@main/services/web-view.service-router';
 import {
+  getRegisteredRouter,
+  settle,
   withWindows as withWindowsServingShards,
   type ShardAnnouncementListeners,
 } from '@main/services/__tests__/service-router-test.util';
+import type { WebViewServiceType } from '@shared/services/web-view.service-model';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import type { NetworkObjectDetails } from '@shared/models/network-object.model';
 import type { SavedWebViewDefinition, WebViewId } from '@shared/models/web-view.model';
@@ -91,6 +94,11 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 
 const { moveWebView } = testingWebViewServiceRouter;
+
+/** Start the router and hand back the object it registered under the generic name */
+async function getRouter() {
+  return getRegisteredRouter<WebViewServiceType>(mocks.networkObjectSet, startWebViewServiceRouter);
+}
 
 /** Start the router and hand back the handler registered for the given command name */
 async function getCommandHandler(commandName: string): Promise<InternalRequestHandler> {
@@ -370,6 +378,91 @@ describe('moveWebView', () => {
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.stringContaining(JSON.stringify({ id: 'view-1', webViewType: 'test.type' })),
     );
+  });
+});
+
+describe('a web view that is between windows on a move', () => {
+  /** A move whose target adopt hangs until the test releases it, holding the capture→adopt gap open */
+  /**
+   * A source window whose capture really closes the tab, the way the real shard's does. The shared
+   * stand-in above leaves its list alone, which no window does — and the whole point of the gap is
+   * that the source stops answering for the web view before the target starts.
+   */
+  function sourceWindowShard(webViewId: WebViewId) {
+    const shard = windowShard([webViewId]);
+    shard.captureAndCloseWebView.mockImplementation(async (id) => {
+      if (id !== webViewId) return undefined;
+      shard.getOpenWebViewDefinition.mockResolvedValue(undefined);
+      shard.getAllOpenWebViewDefinitions.mockResolvedValue([]);
+      return { id, webViewType: 'test.type' };
+    });
+    return shard;
+  }
+
+  async function moveWithHangingAdopt() {
+    const owner = sourceWindowShard('view-1');
+    const target = windowShard([]);
+    let releaseAdopt: (webViewId: WebViewId) => void = () => {};
+    target.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdopt = resolve;
+        }),
+    );
+    withWindows({ 2: owner, 3: target });
+    const router = await getRouter();
+
+    const moving = moveWebView('view-1', 3);
+    await settle();
+    return { router, moving, releaseAdopt: (webViewId: WebViewId) => releaseAdopt(webViewId) };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getReadyWindowIds.mockReturnValue([]);
+    mocks.getUnreachableWindowIds.mockReturnValue([]);
+    mocks.isWindowReady.mockReturnValue(true);
+    mocks.isWindowClosing.mockReturnValue(false);
+    mocks.getFocusedWindowId.mockReturnValue(1);
+    mocks.settingsGet.mockResolvedValue('power');
+  });
+
+  test('a search landing in the capture-to-adopt gap is told the question could not be answered', async () => {
+    // The source tab closes before the target opens it, so for that gap the web view is open in NO
+    // window: every window answers the search truthfully and the search still comes back wrong. A
+    // caller that creates on a miss would mint a second copy of a view meant to be unique.
+    const { router, moving, releaseAdopt } = await moveWithHangingAdopt();
+
+    await expect(router.getOpenWebViewDefinition('view-1')).rejects.toThrow(/unreachable/);
+
+    releaseAdopt('view-1');
+    await moving;
+  });
+
+  test('a completed move stops answering that way', async () => {
+    const { router, moving, releaseAdopt } = await moveWithHangingAdopt();
+
+    releaseAdopt('view-1');
+    await moving;
+
+    // The gap is over, so searches answer for themselves again. Left standing, the entry would
+    // make every later search for this id refuse for the rest of the session
+    await expect(router.getOpenWebViewDefinition('view-1')).resolves.toBeUndefined();
+  });
+
+  test('a move that failed and recovered stops answering that way', async () => {
+    // Recovery reopens the web view somewhere and then rejects, so the gap is over on that exit
+    // too — as it is on every other one
+    const owner = sourceWindowShard('view-1');
+    const target = windowShard([]);
+    target.adoptWebView.mockRejectedValue(new Error('provider exploded'));
+    withWindows({ 2: owner, 3: target });
+    const router = await getRouter();
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow(/where it came from/);
+
+    await expect(router.getOpenWebViewDefinition('view-1')).resolves.toBeUndefined();
   });
 });
 
