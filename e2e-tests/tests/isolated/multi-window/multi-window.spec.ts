@@ -70,6 +70,7 @@ import {
 } from '../../../fixtures/helpers';
 import {
   DUPLICATE_REGISTRATION_PATTERN,
+  RENDERER_STARTING_LOG,
   FAULT_MARKERS,
   HOME_TAB_UUID,
   WEBSOCKET_PORT,
@@ -398,6 +399,10 @@ test.describe('multi-window lifecycle', () => {
     // registrations. Any warn/error collision line here is a fault — see the pattern's doc for why
     // it is bounded by severity.
     const window2StartupLog = output.textFrom(beforeCreateMark);
+    // Positive control first: prove this slice actually holds window 2's startup. A mark taken a
+    // moment too late leaves an empty slice, against which the collision assertion below passes
+    // without having examined anything.
+    expect(window2StartupLog).toContain(RENDERER_STARTING_LOG);
     expect(window2StartupLog).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
 
     // Focus routing: with window 2 focused, generic window-service calls must be answered by
