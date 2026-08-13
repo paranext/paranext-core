@@ -345,6 +345,11 @@ export function getAbandonedWindowIds(): number[] {
 /**
  * Whether a window has been given up on, so nothing will ever run in it again.
  *
+ * Exported for callers outside this module that hold one window's id and need only that window's
+ * answer; the counting rules inside this module read `abandonedWindowIds` directly, so a reader
+ * looking for how the last-window arithmetic uses this state wants
+ * {@link countWindowsThatCouldBeTheLastOne} instead.
+ *
  * @param windowId Window to ask about
  */
 export function isWindowAbandoned(windowId: number): boolean {
