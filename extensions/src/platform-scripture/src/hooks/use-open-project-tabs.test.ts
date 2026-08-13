@@ -358,6 +358,61 @@ describe('useOpenProjectTabs', () => {
     }
   });
 
+  it('keeps retrying long enough to outlast a sibling renderer boot', async () => {
+    vi.useFakeTimers();
+    try {
+      // The failure the seed retry exists to survive is another window starting or reloading,
+      // during which the enumeration refuses to under-report — and a renderer boot takes tens of
+      // seconds on a slow machine. Here the sibling comes up about a minute in; the seed must
+      // still be trying then rather than having given up within its first few seconds.
+      let isSiblingUp = false;
+      mockGetAllOpenWebViewDefinitions.mockImplementation(async () => {
+        if (!isSiblingUp) throw new Error('window 3 unreachable');
+        return [
+          {
+            id: 'wv-after-boot',
+            webViewType: 'platformScriptureEditor.react',
+            projectId: 'p-1',
+            scrollGroupScrRef: 0,
+          },
+        ];
+      });
+      const { result } = renderHook(() => useOpenProjectTabs());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(59_000);
+      });
+      isSiblingUp = true;
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].webViewId).toBe('wv-after-boot');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('spreads its retries across a startup-scale budget before giving up', async () => {
+    vi.useFakeTimers();
+    try {
+      mockGetAllOpenWebViewDefinitions.mockRejectedValue(new Error('window 3 unreachable'));
+      renderHook(() => useOpenProjectTabs());
+      // Still trying at a minute and a half: giving up inside the window a sibling renderer needs
+      // to boot would leave every already-open tab invisible for the life of the component
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(89_000);
+      });
+      expect(mockLoggerWarn).not.toHaveBeenCalledWith(expect.stringContaining('giving up'));
+      // ...but the budget is bounded: well past it, the seed has logged that it gave up
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(120_000);
+      });
+      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('giving up'));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not issue a fetch after unmount during retry delay', async () => {
     vi.useFakeTimers();
     try {
