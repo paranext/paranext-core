@@ -89,3 +89,6 @@ service-account.json
 
 # Local git worktrees used for isolated feature-branch work
 .worktrees/
+
+# roborev snapshots of oversized review diffs
+/.roborev/

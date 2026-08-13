@@ -1,10 +1,10 @@
 ---
 title: Code Review Guide
 description: Code review process, Reviewable workflow, code stewards, and PR approval best practices.
-version: 1.1.0
+version: 1.2.0
 status: active
 created: 2026-03-04
-last_updated: 2026-06-15
+last_updated: 2026-08-13
 ---
 
 # Code Review Guide
@@ -18,6 +18,58 @@ This document outlines the code review process and best practices for Platform.B
 The team recommends using **Reviewable** rather than GitHub's native review tools when available. Reviewable enforces completion requirements: all conversations must be resolved and every changed file must be reviewed before merging is allowed.
 
 For detailed guidelines, see the [Code Review Guide wiki](https://github.com/paranext/paranext/wiki/Code-Review-Guide).
+
+---
+
+## Automated Per-Commit Review (roborev, optional)
+
+[roborev](https://roborev.io) reviews each commit in the background with an AI agent and
+collects the findings in a local queue, so problems surface while the change is still fresh
+rather than at PR time. It complements human review and Reviewable; it does not replace either.
+
+**This is opt-in and entirely local.** The repository ships a `.husky/post-commit` hook that
+exits immediately when the `roborev` binary is not on `PATH`, so developers who have not
+installed it are unaffected — no hook output, no delay, no failed commits.
+
+### Per-machine setup
+
+Everything below is per-developer and per-machine; none of it can be committed.
+
+```bash
+curl -fsSL https://roborev.io/install.sh | bash   # 1. install the binary
+roborev config set --global default_agent claude-code   # 2. pick your review agent
+roborev daemon restart
+roborev skills install                            # 3. optional: /roborev-fix, /roborev-refine
+roborev agent-hook install --agent claude         # 4. optional: mid-session fix reminders
+```
+
+Step 2 matters: `roborev check-agents` lists which agents your machine can actually reach, and
+reviews fail silently if the configured agent is unavailable. Reviews run on **your own** agent
+subscription and consume your quota.
+
+If you install the agent hook, raise the default thresholds in `~/.roborev/config.toml` — the
+shipped defaults interrupt every five turns, and the default instruction uses Codex's
+`$roborev-fix` syntax rather than Claude Code's `/roborev-fix`:
+
+```toml
+[agent_hook]
+turn_threshold = 15
+instruction = "Invoke the /roborev-fix skill now."
+```
+
+Then browse findings with `roborev tui`, or pull them into an agent session with `/roborev-fix`.
+
+### What the repository already provides
+
+- `REVIEW.md` — review guidelines shared by roborev and Claude Code's `/code-review`, which
+  both auto-discover this file. Keep project-wide review rules here.
+- `.roborev.toml` — exclusions for generated output, skip patterns for WIP commits, and commit
+  attribution. It deliberately does not pin a review agent; that is a per-developer choice.
+- `.husky/post-commit` — the guarded hook described above.
+
+Running `roborev init` is not required, and installs a second hook in `.husky/_/post-commit`.
+That is harmless: the daemon coalesces duplicate requests for the same repository, git
+reference, and review target into a single review.
 
 ---
 
@@ -90,3 +142,4 @@ Request code reviews in the `#reviews` channel on the [Platform.Bible Discord se
 | ------- | ---------- | ------------------------------------------------------------------- |
 | 1.0.0   | 2026-03-04 | Initial version                                                     |
 | 1.1.0   | 2026-06-15 | De-ported the AI-Assisted-Review (porting) section for the general profile |
+| 1.2.0   | 2026-08-13 | Added optional roborev per-commit review section with per-machine setup |

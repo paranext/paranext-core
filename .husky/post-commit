@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+
+# ============================================
+# Optional automated review (ALL branches)
+# ============================================
+# Enqueues a background roborev review of the commit just made. This is entirely opt-in:
+# without the roborev binary on PATH the hook exits immediately and changes nothing.
+#
+# Setup for developers who want it: .context/standards/Code-Review-Guide.md
+#
+# Developers who also ran `roborev init` have a second hook in .husky/_/post-commit. That is
+# harmless — the daemon coalesces duplicate requests for the same repository, git reference,
+# and review target into a single review.
+#
+# Husky runs hooks under `sh -e`, so failures are swallowed explicitly: a review is never
+# allowed to fail a commit that has already been made.
+command -v roborev >/dev/null 2>&1 || exit 0
+roborev post-commit >/dev/null 2>&1 || true
