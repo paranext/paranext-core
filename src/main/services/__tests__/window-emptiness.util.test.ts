@@ -203,4 +203,24 @@ describe('a close decided outside this handler', () => {
       vi.useRealTimers();
     }
   });
+
+  test('a window closing by another path is told closing even when it reports born-empty', () => {
+    // A close in flight reloads nothing and docks nothing: telling a window mid-teardown to open
+    // Home puts a tab — and a web view provider's side effects with it — into a window that is on
+    // its way out. Which reason the report carries says nothing about that; the close does.
+    const closingIds = new Set<number>([7]);
+    const closeWindow = vi.fn();
+    const markWindowClosing = vi.fn((windowId: number) => closingIds.add(windowId));
+    const handler = createWindowEmptinessHandler({
+      countWindows: () => 2,
+      closeWindow,
+      markWindowClosing,
+      isWindowClosing: (windowId: number) => closingIds.has(windowId),
+    });
+
+    expect(handler(7, 'born-empty')).toEqual({ action: 'closing' });
+
+    expect(closeWindow).not.toHaveBeenCalled();
+    expect(markWindowClosing).not.toHaveBeenCalled();
+  });
 });
