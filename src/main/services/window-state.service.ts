@@ -115,6 +115,25 @@ type RoutingTarget = { windowId: number | undefined; isReady: boolean };
 /** The routing target as last announced, so an emit happens exactly when the target changes */
 let announcedRoutingTarget: RoutingTarget = { windowId: undefined, isReady: false };
 
+/**
+ * Whether a window is still waiting for the content it was created to receive. Such a window is
+ * shown — and takes OS focus — before that content arrives, and the operation that created it can
+ * still fail and close it again, so anything focus-routed into it in that gap is destroyed with it.
+ * The pending-content mark itself lives with window-layout persistence, which owns the rest of a
+ * window's persisted identity; it reaches this tracker as an injected predicate (see
+ * {@link setWindowPendingContentPredicate}) so this module, which sits under every main-process
+ * service, does not import one of them. Until the predicate is wired, no window counts as pending.
+ */
+let isWindowPendingContent: (windowId: number) => boolean = () => false;
+
+/**
+ * Wire the pending-content predicate the routing target consults — see the declaration above.
+ * Called by `main.ts` during startup, before any window exists.
+ */
+export function setWindowPendingContentPredicate(predicate: (windowId: number) => boolean): void {
+  isWindowPendingContent = predicate;
+}
+
 const onDidChangeRoutingTargetEmitter = new PlatformEventEmitter<number | undefined>();
 
 /**
@@ -316,6 +335,11 @@ export function getFocusedWindowId(): number | undefined {
  * every notification, dialog, and newly opened web view for the whole of that wait lands in the
  * window the user is watching disappear.
  *
+ * A window still waiting for the content it was created to receive is passed over for the same
+ * reason from the other direction: it takes OS focus the moment it is shown, and the operation
+ * filling it can still fail and close it — so new work routed there in that gap is destroyed with
+ * it. See {@link setWindowPendingContentPredicate}.
+ *
  * Once every window is closing there is no window that is not closing left to prefer, so the
  * readiness preference comes back: a closing window still serves calls until its own teardown
  * finishes, and a quit reports its progress and asks its questions through this target. The one
@@ -328,7 +352,9 @@ export function getFocusedWindowId(): number | undefined {
  */
 function getRoutingTarget(): RoutingTarget {
   const canTakeNewWork = (windowId: number) =>
-    readyWindowIds.has(windowId) && !closingWindowIds.has(windowId);
+    readyWindowIds.has(windowId) &&
+    !closingWindowIds.has(windowId) &&
+    !isWindowPendingContent(windowId);
 
   if (focusedWindowId !== undefined && canTakeNewWork(focusedWindowId))
     return { windowId: focusedWindowId, isReady: true };
@@ -611,4 +637,5 @@ export function resetForTesting(): void {
   mostRecentlyFocusedWindowIds.length = 0;
   focusedWindowId = undefined;
   announcedRoutingTarget = { windowId: undefined, isReady: false };
+  isWindowPendingContent = () => false;
 }
