@@ -14,6 +14,7 @@ import {
 } from './checklist.web-view-provider';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
+import { FindHistoryDataProviderEngine } from './find/find-history.data-provider';
 import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
@@ -279,7 +280,10 @@ async function openManageBooks(
   return papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, options);
 }
 
-async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
+async function openFind(
+  editorWebViewId: string | undefined,
+  selectedText?: string,
+): Promise<string | undefined> {
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
   let editorScrollGroupId: FindWebViewOptions['editorScrollGroupId'];
@@ -303,6 +307,7 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
     editorScrollGroupId,
     bringToFront: true,
     editorWebViewId,
+    initialSearchText: selectedText,
   };
 
   // First tries to open an existing find web view
@@ -312,12 +317,13 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
     { ...options, existingId: '?', createNewIfNotFound: false },
   );
 
-  // If found an existing web view, then reloads it only if the project definition is different
+  // If found an existing web view, reload it when the project differs OR when the caller supplied
+  // text to pre-fill (e.g. Ctrl+F with a selection) — reloading is how initialSearchText reaches the
+  // existing panel's search box; without it the selection would be dropped for an already-open panel.
   if (findWebViewId) {
     const existingFindWebViewDefinition =
       await papi.webViews.getOpenWebViewDefinition(findWebViewId);
-    // If the existing web view has a project id different to the current one, then prompts a reload
-    if (existingFindWebViewDefinition?.projectId !== projectId) {
+    if (existingFindWebViewDefinition?.projectId !== projectId || selectedText) {
       await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
     }
   } else {
@@ -673,6 +679,12 @@ export async function activate(context: ExecutionActivationContext) {
             'The ID of the triggering editor web view; the project to search in is resolved from it',
           schema: { type: 'string' },
         },
+        {
+          name: 'selectedText',
+          required: false,
+          summary: 'Text to pre-fill in the search field and immediately search for',
+          schema: { type: 'string' },
+        },
       ],
       result: {
         name: 'return value',
@@ -684,6 +696,14 @@ export async function activate(context: ExecutionActivationContext) {
   const openFindWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     findWebViewType,
     findWebViewProvider,
+  );
+
+  const findHistoryDataProviderPromise = papi.dataProviders.registerEngine(
+    'platformScripture.findHistory',
+    new FindHistoryDataProviderEngine({
+      readUserData: (key) => papi.storage.readUserData(context.executionToken, key),
+      writeUserData: (key, value) => papi.storage.writeUserData(context.executionToken, key, value),
+    }),
   );
 
   const invalidateResultsPromise = papi.commands.registerCommand(
@@ -772,6 +792,7 @@ export async function activate(context: ExecutionActivationContext) {
     openSettingsEventEmitter,
     await openFindPromise,
     await openFindWebViewProviderPromise,
+    await findHistoryDataProviderPromise,
     await openManageBooksPromise,
     await manageBooksWebViewProviderPromise,
     await invalidateResultsPromise,

@@ -45,7 +45,8 @@
         "localizeNotes": "Application main menu > Project > Open new window",
         "group": "platform.projectMisc",
         "order": 1,
-        "command": "platform.createWindow"
+        "command": "platform.createWindow",
+        "hiddenInterfaceModes": ["simple"]
       },
       {
         "label": "%mainMenu_helpInfo_visitGettingStartedPage%",

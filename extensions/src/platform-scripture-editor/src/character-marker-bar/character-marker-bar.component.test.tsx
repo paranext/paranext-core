@@ -38,6 +38,20 @@ beforeAll(() => {
 const mockMode = { isPowerMode: false };
 vi.mock('../use-is-power-mode.hook', () => ({ useIsPowerMode: () => mockMode.isPowerMode }));
 
+// The removal action itself is covered by `use-remove-character-marker.hook.test.ts`; mocking it here
+// keeps this file about the bar. `useRemoveCharacterMarker` records the options it was called with so
+// a test can assert the bar actually WIRES them — without that, dropping `projectId={projectId}` from
+// the component would leave every test in this file passing.
+const removeCharacterMarker = vi.fn();
+// Typed through the generic rather than with an unused parameter, so the options are captured for
+// `toHaveBeenCalledWith` without declaring an argument the implementation does not read.
+const useRemoveCharacterMarker = vi.fn<
+  (options: { projectId?: string }) => typeof removeCharacterMarker
+>(() => removeCharacterMarker);
+vi.mock('./use-remove-character-marker.hook', () => ({
+  useRemoveCharacterMarker: (options: { projectId?: string }) => useRemoveCharacterMarker(options),
+}));
+
 // Imported after the mock so CharacterMarkerToolbar picks up the mocked useIsPowerMode.
 // eslint-disable-next-line import/first
 import { CharacterMarkerBar } from './character-marker-bar.component';
@@ -56,6 +70,7 @@ const STRINGS = {
   // Lives in `platform-bible-react` beside its `_insert`/`_paragraph` siblings, not in this
   // extension — all three fill the same shared `MarkerMenu` search field.
   '%markerMenu_searchPlaceholder_character%': 'Search character markers',
+  '%webView_platformScriptureEditor_characterMarkerMenu_removeMarker%': 'Remove character marker',
   '%webView_platformScriptureEditor_syncEditBlocked_banner%': 'Editing paused',
   // `usfmMarkers.bd.description`. The editor web view loads every marker description (see
   // EDITOR_LOCALIZED_STRINGS), so the bar really does have this string available at runtime.
@@ -91,6 +106,10 @@ function renderBar(overrides: Partial<Parameters<typeof CharacterMarkerBar>[0]> 
 afterEach(() => {
   mockMode.isPowerMode = false;
   selectionHolder.current = { start: { jsonPath: '$.content[0]' } };
+  // Module-level spies outlive each test, so a `toHaveBeenCalledTimes`/`not.toHaveBeenCalled`
+  // assertion added later would otherwise see calls leaked from the test before it.
+  removeCharacterMarker.mockClear();
+  useRemoveCharacterMarker.mockClear();
 });
 
 describe('CharacterMarkerBar', () => {
@@ -164,5 +183,28 @@ describe('CharacterMarkerBar', () => {
     // inherits no direction and `align="end"` would resolve PHYSICALLY — pinning a 200px menu to the
     // right in an RTL project, off the iframe's inline-start edge. Only an explicit `dir` mirrors it.
     expect(await screen.findByRole('dialog')).toHaveAttribute('dir', 'rtl');
+  });
+
+  it('hands the project to the removal action so it can snapshot version history', () => {
+    renderBar({ projectId: 'project-1' });
+
+    // The snapshot is the user's undo of last resort for a destructive edit, and the removal action
+    // takes one only when it has a project. Nothing else in this file would fail if the bar stopped
+    // forwarding `projectId`, so this is what keeps that wiring honest.
+    expect(useRemoveCharacterMarker).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'project-1' }),
+    );
+  });
+
+  it('offers a remove row that calls the removal action', async () => {
+    // `contextMarker: 'nd'` is the caret sitting inside an existing \nd run — the single-marker
+    // case, so the menu offers "Remove character marker".
+    const user = userEvent.setup();
+    renderBar({ contextMarker: 'nd' });
+
+    await user.click(screen.getByRole('button'));
+    await user.click(await screen.findByText('Remove character marker'));
+
+    expect(removeCharacterMarker).toHaveBeenCalledWith('nd');
   });
 });

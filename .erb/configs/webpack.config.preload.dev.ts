@@ -61,8 +61,6 @@ const configuration: webpack.Configuration = {
     __dirname: false,
     __filename: false,
   },
-
-  watch: true,
 };
 
 const preloadConfig = merge(baseConfig, configuration);

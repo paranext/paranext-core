@@ -84,6 +84,10 @@ let status: FirstRunStatus = computeInitialStatus();
 // retryFirstRunResolution from starting a second run while one is already in flight.
 let resolvePromise: Promise<void> | undefined;
 let resolving = false;
+// Bumped when a resolution starts or a user action (continue-without-setup from the loading
+// watchdog) supersedes an in-flight one, so a late-settling resolveInternal can't clobber the
+// newer status. See applyStatus in resolveInternal.
+let resolutionGeneration = 0;
 
 const listeners = new Set<() => void>();
 
@@ -145,7 +149,19 @@ async function seedInterfaceLanguageFromOsLocale(): Promise<void> {
   }
 }
 
-async function resolveInternal(): Promise<void> {
+async function resolveInternal(generation: number): Promise<void> {
+  // True once a user action superseded this run mid-flight (e.g. "continue without setup" from the
+  // loading watchdog while a slow probe was still awaiting). Gates both the in-memory status update
+  // AND the durable wizard-resume writes below (WIZARD_ACTIVE_KEY, firstRunComplete), so a
+  // late-settling run can neither clobber the user's status nor persist state that would resume the
+  // wizard at the wrong step on the next launch. Note the interface-language seed is only guarded at
+  // its boundaries: a bail landing inside seedInterfaceLanguageFromOsLocale's own awaits can still
+  // write platform.interfaceLanguage — that's harmless (it just sets the OS-matched UI language and
+  // never resumes the wizard), so the guard checks before and after the seed rather than atomically.
+  const isSuperseded = (): boolean => generation !== resolutionGeneration;
+  const applyStatus = (next: FirstRunStatus): void => {
+    if (!isSuperseded()) setStatus(next);
+  };
   try {
     // Demo/UX mode (PT-4219): bypass the real registration backend + relaunch entirely and drop the
     // user straight into the wizard from the top. Enablement only — never on in shipped builds.
@@ -153,7 +169,7 @@ async function resolveInternal(): Promise<void> {
     // WIZARD_ACTIVE_KEY, so leaving it unset keeps a later real first-run on the same profile from
     // wrongly resuming at the sync-consent step.
     if (isDemoMode()) {
-      setStatus({ kind: 'wizard', step: 'language' });
+      applyStatus({ kind: 'wizard', step: 'language' });
       return;
     }
 
@@ -167,7 +183,7 @@ async function resolveInternal(): Promise<void> {
       interfaceMode = readCachedInterfaceMode();
     }
     if (interfaceMode !== undefined && interfaceMode !== 'simple') {
-      setStatus({ kind: 'app' });
+      applyStatus({ kind: 'app' });
       return;
     }
 
@@ -213,7 +229,7 @@ async function resolveInternal(): Promise<void> {
           logger.warn(`Self-heal write of platform.syncOnStartup failed: ${getErrorMessage(e)}`);
         }
       }
-      setStatus({ kind: 'app' });
+      applyStatus({ kind: 'app' });
       // Completed Simple-mode user: re-check registration in the background (not awaited) so a
       // registration that has since become invalid can re-raise the wizard without regressing
       // startup latency. Simple-mode is guaranteed here (non-simple returned early above).
@@ -234,13 +250,20 @@ async function resolveInternal(): Promise<void> {
       registrationValidity: effectiveValidity,
     });
 
+    // The registration probe above is the long await where the watchdog reveals the escape hatch, so
+    // it's where a "continue without setup" bail most likely lands. If that superseded us, the user
+    // is already in the app — skip the switch entirely so none of its persisted writes run. (Every
+    // durable write below sits in this switch; the reads/writes before the probe complete before the
+    // watchdog's reveal threshold, so they aren't reachable after a bail.)
+    if (isSuperseded()) return;
+
     switch (decision.action) {
       case 'completeThenShowApp':
         await markFirstRunComplete();
-        setStatus({ kind: 'app' });
+        applyStatus({ kind: 'app' });
         break;
       case 'waitForRegistration':
-        setStatus({ kind: 'error' });
+        applyStatus({ kind: 'error' });
         break;
       case 'startWizard':
         // Fresh start at the language step: default to the OS language if it has enough setup-dialog
@@ -253,27 +276,32 @@ async function resolveInternal(): Promise<void> {
         // introduces no new flash.)
         if (!wizardActive && decision.step === 'language') {
           await seedInterfaceLanguageFromOsLocale();
+          // seedInterfaceLanguageFromOsLocale is another await a bail could land across; re-check so
+          // WIZARD_ACTIVE_KEY isn't persisted for a run the user already superseded.
+          if (isSuperseded()) return;
         }
         writeBooleanFlag(WIZARD_ACTIVE_KEY, true);
-        setStatus({ kind: 'wizard', step: decision.step });
+        applyStatus({ kind: 'wizard', step: decision.step });
         break;
       default:
         // 'showApp' is unreachable here: we pass firstRunComplete: false above (the real flag was
         // checked and returned early). Defensive fallback.
-        setStatus({ kind: 'app' });
+        applyStatus({ kind: 'app' });
         break;
     }
   } catch (e) {
     logger.warn(`resolveFirstRunState failed: ${getErrorMessage(e)}`);
-    setStatus({ kind: 'error' });
+    applyStatus({ kind: 'error' });
   }
 }
 
 // Clears the `resolving` guard even if resolveInternal throws.
 async function runResolution(): Promise<void> {
   resolving = true;
+  resolutionGeneration += 1;
+  const generation = resolutionGeneration;
   try {
-    await resolveInternal();
+    await resolveInternal(generation);
   } finally {
     resolving = false;
   }
@@ -346,6 +374,9 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
  *   is best-effort: a failure is logged but does not block wizard completion.
  */
 export async function completeFirstRun(options?: { skippedStep?: FirstRunStep }): Promise<void> {
+  // Unlike continueWithoutRegistration, this doesn't bump resolutionGeneration: completeFirstRun is
+  // only reachable from the wizard UI, which renders after resolveInternal already set 'wizard' and
+  // returned — so no resolution is in flight whose late result could clobber this status.
   // Demo/UX mode: reveal the app but persist nothing, so the click-through re-runs on next launch.
   if (isDemoMode()) {
     setStatus({ kind: 'app' });
@@ -377,6 +408,9 @@ export async function completeFirstRun(options?: { skippedStep?: FirstRunStep })
  * then the user is in simple mode with no project and cannot open projects/resources.
  */
 export function continueWithoutRegistration(): void {
+  // Supersede any in-flight resolution (the user may reach this from the loading watchdog while a
+  // slow probe is still awaiting) so its late result can't override this choice.
+  resolutionGeneration += 1;
   setStatus({ kind: 'app' });
 }
 
