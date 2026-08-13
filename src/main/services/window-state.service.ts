@@ -145,6 +145,18 @@ export function setWindowPendingContentPredicate(predicate: (windowId: number) =
   isWindowPendingContent = predicate;
 }
 
+/**
+ * Announce a routing-target change that came from state this module does not own.
+ *
+ * The pending-content mark is one of the target's inputs and lives with window-layout persistence
+ * (see {@link setWindowPendingContentPredicate}), so a window gaining or losing it moves the target
+ * with no mutation here to notice. Whoever owns the mark calls this after changing it. Like every
+ * announcement here, it stays quiet when the target did not actually move.
+ */
+export function announceRoutingTargetChange(): void {
+  announceRoutingTargetIfChanged();
+}
+
 const onDidChangeRoutingTargetEmitter = new PlatformEventEmitter<number | undefined>();
 
 /**

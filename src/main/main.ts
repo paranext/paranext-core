@@ -82,6 +82,7 @@ import {
 } from '@main/services/web-view.service-router';
 import {
   addWindow,
+  announceRoutingTargetChange,
   doesNavigationReplaceRendererRegistrations,
   getFocusedWindowId,
   getTargetWindowId,
@@ -104,6 +105,7 @@ import {
   loadWindowLayouts,
   markWindowPendingContent,
   setMainWindowId,
+  setPendingContentChangeListener,
   trackLegacyWindow,
   trackNewWindow,
   updateWindowBounds,
@@ -387,6 +389,10 @@ async function main() {
   // operation that created it fails and closes it. Injected because the pending-content mark lives
   // with window-layout persistence, which the window-state tracker does not import.
   setWindowPendingContentPredicate(isWindowPendingContent);
+  // The other half of that injection: the tracker reads the mark but has nothing to tell it the
+  // mark changed, so a window gaining or losing one moves the routing target with no event —
+  // leaving the routers that hold a resolved shard pointed at the window routing just left.
+  setPendingContentChangeListener(announceRoutingTargetChange);
 
   // Same reasoning as above: a window can report itself empty as soon as it exists, so the handler
   // that decides what happens next must already be registered
