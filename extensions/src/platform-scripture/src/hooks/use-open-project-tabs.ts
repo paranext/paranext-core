@@ -1,5 +1,6 @@
 import papi from '@papi/frontend';
 import { useEffect, useMemo, useState } from 'react';
+import { wait } from 'platform-bible-utils';
 import type { ScrollGroupId } from 'platform-bible-utils';
 
 export interface OpenProjectTabWithWebView {
@@ -110,9 +111,15 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
     // Seeding can fail while another window is starting or reloading (the enumeration refuses to
     // under-report when a window cannot be asked), so a failed attempt is retried — silently
     // giving up would leave every already-open tab invisible here for the life of the component.
-    const seedDelayMs = 2000;
-    const seedMaxAttempts = 3;
+    // The retries back off exponentially and stretch across a startup-scale budget (the delays
+    // below total ~110 s): the usual failure is a sibling window's whole renderer boot, which
+    // takes tens of seconds on a slow machine, not a momentary blip. `retryUntil` from
+    // platform-bible-utils deliberately does not cover variable backoff, hence the bespoke loop.
+    const seedInitialDelayMs = 2000;
+    const seedMaxDelayMs = 16000;
+    const seedMaxAttempts = 10;
     const seed = async () => {
+      let delayMs = seedInitialDelayMs;
       for (let attempt = 1; attempt <= seedMaxAttempts; attempt++) {
         try {
           // Retry logic requires awaiting inside the loop to implement delay between attempts
@@ -123,15 +130,16 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
         } catch (e) {
           papi.logger.warn(
             `useOpenProjectTabs: seed attempt ${attempt}/${seedMaxAttempts} failed${
-              attempt < seedMaxAttempts ? '; retrying' : '; giving up — live events only'
+              attempt < seedMaxAttempts
+                ? `; retrying in ${delayMs} ms`
+                : '; giving up — live events only'
             }: ${e}`,
           );
           if (cancelled || attempt === seedMaxAttempts) return;
           // Retry logic requires awaiting inside the loop to implement delay between attempts
           // eslint-disable-next-line no-await-in-loop
-          await new Promise((resolve) => {
-            setTimeout(resolve, seedDelayMs);
-          });
+          await wait(delayMs);
+          delayMs = Math.min(delayMs * 2, seedMaxDelayMs);
           if (cancelled) return;
         }
       }
