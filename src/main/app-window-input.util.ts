@@ -18,6 +18,13 @@ type AppWindowInputSource = { type: string; key?: string };
  * which kind it is. `mouseUp` and every non-Escape key are ignored so the app-window input event
  * stays limited to dismissal gestures.
  *
+ * SECURITY: this filter is a boundary, not just noise reduction. The hooks feeding it see every
+ * keystroke and mouse event in the window — including input typed into other extensions' web views
+ * — and the resulting event is visible to all extensions on the network. Announcing only these two
+ * gestures, and forwarding nothing about the input beyond which gesture it was, is what keeps the
+ * event useless as a keylogger or input-surveillance channel. Do not widen the filter or enrich the
+ * payload without a security review (see {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT}'s doc).
+ *
  * @returns The {@link AppWindowInputKind} to announce, or `undefined` if this input is not a
  *   dismissal gesture
  */
