@@ -580,7 +580,6 @@ export async function migrateStoredScrollGroupState(
     if (typeof sourceProjectId === 'string')
       scrRefSourceProjectIds[Number(scrollGroupId)] = sourceProjectId;
   });
-  hasOwnScrollGroupState = true;
 
   // Persist what was adopted BEFORE recording that the migration ran, and write both keys before
   // either flag. The store is one file per key with no atomicity across them, so an order that
@@ -602,6 +601,12 @@ export async function migrateStoredScrollGroupState(
     );
     throw e;
   }
+  // Set only now that the store holds it. Set before the write, a failed write would leave this
+  // process claiming state of its own that it never persisted, and the guard at the top of this
+  // function would answer the NEXT window's offer with "refused" — which deletes it, because a
+  // window told "refused" discards its copy. The rejection above is only worth anything while the
+  // offer it rejected can still be made again.
+  hasOwnScrollGroupState = true;
   logger.info('Scroll group service host adopted previously stored scroll group state');
   return true;
 }
