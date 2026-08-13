@@ -44,12 +44,15 @@ across the multi-window stack):
   just as happily against output that never arrived. Assert a positive control first — something
   proving the corpus could have matched.
 
-  **The control must be emitted AFTER the capture starts, not merely be certain to occur.**
-  Certainty is the easy half and it is not the test. An app's startup logging is guaranteed to
-  happen and is still invisible to a capture that attaches once the app is already running — so a
-  control chosen for being unmissable can be absent from every run on every branch. Anchor on
-  something the test itself causes. The control may also need to differ per site: one taken after a
-  quit cannot control a sweep that runs before it.
+  **The control must be something the corpus could have seen, not merely something certain to
+  occur.** Certainty is the easy half and it is not the test. A line emitted before the capture
+  attached — or, for a sweep over a slice, before that slice's mark — proves nothing, however
+  reliably the app logs it. An app's startup logging is guaranteed to happen and is still invisible
+  to a capture that attaches once the app is already running, so a control chosen for being
+  unmissable can be absent from every run on every branch; whole-log sweeps are no safer than
+  slice-scoped ones here, since a capture created in the test body starts empty either way. Anchor
+  on something the test itself causes. The control may also need to differ per site: one taken
+  after a quit cannot control a sweep that runs before it.
 
 Both read as MORE rigorous than a weaker test would, which is why reading them never catches it.
 

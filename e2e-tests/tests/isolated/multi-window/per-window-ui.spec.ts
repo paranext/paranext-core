@@ -50,8 +50,8 @@ import {
 import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
 import {
   DUPLICATE_REGISTRATION_PATTERN,
-  RENDERER_STARTING_LOG,
   FAULT_MARKERS,
+  RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
   captureAppOutput,
   createSecondWindow,
@@ -458,10 +458,11 @@ test.describe('per-window UI isolation', () => {
 
     // ── No faults or cross-window registration collisions anywhere in the exercised flows ──────
     const wholeLog = output.text();
-    FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
-    // Positive control first — see RENDERER_STARTING_LOG. Without it these negative sweeps pass
-    // just as happily against output that never arrived as against output with no faults in it.
+    // Positive control before BOTH negative sweeps — see RENDERER_STARTING_LOG. Without it they
+    // pass just as happily against output that never arrived as against output with no faults in
+    // it, and the fault sweep is one of the assertions it backs, not an exception to it.
     expect(wholeLog).toContain(RENDERER_STARTING_LOG);
+    FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
     expect(wholeLog).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
   });
 });

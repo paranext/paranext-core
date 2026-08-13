@@ -69,11 +69,11 @@ import {
   waitForOverlayGone,
 } from '../../../fixtures/helpers';
 import {
-  DUPLICATE_REGISTRATION_PATTERN,
   APP_QUITTING_LOG,
-  RENDERER_STARTING_LOG,
+  DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
   HOME_TAB_UUID,
+  RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
   captureAppOutput,
   countOccurrences,
