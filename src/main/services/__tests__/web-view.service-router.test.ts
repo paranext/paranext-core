@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
     wasWindowEverReady: vi.fn(),
     isWindowClosing: vi.fn(),
     getFocusedWindowId: vi.fn(),
+    isApplicationFocused: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
     networkObjectSet: vi.fn(),
@@ -72,6 +73,7 @@ vi.mock('@main/services/window-state.service', () => ({
   wasWindowEverReady: mocks.wasWindowEverReady,
   isWindowClosing: mocks.isWindowClosing,
   getFocusedWindowId: mocks.getFocusedWindowId,
+  isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,
 }));
 vi.mock('@shared/services/network-object.service', () => ({
@@ -172,6 +174,7 @@ describe('web view service router', () => {
     mocks.wasWindowEverReady.mockReturnValue(true);
     mocks.isWindowClosing.mockReturnValue(false);
     mocks.getFocusedWindowId.mockReturnValue(1);
+    mocks.isApplicationFocused.mockReturnValue(true);
     mocks.settingsGet.mockResolvedValue('power');
   });
 
@@ -1106,11 +1109,16 @@ describe('web view service router', () => {
       expect(mocks.focusWindow).not.toHaveBeenCalled();
     });
 
-    test('does not raise before any window has been focused', async () => {
-      // What this pins is the latch on first focus: until some window has been focused, a raise is
-      // suppressed, which is what keeps one from firing during startup. It does not establish that
-      // the app holds focus now — see the raise doc on openWebViewInOwningWindow
-      mocks.getFocusedWindowId.mockReturnValue(undefined);
+    test('does not take focus from another application', async () => {
+      // An open routed here is not necessarily something the user just asked for — an extension can
+      // re-open a web view by id at any moment — so with the app in the background, raising a
+      // window would pull it in front of whatever the user is actually working in.
+      //
+      // The focused window id stays SET while the app is in the background — it answers "the window
+      // the user was last working in", which is what routing falls back to — so it is the
+      // application-focus answer, and only that, which says whether a raise may happen here.
+      mocks.getFocusedWindowId.mockReturnValue(1);
+      mocks.isApplicationFocused.mockReturnValue(false);
       withWindows({ 1: windowShard([]), 2: windowShard(['existing-view']) });
       const router = await getRouter();
 
