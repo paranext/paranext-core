@@ -90,18 +90,22 @@ export function createWindowEmptinessHandler(deps: {
       return { action: 'open-home' };
     }
 
-    if (reason === 'born-empty') {
-      logger.debug(`windowLayout:emptied window ${windowId} reason ${reason}: answering open-home`);
-      return { action: 'open-home' };
-    }
-
     // Repeat-answer idempotence — see the set's own doc comment. The shared-registry read extends
     // the same answer to closes decided outside this handler (see the `isWindowClosing` dep doc).
+    //
+    // Ahead of every other answer, including born-empty's: a window whose close is in flight docks
+    // nothing, whatever emptied it. Telling one to open Home mid-teardown puts a tab — and a web
+    // view provider's side effects with it — into a window that is on its way out.
     if (closingWindowIds.has(windowId) || deps.isWindowClosing?.(windowId)) {
       logger.debug(
         `windowLayout:emptied window ${windowId} reason ${reason}: already closing, answering closing again`,
       );
       return { action: 'closing' };
+    }
+
+    if (reason === 'born-empty') {
+      logger.debug(`windowLayout:emptied window ${windowId} reason ${reason}: answering open-home`);
+      return { action: 'open-home' };
     }
 
     const remainingWindows = deps.countWindows();
