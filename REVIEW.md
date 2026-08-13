@@ -4,71 +4,42 @@ Standing instructions for automated code review of this repository. Read by
 [roborev](https://roborev.io) (per-commit background review) and by Claude Code's
 `/code-review`, which both auto-discover this file.
 
-Every rule below is a summary — the authoritative copy lives at the path cited with it, in
-either `.claude/rules/` or `.context/standards/`. When the two disagree, the cited source wins
-and this file is the stale one. Prefer a small number of high-confidence findings over
-exhaustive nitpicking.
+**This file is a map, not a copy.** It deliberately does not restate any rule, so it cannot
+drift out of sync with the real ones. Each row below names a trigger and the canonical file that
+owns the rule — when a change matches a trigger, open the cited file and enforce what it
+actually says. If a rule seems to be missing here, the standards in `.context/standards/` and
+`.claude/rules/` are authoritative regardless.
+
+Prefer a small number of high-confidence findings over exhaustive nitpicking.
 
 ## Project shape
 
-Platform.Bible is an Electron app: TypeScript/React renderer, a Node extension host, and a
-.NET 8 / C# data provider, communicating over JSON-RPC. Extensions in `extensions/src/` are
-sandboxed and talk to the platform only through PAPI. Treat `lib/papi-dts/papi.d.ts` as
-generated output — it is never hand-edited.
+Platform.Bible is an Electron app: a TypeScript/React renderer, a Node extension host, and a
+.NET 8 / C# data provider communicating over JSON-RPC. Extensions in `extensions/src/` are
+sandboxed and reach the platform only through PAPI. Architecture detail:
+`.context/standards/Architecture.md`.
 
-## Always flag
+## When a change touches this, read that
 
-- **Missing `@experimental` on new public API.** Anything newly reaching `papi.d.ts`,
-  extension `.d.ts` contracts, or new fields on public models needs a TSDoc `@experimental`
-  tag. Anything newly visible on the wire — commands, network objects, data providers,
-  web-view providers, PDP factories, network events — needs `'x-experimental': true` in its
-  OpenRPC documentation object (`"isExperimental": true` for menu contributions). Both
-  surfaces, not just one. In extension `.d.ts` files each member must be tagged individually,
-  because TypeDoc's container cascade does not reach IntelliSense there.
-  — see `.context/standards/Paranext-Core-Patterns.md` § Experimental APIs
-- **Ungated project-data writes in C#.** Any new code path that mutates project data
-  (`PutText`, `Settings.Save`/`SetSetting`/`RemoveSetting`, `FileManager` operations, comment
-  or note mutations, extension data) must open with
-  `using var _ = SendReceiveWriteLock.EnterWrite(projectId);` as the first statement of its
-  entry-point method. Keep the scope tight — mutation only. Nested `EnterWrite` calls are a
-  defect, not a style issue: one scope per mutation.
-  — see `CLAUDE.md` § Send/Receive Write Gate
-- **Keyboard handlers not reflected in the catalog.** Adding, changing, or removing a
-  `keydown`/`keyup`/`keypress` listener, an Electron accelerator or `before-input-event`
-  branch, or a `useHotkeys` binding requires the matching entry in
-  `src/stories/keyboard-shortcuts.data.ts` in the same change.
-  — see `.claude/rules/keyboard-shortcuts-catalog.md`
-- **Cross-view sync that only handles the visible case.** rc-dock keeps inactive tabs
-  mounted but `display: none`, where geometry reads return zero and `scrollIntoView` no-ops.
-  Any scroll sync, selection sync, focus-follows, or live highlighting must state what
-  happens while the target view is hidden and how it catches up on activation. "Do nothing
-  while hidden" is acceptable only when a comment at the sync site says so deliberately.
-  — see `.claude/rules/cross-view-sync-hidden-views.md`
-- **Unannotated shadcn edits.** Every change under
-  `lib/platform-bible-react/src/components/shadcn-ui/` needs a `// CUSTOM:` comment
-  immediately above it saying what changed and why. No exceptions, including mechanical
-  find-and-replace.
-  — see `.claude/rules/code-quality/shadcn-discipline.md`
-- **Secrets.** This repository is public. Flag any credential, token, key, connection
-  string, or secret file — including base64-encoded or otherwise obfuscated values, and
-  default values that are real secrets.
-  — see `.claude/rules/code-quality/no-secrets.md`
-- **Suppressions without justification.** `eslint-disable`, `@ts-ignore`, `// prettier-ignore`,
-  and `as Type` assertions need a comment explaining why fixing the code is worse. Prefer
-  `@ts-expect-error` with the error code over `@ts-ignore`.
-  — see `.claude/rules/code-quality/eslint-disable-discipline.md`
-- **Backward-facing references in source comments.** Change narration ("previously", "this PR",
-  "the review found") and backward-facing ticket or PR citations rot the moment the branch
-  merges. Forward-facing pointers are the documented exception and must **not** be flagged:
-  `TODO (PT-XXXX)`, "until PT-XXXX lands", "PT-XXXX's scope". The test is whether the reference
-  would still help a reader who never saw this change land.
-  — see `.context/standards/Code-Style-Guide.md`, "Comments describe the code, not its history"
+| Trigger                                                                                                                                                                                                                                                                           | Canonical rule                                                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| New or changed public API surface — anything reaching `papi.d.ts`, extension `.d.ts` contracts, new public model fields, or anything newly visible on the wire (commands, network objects, data providers, web-view providers, PDP factories, network events, menu contributions) | `.context/standards/Paranext-Core-Patterns.md` § Experimental APIs                      |
+| C# that mutates project data — text, settings, comments/notes, project files, extension data                                                                                                                                                                                      | `CLAUDE.md` § Send/Receive Write Gate                                                   |
+| Any keyboard handler — `keydown`/`keyup`/`keypress`, Electron accelerators, `before-input-event`, `useHotkeys`                                                                                                                                                                    | `.claude/rules/keyboard-shortcuts-catalog.md`                                           |
+| Anything synchronizing state or behavior across views, tabs, or panes — scroll sync, selection sync, focus-follows, live highlighting                                                                                                                                             | `.claude/rules/cross-view-sync-hidden-views.md`                                         |
+| Any file under `lib/platform-bible-react/src/components/shadcn-ui/`                                                                                                                                                                                                               | `.claude/rules/code-quality/shadcn-discipline.md`                                       |
+| `eslint-disable`, `@ts-ignore`, `@ts-expect-error`, `// prettier-ignore`, or `as` type assertions                                                                                                                                                                                 | `.claude/rules/code-quality/eslint-disable-discipline.md`                               |
+| Comments — especially ones referencing tickets, PRs, or the change's own history                                                                                                                                                                                                  | `.context/standards/Code-Style-Guide.md`, "Comments describe the code, not its history" |
+| Naming, TSDoc, `undefined` vs `null`, imports, async style                                                                                                                                                                                                                        | `.context/standards/Code-Style-Guide.md`                                                |
+| Tests                                                                                                                                                                                                                                                                             | `.context/standards/Testing-Guide.md`                                                   |
+| User-facing strings                                                                                                                                                                                                                                                               | `.context/standards/Localization-Guide.md`                                              |
+| Every change — this repository is public                                                                                                                                                                                                                                          | `.claude/rules/code-quality/no-secrets.md`                                              |
 
 ## Do not flag
 
-- Generated or vendored output: `lib/papi-dts/papi.d.ts`, `dist/` directories, minified
-  bundles, source maps.
-- Extensions using `../../../` relative paths for `typeRoots` in `tsconfig.json` — that is
-  the correct pattern here, not a mistake.
-- `global.webViewComponent = ...` in web views. `globalThis` does not work in that context.
+- Generated or vendored output: `lib/papi-dts/papi.d.ts` (regenerated by `npm run build:types`,
+  never hand-edited), `dist/` directories, minified bundles, source maps.
+- Extension `tsconfig.json` files using `../../../` relative paths for `typeRoots`, and
+  `global.webViewComponent = ...` in web views. Both are the documented correct pattern here —
+  see `.context/standards/Component-Builder-Patterns.md`.
 - Missing database migrations or ORM concerns. There is no database in this codebase.
