@@ -516,3 +516,52 @@ describe('serialization across windows', () => {
     expect(mocks.setScrRef).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('serialization within one window', () => {
+  test('two overlapping presses on one detached web view advance exactly two verses', async () => {
+    // A detached target has no host to re-read: its current reference IS the one the window
+    // reported when it was asked what to navigate. So unless the ask is serialized together with
+    // the read-compute-write, two overlapping runs compute from the same answer and the second
+    // press rewrites the verse the first one already wrote — a held key advancing one verse, N
+    // times.
+    const setDetachedScrRef = vi.fn<
+      (webViewId: string, newRef: SerializedVerseRef) => Promise<boolean>
+    >(async () => true);
+    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getWebViewShard.mockImplementation(async (id: number) =>
+      id === 2 ? { setDetachedScrRef } : undefined,
+    );
+    // Stateful window: it answers with the reference the last write put on the web view, as a real
+    // window does — the write updates that window's dock layout synchronously, so it is already
+    // there by the time the write resolves here. Without the statefulness the assertions could not
+    // tell a run that read the previous run's write from one that read the same stale answer.
+    mocks.getTargetWindowServiceShard.mockImplementation(async () => ({
+      windowId: mocks.getTargetWindowId(),
+      shard: {
+        getNavigationContext: vi.fn(async () => ({
+          readDirection: 'ltr',
+          target: {
+            webViewId: 'web-view-1',
+            scrollGroupScrRef: setDetachedScrRef.mock.calls.at(-1)?.[1] ?? GEN_5_3,
+          },
+        })),
+      },
+    }));
+    const goToNextVerse = await getHandler('platform.goToNextVerse');
+
+    const firstPress = goToNextVerse();
+    const secondPress = goToNextVerse();
+    await Promise.all([firstPress, secondPress]);
+
+    expect(setDetachedScrRef).toHaveBeenNthCalledWith(1, 'web-view-1', {
+      book: 'GEN',
+      chapterNum: 5,
+      verseNum: 4,
+    });
+    expect(setDetachedScrRef).toHaveBeenNthCalledWith(2, 'web-view-1', {
+      book: 'GEN',
+      chapterNum: 5,
+      verseNum: 5,
+    });
+  });
+});
