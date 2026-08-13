@@ -275,25 +275,28 @@ function getLayoutTargetTabId(layout?: Layout): string | undefined {
  * Asks each window what its dock holds rather than which window owns a web view with that id. A
  * layout can name a tab that is no web view — a settings tab, a dialog — and a tab group id is not
  * a web view id at all, so an ownership lookup answers "nobody" for both and the open lands
- * wherever the user happens to be instead of where it was aimed.
+ * wherever the user happens to be instead of where it was aimed. That is why every layout target,
+ * `replace-tab` included, is resolved here: the strict ownership search is blind to those targets
+ * by construction, so its "nobody" says nothing about whether the target exists.
  *
- * A window that could not be asked does NOT fail the open here, which is the one way this differs
- * from the `existingId` search. Guessing wrong there costs a second copy of a web view meant to be
- * unique; guessing wrong here costs only placement — the tab still opens, in the window the user is
- * in, beside whatever is already there. Failing instead would mean that for as long as ANY window
- * cannot answer — a second window still starting, or one whose renderer crashed and never
- * re-registered — every open naming a tab produces nothing at all. Replace-tab opens do not come
- * through here — they use the strict search directly, since for them a wrong guess costs more than
- * placement.
+ * Like {@link findOwner}, this does not decide what an unresolved target means —
+ * `hadUnreachableWindows` carries that forward, and the two layout kinds weigh it differently. For
+ * a `panel` or `tab` layout, guessing wrong costs only placement: the tab still opens, in the
+ * window the user is in. For `replace-tab`, replacing IS the operation, and a window that guessed
+ * wrong throws only after the web view provider has run and its side effects (controller, nonce,
+ * state) exist — so that caller refuses rather than guess. Either way a window that positively
+ * holds the target settles the question, and another window failing to answer cannot make that
+ * answer wrong.
  */
-async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard | undefined> {
-  // Every window that could not be asked is warned about and then treated as one that does not hold
-  // the target — see the doc comment above for why that is the right call for a layout target
-  // specifically. A window whose renderer has not registered anything yet is not even worth the
-  // warning: its dock holds nothing, so it is a window with a real answer rather than one that
-  // could not be asked.
+async function findLayoutTargetOwner(
+  targetTabId: string,
+): Promise<{ owner: WindowShard | undefined; hadUnreachableWindows: boolean }> {
+  // A window whose renderer has not registered anything yet is not worth a warning and does not
+  // count as unreachable: its dock holds nothing, so it is a window with a real answer rather than
+  // one that could not be asked.
   const unreachableWindowIds = getUnreachableWindowIds();
-  if (unreachableWindowIds.length > 0)
+  let hadServiceErrors = unreachableWindowIds.length > 0;
+  if (hadServiceErrors)
     logger.warn(
       `Windows ${unreachableWindowIds.join(', ')} stopped serving requests, so they could not be asked whether they hold '${targetTabId}' for openWebView beside a layout target`,
     );
@@ -305,6 +308,7 @@ async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard |
           logger.warn(
             `WebView service for window ${windowId} is not registered, so it could not be asked whether it holds '${targetTabId}' for openWebView beside a layout target`,
           );
+          hadServiceErrors = true;
           return undefined;
         }
         return (await webViewShard.dockContainsTab(targetTabId))
@@ -314,6 +318,7 @@ async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard |
         logger.warn(
           `Failed to ask window ${windowId} whether it holds '${targetTabId}' for openWebView beside a layout target: ${getErrorMessage(e)}`,
         );
+        hadServiceErrors = true;
         return undefined;
       }
     }),
@@ -325,10 +330,10 @@ async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard |
   // the rest so that a target held by neither the routing target nor a single window still goes
   // somewhere predictable rather than wherever answered first.
   const targetWindowId = getTargetWindowId();
-  return (
+  const owner =
     holdingWindows.find((candidate) => candidate.windowId === targetWindowId) ??
-    holdingWindows.sort((a, b) => a.windowId - b.windowId)[0]
-  );
+    holdingWindows.sort((a, b) => a.windowId - b.windowId)[0];
+  return { owner, hadUnreachableWindows: hadServiceErrors };
 }
 
 /**
@@ -916,29 +921,20 @@ async function openWebView(
   // window that then ignores the reason it was sent there.
   const layoutTargetTabId = getLayoutTargetTabId(layout);
   if (layoutTargetTabId) {
-    // For `replace-tab`, replacing IS the operation, not placement advice: a window that
-    // guessed wrong throws only after the web view provider has run and its side effects
-    // (controller, nonce, state) exist. So an unaskable window fails this open, the same rule
-    // the `existingId` search applies. A target no window claims still falls through to the
-    // focused window: the owner search only sees web views, and a replace-tab target can be a
-    // settings tab or dialog that is invisible to it.
-    let owner: WindowShard | undefined;
-    if (layout?.type === 'replace-tab') {
-      const targetMatcher: OwnerMatcher = { kind: 'id', webViewId: layoutTargetTabId };
-      const { owner: replaceTabOwner, hadUnreachableWindows } = await findOwner(
-        targetMatcher,
-        'openWebView over a replace-tab target',
+    // The docks are asked, not the ownership index: a replace-tab target is routinely a settings
+    // tab or a dialog, which an ownership lookup cannot see at all, so its "nobody" would say
+    // nothing about whether the target exists — and refusing on it took every such open down for as
+    // long as one window stayed unreachable.
+    const { owner, hadUnreachableWindows } = await findLayoutTargetOwner(layoutTargetTabId);
+    // For `replace-tab`, replacing IS the operation, not placement advice: a window that guessed
+    // wrong throws only after the web view provider has run and its side effects (controller,
+    // nonce, state) exist. So when nothing that could be asked holds the target and some window
+    // could not be asked — the window that may be holding it — this open refuses rather than guess.
+    // A `panel` or `tab` layout falls through instead: guessing wrong there costs placement only.
+    if (layout?.type === 'replace-tab' && !owner && hadUnreachableWindows)
+      throw new Error(
+        `Could not openWebView ${webViewType} over replace-tab target '${layoutTargetTabId}': some windows were unreachable.`,
       );
-      // Only when nothing claimed the target: a window that answered yes settles where this goes,
-      // and another window failing to answer cannot make that answer wrong. Failing here rather
-      // than falling through is what keeps the open from running in a guessed window and throwing
-      // there, after the provider has already run.
-      if (!replaceTabOwner && hadUnreachableWindows)
-        throw new Error(
-          `Could not openWebView ${webViewType} over replace-tab target '${layoutTargetTabId}': some windows were unreachable.`,
-        );
-      owner = replaceTabOwner;
-    } else owner = await findLayoutTargetOwner(layoutTargetTabId);
     if (owner) {
       // Same rule a caller-named targetWindowId gets above: a window whose close has been decided
       // would take this content and lose it when the close lands. A layout names a tab rather than a
