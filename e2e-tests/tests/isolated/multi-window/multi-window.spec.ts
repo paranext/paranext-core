@@ -70,6 +70,7 @@ import {
 } from '../../../fixtures/helpers';
 import {
   DUPLICATE_REGISTRATION_PATTERN,
+  APP_QUITTING_LOG,
   RENDERER_STARTING_LOG,
   FAULT_MARKERS,
   HOME_TAB_UUID,
@@ -125,9 +126,6 @@ const SHUTDOWN_SYNC_ATTEMPT_MARKER = 'power-mode shutdown session sync';
  * marker is.
  */
 const SIMPLE_MODE_SHUTDOWN_MARKERS = ['Syncing projects on shutdown', 'Sync on shutdown'];
-
-/** Logged from the `will-quit` handler when the whole app goes down. `src/main/main.ts` */
-const APP_QUITTING_LOG = 'Main process is quitting';
 
 /**
  * Logged when the shutdown path cannot read the interface mode and skips the sync entirely.
