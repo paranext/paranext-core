@@ -181,6 +181,67 @@ async function registerWindow(simpleLayout: LayoutInfo) {
 }
 
 /**
+ * A dock layout stand-in that also records `addWebViewToDock` calls, so a test can observe
+ * `reportDockEmptied` actually opening Home as a tab rather than just the `windowLayout:emptied`
+ * request going out.
+ *
+ * `vi.spyOn` on this module's own `openWebView` export was tried first (the harness's usual way to
+ * observe a web view open), but it does not see calls `reportDockEmptied` makes internally: Vitest
+ * only redirects a same-module caller to a spied export for some export forms, and it does not do
+ * so here — confirmed with a minimal caller/callee repro in this same test environment. Standing up
+ * the real path (as "a failed dock add rolls back what the open already did" below already does for
+ * the failure case) is the reliable alternative.
+ */
+function makeDockLayoutThatTracksAdds(simpleLayout: LayoutInfo) {
+  const loadedLayouts: LayoutInfo[] = [];
+  const addWebViewToDockCalls: WebViewTabProps[] = [];
+  const dockLayout = {
+    onLayoutChangeRef: { current: undefined },
+    loadLayout: (layout: LayoutInfo) => {
+      loadedLayouts.push(layout);
+    },
+    getAllWebViewDefinitions: () => [],
+    addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => {
+      addWebViewToDockCalls.push(webView);
+      return layout;
+    },
+    simpleLayout,
+    testLayout: simpleLayout,
+  } as unknown as PapiDockLayout;
+  return { dockLayout, loadedLayouts, addWebViewToDockCalls };
+}
+
+/** Wire up a web view provider and theme so `openWebView`'s dock-add path can run to completion */
+async function primeWebViewOpenPath() {
+  const module = await import('@renderer/services/web-view.service-shard');
+  const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+  const { localThemeService } = await import('@renderer/services/theme.service');
+  // `webViewProviderService` and `localThemeService` are mocked as `{}` (file-level mocks above);
+  // attaching stub methods needs a type assertion because the plain-object mock type doesn't model
+  // them. Same reasoning as "a failed dock add rolls back what the open already did" below.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
+    async () => ({
+      getWebView: async (saved: { id: string; webViewType: string }) => ({
+        id: saved.id,
+        webViewType: saved.webViewType,
+        contentType: 'html',
+        content: '<p>Home</p>',
+        state: {},
+      }),
+    }),
+  );
+  // `localThemeService` is mocked as `{}` too; same untyped-attach reasoning as the provider stub
+  // above requires the assertion here as well.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
+    cssVariables: {},
+  }));
+  await module.startWebViewServiceShard();
+  return module;
+}
+
+/**
  * The shard object this window registered, as the main process's router calls it. Only the members
  * a test reaches for are named; the shard's own type carries the rest.
  */
@@ -437,67 +498,6 @@ describe('loadLayout reports a dock that landed empty', () => {
       if (requestType === 'windowLayout:emptied') return emptiedResponse;
       return undefined;
     });
-  }
-
-  /**
-   * A dock layout stand-in that also records `addWebViewToDock` calls, so a test can observe
-   * `reportDockEmptied` actually opening Home as a tab rather than just the `windowLayout:emptied`
-   * request going out.
-   *
-   * `vi.spyOn` on this module's own `openWebView` export was tried first (the harness's usual way
-   * to observe a web view open), but it does not see calls `reportDockEmptied` makes internally:
-   * Vitest only redirects a same-module caller to a spied export for some export forms, and it does
-   * not do so here — confirmed with a minimal caller/callee repro in this same test environment.
-   * Standing up the real path (as "a failed dock add rolls back what the open already did" below
-   * already does for the failure case) is the reliable alternative.
-   */
-  function makeDockLayoutThatTracksAdds(simpleLayout: LayoutInfo) {
-    const loadedLayouts: LayoutInfo[] = [];
-    const addWebViewToDockCalls: WebViewTabProps[] = [];
-    const dockLayout = {
-      onLayoutChangeRef: { current: undefined },
-      loadLayout: (layout: LayoutInfo) => {
-        loadedLayouts.push(layout);
-      },
-      getAllWebViewDefinitions: () => [],
-      addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => {
-        addWebViewToDockCalls.push(webView);
-        return layout;
-      },
-      simpleLayout,
-      testLayout: simpleLayout,
-    } as unknown as PapiDockLayout;
-    return { dockLayout, loadedLayouts, addWebViewToDockCalls };
-  }
-
-  /** Wire up a web view provider and theme so `openWebView`'s dock-add path can run to completion */
-  async function primeWebViewOpenPath() {
-    const module = await import('@renderer/services/web-view.service-shard');
-    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
-    const { localThemeService } = await import('@renderer/services/theme.service');
-    // `webViewProviderService` and `localThemeService` are mocked as `{}` (file-level mocks above);
-    // attaching stub methods needs a type assertion because the plain-object mock type doesn't model
-    // them. Same reasoning as "a failed dock add rolls back what the open already did" below.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
-      async () => ({
-        getWebView: async (saved: { id: string; webViewType: string }) => ({
-          id: saved.id,
-          webViewType: saved.webViewType,
-          contentType: 'html',
-          content: '<p>Home</p>',
-          state: {},
-        }),
-      }),
-    );
-    // `localThemeService` is mocked as `{}` too; same untyped-attach reasoning as the provider stub
-    // above requires the assertion here as well.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
-      cssVariables: {},
-    }));
-    await module.startWebViewServiceShard();
-    return module;
   }
 
   beforeEach(() => {
@@ -976,8 +976,10 @@ describe('a dock emptied by removal while running on a fallback layout', () => {
       if (requestType === 'windowLayout:get') throw new Error('transport is down');
       return undefined;
     });
-    vi.useFakeTimers();
     const module = await import('@renderer/services/web-view.service-shard');
+    // Docking Home waits on the shard having started, and this window docks Home now
+    await module.startWebViewServiceShard();
+    vi.useFakeTimers();
     const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
     module.registerDockLayout(dockLayout);
     await vi.advanceTimersByTimeAsync(60_000);
@@ -993,6 +995,53 @@ describe('a dock emptied by removal while running on a fallback layout', () => {
       expect.anything(),
       expect.anything(),
     );
+  });
+
+  test('docks Home rather than leaving the user a blank window', async () => {
+    // Not reporting is not the same as doing nothing: this window's dock is empty and its user has
+    // nothing left to open anything from. Home fills it here, where it costs nothing — the pushes
+    // this window makes are held from persistence anyway.
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+    vi.useFakeTimers();
+    const module = await primeWebViewOpenPath();
+    const { dockLayout, loadedLayouts, addWebViewToDockCalls } =
+      makeDockLayoutThatTracksAdds(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+    await vi.advanceTimersByTimeAsync(60_000);
+    vi.useRealTimers();
+    expect(loadedLayouts.length).toBeGreaterThan(0);
+
+    await module.handleDockEmptiedByRemoval(layoutWithNoTabsAnywhere());
+
+    expect(addWebViewToDockCalls).toEqual([
+      expect.objectContaining({ webViewType: 'platformGetResources.home' }),
+    ]);
+  });
+
+  test('a Home open that fails is logged rather than left as an unhandled rejection', async () => {
+    // The dock layout's change handler does not await this, so a throw escaping it would surface as
+    // an unhandled rejection with nothing to attribute it to
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+    const module = await import('@renderer/services/web-view.service-shard');
+    // Started, but with no web view provider stubbed in, so opening Home cannot get past the
+    // provider lookup
+    await module.startWebViewServiceShard();
+    vi.useFakeTimers();
+    const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+    await vi.advanceTimersByTimeAsync(60_000);
+    vi.useRealTimers();
+    expect(loadedLayouts.length).toBeGreaterThan(0);
+
+    await expect(
+      module.handleDockEmptiedByRemoval(layoutWithNoTabsAnywhere()),
+    ).resolves.toBeUndefined();
   });
 });
 
