@@ -494,6 +494,39 @@ describe('window layout persistence service', () => {
     await expect(registeredHandler('windowLayout:get')(86)).resolves.toEqual({ kind: 'empty' });
   });
 
+  test('clearing a mark tells the routing target it changed', async () => {
+    // A pending-content window is passed over for routed work, so losing the mark is the moment it
+    // becomes a window new work can go to. Nothing else fires for that change, and the routers
+    // holding a resolved shard for the old target have nothing else to tell them it moved.
+    const service = await startService();
+    await service.loadWindowLayouts();
+    service.trackNewWindow(87);
+    const announceRoutingTargetChange = vi.fn();
+    service.setPendingContentChangeListener(announceRoutingTargetChange);
+    service.markWindowPendingContent(87);
+    announceRoutingTargetChange.mockClear();
+
+    service.clearWindowPendingContent(87);
+
+    expect(announceRoutingTargetChange).toHaveBeenCalled();
+  });
+
+  test('a first layout push clearing the mark tells the routing target it changed', async () => {
+    // The other way a mark comes off: the window pushed the layout its routed content produced,
+    // which un-marks it directly rather than through `clearWindowPendingContent`
+    const service = await startService();
+    await service.loadWindowLayouts();
+    service.trackNewWindow(88);
+    const announceRoutingTargetChange = vi.fn();
+    service.setPendingContentChangeListener(announceRoutingTargetChange);
+    service.markWindowPendingContent(88);
+    announceRoutingTargetChange.mockClear();
+
+    await registeredHandler('windowLayout:save')(88, layoutWithTab('routed'));
+
+    expect(announceRoutingTargetChange).toHaveBeenCalled();
+  });
+
   test('marking an untracked window pending content does not change its (empty) answer', async () => {
     const service = await startService();
     await service.loadWindowLayouts();
