@@ -69,6 +69,31 @@ const readyWindowIds = new Set<number>();
 const everReadyWindowIds = new Set<number>();
 
 /**
+ * IDs of the windows nothing will ever run in again: their renderer died and the reload path that
+ * brings a crashed window back ran out of attempts, so no page will register from them for the rest
+ * of the session.
+ *
+ * The terminal end of {@link everReadyWindowIds}'s story, and the reason that story needs an end. A
+ * window that stopped serving is transient — main is holding its dock layout, the reload is
+ * actively trying to bring it back, and its tabs really do return — so every fan-out refuses to
+ * answer while one exists rather than reporting the window's contents as absent. Once the reloads
+ * are spent none of that is true any more: nothing is coming back, and leaving the window in the
+ * transient bucket makes every routed search in the app throw for the whole session over a window
+ * that will never hold anything again.
+ *
+ * Kept apart from {@link everReadyWindowIds} rather than clearing that flag, because the two facts
+ * have different consumers: the shutdown sync reports its coverage as partial precisely because a
+ * given-up window's projects genuinely never synced, and a window that quietly stopped being
+ * ever-ready would let the last log line of that session claim clean coverage.
+ *
+ * Also holds windows whose renderer died before it ever registered anything. Those were never
+ * ever-ready, so they were never unreachable either — marking them changes no fan-out — but it is
+ * the same fact about the same window, and one flag recorded unconditionally is what keeps the
+ * give-up path from needing a second mechanism for the never-ready case.
+ */
+const abandonedWindowIds = new Set<number>();
+
+/**
  * IDs of the windows whose close has begun but which are still tracked.
  *
  * A window stays tracked until Electron reports it as actually gone, which is long after every
@@ -178,13 +203,56 @@ export function getReadyWindowIds(): number[] {
  * its renderer takes to start, so counting it would make every routed search in the app refuse to
  * answer for the whole of every window's startup.
  *
- * @returns Tracked windows that are not currently ready but have been ready at some point since
- *   they were created — see {@link everReadyWindowIds} and {@link markWindowNotReady}
+ * A window the reload path has given up on is NOT in here either, however much it was serving
+ * before. This list is what makes a fan-out refuse to answer, which is only worth doing while the
+ * window's contents are coming back; once nothing is coming back, that refusal is permanent, and
+ * every routed search in the app fails for the rest of the session. What was lost with it is
+ * reported through {@link getAbandonedWindowIds} instead, which callers weigh for themselves.
+ *
+ * @returns Tracked windows that are not currently ready, have been ready at some point since they
+ *   were created, and have not been given up on — see {@link everReadyWindowIds},
+ *   {@link markWindowNotReady} and {@link markWindowAbandoned}
  */
 export function getUnreachableWindowIds(): number[] {
   return trackedWindows
     .map(({ windowId }) => windowId)
-    .filter((windowId) => !readyWindowIds.has(windowId) && everReadyWindowIds.has(windowId));
+    .filter(
+      (windowId) =>
+        !readyWindowIds.has(windowId) &&
+        everReadyWindowIds.has(windowId) &&
+        !abandonedWindowIds.has(windowId),
+    );
+}
+
+/**
+ * IDs of the tracked windows nothing will ever run in again, in creation order.
+ *
+ * Separate from {@link getUnreachableWindowIds} on purpose, and neither list is a superset of the
+ * other. Unreachable means "could not be asked, and its answer is still coming" — a fan-out that
+ * would be wrong without it refuses to answer at all. Abandoned means "there is no answer, ever" —
+ * a fan-out has to go on working, and the honest thing is to say what it could not cover rather
+ * than to fail forever or to pretend the window had nothing in it.
+ *
+ * Callers that report coverage — the shutdown sync, which gets one shot at the app's open editors —
+ * should count these alongside the unreachable ones: a given-up window's projects really did go
+ * unsynced.
+ *
+ * @returns Tracked windows whose renderer died and will not be reloaded again — see
+ *   {@link markWindowAbandoned}
+ */
+export function getAbandonedWindowIds(): number[] {
+  return trackedWindows
+    .map(({ windowId }) => windowId)
+    .filter((windowId) => abandonedWindowIds.has(windowId));
+}
+
+/**
+ * Whether a window has been given up on, so nothing will ever run in it again.
+ *
+ * @param windowId Window to ask about
+ */
+export function isWindowAbandoned(windowId: number): boolean {
+  return abandonedWindowIds.has(windowId);
 }
 
 /**
@@ -356,12 +424,14 @@ export function removeWindow(window: BrowserWindow, windowId: number): void {
   const trackedIndex = trackedWindows.findIndex((tracked) => tracked.window === window);
   if (trackedIndex >= 0) trackedWindows.splice(trackedIndex, 1);
   readyWindowIds.delete(windowId);
-  // Electron reuses window IDs, so leaving either of these behind would speak for a window that no
+  // Electron reuses window IDs, so leaving any of these behind would speak for a window that no
   // longer exists: the closing flag would tell a future window's close it is already on its way out,
-  // and the ever-ready flag would make the next window to take this ID look, for the whole of its
-  // startup, like one that had been serving requests and died.
+  // the ever-ready flag would make the next window to take this ID look, for the whole of its
+  // startup, like one that had been serving requests and died, and the abandoned flag would write
+  // that window off before it had loaded anything.
   closingWindowIds.delete(windowId);
   everReadyWindowIds.delete(windowId);
+  abandonedWindowIds.delete(windowId);
   const focusOrderIndex = mostRecentlyFocusedWindowIds.indexOf(windowId);
   if (focusOrderIndex >= 0) mostRecentlyFocusedWindowIds.splice(focusOrderIndex, 1);
   if (focusedWindowId === windowId) focusedWindowId = undefined;
@@ -391,6 +461,11 @@ export function setFocusedWindowId(windowId: number | undefined): void {
 export function markWindowReady(windowId: number): void {
   readyWindowIds.add(windowId);
   everReadyWindowIds.add(windowId);
+  // A page registering is proof that "nothing will ever run in this window again" was wrong,
+  // whatever route it came back by. Left behind, the mark would keep a live window out of the
+  // unreachable list the next time its renderer died — the one list that makes a fan-out refuse to
+  // answer for a window that really is holding the user's tabs.
+  abandonedWindowIds.delete(windowId);
   announceRoutingTargetIfChanged();
 }
 
@@ -459,6 +534,37 @@ export function markWindowNotReady(windowId: number): void {
 }
 
 /**
+ * Record that a window will never serve a routed call again — its renderer died and the reload that
+ * brings a crashed window back has run out of attempts.
+ *
+ * This is the terminal counterpart of {@link markWindowNotReady}, and the distinction is the whole
+ * point of having it. A window that merely stopped serving is one the app is still working on: its
+ * layout is held here, a reload is in flight, and the tabs the user is looking at do come back — so
+ * a fan-out that cannot ask it refuses to answer rather than reporting its contents as absent. A
+ * window that has been given up on is not coming back, and leaving it in that state makes every
+ * routed search in the app throw for the rest of the session over a window that will never hold
+ * anything again.
+ *
+ * Safe to call for a window whose renderer never registered anything, and meant to be: the caller
+ * cannot usefully tell the two apart at the moment it gives up, and the never-ready case wants the
+ * same record made for the same reason.
+ *
+ * The window stays tracked and is deliberately not closed. It is still on screen, and closing it
+ * would rewrite the persisted window layout without it — taking away the one recovery the user has
+ * left, which is to quit and relaunch.
+ *
+ * @param windowId Window nothing will ever run in again
+ */
+export function markWindowAbandoned(windowId: number): void {
+  abandonedWindowIds.add(windowId);
+  // Cannot move the routing target — the target only ever considers windows that can serve a call,
+  // and this window stopped being one when its renderer died. Announced anyway, like every other
+  // mutation here, so the comparison stays the single place that decides what is worth telling
+  // consumers; it stays quiet when nothing moved.
+  announceRoutingTargetIfChanged();
+}
+
+/**
  * Drop all tracked window state. This function is only exported for testing purposes and should not
  * be used in production code — the app removes windows one at a time, as each one goes away.
  */
@@ -466,6 +572,7 @@ export function resetForTesting(): void {
   trackedWindows.length = 0;
   readyWindowIds.clear();
   everReadyWindowIds.clear();
+  abandonedWindowIds.clear();
   closingWindowIds.clear();
   mostRecentlyFocusedWindowIds.length = 0;
   focusedWindowId = undefined;

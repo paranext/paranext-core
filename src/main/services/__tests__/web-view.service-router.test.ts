@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
     getUnreachableWindowIds: vi.fn(),
+    getAbandonedWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     getFocusedWindowId: vi.fn(),
     focusWindow: vi.fn(),
@@ -47,7 +48,11 @@ const mocks = vi.hoisted(() => {
 /** Wire windows whose WebView service shards are the given objects */
 function withWindows(
   shardsByWindowId: Record<number, unknown>,
-  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
+  options?: {
+    startingWindowIds?: number[];
+    unreachableWindowIds?: number[];
+    abandonedWindowIds?: number[];
+  },
 ) {
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
 }
@@ -56,6 +61,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
   getUnreachableWindowIds: mocks.getUnreachableWindowIds,
+  getAbandonedWindowIds: mocks.getAbandonedWindowIds,
   isWindowReady: mocks.isWindowReady,
   getFocusedWindowId: mocks.getFocusedWindowId,
   focusWindow: mocks.focusWindow,
@@ -113,6 +119,7 @@ describe('web view service router', () => {
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
+    mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
     mocks.getFocusedWindowId.mockReturnValue(1);
   });
@@ -200,6 +207,39 @@ describe('web view service router', () => {
     expect(starting.getAllOpenWebViewDefinitions).not.toHaveBeenCalled();
     expect(definitions.map((definition) => definition.id)).toEqual(['a']);
     expect(unreachableWindowIds).toEqual([]);
+  });
+
+  test('reports a window nothing will ever run in again apart from one that could still answer', async () => {
+    // Two different facts for two different callers. Losing a window that is coming back means the
+    // answer is not safe to act on at all; losing one that is not coming back means the answer is
+    // the whole of what there is to know, with a gap in it that will never be filled. Merging them
+    // into one list forces every caller to treat the second as the first — which for a given-up
+    // window means refusing to answer for the rest of the session.
+    const serving = windowShard(['a']);
+    const crashed = windowShard([]);
+    const givenUpOn = windowShard([]);
+    withWindows(
+      { 1: serving, 2: crashed, 3: givenUpOn },
+      { unreachableWindowIds: [2], abandonedWindowIds: [3] },
+    );
+
+    const { definitions, unreachableWindowIds, abandonedWindowIds } =
+      await getAllOpenWebViewDefinitionsWithReachability();
+
+    expect(givenUpOn.getAllOpenWebViewDefinitions).not.toHaveBeenCalled();
+    expect(definitions.map((definition) => definition.id)).toEqual(['a']);
+    expect(unreachableWindowIds).toEqual([2]);
+    expect(abandonedWindowIds).toEqual([3]);
+  });
+
+  test('still answers the merged read while a window nothing will run in again is tracked', async () => {
+    // The refusal below is for a window whose tabs are coming back. A given-up window's are not, so
+    // the same refusal would never lift — every "is this tab already open?" and every project read
+    // in the app would throw until the user quit.
+    withWindows({ 1: windowShard(['a']), 3: windowShard([]) }, { abandonedWindowIds: [3] });
+    const router = await getRouter();
+
+    expect((await router.getAllOpenWebViewDefinitions()).map(({ id }) => id)).toEqual(['a']);
   });
 
   test('refuses to answer with a list that leaves out a window that stopped serving requests', async () => {
@@ -393,6 +433,21 @@ describe('web view service router', () => {
     await expect(router.openWebView('comments', undefined, { existingId: '?' })).resolves.toBe(
       'opened',
     );
+    expect(target.openWebView).toHaveBeenCalled();
+  });
+
+  test('an open that names a web view goes ahead when a window has been given up on', async () => {
+    // The refusal above is worth its cost because the window it protects is coming back with the
+    // web view still in it. Nothing is coming back from a window the reload path gave up on, so
+    // holding the refusal there would make opening a named web view — the Scripture editor, Open
+    // Comments — throw for the rest of the session over a window that will never hold one again.
+    const target = windowShard([]);
+    withWindows({ 1: target, 3: windowShard([]) }, { abandonedWindowIds: [3] });
+    const router = await getRouter();
+
+    await expect(
+      router.openWebView('comments', undefined, { existingId: 'named-view' }),
+    ).resolves.toBe('opened');
     expect(target.openWebView).toHaveBeenCalled();
   });
 
@@ -778,6 +833,18 @@ describe('web view service router', () => {
     await expect(router.reloadWebView('someType', 'owned-view')).rejects.toThrow('unreachable');
     expect(crashed.getOpenWebViewDefinition).not.toHaveBeenCalled();
     expect(focused.reloadWebView).not.toHaveBeenCalled();
+  });
+
+  test('reloads in the routing target rather than refusing when a window has been given up on', async () => {
+    // A reload names one specific web view, so a window that might be holding it fails the call —
+    // but a given-up window is not holding anything any more, and it never stops being tracked, so
+    // the same refusal would make every reload in the app throw for the rest of the session
+    const focused = windowShard([]);
+    withWindows({ 1: focused, 3: windowShard([]) }, { abandonedWindowIds: [3] });
+    const router = await getRouter();
+
+    await expect(router.reloadWebView('someType', 'some-view')).resolves.toBe('reloaded');
+    expect(focused.reloadWebView).toHaveBeenCalled();
   });
 
   test('refuses to route rather than guessing when no window is available', async () => {
