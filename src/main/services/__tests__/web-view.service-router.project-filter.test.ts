@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
     getUnreachableWindowIds: vi.fn(),
+    getAbandonedWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     getFocusedWindowId: vi.fn(),
     focusWindow: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
   getUnreachableWindowIds: mocks.getUnreachableWindowIds,
+  getAbandonedWindowIds: mocks.getAbandonedWindowIds,
   isWindowReady: mocks.isWindowReady,
   // No test here is about a window closing, and an open into the window a search resolved re-reads
   // this immediately before it runs
@@ -122,6 +124,7 @@ describe("a '?' reuse search limited to a project", () => {
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
+    mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
     mocks.getFocusedWindowId.mockReturnValue(1);
     mocks.settingsGet.mockResolvedValue('power');

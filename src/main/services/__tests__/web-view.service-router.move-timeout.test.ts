@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     getTargetWindowId: vi.fn(),
     getReadyWindowIds: vi.fn(),
     getUnreachableWindowIds: vi.fn(),
+    getAbandonedWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     isWindowClosing: vi.fn(),
     getFocusedWindowId,
@@ -59,6 +60,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getTargetWindowId: mocks.getTargetWindowId,
   getReadyWindowIds: mocks.getReadyWindowIds,
   getUnreachableWindowIds: mocks.getUnreachableWindowIds,
+  getAbandonedWindowIds: mocks.getAbandonedWindowIds,
   isWindowReady: mocks.isWindowReady,
   isWindowClosing: mocks.isWindowClosing,
   getFocusedWindowId: mocks.getFocusedWindowId,
@@ -122,6 +124,7 @@ describe('moveWebView when the target adopt times out', () => {
     mocks.getTargetWindowId.mockReturnValue(1);
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
+    mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
     mocks.isWindowClosing.mockReturnValue(false);
     mocks.getFocusedWindowId.mockReturnValue(1);
