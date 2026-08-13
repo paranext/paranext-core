@@ -62,6 +62,7 @@ import {
   getFocusedWindowId,
   getTargetWindowId,
   getWindows,
+  isWindowClosing,
   markWindowClosing,
   markWindowNotReady,
   markWindowReady,
@@ -217,6 +218,30 @@ const WINDOW_CLOSE_TIME_OUT_MS = 10000;
 
 /** How long to coalesce a window's resize/move events before capturing its bounds */
 const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
+
+/**
+ * How many times in a row a window's renderer is reloaded after it dies before the window is left
+ * down.
+ *
+ * A renderer that dies again immediately is dying at load — a bad bundle, a startup crash, an
+ * out-of-memory page — and reloading it again only burns CPU and rewrites the same crash to the log
+ * forever. Stopping leaves the window blank and unroutable, which is what it already was; the user
+ * can close it and open another. Three because the reload is the only thing that puts a crashed
+ * window back into the app at all, so it is worth a couple of tries before giving the session up on
+ * it.
+ */
+const MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS = 3;
+
+/**
+ * How long a reloaded renderer has to survive before its reload counts as having worked, resetting
+ * the crash-reload budget.
+ *
+ * Without this the cap would be a per-session budget: a window that crashed three times over an
+ * afternoon — three unrelated failures, each recovered from — would be left down on the fourth. A
+ * renderer that comes back and runs for this long recovered; one that dies again inside it is
+ * looping.
+ */
+const RENDERER_CRASH_RELOAD_RECOVERY_MS = 30000;
 
 /**
  * How a window being created relates to the persisted window-layouts structure: it restores a saved
@@ -680,13 +705,52 @@ async function main() {
     // Add several listeners to the window to log events
     newWindow.webContents.on('unresponsive', () => logger.warn(`Window ${windowId} unresponsive`));
     newWindow.webContents.on('responsive', () => logger.warn(`Window ${windowId} responsive`));
+    // How many times in a row this window's renderer has been reloaded after dying, and when the
+    // last of those reloads was. Per window, because a crash loop is one window's page failing
+    // rather than the app's.
+    let consecutiveCrashReloads = 0;
+    let lastCrashReloadAt = 0;
     newWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) => {
       logger.warn(`Window ${windowId} render process gone: ${JSON.stringify(details)}`);
       // Everything this window registered died with its renderer, so routing has to move to a window
       // that can answer rather than spending the network service's registration retry on handlers
-      // that no longer exist. The `onDidRegisterWindowServiceShard` subscription above marks it
-      // ready again when its window service shard reappears.
+      // that no longer exist.
       markWindowNotReady(windowId);
+
+      // Nothing else brings a dead renderer back: Electron leaves the window there with no page in
+      // it, and the `onDidRegisterWindowServiceShard` subscription that would mark this window ready
+      // again only ever hears from a page that is running. Without the reload below the window stays
+      // out of the routable set for the rest of the session — a window still on screen, still
+      // holding its tabs' worth of the user's work, that every fan-out reports as unreachable and
+      // every routed call refuses to go to.
+      //
+      // A clean exit is the renderer going away on purpose, which is what a window being taken down
+      // looks like from here, so it gets no reload — and neither does a window whose close has
+      // already begun, which is on its way out with its shutdown work in flight.
+      if (
+        details.reason === 'clean-exit' ||
+        newWindow.isDestroyed() ||
+        isWindowClosing(windowId) ||
+        isAppShuttingDown()
+      )
+        return;
+
+      // A renderer that came back and ran for a while recovered, so its next crash starts the budget
+      // over; one that dies again straight away is looping, and stops after the cap.
+      if (Date.now() - lastCrashReloadAt > RENDERER_CRASH_RELOAD_RECOVERY_MS)
+        consecutiveCrashReloads = 0;
+      if (consecutiveCrashReloads >= MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS) {
+        logger.error(
+          `Window ${windowId} renderer died ${consecutiveCrashReloads} times in a row despite being reloaded each time, so it is being left down. Close the window and open a new one.`,
+        );
+        return;
+      }
+      consecutiveCrashReloads += 1;
+      lastCrashReloadAt = Date.now();
+      logger.warn(
+        `Reloading window ${windowId} after its renderer died (attempt ${consecutiveCrashReloads} of ${MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS}); it becomes routable again when its window service shard reappears`,
+      );
+      newWindow.webContents.reload();
     });
     // A reload replaces the page and everything it registered, the same as a crash does. This also
     // fires for the very first load, before the window was ever ready, which changes nothing.
@@ -856,7 +920,7 @@ async function main() {
     // when you click on the close button for the main window, it immediately fires the `close`
     // event, superseding the app:`before-quit` event and this process needs to be able to hang
     // the window until the sync completes.
-    let isWindowClosing = false;
+    let isCloseInProgress = false;
     /**
      * Whether this window's close is the app going down, decided on the first pass through the
      * close handler below.
@@ -875,16 +939,16 @@ async function main() {
       // and this fall-through is the user's only escape hatch until a real feedback/cancel UX
       // exists (PT-4001 tracks the missing shutdown-sync feedback). It abandons the in-flight sync
       // mid-flight — same risk profile as force-quitting the app.
-      if (isWindowClosing) return;
+      if (isCloseInProgress) return;
 
       // Prevents the window from initially closing. First, and ahead of every decision this handler
       // makes: Electron reads `defaultPrevented` when this synchronous stretch returns, so anything
       // that throws above this line lets the window close with none of the shutdown work below ever
       // running — and an async listener's throw becomes a rejected promise Electron never sees.
-      // Below the `isWindowClosing` guard, though: the second close click has to reach Electron's
+      // Below the `isCloseInProgress` guard, though: the second close click has to reach Electron's
       // default close, which is the user's only escape from the wait this handler is about to start.
       event.preventDefault();
-      isWindowClosing = true;
+      isCloseInProgress = true;
 
       // Everything from here down is inside the guard: the window is now prevented from closing and
       // latched as closing, so a throw that escaped would strand it exactly there — visible, inert,
@@ -961,7 +1025,7 @@ async function main() {
           // Closed rather than destroyed, because the app is staying up and the page still has
           // teardown of its own to run — `destroy()` skips `beforeunload`, which is what prunes
           // this window's stored web view state. The second pass through this handler stops at
-          // the `isWindowClosing` guard above, leaving Electron's default close to run.
+          // the `isCloseInProgress` guard above, leaving Electron's default close to run.
           newWindow.close();
           // A renderer that never finishes that teardown would otherwise leave the window on screen
           // and in limbo for the rest of the session: it is out of the routable set and recorded as
