@@ -963,15 +963,25 @@ declare module 'platform-scripture' {
 
   // #region Scripture Edit Permissions Types
 
-  /** Provides permission checks for editing Scripture content (intentionally empty) */
-  export type ScriptureEditPermissionsProjectInterfaceDataTypes = {};
+  /** Provides permission checks for editing Scripture content */
+  export type ScriptureEditPermissionsProjectInterfaceDataTypes = {
+    /**
+     * Read-only. Whether the current user can edit Scripture content on this project (i.e., has a
+     * role other than Observer or None). Refreshes automatically after every Send/Receive sync.
+     * Subscribe to react to changes; this data type cannot be set.
+     */
+    CanUserEditScripture: DataProviderDataType<undefined, boolean, never>;
+  };
 
   /** Provides permission checks for editing Scripture content on this project */
   export type IScriptureEditPermissionsProjectDataProvider =
     IProjectDataProvider<ScriptureEditPermissionsProjectInterfaceDataTypes> & {
       /**
-       * Determines whether the current user can edit Scripture content on this project (i.e., has a
-       * role other than Observer or None).
+       * One-shot, non-reactive check for whether the current user can edit Scripture content on
+       * this project. Prefer subscribing to the `CanUserEditScripture` data type
+       * (`getCanUserEditScripture`/`subscribeCanUserEditScripture`) for anything that should react
+       * to a role change landing via sync; this method is for one-off checks (e.g. picking a
+       * default project) that don't need a live subscription.
        *
        * @returns `true` if the user can edit Scripture content, `false` if they are Observer-only
        *   or if permissions cannot be determined.
