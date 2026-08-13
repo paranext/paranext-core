@@ -50,6 +50,7 @@ import {
 import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
 import {
   DUPLICATE_REGISTRATION_PATTERN,
+  ROUTER_REGISTERED_LOG,
   FAULT_MARKERS,
   WEBSOCKET_PORT,
   captureAppOutput,
@@ -458,6 +459,9 @@ test.describe('per-window UI isolation', () => {
     // ── No faults or cross-window registration collisions anywhere in the exercised flows ──────
     const wholeLog = output.text();
     FAULT_MARKERS.forEach((marker) => expect(wholeLog).not.toContain(marker));
+    // Positive control first — see ROUTER_REGISTERED_LOG. Without it these negative sweeps pass
+    // just as happily against output that never arrived as against output with no faults in it.
+    expect(wholeLog).toContain(ROUTER_REGISTERED_LOG);
     expect(wholeLog).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
   });
 });
