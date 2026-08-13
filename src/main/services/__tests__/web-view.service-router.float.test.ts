@@ -69,6 +69,8 @@ vi.mock('@main/services/window-state.service', () => ({
   getReadyWindowIds: mocks.getReadyWindowIds,
   getNotReadyWindowIds: mocks.getNotReadyWindowIds,
   isWindowReady: mocks.isWindowReady,
+  // No test here names a closing window; the routed-open guard just needs an answer
+  isWindowClosing: () => false,
   getFocusedWindowId: mocks.getFocusedWindowId,
   focusWindow: mocks.focusWindow,
 }));
