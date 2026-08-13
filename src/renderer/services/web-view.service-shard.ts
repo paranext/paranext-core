@@ -2930,28 +2930,82 @@ export const openWebView = async (
 };
 
 /**
+ * Put Home in this window's dock, deciding nothing with the main process. A dock with no tab in it
+ * gives the user no way to open anything, so this is what fills one whenever closing the window is
+ * not the answer.
+ */
+async function dockHomeInThisWindow(): Promise<void> {
+  try {
+    await openWebView('platformGetResources.home', { type: 'tab' });
+  } catch (e) {
+    throw new Error(`web-view.service-shard error: Opening Home web view failed! ${e}`, {
+      cause: e,
+    });
+  }
+}
+
+/**
+ * How many times {@link reportDockEmptied} tells the main process this window's dock is empty before
+ * giving up. The main process registers the handler before it creates any window, so a failure can
+ * only be transient transport trouble — worth a few retries, the same as the saved layout this
+ * window asked for at startup.
+ */
+const REPORT_DOCK_EMPTIED_ATTEMPTS = 3;
+
+/** How long {@link reportDockEmptied} waits between attempts */
+const REPORT_DOCK_EMPTIED_RETRY_DELAY_MS = 2_000;
+
+/**
  * Tell the main process this window's dock is empty and act on its decision: dock Home here, or
  * nothing — the window is about to close. Only the main process knows how many windows exist, so
  * the close-or-home decision lives there; see the window-emptiness handler.
+ *
+ * Everything this window shows from here on hangs off that one answer, so it is asked for several
+ * times before this side decides alone. A report that goes entirely unanswered ends in Home docked
+ * locally: an empty dock leaves the user with nothing to open anything from, and closing the window
+ * is the one answer only the main process may give.
  */
 async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
-  try {
-    const windowId = getWindowIdOrThrow();
-    logger.debug(`Window ${windowId} reporting its dock emptied to main (reason: ${reason})`);
-    const response = await sendNetworkRequest<[number, WindowEmptiedReason], WindowEmptiedResponse>(
-      WINDOW_EMPTIED_REQUEST_TYPE,
-      windowId,
-      reason,
-    );
-    logger.debug(
-      `Window ${windowId}'s reported emptiness was answered with action: ${response.action}`,
-    );
-    if (response.action !== 'open-home') return;
-    await openWebView('platformGetResources.home', { type: 'tab' });
-  } catch (e) {
+  let response: WindowEmptiedResponse | undefined;
+  for (let attempt = 1; attempt <= REPORT_DOCK_EMPTIED_ATTEMPTS; attempt += 1) {
+    try {
+      const windowId = getWindowIdOrThrow();
+      logger.debug(
+        `Window ${windowId} reporting its dock emptied to main (reason: ${reason}, attempt ${attempt} of ${REPORT_DOCK_EMPTIED_ATTEMPTS})`,
+      );
+      // Sequential attempts: each one must settle before the next may start
+      // eslint-disable-next-line no-await-in-loop
+      response = await sendNetworkRequest<[number, WindowEmptiedReason], WindowEmptiedResponse>(
+        WINDOW_EMPTIED_REQUEST_TYPE,
+        windowId,
+        reason,
+      );
+      logger.debug(
+        `Window ${windowId}'s reported emptiness was answered with action: ${response.action}`,
+      );
+      break;
+    } catch (e) {
+      logger.warn(
+        `Reporting an empty dock failed (attempt ${attempt} of ${REPORT_DOCK_EMPTIED_ATTEMPTS}): ${getErrorMessage(e)}`,
+      );
+      if (attempt < REPORT_DOCK_EMPTIED_ATTEMPTS)
+        // Sequential attempts (see above)
+        // eslint-disable-next-line no-await-in-loop
+        await wait(REPORT_DOCK_EMPTIED_RETRY_DELAY_MS);
+    }
+  }
+
+  if (response && response.action !== 'open-home') return;
+  if (!response)
     logger.warn(
-      `Reporting an empty dock failed; leaving the window as it is: ${getErrorMessage(e)}`,
+      `An empty dock went unanswered after ${REPORT_DOCK_EMPTIED_ATTEMPTS} attempts; docking Home here rather than leaving the window blank`,
     );
+  try {
+    await dockHomeInThisWindow();
+  } catch (e) {
+    // Reporting emptiness runs fire-and-forget from a freshly loaded layout, so a failure here has
+    // nobody to hand itself to
+    logger.warn(`Could not dock Home in the emptied window: ${getErrorMessage(e)}`);
   }
 }
 
@@ -2991,13 +3045,7 @@ export async function handleDockEmptiedByRemoval(layout: LayoutInfo): Promise<vo
   logger.debug(
     `Window ${globalThis.windowId}'s dock lost its last docked tab, but tabs remain elsewhere (float/maximized/window); docking Home locally instead of reporting`,
   );
-  try {
-    await openWebView('platformGetResources.home', { type: 'tab' });
-  } catch (e) {
-    throw new Error(`web-view.service-shard error: Opening Home web view failed! ${e}`, {
-      cause: e,
-    });
-  }
+  await dockHomeInThisWindow();
 }
 
 /** See {@link WebViewServiceShard.reloadWebView} */

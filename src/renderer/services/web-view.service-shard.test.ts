@@ -1671,6 +1671,69 @@ describe('loadLayout reports a dock that landed empty', () => {
     expect(addWebViewToDockCalls).toEqual([]);
   });
 
+  describe('when the emptied round trip fails', () => {
+    /** Every `windowLayout:emptied` report made so far */
+    function emptiedReports() {
+      return mocks.networkRequest.mock.calls.filter(
+        ([requestType]) => requestType === 'windowLayout:emptied',
+      );
+    }
+
+    /** Stand up the open path, register a dock layout, and drive the report's retry delays */
+    async function registerThroughEmptiedRetries() {
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, loadedLayouts, addWebViewToDockCalls } =
+        makeDockLayoutThatTracksAdds(layoutWithAnchor());
+      vi.useFakeTimers();
+      try {
+        module.registerDockLayout(dockLayout);
+        await vi.advanceTimersByTimeAsync(60_000);
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(loadedLayouts.length).toBeGreaterThan(0);
+      return { addWebViewToDockCalls };
+    }
+
+    test('retries the report and acts on the answer a later attempt brings', async () => {
+      // Home-on-empty hangs off this one round trip, so a transport hiccup that would have been
+      // over by the next attempt otherwise decides what the window shows for the rest of the
+      // session
+      let emptiedCalls = 0;
+      mocks.networkRequest.mockImplementation(async (requestType: string) => {
+        if (requestType === 'windowLayout:get') return { kind: 'empty' };
+        if (requestType !== 'windowLayout:emptied') return undefined;
+        emptiedCalls += 1;
+        if (emptiedCalls < 3) throw new Error('transport not up yet');
+        return { action: 'closing' };
+      });
+
+      const { addWebViewToDockCalls } = await registerThroughEmptiedRetries();
+
+      expect(emptiedReports()).toHaveLength(3);
+      // The answer that finally arrived says this window is on its way out, so nothing is docked
+      // into it
+      expect(addWebViewToDockCalls).toEqual([]);
+    });
+
+    test('docks Home locally when every attempt fails, without reporting again', async () => {
+      // No answer is coming, and an empty dock offers the user no way to open anything. Home is
+      // the one outcome that cannot strand them; closing is not this side's decision to take.
+      mocks.networkRequest.mockImplementation(async (requestType: string) => {
+        if (requestType === 'windowLayout:get') return { kind: 'empty' };
+        if (requestType === 'windowLayout:emptied') throw new Error('transport is down');
+        return undefined;
+      });
+
+      const { addWebViewToDockCalls } = await registerThroughEmptiedRetries();
+
+      expect(addWebViewToDockCalls).toEqual([
+        expect.objectContaining({ webViewType: 'platformGetResources.home' }),
+      ]);
+      expect(emptiedReports()).toHaveLength(3);
+    });
+  });
+
   describe('a dock that lost its last docked tab', () => {
     /**
      * Layout with one tab floating above a dock that holds nothing but the empty placeholder panel
