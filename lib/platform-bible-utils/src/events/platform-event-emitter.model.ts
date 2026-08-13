@@ -4,6 +4,24 @@ import { Dispose } from '../lifetime-management/disposal.model';
 import { PlatformEvent, PlatformEventHandler } from './platform-event';
 
 /**
+ * Determine at runtime whether a value is a promise whose rejection we can subscribe to.
+ * Deliberately duck-typed: this runs on values whose static type claims to be `void`, so there is
+ * nothing for the type system to narrow. Both `then` and `catch` are checked because `catch` is the
+ * capability the caller uses, and an `async` function - the case this exists for - returns a native
+ * promise that has both.
+ */
+function isPromise(value: unknown): value is Promise<unknown> {
+  return (
+    typeof value === 'object' &&
+    !!value &&
+    'then' in value &&
+    typeof value.then === 'function' &&
+    'catch' in value &&
+    typeof value.catch === 'function'
+  );
+}
+
+/**
  * Event manager - accepts subscriptions to an event and runs the subscription callbacks when the
  * event is emitted Use eventEmitter.event(callback) to subscribe to the event. Use
  * eventEmitter.emit(event) to run the subscriptions. Generally, this EventEmitter should be
@@ -116,6 +134,8 @@ export class PlatformEventEmitter<T> implements Dispose {
   /**
    * Function that runs the subscriptions for the event in isolation from each other. Added here so
    * children can override {@link emitIsolated} and still call the base functionality.
+   *
+   * @experimental
    */
   protected emitIsolatedFn(
     event: T,
@@ -125,7 +145,19 @@ export class PlatformEventEmitter<T> implements Dispose {
 
     this.forEachSubscription((callback, subscriberIndex) => {
       try {
-        callback(event);
+        // `PlatformEventHandler` returns `void`, but an `async` function is assignable to a
+        // void-returning type, so a subscriber can hand back a promise even though the type says
+        // nothing came back. Were we to ignore it, that promise's rejection would escape as an
+        // unhandled rejection naming no emitter, event, or subscriber - the opposite of the
+        // isolation this method promises - so look at what actually came back and route a
+        // rejection the same way a synchronous throw goes. Inspecting the returned value rather
+        // than wrapping every call in `Promise.resolve(...)` keeps the common all-synchronous
+        // emit allocation-free; these are hot paths.
+        const returnedValue: unknown = callback(event);
+        if (isPromise(returnedValue))
+          returnedValue.catch((error: unknown) => {
+            handleSubscriberError(error, subscriberIndex);
+          });
       } catch (error) {
         handleSubscriberError(error, subscriberIndex);
       }

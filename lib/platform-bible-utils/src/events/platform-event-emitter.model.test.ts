@@ -102,6 +102,33 @@ describe('emitIsolated', () => {
     expect(eventsSeenByLastSubscriber).toEqual([2]);
   });
 
+  it('reports an async subscriber that rejects and still runs the later subscribers', async () => {
+    const emitter = new PlatformEventEmitter<string>();
+    const subscribersRun: number[] = [];
+    const rejected = new Error('async subscriber blew up');
+    emitter.subscribe(() => subscribersRun.push(0));
+    emitter.subscribe(async () => {
+      subscribersRun.push(1);
+      throw rejected;
+    });
+    emitter.subscribe(() => subscribersRun.push(2));
+    const reportedErrors: [unknown, number][] = [];
+
+    emitter.emitIsolated('the news', (error, subscriberIndex) => {
+      reportedErrors.push([error, subscriberIndex]);
+    });
+
+    // The later subscribers run synchronously; only the rejection is reported later
+    expect(subscribersRun).toEqual([0, 1, 2]);
+
+    // A rejection can only be seen once the microtask queue has drained
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(reportedErrors).toEqual([[rejected, 1]]);
+  });
+
   it('still refuses to emit once disposed', async () => {
     const emitter = new PlatformEventEmitter<undefined>();
     await emitter.dispose();
