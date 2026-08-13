@@ -10,6 +10,9 @@ pids
 # Coverage directory used by tools like istanbul
 coverage
 
+# CPU profiles captured by npm run profile-extension-host
+*.cpuprofile
+
 # formatting and linting
 .eslintcache
 .eslintConfig.json

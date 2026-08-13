@@ -1,28 +1,10 @@
 import fs from 'fs';
-import os from 'os';
-import path from 'path';
-import { parseStartupMarks, formatWaterfall, selectLatestRun } from './startup-waterfall.util';
-
-/**
- * Default dev `main.log` location per platform (packaged uses 'platform-bible' instead of
- * 'Electron').
- */
-function defaultLogPath(): string {
-  const home = os.homedir();
-  switch (process.platform) {
-    case 'win32':
-      return path.join(
-        process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming'),
-        'Electron',
-        'logs',
-        'main.log',
-      );
-    case 'darwin':
-      return path.join(home, 'Library', 'Logs', 'Electron', 'main.log');
-    default:
-      return path.join(home, '.config', 'Electron', 'logs', 'main.log');
-  }
-}
+import {
+  parseStartupMarks,
+  formatWaterfall,
+  selectLatestRun,
+  defaultLogPath,
+} from './startup-waterfall.util';
 
 /**
  * Resolve the `--log` path from argv, supporting both `--log <path>` and the common `--log=<path>`

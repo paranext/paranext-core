@@ -1,3 +1,5 @@
+import os from 'os';
+import path from 'path';
 // Relative (not @shared/*) import: this CLI/test corpus lives outside the root tsconfig's
 // `include`, so path aliases don't resolve here under vitest. platform.data is import-free, so
 // pulling it in drags no logger side effects into the CLI.
@@ -6,6 +8,27 @@ import {
   STARTUP_MARK_PREFIX,
   STARTUP_MARK_PROCESS_START,
 } from '../../src/shared/data/platform.data';
+
+/**
+ * Default dev `main.log` location per platform (packaged uses 'platform-bible' instead of
+ * 'Electron'). Shared by every CLI here that reads startup marks.
+ */
+export function defaultLogPath(): string {
+  const home = os.homedir();
+  switch (process.platform) {
+    case 'win32':
+      return path.join(
+        process.env.APPDATA ?? path.join(home, 'AppData', 'Roaming'),
+        'Electron',
+        'logs',
+        'main.log',
+      );
+    case 'darwin':
+      return path.join(home, 'Library', 'Logs', 'Electron', 'main.log');
+    default:
+      return path.join(home, '.config', 'Electron', 'logs', 'main.log');
+  }
+}
 
 export interface StartupMark {
   proc: string;
