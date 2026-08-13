@@ -85,6 +85,11 @@ import {
   DEFAULT_WINDOW_WIDTH,
   ensureBoundsVisibleOnSomeDisplay,
 } from '@main/window-bounds.util';
+import {
+  decideRendererCrashReload,
+  MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS,
+  NO_RENDERER_CRASH_RELOADS_YET,
+} from '@main/renderer-crash-reload-budget.util';
 import type {
   WindowBoundsState,
   WindowLayoutEntry,
@@ -218,30 +223,6 @@ const WINDOW_CLOSE_TIME_OUT_MS = 10000;
 
 /** How long to coalesce a window's resize/move events before capturing its bounds */
 const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
-
-/**
- * How many times in a row a window's renderer is reloaded after it dies before the window is left
- * down.
- *
- * A renderer that dies again immediately is dying at load — a bad bundle, a startup crash, an
- * out-of-memory page — and reloading it again only burns CPU and rewrites the same crash to the log
- * forever. Stopping leaves the window blank and unroutable, which is what it already was; the user
- * can close it and open another. Three because the reload is the only thing that puts a crashed
- * window back into the app at all, so it is worth a couple of tries before giving the session up on
- * it.
- */
-const MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS = 3;
-
-/**
- * How long a reloaded renderer has to survive before its reload counts as having worked, resetting
- * the crash-reload budget.
- *
- * Without this the cap would be a per-session budget: a window that crashed three times over an
- * afternoon — three unrelated failures, each recovered from — would be left down on the fourth. A
- * renderer that comes back and runs for this long recovered; one that dies again inside it is
- * looping.
- */
-const RENDERER_CRASH_RELOAD_RECOVERY_MS = 30000;
 
 /**
  * How a window being created relates to the persisted window-layouts structure: it restores a saved
@@ -705,11 +686,9 @@ async function main() {
     // Add several listeners to the window to log events
     newWindow.webContents.on('unresponsive', () => logger.warn(`Window ${windowId} unresponsive`));
     newWindow.webContents.on('responsive', () => logger.warn(`Window ${windowId} responsive`));
-    // How many times in a row this window's renderer has been reloaded after dying, and when the
-    // last of those reloads was. Per window, because a crash loop is one window's page failing
-    // rather than the app's.
-    let consecutiveCrashReloads = 0;
-    let lastCrashReloadAt = 0;
+    // What this window has spent of its crash-reload budget. Per window, because a crash loop is
+    // one window's page failing rather than the app's.
+    let crashReloadBudget = NO_RENDERER_CRASH_RELOADS_YET;
     newWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) => {
       logger.warn(`Window ${windowId} render process gone: ${JSON.stringify(details)}`);
       // Everything this window registered died with its renderer, so routing has to move to a window
@@ -737,18 +716,16 @@ async function main() {
 
       // A renderer that came back and ran for a while recovered, so its next crash starts the budget
       // over; one that dies again straight away is looping, and stops after the cap.
-      if (Date.now() - lastCrashReloadAt > RENDERER_CRASH_RELOAD_RECOVERY_MS)
-        consecutiveCrashReloads = 0;
-      if (consecutiveCrashReloads >= MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS) {
+      const reloadDecision = decideRendererCrashReload(crashReloadBudget, Date.now());
+      if (!reloadDecision.shouldReload) {
         logger.error(
-          `Window ${windowId} renderer died ${consecutiveCrashReloads} times in a row despite being reloaded each time, so it is being left down. Close the window and open a new one.`,
+          `Window ${windowId} renderer died ${reloadDecision.reloadsAlreadySpent} times in a row despite being reloaded each time, so it is being left down. Close the window and open a new one.`,
         );
         return;
       }
-      consecutiveCrashReloads += 1;
-      lastCrashReloadAt = Date.now();
+      crashReloadBudget = reloadDecision.budget;
       logger.warn(
-        `Reloading window ${windowId} after its renderer died (attempt ${consecutiveCrashReloads} of ${MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS}); it becomes routable again when its window service shard reappears`,
+        `Reloading window ${windowId} after its renderer died (attempt ${reloadDecision.attempt} of ${MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS}); it becomes routable again when its window service shard reappears`,
       );
       newWindow.webContents.reload();
     });
