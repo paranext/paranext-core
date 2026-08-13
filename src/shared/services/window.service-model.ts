@@ -71,10 +71,19 @@ export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string
  *
  * - `'mouseDown'` — a mouse button went down anywhere in the window
  * - `'escape'` — the Escape key went down anywhere in the window
+ *
+ * These two gestures are deliberately the ONLY inputs this type can describe. Do not add other keys
+ * or richer mouse detail — see the security note on {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT}.
  */
 export type AppWindowInputKind = 'mouseDown' | 'escape';
 
-/** Payload of the {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} network event */
+/**
+ * Payload of the {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} network event.
+ *
+ * Deliberately carries nothing but which of the two gestures happened — no key identity, no mouse
+ * coordinates, button, or target. See the security note on
+ * {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} before adding fields.
+ */
 export type AppWindowInputEvent = {
   /** Which input gesture happened */
   kind: AppWindowInputKind;
@@ -89,6 +98,12 @@ export type AppWindowInputEvent = {
  * parent document, so this event is the only way they learn that a click landed inside a WebView.
  * Escape is announced without `preventDefault`, so the focused frame still receives the key and can
  * act on it too.
+ *
+ * SECURITY: network events are visible to every process and every extension, and the hooks feeding
+ * this one see ALL input in the window — including keystrokes typed into other extensions' web
+ * views. The announcement is therefore restricted to the two overlay-dismissal gestures, with no
+ * key identity, coordinates, or any other detail, so the event cannot be used as a keylogger or to
+ * surveil user input. Do not broaden what is announced here without a security review.
  */
 export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
 
