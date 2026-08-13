@@ -35,13 +35,16 @@ import {
 } from '@shared/models/web-view.model';
 import { Layout } from '@shared/models/docking-framework.model';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, wait } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
-import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
+import {
+  CATEGORY_COMMAND,
+  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
+} from '@shared/data/rpc.model';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
 import { settingsService } from '@shared/services/settings.service';
@@ -465,6 +468,82 @@ async function openWebViewInNewWindow(
 /** Where a move sends a web view: an existing window's id, or `'new'` for a window created for it */
 type MoveWebViewTarget = number | 'new';
 
+/** How many times {@link findWebViewAdoptedAfterTimeout} asks the target whether the adopt landed */
+const LATE_ADOPT_PROBE_ATTEMPTS = 3;
+
+/** How long {@link findWebViewAdoptedAfterTimeout} waits between attempts */
+const LATE_ADOPT_PROBE_RETRY_DELAY_MS = 2_000;
+
+/**
+ * Whether `error` is what the network plumbing throws when a request expires client-side before any
+ * answer arrives (`doRequest` in `network.service.ts` builds `JSON-RPC Request timed out:
+ * <requestType> <args>` when its per-request wait runs out). Matched by message substring, deriving
+ * the format from its one producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}) — the same
+ * derivation the startup tasks use to recognize the same producer.
+ */
+function isRequestTimedOutError(error: unknown): boolean {
+  return getErrorMessage(error).includes(JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX);
+}
+
+/**
+ * Whether a move's target holds the web view whose adopt call timed out — asked before any
+ * recovery, because a timed-out adopt is ambiguous where every other failure is not: the request
+ * expired client-side, but the target may still be running it (a provider can legitimately take
+ * longer than the request timeout), and reopening the captured definition elsewhere while the
+ * target finishes would put the same web view id live in two windows, where messages for it become
+ * unroutable.
+ *
+ * Bounded to a few attempts a couple of seconds apart: a target that never answers must not stall
+ * the recovery the user is waiting on forever. A provider still slower than these attempts ends in
+ * recovery anyway and the collision window comes back — that residual is accepted over an unbounded
+ * wait.
+ *
+ * @param webViewId The id the target would hold the web view under — the captured definition's id,
+ *   which the capture already stripped of its source window's scope
+ * @returns The id the web view is open under in the target, or undefined when the probe confirmed
+ *   absence or could not ask
+ */
+async function findWebViewAdoptedAfterTimeout(
+  targetShard: WebViewServiceShard,
+  webViewId: WebViewId,
+  targetDescription: string,
+): Promise<WebViewId | undefined> {
+  for (let attempt = 1; attempt <= LATE_ADOPT_PROBE_ATTEMPTS; attempt += 1) {
+    try {
+      // Sequential attempts: each one must settle before the next may start
+      // eslint-disable-next-line no-await-in-loop
+      const definition = await targetShard.getOpenWebViewDefinition(webViewId);
+      if (definition) {
+        logger.info(
+          `Webview ${webViewId}'s adopt into ${targetDescription} timed out but landed anyway; probe attempt ${attempt} of ${LATE_ADOPT_PROBE_ATTEMPTS} found it open as ${definition.id}`,
+        );
+        return definition.id;
+      }
+      logger.debug(
+        `Webview ${webViewId}'s timed-out adopt has not landed in ${targetDescription} (probe attempt ${attempt} of ${LATE_ADOPT_PROBE_ATTEMPTS})`,
+      );
+    } catch (e) {
+      logger.warn(
+        `Could not ask ${targetDescription} whether webview ${webViewId}'s timed-out adopt landed (probe attempt ${attempt} of ${LATE_ADOPT_PROBE_ATTEMPTS}): ${getErrorMessage(e)}`,
+      );
+    }
+    if (attempt < LATE_ADOPT_PROBE_ATTEMPTS)
+      // Sequential attempts (see above)
+      // eslint-disable-next-line no-await-in-loop
+      await wait(LATE_ADOPT_PROBE_RETRY_DELAY_MS);
+  }
+  return undefined;
+}
+
+/**
+ * Raise the window a completed move put the web view in. Raising is how the user sees where the web
+ * view went — same narrow rule as cross-window opens: only between this app's windows, never taking
+ * focus from another application. A new window raises itself when it is created.
+ */
+function raiseMoveTarget(target: MoveWebViewTarget): void {
+  if (typeof target === 'number' && getFocusedWindowId() !== undefined) focusWindow(target);
+}
+
 /**
  * Move a web view: close it in the window that holds it, reopen it from the captured definition in
  * the target. Close-source-first is load-bearing — a one-instance web view cannot be opened in the
@@ -551,16 +630,28 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
         ? await targetShard.adoptWebView(captured)
         : await openInFreshWindow(webViewId, (shard) => shard.adoptWebView(captured));
     if (movedWebViewId !== undefined) {
-      // Raising is how the user sees where the web view went — same narrow rule as cross-window
-      // opens: only between this app's windows, never taking focus from another application. A
-      // new window raises itself when it is created
-      if (typeof target === 'number' && getFocusedWindowId() !== undefined) focusWindow(target);
+      raiseMoveTarget(target);
       return movedWebViewId;
     }
     logger.warn(
       `Moving webview ${webViewId} to ${targetDescription} did not happen: the provider did not recreate it there. Reopening it where it can go.`,
     );
   } catch (e) {
+    // A timed-out adopt may have succeeded after its request expired, and only the target knows —
+    // see findWebViewAdoptedAfterTimeout. The new-window path is deliberately not probed: its own
+    // failure handling has already closed the window it created, so there is nothing left holding
+    // the view there.
+    if (targetShard !== undefined && isRequestTimedOutError(e)) {
+      const lateAdoptedWebViewId = await findWebViewAdoptedAfterTimeout(
+        targetShard,
+        captured.id,
+        targetDescription,
+      );
+      if (lateAdoptedWebViewId !== undefined) {
+        raiseMoveTarget(target);
+        return lateAdoptedWebViewId;
+      }
+    }
     logger.warn(
       `Moving webview ${webViewId} to ${targetDescription} failed: ${getErrorMessage(e)}. Reopening it where it can go.`,
     );
