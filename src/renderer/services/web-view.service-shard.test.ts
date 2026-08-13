@@ -1863,6 +1863,42 @@ describe('loadLayout when the saved-layout request fails', () => {
   });
 });
 
+describe('a dock emptied by removal while running on a fallback layout', () => {
+  /** Layout with no tab anywhere — only the empty placeholder panel in the dock */
+  function layoutWithNoTabsAnywhere(): LayoutInfo {
+    return {
+      dockbox: { mode: 'horizontal', children: [{ id: '+0', tabs: [] }] },
+    } as unknown as LayoutInfo;
+  }
+
+  test('reports nothing — a fallback dock made empty is treated like one born empty', async () => {
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+    vi.useFakeTimers();
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+    await vi.advanceTimersByTimeAsync(60_000);
+    vi.useRealTimers();
+    expect(loadedLayouts.length).toBeGreaterThan(0);
+
+    await module.handleDockEmptiedByRemoval(layoutWithNoTabsAnywhere());
+
+    // Same guard as born-empty: reporting would have main close this window and rewrite the
+    // persisted structure without it — deleting the saved entry the held pushes exist to protect
+    expect(mocks.networkRequest).not.toHaveBeenCalledWith(
+      'windowLayout:emptied',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+});
+
 describe('loadLayout discards a load a newer one has superseded', () => {
   /**
    * Let every already-scheduled continuation run. A superseded load produces no observable call, so

@@ -2932,6 +2932,17 @@ async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
  * @param layout The layout the dock is changing to
  */
 export async function handleDockEmptiedByRemoval(layout: LayoutInfo): Promise<void> {
+  // A fallback dock is deliberately NOT the user's layout (see isRunningOnFallbackLayout), so its
+  // emptiness says nothing about what the user has — the same guard the born-empty report applies.
+  // Reporting would let main close this window and rewrite the persisted structure without it,
+  // deleting the saved entry the held pushes exist to protect; docking Home would put a tab in a
+  // dock whose changes are held from persistence anyway.
+  if (isRunningOnFallbackLayout) {
+    logger.debug(
+      `Window ${globalThis.windowId}'s dock was emptied while running on a fallback layout; leaving it as it is`,
+    );
+    return;
+  }
   if (!hasAnyTabs(layout)) {
     logger.debug(
       `Window ${globalThis.windowId}'s dock has no tabs left anywhere; reporting the emptiness to main`,
