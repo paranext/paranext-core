@@ -900,7 +900,18 @@ async function openWebView(
         );
       owner = replaceTabOwner;
     } else owner = await findLayoutTargetOwner(layoutTargetTabId);
-    if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
+    if (owner) {
+      // Same rule a caller-named targetWindowId gets above: a window whose close has been decided
+      // would take this content and lose it when the close lands. A layout names a tab rather than a
+      // window, so the caller has even less way of knowing which window it resolved to — falling
+      // through to the focused window instead would put the tab somewhere the caller did not ask
+      // for and never say so.
+      if (isWindowClosing(owner.windowId))
+        throw new Error(
+          `Cannot open ${webViewType} in window ${owner.windowId}: that window is closing.`,
+        );
+      return openWebViewInOwningWindow(owner, webViewType, layout, options);
+    }
   }
 
   // No existingId or not found in any window — route to focused window
