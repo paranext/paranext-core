@@ -19,6 +19,7 @@ import {
 } from '@main/services/scroll-group.service-host';
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
 import { getWebViewShard } from '@main/services/web-view.service-router';
+import { getTargetWindowId } from '@main/services/window-state.service';
 import { getTargetWindowServiceShard } from '@main/services/window.service-router';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
@@ -29,7 +30,7 @@ import * as networkService from '@shared/services/network.service';
 import { get as getProjectDataProvider } from '@shared/services/project-data-provider.service';
 import { serializeRequestType } from '@shared/utils/util';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { getErrorMessage, Mutex, ScrollGroupId } from 'platform-bible-utils';
+import { getErrorMessage, Mutex, MutexMap, ScrollGroupId } from 'platform-bible-utils';
 import {
   ALL_BOOK_IDS,
   findAdjacentPresentBook,
@@ -81,6 +82,10 @@ async function resolveNavigationContext(): Promise<ResolvedNavigationContext> {
  * write lands in the host synchronously, so the next run reads its own last step. A window's cache
  * only learns of that write when the host's broadcast reaches it, which is after the lock has been
  * released — so reading the window instead would make N repeats advance one step, N times.
+ *
+ * A detached target has no host to read: its reference is whatever the window reported when it was
+ * asked, and this returns that answer unchanged. What keeps a held key advancing there is that the
+ * ask itself is serialized — see {@link navigationCommandMutexesByWindowId}.
  */
 async function getCurrentRef(
   target: NonNullable<NavigationContext['target']>,
@@ -235,12 +240,42 @@ async function writeNewRef(
  * App-global, since the handler runs in the main process: two windows driving the same scroll group
  * are serialized against each other as well, which a per-renderer lock could not do. That is a
  * trade, not a free win — a slow window now delays go-to commands issued in every other window,
- * where a per-renderer lock could only ever delay its own. Asking the window what to act on is
- * therefore deliberately kept OUTSIDE the lock (it is the one step that waits on another process),
- * leaving only this process's own work inside it. Cross-window ordering beyond this is
- * TODO(PT-4270).
+ * where a per-renderer lock could only ever delay its own. So what it holds is kept to what has to
+ * be atomic: the current-ref read, the pure computation, the write, and the versification bounds
+ * fetch, which reads per-chapter verse counts for books derived from the ref the read just produced
+ * and so cannot be started ahead of it. Everything a run can do knowing only which project it is
+ * navigating happens before the lock is taken (see {@link makeGoToCommandHandler}), and asking the
+ * window what to act on is covered by {@link navigationCommandMutexesByWindowId} outside instead.
+ * Cross-window ordering beyond this is TODO(PT-4270).
  */
 const navigationCommandMutex = new Mutex();
+
+/**
+ * Serializes a window's go-to commands against each other around the WHOLE of a run — including the
+ * ask that reports what to navigate, which {@link navigationCommandMutex} inside deliberately
+ * excludes.
+ *
+ * For a detached target that ask IS the read: the window reports the web view's own reference and
+ * nothing re-reads it afterward (see {@link getCurrentRef}). Overlapping runs that each ask before
+ * taking the inner lock therefore all compute from the same reference, and a held key — whose OS
+ * auto-repeat sends one fire-and-forget command per repeat — advances one verse, N times. Holding
+ * the ask and the write together is what fixes that: the detached write reaches the window's dock
+ * layout synchronously, so once a run's write has resolved back here, the next run's ask is
+ * guaranteed to see it. No extra round trip is added — the next run makes that same ask either way,
+ * only now after the previous run has finished rather than beside it.
+ *
+ * Keyed by window rather than app-global because the ask is a request to another process: a window
+ * that has stopped answering takes the whole request timeout to say so, and behind one lock that
+ * wait would stall every other window's navigation for as long as it lasts.
+ *
+ * The key is read when the command arrives, while `resolveNavigationContext` re-derives the target
+ * window when it runs. If focus moves between the two, a run holds one window's lock while
+ * resolving another's — costing those two runs only their serialization against each other, which
+ * is what cross-window ordering already looks like here. The write still lands in the window that
+ * answered, because `writeNewRef` takes the window from the resolved context rather than deriving
+ * it again.
+ */
+const navigationCommandMutexesByWindowId = new MutexMap();
 
 function makeGoToCommandHandler(
   getNewRef: (
@@ -258,48 +293,47 @@ function makeGoToCommandHandler(
     needsPreviousBook = false,
   }: { needsBounds?: boolean; needsPreviousBook?: boolean } = {},
 ): () => Promise<void> {
-  return async () => {
-    // Asked before the lock is taken: this is a request to another process, and holding the
-    // app-global lock across it would let one unresponsive window stall go-to commands issued in
-    // every other window for as long as that request takes to give up. What the lock is for is the
-    // read-compute-write below, all of which is this process's own state.
-    const resolved = await resolveNavigationContext();
-    const { target } = resolved.context;
-    if (!target) {
-      logger.debug('Navigation command ignored: no active web view to navigate');
-      return;
-    }
+  return async () =>
+    // Keyed on the window as the command arrives, so a run cannot start until the previous run in
+    // the same window has finished writing — the ask below is the only read a detached target gets
+    navigationCommandMutexesByWindowId.get(String(getTargetWindowId())).runExclusive(async () => {
+      const resolved = await resolveNavigationContext();
+      const { target } = resolved.context;
+      if (!target) {
+        logger.debug('Navigation command ignored: no active web view to navigate');
+        return;
+      }
 
-    await navigationCommandMutex.runExclusive(async () => {
-      // Start acquiring the versification provider right away — it depends only on the project
-      // id, so it can resolve concurrently with the current-ref and books-present round trips
-      // below instead of serializing after them
+      // Both of these need only the project id the ask above already reported, so they run before
+      // the app-global lock rather than inside it — the acquisition started here and awaited later
+      // (by getScriptureBounds, which does need the in-lock ref), the books-present fetch finished
+      // here. They neither read nor write the reference that lock protects, and their round trips
+      // are the bulk of what it would otherwise hold against every other window.
       const versificationPdpPromise =
         needsBounds && target.projectId ? acquireVersificationPdp(target.projectId) : undefined;
       // Mark an early rejection as handled so it cannot surface as an unhandled rejection while
       // the round trips below are still in flight; the failure is actually handled (with a debug
       // log and versification-unaware fallback) where getScriptureBounds awaits this promise
       versificationPdpPromise?.catch(() => {});
+      const availableBooks = await getAvailableBooks(target.projectId);
 
-      const [currentRef, availableBooks] = await Promise.all([
-        getCurrentRef(target),
-        getAvailableBooks(target.projectId),
-      ]);
-      const bounds =
-        versificationPdpPromise && target.projectId
-          ? await getScriptureBounds(
-              versificationPdpPromise,
-              target.projectId,
-              currentRef,
-              availableBooks,
-              needsPreviousBook,
-            )
-          : undefined;
-      const newRef = getNewRef(currentRef, availableBooks, bounds);
-      if (!newRef) return;
-      await writeNewRef(resolved, newRef);
+      await navigationCommandMutex.runExclusive(async () => {
+        const currentRef = await getCurrentRef(target);
+        const bounds =
+          versificationPdpPromise && target.projectId
+            ? await getScriptureBounds(
+                versificationPdpPromise,
+                target.projectId,
+                currentRef,
+                availableBooks,
+                needsPreviousBook,
+              )
+            : undefined;
+        const newRef = getNewRef(currentRef, availableBooks, bounds);
+        if (!newRef) return;
+        await writeNewRef(resolved, newRef);
+      });
     });
-  };
 }
 
 /**
@@ -322,9 +356,12 @@ function getActiveReferenceHistoryScrollGroupId(
  * the main process's keyboard handler can dispatch the physical key and stay direction-agnostic.
  *
  * `false` means one thing only: nothing moved, because there was no entry that way or the target
- * carries a detached reference. A window that could not be reached throws instead — the keyboard
- * handler reads `false` as "the shortcut had nothing to do here" and falls through to its next
- * option on it.
+ * carries a detached reference. A window that could not be reached throws instead.
+ *
+ * Nothing acts on that difference today: main's keyboard handler consumes the key with
+ * `preventDefault` before it dispatches, then discards the answer and returns either way, so a
+ * shortcut with nothing to do here is swallowed rather than falling through to another binding.
+ * Reporting it honestly is still what any caller that wants to tell the two apart would need.
  */
 async function navigateReferenceHistoryPhysical(
   physicalDirection: 'left' | 'right',
