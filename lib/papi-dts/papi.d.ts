@@ -3861,6 +3861,12 @@ declare module 'shared/models/docking-framework.model' {
    * the same degraded path rather than failing the open, so a caller in Power mode can get a tab
    * instead of a window when the mode read fails.
    *
+   * It degrades the same way for an open that also passed `existingId: '?'` whose reuse search could
+   * not be answered because some window was unreachable. Such an open goes ahead rather than failing,
+   * accepting that it may be making a second copy of a web view that already exists somewhere — and a
+   * duplicate as a tab is one the user can see and close, where a duplicate as a window takes the
+   * screen and OS focus and can hide the original behind it.
+   *
    * @experimental This type is unstable and may change or disappear without notice
    */
   export interface WindowLayout {

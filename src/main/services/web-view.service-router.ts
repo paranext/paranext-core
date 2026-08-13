@@ -955,6 +955,14 @@ async function openWebView(
       );
   }
 
+  /**
+   * Whether the reuse search below ended without an answer and this open carried on anyway — the
+   * `'?'` fall-through, which trades a possible duplicate for the click doing something. Declared
+   * out here because the layout is decided below the search, where the search's own reachability
+   * reading is out of scope.
+   */
+  let didSearchFallThroughInconclusively = false;
+
   // If an existingId is provided, search all windows for the webview's owner
   if (options?.existingId) {
     // A project filter narrows which web views count as a match before the search picks among the
@@ -985,9 +993,27 @@ async function openWebView(
     // long as one window is unreachable, which for a crashed renderer is the rest of the session.
     // Guessing wrong costs a second copy of the view, in the window the user is looking at, where
     // they can see and close it. Falling through to open where the user is beats not opening.
+    didSearchFallThroughInconclusively = hadUnreachableWindows && matcher.kind === 'type';
   }
 
-  if (layout?.type === 'window') {
+  /**
+   * The layout the rest of this open acts on.
+   *
+   * A `window` layout becomes a tab when the reuse search fell through without an answer: what the
+   * fall-through accepts is a duplicate in the window the user is looking at, where they can see it
+   * and close it. A whole new window is a different bargain — it takes the screen and OS focus, and
+   * the copy it may be duplicating can be sitting behind it on another monitor.
+   *
+   * Substituted rather than skipping the window rung: every path below hands the layout to a
+   * window's shard, and rc-dock acts on `window` itself, so skipping would produce the popup
+   * anyway.
+   */
+  const effectiveLayout =
+    didSearchFallThroughInconclusively && layout?.type === 'window'
+      ? ({ type: 'tab' } satisfies Layout)
+      : layout;
+
+  if (effectiveLayout?.type === 'window') {
     // A caller that declined creation only wanted the reuse search above, which found nothing (its
     // own not-found and unreachable answers are decided up there). A window layout from here on
     // only ever creates, so the decline is honored before any window exists — a created window is
@@ -1013,14 +1039,14 @@ async function openWebView(
       webViewShards,
       options.targetWindowId,
     );
-    return shard.openWebView(webViewType, layout, options);
+    return shard.openWebView(webViewType, effectiveLayout, options);
   }
 
   // A layout naming a tab or tab group names the window that holds it, so it routes the same way an
   // existingId does — and after it, because a window shard that finds the existing web view raises it and
   // returns before it ever reads the layout. Routing in the other order would send the call to a
   // window that then ignores the reason it was sent there.
-  const layoutTargetTabId = getLayoutTargetTabId(layout);
+  const layoutTargetTabId = getLayoutTargetTabId(effectiveLayout);
   if (layoutTargetTabId) {
     // The docks are asked, not the ownership index: a replace-tab target is routinely a settings
     // tab or a dialog, which an ownership lookup cannot see at all, so its "nobody" would say
@@ -1032,7 +1058,7 @@ async function openWebView(
     // nonce, state) exist. So when nothing that could be asked holds the target and some window
     // could not be asked — the window that may be holding it — this open refuses rather than guess.
     // A `panel` or `tab` layout falls through instead: guessing wrong there costs placement only.
-    if (layout?.type === 'replace-tab' && !owner && hadUnreachableWindows)
+    if (effectiveLayout?.type === 'replace-tab' && !owner && hadUnreachableWindows)
       throw new Error(
         `Could not openWebView ${webViewType} over replace-tab target '${layoutTargetTabId}': some windows were unreachable.`,
       );
@@ -1046,13 +1072,13 @@ async function openWebView(
         throw new Error(
           `Cannot open ${webViewType} in window ${owner.windowId}: that window is closing.`,
         );
-      return openWebViewInOwningWindow(owner, webViewType, layout, options);
+      return openWebViewInOwningWindow(owner, webViewType, effectiveLayout, options);
     }
   }
 
   // No existingId or not found in any window — route to focused window
   const webViewShard = await getTargetWebViewShard();
-  return webViewShard.openWebView(webViewType, layout, options);
+  return webViewShard.openWebView(webViewType, effectiveLayout, options);
 }
 
 async function reloadWebView(
