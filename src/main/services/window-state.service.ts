@@ -280,12 +280,18 @@ export function focusWindow(windowId: number): void {
 
   try {
     if (trackedWindow.window.isMinimized()) trackedWindow.window.restore();
-    trackedWindow.window.focus();
-    // Windows can refuse a client-initiated activation, and Electron reports neither the refusal
-    // nor the success — `focus()` returns nothing and no event follows. Flashing unconditionally is
-    // the only degradation available: where activation was refused it is the whole signal, and
-    // where it succeeded the window is already in front.
+    // Windows can refuse a client-initiated activation. `focus()` itself says nothing about which
+    // happened, but `isFocused()` read immediately after does — so the flash goes up first and comes
+    // straight back down when the activation actually landed, leaving it only where it is the whole
+    // signal the user gets. Hand-tested on native Windows: flashing after a successful `focus()`
+    // flashes the taskbar ~5 times on the ordinary raise, and merely flashing before it does too —
+    // Windows does not cancel a flash on activation — while cancelling on `isFocused()` produces no
+    // flash at all. Started BEFORE focusing on purpose: a flash begun after a successful activation
+    // could not then be cancelled. A false negative here only flashes on a raise that worked, which
+    // is what this did on every raise before.
     trackedWindow.window.flashFrame(true);
+    trackedWindow.window.focus();
+    if (trackedWindow.window.isFocused()) trackedWindow.window.flashFrame(false);
   } catch (e) {
     // A window can be destroyed between the check above and any of these calls. Raising a window is
     // feedback about where something already happened, so failing to raise must not fail the
