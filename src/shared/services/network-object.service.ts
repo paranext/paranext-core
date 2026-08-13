@@ -316,11 +316,24 @@ const forgetRegistration = (id: string): boolean => {
   // that route this is a no-op. It is not one for the other route: a process told that an object it
   // still has registered is gone would otherwise keep answering requests for an object every other
   // process has already forgotten.
-  networkObjectRegistration.unregisterRequestHandlers?.().catch((e) => {
-    logger.error(
-      `Failed to unregister the request handlers of forgotten network object '${id}': ${getErrorMessage(e)}`,
-    );
-  });
+  // Not awaited — the announcement below must go out whatever the RPC layer does — so both ways it
+  // can fail have to be reported here or they are reported nowhere. A `false` resolution means as
+  // much as a throw: this process is still answering requests for an object every other process is
+  // about to forget.
+  const { unregisterRequestHandlers } = networkObjectRegistration;
+  if (unregisterRequestHandlers)
+    (async () => {
+      try {
+        if (!(await unregisterRequestHandlers()))
+          logger.error(
+            `Could not unregister all of the request handlers of forgotten network object '${id}', so this process may keep answering requests for it after everyone else has forgotten it`,
+          );
+      } catch (e) {
+        logger.error(
+          `Failed to unregister the request handlers of forgotten network object '${id}': ${getErrorMessage(e)}`,
+        );
+      }
+    })();
 
   // Alert users of this specific network object that it was disposed, one at a time: this is the
   // only time they are told, so one of them throwing must not keep the news from the rest.
@@ -333,9 +346,20 @@ const forgetRegistration = (id: string): boolean => {
   // Dispose of the network object registration itself
   networkObjectRegistration.onDidDisposeEmitter.dispose();
 
-  // Killed after the consumers have been told rather than before, so a dispose handler can still
-  // read the object it is being told about; from here on every call on it throws instead of
-  // hanging. Reached whatever those consumers did, since none of their failures escape.
+  // Killed after the consumers have been told rather than before, so a SYNCHRONOUS dispose handler
+  // can still read the object it is being told about. That is the whole of the guarantee:
+  // `emitIsolated` does not await async subscribers, so the proxy is revoked as soon as the emit
+  // above returns. A handler that awaits anything before touching the object finds it revoked and
+  // every access on it throws, which is why the contract on `NetworkObject.onDidDispose` tells
+  // handlers to capture what they need before their first await. Reached whatever those consumers
+  // did, since none of their failures escape.
+  //
+  // Waiting for async handlers before revoking is not a safe patch. The id is freed at the top of
+  // this function by design, so any time spent waiting here is time in which another process can
+  // claim the name while this proxy is still live and its handlers are half torn down — calls
+  // through it would hang instead of failing loudly, which is the exact failure the
+  // free-the-name-first ordering exists to prevent. A bounded wait that also closes that hole is
+  // real work, not a one-line change.
   networkObjectRegistration.revokeProxy();
 
   return true;
@@ -791,19 +815,52 @@ const set = async <T extends NetworkableObject>(
 
     // At this point, the network object has been registered
 
-    /** Whether the RPC handlers registered above have already been unregistered */
-    let areRequestHandlersUnregistered = false;
+    /**
+     * The run that unregistered the RPC handlers registered above, if one has succeeded or is still
+     * in flight. Held as the run itself rather than a "we did that" flag so that what later callers
+     * get back is the real outcome of it: a flag set on entry answers `true` to everyone the moment
+     * the first caller starts, whether or not the unregistering ever worked.
+     */
+    let unregisterRequestHandlersRun: Promise<boolean> | undefined;
     /**
      * Stop answering network requests for this object. Both routes out of a registration run this —
      * the object's own `dispose` and {@link forgetRegistration} — so it has to be safe to run twice;
      * the second run is a no-op rather than a batch of unregisters for names that are already
      * gone.
+     *
+     * Callers that overlap share the one run instead of each starting their own. Running it twice
+     * concurrently would be safe but would lie to the loser: `registerRequestHandler`'s
+     * unsubscriber resolves `false` (having warned) when there is nothing left to unregister, so
+     * the second run would report a failure that is really just the first run having already done
+     * the work.
      */
     const unregisterRequestHandlers = async (): Promise<boolean> => {
-      if (areRequestHandlersUnregistered) return true;
-      areRequestHandlersUnregistered = true;
-      const unsubscribers = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
-      return unsubscribers();
+      if (!unregisterRequestHandlersRun) {
+        const run = (async () => {
+          const unsubscribers = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
+          return unsubscribers();
+        })();
+        unregisterRequestHandlersRun = run;
+        // Remember only a run that succeeded. A run that resolved `false` or threw did not stop this
+        // process answering requests for the object, so a caller that tries again — which is exactly
+        // what a caller does after `dispose` returns `false` — has to get a fresh attempt rather than
+        // this one's failure replayed as a success. Nothing re-runs on its own; this only keeps a
+        // failure from being remembered as one. Guarded on identity so a late settle cannot discard a
+        // newer run. This watcher is attached before anyone can await the run, so the memo is always
+        // cleared before a caller learns it failed and comes back.
+        (async () => {
+          let didUnregister = false;
+          try {
+            didUnregister = await run;
+          } catch {
+            // The caller gets the error from the run itself; here it only means "did not succeed"
+            didUnregister = false;
+          }
+          if (!didUnregister && unregisterRequestHandlersRun === run)
+            unregisterRequestHandlersRun = undefined;
+        })();
+      }
+      return unregisterRequestHandlersRun;
     };
 
     // Create a proxy object that blocks functions like "dispose" for others in the same process

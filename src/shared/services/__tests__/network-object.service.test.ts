@@ -437,6 +437,26 @@ describe('networkObjectService — network objects lost with a departed process'
     }
   });
 
+  // Unregistering can fail without throwing — an unsubscriber resolves `false` — and this call is
+  // not awaited, so a `false` that goes unreported is reported nowhere at all. The object is
+  // announced gone to every process either way, so the log line is the only trace that this process
+  // is still answering requests for a name everyone else has forgotten.
+  it('reports an unregister that resolved false, not only one that threw', async () => {
+    setupNetworkServiceMocks();
+    vi.mocked(networkService.registerRequestHandler).mockImplementation(() =>
+      Promise.resolve(async () => false),
+    );
+    await networkObjectService.set('ObjectWhoseHandlersRefuseToGo', { doThing: async () => 1 });
+
+    announceClientDisconnect(['object:ObjectWhoseHandlersRefuseToGo']);
+
+    await vi.waitFor(() =>
+      expect(vi.mocked(logger.error)).toHaveBeenCalledWith(
+        expect.stringContaining('ObjectWhoseHandlersRefuseToGo'),
+      ),
+    );
+  });
+
   // The only route that unregisters an object's RPC handlers is its own `dispose`. A process told
   // that an object it still has registered is gone never ran that, so without unregistering here it
   // would keep answering requests for an object every other process has already forgotten.
@@ -463,5 +483,90 @@ describe('networkObjectService — network objects lost with a departed process'
         ]),
       ),
     );
+  });
+});
+
+/**
+ * Tests for what an object's `dispose` reports when unregistering its RPC handlers does not work.
+ *
+ * `dispose` returning `false` is an invitation to try again, and the retry is the whole point: a
+ * process that answers requests for an object every other process has forgotten answers them until
+ * it exits.
+ */
+describe('networkObjectService — disposing when unregistering the request handlers fails', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  /**
+   * Register handlers whose unsubscribers record what they were asked to unregister and succeed or
+   * fail according to a flag the test flips.
+   */
+  function recordUnregisterAttempts(): {
+    unregisteredRequestTypes: string[];
+    letUnregisteringSucceed: () => void;
+  } {
+    const unregisteredRequestTypes: string[] = [];
+    let doesUnregisteringWork = false;
+    vi.mocked(networkService.registerRequestHandler).mockImplementation((requestType) =>
+      Promise.resolve(async () => {
+        unregisteredRequestTypes.push(requestType);
+        return doesUnregisteringWork;
+      }),
+    );
+    return {
+      unregisteredRequestTypes,
+      letUnregisteringSucceed: () => {
+        doesUnregisteringWork = true;
+      },
+    };
+  }
+
+  it('really unregisters again when a caller retries after a failed dispose', async () => {
+    setupNetworkServiceMocks();
+    const { unregisteredRequestTypes, letUnregisteringSucceed } = recordUnregisterAttempts();
+    const objectToShare = { doThing: async () => 1 };
+
+    const networkObject = await networkObjectService.set(
+      'ObjectThatFailsToUnregister',
+      objectToShare,
+    );
+
+    await expect(networkObject.dispose()).resolves.toBe(false);
+    const attemptsAfterTheFailure = unregisteredRequestTypes.length;
+    expect(attemptsAfterTheFailure).toBeGreaterThan(0);
+
+    // Whatever kept the handlers registered has passed. Nothing else will unregister them, so the
+    // retry has to do the work rather than replay the failed run as a success.
+    letUnregisteringSucceed();
+    await expect(networkObject.dispose()).resolves.toBe(true);
+
+    expect(unregisteredRequestTypes.length).toBeGreaterThan(attemptsAfterTheFailure);
+    expect(networkObjectService.hasKnown('ObjectThatFailsToUnregister')).toBe(false);
+  });
+
+  it('gives overlapping callers the one run rather than making the loser report a failure', async () => {
+    setupNetworkServiceMocks();
+    const { unregisteredRequestTypes, letUnregisteringSucceed } = recordUnregisterAttempts();
+    letUnregisteringSucceed();
+    const objectToShare = { doThing: async () => 1 };
+
+    const networkObject = await networkObjectService.set(
+      'ObjectDisposedTwiceAtOnce',
+      objectToShare,
+    );
+
+    // A second run would find the handlers already gone and resolve `false`, which is not a failure
+    // anyone should be told about
+    await expect(Promise.all([networkObject.dispose(), networkObject.dispose()])).resolves.toEqual([
+      true,
+      true,
+    ]);
+
+    // One existence method plus one per exposed function, unregistered once each
+    expect(unregisteredRequestTypes).toEqual([
+      'object:ObjectDisposedTwiceAtOnce',
+      'object:ObjectDisposedTwiceAtOnce.doThing',
+    ]);
   });
 });
