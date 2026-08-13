@@ -62,6 +62,9 @@ vi.mock('@main/services/window-state.service', () => ({
   getReadyWindowIds: mocks.getReadyWindowIds,
   getUnreachableWindowIds: mocks.getUnreachableWindowIds,
   isWindowReady: mocks.isWindowReady,
+  // No test here is about a window closing, and an open into the window a search resolved re-reads
+  // this immediately before it runs
+  isWindowClosing: () => false,
   getFocusedWindowId: mocks.getFocusedWindowId,
   // No test here is about the cross-window raise; the app holding focus is what allows one
   isApplicationFocused: () => true,
