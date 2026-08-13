@@ -3078,6 +3078,23 @@ async function dockHomeInThisWindow(): Promise<void> {
 }
 
 /**
+ * Dock Home here, absorbing a failure rather than letting it out.
+ *
+ * Every caller is reached from the dock layout's change handler, which does not await what it
+ * starts — so a throw from here would surface as an unhandled rejection with nothing to attribute
+ * it to, in place of the "this window has nothing in it" problem it actually is.
+ */
+async function dockHomeInThisWindowLoggingFailure(): Promise<void> {
+  try {
+    await dockHomeInThisWindow();
+  } catch (e) {
+    logger.warn(
+      `Could not dock Home in window ${globalThis.windowId} after its dock emptied: ${getErrorMessage(e)}`,
+    );
+  }
+}
+
+/**
  * How many times {@link reportDockEmptied} tells the main process this window's dock is empty before
  * giving up. The main process registers the handler before it creates any window, so a failure can
  * only be transient transport trouble — worth a few retries, the same as the saved layout this
@@ -3169,12 +3186,19 @@ export async function handleDockEmptiedByRemoval(layout: LayoutInfo): Promise<vo
   // A fallback dock is deliberately NOT the user's layout (see isRunningOnFallbackLayout), so its
   // emptiness says nothing about what the user has — the same guard the born-empty report applies.
   // Reporting would let main close this window and rewrite the persisted structure without it,
-  // deleting the saved entry the held pushes exist to protect; docking Home would put a tab in a
-  // dock whose changes are held from persistence anyway.
+  // deleting the saved entry the held pushes exist to protect.
+  //
+  // Not reporting is not the same as doing nothing, though: this dock is empty and its user has no
+  // way left to open anything. Home fills it here, where it costs nothing — this window's layout
+  // pushes are held from persistence for as long as it runs on a fallback. The consequence, and it
+  // is deliberate: in a multi-window session this window stays alive as a Home-only window that the
+  // main process will never close, because the only way to be closed is to report, and reporting is
+  // what would destroy the saved entry.
   if (isRunningOnFallbackLayout) {
     logger.debug(
-      `Window ${globalThis.windowId}'s dock was emptied while running on a fallback layout; leaving it as it is`,
+      `Window ${globalThis.windowId}'s dock was emptied while running on a fallback layout; docking Home locally rather than reporting`,
     );
+    await dockHomeInThisWindowLoggingFailure();
     return;
   }
   if (!hasAnyTabs(layout)) {
@@ -3187,7 +3211,7 @@ export async function handleDockEmptiedByRemoval(layout: LayoutInfo): Promise<vo
   logger.debug(
     `Window ${globalThis.windowId}'s dock lost its last docked tab, but tabs remain elsewhere (float/maximized/window); docking Home locally instead of reporting`,
   );
-  await dockHomeInThisWindow();
+  await dockHomeInThisWindowLoggingFailure();
 }
 
 /** See {@link WebViewServiceShard.reloadWebView} */
