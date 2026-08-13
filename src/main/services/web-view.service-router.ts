@@ -43,10 +43,7 @@ import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
-import {
-  CATEGORY_COMMAND,
-  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
-} from '@shared/data/rpc.model';
+import { CATEGORY_COMMAND, isRequestTimedOutError } from '@shared/data/rpc.model';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
 import { settingsService } from '@shared/services/settings.service';
@@ -478,17 +475,6 @@ const LATE_ADOPT_PROBE_ATTEMPTS = 3;
 
 /** How long {@link findWebViewAdoptedAfterTimeout} waits between attempts */
 const LATE_ADOPT_PROBE_RETRY_DELAY_MS = 2_000;
-
-/**
- * Whether `error` is what the network plumbing throws when a request expires client-side before any
- * answer arrives (`doRequest` in `network.service.ts` builds `JSON-RPC Request timed out:
- * <requestType> <args>` when its per-request wait runs out). Matched by message substring, deriving
- * the format from its one producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}) — the same
- * derivation the startup tasks use to recognize the same producer.
- */
-function isRequestTimedOutError(error: unknown): boolean {
-  return getErrorMessage(error).includes(JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX);
-}
 
 /**
  * Whether a move's target holds the web view whose adopt call timed out — asked before any
