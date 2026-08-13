@@ -476,6 +476,21 @@ describe('optimistic scr ref writes', () => {
     expect(host.setScrRef).toHaveBeenCalledWith(1, MARK, 'projA');
   });
 
+  it('still sends the write to the host when a reference-history subscriber throws', async () => {
+    const service = await startService();
+    // The history is announced from inside `setScrRefSync` too, after the cache has moved and
+    // before the write is sent — so this subscriber can strand the window exactly as a scr-ref
+    // subscriber can
+    service.onDidChangeReferenceHistory(() => {
+      throw new Error('history subscriber blew up');
+    });
+
+    expect(service.setScrRefSync(1, MARK, 'projA')).toBe(true);
+
+    await settlePendingWork();
+    expect(host.setScrRef).toHaveBeenCalledWith(1, MARK, 'projA');
+  });
+
   it('tells the remaining subscribers even when an earlier one throws', async () => {
     const service = await startService();
     const seen: unknown[] = [];
