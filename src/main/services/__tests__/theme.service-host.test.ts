@@ -531,6 +531,64 @@ describe('resetting a theme that no longer exists', () => {
 
     expect((await engine.getCurrentTheme()).themeFamilyId).toBe('');
   });
+
+  it('does not reset the theme when a restarted extension host publishes before its extensions load', async () => {
+    localStorage.setItem(CURRENT_THEME_STORAGE_KEY, JSON.stringify(TEST_LIGHT));
+    const { engine } = await startHost();
+
+    // A whole session's worth of a complete list: long past any window measured from the first
+    // payload ever
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    // `platform.restartExtensionHost`, or the dev build's extension-host file watcher. The
+    // replacement host registers the theme data provider at its own init, before any extension has
+    // loaded, and the subscription's immediate payload is that extension-less list.
+    announceNetworkObject(THEME_DATA_PROVIDER_OBJECT_ID);
+    await settlePendingWork();
+
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+    publishExtensionThemes({ '': { light: makeTheme('', 'light') } });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect((await engine.getCurrentTheme()).themeFamilyId).toBe('testFamily');
+    // A reset here is persisted, so the complete list arriving seconds later would not undo it
+    expect(setItem.mock.calls.filter(([key]) => key === CURRENT_THEME_STORAGE_KEY)).toHaveLength(0);
+
+    // The extensions finish loading and the list is complete again, well inside the window
+    publishExtensionThemes({
+      testFamily: { light: TEST_LIGHT, dark: TEST_DARK },
+      '': { light: makeTheme('', 'light') },
+    });
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    expect((await engine.getCurrentTheme()).themeFamilyId).toBe('testFamily');
+    expect(setItem.mock.calls.filter(([key]) => key === CURRENT_THEME_STORAGE_KEY)).toHaveLength(0);
+  });
+
+  it('still resets after an extension host restart when the theme really is gone', async () => {
+    localStorage.setItem(CURRENT_THEME_STORAGE_KEY, JSON.stringify(TEST_LIGHT));
+    const { engine } = await startHost();
+
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    announceNetworkObject(THEME_DATA_PROVIDER_OBJECT_ID);
+    await settlePendingWork();
+
+    // Same shape as above, but this time the family is gone for good — the user uninstalled the
+    // extension that contributed it, and no later payload brings it back
+    publishExtensionThemes({ '': { light: makeTheme('', 'light') } });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    // The payload that dropped the family starts the window; it does not end it
+    expect((await engine.getCurrentTheme()).themeFamilyId).toBe('testFamily');
+
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    expect((await engine.getCurrentTheme()).themeFamilyId).toBe('');
+    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toContain('"themeFamilyId":""');
+  });
 });
 
 // What makes the host refuse a migration offer has to be evidence of a USER action. The engine also

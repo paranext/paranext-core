@@ -60,15 +60,24 @@ import {
 } from 'platform-bible-utils';
 
 /**
- * How long extension-contributed themes have to arrive before the current theme is judged against
- * the theme list — and reset if the list does not have it.
+ * How long the current theme has, once a payload of the theme list has come without it, for a later
+ * payload to bring it back before it is judged gone rather than late and reset.
  *
- * Measured from the theme list's FIRST payload, not from this process's age. The list is published
- * by the extension host, which this process spawns after its own app-global services have started,
- * and its first payload is built at extension-host init before any extension has loaded — so
- * "extension themes have had a fair chance" starts when that payload arrives and the extensions
- * contributing themes are loading behind it. Anchoring to this process's age instead throws away
- * the theme of anyone whose extension host starts slowly, and persists the reset.
+ * Measured from the payload that first showed it missing — not from this process's age, and not
+ * from the theme list's first payload. The list is published by the extension host, which this
+ * process spawns after its own app-global services have started and which
+ * `platform.restartExtensionHost` (or a dev build's file watcher) can replace at any moment. Every
+ * one of those hosts publishes its first payload at its own init, before any extension has loaded,
+ * so an extension-less list is what this process sees at each of those moments and none of them is
+ * evidence about anything. Anchoring to this process's age, or to a window that can only be spent
+ * once, throws away the theme of anyone whose extension host starts slowly or gets restarted, and
+ * persists the reset.
+ *
+ * The cost of anchoring it this way, accepted deliberately: an extension genuinely uninstalled
+ * while the app is running takes this long to reset, rather than resetting the moment the list
+ * drops its family. A late reset costs a few seconds of painting from the theme definition this
+ * process still holds in memory; a false reset writes the default over a theme the user chose, and
+ * nothing brings that back.
  */
 const EXTENSION_THEMES_GRACE_PERIOD_MS = 30000;
 
@@ -373,13 +382,16 @@ class ThemeDataProviderEngine
    */
   #allThemeFamiliesByIdAsyncVariable: AsyncVariable<ThemeFamiliesByIdExpanded>;
   /**
-   * Whether extension-contributed themes have had their chance to arrive, so a current theme that
-   * is not in the served list is missing rather than merely late. See
-   * {@link EXTENSION_THEMES_GRACE_PERIOD_MS}.
+   * Timer that will reset the current theme, armed while a payload of the theme list has come
+   * without the current theme's family and nothing has since brought it back. `undefined` when
+   * there is no such pending decision. See {@link EXTENSION_THEMES_GRACE_PERIOD_MS}.
+   *
+   * A pending decision about the theme list rather than a latch on this engine, so that every way
+   * back into an incomplete list — a slow start, an extension host restarted at any point in the
+   * session, a list that errors and recovers — is answered by the same rule rather than by whether
+   * some window elapsed earlier.
    */
-  #hasExtensionThemesGracePeriodElapsed = false;
-  /** Timer that ends the grace period, once the theme list's first payload has started it */
-  #extensionThemesGracePeriodTimeout: ReturnType<typeof setTimeout> | undefined;
+  #pendingCurrentThemeResetTimeout: ReturnType<typeof setTimeout> | undefined;
   /** Unsubscriber for the live `onDidUpdateAllThemes` subscription, if there is one */
   #unsubscribeAllThemes: (() => void) | undefined;
   /** Whether a subscribe attempt is in flight, so overlapping announcements take one attempt */
@@ -443,6 +455,14 @@ class ThemeDataProviderEngine
       this.#dropAllThemesSubscription();
       return true;
     });
+    // Registered ONCE, here, and reading the field when it runs rather than closing over a timer.
+    // `unsubscribeEventListeners` is a set of distinct closures with no removal, so registering
+    // teardown at each arm would leak one closure per arm — and the pending reset is armed and
+    // cancelled repeatedly through the session.
+    this.unsubscribeEventListeners.add(() => {
+      this.#cancelPendingCurrentThemeReset();
+      return true;
+    });
 
     // Listen to system theme change and update current theme
     const updateThemeToSystem = (newThemeType: 'light' | 'dark') => {
@@ -477,14 +497,8 @@ class ThemeDataProviderEngine
       const unsubscribe = await engine.#onDidUpdateAllThemes((allThemeFamilies) => {
         // Keep the payload as received — no user themes merged in — for `adoptMigratedState` to
         // rebuild from (see `#themeFamiliesFromLastUpdate`)
-        if (!isPlatformError(allThemeFamilies)) {
+        if (!isPlatformError(allThemeFamilies))
           engine.#themeFamiliesFromLastUpdate = allThemeFamilies;
-          // Started only by a payload that IS the list. What ends the grace period is the judgement
-          // that a current theme missing from the list is gone rather than late, and an error
-          // carries no list to be missing from — the timer would fire against nothing at all and
-          // reset the user's theme to the default, persisted, for a list that never arrived.
-          engine.#startExtensionThemesGracePeriod();
-        }
         const dataTypesToUpdate = engine.#updateAllThemeFamiliesNoUpdate(allThemeFamilies);
         // Notify others if theme data changed
         if (dataTypesToUpdate) engine.notifyUpdate(dataTypesToUpdate);
@@ -867,29 +881,43 @@ class ThemeDataProviderEngine
   }
 
   /**
-   * Start the window in which extension-contributed themes may still arrive, on the first payload
-   * of the theme list. See {@link EXTENSION_THEMES_GRACE_PERIOD_MS}.
+   * Start the window a theme list without the current theme's family opens, in which a later
+   * payload may still bring it back. Does nothing while one is already open — the window belongs to
+   * the theme that went missing, not to each payload that keeps failing to carry it. See
+   * {@link EXTENSION_THEMES_GRACE_PERIOD_MS}.
    */
-  #startExtensionThemesGracePeriod(): void {
-    if (this.#extensionThemesGracePeriodTimeout !== undefined) return;
-    this.#extensionThemesGracePeriodTimeout = setTimeout(() => {
+  #armPendingCurrentThemeReset(): void {
+    if (this.#pendingCurrentThemeResetTimeout !== undefined) return;
+    this.#pendingCurrentThemeResetTimeout = setTimeout(() => {
+      this.#pendingCurrentThemeResetTimeout = undefined;
       if (this.#isDisposed) return;
-      this.#hasExtensionThemesGracePeriodElapsed = true;
-      // The current theme is now judged missing rather than late. Reset it if the list does not
-      // have it — the family's extension was removed or renamed, and nothing else would notice.
-      const updatedCurrentTheme =
-        this.#allThemeFamiliesById?.[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
-      if (updatedCurrentTheme) return;
+      // Asked of the list as it stands now rather than acted on from what armed this. Everything
+      // that would make the answer stale cancels this timer, so this is a second line rather than
+      // the only one — but what it is about to do is write the default over a theme the user chose
+      // and persist it, and that is worth one more look at the list it is judging.
+      if (this.#allThemeFamiliesById?.[this.currentTheme.themeFamilyId]?.[this.currentTheme.type])
+        return;
       this.#resetCurrentThemeNoUpdate();
       this.notifyUpdate('CurrentTheme');
     }, EXTENSION_THEMES_GRACE_PERIOD_MS);
-    this.unsubscribeEventListeners.add(() => {
-      clearTimeout(this.#extensionThemesGracePeriodTimeout);
-      return true;
-    });
+  }
+
+  /**
+   * Call off a pending reset, because whatever it was waiting to decide has been decided some other
+   * way: the family turned up in a later payload, there is no list to judge against, or the theme
+   * it was about is no longer the current one.
+   */
+  #cancelPendingCurrentThemeReset(): void {
+    if (this.#pendingCurrentThemeResetTimeout === undefined) return;
+    clearTimeout(this.#pendingCurrentThemeResetTimeout);
+    this.#pendingCurrentThemeResetTimeout = undefined;
   }
 
   #setCurrentThemeNoUpdate(newTheme: ThemeDefinitionExpanded) {
+    // Any pending reset was a decision about the theme that is being replaced here, so it has
+    // nothing left to decide. The theme taking its place is in the list — `setCurrentTheme` throws
+    // otherwise, and every other caller picks a definition out of the list itself.
+    this.#cancelPendingCurrentThemeReset();
     this.currentTheme = newTheme;
     // Persisted before the announcement, and the announcement is isolated: main registers one
     // subscriber per window, so a plain emit would let one throwing subscriber cost every later
@@ -970,6 +998,12 @@ class ThemeDataProviderEngine
       logger.warn(
         `Theme service host received PlatformError in updateAllThemeFamilies: ${getErrorMessage(allThemeFamilies)}`,
       );
+      // Any pending reset is called off rather than left running. It is a judgement that the theme
+      // is missing FROM A LIST, and this says there is no list — the theme data provider failed, or
+      // the extension host went down under it. Left running, the timer would fire against whatever
+      // list happened to be in hand and reset the user's theme, persisted, on the strength of an
+      // error. The next payload that IS a list arms it again if the theme really is absent.
+      this.#cancelPendingCurrentThemeReset();
       return false;
     }
 
@@ -990,18 +1024,19 @@ class ThemeDataProviderEngine
       const updatedCurrentTheme =
         this.#allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
       if (!updatedCurrentTheme) {
-        // The current theme is not in the list. Only a reset once extension-contributed themes have
-        // had their chance — before that this list is simply incomplete, and resetting would throw
-        // away the theme of anyone whose theme extension has not finished loading.
-        if (this.#hasExtensionThemesGracePeriodElapsed) {
-          this.#resetCurrentThemeNoUpdate();
-          this.notifyUpdate('CurrentTheme');
+        // The current theme is not in this list. Not reset here: this list may simply be incomplete
+        // — every extension host publishes its first payload before the extensions contributing
+        // themes have loaded — so the reset waits to see whether a later payload brings the family
+        // back. See `#armPendingCurrentThemeReset`.
+        this.#armPendingCurrentThemeReset();
+      } else {
+        // The family is back (or never left), so a pending reset has its answer
+        this.#cancelPendingCurrentThemeReset();
+        // If the current theme's definition was updated, update it
+        if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
+          this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
+          dataTypesToUpdate.push('CurrentTheme');
         }
-      }
-      // If the current theme's definition was updated, update it
-      else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
-        this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
-        dataTypesToUpdate.push('CurrentTheme');
       }
     }
 
