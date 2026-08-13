@@ -105,6 +105,12 @@ function announceNetworkObject(id: string) {
 /** The network object id the theme data provider is registered under */
 const THEME_DATA_PROVIDER_OBJECT_ID = 'platform.themeDataServiceDataProvider-data';
 
+/**
+ * The host's key for "this process holds theme state a user chose" — its own key rather than the
+ * presence of the value keys, because the host also writes those on its own
+ */
+const HAS_USER_THEME_STATE_KEY = 'theme.service-host.hasUserThemeState';
+
 /** Start the host and hand back the engine it registered */
 async function startHost() {
   const host = await import('@main/services/theme.service-host');
@@ -291,7 +297,7 @@ describe('adopting theme state stored before the host moved to main', () => {
   it('refuses an offer once this process has stored theme state a user chose', async () => {
     // An earlier offer failed to arrive, but the app has been used since: the theme the user last
     // chose has to beat the one they left behind before any of this
-    localStorage.setItem('theme.service-host.hasUserThemeState', 'true');
+    localStorage.setItem(HAS_USER_THEME_STATE_KEY, 'true');
     localStorage.setItem(CURRENT_THEME_STORAGE_KEY, JSON.stringify(TEST_LIGHT));
     const { engine } = await startHost();
 
@@ -563,6 +569,45 @@ describe('telling this process own theme state from what it derived', () => {
     // A caller told "refused" discards its copy; this is the one outcome where its copy is still
     // the only durable one, so it has to be told something else
     await expect(engine.migrateStoredThemeState(offeredState)).rejects.toThrow('disk full');
+    expect(logger.error).toHaveBeenCalled();
+  });
+
+  it('writes the theme a user chose before the marker that vouches for it', async () => {
+    const { engine } = await startHost();
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+
+    await engine.setCurrentTheme({ themeFamilyId: 'testFamily', type: 'dark' });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    // One file per key with no atomicity across them, so the marker has to be last for the same
+    // reason the migration writes it last: a marker that lands first and a value write that then
+    // fails leaves the next start reading "this process holds state a user chose" with nothing
+    // stored, which refuses a renderer's still-pending handover and deletes it.
+    const writtenKeys = setItem.mock.calls.map(([key]) => key);
+    expect(writtenKeys).toContain(CURRENT_THEME_STORAGE_KEY);
+    expect(writtenKeys[writtenKeys.length - 1]).toBe(HAS_USER_THEME_STATE_KEY);
+  });
+
+  it('leaves no marker behind when the theme it vouches for could not be written', async () => {
+    const { engine } = await startHost();
+    publishExtensionThemes({ testFamily: { light: TEST_LIGHT, dark: TEST_DARK } });
+    const realSetItem = Storage.prototype.setItem;
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function failTheThemeWrite(
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (key === CURRENT_THEME_STORAGE_KEY) throw new Error('disk full');
+      realSetItem.call(this, key, value);
+    });
+
+    await engine.setCurrentTheme({ themeFamilyId: 'testFamily', type: 'dark' });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    // A marker with no theme under it is the state that refuses a handover that has not happened
+    // yet, so the store must never be left in it.
+    expect(localStorage.getItem(HAS_USER_THEME_STATE_KEY)).toBeNull();
     expect(logger.error).toHaveBeenCalled();
   });
 
