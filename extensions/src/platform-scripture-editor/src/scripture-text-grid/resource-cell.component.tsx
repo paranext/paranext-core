@@ -168,6 +168,13 @@ export function ResourceCell({
   // group, dragging the Scripture Editor off the intro the user came from. Worse, the slice carries
   // no chapter marker, so the plugin defaults to chapter 1 and Luke 5:0 would report Luke 1:1.
   // Swallow that echo: fall-forward is display-only. Non-fallen-forward cells report normally.
+  //
+  // This guard belongs here, not upstream in `ScriptureReferencePlugin`. Gating that plugin on
+  // `isReadonly` would break the read-only surfaces that need it: it is bidirectional (it also moves
+  // the caret to `scrRef`), and these very cells depend on its reporting for click-to-sync at every
+  // normal verse. A read-only editor reporting its caret is correct; the bug is that WE told it a
+  // reference we then contradicted, so the component that created the mismatch is the one that owns
+  // it. Full reasoning, and what a future single-verse surface must copy: ADR-0013.
   const handleScrRefChange = useCallback(
     (nextScrRef: SerializedVerseRef) => {
       if (viewMode === 'verse' && isFallenForward) return;
