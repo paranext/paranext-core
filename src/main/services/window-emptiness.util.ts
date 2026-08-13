@@ -56,6 +56,15 @@ export function createWindowEmptinessHandler(deps: {
    * later decision and nothing routes new content into it while its close is in flight
    */
   markWindowClosing: (windowId: number) => void;
+  /**
+   * Whether this window's close has been decided by ANY path — the registry `markWindowClosing`
+   * writes to, which the user closing a window with its close button also writes to. The handler's
+   * private set only knows the closes this handler itself decided, so without this read a window
+   * closing by another path that reports empty mid-teardown would be handed a second close, which
+   * trips main's force-close escape hatch and abandons the close-time work the first close started.
+   * Optional so a caller composing only this handler's own decisions can omit it.
+   */
+  isWindowClosing?: (windowId: number) => boolean;
 }): WindowEmptinessHandler {
   /**
    * Windows already told "closing" that are still open.
@@ -86,8 +95,9 @@ export function createWindowEmptinessHandler(deps: {
       return { action: 'open-home' };
     }
 
-    // Repeat-answer idempotence — see the set's own doc comment
-    if (closingWindowIds.has(windowId)) {
+    // Repeat-answer idempotence — see the set's own doc comment. The shared-registry read extends
+    // the same answer to closes decided outside this handler (see the `isWindowClosing` dep doc).
+    if (closingWindowIds.has(windowId) || deps.isWindowClosing?.(windowId)) {
       logger.debug(
         `windowLayout:emptied window ${windowId} reason ${reason}: already closing, answering closing again`,
       );

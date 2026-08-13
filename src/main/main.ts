@@ -390,6 +390,9 @@ async function main() {
         .length,
     closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
     markWindowClosing,
+    // The shared registry, not only this handler's own decisions: a window the user is closing can
+    // report empty mid-teardown, and it must get the same "closing" answer instead of a second close
+    isWindowClosing: isWindowMarkedClosing,
   });
   await networkService.registerRequestHandler(
     WINDOW_EMPTIED_REQUEST_TYPE,
