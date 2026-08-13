@@ -1032,9 +1032,10 @@ await networkObjectService.set<WebViewServiceType>(
 - Write fan-outs (`getAllOpenWebViewDefinitions`, notification `dismiss`) by hand. Asking every
   window is the meaningful answer for those, not a missing abstraction.
 - Ask only ready windows in a fan-out (`getReadyWindowIds`), and treat "could not ask" as different
-  from "answered no." That includes the tracked windows a fan-out skipped for not being ready
-  (`getNotReadyWindowIds`): leaving them out of the answer entirely makes a window that is alive with
-  work open in it indistinguishable from a window that does not exist.
+  from "answered no." "Could not ask" means a window that **was serving and stopped**
+  (`getUnreachableWindowIds`) — not one that has never started. A window still starting holds
+  nothing, so leaving it out costs nothing; a window that was alive with work open in it must not be
+  silently indistinguishable from a window that does not exist.
 
 **Don't:**
 
