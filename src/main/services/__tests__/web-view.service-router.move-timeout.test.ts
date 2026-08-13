@@ -173,6 +173,40 @@ describe('moveWebView when the target adopt times out', () => {
     }
   });
 
+  test('a source readopt that timed out and landed ends the recovery ladder there', async () => {
+    // The recovery adopts are adopts, and carry the same ambiguity the primary one does: the
+    // request expired client-side while the source may still have been running it. Walking on to
+    // the next rung without asking is what would put this web view id live in two windows.
+    const focused = windowShard([]);
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    target.adoptWebView.mockRejectedValue(new Error('provider exploded'));
+    owner.adoptWebView.mockRejectedValue(requestTimedOutError());
+    withWindows({ 1: focused, 2: owner, 3: target });
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow(/window 2, where it came from/);
+
+    expect(focused.adoptWebView).not.toHaveBeenCalled();
+  });
+
+  test('a focused-window readopt that timed out and landed is not reported as reopened nowhere', async () => {
+    const focused = windowShard([]);
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    target.adoptWebView.mockRejectedValue(new Error('provider exploded'));
+    owner.adoptWebView.mockRejectedValue(new Error('source refused'));
+    focused.adoptWebView.mockRejectedValue(requestTimedOutError());
+    // Asked once by the ownership search, when the focused window does not hold it; asked again by
+    // the probe after the timed-out readopt, by which time that readopt has landed
+    focused.getOpenWebViewDefinition.mockResolvedValueOnce(undefined);
+    focused.getOpenWebViewDefinition.mockResolvedValue({ id: 'view-1' });
+    withWindows({ 1: focused, 2: owner, 3: target });
+
+    // Telling the caller nothing could reopen it — while it is sitting in the focused window —
+    // sends them looking for a definition in the log for a web view the user can see
+    await expect(moveWebView('view-1', 3)).rejects.toThrow(/reopened in the focused window/);
+  });
+
   test('a rejection the target itself produced enters recovery without probing', async () => {
     const owner = windowShard(['view-1']);
     const target = windowShard([]);

@@ -645,6 +645,39 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
 }
 
 /**
+ * Reopen a captured web view in one window, answering whether it is now open there.
+ *
+ * A timed-out readopt is asked about rather than given up on, exactly as the move's own adopt is —
+ * see {@link findWebViewAdoptedAfterTimeout}. The recovery ladder walks on to the next window when a
+ * rung answers no, so reading a timeout as a no is what would put this web view id live in two
+ * windows, where messages for it become unroutable.
+ *
+ * @param webViewId The id the caller named, for the log; `captured.id` is what a landed readopt is
+ *   found under
+ */
+async function readoptAfterFailedMove(
+  shard: WebViewServiceShard,
+  webViewId: WebViewId,
+  captured: SavedWebViewDefinition,
+  destinationDescription: string,
+): Promise<boolean> {
+  try {
+    if ((await shard.adoptWebView(captured)) !== undefined) return true;
+  } catch (e) {
+    if (
+      isRequestTimedOutError(e) &&
+      (await findWebViewAdoptedAfterTimeout(shard, captured.id, destinationDescription)) !==
+        undefined
+    )
+      return true;
+    logger.warn(
+      `Could not reopen webview ${webViewId} in ${destinationDescription}: ${getErrorMessage(e)}`,
+    );
+  }
+  return false;
+}
+
+/**
  * Reopen a web view whose move could not open it in its target, escalating until something takes
  * it: the source window — unless its close has begun, which a move that emptied it will have made
  * true — then the focused window. Always rejects: wherever the web view ended up, the move the
@@ -661,18 +694,14 @@ async function recoverAfterFailedMove(
   );
   let reopenedIn: string | undefined;
   if (!isWindowClosing(owner.windowId)) {
-    try {
-      if ((await owner.shard.adoptWebView(captured)) !== undefined)
-        reopenedIn = `window ${owner.windowId}, where it came from`;
-    } catch (e) {
-      logger.warn(
-        `Could not reopen webview ${webViewId} in its source window ${owner.windowId}: ${getErrorMessage(e)}`,
-      );
-    }
+    const sourceDescription = `window ${owner.windowId}, where it came from`;
+    if (await readoptAfterFailedMove(owner.shard, webViewId, captured, sourceDescription))
+      reopenedIn = sourceDescription;
   }
   if (reopenedIn === undefined) {
     try {
-      if ((await (await getTargetWebViewShard()).adoptWebView(captured)) !== undefined)
+      const focusedShard = await getTargetWebViewShard();
+      if (await readoptAfterFailedMove(focusedShard, webViewId, captured, 'the focused window'))
         reopenedIn = 'the focused window';
     } catch (e) {
       logger.warn(
