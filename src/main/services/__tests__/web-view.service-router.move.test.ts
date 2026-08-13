@@ -347,6 +347,33 @@ describe('moveWebView', () => {
     );
   });
 
+  test('a source window that began closing while it readopted does not count as recovered', async () => {
+    // Capturing out of the source is what emptied it, so its close can be decided at any moment —
+    // including while the readopt that is putting the web view back is in flight. Reporting that as
+    // where the view ended up would name a window that is on its way out.
+    const owner = windowShard(['view-1']);
+    const target = windowShard([]);
+    const focused = windowShard([]);
+    target.adoptWebView.mockRejectedValue(new Error('provider exploded'));
+    let hasSourceCloseBeenDecided = false;
+    owner.adoptWebView.mockImplementation(async (savedWebViewDefinition) => {
+      hasSourceCloseBeenDecided = true;
+      return savedWebViewDefinition.id;
+    });
+    withWindows({ 1: focused, 2: owner, 3: target });
+    mocks.isWindowClosing.mockImplementation(
+      (windowId: number) => windowId === 2 && hasSourceCloseBeenDecided,
+    );
+    mocks.getTargetWindowId.mockReturnValue(1);
+
+    await expect(moveWebView('view-1', 3)).rejects.toThrow(/the focused window/);
+
+    expect(owner.adoptWebView).toHaveBeenCalled();
+    expect(focused.adoptWebView).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
+    );
+  });
+
   test('a provider decline in a new window closes that window and enters recovery', async () => {
     const owner = windowShard(['view-1']);
     const created = windowShard([]);

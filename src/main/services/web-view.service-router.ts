@@ -757,8 +757,17 @@ async function recoverAfterFailedMove(
   let reopenedIn: string | undefined;
   if (!isWindowClosing(owner.windowId)) {
     const sourceDescription = `window ${owner.windowId}, where it came from`;
-    if (await readoptAfterFailedMove(owner.shard, webViewId, captured, sourceDescription))
-      reopenedIn = sourceDescription;
+    if (await readoptAfterFailedMove(owner.shard, webViewId, captured, sourceDescription)) {
+      // Read again, because capturing out of this window is what emptied it: its close can be
+      // decided while the readopt is in flight, and a web view in a window that is closing is not
+      // recovered — it is about to be lost with it. The next rung reopens it somewhere that will
+      // still be there, which duplicates it for as long as the closing window takes to go.
+      if (isWindowClosing(owner.windowId))
+        logger.warn(
+          `Webview ${webViewId} was reopened in window ${owner.windowId}, but that window's close was decided in the meantime; reopening it somewhere else as well.`,
+        );
+      else reopenedIn = sourceDescription;
+    }
   }
   if (reopenedIn === undefined) {
     try {
