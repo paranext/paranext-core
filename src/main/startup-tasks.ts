@@ -1,6 +1,6 @@
 import {
   getJsonRpcRequestErrorMessagePrefix,
-  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
+  isRequestTimedOutError,
   MAX_REQUEST_ATTEMPTS,
   REQUEST_ATTEMPT_WAIT_TIME_MS,
 } from '@shared/data/rpc.model';
@@ -300,32 +300,19 @@ function isMethodNotFoundError(error: unknown): boolean {
 }
 
 /**
- * Whether `error` is what `networkService`'s request plumbing throws when a request times out
- * client-side before any response arrives (`doRequest` in `network.service.ts` builds `JSON-RPC
- * Request timed out: <requestType> <args>` when its per-request `AsyncVariable` fires).
- *
- * At cold boot a timeout is the same "not ready yet" condition as a missing handler, not a genuine
- * failure, so it belongs in the retryable set. Concretely, the S/R extension registers
- * `runScheduledSessionSync` with its request timeout disabled (a scheduled sync can legitimately
- * run long); until that override propagates to this process, `doRequest` still applies the default
- * 30 s timeout, so a slow-but-registered first sync can trip it. Excluding that from retry would
- * collapse the whole boot budget to a single attempt against a handler that is present and
- * working.
- *
- * Matches by message substring for the same reason as {@link isMethodNotFoundError}, deriving the
- * format from the same producer ({@link JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX}).
- */
-function isRequestTimedOutError(error: unknown): boolean {
-  return getErrorMessage(error).includes(JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX);
-}
-
-/**
  * Whether `error` from a `runScheduledSessionSync` attempt is a boot-race condition worth retrying
  * within the budget rather than a genuine handler failure. Both retryable shapes mean "the handler
  * isn't answering yet", not "the handler ran and failed": a {@link isMethodNotFoundError} (no
  * handler registered anywhere on the network yet) or a {@link isRequestTimedOutError} (a handler may
  * be present but hasn't responded in time this early in boot). Anything else — a registered handler
  * that threw — is a real failure and must NOT be retried blindly.
+ *
+ * A timeout belongs in the retryable set because at cold boot it is the same "not ready yet"
+ * condition as a missing handler: the S/R extension registers `runScheduledSessionSync` with its
+ * request timeout disabled (a scheduled sync can legitimately run long), but until that override
+ * propagates to this process, `doRequest` still applies the default 30 s timeout, so a
+ * slow-but-registered first sync can trip it. Excluding that would collapse the whole boot budget
+ * to a single attempt against a handler that is present and working.
  */
 function isRetryableBootRaceError(error: unknown): boolean {
   return isMethodNotFoundError(error) || isRequestTimedOutError(error);

@@ -1,6 +1,8 @@
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import {
+  isRequestTimedOutError,
+  JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX,
   MAX_REQUEST_ATTEMPTS,
   REQUEST_ATTEMPT_WAIT_TIME_MS,
   requestWithRetry,
@@ -213,5 +215,23 @@ describe('requestWithRetry', () => {
         `attempt ${MAX_REQUEST_ATTEMPTS} of ${MAX_REQUEST_ATTEMPTS}. Giving up.`,
       ),
     );
+  });
+});
+
+describe('isRequestTimedOutError', () => {
+  test('recognizes the message doRequest builds for a client-side request timeout', () => {
+    expect(
+      isRequestTimedOutError(
+        new Error(`${JSON_RPC_REQUEST_TIMED_OUT_MESSAGE_PREFIX} command:test.thing ["arg"]`),
+      ),
+    ).toBe(true);
+  });
+
+  test('does not match other request failures or non-errors', () => {
+    expect(
+      isRequestTimedOutError(new Error("JSON-RPC Request error (-32601): 'command:x' not found")),
+    ).toBe(false);
+    expect(isRequestTimedOutError(new Error('some unrelated failure'))).toBe(false);
+    expect(isRequestTimedOutError(undefined)).toBe(false);
   });
 });
