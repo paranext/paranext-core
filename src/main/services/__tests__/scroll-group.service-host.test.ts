@@ -495,6 +495,27 @@ describe('adopting previously stored state', () => {
     });
   });
 
+  it('rejects the NEXT offer too rather than refusing it after a failed store', async () => {
+    const host = await import('@main/services/scroll-group.service-host');
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('disk full');
+    });
+
+    await expect(host.migrateStoredScrollGroupState(previouslyStored)).rejects.toThrow('disk full');
+
+    // A second window offers the same pre-host state in the same session. "Refused" is not an answer
+    // this process may give while nothing has been stored: every window's renderer shares one
+    // `localStorage` for the profile, so the window told "refused" drops the profile's only
+    // remaining copy of where the user was. A rejection is what keeps it.
+    await expect(host.migrateStoredScrollGroupState(previouslyStored)).rejects.toThrow('disk full');
+
+    // And the one-time adoption was not spent on the failure: once the store works, the offer is
+    // still adopted rather than being refused with nothing migrated.
+    setItem.mockRestore();
+    expect(await host.migrateStoredScrollGroupState(previouslyStored)).toBe(true);
+    expect(await host.getScrRef(0)).toEqual({ book: 'MRK', chapterNum: 4, verseNum: 1 });
+  });
+
   it('does not consume the one-time adoption when only the second of the two writes fails', async () => {
     // The store is one file per key with no atomicity across them, so a failure between them leaves
     // one written and the other not. The key backing the "do I already have state of my own?" gate

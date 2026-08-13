@@ -565,6 +565,28 @@ describe('telling this process own theme state from what it derived', () => {
     await expect(engine.migrateStoredThemeState(offeredState)).rejects.toThrow('disk full');
     expect(logger.error).toHaveBeenCalled();
   });
+
+  it('rejects the NEXT offer too rather than refusing it after a failed store', async () => {
+    const { engine } = await startHost();
+    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('disk full');
+    });
+
+    await expect(engine.migrateStoredThemeState(offeredState)).rejects.toThrow('disk full');
+
+    // A second window offers the same pre-host state. "Refused" is not an answer this process may
+    // give while nothing has been stored: every window's renderer shares one `localStorage` for the
+    // profile, so the window told "refused" drops the profile's only remaining copy — including the
+    // user-defined theme families, which exist nowhere else. A rejection is what keeps it.
+    await expect(engine.migrateStoredThemeState(offeredState)).rejects.toThrow('disk full');
+
+    // And the one-time migration was not spent on the failure: once the store works, the offer is
+    // still adopted rather than the profile being latched into "already migrated" with nothing
+    // migrated.
+    setItem.mockRestore();
+    expect(await engine.migrateStoredThemeState(offeredState)).toBe(true);
+    expect(localStorage.getItem(USER_THEMES_STORAGE_KEY)).toContain('red');
+  });
 });
 
 // Everything in this process that paints from the theme — the Windows title-bar overlay colours —
