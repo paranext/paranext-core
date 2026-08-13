@@ -13,6 +13,10 @@
 # and review target into a single review.
 #
 # Husky runs hooks under `sh -e`, so failures are swallowed explicitly: a review is never
-# allowed to fail a commit that has already been made.
+# allowed to fail a commit that has already been made. Stderr is deliberately NOT discarded --
+# a misconfigured agent makes every review fail, and silently swallowing that leaves a
+# developer believing their commits are reviewed when nothing is running.
 command -v roborev >/dev/null 2>&1 || exit 0
-roborev post-commit >/dev/null 2>&1 || true
+roborev post-commit >/dev/null || {
+  echo "roborev: could not enqueue a review (try 'roborev check-agents')" >&2
+}
