@@ -4,10 +4,11 @@
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Sprint Statement (roadmap)** | "Saroj navigates all Simple functionality with as few problems for users as possible (breaks, freezes, bugs, etc.)"                                 |
 | **Roadmap description**        | "Engineers identify and fix at least 6 NN (+ 10 NTHs) of the most serious bugs and performance issues for Simple, to make Simple 'nice to use'."    |
-| **Epic Lead (PO)**             | Ian Hewerdine                                                                                                                                       |
-| **Prepared by**                | Ira Hopkinson (Simple Engineering Lead) — first pass for PO review                                                                                  |
+| **Owner (PO)**                 | Ian Hewerdine — signs off on the PRD                                                                                                                |
+| **Epic Lead**                  | Todd Hoatson — runs the PRD (role change 14 Aug 2026)                                                                                               |
+| **Prepared by**                | Ira Hopkinson (Simple Engineering Lead)                                                                                                             |
 | **Implementation Owner**       | Katherine Jensen                                                                                                                                    |
-| **Status**                     | Draft for PO review, 2nd revision (post refine passes 1 & 2) — as of 2026-08-12                                                                     |
+| **Status**                     | Draft 4 — PO decisions incorporated (open questions 1–3, 6, 7 resolved) — as of 2026-08-14                                                          |
 | **Candidate gathering**        | [Discord: [Sp 89] Simple Quality Improvements](https://discord.com/channels/892072317436448768/1533668454421495909) (dev suggestions, 3–8 Aug 2026) |
 
 ## Problem
@@ -27,8 +28,11 @@ fixed, plus up to **10 nice-to-haves** as time allows. Where a candidate has unb
 (PT-1641, startup performance), the NN is scoped as a time-boxed "materially improve and
 report", not a benchmark promise — the lesson Matt Lyons flagged in Sp 87. Per the
 Implementation Owner's feasibility check (12 Aug 2026), NTH capacity is expected to be
-minimal — the NTH list is a prioritized menu, not committed scope (see also Open
-question 6 on the NN commitment level).
+minimal — the NTH list is a prioritized menu, not committed scope.
+
+Commitment level (decided by the PO, 13 Aug 2026, resolving Open question 6): **5 NNs
+committed; the 6th is a stretch goal** — which NN takes the stretch slot is designated
+at sprint entry once the PR #2425 gate (Open question 4) is answered.
 
 ## Success criteria
 
@@ -59,6 +63,17 @@ Two deliverables, deliberately separate:
    in-app "report this issue" link is planned before release but no reporting mechanism
    exists yet — logging is the sprint-89 scope.
 
+Repro status (Sebastian, 13 Aug 2026,
+[analysis + repro steps attached](https://discord.com/channels/892072317436448768/1530217280221352086/1537420033477578812)):
+it is a race —
+any `useData` caller re-rendering more than 100 times in under 1 second trips the
+guard, so no reliable manual repro exists. Most reliable natural path: cold start with
+a purged profile, opening a Scripture editor immediately (the original report's
+scenario; retry several times). A deterministic repro is achievable by driving a test
+web view past the render threshold — use that for the root-cause verification and the
+regression test rather than chasing manual repros. No environmental factor identified;
+occurrences are rare but showstoppers when they hit.
+
 ### NN-2 · Panes never show the wrong project's or book's text
 
 Two flavors of the same trust bug:
@@ -72,6 +87,13 @@ Two flavors of the same trust bug:
 Includes Roopa's broader re-rendering cluster (rerendering when a book is unavailable or
 when switching projects). Saroj must never read text labeled as one project/book that is
 actually another.
+
+Rabbit hole — the "broader re-rendering cluster" is unbounded as phrased (the IO's
+feasibility check flagged it as this NN's risky part). Fence: this NN commits to the
+ticketed and reproduced items only — PT-4238, PT-4139's don't-rerender half, and the
+project-switch/missing-book repros already documented in those tickets and threads.
+Newly discovered rerender oddities enter the candidate pool for prioritization; they do
+not silently expand this NN.
 
 Sp 88 boundary (13 Aug 2026): Sp 88's Trust-the-App NN5 owns the honest
 missing-book/loading **messaging** across tabs (PT-4111, PT-4132) and navigating to
@@ -98,7 +120,7 @@ Simple ↔ Power switching regression test (none exists today, per the 2026-08-1
 pass) with the mid-load switch as an explicit case — this is the NN most likely to
 regress silently.
 
-### NN-4 · Startup and switching performance (Sp 87 carry-over — confirmed 11 Aug 2026)
+### NN-4 · Startup performance (Sp 87 NN carry-over — confirmed 11 Aug 2026)
 
 Sp 87 measurements (Tom Bogle, 1 Aug 2026, local release build): startup into Simple
 **~42 s**; Power → Simple **~12–14 s** (halved by PR
@@ -116,13 +138,16 @@ so this carry-over is confirmed, not hypothetical. Note (Tom, 12 Aug 2026): #242
 contains Sync-affecting changes — analyze it for overlap/landmines before S/R-adjacent
 work builds on or around it.
 
-Note the split: Sp 87's NN was **startup** speed; PR #2425 primarily delivers the
-Power → Simple **switch** (an Sp 87 NTH), though it contains fixes the startup case
-builds on. The startup work itself is not done — Tom describes a "smallish" amount of
-follow-on work for startup, dependent on #2425 and paratext-10-studio #171.
+Inheritance rule (clarified 14 Aug 2026): only Sp 87's **NN — startup speed — carries
+over** as this NN; Sp 87's NTHs do not. PR #2425 originates from one of those NTHs
+(the Power → Simple switch) and is in scope only because it contains fixes the startup
+work builds on — the switch improvement lands as a byproduct of the prerequisite, not
+as its own commitment. The startup work itself is not done — Tom describes a "smallish"
+amount of follow-on work for startup, dependent on #2425 and paratext-10-studio #171.
 
 Scope for sprint 89, in priority order (priority = importance, not sequence — item 2 is
-item 1's prerequisite, so execution order is 2 → 1 → 3):
+item 1's prerequisite, so execution order is 2 → 1 → 3; item 4 is independent and can
+run in parallel):
 
 1. **Startup** (the carried-over NN): complete the startup follow-on work (depends on
    PR #2425; the paratext-10-studio #171 dependency merged 12 Aug 2026) and land it.
@@ -131,9 +156,20 @@ item 1's prerequisite, so execution order is 2 → 1 → 3):
 3. Verify the improved numbers hold in a packaged P10 build, reported before/after
    (`PT_STARTUP_MARKS` waterfall); further time-boxed improvement as appetite allows.
    The 5-second startup figure remains an aspiration/NTH indicator, as in Sp 87 — not an
-   NN benchmark. Candidate lever: the string-utils rework (NTH-1, PT-2626) consumed
-   ~13 s of a **debug** startup — measure its release-build contribution as part of
-   this NN's verification.
+   NN benchmark.
+4. Adopt the string-utils rework (PT-2626; folded in from the NTH list 14 Aug 2026) — a
+   **verified** startup lever: the current implementation costs **~1 s of a Simple
+   release-build startup (~2.5 s with a project open**; Power 0.5 s; Matt G,
+   14 Aug 2026,
+   [findings thread](https://discord.com/channels/892072317436448768/1536890498906853418)).
+   Adoption per the game plan TJ and Matt G agreed (14 Aug): rework to match native
+   `String` semantics with unit tests; replace the existing functions' internals with
+   `GraphemeString`-backed wrappers (no deprecation — every caller gets the win for
+   free; the class is exposed for callers batching operations); PR + breaking-change
+   announcement in #platform-changes. Also fixes the latent index bugs (UTF-16 vs
+   grapheme mixing) the sweep surfaced. Context: the alarming debug-build interactive
+   numbers largely vanish in release builds (typing 0.04 s; Enhanced Resources 0.14 s)
+   — startup is where the real user-visible win is.
 
 ### NN-5 · Project/resource selection works reliably
 
@@ -169,23 +205,37 @@ selector to Find — for Saroj, reusing (and renaming) the existing resource dia
 the time this NN starts, that is one more live consumer of the selection surfaces:
 include it in the convergence inventory, and don't break what Sp 88 just shipped.
 
-Sp 90 boundary — **recommended split, pending PO agreement** (13 Aug 2026): Sp 90's
-NN4 (titlebar project selector behavior) and NN5 (unify the 3–4 selection UIs, 2 wks)
-restate this NN's items 2–3 almost verbatim — including the "not necessarily one
-component; different for single vs multi selection" conclusion that matches the
-two-surface design above. Recommended: **Sp 89 keeps item 1 only** (the dead-end bug
-fixes, fixed in place with deliberately minimal restructuring); **items 2–3 transfer to
-Sp 90**, inheriting the recorded design decisions (two-surface design, fold in PR
-#2291's work, Sp 88's Find selector in the inventory). The IO concurs both sprints are
-needed to cover the area; this draws the line at fix-what's-broken (89) vs
-restructure (90). If agreed, the escape valve below becomes the plan rather than the
-contingency, and NN-5 shrinks to its bug core (relevant to Open question 6).
+Sp 90 boundary — **split AGREED by the PO, 13 Aug 2026**: Sp 90's NN4 (titlebar project
+selector behavior) and NN5 (unify the 3–4 selection UIs, 2 wks) restate this NN's items
+2–3 almost verbatim — including the "not necessarily one component; different for
+single vs multi selection" conclusion that matches the two-surface design above.
+**Sp 89 keeps item 1 only** (the dead-end bug fixes, fixed in place with deliberately
+minimal restructuring); **items 2–3 are transferred to Sp 90**, inheriting the recorded
+design decisions (two-surface design, fold in PR #2291's work, Sp 88's Find selector in
+the inventory). The IO concurs both sprints are needed; the line is fix-what's-broken
+(89) vs restructure (90). Ian has asked for input into the Sp 90 epic to make sure the
+transferred work is covered correctly — hand him this section's design notes.
 
-Escape valve (decided 2026-08-10): if the sprint squeezes, the bug fixes (item 1) are
-the non-negotiable core; the consolidation (items 2–3) degrades to a nice-to-have. In
-that case it joins the NTH pool on its own merits — a squeeze that fires the valve makes
-all NTHs unlikely alike, but within the pool the consolidation may still outrank other
-NTHs (it is not automatically last).
+Fix-path nuance (14 Aug 2026): the goal here is bug fixes, but in some places adopting
+the shared, configurable selection component may be the best way to fix — the
+[`ProjectSelector`](https://paranext.github.io/paranext-core/platform-bible-react-storybook/?path=/docs/advanced-project-selector--docs)
+in platform-bible-react (confirmed by the 2026-08-10 repo scan as the component Manage
+Books, the checklists, and the checks side panel use in Power). Per the Sp 88 epic
+thread (13–14 Aug 2026): the same shared component can render a flat list configured
+for Simple (search/filter, scroll groups hidden as needed); Alex has UX-approved the
+simplified configuration (storybook demo of the flat list using the unmodified
+component: PR [#2671](https://github.com/paranext/paranext-core/pull/2671), in the
+"Multiselect project/resources dialog" thread); Ian confirms it's the same picker
+family as Get Resources, so no new complexity. Precondition before adopting it as a fix
+path: verify the known selection bugs are actually fixed in that component — a live
+example: Sebastian found its tooltip and filter dropdown render behind the dialog
+(fix: PR [#2672](https://github.com/paranext/paranext-core/pull/2672), 14 Aug 2026),
+the same layering-bug family as NTH-4/PT-4226, now on its fourth occurrence — worth a
+shared-fix sweep rather than a fourth spot fix. Decide fix-in-place vs adopt-shared per
+bug; wholesale convergence remains Sp 90's.
+
+Escape valve (decided 2026-08-10) — **superseded 13 Aug 2026** by the Sp 90 transfer:
+with items 2–3 gone to Sp 90, this NN is the bug fixes and needs no degradation path.
 
 ### NN-6 · The app never dies silently (WebSocket disconnect)
 
@@ -206,27 +256,12 @@ No reliable repro exists, so the NN is scoped as:
 ## Nice-to-haves
 
 Listed in priority order, ranked by the same criteria as the non-negotiables
-(Appendix A). Reordered 13 Aug 2026 when the string-utils findings landed.
+(Appendix A). Renumbered 14 Aug 2026: string-utils moved into NN-4 (release-build
+numbers verified it as a startup lever; its debug-build interactive costs largely
+vanish in release), and the S/R feedback story's slot removed (moved to Sp 88 — see
+Out of scope).
 
-1. **String-utils performance improvements + integration** (Matt Getgen; PT-2626) —
-   the user-visible metric gate is now **satisfied** (Matt G, 12–13 Aug 2026,
-   [findings thread](https://discord.com/channels/892072317436448768/1536890498906853418)):
-   the current grapheme-aware string functions re-segment on every call and consumed
-   **~13 s of a debug startup**; typing 5 characters in the editor triggered **13.7 s**
-   of background work; opening Enhanced Resources in Simple spent **12.2 s** in the
-   foreground; Power startup spends 5.8 s. His PT-2626 rework is ~0.02 ms per call and
-   a drop-in replacement for the most common function (45% of ~200 call sites); the
-   sweep also surfaced latent index bugs (UTF-16 vs grapheme mixing) and sites that
-   don't need grapheme awareness at all. Note: these measurements are debug builds —
-   the release-build contribution (relevant to NN-4) is unverified. Open adoption
-   question (TJ): the new API is internally consistent rather than
-   native-`String`-compatible — decide match-native vs adopt-consistent before
-   integration.
-2. _(Moved out of scope 13 Aug 2026 — owned by Sp 88.)_ **One coherent Send/Receive
-   feedback story** is Sp 88 Trust-the-App **NN4** ("a single, truthful S/R or Sync
-   notification at a time; cancel with a single click") — see Out of scope. Slot kept
-   to preserve numbering; re-check at Sp 88 close.
-3. **Localizable sync progress messages** — raw S/R progress strings are concatenated
+1. **Localizable sync progress messages** — raw S/R progress strings are concatenated
    onto "Syncing", producing non-grammatical, non-localizable toasts, e.g.
    `Syncing Searching local 'SPAN' for most recent change (65%).` (Tom Bogle;
    [discussion](https://discord.com/channels/892072317436448768/1529901003401461933/1530268266885283941)).
@@ -235,9 +270,9 @@ Listed in priority order, ranked by the same criteria as the non-negotiables
    and the join likely lives in paratext-10-studio or a repo it pulls in. Coordinate
    with Sp 88 NN4's notification consolidation — localize against the notification
    surface that work lands on, not the current toasts.
-4. **Auto-sync banner shouldn't jump the editor** — banner pushes the text down and back
+2. **Auto-sync banner shouldn't jump the editor** — banner pushes the text down and back
    up; overlay it instead. Ian agrees it's real but not urgent.
-5. **Bible Texts follows versification** — port the model-text fix (PR #2537) to the
+3. **Bible Texts follows versification** — port the model-text fix (PR #2537) to the
    Bible Texts WebView, or do TJ's recommended structural fix (`projectId` = the project
    actually open in the WebView). Versification is explicitly a Sp 88 no-go, so this
    stays here. The "show all books" BCV affordance from the
@@ -245,26 +280,26 @@ Listed in priority order, ranked by the same criteria as the non-negotiables
    is owned by **Sp 88 NN5d/NTH5b** (navigate to books in a resource but not the
    project) — Ian's decision (Open question 1) transfers there as input; re-check at
    Sp 88 close.
-6. **PT-4226** — BCV history dropdown renders behind floating tabs.
-7. **PT-4103** — platform-bible-react components leak raw `%…%` localization keys when
+4. **PT-4226** — BCV history dropdown renders behind floating tabs.
+5. **PT-4103** — platform-bible-react components leak raw `%…%` localization keys when
    a string is missing; give them English defaults (the ticket lists six components;
    the 2026-08-10 refine pass found nine sites — sweep, don't just fix the listed six).
-8. **PT-4121** — markers can be deleted while the project structure is locked
+6. **PT-4121** — markers can be deleted while the project structure is locked
    (delete-guard can be bypassed by emptying the block first; mechanism understood).
    Cross-package risk: the fix likely lands in the shared editor package (its own
    release path), not in this codebase — confirm before committing to the sprint.
-9. **PT-4317 / PT-3998** — Simple zero-state dead-ends: registered user with no projects
+7. **PT-4317 / PT-3998** — Simple zero-state dead-ends: registered user with no projects
    has no way to get one after setup.
-10. **Small visual/behavior verification set** (Levi): checkbox borders too light;
-    "Show footnotes" (project hamburger menu) only affects the middle editor column — it
-    should also apply to model text (column 1) and the Bible texts / commentaries tabs
-    (column 3). Not a bug per se but an incomplete feature (clarified by Ira,
-    2026-08-11); those panes currently have no footnote rendering at all, so this is
-    completing an existing toggle across panes — in scope under the epic's "didn't quite
-    get finished" framing. Also: verify scroll sync across model text / editor /
-    commentaries / Bible texts — noting Bible Texts / Commentaries are deliberately
-    outside Simple's scroll sync today, so "verify" must first pin down the intended
-    behavior.
+8. **Small visual/behavior verification set** (Levi): checkbox borders too light;
+   "Show footnotes" (project hamburger menu) only affects the middle editor column — it
+   should also apply to model text (column 1) and the Bible texts / commentaries tabs
+   (column 3). Not a bug per se but an incomplete feature (clarified by Ira,
+   2026-08-11); those panes currently have no footnote rendering at all, so this is
+   completing an existing toggle across panes — in scope under the epic's "didn't quite
+   get finished" framing. Also: verify scroll sync across model text / editor /
+   commentaries / Bible texts — noting Bible Texts / Commentaries are deliberately
+   outside Simple's scroll sync today, so "verify" must first pin down the intended
+   behavior.
 
 ## Out of scope (considered, cut first)
 
@@ -278,7 +313,7 @@ Listed in priority order, ranked by the same criteria as the non-negotiables
   promote into NN-6's diagnosis work if it turns out related.
 - New functionality of any kind (per the epic's framing). Completing a partially-shipped
   feature whose control already exists — e.g. the "Show footnotes" toggle reaching all
-  columns (NTH-10) — counts as finishing, not new functionality. _(Ratified by Ian,
+  columns (NTH-8) — counts as finishing, not new functionality. _(Ratified by Ian,
   12 Aug 2026.)_
 - BCV history carrying over between Power and Simple via shared scroll groups (Roopa,
   BCV History thread) — confirmed working as intended by Alex (UX), 2026-08-10; history
@@ -288,17 +323,20 @@ Listed in priority order, ranked by the same criteria as the non-negotiables
   of the fuller story is under discussion in the
   ["Send-receive issues split across PRDs" thread](https://discord.com/channels/892072317436448768/1451249981565702214/threads/1537081655586717857)
   (13 Aug 2026): Ian's direction (titlebar sync status over toasts, one-click
-  cancel-all) exceeds Sp 88's "messaging only" no-go per Sebastian. Hand our detail to
-  that thread as input: PT-4240, PT-4002, the unticketed duplicate Power+Simple toasts,
-  PT-3954/PT-4007, and the cancel-verification concern. Whatever the thread doesn't
-  assign — and any unfinished Sp 88 part — re-enters this pool at Sp 88 close.
+  cancel-all) exceeds Sp 88's "messaging only" no-go per Sebastian. **Ian's ruling
+  (13 Aug 2026): small S/R changes initially are fine — reliable interactions and less
+  noise are the immediate target; a fully unified solution comes later** (he will
+  confirm on the thread). Our detail was handed to that thread as input: PT-4240,
+  PT-4002, the unticketed duplicate Power+Simple toasts, PT-3954/PT-4007, and the
+  cancel-verification concern. Any unfinished Sp 88 part re-enters this pool at Sp 88
+  close; the fully unified solution is later than both sprints.
 - **PT-4218** (min-width cuts controls) — covered by Sp 88 Trust-the-App NN2b.
 
 ## Open questions
 
 1. **BCV book list: filtered vs all books** — **Resolved (Ian, 12 Aug 2026):** filtered
    to the project's books plus a "show all books" button; Ian is seeking UX input to
-   confirm the detail. Unblocks NTH-5's book-list part.
+   confirm the detail. Unblocks NTH-3's book-list part.
 2. **Sp 87 final leftover set** — **Resolved (12 Aug 2026):** the leftover set is PR
    #2425 plus the startup follow-on work; paratext-10-studio #171 merged 12 Aug 2026.
    The live tracking point is now question 4 (the #2425 entry gate).
@@ -325,21 +363,17 @@ Listed in priority order, ranked by the same criteria as the non-negotiables
    action, folded into the sprint-entry gate (question 4): **Sp 88 close-out review** —
    any unfinished Sp 88 NN4/NN5 item and the split-thread outcome re-enter this pool,
    and Tom's #2425 Sync-overlap warning applies to whatever Sp 88 ships.
-6. **Commit to 6 NNs, or 5 + a stretch?** (Ian) — the Implementation Owner's
-   feasibility check of draft 2
-   ([frozen record](./sp89-simple-quality-feasibility-draft2.md), 12 Aug 2026) reads
-   the roadmap's "at least 6 NN" as a stretch, not a plan: effective capacity is
-   roughly 20–40% short of the NN midpoints even with NN-5's escape valve fired, and
-   the 6th NN hinges on PR #2425 landing in the sprint's first days. Options: commit
-   to 5 NNs with the 6th as stretch, or hold "at least 6" and accept the risk. Note:
-   if question 7's recommended split is agreed, NN-5 shrinks to its bug core, which
-   eases (but does not eliminate) this gap.
-7. **Sp 90 crossover on selection surfaces** (Ian, flagged 13 Aug 2026) — Sp 90's NN4
-   and NN5 overlap this PRD's NN-5. **Recommended split** (see NN-5's Sp 90 boundary
-   note): Sp 89 fixes the dead-end bugs in place; Sp 90 takes the convergence and
-   behavior redesign, inheriting the recorded design decisions. Honors the IO's view
-   that both sprints are needed; reduces Sp 89 load where the feasibility check says
-   it's tightest.
+6. **Commit to 6 NNs, or 5 + a stretch?** — **Resolved (Ian, 13 Aug 2026): 5 NNs
+   committed, the 6th as stretch** ("means we don't have to squeeze other NNs").
+   Background: the Implementation Owner's feasibility check of draft 2
+   ([frozen record](./sp89-simple-quality-feasibility-draft2.md), 12 Aug 2026) read
+   "at least 6 NN" as a stretch, not a plan. Which NN takes the stretch slot is
+   designated at sprint entry once question 4 is answered.
+7. **Sp 90 crossover on selection surfaces** — **Resolved (Ian, 13 Aug 2026): split
+   agreed** (see NN-5's Sp 90 boundary note): Sp 89 fixes the dead-end bugs in place;
+   Sp 90 takes the convergence and behavior redesign, inheriting the recorded design
+   decisions. Follow-up action: Ian wants input into the Sp 90 epic to make sure the
+   transferred work is covered correctly — hand over NN-5's design notes.
 
 ---
 
@@ -396,16 +430,16 @@ the last ~4–6 months). Jira note: nearly all candidates sit in Triage/ToDo wit
 | Startup ~42 s / project switch ~16 s                                                                              | Sp 87 leftover                           | NN-4                                       |
 | Picker bugs + consolidation (PT-4059, PT-4135, PT-4264, PT-4232, PT-4299, PT-4225)                                | Sebastian, TJ, PO signal                 | NN-5                                       |
 | WebSockets silent disconnect (PT-1641)                                                                            | Todd                                     | NN-6                                       |
-| S/R notification/Cancel streamlining                                                                              | Roopa                                    | NTH-2                                      |
-| Non-localizable "Syncing …" strings                                                                               | Tom                                      | NTH-3                                      |
-| Auto-sync banner jump                                                                                             | Roopa → Auto Sync thread (Ira, Ian)      | NTH-4                                      |
-| Bible Texts versification + book-list UX                                                                          | Roopa → BCV thread (TJ, Sebastian, Alex) | NTH-5                                      |
-| BCV history behind floating tabs (PT-4226)                                                                        | Roopa → History Depth thread             | NTH-6                                      |
-| Raw `%…%` key leaks (PT-4103)                                                                                     | Tom (standup)                            | NTH-7                                      |
-| Marker deletion while locked (PT-4121)                                                                            | Jolie                                    | NTH-8                                      |
-| Zero-state dead-end (PT-4317, PT-3998)                                                                            | Jira sweep                               | NTH-9                                      |
-| Checkbox borders / footnote toggle / scroll-sync check                                                            | Levi                                     | NTH-10                                     |
-| String-utils performance                                                                                          | Matt Getgen                              | NTH-1 (metric confirmed 12–13 Aug 2026)    |
+| S/R notification/Cancel streamlining                                                                              | Roopa                                    | Sp 88 NN4 (moved 13 Aug 2026)              |
+| Non-localizable "Syncing …" strings                                                                               | Tom                                      | NTH-1                                      |
+| Auto-sync banner jump                                                                                             | Roopa → Auto Sync thread (Ira, Ian)      | NTH-2                                      |
+| Bible Texts versification + book-list UX                                                                          | Roopa → BCV thread (TJ, Sebastian, Alex) | NTH-3                                      |
+| BCV history behind floating tabs (PT-4226)                                                                        | Roopa → History Depth thread             | NTH-4                                      |
+| Raw `%…%` key leaks (PT-4103)                                                                                     | Tom (standup)                            | NTH-5                                      |
+| Marker deletion while locked (PT-4121)                                                                            | Jolie                                    | NTH-6                                      |
+| Zero-state dead-end (PT-4317, PT-3998)                                                                            | Jira sweep                               | NTH-7                                      |
+| Checkbox borders / footnote toggle / scroll-sync check                                                            | Levi                                     | NTH-8                                      |
+| String-utils performance                                                                                          | Matt Getgen                              | NN-4 item 4 (folded 14 Aug 2026)           |
 | PAPI modal type merge                                                                                             | Matt Getgen                              | Out of scope                               |
 | Docs update/migration                                                                                             | Jolie                                    | Out of scope                               |
 | Lint-rule hoisting                                                                                                | Matt Lyons                               | Out of scope                               |
