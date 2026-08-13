@@ -110,5 +110,17 @@ export type WindowEmptiedReason = 'emptied-by-removal' | 'born-empty';
  *   window standing, and closing it would exit the application.
  * - `closing`: the main process is closing this window. Windows are equal siblings; one with nothing
  *   in it has nothing to be.
+ * - `stay`: do nothing at all — see below.
  */
-export type WindowEmptiedResponse = { action: 'open-home' } | { action: 'closing' };
+export type WindowEmptiedResponse =
+  | { action: 'open-home' }
+  | { action: 'closing' }
+  /**
+   * Content reached this window after it sent its report, so it is not empty any more and neither
+   * other answer applies: docking Home would add a tab nobody asked for, and closing would take the
+   * content that just arrived with it. The window keeps what it has and reports again if it empties
+   * again.
+   *
+   * @experimental
+   */
+  | { action: 'stay' };

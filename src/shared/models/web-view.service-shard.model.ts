@@ -36,6 +36,20 @@ export interface WebViewServiceShard extends WebViewServiceType {
   dockContainsTab(tabOrTabGroupId: string): Promise<boolean>;
 
   /**
+   * Whether anything has been docked in this window since it last reported its dock empty.
+   *
+   * An emptiness report describes a moment that has already passed by the time the main process
+   * acts on it — a routed open or a move's adopt can land in the window while the report is in
+   * flight. This is what the decision to close such a window is re-checked against, and what keeps
+   * a window created to receive routed content from being cleaned up after the content arrived.
+   *
+   * @returns `true` if content reached this window's dock since its last emptiness report (or since
+   *   the window started, if it has never reported one)
+   * @experimental
+   */
+  hasContentArrivedSinceEmptyReport(): Promise<boolean>;
+
+  /**
    * Open a Settings tab in this window, optionally limited to a project.
    *
    * The project is passed in rather than looked up here: the router already read the owning web
