@@ -173,3 +173,34 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     expect(mocks.loggerWarn).toHaveBeenCalled();
   });
 });
+
+describe('a close decided outside this handler', () => {
+  test('a window already closing by another path is answered closing without a second close', () => {
+    // The user closed the window with its close button; the close path marked it closing in the
+    // shared registry, not through this handler. Its dock empties during the close-time teardown
+    // and reports in — a fresh close scheduled here would be a second close on a closing window,
+    // which trips main's force-close escape hatch and abandons the close-time work (the shutdown
+    // sync) the first close started.
+    vi.useFakeTimers();
+    try {
+      const closingIds = new Set<number>([7]);
+      const countWindows = vi.fn(() => 2);
+      const closeWindow = vi.fn();
+      const markWindowClosing = vi.fn((windowId: number) => closingIds.add(windowId));
+      const handler = createWindowEmptinessHandler({
+        countWindows,
+        closeWindow,
+        markWindowClosing,
+        isWindowClosing: (windowId: number) => closingIds.has(windowId),
+      });
+
+      expect(handler(7, 'emptied-by-removal')).toEqual({ action: 'closing' });
+
+      vi.runAllTimers();
+      expect(closeWindow).not.toHaveBeenCalled();
+      expect(markWindowClosing).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
