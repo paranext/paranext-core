@@ -5725,6 +5725,8 @@ declare module 'shared/services/data-provider.service' {
    * Exported because anything that has a provider NAME and needs to recognize that provider's network
    * object — `useDataProvider`'s re-lookup listener, for one — has to derive the id the same way this
    * service does rather than assume the name is the id.
+   *
+   * @experimental
    */
   export const getDataProviderObjectId: (providerName: string) => string;
   /**
