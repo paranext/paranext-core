@@ -7,6 +7,7 @@ import {
   USER_THEMES_STORAGE_KEY,
 } from '@shared/services/theme.service-model';
 import {
+  newPlatformError,
   ThemeDefinitionExpanded,
   ThemeFamiliesById,
   ThemeFamiliesByIdExpanded,
@@ -89,6 +90,12 @@ const TEST_DARK = makeTheme('testFamily', 'dark');
 /** Stand in for the theme data service publishing the extension-contributed theme families */
 function publishExtensionThemes(allThemes: ThemeFamiliesByIdExpanded) {
   allThemesHandlers.forEach((handler) => handler(allThemes));
+}
+
+/** Stand in for the theme data service answering with an error instead of a theme list */
+function publishThemeListError(message: string) {
+  const platformError = newPlatformError(message);
+  allThemesHandlers.forEach((handler) => handler(platformError));
 }
 
 /** Stand in for the user flipping the OS dark-mode preference */
@@ -491,6 +498,24 @@ describe('resetting a theme that no longer exists', () => {
     await vi.advanceTimersByTimeAsync(1000);
 
     expect((await engine.getCurrentTheme()).themeFamilyId).toBe('testFamily');
+    expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toContain('testFamily');
+  });
+
+  it('does not reset the theme when the theme list never arrived at all', async () => {
+    localStorage.setItem(CURRENT_THEME_STORAGE_KEY, JSON.stringify(TEST_LIGHT));
+    const { engine } = await startHost();
+    const setItem = vi.spyOn(Storage.prototype, 'setItem');
+
+    // The subscription delivered an error rather than a list — the theme data provider failed, or
+    // the extension host went down under it. "The list does not have this theme" and "there is no
+    // list" are different answers, and only the first is evidence the theme is gone.
+    publishThemeListError('the theme data provider could not build the theme list');
+    await vi.advanceTimersByTimeAsync(120_000);
+
+    expect((await engine.getCurrentTheme()).themeFamilyId).toBe('testFamily');
+    // The reset persists, so a theme thrown away on a payload that never came is not recovered when
+    // the extension host does
+    expect(setItem.mock.calls.filter(([key]) => key === CURRENT_THEME_STORAGE_KEY)).toHaveLength(0);
     expect(localStorage.getItem(CURRENT_THEME_STORAGE_KEY)).toContain('testFamily');
   });
 
