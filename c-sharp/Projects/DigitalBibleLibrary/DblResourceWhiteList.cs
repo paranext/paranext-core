@@ -6,7 +6,11 @@ public static class DblResourceWhiteList
 {
     public static bool IsValidResource(InstallableResource resource)
     {
-        return s_validResourceIds.Contains(resource.DBLEntryUid.ToString().ToUpperInvariant());
+        // Use .Id (the raw lowercase hex string) rather than .ToString() — ToString() on
+        // DBLEntryUid returns a different representation that does not match the 16-char hex
+        // entries in s_validResourceIds, causing valid resources like TNN to be incorrectly
+        // excluded from the catalog fetch result.
+        return s_validResourceIds.Contains(resource.DBLEntryUid.Id.ToUpperInvariant());
     }
 
     private static readonly HashSet<string> s_validResourceIds =
