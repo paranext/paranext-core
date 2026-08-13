@@ -100,6 +100,7 @@ vi.mock('@shared/services/network.service', () => ({
 // eslint-disable-next-line import/first
 import {
   overlayService,
+  resetAppWindowInputState,
   resetDebounceState,
   showModalDialogOverlay,
   startOverlayService,
@@ -1311,9 +1312,6 @@ describe('overlay.service-host', () => {
       vi.mocked(menuDataService.getWebViewMenu).mockResolvedValue(DEFAULT_WEB_VIEW_MENU);
       // Only track the subscription this test's startOverlayService call registers
       appWindowInputSubscribers.length = 0;
-      const { startOverlayService, resetAppWindowInputState } = await import(
-        './overlay.service-host'
-      );
       // Drop any pointerdown an earlier test recorded so it cannot correlate with this test's signal
       resetAppWindowInputState();
       await startOverlayService();
