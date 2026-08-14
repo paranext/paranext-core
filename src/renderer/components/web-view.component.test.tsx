@@ -107,9 +107,14 @@ describe('a restored tab fetching the content it was saved without', () => {
 
     loadWebViewTab(RESTORED_TAB);
 
+    // Matching the phrase this branch produces, not just the id: the catch that logs this
+    // serializes the whole tab, so an id on its own is in the message whatever went wrong — a
+    // mock-shaped type error would satisfy it just as well as the branch under test.
     await vi.waitFor(() =>
       expect(mocks.loggerError).toHaveBeenCalledWith(
-        expect.stringMatching(new RegExp(SAVED_WEB_VIEW_ID)),
+        expect.stringMatching(
+          new RegExp(`${SAVED_WEB_VIEW_ID}[\\s\\S]*returned undefined when reloading`),
+        ),
       ),
     );
   });
