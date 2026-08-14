@@ -1375,29 +1375,6 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
 }
 
 /**
- * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares four
- * tabs with empty state (no `projectId`); restoring it would mount four empty webviews, fire
- * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all four
- * webviews with the project — paying a full webview teardown + remount cycle twice. Power mode
- * avoids this because its persisted layout already has every tab's state populated.
- *
- * To match the power-mode shape, we resolve the most-recent project here, bake its `projectId` into
- * a cloned simple layout via {@link buildSimpleLayoutForProject}, and pass that to `loadLayout`.
- * Each web-view provider's `getWebView` then receives `savedWebView.projectId` directly from the
- * layout — same code path power mode uses on restore — and renders project content immediately,
- * with no empty-placeholder → reload round-trip.
- *
- * Fast path: `getLastOpenedProject` returns the cached id synchronously (kept current by the
- * Scripture Editor tab event subscription further down this file).
- *
- * Slow path: cold start (no cache yet) — fall back to {@link getMostRecentUsableProjectId}, which
- * walks the recents list trying each candidate until one isn't a published resource, bounded
- * overall by {@link COLD_START_LOOKUP_TIMEOUT_MS}.
- *
- * Fallback: if neither cache nor recents can produce a usable project, load the bare `simpleLayout`
- * and let the picker do the slow legacy path.
- */
-/**
  * Bound on the whole {@link getMostRecentUsableProjectId} walk (recents fetch plus every candidate's
  * `isPublished` check) while resolving the Simple-mode cold-start path (no cached last-opened
  * project). Without this, a slow or not-yet-registered PDP factory can leave
@@ -1437,6 +1414,28 @@ async function withTimeout<T>(
 }
 
 /**
+ * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares four
+ * tabs with empty state (no `projectId`); restoring it would mount four empty webviews, fire
+ * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all four
+ * webviews with the project — paying a full webview teardown + remount cycle twice. Power mode
+ * avoids this because its persisted layout already has every tab's state populated.
+ *
+ * To match the power-mode shape, we resolve the most-recent project here, bake its `projectId` into
+ * a cloned simple layout via {@link buildSimpleLayoutForProject}, and pass that to `loadLayout`.
+ * Each web-view provider's `getWebView` then receives `savedWebView.projectId` directly from the
+ * layout — same code path power mode uses on restore — and renders project content immediately,
+ * with no empty-placeholder → reload round-trip.
+ *
+ * Fast path: `getLastOpenedProject` returns the cached id synchronously (kept current by the
+ * Scripture Editor tab event subscription further down this file).
+ *
+ * Slow path: cold start (no cache yet) — fall back to {@link getMostRecentUsableProjectId}, which
+ * walks the recents list trying each candidate until one isn't a published resource, bounded
+ * overall by {@link COLD_START_LOOKUP_TIMEOUT_MS}.
+ *
+ * Fallback: if neither cache nor recents can produce a usable project, load the bare `simpleLayout`
+ * and let the picker do the slow legacy path.
+ *
  * @param generation This switch's generation (see {@link switchGeneration}). Defaults to starting a
  *   fresh one, for callers (tests) invoking this directly rather than through the
  *   `platform.interfaceMode` subscription, which starts one itself before calling this.
@@ -1538,22 +1537,6 @@ async function runProjectBoundSimpleSwitch(projectId: string, generation: number
   // `catch`/`finally` below. `finally` only disposes it if it was actually acquired.
   let tabsResolved: ReturnType<typeof trackSimpleLayoutTabsResolvedImpl> | undefined;
   try {
-    // Start tracking webview-resolved events BEFORE `loadLayout` fires the async
-    // `retrieveWebViewContent` calls — otherwise the events for fast-resolving tabs can fire before
-    // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
-    // where the previous switch's resolved titles are still in the dock layout and the new update
-    // events for them are what tell us the project content has actually landed.
-    // Only the tabs that are actually on-screen should gate the overlay: Column 3 of `simpleLayout`
-    // stacks other tabs behind the one active tab, and the others are mounted-but-hidden (rc-dock
-    // `display: none`) - waiting on them too would block the overlay on content the user can't even
-    // see yet. `VISIBLE_SIMPLE_LAYOUT_TAB_IDS` is the narrower subset; see its doc comment in
-    // simple-layout.builder.ts for what it does and does not account for.
-    tabsResolved = trackSimpleLayoutTabsResolvedImpl({
-      tabIds: VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
-      onDidOpenWebView,
-      onDidUpdateWebView,
-    });
-
     const projectBoundLayout = buildSimpleLayoutForProject(projectId);
     // `loadLayout`'s explicit-layout branch deliberately does not apply the default-layout
     // supplement (a caller passing an explicit layout owns its full contents) - so this caller
@@ -1568,8 +1551,27 @@ async function runProjectBoundSimpleSwitch(projectId: string, generation: number
     // Re-check right before the mutating load: a newer switch (the user changing their mind) may
     // have started and become current during the awaits above. A superseded switch must never
     // reach `loadLayout` — that's what would let it persist stale data into the wrong slot (see
-    // `switchGeneration`'s doc comment).
-    if (generation !== switchGeneration) return; // tabsResolved is disposed in `finally` below
+    // `switchGeneration`'s doc comment). Nothing to dispose yet on this branch — the tracker below
+    // hasn't armed.
+    if (generation !== switchGeneration) return;
+    // Start tracking webview-resolved events BEFORE `loadLayout` fires the async
+    // `retrieveWebViewContent` calls — otherwise the events for fast-resolving tabs can fire before
+    // we subscribe and we'd miss them. Especially important on subsequent simple-mode switches,
+    // where the previous switch's resolved titles are still in the dock layout and the new update
+    // events for them are what tell us the project content has actually landed. Armed here — right
+    // before `loadLayout`, after the settings read above — rather than at the top of this function:
+    // arming earlier would start the tracker's own timeout clock ticking against the awaited
+    // supplement-settings round trip, not against the tabs it's actually meant to time.
+    // Only the tabs that are actually on-screen should gate the overlay: Column 3 of `simpleLayout`
+    // stacks other tabs behind the one active tab, and the others are mounted-but-hidden (rc-dock
+    // `display: none`) - waiting on them too would block the overlay on content the user can't even
+    // see yet. `VISIBLE_SIMPLE_LAYOUT_TAB_IDS` is the narrower subset; see its doc comment in
+    // simple-layout.builder.ts for what it does and does not account for.
+    tabsResolved = trackSimpleLayoutTabsResolvedImpl({
+      tabIds: VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
+      onDidOpenWebView,
+      onDidUpdateWebView,
+    });
     // `persist: false` is defense-in-depth alongside the generation check above: even if this
     // switch is (impossibly, as far as this function knows) still current, a Simple-mode layout
     // must never be written to the Power-mode storage key regardless of what `currentInterfaceMode`
@@ -1658,7 +1660,15 @@ async function getMostRecentUsableProjectId(): Promise<string | undefined> {
       const isPublished = await resolveProjectIsPublished(candidateId);
       return isPublished ? undefined : candidateId;
     }, Promise.resolve<string | undefined>(undefined));
-  } catch {
+  } catch (err) {
+    // Distinct from a timeout (logged separately by the caller, which races this whole function
+    // against COLD_START_LOOKUP_TIMEOUT_MS via withTimeout): this is a genuine failure of the
+    // recents provider itself (e.g. unreachable PDP), not this function running out of time. Without
+    // this, a real failure and an empty-recents-list cold start (also `undefined`, not an error)
+    // would be indistinguishable in the logs.
+    logger.warn(
+      `Could not resolve a usable recent project while switching to Simple mode: ${getErrorMessage(err)}`,
+    );
     return undefined;
   }
 }
@@ -1700,15 +1710,11 @@ async function resolveProjectIsPublished(projectId: string): Promise<boolean> {
  * has no already-rendered UI whose perceived latency this is protecting.
  */
 function finalizeProjectSwitch(projectId: string): void {
-  // This command comes from an extension and is not typed in CommandHandlers.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-  (sendCommand as any)('platformScriptureEditor.finalizeProjectSwitch', projectId).catch(
-    (err: unknown) => {
-      logger.warn(
-        `Failed to finalize project switch for project ${projectId} after Simple-mode switch: ${getErrorMessage(err)}`,
-      );
-    },
-  );
+  sendCommand('platformScriptureEditor.finalizeProjectSwitch', projectId).catch((err: unknown) => {
+    logger.warn(
+      `Failed to finalize project switch for project ${projectId} after Simple-mode switch: ${getErrorMessage(err)}`,
+    );
+  });
 }
 
 // #endregion Dock layouts

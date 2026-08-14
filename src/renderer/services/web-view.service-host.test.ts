@@ -621,6 +621,32 @@ describe('handleSwitchToSimpleMode', () => {
     expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
   });
 
+  it('slow path: warns distinctly when the recents provider itself fails, not just on a timeout', async () => {
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const getRecentProjects = vi.fn(async () => {
+      throw new Error('PDP unreachable');
+    });
+    dataProviderGetMock.mockImplementation(async (dataProviderId: string) =>
+      dataProviderId === 'platformScripture.recentlyOpenedProjects'
+        ? { getRecentProjects }
+        : undefined,
+    );
+
+    await host.handleSwitchToSimpleMode();
+
+    expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+    const { logger } = await import('@shared/services/logger.service');
+    // Same underlying `undefined` result as an empty/absent recents list, but this path is a
+    // genuine failure - must be distinguishable in the logs from both silence (the fallback test
+    // above) and a timeout (a different message, asserted elsewhere in this describe block).
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not resolve a usable recent project'),
+    );
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('Timed out'));
+  }, 15000);
+
   it('slow path: falls back to the bare layout and warns if resolving the most recent project hangs past the cold-start bound', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
