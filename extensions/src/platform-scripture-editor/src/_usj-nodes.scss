@@ -2389,6 +2389,21 @@
   background-color: transparent;
 }
 
+/* `.text-spacing .verse` above gives the verse token 2px of margin and 1px of padding on each side.
+   That is the separation the NON-editable views need: there a verse is a decorator rendering a bare
+   number, with no space of its own on either side of it.
+
+   In editable-marker mode the verse is a VerseNode — a TextNode whose text is literally `\v 9 `, so
+   the USFM separator space is real, selectable, caret-addressable content. The box spacing then
+   lands on top of a space the user can already see, and the view reads as TWO spaces after the
+   verse number. Only one of them is a character: the box space has no caret position of its own and
+   no selection highlight, which is exactly how it was reported. The marker's own text does all the
+   separating in this mode, so the box adds none. */
+.text-spacing.marker-editable .verse {
+  margin: 0;
+  padding: 0;
+}
+
 /* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).
    Destructive styling — light-destructive background, destructive text, roomier padding, and a
    caret-like glow-underline blink — signals "press again to delete". Bound to the live theme
