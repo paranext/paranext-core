@@ -3012,12 +3012,17 @@ export async function openOrReloadWebView(
     deleteWebViewNonce(webView.id);
     return undefined;
   }
+  // Both statements in the try below throw into the same catch, and what a throw there means
+  // depends on which of them it came from — see the catch. Nothing can move between them: the add
+  // is synchronous, so the answer the refusal reads cannot turn over before it runs.
+  let didThisWindowAdmitTheWebView = false;
   try {
     // Immediately before the add, and inside the try because by here the provider has already run:
     // a controller may be registered in the extension host, a nonce minted and state persisted, and
     // that residue is the same whether the dock turned this web view down or this window did. The
     // catch below is what clears it, so the refusal has to land where the catch can see it.
     throwIfWindowIsClosing(`dock web view ${webView.id}`);
+    didThisWindowAdmitTheWebView = true;
     finalLayout = dockLayoutVar.addWebViewToDock(
       finalWebView,
       layout,
@@ -3031,9 +3036,18 @@ export async function openOrReloadWebView(
     // state then would gut a view the user still sees, so such a failure is logged and rethrown
     // with the dock and the state untouched.
     if (dockLayoutVar.getWebViewDefinition(webView.id) !== undefined) {
-      logger.error(
-        `Could not update webview ${webView.id} (type ${webView.webViewType}) in the dock; its existing tab is unchanged. ${getErrorMessage(e)}`,
-      );
+      // Which of the two throws it was decides how loudly this is worth saying. An add that failed
+      // leaves the user a view that answered a reload by not changing, with no account of why. A
+      // refusal is the window on its way out and says so itself: every reload in flight when a
+      // close is decided comes through here, and the caller is still handed the refusal to act on.
+      if (didThisWindowAdmitTheWebView)
+        logger.error(
+          `Could not update webview ${webView.id} (type ${webView.webViewType}) in the dock; its existing tab is unchanged. ${getErrorMessage(e)}`,
+        );
+      else
+        logger.debug(
+          `Not reloading web view ${webView.id} (type ${webView.webViewType}); its existing tab is unchanged. ${getErrorMessage(e)}`,
+        );
       throw e;
     }
     // The provider has already run: a controller may be registered in the extension host, a
