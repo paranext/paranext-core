@@ -1,6 +1,7 @@
 import cloneDeep from 'lodash/cloneDeep';
 import { BoxBase, LayoutBase, PanelBase } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { simpleLayout } from './simple-layout.data';
 
 /**
@@ -76,6 +77,27 @@ export const VISIBLE_SIMPLE_LAYOUT_TAB_IDS: readonly string[] = (() => {
     if (firstTabId) ids.push(firstTabId);
   });
   return ids;
+})();
+
+/**
+ * The Scripture Editor tab's own fixed id within {@link simpleLayout} — the one
+ * {@link SIMPLE_LAYOUT_TAB_IDS} entry relevant to `web-view.service-host.ts`'s
+ * `simpleEditorTabIds`/`cacheLastOpenedSimpleProject` tracking (Column 1's Model Text and Column
+ * 3's tabs aren't candidates for "the current Simple-mode project"). Derived from
+ * {@link simpleLayout} the same way as {@link SIMPLE_LAYOUT_TAB_IDS} so it cannot drift.
+ */
+export const SIMPLE_LAYOUT_EDITOR_TAB_ID: string = (() => {
+  let editorTabId: string | undefined;
+  visitTabs(simpleLayout, (tab) => {
+    if (
+      tab.data &&
+      isObjectRecord(tab.data) &&
+      tab.data.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE
+    )
+      editorTabId = tab.id;
+  });
+  if (!editorTabId) throw new Error('simpleLayout has no Scripture Editor tab');
+  return editorTabId;
 })();
 
 /** Narrows a tab's `data`/`state` payload (typed `unknown` on `TabBase`) to a writable record. */

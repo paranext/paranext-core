@@ -93,13 +93,19 @@ vi.mock('@shared/services/logger.service', () => ({
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { set: vi.fn() },
 }));
-vi.mock('@shared/services/web-view-provider.service', () => ({ webViewProviderService: {} }));
+const { getWebViewProviderMock } = vi.hoisted(() => ({ getWebViewProviderMock: vi.fn() }));
+vi.mock('@shared/services/web-view-provider.service', () => ({
+  webViewProviderService: { getWebViewProvider: getWebViewProviderMock },
+}));
 
 // theme.service-host.ts calls `window.matchMedia` at module load to seed its dark-mode default,
 // which jsdom does not implement. Stub the whole module — none of the functions under test read
-// the theme.
+// the theme, except `trackSimpleEditorReplaceTab`'s coverage, which drives `openOrReloadWebView`
+// far enough to need a minimal-but-real-shaped theme object.
 vi.mock('@renderer/services/theme.service-host', () => ({
-  localThemeService: { getCurrentThemeSync: vi.fn() },
+  localThemeService: {
+    getCurrentThemeSync: vi.fn(() => ({ id: 'test-theme', cssVariables: {} })),
+  },
 }));
 vi.mock('@renderer/services/web-view-state.service', () => ({
   deleteFullWebViewStateById: vi.fn(),
@@ -207,6 +213,12 @@ vi.mock('@renderer/components/docking/simple-layout.builder', () => ({
   buildSimpleLayoutForProject: buildSimpleLayoutForProjectMock,
   SIMPLE_LAYOUT_TAB_IDS: simpleLayoutTabIdsMock,
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS: visibleSimpleLayoutTabIdsMock,
+  // Every test that pushes into `simpleLayoutTabIdsMock` to model "the fixed Simple editor tab id"
+  // pushes exactly that one id first, matching real `simpleLayout`'s single Scripture Editor tab —
+  // a getter (not a snapshot) so it stays correct across `vi.resetModules()` re-imports.
+  get SIMPLE_LAYOUT_EDITOR_TAB_ID() {
+    return simpleLayoutTabIdsMock[0];
+  },
 }));
 
 // `LayoutInfo` is deliberately opaque in the shared model, so building a layout fixture and reading
@@ -1038,6 +1050,64 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
 
     expect(getMetadataForProjectMock).not.toHaveBeenCalled();
     expect(getLastOpenedProject()).toBeUndefined();
+  });
+
+  it('keeps caching after an in-Simple project switch replaces the fixed editor tab id (replace-tab)', async () => {
+    // Regression test: an in-Simple project switch (e.g. Paratext -> Open while already in Simple
+    // mode) does NOT reuse the fixed Simple editor tab id - `resolveOpenEditorDispatch` dispatches
+    // it as `{ kind: 'replace-tab', targetTabId: <current editor id> }`, and `addWebViewToDock`'s
+    // `replace-tab` case swaps the WHOLE tab (including its id) for the new webview's freshly
+    // generated one. A filter keyed on the original fixed id alone would silently stop matching
+    // after this single switch, for the rest of the session.
+    //
+    // Drives the real `openOrReloadWebView` for the tracking half (where the regression actually
+    // lived - the fresh id never getting recognized) rather than asserting on a synthetic event
+    // alone. `createBufferedNetworkEventEmitter`/`getNetworkEvent` are separately-mocked layers in
+    // this test file with no bridge between them (matching real production, where the emit crosses
+    // an actual network round trip before a subscriber sees it) - so a synthetic event for the new
+    // id is still used to prove the cache reacts, exactly like every other test in this describe
+    // block, but only after `openOrReloadWebView` has run for real and updated the tracked id set.
+    const host = await importHost();
+    host.registerDockLayout(createFakeDockLayout());
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+
+    // Initial Power -> Simple switch: the fast path always mounts the fixed editor tab id.
+    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+      webView: {
+        id: FIXED_SIMPLE_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-initial',
+      },
+    });
+    await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-initial' }));
+
+    // In-Simple project switch: a freshly-generated id replaces the fixed one via `replace-tab`.
+    const NEW_EDITOR_TAB_ID = 'freshly-generated-guid';
+    getWebViewProviderMock.mockResolvedValue({
+      getWebView: vi.fn(async () => ({
+        id: NEW_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        content: '',
+      })),
+    });
+
+    await host.openOrReloadWebView(
+      { id: NEW_EDITOR_TAB_ID, webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE },
+      { type: 'replace-tab', targetTabId: FIXED_SIMPLE_EDITOR_TAB_ID },
+      {},
+    );
+    expect(getWebViewProviderMock).toHaveBeenCalledWith(SCRIPTURE_EDITOR_WEBVIEW_TYPE);
+
+    // The fresh id must now be recognized - not just the original fixed one.
+    emitNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW, {
+      webView: {
+        id: NEW_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-switched',
+      },
+    });
+
+    await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-switched' }));
   });
 });
 

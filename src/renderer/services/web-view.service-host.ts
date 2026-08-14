@@ -108,6 +108,7 @@ import {
 } from '@renderer/services/renderer-hosted-command-registry';
 import {
   buildSimpleLayoutForProject,
+  SIMPLE_LAYOUT_EDITOR_TAB_ID,
   SIMPLE_LAYOUT_TAB_IDS,
   VISIBLE_SIMPLE_LAYOUT_TAB_IDS,
 } from '@renderer/components/docking/simple-layout.builder';
@@ -1203,18 +1204,55 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
  * @returns Function used to unregister this dock layout
  */
 /**
+ * Every webview id that has ever been the Simple-mode Scripture Editor tab's real id during this
+ * renderer session. Seeded with the tab's fixed id from `simpleLayout`
+ * (`SIMPLE_LAYOUT_EDITOR_TAB_ID`) — reused every time a fresh Simple layout loads, whether via the
+ * Power → Simple fast path (`buildSimpleLayoutForProject`) or the no-arg Simple-mode load
+ * (`simpleLayout` itself) — and grown by `trackSimpleEditorReplaceTab` whenever an in-Simple
+ * project switch replaces the tab's content with a freshly-generated webview id instead. Ids are
+ * never removed: they're random GUIDs, so unbounded growth over a session is negligible and safer
+ * than guessing when it would be safe to prune.
+ */
+const simpleEditorTabIds = new Set<string>([SIMPLE_LAYOUT_EDITOR_TAB_ID]);
+
+/**
+ * Keeps `simpleEditorTabIds` current across an in-Simple project switch, which does NOT reuse the
+ * Simple layout's fixed Scripture Editor tab id. `resolveOpenEditorDispatch`
+ * (`platform-scripture-editor.utils.ts`) dispatches that switch as `{ kind: 'replace-tab',
+ * targetTabId }` against whichever id is _currently_ the Simple editor's; `addWebViewToDock`'s
+ * `replace-tab` case (`platform-dock-layout-storage.util.ts`) then swaps that tab's whole
+ * `SavedTabInfo` — including its `id` — for the new webview's. So the position that used to answer
+ * to a tracked id now answers to a freshly-generated one, and a filter keyed on a fixed id (or even
+ * a fixed id list) alone stops matching after the very first in-Simple switch, permanently. Called
+ * from `openOrReloadWebView` right after the dock placement lands, so the retirement of the old id
+ * and the tracking of the new one happen atomically with the switch itself — no window where an
+ * event for the new id could arrive before it's tracked.
+ *
+ * Deliberately does nothing when `targetTabId` isn't already tracked (e.g. a Power-mode replace-tab
+ * on some other editor tab): only replacements that land on a tab this set already recognizes as
+ * the Simple editor extend the tracking, so a Power tab can never join `simpleEditorTabIds` by
+ * accident.
+ */
+function trackSimpleEditorReplaceTab(layout: Layout, newTabId: WebViewId): void {
+  if (layout.type !== 'replace-tab') return;
+  if (!simpleEditorTabIds.has(layout.targetTabId)) return;
+  simpleEditorTabIds.add(newTabId);
+}
+
+/**
  * Keeps `last-opened-project-cache` current with the Simple-mode Scripture Editor tab's real
  * project, whenever it resolves — whether that's from a Power → Simple switch completing, or the
- * user picking a different project while already in Simple mode. Filtered to the fixed
- * Simple-layout Scripture Editor tab id (`SIMPLE_LAYOUT_TAB_IDS`), which a Power-mode editor tab
- * can never carry, so this needs no `isPowerMode` check to stay accurate.
+ * user picking a different project while already in Simple mode. Filtered to `simpleEditorTabIds`
+ * (kept current by `trackSimpleEditorReplaceTab` — see its doc for why a fixed id alone isn't
+ * enough), none of which a Power-mode editor tab can ever carry, so this needs no `isPowerMode`
+ * check to stay accurate.
  *
  * Excludes published resources from the cache: `platform.isPublished` is stable, cheap metadata, so
  * checking it here keeps a resource from ever becoming a Power → Simple switch's fast-path target.
  */
 function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
   if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
-  if (!SIMPLE_LAYOUT_TAB_IDS.includes(webView.id)) return;
+  if (!simpleEditorTabIds.has(webView.id)) return;
   const { projectId } = webView;
   if (!projectId) return;
   projectLookupService
@@ -2165,8 +2203,13 @@ function applyAndLogLegacyColorVarTransforms(
  *   {@link getWebViewOptionsDefaults} ON THIS OBJECT BEFORE PASSING IT IN!**
  * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
  *   not create a WebView for this request.
+ *
+ *   Exported for the test file's reuse — see `web-view.service-host.test.ts`'s
+ *   `trackSimpleEditorReplaceTab` coverage, which drives this function directly rather than through
+ *   `openWebView`'s `waitForInitialize()`/`initialize()` gate (the latter mutates real globals —
+ *   `window.navigator`, `window.alert`, etc. — which is unsafe to invoke repeatedly across tests).
  */
-async function openOrReloadWebView(
+export async function openOrReloadWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
   layout: Layout = { type: 'tab' },
   optionsDefaulted: OpenWebViewOptions = {},
@@ -2566,6 +2609,13 @@ async function openOrReloadWebView(
     layout,
     optionsDefaulted.bringToFront,
   );
+  // See `trackSimpleEditorReplaceTab`'s doc: keeps the last-opened-project cache's id tracking
+  // current the instant a `replace-tab` placement lands, regardless of webview type — the function
+  // itself no-ops unless `layout.targetTabId` is already a tracked Simple editor id.
+  // See `trackSimpleEditorReplaceTab`'s doc: keeps the last-opened-project cache's id tracking
+  // current the instant a `replace-tab` placement lands, regardless of webview type — the function
+  // itself no-ops unless `layout.targetTabId` is already a tracked Simple editor id.
+  trackSimpleEditorReplaceTab(layout, finalWebView.id);
 
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
   // inform web view consumers that we added a new web view
