@@ -61,7 +61,7 @@ first if you use it.
 roborev config set --global default_agent claude-code   # pick your review agent
 roborev daemon restart
 roborev check-agents                                    # confirm the agent is reachable
-roborev skills install                                  # optional: /roborev-fix, /roborev-refine
+roborev skills install                                  # optional: /roborev-fix, /roborev-refine, /roborev-snooze
 roborev agent-hook install --agent claude               # optional: mid-session fix reminders
 ```
 
