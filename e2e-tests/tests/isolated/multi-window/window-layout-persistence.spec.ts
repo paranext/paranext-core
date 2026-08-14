@@ -60,9 +60,14 @@
  * - Multi-monitor behaviour (restoring a window whose saved display is gone): this environment has a
  *   single virtual display; the monitor-gone re-placement is a pure function with its own unit
  *   tests.
- * - SECONDARY windows round-tripping content BEYOND their own auto-docked Home tab: putting a
- *   project/editor tab into a second window needs the move-web-views-between-windows feature; until
- *   then only the main window's layout has that kind of content to round-trip.
+ * - SECONDARY windows round-tripping content BEYOND their own auto-docked Home tab ACROSS A RESTART.
+ *   Putting another window's content into a secondary window no longer needs anything that does not
+ *   exist: `platform.moveWebViewToWindow` / `platform.moveWebViewToNewWindow` do it, and the move
+ *   itself — a web view leaving one real window, arriving in another, and what each window is left
+ *   holding afterwards — is covered by `web-view-move-between-windows.spec.ts` in this directory.
+ *   What remains uncovered is the RESTART half: quitting with a moved tab sitting in a secondary
+ *   window and asserting that window brings it back. That is a coverage gap, not a missing
+ *   feature.
  * - Window POSITION restore at the window level: this environment's compositor (WSLg) assigns
  *   positions itself, in host-desktop coordinates that can lie outside the virtual display Electron
  *   reports, so a restored window's position never observably matches what the app requested.
