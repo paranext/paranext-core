@@ -510,8 +510,13 @@ describe('content admitted to the dock after the entry point had its say', () =>
    * moment the request arrived. What follows them is a round trip into the extension host running
    * extension code, of no bounded duration, and a load that starts inside it is one that nothing
    * between there and the dock write has been told about.
+   *
+   * @param doesLoadReplaceTheDock Whether the loads these tests start also empty what is docked —
+   *   see {@link makeLiveDockLayout}. On by default, since every layout loaded in this file carries
+   *   no tabs and the point is usually a load that takes what is docked; off for the tests about a
+   *   load that leaves the dock's contents alone.
    */
-  async function windowHoldingOneWebViewWithNothingLoading() {
+  async function windowHoldingOneWebViewWithNothingLoading({ doesLoadReplaceTheDock = true } = {}) {
     let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
     mocks.settingsSubscribe.mockImplementation(
       async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
@@ -542,7 +547,7 @@ describe('content admitted to the dock after the entry point had its say', () =>
     const module = await import('@renderer/services/web-view.service-shard');
     const { networkObjectService } = await import('@shared/services/network-object.service');
     const { dockLayout, loadedLayouts, dockedWebViews, dockedTabs } = makeLiveDockLayout({
-      doesLoadReplaceTheDock: true,
+      doesLoadReplaceTheDock,
     });
     module.registerDockLayout(dockLayout);
     await module.startWebViewServiceShard();
@@ -564,6 +569,7 @@ describe('content admitted to the dock after the entry point had its say', () =>
 
     return {
       module,
+      shard,
       dockedWebViews,
       dockedTabs,
       provider,
@@ -652,11 +658,46 @@ describe('content admitted to the dock after the entry point had its say', () =>
     expect(dockedWebViews.map((webView) => webView.webViewType)).not.toContain('test.opened');
   });
 
-  test('a reload waits for a load in flight', async () => {
-    // A reload reaches the dock with none of an entry point's protections behind it — it goes
-    // straight to the open path. A restored tab fetching its content and every extension reload
-    // both come this way, so a layout load is exactly the company it keeps, and the load is as
-    // fatal to what it brings as to any other arrival.
+  test('a web view refused after its provider answered leaves nothing of it behind', async () => {
+    // A refusal this late is not a request that was turned away at the door: the provider has run,
+    // so the extension host holds a controller for this web view and the state is persisted under
+    // an id this window's scope is stripped from — both outlive the window that refused. Nothing
+    // else will ever emit a close event for a tab that never joined the dock, so the refusal has
+    // to land where the failed-add cleanup catches it.
+    const { shard, dockedWebViews, provider, emptyTheDockAndBeToldItIsClosing } =
+      await windowHoldingOneWebViewWithNothingLoading();
+    const { deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+
+    provider.makeTheProviderThink();
+    // A move carries the state it was captured with, which this window persists before the
+    // provider runs — the residue a refusal leaves is real state, not a hypothetical
+    const adopting = shard.adoptWebView({
+      id: 'moved-view',
+      webViewType: 'test.type',
+      state: { scrollPosition: 12 },
+    });
+    // Marked handled from the start (see the open above)
+    adopting.catch(() => {});
+    await provider.waitForTheProviderToBeAsked();
+
+    await emptyTheDockAndBeToldItIsClosing();
+
+    provider.releaseTheProvider();
+
+    await expect(adopting).rejects.toThrow(/closing/);
+    expect(dockedWebViews.map((webView) => webView.id)).not.toContain('moved-view');
+    // The close event is what disposes the controller and the nonce; the state is evicted directly
+    expect(getClosedWebViewIds()).toContain('moved-view');
+    expect(deleteFullWebViewStateById).toHaveBeenCalledWith('moved-view');
+  });
+
+  test('a reload does not re-add a web view the load it waited out removed', async () => {
+    // The reload's reading of the dock is taken before the wait, so it speaks for a dock the load
+    // is about to replace — a switch to `simpleLayout` while a restored tab was still fetching its
+    // content is exactly that. The load closed this web view and disposed what backed it, so
+    // adding it back would hand the user a tab the load removed with nothing behind it.
     const { module, dockedWebViews, startReloadWithSavedLayoutHanging, releaseLayoutGet } =
       await windowHoldingOneWebViewWithNothingLoading();
 
@@ -664,6 +705,38 @@ describe('content admitted to the dock after the entry point had its say', () =>
 
     const reloadingWebView = module.reloadWebView('test.type', 'settled-view');
     await settle();
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+
+    await expect(reloadingWebView).resolves.toBeUndefined();
+    expect(dockedWebViews.map((webView) => webView.id)).not.toContain('settled-view');
+    // The load is what closed it, and it did so while the reload was parked on that same load
+    expect(getClosedWebViewIds()).toContain('settled-view');
+  });
+
+  test('a reload waits for a load in flight', async () => {
+    // A reload reaches the dock with none of an entry point's protections behind it — it goes
+    // straight to the open path. A restored tab fetching its content and every extension reload
+    // both come this way, so a layout load is exactly the company it keeps, and the load is as
+    // fatal to what it brings as to any other arrival.
+    //
+    // The load here keeps what is docked, which is the load a reload survives: the web view it
+    // names is still there when it resumes, so it is still a reload of something.
+    const { module, dockedWebViews, startReloadWithSavedLayoutHanging, releaseLayoutGet } =
+      await windowHoldingOneWebViewWithNothingLoading({ doesLoadReplaceTheDock: false });
+
+    const { reloading } = await startReloadWithSavedLayoutHanging();
+
+    let hasReloadAnswered = false;
+    const reloadingWebView = module.reloadWebView('test.type', 'settled-view').then((id) => {
+      hasReloadAnswered = true;
+      return id;
+    });
+    await settle();
+
+    // Parked on the load rather than writing into the dock behind it
+    expect(hasReloadAnswered).toBe(false);
 
     releaseLayoutGet({ kind: 'empty' });
     await reloading;
