@@ -598,6 +598,54 @@ describe('window layout persistence service', () => {
     ]);
   });
 
+  test('a restored window that went down keeps its place in the file when its id is reused', async () => {
+    // The case the resident-app path actually produces: the departed windows were RESTORED, so
+    // each one holds a file slot. The reclaimed slot must keep the departed window's entry where
+    // it is — the new window is a different window and belongs after them, not in one of their
+    // positions, or next session hands out these layouts in the wrong order.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    service.trackNewWindow(12);
+
+    await service.writeNow([11, 12]);
+    expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual([
+      'one',
+      'two',
+      undefined,
+    ]);
+  });
+
+  test('a reused main-window id does not take isMain from the entry that still holds the layout', async () => {
+    // `setMainWindowId` only runs at startup, so the id it holds outlives the window. A new window
+    // taking that id back would otherwise be written as the main entry, and the entry that really
+    // holds the user's main layout would lose the flag — which simple mode then restores instead.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.setMainWindowId(11);
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    service.trackNewWindow(11);
+
+    await service.writeNow([11, 12]);
+    const written = writtenStructure().windows;
+    expect(written.find((entry) => entry.isMain)).toEqual(
+      expect.objectContaining({ layout: expect.anything() }),
+    );
+    expect(firstTabIdOf(written.find((entry) => entry.isMain)?.layout)).toBe('one');
+  });
+
   test('reloading window layouts clears pending-content marks left over from the previous session', async () => {
     const service = await startService();
     await service.loadWindowLayouts();
