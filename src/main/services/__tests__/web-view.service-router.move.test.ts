@@ -173,6 +173,20 @@ type WindowShard = ReturnType<typeof windowShard>;
  * its prose: it names where the web view ended up as a disposition, which is what a caller telling
  * the user about the failure acts on.
  */
+/**
+ * When a window's shard was resolved, on the same clock `vi`'s `invocationCallOrder` counts on — so
+ * an ordering assertion can name a step that is not a call on any one window's stand-in. A shard is
+ * resolved by asking the network object service for it by id, which is the only place that
+ * happens.
+ */
+function resolvedShardOfWindowAt(windowId: number): number {
+  const resolutionIndex = mocks.networkObjectGet.mock.calls.findIndex(
+    (call: unknown[]) => call[0] === `shard-of-window-${windowId}`,
+  );
+  if (resolutionIndex < 0) throw new Error(`Window ${windowId}'s shard was never resolved`);
+  return mocks.networkObjectGet.mock.invocationCallOrder[resolutionIndex];
+}
+
 async function failedMove(moving: Promise<WebViewId>): Promise<unknown> {
   return moving.then(
     (movedWebViewId) => {
@@ -315,6 +329,70 @@ describe('moveWebView', () => {
     expect(movedId).toBe('view-1-window-7');
   });
 
+  test('a move to a new window waits for that window to be reachable before the source tab closes', async () => {
+    // A window created for a move is a cold renderer start: bundle, network service, shard
+    // registration. Waiting that out while the web view is open in no window is what puts the
+    // user's tab at the mercy of a start that may be slow or may never finish, so the wait belongs
+    // before the capture, while the tab is still where the user left it.
+    const owner = windowShard(['view-1']);
+    const created = windowShard([]);
+    // Window 7 has not announced a shard: its renderer is still starting, so nothing can be routed
+    // to it yet
+    withWindows({ 2: owner });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    const moving = moveWebView('view-1', 'new');
+    await settle();
+
+    expect(creator.createPendingContentWindow).toHaveBeenCalled();
+    expect(owner.captureAndCloseWebView).not.toHaveBeenCalled();
+
+    // The new window's renderer finishes starting and registers its shard
+    withWindows({ 2: owner, 7: created });
+
+    await expect(moving).resolves.toBe('view-1-window-7');
+    expect(owner.captureAndCloseWebView).toHaveBeenCalledWith('view-1');
+    // Resolve-before-capture, not merely both-happened: the ordering is the whole protection, and
+    // an implementation that captured first would still pass every other assertion here
+    expect(resolvedShardOfWindowAt(7)).toBeLessThan(
+      owner.captureAndCloseWebView.mock.invocationCallOrder[0],
+    );
+  });
+
+  test('a new window that never becomes reachable fails the move with the web view untouched', async () => {
+    // resolveShardForWindow waits out the shard-announcement grace period before giving up — same
+    // reasoning as the unknown-target-window test above.
+    vi.useFakeTimers();
+    try {
+      const owner = windowShard(['view-1']);
+      // Nothing ever announces a shard for window 7, so the window the move created never becomes
+      // somewhere the web view can go
+      withWindows({ 2: owner });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+
+      const moving = moveWebView('view-1', 'new');
+      moving.catch(() => undefined);
+
+      await vi.runAllTimersAsync();
+
+      const failure = await failedMove(moving);
+
+      // Nothing took the web view out of its window, so there is nothing to recover: the user's tab
+      // is still where it was, and the failure is a delay and an error rather than a tab in limbo
+      expect(owner.captureAndCloseWebView).not.toHaveBeenCalled();
+      expect(owner.adoptWebView).not.toHaveBeenCalled();
+      // Which is what a caller must be able to read off the rejection: no disposition means nothing
+      // about where the web view lives changed
+      expect(getWebViewMoveFailureDisposition(failure)).toBeUndefined();
+      // The window it created is an empty shell the user never asked to manage
+      expect(creator.closeWindow).toHaveBeenCalledWith(7);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('move-to-new-window outside power mode leaves the view where it is', async () => {
     mocks.settingsGet.mockResolvedValue('simple');
     const owner = windowShard(['view-1']);
@@ -367,6 +445,22 @@ describe('moveWebView', () => {
     // whose tab never actually closed
     expect(owner.adoptWebView).not.toHaveBeenCalled();
     expect(target.adoptWebView).not.toHaveBeenCalled();
+  });
+
+  test('a capture that throws closes the window the move created to receive the view', async () => {
+    const owner = windowShard(['view-1']);
+    owner.captureAndCloseWebView.mockRejectedValue(new Error('capture round trip lost'));
+    const created = windowShard([]);
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    await expect(moveWebView('view-1', 'new')).rejects.toThrow(/capturing it failed/);
+
+    // The window is ready and nothing is ever coming to fill it, so it must not outlive the move
+    // that created it: an empty window is a shell the user never asked to manage
+    expect(created.adoptWebView).not.toHaveBeenCalled();
+    expect(creator.closeWindow).toHaveBeenCalledWith(7);
   });
 
   test('a failed target adopt reopens the view in the source window and still rejects', async () => {
