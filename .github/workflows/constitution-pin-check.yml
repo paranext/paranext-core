@@ -51,7 +51,17 @@ jobs:
           # if upstream ever stops cutting formal releases. --paginate matters: without it this
           # reads only the first 30 tags, and once upstream passes that count an unlucky ordering
           # would resolve a stale tag, compare equal, and report a false all-clear.
-          latest="$(gh api --paginate "repos/${UPSTREAM}/tags" --jq '.[].name' | grep -E "$version_re" | sort -V | tail -1 || true)"
+          # The fetch and the filter are kept separate on purpose. A failed fetch must be fatal:
+          # with --paginate, a failure on a later page still leaves earlier pages on stdout, and
+          # folding the two together would let a `|| true` (needed so a no-match grep reaches the
+          # guard below) swallow that partial-fetch failure and resolve a stale tag.
+          tags="$(gh api --paginate "repos/${UPSTREAM}/tags" --jq '.[].name')" || {
+            echo "::error::Failed to fetch tags from ${UPSTREAM}."
+            echo "Failing loudly rather than reporting a false all-clear."
+            exit 1
+          }
+
+          latest="$(printf '%s\n' "$tags" | grep -E "$version_re" | sort -V | tail -1 || true)"
           if [ -z "$latest" ]; then
             echo "::error::Fetched no well-formed version tags from ${UPSTREAM}."
             echo "Failing loudly rather than reporting a false all-clear."
