@@ -328,10 +328,19 @@ export function trackNewWindow(windowId: number): void {
   const tracked = findTrackedWindow(windowId);
   // A departed window's state is kept for writes still queued behind it, and runtime ids are
   // reused, so an id can be tracked by a window that no longer exists. This window is not that one
-  // and must not inherit what it held.
+  // and must not inherit what it held — but the departed window's ENTRY still has to be there next
+  // session, so its state is folded into an entry nothing is living in rather than dropped.
   if (tracked?.hasGoneAway) {
+    const slot = fileSlots.find((candidate) => candidate.windowId === windowId);
+    if (slot) {
+      slot.entry = entryForTrackedWindow(tracked);
+      slot.windowId = undefined;
+    } else {
+      // Departed without a slot: it was opened mid-session, so its entry has never been in the
+      // file. It is still a window the user had open when the app went down.
+      fileSlots.push({ entry: entryForTrackedWindow(tracked) });
+    }
     trackedWindows = trackedWindows.filter((candidate) => candidate !== tracked);
-    fileSlots = fileSlots.filter((slot) => slot.windowId !== windowId);
   } else if (tracked) return;
   trackedWindows.push({ windowId, boundsState: {}, usesLegacyLayout: false });
 }
