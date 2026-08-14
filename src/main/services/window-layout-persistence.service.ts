@@ -75,6 +75,15 @@ type TrackedWindow = {
    * which must stay empty rather than cloning the legacy layout.
    */
   usesLegacyLayout: boolean;
+  /**
+   * Whether the window itself is gone while its state is deliberately kept — the app was going
+   * down, so the writes still queued must be able to build this window's entry from it.
+   *
+   * Runtime window ids are reused, so this is what separates "this id is already tracked" from
+   * "this id belonged to a window that has departed": a new window taking the id back is tracked
+   * afresh instead of inheriting the departed window's layout and bounds.
+   */
+  hasGoneAway?: boolean;
 };
 
 /** File entries in file order; unassigned slots are preserved verbatim at save time */
@@ -316,7 +325,14 @@ export function trackLegacyWindow(windowId: number): void {
 
 /** Track a window created mid-session. It has no saved entry, so it starts with an empty layout */
 export function trackNewWindow(windowId: number): void {
-  if (findTrackedWindow(windowId)) return;
+  const tracked = findTrackedWindow(windowId);
+  // A departed window's state is kept for writes still queued behind it, and runtime ids are
+  // reused, so an id can be tracked by a window that no longer exists. This window is not that one
+  // and must not inherit what it held.
+  if (tracked?.hasGoneAway) {
+    trackedWindows = trackedWindows.filter((candidate) => candidate !== tracked);
+    fileSlots = fileSlots.filter((slot) => slot.windowId !== windowId);
+  } else if (tracked) return;
   trackedWindows.push({ windowId, boundsState: {}, usesLegacyLayout: false });
 }
 
@@ -373,10 +389,20 @@ export function handleWindowRemoved(windowId: number, disposition: RemovedWindow
   // scheduled before the removal fires into a session that is either rewriting the structure itself
   // (a deliberate close) or on its way down, and neither wants a debounce landing behind it.
   cancelScheduledWrite();
-  if (disposition === 'entry-stays') return;
+  // Whatever the disposition: no write reads this mark — a queued write builds an entry from
+  // `layout` and `boundsState` alone — and a window that has gone away is not waiting for content.
+  // Left set, it is inherited by whatever window takes this runtime id next.
+  pendingContentWindowIds.delete(windowId);
+  if (disposition === 'entry-stays') {
+    // The state stays for the queued writes to build from, but the window itself is gone. Recording
+    // that is what lets a window taking this runtime id back be tracked as the new window it is,
+    // rather than being waved through as already tracked and adopting what the departed one held.
+    const tracked = findTrackedWindow(windowId);
+    if (tracked) tracked.hasGoneAway = true;
+    return;
+  }
   trackedWindows = trackedWindows.filter((tracked) => tracked.windowId !== windowId);
   fileSlots = fileSlots.filter((slot) => slot.windowId !== windowId);
-  pendingContentWindowIds.delete(windowId);
 }
 
 /** A window's live state as a file entry */
