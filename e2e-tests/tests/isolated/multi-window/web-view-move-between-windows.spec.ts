@@ -490,9 +490,12 @@ test.describe('moving a web view between windows', () => {
     await expect(page3.locator(`iframe[data-web-view-id="${idAfterSecondMove}"]`)).toBeAttached({
       timeout: 120_000,
     });
-    // The id names the moved web view, not the Home tab window 2 docked for itself — the one id
-    // that is neither ruled out by the contract check above nor derivable from it, and the
-    // difference between "your tab moved on" and "the answer named whatever was lying around".
+    // Nearly implied by the contract check above, and worth being honest about how nearly: that
+    // check narrows the answer to the id this move was handed or its unscoped spelling, and the id
+    // it was handed was already held apart from window 2's own Home tab at the first move. What is
+    // left for this line is the residue — an unscoped spelling colliding with the Home id window 2
+    // minted for itself. Unlikely, but it is the one way the answer could name whatever was lying
+    // around rather than the web view that moved.
     // (A clone of window 2's layout is caught by the exactness of the assertion above, not here:
     // it would arrive as an extra tab in window 3, never as a different `idAfterSecondMove`.)
     expect(idAfterSecondMove).not.toBe(window2OwnHomeWebViewId);
