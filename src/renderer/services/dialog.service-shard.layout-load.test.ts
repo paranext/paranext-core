@@ -32,9 +32,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // This file drives the REAL web view service shard and the REAL dialog service shard together —
-// the dialog's wait is on the web view shard's own load-in-flight state, so mocking either one out
-// would leave the interaction under test unexercised. That means standing up both dependency
-// graphs: the web view shard's mock set is the one from
+// everything a routed dialog has to answer for lives on the web view shard: the load in flight it
+// waits out, the decided close it is refused for, and the emptiness report it may land inside of.
+// Mocking either shard out would leave the interaction under test unexercised. That means standing
+// up both dependency graphs: the web view shard's mock set is the one from
 // `web-view.service-shard.initial-load.test.ts`, and the dialog-only mocks below it are the ones
 // from `dialog.service-shard.test.ts`.
 vi.mock('@renderer/components/docking/default-layout-supplement.json', () => ({
@@ -113,6 +114,7 @@ const ALERT_DIALOG_TYPE = 'platform.alert';
 /** Narrow view of the published web view shard covering only what these tests drive */
 type WebViewShard = {
   adoptWebView(savedWebViewDefinition: SavedWebViewDefinition): Promise<string | undefined>;
+  hasContentArrivedSinceEmptyReport(): Promise<boolean>;
 };
 
 /** Narrow view of the published dialog shard covering only what these tests drive */
@@ -364,5 +366,98 @@ describe('a dialog racing a layout load in flight', () => {
     // at all — the rejection assertion would report a timeout where this one names what went wrong
     expect(dockedTabs.map((tab) => tab.tabType)).not.toContain(ALERT_DIALOG_TYPE);
     await expect(showing).rejects.toThrow(/closing/);
+  });
+
+  test('a modal dialog is refused as well, without waiting the load out to be told so', async () => {
+    // The refusal is a statement about the window, not about the dock, so it reaches a modal too —
+    // and a modal has the least to fall back on of anything routed here. Its promise lives in the
+    // overlay, never in `dialogRequests`, so the unload rejection that catches docked dialogs does
+    // not reach it; the router lifts the request timeout for `showDialog`; and the window it was
+    // shown into is destroyed before anyone can answer it. Nothing would ever settle it.
+    const { showModalDialogOverlay } = await import(
+      '@renderer/services/overlays/overlay.service-host'
+    );
+    const { dialogShard, reloading, releaseLayoutGet, emptyTheDockAndBeToldItIsClosing } =
+      await windowReloadingWithSavedLayoutHanging();
+
+    await emptyTheDockAndBeToldItIsClosing();
+
+    // Refused with the load still hanging: a modal is not in the dock, so the load has nothing of
+    // its to replace and it must not park on one
+    await expect(
+      dialogShard.showDialog(ALERT_DIALOG_TYPE, { prompt: 'Alert message', isModal: true }),
+    ).rejects.toThrow(/closing/);
+    expect(showModalDialogOverlay).not.toHaveBeenCalled();
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+  });
+});
+
+describe('a dialog arriving while this window has an emptiness report in flight', () => {
+  /**
+   * Stand a window up that loaded an empty layout — so it reported itself born-empty on the spot —
+   * and leave that report hanging, unanswered. That is the gap the main process asks about: the
+   * report describes a moment that has already passed by the time it is answered, so before acting
+   * on it the main process asks this window whether anything has landed since.
+   */
+  async function windowWithAnEmptinessReportInFlight() {
+    let releaseEmptiedReport: (response: unknown) => void = () => {};
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') return { kind: 'empty' };
+      if (requestType !== 'windowLayout:emptied') return undefined;
+      // Held open, because the flag has to answer at the moment the main process reads it: while
+      // the report it is deciding about is still in flight
+      return new Promise((resolve) => {
+        releaseEmptiedReport = resolve;
+      });
+    });
+
+    const webViewModule = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout, loadedLayouts, dockedTabs } = makeLiveDockLayout();
+    webViewModule.registerDockLayout(dockLayout);
+    await webViewModule.startWebViewServiceShard();
+    await primeProvider();
+    await vi.waitFor(() => expect(loadedLayouts.length).toBe(1));
+    await vi.waitFor(() =>
+      expect(mocks.networkRequest).toHaveBeenCalledWith(
+        'windowLayout:emptied',
+        expect.anything(),
+        'born-empty',
+      ),
+    );
+
+    const dialogModule = await import('./dialog.service-shard');
+    await dialogModule.startDialogServiceShard();
+
+    return {
+      dialogShard: findPublishedShard<DialogShard>('showDialog'),
+      webViewShard: findPublishedShard<WebViewShard>('hasContentArrivedSinceEmptyReport'),
+      dockedTabs,
+      releaseEmptiedReport: (response: unknown) => releaseEmptiedReport(response),
+    };
+  }
+
+  test('counts as content arriving, so the report the main process holds reads as out of date', async () => {
+    // The close is not decided yet when a dialog lands in this gap, so the refusal has nothing to
+    // say about it — this flag is the only thing standing between the dialog and a window the main
+    // process is a moment away from closing. Uncounted, the main process answers `closing`, the
+    // dialog goes with the window, and its requestor is handed a shutdown error for a dialog the
+    // user was shown for an instant.
+    const { dialogShard, webViewShard, dockedTabs, releaseEmptiedReport } =
+      await windowWithAnEmptinessReportInFlight();
+    await expect(webViewShard.hasContentArrivedSinceEmptyReport()).resolves.toBe(false);
+
+    const showing = dialogShard.showDialog(ALERT_DIALOG_TYPE, { prompt: 'Alert message' });
+    // A dialog nobody answers stays open for the rest of the test; marked handled so a rejection
+    // from teardown cannot fail the run for the wrong reason
+    showing.catch(() => {});
+    await vi.waitFor(() =>
+      expect(dockedTabs.map((tab) => tab.tabType)).toContain(ALERT_DIALOG_TYPE),
+    );
+
+    await expect(webViewShard.hasContentArrivedSinceEmptyReport()).resolves.toBe(true);
+
+    releaseEmptiedReport({ action: 'stay' });
   });
 });
