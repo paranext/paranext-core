@@ -1,7 +1,7 @@
 import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { LayoutBase } from 'rc-dock';
-import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.constants';
+import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.util';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */

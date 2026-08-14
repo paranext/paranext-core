@@ -15,10 +15,10 @@ import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
 import { ChevronsUpDown } from 'lucide-react';
 import { TabType } from './docking-framework-internal.model';
 import { PanelExtraContent } from './panel-extra-content.component';
-import { HEADLESS_GROUP, TAB_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.constants';
+import { HEADLESS_GROUP, TAB_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.util';
 
 // Re-exported for existing consumers of these group-name constants from this module; the
-// definitions themselves live in `dock-tab-group.constants.ts` so `simple-layout.data.ts` can use
+// definitions themselves live in `dock-tab-group.util.ts` so `simple-layout.data.ts` can use
 // them without importing this file (which pulls in the dialogs barrel, and from there a cycle back
 // through `use-project-picker-data.hook.ts` to `web-view.service-host.ts`, which imports the simple
 // layout builder that `simple-layout.data.ts` feeds).
