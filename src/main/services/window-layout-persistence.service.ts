@@ -439,8 +439,15 @@ function buildStructure(windowIdsInOrder: readonly number[]): WindowLayoutStruct
       built.push({ entry: { ...slot.entry } });
       return;
     }
-    if (!liveIds.has(slot.windowId)) return;
     const tracked = findTrackedWindow(slot.windowId);
+    if (!liveIds.has(slot.windowId)) {
+      // Not a window this write knows about. A window that went down with the app is still one the
+      // user had open — the write that pins it may be one this one is ahead of, or may never come
+      // (a later deliberate close pins only what is still open) — so its entry goes out either
+      // way. Anything else here is a window that has genuinely left the structure.
+      if (tracked?.hasGoneAway) built.push({ entry: entryForTrackedWindow(tracked) });
+      return;
+    }
     if (tracked) built.push({ entry: entryForTrackedWindow(tracked), windowId: slot.windowId });
   });
   const slottedWindowIds = new Set(
