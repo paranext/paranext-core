@@ -34,6 +34,10 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+  // `vi.doMock` (used by the "failing provider send" test below) isn't undone by
+  // `vi.resetModules()` — it stays registered for the module path and would otherwise leak into
+  // every later test in this file that re-imports the module.
+  vi.doUnmock('@extension-host/services/analytics-providers/console-analytics.provider');
 });
 
 test('an event fired before initialize resolves is queued, then flushed as test once the override env var forces test', async () => {
@@ -158,4 +162,49 @@ test('a failing provider send is caught and logged, without initialize or trackE
   });
 
   expect(mocks.error).toHaveBeenCalledWith(expect.stringContaining('boom'));
+});
+
+test('trackEvent drops a non-serializable property and warns immediately, but still sends the rest of the event', async () => {
+  vi.stubEnv('PARATEXT_ANALYTICS_TEST_OVERRIDE', 'true');
+
+  const { initialize, trackEvent } = await import(
+    '@extension-host/services/analytics.service-host'
+  );
+  await initialize();
+  mocks.warn.mockClear();
+
+  const circular: Record<string, unknown> = {};
+  circular.self = circular;
+
+  trackEvent('bad_properties_event', { valid: 'ok', circularRef: circular });
+
+  // Warned at trackEvent() call time, before the event is ever queued or sent
+  expect(mocks.warn).toHaveBeenCalledWith(
+    expect.stringContaining("dropping non-serializable property 'circularRef'"),
+  );
+
+  const sentLog = findSentLog('Test');
+  expect(sentLog).toBeDefined();
+  expect(sentLog).toContain('"name":"bad_properties_event"');
+  expect(sentLog).toContain('"valid":"ok"');
+  expect(sentLog).not.toContain('circularRef');
+});
+
+test('trackEvent omits properties entirely when none of them survive sanitization', async () => {
+  vi.stubEnv('PARATEXT_ANALYTICS_TEST_OVERRIDE', 'true');
+
+  const { initialize, trackEvent } = await import(
+    '@extension-host/services/analytics.service-host'
+  );
+  await initialize();
+
+  const circular: Record<string, unknown> = {};
+  circular.self = circular;
+
+  trackEvent('all_properties_bad', { onlyBad: circular });
+
+  const sentLog = findSentLog('Test');
+  expect(sentLog).toBeDefined();
+  expect(sentLog).toContain('"name":"all_properties_bad"');
+  expect(sentLog).not.toContain('"properties"');
 });

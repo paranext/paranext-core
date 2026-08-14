@@ -60,6 +60,30 @@ async function resolveEnvironment(): Promise<AnalyticsEnvironment> {
   return selectedServer === 'Production' ? 'production' : 'test';
 }
 
+/**
+ * Drops any property that can't survive `JSON.stringify` (e.g. a circular reference), warning
+ * immediately rather than waiting for the event to reach a provider — which, once the queue is
+ * durable, could be long after the event was fired. Only the offending keys are lost; the rest of
+ * the event (and the rest of `properties`) still gets sent.
+ */
+function sanitizeProperties(
+  properties: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!properties) return undefined;
+
+  const sanitized: Record<string, unknown> = {};
+  Object.entries(properties).forEach(([key, value]) => {
+    try {
+      JSON.stringify(value);
+      sanitized[key] = value;
+    } catch (error) {
+      logger.warn(`Analytics: dropping non-serializable property '${key}': ${String(error)}`);
+    }
+  });
+
+  return Object.keys(sanitized).length > 0 ? sanitized : undefined;
+}
+
 function flushQueue(environment: AnalyticsEnvironment): void {
   const queue = queues[environment];
   const provider = providers[environment];
@@ -95,11 +119,12 @@ export const initialize = createCachedInitializer(async (): Promise<void> => {
 export function trackEvent(name: string, properties?: Record<string, unknown>): void {
   logger.debug(`Analytics event tracked: ${name}`);
   const timestamp = Date.now();
+  const sanitizedProperties = sanitizeProperties(properties);
 
   if (resolvedEnvironment) {
     queues[resolvedEnvironment].push({
       name,
-      properties,
+      properties: sanitizedProperties,
       timestamp,
       environment: resolvedEnvironment,
     });
@@ -107,5 +132,5 @@ export function trackEvent(name: string, properties?: Record<string, unknown>): 
     return;
   }
 
-  queues.unresolved.push({ name, properties, timestamp });
+  queues.unresolved.push({ name, properties: sanitizedProperties, timestamp });
 }
