@@ -213,6 +213,15 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 
   const localizedOptions = await localizeDialogOptions(options);
 
+  // Routed to this window by the main process, the same as an open or a settings tab, so it needs
+  // the same refusal: a dialog put in a window whose close is decided is destroyed with it moments
+  // later, leaving the requestor awaiting an answer from a dialog the user never saw. A statement
+  // about the window rather than about the dock, so it is asked before the routing below and holds
+  // for both answers — and a modal has the least to fall back on of the two. Its promise lives in
+  // the overlay and never in `dialogRequests`, so the unload rejection below does not reach it, and
+  // the router lifts the request timeout for `showDialog`, so nothing else settles it either.
+  webViewService.throwIfWindowIsClosing(`show dialog ${dialogType}`);
+
   // Route based on modal flag
   if (localizedOptions?.isModal) {
     // Look up the DialogDefinition for this dialog type
@@ -273,19 +282,16 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 
   // Non-modal path: create rc-dock floating tab (existing behavior)
 
-  // Routed to this window by the main process, the same as an open or a settings tab, so it needs
-  // the same refusal: a dialog put in a window whose close is decided is destroyed with it moments
-  // later, leaving the requestor awaiting an answer from a dialog the user never saw. Ahead of the
-  // request registration below so the refusal reaches the caller as a rejection rather than as a
-  // dialog that quietly never opens.
-  webViewService.throwIfWindowIsClosing(`show dialog ${dialogType}`);
-  // And the same wait: a layout load in flight replaces this dock wholesale with what it read
-  // before this dialog existed. A dialog tab is not a web view, so it is in none of the lists a
-  // load diffs — it goes with nothing reported anywhere, and the dialog simply never appears.
+  // The dock's own hazard, which this path alone has: a layout load in flight replaces this dock
+  // wholesale with what it read before this dialog existed. A dialog tab is not a web view, so it
+  // is in none of the lists a load diffs — it goes with nothing reported anywhere, and the dialog
+  // simply never appears. A modal is in no dock and so waits for none of this.
   await webViewService.waitForLayoutLoadToSettle();
-  // Again, because the wait above parks for as long as a load takes and this window's close can be
-  // decided inside it: `isWindowToldToClose` latches whenever an emptiness report is answered, which
-  // can be at any moment. The guard above spoke for the moment this request arrived, not for this one.
+  // The refusal again, because the wait above parks for as long as a load takes and this window's
+  // close can be decided inside it: `isWindowToldToClose` latches whenever an emptiness report is
+  // answered, which can be at any moment. The guard above spoke for the moment this request
+  // arrived, not for this one. Still ahead of the request registration below, so the refusal
+  // reaches the caller as a rejection rather than as a dialog that quietly never opens.
   webViewService.throwIfWindowIsClosing(`show dialog ${dialogType}`);
 
   let dialogId = newGuid();
