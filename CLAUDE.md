@@ -2,6 +2,30 @@
 
 This file provides guidance to Claude Code when working with code in the paranext-core repository.
 
+## Agent Operating Principles
+
+@CONSTITUTION.md
+
+`CONSTITUTION.md` is a **pinned verbatim copy** of the [Clanker Constitution](https://github.com/kenn-io/constitution)
+(v2026.08.11, CC BY 4.0). Do not edit it locally — update it by copying a newer release tag
+in its own pull request, so the pin stays reviewable. Everything below in this file, and
+every rule under `.claude/rules/`, is a "more specific repository instruction" and overrides
+it per § 1.
+
+Where this repository deviates:
+
+- **§ 2, ceremony.** "Scale process to the task" wins over the Superpowers `brainstorming`
+  skill's claim that its approval gate never scales down. The boundary is defined in
+  [Agentic-Engineering-Guide.md § When it applies](.context/standards/Agentic-Engineering-Guide.md#when-it-applies).
+  A skill you invoke by name keeps whatever gates it defines.
+- **§ 7, `AGENTS.md`.** We have no `AGENTS.md`. Our equivalent is this file plus
+  `.claude/rules/` plus `.context/standards/`, with per-team ownership defined in
+  [.claude/rules/where-to-add-guidance.md](.claude/rules/where-to-add-guidance.md) — which
+  is authoritative for where guidance goes.
+- **§ 7, agent-private memories.** Applies prospectively: anything a teammate would need
+  belongs in this repository, not in an agent's private memory. Personal working context
+  (your own preferences, session state) may stay personal.
+
 ## Project Overview
 
 Platform.Bible is extensible Bible translation software built on Electron with a TypeScript/React frontend and .NET 8 backend data provider. The core platform provides a minimal framework with functionality delivered primarily through extensions, giving developers flexibility to create and share their desired Bible translation experience.
@@ -23,10 +47,11 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Localization            | [Localization-Guide.md](.context/standards/Localization-Guide.md)         | i18n store/APIs, fallback chain, RTL, immutable strings, C# localization |
 | Git and GitHub          | [Git-Guide.md](.context/standards/Git-Guide.md)                           | Branch structure, squash-merge, template merges              |
 | Code Review             | [Code-Review-Guide.md](.context/standards/Code-Review-Guide.md)           | Reviewable, code-steward, review workflow, auto-merge        |
+| Agentic Engineering     | [Agentic-Engineering-Guide.md](.context/standards/Agentic-Engineering-Guide.md) | How we build substantial changes with agents: design → spec → adversarial review → plan → close-out gate → durable docs |
 | Current Epic            | [Current-Epic.md](.context/standards/Current-Epic.md)                     | What the current epic is, where it is articulated (roadmap, JIRA sprint board, Discord), is work item in epic? |
 | Security                | [Security-Guide.md](.context/standards/Security-Guide.md)                 | CSP, module import restrictions, extension sandboxing        |
 | PT9 Feature Inventory   | [paratext-9-features/](.context/research/paratext-9-features/README.md) | Catalogue of Paratext 9 features (entry points, forms, classes, sources) — used by `/investigate-prd` |
-| Capability Designs      | [designs/](.context/designs/)                                             | Design specs + implementation plans for capabilities (e.g. `/investigate-prd`) |
+| Capability Designs      | [designs/](.context/designs/)                                             | Frozen rationale for the PRD tooling (`/investigate-prd`, `/refine-prd`, `/prd-to-jira`). Nothing reads it at runtime; **do not add to it** — see [Agentic-Engineering-Guide.md § Where artifacts live](.context/standards/Agentic-Engineering-Guide.md#where-artifacts-live) |
 | Startup performance     | [README.md](README.md#startup-performance-timing)                         | Enable `PT_STARTUP_MARKS`, capture marks, render the waterfall (`npm run startup-waterfall`), packaged-vs-dev caveat |
 
 ## Terminology
@@ -241,7 +266,8 @@ Never skip pre-commit hooks (`--no-verify`, `-n`, `HUSKY=0`) — they run the se
 - Keep PR titles short (under 70 characters) with a descriptive body.
 - Run `npm run typecheck && npm run lint && npm test && dotnet test c-sharp-tests/` before **pushing or opening a PR** — this is the gate that must pass, and it is the same work CI does. Individual commits are gated only by the pre-commit hook (secret scanning and `lint:staged`), which runs in seconds.
 - **Commit early and often.** After each self-contained change that builds, make a commit rather than batching many changes into one. Small, focused commits are easier to review, easier to revert, and give automated review tools a diff they can reason about. Do not let the full verification battery above discourage frequent commits — it belongs at the push boundary, not on every commit.
-- When committing, include ALL related files (plans, docs, configs) — never exclude supporting files unless they are gitignored or you are explicitly told to.
+- When committing, include ALL related files (docs, configs) — never exclude supporting files unless they are gitignored or you are explicitly told to.
+- **Planning artifacts do not live in this repository.** Design docs, specs, and implementation plans are build-time scaffolding: keep them outside the repo, and land their durable content in `.context/standards/`, `.claude/rules/`, or doc comments instead. A planning document lands on the default branch only with a stated reason, and is deleted when that reason expires. See [Agentic-Engineering-Guide.md § Where artifacts live](.context/standards/Agentic-Engineering-Guide.md#where-artifacts-live).
 - When git reports warnings about untracked or uncommitted files, investigate what they are before dismissing them. Never claim a file is unrelated without reading it first.
 - After completing file changes, push all relevant branches before reporting completion.
 - For rebases with many conflicts, prefer incremental conflict resolution over a single direct rebase. If a direct rebase produces massive conflicts, pause and discuss strategy with the user before attempting fixes.
