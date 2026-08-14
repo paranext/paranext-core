@@ -21,6 +21,7 @@ import { gracefulShutdownMessage } from '@node/models/interprocess-messages.mode
 import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
 import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
 import { startLocalOAuthServer } from '@extension-host/services/local-oauth.service';
+import * as analyticsService from '@extension-host/services/analytics.service-host';
 import { markStartup } from '@shared/utils/startup-timing.util';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 
@@ -84,6 +85,10 @@ process.on('unhandledRejection', (reason) => {
 
 (async () => {
   try {
+    // Fire this first: trackEvent() always queues until the engine is ready, so calling it here
+    // — before anything else in this IIFE runs — guarantees app_launch is first in flush order.
+    analyticsService.trackEvent('app_launch');
+
     // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
     await initializeSharedStoreService(networkService);
@@ -98,6 +103,7 @@ process.on('unhandledRejection', (reason) => {
       startProjectSettingsService(),
       initializeDatabaseService(),
       startLocalOAuthServer(),
+      analyticsService.initialize(),
     ]);
     markStartup('host-services-ready');
 
