@@ -34,8 +34,12 @@
  * - A Home tab a window docks on the fly gets a freshly minted id (see
  *   {@link expectWindowDockHasOnlyHomeTab}), which can never be that one.
  * - A window that wrongly CLONED another window's layout would render that layout's ids re-scoped to
- *   itself — `{@link HOME_TAB_UUID}-w{itsOwnWindowId}` — which is also never the moved id, and is
- *   asserted against directly below.
+ *   itself — `{@link HOME_TAB_UUID}-w{itsOwnWindowId}` — ALONGSIDE the web view it received, so a
+ *   clone shows up as an EXTRA held id, never as a different value of the moved one. What catches
+ *   it is therefore {@link expectWindowToHoldExactly}, which pins the destination's whole set of
+ *   held ids: the cloned tab makes that set too big. Comparing the moved id itself against the
+ *   clone's id would prove nothing, since the moved id is already constrained (below) to ids the
+ *   clone's can never be.
  *
  * The move's own answer is the fourth piece: it returns the AUTHORITATIVE id of the web view after
  * the move, which the API documents as possibly differing from the id passed in, because a web view
@@ -233,26 +237,36 @@ async function expectAppWindowCount(
   expect(getAppPages(electronApp).length, label).toBe(expectedCount);
 }
 
-/**
- * The text every "the move did not do what you asked" notification starts with
- * (`%tab_contextMenu_moveTabToNewWindow_failed*%` in `assets/localization/en.json`). The move's
- * rejection reaches the user as a toast and nothing else, so a move that failed while its tab
- * happened to end up somewhere plausible would otherwise be invisible to these assertions.
- */
-const MOVE_FAILURE_TOAST_TEXT = 'Could not move the tab to a new window';
+// #endregion
 
-/** Assert no window is telling the user the move failed. */
-async function expectNoMoveFailureToast(pages: Page[]): Promise<void> {
-  await Promise.all(
-    pages
-      .filter((page) => !page.isClosed())
-      .map(async (page) =>
-        expect(
-          page.locator('.notification-toast', { hasText: MOVE_FAILURE_TOAST_TEXT }),
-        ).toHaveCount(0),
-      ),
-  );
-}
+// #region move failure marker
+
+/**
+ * What the CONTEXT-MENU route logs when the move it sent is rejected (`handleMoveTabToNewWindow` in
+ * `src/renderer/components/docking/platform-tab-title.component.tsx`). No other code in the app
+ * emits this phrase. It reaches the captured app output because `log.initialize` in
+ * `src/shared/services/logger.service.ts` forwards the renderer's logging to the main process,
+ * whose console transport is what {@link captureAppOutput} reads — the same path that puts
+ * {@link RENDERER_STARTING_LOG}, itself a renderer line, in the capture.
+ *
+ * A rejected move is worth a dedicated marker because it need not be visible anywhere else: the
+ * failure paths that reopen the web view (the `reopened-in-focused-window` disposition puts it in a
+ * window nobody chose) can leave it looking exactly like a successful arrival, satisfying every
+ * identity assertion here.
+ *
+ * The LOG rather than the failure toast the user sees, even though the toast is the user-facing
+ * signal: toasts auto-close on a timer derived from their message length (about ten seconds for
+ * copy this short — see `src/renderer/services/notification.service-shard.ts`), and the assertions
+ * here spend far longer than that waiting out the move, a window creation and two settle periods,
+ * so asserting a toast's absence at the end would pass whether or not it was ever shown. The log
+ * line does not expire.
+ *
+ * The COMMAND routes need no marker of their own: a move that fails there rejects the JSON-RPC
+ * request, which {@link moveWebViewToWindow} / {@link moveWebViewToNewWindow} surface as a thrown
+ * error that fails the test outright. The toast is not even reachable on those routes — it is sent
+ * by the context menu's handler, which a command sent over the socket never runs.
+ */
+const MOVE_FAILURE_LOG = 'Failed to move web view';
 
 // #endregion
 
@@ -327,7 +341,10 @@ test.describe('moving a web view between windows', () => {
 
     // THE MOVE ITSELF, asserted on identity. The new window must hold the web view that was in
     // window 1 — under one of the two ids the move's contract allows it to answer to — and nothing
-    // else.
+    // else. "Nothing else" is also what rules out a window that wrongly CLONED window 1's LAYOUT
+    // instead of receiving the move: a clone's tabs carry that layout's ids re-scoped to this
+    // window and sit ALONGSIDE the moved web view, so a clone is an extra held id rather than a
+    // different value of `movedWebViewId`.
     const movedWebViewId = await waitForWindowToHoldOneOf(
       page2,
       idsMovedWebViewMayAnswerTo(webViewIdBeforeMove),
@@ -344,11 +361,6 @@ test.describe('moving a web view between windows', () => {
     await expect(page2.locator(`iframe[data-web-view-id="${movedWebViewId}"]`)).toBeAttached({
       timeout: 120_000,
     });
-    // And it is genuinely the moved instance rather than a copy of window 1's LAYOUT: a window that
-    // cloned that layout would carry its ids re-scoped to itself, which is neither of the ids a move
-    // may answer with. Stated as its own assertion because it is the failure mode a Home-shaped
-    // window makes invisible.
-    expect(movedWebViewId).not.toBe(`${HOME_TAB_UUID}-w${window2Id}`);
     logStep(`window ${window2Id} holds the moved web view as ${movedWebViewId}`);
 
     // Gone from the window it left — the tab and its iframe both.
@@ -379,16 +391,15 @@ test.describe('moving a web view between windows', () => {
       'the app to end the move with exactly two windows',
     );
 
-    // The move's rejection path reports itself to the user as a toast and nowhere else, so a move
-    // that failed and merely happened to leave the tab somewhere plausible would slip past every
-    // assertion above.
-    await expectNoMoveFailureToast([mainPage, page2]);
-
     // Nothing about creating a window, emptying another, and reopening a web view across them may
-    // fault or collide. The slice starts before the move, so window 2's whole startup is in it —
-    // and its renderer's first line is the positive control proving the slice is not empty.
+    // fault or collide — and the move must not have been REJECTED, which a failure that reopened
+    // the web view somewhere plausible would otherwise hide from every assertion above (see
+    // {@link MOVE_FAILURE_LOG}). The slice starts before the move, so window 2's whole startup is
+    // in it — and its renderer's first line is the positive control proving the slice is not empty,
+    // which is what keeps these negative sweeps from passing against nothing.
     const moveLog = output.textFrom(beforeMoveMark);
     expect(moveLog).toContain(RENDERER_STARTING_LOG);
+    expect(moveLog).not.toContain(MOVE_FAILURE_LOG);
     expect(moveLog).not.toMatch(DUPLICATE_REGISTRATION_PATTERN);
     FAULT_MARKERS.forEach((marker) => expect(moveLog).not.toContain(marker));
   });
@@ -479,8 +490,11 @@ test.describe('moving a web view between windows', () => {
     await expect(page3.locator(`iframe[data-web-view-id="${idAfterSecondMove}"]`)).toBeAttached({
       timeout: 120_000,
     });
-    // Not a clone of window 2's layout re-scoped to this window.
-    expect(idAfterSecondMove).not.toBe(`${HOME_TAB_UUID}-w${window3Id}`);
+    // The id names the moved web view, not the Home tab window 2 docked for itself — the one id
+    // that is neither ruled out by the contract check above nor derivable from it, and the
+    // difference between "your tab moved on" and "the answer named whatever was lying around".
+    // (A clone of window 2's layout is caught by the exactness of the assertion above, not here:
+    // it would arrive as an extra tab in window 3, never as a different `idAfterSecondMove`.)
     expect(idAfterSecondMove).not.toBe(window2OwnHomeWebViewId);
 
     // Gone from the window it left — which is still open, still holding its own Home tab, because
@@ -500,7 +514,6 @@ test.describe('moving a web view between windows', () => {
       60_000,
       'the app to end the second move with exactly two windows',
     );
-    await expectNoMoveFailureToast([page2, page3]);
 
     // A real quit after all of that: the app must still go down cleanly, and the epilogue sweeps
     // everything captured — both moves included — for faults and duplicate registrations, with the
