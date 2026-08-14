@@ -6,6 +6,7 @@ import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
+import { describeWebViewMoveFailure } from '@shared/models/web-view-move.model';
 import { PlatformTabTitle } from './platform-tab-title.component';
 
 // #region mocks
@@ -102,6 +103,9 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(true);
     vi.mocked(sendCommand).mockReset();
     vi.mocked(logger.error).mockClear();
+    // Every notification assertion below asks whether the message was sent at all, so calls left
+    // over from an earlier test would let one of them pass on another test's notification
+    vi.mocked(notificationService.send).mockClear();
   });
 
   it('a web view tab in power mode offers "Move tab to new window"', () => {
@@ -160,6 +164,105 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
       expect(notificationService.send).toHaveBeenCalledWith(
         expect.objectContaining({
           message: '%tab_contextMenu_moveTabToNewWindow_failed%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
+  it('a move whose tab went back where it came from says nothing moved', async () => {
+    vi.mocked(sendCommand).mockRejectedValue(
+      new Error(
+        describeWebViewMoveFailure(
+          'reopened-in-source-window',
+          'Could not move webview web-view-1 to a new window; it was reopened in window 2, where it came from.',
+        ),
+      ),
+    );
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByText('Move tab to new window'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTabToNewWindow_failed%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
+  it('a move whose tab landed in another window says so rather than that nothing happened', async () => {
+    // The tab DID move, just not to the window the user asked for. Telling them the move failed
+    // sends them looking for it where it no longer is.
+    vi.mocked(sendCommand).mockRejectedValue(
+      new Error(
+        describeWebViewMoveFailure(
+          'reopened-in-focused-window',
+          'Could not move webview web-view-1 to a new window; it was reopened in the focused window.',
+        ),
+      ),
+    );
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByText('Move tab to new window'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
+  it('a move that could reopen the tab nowhere says the tab is gone', async () => {
+    // The worst of the three and the one the generic message serves worst: the tab is open in no
+    // window at all, and the user is the only one who can decide to open it again
+    vi.mocked(sendCommand).mockRejectedValue(
+      new Error(
+        describeWebViewMoveFailure(
+          'not-reopened',
+          'Could not move webview web-view-1 to a new window, and could not reopen it anywhere afterwards. Its captured definition is in the log.',
+        ),
+      ),
+    );
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByText('Move tab to new window'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTabToNewWindow_failedNotReopened%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
+  it('a disposition that survived the network round trip is still read', async () => {
+    // What the renderer actually receives: the request plumbing wraps a handler's rejection in its
+    // own message, so a disposition only reaches here if it is read out of the whole text rather
+    // than off the front of it
+    vi.mocked(sendCommand).mockRejectedValue(
+      new Error(
+        `JSON-RPC Request error (-32603): ${describeWebViewMoveFailure(
+          'not-reopened',
+          'Could not move webview web-view-1 to a new window, and could not reopen it anywhere afterwards. Its captured definition is in the log.',
+        )}`,
+      ),
+    );
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByText('Move tab to new window'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTabToNewWindow_failedNotReopened%',
           severity: 'error',
         }),
       ),

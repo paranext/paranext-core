@@ -33,6 +33,10 @@ import {
   WebViewId,
   WebViewType,
 } from '@shared/models/web-view.model';
+import {
+  describeWebViewMoveFailure,
+  WebViewMoveFailureDisposition,
+} from '@shared/models/web-view-move.model';
 import { Layout } from '@shared/models/docking-framework.model';
 import { logger } from '@shared/services/logger.service';
 import { getErrorMessage, wait } from 'platform-bible-utils';
@@ -718,10 +722,10 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
         `Moving webview ${webViewId} to ${targetDescription} did not happen: the provider did not recreate it there. Reopening it where it can go.`,
       );
     } catch (e) {
-      // A timed-out adopt may have succeeded after its request expired, and only the target knows —
-      // see findWebViewAdoptedAfterTimeout. The new-window path is deliberately not probed: its own
-      // failure handling has already closed the window it created, so there is nothing left holding
-      // the view there.
+      // A timed-out adopt may have succeeded after its request expired, and only the window that
+      // ran it knows — see findWebViewAdoptedAfterTimeout. Only a move into an existing window has
+      // a window to ask: the new-window path creates its window inside the attempt above, so a
+      // failure there arrives here with no shard to put the question to.
       if (targetShard !== undefined && isRequestTimedOutError(e)) {
         const lateAdoptedWebViewId = await findWebViewAdoptedAfterTimeout(
           targetShard,
@@ -782,6 +786,11 @@ async function readoptAfterFailedMove(
  * it: the source window — unless its close has begun, which a move that emptied it will have made
  * true — then the focused window. Always rejects: wherever the web view ended up, the move the
  * caller asked for did not happen, and the error says where it is.
+ *
+ * Where it is rides on the error as a {@link WebViewMoveFailureDisposition} and not only in its
+ * prose. These three outcomes are as far apart as "nothing changed" and "the web view is open
+ * nowhere at all", and a caller reporting a failed move to the user has to tell them apart without
+ * reading a sentence written for the log.
  */
 async function recoverAfterFailedMove(
   webViewId: WebViewId,
@@ -792,7 +801,8 @@ async function recoverAfterFailedMove(
   logger.debug(
     `Reopening webview ${webViewId} after its failed move to ${targetDescription}. Captured definition: ${JSON.stringify(captured)}`,
   );
-  let reopenedIn: string | undefined;
+  /** The window that took the web view back: how to name it, and how a caller must read that */
+  let reopenedIn: { description: string; disposition: WebViewMoveFailureDisposition } | undefined;
   if (!isWindowClosing(owner.windowId)) {
     const sourceDescription = `window ${owner.windowId}, where it came from`;
     if (await readoptAfterFailedMove(owner.shard, webViewId, captured, sourceDescription)) {
@@ -804,14 +814,18 @@ async function recoverAfterFailedMove(
         logger.warn(
           `Webview ${webViewId} was reopened in window ${owner.windowId}, but that window's close was decided in the meantime; reopening it somewhere else as well.`,
         );
-      else reopenedIn = sourceDescription;
+      else
+        reopenedIn = { description: sourceDescription, disposition: 'reopened-in-source-window' };
     }
   }
   if (reopenedIn === undefined) {
     try {
       const focusedShard = await getTargetWebViewShard();
       if (await readoptAfterFailedMove(focusedShard, webViewId, captured, 'the focused window'))
-        reopenedIn = 'the focused window';
+        reopenedIn = {
+          description: 'the focused window',
+          disposition: 'reopened-in-focused-window',
+        };
     } catch (e) {
       logger.warn(
         `Could not reopen webview ${webViewId} in the focused window: ${getErrorMessage(e)}`,
@@ -825,11 +839,17 @@ async function recoverAfterFailedMove(
       `Nothing could reopen webview ${webViewId} after its failed move. Captured definition: ${JSON.stringify(captured)}`,
     );
     throw new Error(
-      `Could not move webview ${webViewId} to ${targetDescription}, and could not reopen it anywhere afterwards. Its captured definition is in the log.`,
+      describeWebViewMoveFailure(
+        'not-reopened',
+        `Could not move webview ${webViewId} to ${targetDescription}, and could not reopen it anywhere afterwards. Its captured definition is in the log.`,
+      ),
     );
   }
   throw new Error(
-    `Could not move webview ${webViewId} to ${targetDescription}; it was reopened in ${reopenedIn}.`,
+    describeWebViewMoveFailure(
+      reopenedIn.disposition,
+      `Could not move webview ${webViewId} to ${targetDescription}; it was reopened in ${reopenedIn.description}.`,
+    ),
   );
 }
 
