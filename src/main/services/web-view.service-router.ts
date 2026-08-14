@@ -428,23 +428,52 @@ async function openWebViewInOwningWindow(
 }
 
 /**
- * Create a pending-content window, run an open against its shard, and never leak the window: any
- * failure — and a provider decline — closes it again, since a window whose content never arrived is
- * an empty shell the user never asked to manage. On success the pending-content mark comes off, so
- * a reload before the first layout push restores as an ordinary (empty) window instead of waiting
- * forever for content that already arrived.
+ * A window created to receive content that has not been put in it yet: created, marked
+ * pending-content, and already reachable through the shard {@link createFreshWindow} resolved.
  *
- * @param onWindowLeftStanding Called when a failure did NOT take the window down with it, because
- *   content reached it anyway — with the window and the shard to reach it through. The window this
- *   call created is the only place that knows whether that happened, so a caller whose next move
- *   depends on it has to be told from in here; one that has nothing to do with the answer may leave
- *   this out
+ * The two halves are separate because they cost different things. Getting this far is a cold
+ * renderer start — bundle, network service, shard registration — and it OPENS NOTHING; running the
+ * open is the part that puts content somewhere. A caller holding something it would have to undo,
+ * like a move that has to empty the source window first, can therefore pay the whole start before
+ * it commits to anything, and a window that never becomes reachable costs it a wait and an error
+ * rather than content stranded mid-flight.
+ *
+ * Either half leaves the window closed again when it does not end in content: a window whose
+ * content never arrived is an empty shell the user never asked to manage.
  */
-async function openInFreshWindow(
-  webViewDescription: string,
-  open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
-  onWindowLeftStanding?: (standingWindow: WindowShard) => void,
-): Promise<WebViewId | undefined> {
+type FreshWindow = {
+  /**
+   * Run an open against the created window. A failure — and a provider decline — closes the window
+   * again. Success takes the pending-content mark off, so a reload before the first layout push
+   * restores as an ordinary (empty) window instead of waiting forever for content that already
+   * arrived.
+   *
+   * @param onWindowLeftStanding Called when a failure did NOT take the window down with it, because
+   *   content reached it anyway — with the window and the shard to reach it through. This window is
+   *   the only place that knows whether that happened, so a caller whose next move depends on it
+   *   has to be told from in here; one that has nothing to do with the answer may leave this out
+   */
+  runOpen: (
+    open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+    onWindowLeftStanding?: (standingWindow: WindowShard) => void,
+  ) => Promise<WebViewId | undefined>;
+  /**
+   * Close the created window for a caller that will never run its open — what became impossible
+   * between creating the window and being ready to fill it. Nothing was ever opened here, so there
+   * is nothing to report about where it went.
+   */
+  discard: () => Promise<void>;
+};
+
+/**
+ * Create a pending-content window and resolve the shard to reach it through, so the window is ready
+ * to be filled. See {@link FreshWindow} for why filling it is a separate step.
+ *
+ * Never leaks the window: a shard that never arrives closes it again before this throws.
+ *
+ * @param webViewDescription What the window is being created for, for the errors this raises
+ */
+async function createFreshWindow(webViewDescription: string): Promise<FreshWindow> {
   if (!windowCreator)
     throw new Error(
       `Cannot open ${webViewDescription} in a new window: window creation is not wired up`,
@@ -464,7 +493,9 @@ async function openInFreshWindow(
   //
   // A window kept this way is reported to the caller, since it is the one window that can be asked
   // what became of the open that appeared to fail.
-  const closeAbandonedWindow = async () => {
+  const closeAbandonedWindow = async (
+    onWindowLeftStanding?: (standingWindow: WindowShard) => void,
+  ) => {
     try {
       const shard = await webViewShards.getShard(windowId);
       if (shard && (await shard.hasContentArrivedSinceEmptyReport())) {
@@ -492,31 +523,56 @@ async function openInFreshWindow(
     }
   };
 
-  let openedWebViewId: WebViewId | undefined;
+  let shard: WebViewServiceShard;
   try {
-    const shard = await resolveShardForWindow(
+    shard = await resolveShardForWindow(
       NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
       webViewShards,
       windowId,
     );
-    openedWebViewId = await open(shard);
   } catch (e) {
     await closeAbandonedWindow();
     throw e;
   }
 
-  if (openedWebViewId === undefined) {
-    // The provider chose not to create the web view — the established "it did not happen"
-    // answer. The window it would have lived in has no reason to exist, and a decline never docked
-    // anything, so the re-check inside cannot mistake this open's own content for an interloper.
-    await closeAbandonedWindow();
-  } else {
-    // The routed content is in the window now. Un-mark it, so a reload before its first layout
-    // push restores as an ordinary (empty) window instead of waiting forever for content that
-    // already arrived.
-    clearWindowPendingContent(windowId);
-  }
-  return openedWebViewId;
+  return {
+    runOpen: async (open, onWindowLeftStanding) => {
+      let openedWebViewId: WebViewId | undefined;
+      try {
+        openedWebViewId = await open(shard);
+      } catch (e) {
+        await closeAbandonedWindow(onWindowLeftStanding);
+        throw e;
+      }
+
+      if (openedWebViewId === undefined) {
+        // The provider chose not to create the web view — the established "it did not happen"
+        // answer. The window it would have lived in has no reason to exist, and a decline never
+        // docked anything, so the re-check inside cannot mistake this open's own content for an
+        // interloper.
+        await closeAbandonedWindow(onWindowLeftStanding);
+      } else {
+        // The routed content is in the window now. Un-mark it, so a reload before its first layout
+        // push restores as an ordinary (empty) window instead of waiting forever for content that
+        // already arrived.
+        clearWindowPendingContent(windowId);
+      }
+      return openedWebViewId;
+    },
+    discard: () => closeAbandonedWindow(),
+  };
+}
+
+/**
+ * Create a pending-content window and open in it, for a caller with nothing to protect from the
+ * window's start — the two steps of {@link createFreshWindow} back to back.
+ */
+async function openInFreshWindow(
+  webViewDescription: string,
+  open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+): Promise<WebViewId | undefined> {
+  const freshWindow = await createFreshWindow(webViewDescription);
+  return freshWindow.runOpen(open);
 }
 
 /**
@@ -619,17 +675,24 @@ function raiseMoveTarget(target: MoveWebViewTarget): void {
 }
 
 /**
- * Move a web view: close it in the window that holds it, reopen it from the captured definition in
- * the target. Close-source-first is load-bearing — a one-instance web view cannot be opened in the
- * target while the source instance is alive, because reuse logic would find and raise the source
- * instead.
+ * Move a web view: make the destination ready, close the view in the window that holds it, reopen
+ * it from the captured definition in the destination.
+ *
+ * Close-source-first is load-bearing for the OPEN — a one-instance web view cannot be opened in the
+ * destination while the source instance is alive, because reuse logic would find and raise the
+ * source instead. It is not load-bearing for getting the destination ready, which opens nothing: a
+ * window created for the move and the shard to reach it through are both settled before the
+ * capture, so the wait for a window to finish starting — the one step here that can take a cold
+ * renderer start — is spent with the web view still in the window the user left it in.
  *
  * @returns Authoritative id of the web view in its new window. Can differ from the id passed in: a
  *   web view restored from a persisted layout carries a window-scoped id, and the capture strips
  *   that scope rather than carry one window's scope into another — callers use the returned id for
  *   anything after the move
- * @throws If no window holds the web view, if the target window does not exist or is closing, or if
- *   the target open failed — the error says where the web view ended up (see
+ * @throws If no window holds the web view; if the destination could not be made ready — a named
+ *   target window that does not exist or is closing, or a window created for the move that never
+ *   became reachable, all of which leave the web view where it was; or if the open in the
+ *   destination failed, where the error says where the web view ended up instead (see
  *   {@link recoverAfterFailedMove})
  */
 async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Promise<WebViewId> {
@@ -644,7 +707,22 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
 
   const targetDescription = target === 'new' ? 'a new window' : `window ${target}`;
 
+  /**
+   * The window a move to a new window created and left standing, because content reached it while
+   * its adopt was failing. Only that window can say what became of the adopt, and only a move that
+   * has one has anywhere to put the question.
+   */
+  let standingNewWindow: WindowShard | undefined;
+  /** The named target window's shard. A move to a new window has no named target */
   let targetShard: WebViewServiceShard | undefined;
+  /** Puts the captured definition in the destination resolved below */
+  let adoptIntoDestination: (definition: SavedWebViewDefinition) => Promise<WebViewId | undefined>;
+  /**
+   * Undo the destination, for a move that ends before it ever adopts into it. Only a move to a new
+   * window has anything to undo — it created a window — so anything else leaves this out.
+   */
+  let discardDestination: (() => Promise<void>) | undefined;
+
   if (target === 'new') {
     // Same read as opening into a new window, but not the same degrade. In Simple mode —
     // single-window by design — there is no other window to move to, and the view already is a
@@ -661,10 +739,20 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
       );
     }
     if (interfaceMode !== 'power') return webViewId;
-    // Checked before anything closes, even though openInFreshWindow checks again: failing after
-    // the capture would put the view through a needless close and recovery
-    if (!windowCreator)
-      throw new Error(`Cannot move webview ${webViewId}: window creation is not wired up`);
+    // Created and reachable before anything closes. This is the step that can take a whole cold
+    // renderer start, and the one that fails when a window never gets there — so it belongs where a
+    // window that never comes up costs the user a wait and an error rather than a web view open in
+    // no window at all. It opens nothing: an empty window gives reuse logic nothing to find, so
+    // what makes the capture below have to come before the adopt is untouched by doing this early.
+    const freshWindow = await createFreshWindow(webViewId);
+    adoptIntoDestination = (definition) =>
+      freshWindow.runOpen(
+        (shard) => shard.adoptWebView(definition),
+        (standingWindow) => {
+          standingNewWindow = standingWindow;
+        },
+      );
+    discardDestination = freshWindow.discard;
   } else {
     // The web view is already there; closing and reopening it would be churn for nothing
     if (target === owner.windowId) return webViewId;
@@ -676,11 +764,13 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
       );
     // Resolved before anything closes: an unknown target must fail the move with the web view
     // untouched
-    targetShard = await resolveShardForWindow(
+    const shard = await resolveShardForWindow(
       NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
       webViewShards,
       target,
     );
+    targetShard = shard;
+    adoptIntoDestination = (definition) => shard.adoptWebView(definition);
   }
 
   let captured: SavedWebViewDefinition | undefined;
@@ -695,14 +785,20 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
     logger.error(
       `Capturing webview ${webViewId} for a move to ${targetDescription} failed; window ${owner.windowId} may or may not still have it. Definition from the owner search: ${JSON.stringify(owner.definition)}`,
     );
+    // Nothing is coming to fill a window this move created, and an empty window the user never
+    // asked to manage must not outlive the move that made it
+    await discardDestination?.();
     throw new Error(
       `Could not move webview ${webViewId} to ${targetDescription}: capturing it failed (${getErrorMessage(e)}). Its definition from before the move is in the log.`,
     );
   }
-  if (!captured)
+  if (!captured) {
+    // Same as above: there is nothing to put in a window this move created
+    await discardDestination?.();
     throw new Error(
       `Cannot move webview ${webViewId}: window ${owner.windowId} no longer had it when the move tried to capture it.`,
     );
+  }
 
   // From here the web view is open in NO window until the target takes it, or until recovery
   // puts it back — see `webViewMovesInFlight`, which is what keeps a search landing in that gap
@@ -713,12 +809,6 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
     projectId: captured.projectId,
   };
   webViewMovesInFlight.add(moveInFlight);
-  /**
-   * The window a move to a new window created and left standing, because content reached it while
-   * its adopt was failing. Only that window can say what became of the adopt, and only a move that
-   * has one has anywhere to put the question.
-   */
-  let standingNewWindow: WindowShard | undefined;
   try {
     try {
       // Read again at the last moment: the capture above closed the source tab, and everything
@@ -727,16 +817,7 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
       // below rather than into a window that is about to take it away.
       if (typeof target === 'number' && isWindowClosing(target))
         throw new Error(`window ${target}'s close was decided while the move was in flight`);
-      const movedWebViewId =
-        targetShard !== undefined
-          ? await targetShard.adoptWebView(captured)
-          : await openInFreshWindow(
-              webViewId,
-              (shard) => shard.adoptWebView(captured),
-              (standingWindow) => {
-                standingNewWindow = standingWindow;
-              },
-            );
+      const movedWebViewId = await adoptIntoDestination(captured);
       if (movedWebViewId !== undefined) {
         raiseMoveTarget(target);
         return movedWebViewId;
