@@ -166,7 +166,9 @@ global.webViewComponent = function FindWebView({
       if (!term) return;
       if (term === lastPersistedHistoryTermRef.current) return;
       lastPersistedHistoryTermRef.current = term;
-      findHistoryProviderRef.current?.addHistoryItem(term, projectId).catch(() => {});
+      findHistoryProviderRef.current
+        ?.addHistoryItem(term, projectId)
+        .catch((e) => logger.warn(`Find: failed to save search history: ${getErrorMessage(e)}`));
     },
     [projectId],
   );
@@ -333,7 +335,11 @@ global.webViewComponent = function FindWebView({
 
   const persistLastSearchTerm = useCallback(
     (term: string) => {
-      findHistoryProviderRef.current?.setLastSearchTerm(projectId, term).catch(() => {});
+      findHistoryProviderRef.current
+        ?.setLastSearchTerm(projectId, term)
+        .catch((e) =>
+          logger.warn(`Find: failed to persist last search term: ${getErrorMessage(e)}`),
+        );
     },
     [projectId],
   );
@@ -1082,7 +1088,9 @@ global.webViewComponent = function FindWebView({
   useEffect(() => {
     const currentController = editorWebViewController;
     return () => {
-      currentController?.runAnnotationAction('find-current-result', 'removed').catch(() => {});
+      currentController
+        ?.runAnnotationAction('find-current-result', 'removed')
+        .catch((e) => logger.warn(`Find: failed to clear result highlight: ${getErrorMessage(e)}`));
     };
   }, [editorWebViewController]);
 
@@ -1106,14 +1114,18 @@ global.webViewComponent = function FindWebView({
         try {
           editorWebViewController
             .selectRange({ start: searchResult.start, end: searchResult.end })
-            .catch(() => {});
+            .catch((e) =>
+              logger.warn(`Find: failed to select result in editor: ${getErrorMessage(e)}`),
+            );
           editorWebViewController
             .setAnnotation(
               { start: searchResult.start, end: searchResult.end },
               'find-result-highlight',
               'find-current-result',
             )
-            .catch(() => {});
+            .catch((e) =>
+              logger.warn(`Find: failed to highlight result in editor: ${getErrorMessage(e)}`),
+            );
         } catch {
           // Ignore any synchronous errors from the controller methods.
         }
