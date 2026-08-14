@@ -27,6 +27,10 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   initialize: vi.fn().mockResolvedValue(undefined),
   addTab: mockAddTab,
   closeTab: mockCloseTab,
+  // Standing in for a window with no layout load in flight and no close decided — this file is
+  // about the float layout, not either of those. See `dialog.service-shard.layout-load.test.ts`.
+  throwIfWindowIsClosing: vi.fn(),
+  waitForLayoutLoadToSettle: vi.fn(async () => {}),
 }));
 
 vi.mock('@shared/services/localization.service', () => ({
