@@ -433,10 +433,17 @@ async function openWebViewInOwningWindow(
  * an empty shell the user never asked to manage. On success the pending-content mark comes off, so
  * a reload before the first layout push restores as an ordinary (empty) window instead of waiting
  * forever for content that already arrived.
+ *
+ * @param onWindowLeftStanding Called when a failure did NOT take the window down with it, because
+ *   content reached it anyway — with the window and the shard to reach it through. The window this
+ *   call created is the only place that knows whether that happened, so a caller whose next move
+ *   depends on it has to be told from in here; one that has nothing to do with the answer may leave
+ *   this out
  */
 async function openInFreshWindow(
   webViewDescription: string,
   open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+  onWindowLeftStanding?: (standingWindow: WindowShard) => void,
 ): Promise<WebViewId | undefined> {
   if (!windowCreator)
     throw new Error(
@@ -454,10 +461,13 @@ async function openInFreshWindow(
   // outcome closes, including one where the question itself could not be answered — a
   // pending-content window kept by mistake never reports itself born-empty and never docks Home, so
   // it stands there blank with nothing to heal it, which is worse than closing one window too many.
+  //
+  // A window kept this way is reported to the caller, since it is the one window that can be asked
+  // what became of the open that appeared to fail.
   const closeAbandonedWindow = async () => {
     try {
       const shard = await webViewShards.getShard(windowId);
-      if (await shard?.hasContentArrivedSinceEmptyReport()) {
+      if (shard && (await shard.hasContentArrivedSinceEmptyReport())) {
         logger.warn(
           `Window ${windowId}'s new-window open did not succeed, but content reached the window anyway; leaving it open.`,
         );
@@ -465,6 +475,7 @@ async function openInFreshWindow(
         // restoring as a window still waiting for content that has already arrived. Changing the
         // mark announces the routing-target change itself, so nothing else has to.
         clearWindowPendingContent(windowId);
+        onWindowLeftStanding?.({ windowId, shard });
         return;
       }
     } catch (recheckError) {
@@ -702,6 +713,12 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
     projectId: captured.projectId,
   };
   webViewMovesInFlight.add(moveInFlight);
+  /**
+   * The window a move to a new window created and left standing, because content reached it while
+   * its adopt was failing. Only that window can say what became of the adopt, and only a move that
+   * has one has anywhere to put the question.
+   */
+  let standingNewWindow: WindowShard | undefined;
   try {
     try {
       // Read again at the last moment: the capture above closed the source tab, and everything
@@ -713,7 +730,13 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
       const movedWebViewId =
         targetShard !== undefined
           ? await targetShard.adoptWebView(captured)
-          : await openInFreshWindow(webViewId, (shard) => shard.adoptWebView(captured));
+          : await openInFreshWindow(
+              webViewId,
+              (shard) => shard.adoptWebView(captured),
+              (standingWindow) => {
+                standingNewWindow = standingWindow;
+              },
+            );
       if (movedWebViewId !== undefined) {
         raiseMoveTarget(target);
         return movedWebViewId;
@@ -723,18 +746,40 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
       );
     } catch (e) {
       // A timed-out adopt may have succeeded after its request expired, and only the window that
-      // ran it knows — see findWebViewAdoptedAfterTimeout. Only a move into an existing window has
-      // a window to ask: the new-window path creates its window inside the attempt above, so a
-      // failure there arrives here with no shard to put the question to.
-      if (targetShard !== undefined && isRequestTimedOutError(e)) {
+      // ran it knows — see findWebViewAdoptedAfterTimeout. The window to ask is the target a move
+      // named, or, for a move to a new window, the window that path created and left standing:
+      // content reaching a window created for this one adopt is what a late-landing adopt looks
+      // like from outside. A new-window attempt that took its window down with it has nobody to
+      // ask and nothing that could have landed, so it goes straight to the recovery the user is
+      // waiting on rather than spending the probe's attempts on a window that is gone.
+      const shardToProbe = targetShard ?? standingNewWindow?.shard;
+      if (shardToProbe !== undefined && isRequestTimedOutError(e)) {
         const lateAdoptedWebViewId = await findWebViewAdoptedAfterTimeout(
-          targetShard,
+          shardToProbe,
           captured.id,
           targetDescription,
         );
         if (lateAdoptedWebViewId !== undefined) {
           raiseMoveTarget(target);
           return lateAdoptedWebViewId;
+        }
+        if (standingNewWindow !== undefined) {
+          // The window created for this move is holding content, so the adopt can still land in it
+          // after the probe has given up. Reopening the captured definition anywhere would then
+          // put the same web view id live in two windows, where messages for it become unroutable
+          // and closing either copy takes the other's controller with it. So the move ends here:
+          // the window keeps whatever reached it — closing it would destroy content that may be in
+          // front of the user — and the caller is told that nothing it can name holds the web
+          // view, which is the answer to give a user whose tab did not come back.
+          logger.error(
+            `Webview ${webViewId}'s adopt into window ${standingNewWindow.windowId} timed out and the probe did not find it there, but that window is holding content, so nothing may reopen the web view elsewhere. Captured definition: ${JSON.stringify(captured)}`,
+          );
+          throw new Error(
+            describeWebViewMoveFailure(
+              'not-reopened',
+              `Could not move webview ${webViewId} to ${targetDescription}: adopting it there timed out and could not be confirmed (${getErrorMessage(e)}), and window ${standingNewWindow.windowId} is holding content, so it was not reopened anywhere. Its captured definition is in the log.`,
+            ),
+          );
         }
       }
       logger.warn(
