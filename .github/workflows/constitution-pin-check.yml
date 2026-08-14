@@ -35,6 +35,10 @@ jobs:
 
           # The pinned version lives in the HTML comment on line 1, e.g.
           # <!-- Clanker Constitution v2026.08.11 | https://github.com/kenn-io/constitution -->
+          # That header is upstream's own and carries the release's version — every published
+          # release has it. It is not a local addition, so a verbatim bump brings the new
+          # version's header with it and this parse keeps working. If upstream ever changes the
+          # format, this job fails loudly below rather than reporting a stale pin as current.
           pinned="$(head -1 CONSTITUTION.md | grep -oE 'v[0-9]{4}\.[0-9]{2}\.[0-9]{2}' | head -1 || true)"
           if ! printf '%s' "$pinned" | grep -qE "$version_re"; then
             echo "::error::Could not read a pinned version from line 1 of CONSTITUTION.md."
