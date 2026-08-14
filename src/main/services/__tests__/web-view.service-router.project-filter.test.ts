@@ -236,6 +236,10 @@ describe("a '?' reuse search limited to a project", () => {
         createNewIfNotFound: false,
       }),
     ).resolves.toBeUndefined();
+    // The not-found answer has to be the routing target's own, reached by falling through to it —
+    // a decline that short-circuits before asking would answer "not found" for a web view sitting
+    // in the very window it never asked
+    expect(target.openWebView).toHaveBeenCalled();
   });
 
   test('a filtered open that would create lands in the routing target when a window could not be asked, like an unfiltered one', async () => {

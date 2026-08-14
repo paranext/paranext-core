@@ -1132,4 +1132,109 @@ describe('window layout persistence service', () => {
     expect(written.windows[1].bounds).toEqual({ x: 9, y: 9, width: 900, height: 900 });
     expect(written.windows[1].isMaximized).toBe(true);
   });
+
+  test('a maximize keeps the normal placement its capture does not carry', async () => {
+    // A window's normal placement is captured only while the window is in its normal state, so the
+    // capture that reports a maximize (or a minimize, or full screen) carries the flags alone. The
+    // entry has to keep the placement that capture is silent about: it is where the window goes
+    // back to, and losing it the first time the user maximizes returns the window next session at a
+    // default size instead of where they left it.
+    const normalBounds = { x: 10, y: 20, width: 800, height: 600 };
+    const displayBounds = { x: 0, y: 0, width: 1920, height: 1080 };
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [
+        {
+          layout: layoutWithTab('one'),
+          bounds: normalBounds,
+          displayBounds,
+          isFullScreen: true,
+          isMain: true,
+        },
+      ],
+      11,
+    );
+
+    // The user left full screen and maximized: both flags moved, neither placement was captured
+    service.updateWindowBounds(11, { isMaximized: true, isFullScreen: false });
+    await service.writeNow();
+
+    const written = writtenStructure().windows[0];
+    expect(written.bounds).toEqual(normalBounds);
+    expect(written.displayBounds).toEqual(displayBounds);
+    expect(written.isMaximized).toBe(true);
+    // A flag the capture reports as `false` is the window saying it is not in that state, not the
+    // capture saying nothing — treating the two alike would leave a flag set for good, and a window
+    // the user took out of full screen would come back full screen every session after
+    expect(written.isFullScreen).toBe(false);
+  });
+
+  test('a window restored to its normal state clears the flag its entry was carrying', async () => {
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [
+        {
+          layout: layoutWithTab('one'),
+          bounds: { x: 10, y: 20, width: 800, height: 600 },
+          displayBounds: { x: 0, y: 0, width: 1920, height: 1080 },
+          isMaximized: true,
+          isMain: true,
+        },
+      ],
+      11,
+    );
+
+    // Un-maximized: the window is in its normal state again, so this capture carries a placement
+    // as well as the flags
+    const restoredBounds = { x: 30, y: 40, width: 900, height: 700 };
+    service.updateWindowBounds(11, {
+      bounds: restoredBounds,
+      displayBounds: { x: 0, y: 0, width: 1920, height: 1080 },
+      isMaximized: false,
+      isFullScreen: false,
+    });
+    await service.writeNow();
+
+    const written = writtenStructure().windows[0];
+    expect(written.bounds).toEqual(restoredBounds);
+    expect(written.isMaximized).toBe(false);
+  });
+
+  test('a capture leaves alone every field it does not carry, flags included', async () => {
+    // Merged field by field: a capture states what it observed, and a field it omits is not a
+    // statement about that field. Main's own capture always reports both flags, so an update
+    // carrying neither is a probe for the merge being per field rather than a session that could
+    // happen — but every field of a captured state is optional, and a merge that read an absent
+    // field as a value would answer for a window that never said so.
+    const displayBounds = { x: 0, y: 0, width: 1920, height: 1080 };
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [
+        {
+          layout: layoutWithTab('one'),
+          bounds: { x: 10, y: 20, width: 800, height: 600 },
+          displayBounds,
+          isMain: true,
+        },
+      ],
+      11,
+    );
+
+    // The flags come from a capture rather than from the seeded entry because the file cannot hold
+    // a `false` one: parsing keeps a flag only when it was saved as `true`
+    service.updateWindowBounds(11, { isMaximized: true, isFullScreen: false });
+
+    const movedBounds: WindowBoundsState = { bounds: { x: 5, y: 5, width: 400, height: 300 } };
+    service.updateWindowBounds(11, movedBounds);
+    await service.writeNow();
+
+    const written = writtenStructure().windows[0];
+    expect(written.bounds).toEqual(movedBounds.bounds);
+    expect(written.displayBounds).toEqual(displayBounds);
+    expect(written.isMaximized).toBe(true);
+    expect(written.isFullScreen).toBe(false);
+  });
 });
