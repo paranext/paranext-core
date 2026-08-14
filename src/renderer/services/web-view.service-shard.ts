@@ -114,7 +114,10 @@ import {
   WindowEmptiedReason,
   WindowEmptiedResponse,
 } from '@shared/data/window-layout-persistence.model';
-import { reconcileSavedLayout } from '@shared/utils/saved-layout-reconciliation.util';
+import {
+  reconcileSavedLayout,
+  savedLayoutHasAnyTabs,
+} from '@shared/utils/saved-layout-reconciliation.util';
 import {
   buildLegacyColorVarsLogMessage,
   transformLegacyColorVars,
@@ -805,28 +808,6 @@ function collectWebViewIdsFromLayoutInfo(layout: LayoutInfo): Set<WebViewId> {
 }
 
 /**
- * Whether a layout holds any tab at all (docked, floated, or maximized) — used to decide whether a
- * freshly loaded layout leaves this window's dock empty. Same traversal shape as
- * {@link collectWebViewIdsFromLayoutInfo}, but matching ANY tab rather than only web view tabs: a
- * dock is empty when it has no tabs, of any type.
- */
-function hasAnyTabs(layout: LayoutInfo): boolean {
-  const visit = (node: unknown): boolean => {
-    if (!node || typeof node !== 'object') return false;
-    if ('tabs' in node && Array.isArray(node.tabs) && node.tabs.length > 0) return true;
-    if ('children' in node && Array.isArray(node.children)) return node.children.some(visit);
-    return false;
-  };
-
-  return (
-    visit(layout.dockbox) ||
-    visit(layout.floatbox) ||
-    visit(layout.maxbox) ||
-    visit(layout.windowbox)
-  );
-}
-
-/**
  * Emits {@link onDidCloseWebView} for every web view that was open before a whole-layout load and is
  * not present in the loaded layout. `PapiDockLayout.loadLayout` replaces all tabs at once without
  * running rc-dock's per-tab remove callback (the only other place the close event is emitted — see
@@ -1223,7 +1204,7 @@ async function getPersistedLayout(
  * @param layout The layout that was just loaded into the dock
  */
 function reportIfLoadedLayoutIsEmpty(layout: LayoutInfo): void {
-  if (isRunningOnFallbackLayout || hasAnyTabs(layout)) return;
+  if (isRunningOnFallbackLayout || savedLayoutHasAnyTabs(layout)) return;
   reportDockEmptied('born-empty');
 }
 
@@ -2376,6 +2357,11 @@ export const openWebView = async (
   // provider's side effects for a tab that is about to be destroyed with it
   throwIfWindowIsClosing(`open web view ${webViewType}`);
   await waitForInitialize();
+  // A layout load in flight is about to replace this dock wholesale with what it read before this
+  // open, so docking now loses the web view — silently, since the close events that load emits are
+  // diffed against the same reading. Ahead of the existing-web-view search below as well as the
+  // dock add: that search reads a dock the load is about to replace.
+  await waitForLayoutLoadToSettle();
 
   const optionsDefaulted = getWebViewOptionsDefaults(options);
 
@@ -2570,7 +2556,7 @@ export async function handleDockEmptiedByRemoval(layout: LayoutInfo): Promise<vo
     await dockHomeInThisWindowLoggingFailure();
     return;
   }
-  if (!hasAnyTabs(layout)) {
+  if (!savedLayoutHasAnyTabs(layout)) {
     logger.debug(
       `Window ${globalThis.windowId}'s dock has no tabs left anywhere; reporting the emptiness to main`,
     );
@@ -2802,6 +2788,9 @@ const papiWebViewService: WebViewServiceType = {
  * project arrives as an argument rather than being looked up here.
  */
 async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layout | undefined> {
+  // Routed here by the main process, the same as an open or an adopt, so it needs the same refusal:
+  // a tab put in a window whose close is decided is destroyed with it moments later
+  throwIfWindowIsClosing('open a settings tab');
   const settingsTabId = newGuid();
 
   const layout = await addTab<SettingsTabData>(

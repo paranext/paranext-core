@@ -230,7 +230,7 @@ describe('the initial layout load against a dock that gained content mid-load', 
   });
 });
 
-describe('a mid-session layout load racing an adopt', () => {
+describe('a mid-session layout load racing content arriving', () => {
   /** Let every already-scheduled continuation run, so a negative can be asserted */
   async function settle() {
     for (let turn = 0; turn < 3; turn += 1)
@@ -241,12 +241,17 @@ describe('a mid-session layout load racing an adopt', () => {
       });
   }
 
-  test('the adopt waits for the load instead of docking into a dock about to be replaced', async () => {
-    // The empty-dock checkpoints cannot help here: this window already has content, so the reload
-    // cannot tell what arrived during it from what it is replacing. It would apply its pre-adopt
-    // answer over the adopted web view — and silently, since the close events it emits are diffed
-    // against that same pre-adopt snapshot, leaving the controller, nonce and state that web view
-    // registered with nothing to dispose them.
+  /**
+   * Stand a window up holding one web view, then leave it reloading with its saved-layout request
+   * hanging — the stretch anything arriving in this window has to wait out.
+   *
+   * The empty-dock checkpoints cannot help a reload like this one: the window already has content,
+   * so the load cannot tell what arrived during it from what it is replacing. It would apply its
+   * pre-arrival answer over the web view that just landed — and silently, since the close events it
+   * emits are diffed against that same pre-arrival reading, leaving the controller, nonce and state
+   * that web view registered with nothing to dispose them.
+   */
+  async function windowReloadingWithSavedLayoutHanging() {
     let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
     mocks.settingsSubscribe.mockImplementation(
       async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
@@ -279,6 +284,7 @@ describe('a mid-session layout load racing an adopt', () => {
     await vi.waitFor(() => expect(loadedLayouts.length).toBe(1));
     const [, publishedShard] = vi.mocked(networkObjectService.set).mock.calls[0];
     const shard = publishedShard as unknown as AdoptShard;
+    // Content in the dock is what makes the reload below one with something to lose
     await shard.adoptWebView({ id: 'settled-view', webViewType: 'test.type' });
 
     // The user switches interface mode, and the reload hangs on the saved-layout request
@@ -289,6 +295,19 @@ describe('a mid-session layout load racing an adopt', () => {
     doesLayoutGetHang = true;
     const reloading = interfaceModeCallback('power');
     await settle();
+
+    return {
+      module,
+      shard,
+      dockedWebViews,
+      reloading,
+      releaseLayoutGet: (response: unknown) => releaseLayoutGet(response),
+    };
+  }
+
+  test('an adopt waits for the load instead of docking into a dock about to be replaced', async () => {
+    const { shard, dockedWebViews, reloading, releaseLayoutGet } =
+      await windowReloadingWithSavedLayoutHanging();
 
     // A move lands in this window while that reload is in flight
     const adopting = shard.adoptWebView({ id: 'moved-view', webViewType: 'test.type' });
@@ -301,5 +320,25 @@ describe('a mid-session layout load racing an adopt', () => {
 
     await expect(adopting).resolves.toBe('moved-view');
     expect(dockedWebViews.map((webView) => webView.id)).toContain('moved-view');
+  });
+
+  test('an open waits for the load instead of docking into a dock about to be replaced', async () => {
+    // An open reaches this window the same way a move does — the router picks the window, and a
+    // routed open lands here whenever a command asks for a web view. The load in flight is just as
+    // fatal to it: the tab is wiped with no close event, so nothing disposes the controller, the
+    // nonce and the state the open has already registered.
+    const { module, dockedWebViews, reloading, releaseLayoutGet } =
+      await windowReloadingWithSavedLayoutHanging();
+
+    const opening = module.openWebView('test.opened');
+    await settle();
+
+    expect(dockedWebViews.map((webView) => webView.webViewType)).not.toContain('test.opened');
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+
+    await expect(opening).resolves.toEqual(expect.any(String));
+    expect(dockedWebViews.map((webView) => webView.webViewType)).toContain('test.opened');
   });
 });
