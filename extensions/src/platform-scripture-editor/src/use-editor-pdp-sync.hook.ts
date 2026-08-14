@@ -225,6 +225,14 @@ export function useEditorPdpSync({
   // echo (defer while actively editing) from a different document arriving (navigation: always
   // replace).
   const lastAppliedDocumentSelector = useRef<EditorDocumentSelector | undefined>(undefined);
+  // The `usjFromPdp` reference this effect has already acted on. Every decision below reads the
+  // (usjFromPdp, documentSelector) PAIR, but the two do not move together: `documentSelector`
+  // changes during the navigation render while `usjFromPdp` still holds the OLD chapter's data
+  // (`createUseDataHook` keeps the previous value until the new subscription delivers, flipping
+  // only `isLoading`). Acting on that render would treat the old chapter's bytes as the new
+  // chapter's — saving them through the new chapter's save function and mis-pairing the real
+  // delivery when it lands. Gating on a genuinely new delivery keeps the pair honest.
+  const lastProcessedUsjFromPdp = useRef<Usj | undefined>(undefined);
   useEffect(() => {
     if (!usjFromPdp) return;
     if (!editorRef.current) {
@@ -235,8 +243,15 @@ export function useEditorPdpSync({
       lastIncomingUsjDeferred.current = undefined;
       warnedLossyDifferences.current = [];
       lastAppliedDocumentSelector.current = undefined;
+      lastProcessedUsjFromPdp.current = undefined;
       return;
     }
+    // A re-run with no new delivery (the selector moved ahead of its data, or an unrelated dep
+    // changed) carries no information to act on. Reference equality is the right test: each
+    // delivery hands down a new object, and a re-delivery of identical content under
+    // `whichUpdates: '*'` is a fresh object too, so genuine echoes still get through.
+    if (usjFromPdp === lastProcessedUsjFromPdp.current) return;
+    lastProcessedUsjFromPdp.current = usjFromPdp;
 
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
     // has the best data. This could happen if the selected chapter changed or something other than

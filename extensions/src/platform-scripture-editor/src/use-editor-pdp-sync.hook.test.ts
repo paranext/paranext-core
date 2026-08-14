@@ -337,6 +337,59 @@ describe('useEditorPdpSync', () => {
     expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
   });
 
+  // Regression: the selector moves one render BEFORE its data. `createUseDataHook` keeps the
+  // previous selector's `data` until the new subscription delivers (it only flips `isLoading` on a
+  // selector change), so a render exists where `documentSelector` is the NEW chapter while
+  // `usjFromPdp` is still the OLD chapter's. Acting on that pair is acting on a lie: the hook
+  // would treat the stale content as belonging to the new chapter — pushing the old chapter's
+  // bytes through the NEW chapter's save function, then mis-pairing the real delivery when it
+  // lands. Nothing may happen until data and selector describe the same document.
+  it('does nothing when the selector changes before the new chapter data arrives', () => {
+    const gen1 = makeChapterUsj('1', 'In the beginning...', { verseNumber: '1' });
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => gen1,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({
+        usjFromPdp,
+        documentSelector,
+      }: {
+        usjFromPdp: Usj;
+        documentSelector: EditorDocumentSelector;
+      }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          documentSelector,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: gen1, documentSelector: gen1Selector } },
+    );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+
+    // Navigate GEN 1 -> EXO 1. The selector is already EXO 1; the data is still GEN 1's.
+    act(() => rerender({ usjFromPdp: gen1, documentSelector: exo1Selector }));
+
+    expect(setUsjSpy).not.toHaveBeenCalled();
+    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+  });
+
   // Defense-in-depth: before anything has been applied to a (focused) editor, an incoming update
   // can never be the "same document" as what the editor shows, so it replaces instead of
   // deferring — a fresh editor must always receive its first content.
