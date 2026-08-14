@@ -12,7 +12,10 @@ import { ABOUT_DIALOG } from '@renderer/components/dialogs/about-dialog.componen
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 import { DIALOGS } from '@renderer/components/dialogs/index';
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
-import { showModalDialogOverlay } from '@renderer/services/overlays/overlay.service-host';
+import {
+  rejectModalDialogOverlaysOnShutdown,
+  showModalDialogOverlay,
+} from '@renderer/services/overlays/overlay.service-host';
 import {
   rejectAndRemoveOverlay,
   resolveAndRemoveOverlay,
@@ -391,6 +394,17 @@ export async function startDialogServiceShard(): Promise<void> {
   window.addEventListener('beforeunload', async () => {
     // TODO: preserve requests between refreshes - stop rejecting all remaining requests
     dialogRequests.forEach((request) => request.reject(`DialogService is shutting down`));
+    // The modal half of the same job, and the only thing anywhere that does it. A modal's promise
+    // lives in its overlay rather than in `dialogRequests` above, and the router lifts the request
+    // timeout for `showDialog`, so a modal still on screen when this window goes leaves its
+    // requestor waiting for the rest of the session. The per-request refusal cannot stand in for
+    // this: it speaks only for a close already decided when the dialog arrives, and neither of the
+    // other two ways this window ends is visible to it — a modal is an overlay and no dock add, so
+    // it is not the arrival that keeps a window whose emptiness report is being answered, and a
+    // close the user or a quit decides is settled in the main process and never announced here.
+    // Unload is the one moment all three have in common. Same words as the line above so a
+    // requestor is told one story whichever kind of dialog it asked for.
+    rejectModalDialogOverlaysOnShutdown('DialogService is shutting down');
     await dialogServiceNetworkObject.dispose();
   });
 }
