@@ -908,8 +908,14 @@ function beginTrackedLayoutLoad(): () => void {
  * Wait, bounded, for the layout loads in flight to finish — see {@link layoutLoadInFlight}. Loads
  * rather than load: one superseded while this waits hands the dock to a newer one, and it is
  * whichever load actually reaches the dock that this exists to stay out of the way of.
+ *
+ * Exported for the routed entry points that dock into this window from other modules — the dialog
+ * shard's `showDialog`. The load state this reads lives here, so the wait has to be asked for from
+ * here.
+ *
+ * @internal function; not exposed on papi
  */
-async function waitForLayoutLoadToSettle(): Promise<void> {
+export async function waitForLayoutLoadToSettle(): Promise<void> {
   let loadInFlight = layoutLoadInFlight;
   if (!loadInFlight) return;
   logger.debug('Waiting for the layout load in flight before docking into this window');
@@ -1878,9 +1884,14 @@ let isWindowToldToClose = false;
  * not to create it" answer: a router reading that would clean up as though the open had been
  * considered and turned down, instead of taking the web view somewhere it can live.
  *
+ * Exported for the routed entry points that dock into this window from other modules — the dialog
+ * shard's `showDialog`. The record it reads lives here, so the refusal has to be asked for from
+ * here.
+ *
  * @param operation What was being asked of this window, for the error message
+ * @internal function; not exposed on papi
  */
-function throwIfWindowIsClosing(operation: string): void {
+export function throwIfWindowIsClosing(operation: string): void {
   if (!isWindowToldToClose) return;
   throw new Error(
     `web-view.service-shard: window ${globalThis.windowId} cannot ${operation}: the main process has told this window that it is closing.`,
