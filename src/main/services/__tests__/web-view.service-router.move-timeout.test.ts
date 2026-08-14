@@ -51,8 +51,15 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-/** Wire windows whose WebView service shards are the given objects */
-function withWindows(shardsByWindowId: Record<number, unknown>) {
+/**
+ * Wire windows whose WebView service shards are the given objects, telling each stand-in which
+ * window serves it — the ids a shard answers with are scoped to its own window (see
+ * {@link windowShard}), so a shard that does not know which window it is cannot answer as one.
+ */
+function withWindows(shardsByWindowId: Record<number, WindowShard>) {
+  Object.entries(shardsByWindowId).forEach(([windowId, shard]) =>
+    shard.setWindowId(Number(windowId)),
+  );
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId);
 }
 
@@ -94,7 +101,12 @@ const { moveWebView } = testingWebViewServiceRouter;
  * `web-view.service-router.move.test.ts`.
  */
 function windowShard(openWebViewIds: string[]) {
+  /** Set by `withWindows` from the id the shard is wired under */
+  let windowId = 0;
   return {
+    setWindowId: (id: number) => {
+      windowId = id;
+    },
     getOpenWebViewDefinition: vi.fn(async (id: string) =>
       openWebViewIds.includes(id) ? { id } : undefined,
     ),
@@ -105,11 +117,17 @@ function windowShard(openWebViewIds: string[]) {
     captureAndCloseWebView: vi.fn<
       (webViewId: WebViewId) => Promise<SavedWebViewDefinition | undefined>
     >(async (id) => (openWebViewIds.includes(id) ? { id, webViewType: 'test.type' } : undefined)),
+    // A window holds a web view under its own scoping of the id, so the answer to an adopt is not
+    // the id it was handed — echoing it back would make a move's answer indistinguishable from its
+    // caller's own id, and every assertion about which one the move reports unfalsifiable
     adoptWebView: vi.fn<
       (savedWebViewDefinition: SavedWebViewDefinition) => Promise<WebViewId | undefined>
-    >(async (savedWebViewDefinition) => savedWebViewDefinition.id),
+    >(async (savedWebViewDefinition) => `${savedWebViewDefinition.id}-window-${windowId}`),
   };
 }
+
+/** A window's WebView service shard stand-in, as {@link windowShard} builds it */
+type WindowShard = ReturnType<typeof windowShard>;
 
 /** The rejection the network plumbing produces when a request expires with no answer */
 function requestTimedOutError() {
@@ -136,14 +154,17 @@ describe('moveWebView when the target adopt times out', () => {
     const target = windowShard([]);
     target.adoptWebView.mockRejectedValue(requestTimedOutError());
     // First asked during the ownership search (target does not hold it yet); asked again by the
-    // probe after the timed-out adopt, by which time the adopt has landed in the target
+    // probe after the timed-out adopt, by which time the adopt has landed in the target — under the
+    // target's own scoping of the id, which is what the probe finds it as
     target.getOpenWebViewDefinition.mockResolvedValueOnce(undefined);
-    target.getOpenWebViewDefinition.mockResolvedValue({ id: 'view-1' });
+    target.getOpenWebViewDefinition.mockResolvedValue({ id: 'view-1-window-3' });
     withWindows({ 2: owner, 3: target });
 
     const movedId = await moveWebView('view-1', 3);
 
-    expect(movedId).toBe('view-1');
+    // What the target says it holds the view under, not the id the move was given: a late-landed
+    // adopt is still an adopt, and the caller has to use the target's id for anything after it
+    expect(movedId).toBe('view-1-window-3');
     // The move succeeded late, so nothing may reopen the captured definition anywhere — that
     // would put the same web view id live in two windows
     expect(owner.adoptWebView).not.toHaveBeenCalled();

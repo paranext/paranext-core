@@ -579,6 +579,8 @@
   "%tab_contextMenu_floatTab%": "Abrir como ventana flotante",
   "%tab_contextMenu_moveTabToNewWindow%": "Mover la pestaña a una ventana nueva",
   "%tab_contextMenu_moveTabToNewWindow_failed%": "No se pudo mover la pestaña a una ventana nueva.",
+  "%tab_contextMenu_moveTabToNewWindow_failedNotReopened%": "No se pudo mover la pestaña a una ventana nueva y no se pudo volver a abrir en ninguna parte, por lo que ahora está cerrada. Sus detalles están en el registro.",
+  "%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%": "No se pudo mover la pestaña a una ventana nueva. Se volvió a abrir en una ventana diferente.",
   "%tab_title_error%": "Error",
   "%tab_title_unknown%": "Desconocido",
   "%test_deprecated_string%": "Test Deprecated String (obsoleto - sin traducir intencionalmente)",
