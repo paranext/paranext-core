@@ -98,8 +98,15 @@ type RoutedShard = {
  * Non-web-view tabs go in through `addTabToDock` and are recorded separately, matching the dock's
  * own split: a settings tab is not a web view, so it is in none of the web view lists a load
  * reads.
+ *
+ * @param doesLoadReplaceTheDock Whether a whole-layout load also empties what is docked, the way
+ *   the real dock's wholesale replacement does. Off by default: the tests that stand a window up by
+ *   loading empty layouts need what they docked to outlive them, or the reload they are about to
+ *   race would begin against an empty dock and be tracked by nothing. On for the tests that assert
+ *   a web view is GONE, where the load has to actually take it — every layout loaded in this file
+ *   carries no tabs, so replacing the dock's contents with one is emptying the dock.
  */
-function makeLiveDockLayout() {
+function makeLiveDockLayout({ doesLoadReplaceTheDock = false } = {}) {
   const loadedLayouts: LayoutInfo[] = [];
   const dockedWebViews: WebViewDefinition[] = [];
   const dockedTabs: SavedTabInfo[] = [];
@@ -107,6 +114,10 @@ function makeLiveDockLayout() {
     onLayoutChangeRef: { current: undefined },
     loadLayout: (layout: LayoutInfo) => {
       loadedLayouts.push(layout);
+      if (doesLoadReplaceTheDock) {
+        dockedWebViews.length = 0;
+        dockedTabs.length = 0;
+      }
     },
     getAllWebViewDefinitions: () => [...dockedWebViews],
     getWebViewDefinition: (webViewId: string) =>
@@ -125,26 +136,55 @@ function makeLiveDockLayout() {
   return { dockLayout, loadedLayouts, dockedWebViews, dockedTabs };
 }
 
-/** Stub the web view provider (and the theme it needs) so `adoptWebView`'s open path can run */
+/**
+ * Stub the web view provider (and the theme it needs) so `adoptWebView`'s open path can run.
+ *
+ * The handle this returns can park `getWebView` until the test lets it answer. Nothing else in
+ * these tests can hold that stretch open, and it is the one stretch of the open path with no bound
+ * on it at all: `getWebView` is a round trip into the extension host running extension code.
+ */
 async function primeProvider() {
   const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
   const { localThemeService } = await import('@renderer/services/theme.service');
+  let doesGetWebViewPark = false;
+  let parkedWebViewRequests: (() => void)[] = [];
   // `webViewProviderService` and `localThemeService` are mocked as `{}` (file-level mocks above);
   // attaching stub methods needs a type assertion because the plain-object mock type doesn't model
   // them — same reasoning as the equivalent stubs in `web-view.service-shard.test.ts`.
   (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
     async () => ({
-      getWebView: async (saved: SavedWebViewDefinition) => ({
-        id: saved.id,
-        webViewType: saved.webViewType,
-        contentType: 'html',
-        content: '<p>moved</p>',
-      }),
+      getWebView: async (saved: SavedWebViewDefinition) => {
+        if (doesGetWebViewPark)
+          await new Promise<void>((resolve) => {
+            parkedWebViewRequests.push(resolve);
+          });
+        return {
+          id: saved.id,
+          webViewType: saved.webViewType,
+          contentType: 'html',
+          content: '<p>moved</p>',
+        };
+      },
     }),
   );
   (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
     cssVariables: {},
   }));
+  return {
+    /** Park every `getWebView` from here on until {@link releaseTheProvider} */
+    makeTheProviderThink: () => {
+      doesGetWebViewPark = true;
+    },
+    /** Resolves once a `getWebView` call is parked — the open has reached the provider */
+    waitForTheProviderToBeAsked: () =>
+      vi.waitFor(() => expect(parkedWebViewRequests.length).toBeGreaterThan(0)),
+    /** Let every parked `getWebView` answer */
+    releaseTheProvider: () => {
+      const parked = parkedWebViewRequests;
+      parkedWebViewRequests = [];
+      parked.forEach((answer) => answer());
+    },
+  };
 }
 
 /**
@@ -190,6 +230,22 @@ function getCloseEmitter() {
   )?.[1];
   if (!closeEmitter) throw new Error('close emitter was never created');
   return closeEmitter;
+}
+
+/** The ids of the web views a close event has been emitted for */
+function getClosedWebViewIds(): string[] {
+  const closeEvents = getCloseEmitter().emit.mock.calls as [{ webView: { id: string } }][];
+  return closeEvents.map(([event]) => event.webView.id);
+}
+
+/** Let every already-scheduled continuation run, so a negative can be asserted */
+async function settle() {
+  for (let turn = 0; turn < 3; turn += 1)
+    // Draining is inherently sequential
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
 }
 
 // Starting the shard deletes `globalThis.open` so web views cannot make popups. That is a one-way
@@ -242,16 +298,6 @@ describe('the initial layout load against a dock that gained content mid-load', 
 });
 
 describe('a mid-session layout load racing content arriving', () => {
-  /** Let every already-scheduled continuation run, so a negative can be asserted */
-  async function settle() {
-    for (let turn = 0; turn < 3; turn += 1)
-      // Draining is inherently sequential
-      // eslint-disable-next-line no-await-in-loop
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
-      });
-  }
-
   /**
    * Stand a window up holding one web view, then leave it reloading with its saved-layout request
    * hanging — the stretch anything arriving in this window has to wait out.
@@ -451,5 +497,217 @@ describe('a mid-session layout load racing content arriving', () => {
 
     await expect(openingSettings).rejects.toThrow(/closing/);
     expect(dockedTabs.map((tab) => tab.tabType)).not.toContain('settings-tab');
+  });
+});
+
+describe('content admitted to the dock after the entry point had its say', () => {
+  /**
+   * Stand a window up holding one web view with NOTHING loading — which is what an entry point's
+   * wait finds when it runs — and hand back the levers this stretch needs: a provider the test can
+   * leave thinking, and a reload the test starts and releases itself.
+   *
+   * Everything here happens after an entry point's guard and wait have already answered for the
+   * moment the request arrived. What follows them is a round trip into the extension host running
+   * extension code, of no bounded duration, and a load that starts inside it is one that nothing
+   * between there and the dock write has been told about.
+   */
+  async function windowHoldingOneWebViewWithNothingLoading() {
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    // A load reads the mode for itself, so the notification and the read have to agree
+    let interfaceMode = 'power';
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    let releaseLayoutGet: (response: unknown) => void = () => {};
+    let doesLayoutGetHang = false;
+    let layoutGetRequestCount = 0;
+    // `stay` until a test says otherwise — see the same answer in the describe above
+    let emptiedResponse: unknown = { action: 'stay' };
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:emptied') return emptiedResponse;
+      if (requestType !== 'windowLayout:get') return undefined;
+      layoutGetRequestCount += 1;
+      if (!doesLayoutGetHang) return { kind: 'empty' };
+      return new Promise((resolve) => {
+        releaseLayoutGet = resolve;
+      });
+    });
+
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { networkObjectService } = await import('@shared/services/network-object.service');
+    const { dockLayout, loadedLayouts, dockedWebViews, dockedTabs } = makeLiveDockLayout({
+      doesLoadReplaceTheDock: true,
+    });
+    module.registerDockLayout(dockLayout);
+    await module.startWebViewServiceShard();
+    const provider = await primeProvider();
+    await vi.waitFor(() => expect(loadedLayouts.length).toBe(1));
+    const [, publishedShard] = vi.mocked(networkObjectService.set).mock.calls[0];
+    const shard = publishedShard as unknown as RoutedShard;
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    const notifyInterfaceMode = interfaceModeCallback;
+    // The mode has to be somewhere else before a switch back to power reloads anything — the
+    // subscription ignores a notification that leaves the mode where it was. Only the power reload
+    // can be made to hang: simple mode loads a static layout with no request behind it.
+    interfaceMode = 'simple';
+    await notifyInterfaceMode('simple');
+    // Docked after that first switch, so this window holds content by the time the reload below
+    // begins: a load that began against an EMPTY dock is tracked by nothing and waited for by
+    // nobody, which would leave these tests racing a load that is not there
+    await shard.adoptWebView({ id: 'settled-view', webViewType: 'test.type' });
+
+    return {
+      module,
+      dockedWebViews,
+      dockedTabs,
+      provider,
+      /**
+       * Start the load this window's incoming content has to survive, hanging on its saved-layout
+       * request until {@link releaseLayoutGet}. Answers once the load is actually in flight.
+       */
+      startReloadWithSavedLayoutHanging: async () => {
+        const requestsBeforeReload = layoutGetRequestCount;
+        interfaceMode = 'power';
+        doesLayoutGetHang = true;
+        const reloading = notifyInterfaceMode('power');
+        // A load is only something to wait for once it has begun; it has begun once it has asked
+        await vi.waitFor(() => expect(layoutGetRequestCount).toBeGreaterThan(requestsBeforeReload));
+        // Wrapped, because this returns while the load it started is still in flight: an async
+        // function's own promise adopts a promise it returns bare, so awaiting the start would be
+        // awaiting the load
+        return { reloading };
+      },
+      releaseLayoutGet: (response: unknown) => releaseLayoutGet(response),
+      /**
+       * Empty this window's dock and have the main process answer that it is closing — the one
+       * moment `isWindowToldToClose` latches, and one that can come at any time, including while a
+       * web view provider is still thinking
+       */
+      emptyTheDockAndBeToldItIsClosing: async () => {
+        emptiedResponse = { action: 'closing' };
+        await module.handleDockEmptiedByRemoval(EMPTY_LAYOUT);
+      },
+    };
+  }
+
+  test('a web view waits for a load that started while its provider was thinking', async () => {
+    // The stretch this covers is the one an entry point cannot answer for: the open's own wait had
+    // nothing to wait for when it ran, and the load began while the provider was still thinking.
+    // Docking into that load's dock loses the web view — and silently, since the close events the
+    // load emits are diffed against a reading taken before this web view existed, leaving the
+    // controller, the nonce and the state it registered with nothing to dispose them.
+    const {
+      module,
+      dockedWebViews,
+      provider,
+      startReloadWithSavedLayoutHanging,
+      releaseLayoutGet,
+    } = await windowHoldingOneWebViewWithNothingLoading();
+
+    provider.makeTheProviderThink();
+    const opening = module.openWebView('test.opened');
+    await provider.waitForTheProviderToBeAsked();
+
+    const { reloading } = await startReloadWithSavedLayoutHanging();
+
+    provider.releaseTheProvider();
+    await settle();
+
+    expect(dockedWebViews.map((webView) => webView.webViewType)).not.toContain('test.opened');
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+
+    const openedId = await opening;
+    expect(dockedWebViews.map((webView) => webView.webViewType)).toContain('test.opened');
+    expect(getClosedWebViewIds()).not.toContain(openedId);
+  });
+
+  test('a web view is refused once this window is told it is closing while its provider thinks', async () => {
+    // The other half of the same stretch: nothing about a decided close is announced ahead of time,
+    // so the answer that latches it can land at any moment — including while the provider is
+    // running. A web view docked after that is destroyed with the window moments later, and
+    // refusing is what sends it back up the router's recovery ladder instead.
+    const { module, dockedWebViews, provider, emptyTheDockAndBeToldItIsClosing } =
+      await windowHoldingOneWebViewWithNothingLoading();
+
+    provider.makeTheProviderThink();
+    const opening = module.openWebView('test.opened');
+    // Marked handled from the start: the refusal lands while the release below is being awaited,
+    // and an unhandled rejection in that gap would fail the run for the wrong reason
+    opening.catch(() => {});
+    await provider.waitForTheProviderToBeAsked();
+
+    await emptyTheDockAndBeToldItIsClosing();
+
+    provider.releaseTheProvider();
+
+    await expect(opening).rejects.toThrow(/closing/);
+    expect(dockedWebViews.map((webView) => webView.webViewType)).not.toContain('test.opened');
+  });
+
+  test('a reload waits for a load in flight', async () => {
+    // A reload reaches the dock with none of an entry point's protections behind it — it goes
+    // straight to the open path. A restored tab fetching its content and every extension reload
+    // both come this way, so a layout load is exactly the company it keeps, and the load is as
+    // fatal to what it brings as to any other arrival.
+    const { module, dockedWebViews, startReloadWithSavedLayoutHanging, releaseLayoutGet } =
+      await windowHoldingOneWebViewWithNothingLoading();
+
+    const { reloading } = await startReloadWithSavedLayoutHanging();
+
+    const reloadingWebView = module.reloadWebView('test.type', 'settled-view');
+    await settle();
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+
+    await expect(reloadingWebView).resolves.toBe('settled-view');
+    expect(dockedWebViews.map((webView) => webView.id)).toContain('settled-view');
+  });
+
+  test('a tab waits for a load in flight', async () => {
+    // Driven straight at the dock write, because that is the whole of what the check there is for:
+    // every caller's own wait speaks for the moment its request arrived, and this one speaks for
+    // the moment the tab actually reaches the dock.
+    const { module, dockedTabs, startReloadWithSavedLayoutHanging, releaseLayoutGet } =
+      await windowHoldingOneWebViewWithNothingLoading();
+
+    const { reloading } = await startReloadWithSavedLayoutHanging();
+
+    const addingTab = module.addTab(
+      { id: 'late-tab', tabType: 'settings-tab' },
+      { type: 'float', position: 'center' },
+    );
+    await settle();
+
+    expect(dockedTabs.map((tab) => tab.id)).not.toContain('late-tab');
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+    await addingTab;
+
+    expect(dockedTabs.map((tab) => tab.id)).toContain('late-tab');
+  });
+
+  test('a tab is refused once this window is told it is closing', async () => {
+    const { module, dockedTabs, emptyTheDockAndBeToldItIsClosing } =
+      await windowHoldingOneWebViewWithNothingLoading();
+
+    await emptyTheDockAndBeToldItIsClosing();
+
+    const addingTab = module.addTab(
+      { id: 'late-tab', tabType: 'settings-tab' },
+      { type: 'float', position: 'center' },
+    );
+
+    await expect(addingTab).rejects.toThrow(/closing/);
+    expect(dockedTabs.map((tab) => tab.id)).not.toContain('late-tab');
   });
 });
