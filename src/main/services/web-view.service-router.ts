@@ -878,7 +878,8 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
         {
           name: 'targetWindowId',
           required: true,
-          summary: "The target window's runtime id — reused across sessions, never persist one",
+          summary:
+            "The target window's runtime id — ids restart at 1 each launch, so never persist one",
           schema: { type: 'number' },
         },
       ],
