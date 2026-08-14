@@ -13,6 +13,7 @@ import {
   isWebViewNonceCorrect,
   reloadWebView,
   updateTabPartialSync,
+  getSavedWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-shard';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -81,10 +82,24 @@ async function retrieveWebViewContent(webViewType: string, id: string): Promise<
     bringToFront: false,
   });
 
-  if (!loadedId)
+  if (!loadedId) {
+    // Two very different answers arrive as the same `undefined`, and the dock tells them apart. A
+    // web view that is no longer in it left while the reload was in flight — a layout load took the
+    // dock wholesale, which is what an interface mode switch does to a tab still fetching its
+    // content, or the tab was dragged into another window. Whatever took it disposed what backed
+    // it, so there is nothing here to report. A web view still in the dock is one whose provider
+    // declined to supply content, leaving that tab waiting on content that is never coming, which
+    // nothing else will mention.
+    if (!getSavedWebViewDefinitionSync(id)) {
+      logger.debug(
+        `WebView with type ${webViewType} and id ${id} is no longer in this window's dock; nothing to reload`,
+      );
+      return;
+    }
     throw new Error(
       `WebView with type ${webViewType} and id ${id} returned undefined when reloading!`,
     );
+  }
 
   if (loadedId !== id)
     logger.error(`WebView with type ${webViewType} and id ${id} loaded into id ${loadedId}!`);
