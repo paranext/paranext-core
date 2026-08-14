@@ -532,11 +532,12 @@ export function removeWindow(window: BrowserWindow, windowId: number): void {
   const trackedIndex = trackedWindows.findIndex((tracked) => tracked.window === window);
   if (trackedIndex >= 0) trackedWindows.splice(trackedIndex, 1);
   readyWindowIds.delete(windowId);
-  // Electron reuses window IDs, so leaving any of these behind would speak for a window that no
-  // longer exists: the closing flag would tell a future window's close it is already on its way out,
-  // the ever-ready flag would make the next window to take this ID look, for the whole of its
-  // startup, like one that had been serving requests and died, and the abandoned flag would write
-  // that window off before it had loaded anything.
+  // These marks are this window's state, keyed by its ID. Left behind they keep answering for a
+  // window that no longer exists — anything that still holds the ID would be told it is closing,
+  // that it had been serving requests and died, or that it had been written off — and they would
+  // accumulate for the life of the process. (Electron hands out each ID at most once per process,
+  // so a later window can never be the one to ask; IDs only restart at 1 on the next launch, which
+  // is why none of them is ever persisted.)
   closingWindowIds.delete(windowId);
   everReadyWindowIds.delete(windowId);
   abandonedWindowIds.delete(windowId);
@@ -617,9 +618,9 @@ export function markWindowReady(windowId: number): void {
  * An id that is not tracked is ignored. A window's own close handler always runs while the window
  * is still tracked, so nothing legitimate arrives here for one that has gone — but a window that
  * has gone can still have a report in flight (its dock empties during teardown, and the answer to
- * that is a close). Electron reuses window ids, so recording such a mark would leave the next
- * window to take this id born closing: passed over by routing, and told 'closing' when it reports
- * its own emptiness, with no close ever scheduled for it.
+ * that is a close). Recording such a mark would add one nothing ever takes off again: the removal
+ * that would have cleared it has already run, so it would sit there for the life of the process,
+ * answering 'closing' for a window that is not there and never had a close scheduled for it.
  *
  * @param windowId Window that is on its way out
  */

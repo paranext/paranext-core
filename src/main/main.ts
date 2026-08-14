@@ -1131,24 +1131,21 @@ async function main() {
           // is re-checked immediately before the sync goes out.
           if (shouldWindowCloseAbortReadinessWait(process.platform)) startupReadinessAbort.abort();
 
-          // Flush the window-layouts structure with every still-tracked window in it, before any
-          // `closed` handler trims the list — a window that is not live at save time is not
-          // written, so this is what preserves the closing windows' entries across a quit (and the
-          // final window's entry on a last-window close). Capture this window's placement first so
-          // the flush holds its freshest bounds.
+          // Flush the window-layouts structure so this window's entry holds what it had open when
+          // the app went down. Capture its placement first so the flush holds its freshest bounds.
           //
           // On a multi-window quit every window flushes, and the flushes queue behind one another
-          // while the windows go down around them. Which windows a flush covers is fixed here, but
-          // what it writes for them is read when it reaches the front of the queue — so the LAST
-          // flush, the one that survives on disk, is only complete because a window going down with
-          // the app keeps its persistence state (see `handleWindowRemoved`'s disposition below).
+          // while the windows go down around them. A flush writes the structure as it stands when
+          // it reaches the front of the queue — so the LAST flush, the one that survives on disk,
+          // is only complete because a window going down with the app keeps its entry (see
+          // `handleWindowRemoved`'s disposition below).
           //
           // Only on this path: a window closing while the app stays up is leaving the structure,
           // and its `closed` handler below rewrites the structure without it.
           try {
             cancelPendingBoundsCapture();
             updateWindowBounds(windowId, captureWindowBoundsState());
-            await writeNow(getWindows().map((window) => window.id));
+            await writeNow();
           } catch (e) {
             // Losing the structure costs the user their window arrangement. Skipping the shutdown
             // tasks below would cost them their unsynced edits, which nothing can write back once
@@ -1217,8 +1214,8 @@ async function main() {
       // What this window's disappearance means for its entry. A deliberate close — the app stays up
       // — takes the entry with it, and the structure is rewritten without it below so the window
       // does not come back next session. A window going down with the app is NOT leaving the
-      // structure: it has to be there next session, so its entry (and the state every flush still
-      // queued behind this moment builds from) stays.
+      // structure: it has to be there next session, so its entry stays — including in every flush
+      // still queued behind this moment.
       // After the announcement above, which is synchronous and must not wait on a disk write, and
       // before the unsubscribers below, which spend the network service's whole registration retry
       // failing against a renderer that is already gone.
@@ -1228,7 +1225,7 @@ async function main() {
       // real only here — its close runs the async work above, and it is open and counted for all of
       // it. Told or not, every window passes through here, and untracked ids are ignored.
       handleWindowEmptied.handleWindowGone(windowId);
-      if (!isAppGoingDown) await writeNow(getWindows().map((window) => window.id));
+      if (!isAppGoingDown) await writeNow();
 
       try {
         await windowCloseUnsubscribers.runAllUnsubscribers();
