@@ -465,6 +465,10 @@ type FreshWindow = {
    * Close the created window for a caller that will never run its open — what became impossible
    * between creating the window and being ready to fill it. Nothing was ever opened here, so there
    * is nothing to report about where it went.
+   *
+   * The window is closed once however many times this is called, and whether or not the open above
+   * already took it down: calls after the first join that one attempt rather than issuing a close
+   * of their own, so a caller need not await one before making another.
    */
   discard: () => Promise<void>;
 };
@@ -485,9 +489,9 @@ async function createFreshWindow(webViewDescription: string): Promise<FreshWindo
   const creator = windowCreator;
   const windowId = await creator.createPendingContentWindow();
 
-  // Closes the window this call created, at most once, and never lets a failure to close replace
-  // the reason the window is being closed in the first place — a window that fails to close is a
-  // leak to warn about, not grounds to hide why the open itself did not succeed.
+  // Closes the window this call created, and never lets a failure to close replace the reason the
+  // window is being closed in the first place — a window that fails to close is a leak to warn
+  // about, not grounds to hide why the open itself did not succeed.
   //
   // Asks the window first whether anything reached it in the meantime: an open whose request timed
   // out can still have landed afterwards, and this window is the only place that knows. Every other
@@ -497,16 +501,9 @@ async function createFreshWindow(webViewDescription: string): Promise<FreshWindo
   //
   // A window kept this way is reported to the caller, since it is the one window that can be asked
   // what became of the open that appeared to fail.
-  //
-  // At most once is enforced here rather than left to callers: both of the returned methods close,
-  // so a caller that discards after a failed open — or discards twice — would otherwise issue a
-  // second close on a window whose close is already running, which trips the force-close escape
-  // hatch and abandons the first close's close-time work (see `window-emptiness.util.ts`).
-  let hasClosed = false;
-  const closeAbandonedWindow = async (
+  const closeWindowUnlessContentArrived = async (
     onWindowLeftStanding?: (standingWindow: WindowShard) => void,
   ) => {
-    if (hasClosed) return;
     try {
       const shard = await webViewShards.getShard(windowId);
       if (shard && (await shard.hasContentArrivedSinceEmptyReport())) {
@@ -525,9 +522,6 @@ async function createFreshWindow(webViewDescription: string): Promise<FreshWindo
         `Could not ask window ${windowId} whether content reached it before closing it: ${getErrorMessage(recheckError)}`,
       );
     }
-    // Marked before the call, not after: a close that threw may still have started, and the second
-    // close is the one this is protecting against
-    hasClosed = true;
     try {
       creator.closeWindow(windowId);
     } catch (closeError) {
@@ -535,6 +529,29 @@ async function createFreshWindow(webViewDescription: string): Promise<FreshWindo
         `Could not close window ${windowId} after its new-window open did not succeed: ${getErrorMessage(closeError)}`,
       );
     }
+  };
+
+  /**
+   * The one close this window ever gets, memoized so every later call joins it instead of starting
+   * another.
+   *
+   * At most once is enforced here rather than left to callers: both of the returned methods close,
+   * so a caller that discards after a failed open — or discards twice — would otherwise issue a
+   * second close on a window whose close is already running, which trips the force-close escape
+   * hatch and abandons the first close's close-time work (see `window-emptiness.util.ts`). A flag
+   * inside the close cannot enforce that: the only place to set one is past the cross-process
+   * awaits above, and calls that overlap all read it before any of them gets there.
+   *
+   * What a joining call therefore skips is the whole attempt, including the arrival re-check —
+   * whose answer cannot have changed under it, since the flag it reads stays set until the window
+   * next reports its dock empty, which a window holding content does not do — and its own
+   * `onWindowLeftStanding`, a report nothing but `runOpen` asks for and no caller runs twice, so
+   * joining costs nobody an answer they were waiting on.
+   */
+  let closeAttempt: Promise<void> | undefined;
+  const closeAbandonedWindow = (onWindowLeftStanding?: (standingWindow: WindowShard) => void) => {
+    closeAttempt ??= closeWindowUnlessContentArrived(onWindowLeftStanding);
+    return closeAttempt;
   };
 
   let shard: WebViewServiceShard;
@@ -1108,8 +1125,14 @@ async function moveWebViewToWindow(
   return moveWebView(webViewId, targetWindowId);
 }
 
-/** Internal-only export for testing; not for use in development */
-export const testingWebViewServiceRouter = { moveWebView };
+/**
+ * Internal-only export for testing; not for use in development.
+ *
+ * `createFreshWindow` is here because what it promises about overlapping closes cannot be exercised
+ * through any router method: every caller of one awaits each close before the next, which is the
+ * sequential case the promise is not about.
+ */
+export const testingWebViewServiceRouter = { moveWebView, createFreshWindow };
 
 // Router methods that route to the focused window's WebView service shard
 

@@ -162,6 +162,11 @@ function windowShard(openWebViewIds: string[]) {
     >(async (savedWebViewDefinition) =>
       scopeWebViewIdToWindow(savedWebViewDefinition.id, windowId),
     ),
+    // A window with nothing docked in it since its last emptiness report, which is what a window
+    // created to receive a moved web view is until the adopt lands. A stand-in without this answers
+    // every re-check with a TypeError, and the closes below would all reach the window through the
+    // "could not ask" branch instead of the "nothing arrived, so close it" one they describe.
+    hasContentArrivedSinceEmptyReport: vi.fn(async () => false),
   };
 }
 
@@ -452,6 +457,14 @@ describe('moveWebView', () => {
 
     expect(created.adoptWebView).not.toHaveBeenCalled();
     expect(creator.closeWindow).toHaveBeenCalledWith(7);
+    // Closed because the window answered that nothing reached it, not because it could not be
+    // asked: a stand-in the re-check cannot run against closes every window in this file through
+    // the "could not ask" branch, which makes every close assertion here pass for a reason none of
+    // them describe
+    expect(created.hasContentArrivedSinceEmptyReport).toHaveBeenCalled();
+    expect(mocks.loggerWarn).not.toHaveBeenCalledWith(
+      expect.stringContaining('whether content reached it'),
+    );
   });
 
   test('a capture that throws fails the move with the owner-search definition in the log', async () => {
