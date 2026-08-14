@@ -251,6 +251,24 @@ describe('re-checking whether a window is still empty before closing it', () => 
     expect(hasContentArrivedSinceEmptyReport).not.toHaveBeenCalled();
   });
 
+  test('a window whose last sibling starts closing during the re-check docks Home', async () => {
+    // Decisions from this handler are serialized against each other, but a window the user closes
+    // with its own X button marks itself closing on a path that serialization does not cover. So
+    // the window count can drop while a re-check is in flight, and a close decided on the count
+    // from before it closes the only window that would have been left — which takes the
+    // application down, the very outcome the last-window branch exists to prevent.
+    hasContentArrivedSinceEmptyReport.mockImplementation(async () => {
+      markedIds.add(2);
+      return false;
+    });
+    const handler = handlerOverWindows(2);
+
+    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
+
+    expect(closeWindow).not.toHaveBeenCalled();
+    expect(markWindowClosing).not.toHaveBeenCalled();
+  });
+
   test('a re-check that throws proceeds with the close', async () => {
     // The report was the renderer's own word about its own dock; a re-check that could not be made
     // is no reason to leave an empty window standing
