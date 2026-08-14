@@ -74,15 +74,19 @@ ever reviewed. Reviews run on **your own** agent subscription and consume your q
 see a job for that commit. An empty list means reviews are not being enqueued; check
 `~/.roborev/post-commit.log`, which records the real reason.
 
-If you install the agent hook, raise the default thresholds in `~/.roborev/config.toml` — the
-shipped defaults interrupt every five turns, and the default instruction uses Codex's
-`$roborev-fix` syntax rather than Claude Code's `/roborev-fix`:
+If you install the agent hook, keep roborev's default thresholds — they are tuned so the stack of
+unfixed findings stays small between reminders. One override is required, though: the shipped
+default instruction names Codex's `$roborev-fix`, which does nothing in Claude Code.
 
 ```toml
 [agent_hook]
-turn_threshold = 15
 instruction = "Invoke the /roborev-fix skill now."
 ```
+
+The hook reminds you every five turns once failed reviews have accumulated. When a long stretch of
+work genuinely should not be interrupted, use `/roborev-snooze on 2h` rather than raising
+`turn_threshold`: snoozing is temporary and scoped to the current worktree and branch, and reviews
+keep enqueueing while it is active.
 
 Then browse findings with `roborev tui`, or pull them into an agent session with `/roborev-fix`.
 
