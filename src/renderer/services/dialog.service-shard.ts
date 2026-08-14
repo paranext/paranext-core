@@ -272,6 +272,22 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
   }
 
   // Non-modal path: create rc-dock floating tab (existing behavior)
+
+  // Routed to this window by the main process, the same as an open or a settings tab, so it needs
+  // the same refusal: a dialog put in a window whose close is decided is destroyed with it moments
+  // later, leaving the requestor awaiting an answer from a dialog the user never saw. Ahead of the
+  // request registration below so the refusal reaches the caller as a rejection rather than as a
+  // dialog that quietly never opens.
+  webViewService.throwIfWindowIsClosing(`show dialog ${dialogType}`);
+  // And the same wait: a layout load in flight replaces this dock wholesale with what it read
+  // before this dialog existed. A dialog tab is not a web view, so it is in none of the lists a
+  // load diffs — it goes with nothing reported anywhere, and the dialog simply never appears.
+  await webViewService.waitForLayoutLoadToSettle();
+  // Again, because the wait above parks for as long as a load takes and this window's close can be
+  // decided inside it: `isWindowToldToClose` latches whenever an emptiness report is answered, which
+  // can be at any moment. The guard above spoke for the moment this request arrived, not for this one.
+  webViewService.throwIfWindowIsClosing(`show dialog ${dialogType}`);
+
   let dialogId = newGuid();
   // Dumbest way to make sure the guid is unique
   while (dialogRequests.has(dialogId)) dialogId = newGuid();

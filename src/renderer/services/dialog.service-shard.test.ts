@@ -18,6 +18,11 @@ vi.mock('@renderer/services/web-view.service-shard', () => ({
   initialize: vi.fn().mockResolvedValue(undefined),
   addTab: vi.fn(),
   closeTab: mockCloseTab,
+  // Standing in for a window with no layout load in flight and no close decided — the conditions
+  // every test here is about something other than. What these two do when either is true is
+  // covered against the real module in `dialog.service-shard.layout-load.test.ts`.
+  throwIfWindowIsClosing: vi.fn(),
+  waitForLayoutLoadToSettle: vi.fn(async () => {}),
 }));
 
 // Mock localization service
