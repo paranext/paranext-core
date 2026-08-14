@@ -134,7 +134,7 @@ describe('window layout persistence service', () => {
     // the next test does not cancel it: the orphaned timer fires into whichever test is running and
     // records a call on the file-wide writeFile mock. Removing a window cancels the pending write
     // unconditionally, so an id no window ever had defuses whatever this test left scheduled.
-    serviceUnderTest?.handleWindowRemoved(-1);
+    serviceUnderTest?.handleWindowRemoved(-1, 'entry-goes-with-it');
     serviceUnderTest = undefined;
     vi.useRealTimers();
   });
@@ -224,7 +224,7 @@ describe('window layout persistence service', () => {
       11,
     );
 
-    service.handleWindowRemoved(12);
+    service.handleWindowRemoved(12, 'entry-goes-with-it');
     await service.writeNow([11, 13]);
 
     const written = writtenStructure();
@@ -278,7 +278,7 @@ describe('window layout persistence service', () => {
     );
     service.setMainWindowId(11);
 
-    service.handleWindowRemoved(11);
+    service.handleWindowRemoved(11, 'entry-goes-with-it');
     await service.writeNow([12, 13]);
 
     expect(writtenStructure().windows.map((entry) => entry.isMain)).toEqual([true, undefined]);
@@ -567,7 +567,7 @@ describe('window layout persistence service', () => {
     service.trackNewWindow(84);
     service.markWindowPendingContent(84);
 
-    service.handleWindowRemoved(84);
+    service.handleWindowRemoved(84, 'entry-goes-with-it');
     // A later window that happens to reuse the same runtime id must not inherit the stale mark
     service.trackNewWindow(84);
 
@@ -646,11 +646,11 @@ describe('window layout persistence service', () => {
     // …then a bounds update lands (the window was dragged during the shutdown wait), scheduling a
     // debounced write, and the window is torn down before the debounce fires.
     service.updateWindowBounds(12, { bounds: { x: 9, y: 9, width: 900, height: 900 } });
-    service.handleWindowRemoved(12);
+    service.handleWindowRemoved(12, 'entry-stays');
     await vi.advanceTimersByTimeAsync(10_000);
 
-    // The flush must remain the last write: a debounced write firing after the removal would
-    // rewrite the structure without the removed window, losing its entry.
+    // The flush must remain the last write: what the shutdown decided to persist is not something a
+    // debounce left over from before it may follow up on, part-way through the app's teardown.
     expect(mocks.writeFile).toHaveBeenCalledTimes(1);
     expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual([
       'one',
@@ -672,10 +672,85 @@ describe('window layout persistence service', () => {
     expect(mocks.writeFile).toHaveBeenCalledTimes(1);
 
     service.updateWindowBounds(11, { bounds: { x: 9, y: 9, width: 900, height: 900 } });
-    service.handleWindowRemoved(-1);
+    service.handleWindowRemoved(-1, 'entry-goes-with-it');
     await vi.advanceTimersByTimeAsync(10_000);
 
     expect(mocks.writeFile).toHaveBeenCalledTimes(1);
+  });
+
+  test('a multi-window shutdown writes every window, though they go away while the flushes queue', async () => {
+    // Five windows, not two: with only two, the last flush executes before either window's removal
+    // can reach it, so a flush that read a shrinking window list would still write both and this
+    // would pass while saying nothing. Any count above two can tell the difference.
+    const tabIds = ['one', 'two', 'three', 'four', 'five'];
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      tabIds.map((tabId, index) => ({
+        layout: layoutWithTab(tabId),
+        ...(index === 0 ? { isMain: true } : {}),
+      })),
+      11,
+    );
+    service.setMainWindowId(11);
+
+    // Hold each write at the disk, so the shutdown's ordering is stated here rather than raced out
+    // of how quickly a mocked write resolves.
+    const releaseWrite: (() => void)[] = [];
+    mocks.writeFile.mockImplementation(
+      async () =>
+        new Promise<void>((resolve) => {
+          releaseWrite.push(resolve);
+        }),
+    );
+
+    // Every window's close handler runs in the same tick — the app is going down and Electron
+    // closes them in one loop — so they all flush the same live set and the writes queue up.
+    const windowIds = tabIds.map((_, index) => 11 + index);
+    const flushes = windowIds.map(() => service.writeNow(windowIds));
+
+    // Each window goes away as soon as its OWN flush lands, while the flushes behind it are still
+    // waiting their turn. The window is going down with the app, so its entry stays.
+    for (let index = 0; index < windowIds.length; index += 1) {
+      // Sequential on purpose: this is the shutdown's ordering, one window at a time
+      /* eslint-disable no-await-in-loop */
+      await vi.waitFor(() => expect(mocks.writeFile).toHaveBeenCalledTimes(index + 1));
+      releaseWrite[index]();
+      await flushes[index];
+      /* eslint-enable no-await-in-loop */
+      service.handleWindowRemoved(windowIds[index], 'entry-stays');
+    }
+
+    // The last write is the one that survives on disk. Every window was live when the flushes were
+    // decided, so every window has to be in it — a flush that read the tracked windows as they were
+    // by the time it reached the front of the queue would hold only the stragglers.
+    expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual(tabIds);
+  });
+
+  test('a window that went down with the app is written with what it last held', async () => {
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.setMainWindowId(11);
+
+    // The window's last word on its own layout and placement, then it goes down with the app…
+    await registeredHandler('windowLayout:save')(12, layoutWithTab('two-edited'));
+    service.updateWindowBounds(12, { bounds: { x: 5, y: 6, width: 700, height: 800 } });
+    service.handleWindowRemoved(12, 'entry-stays');
+
+    // …and a flush that only reaches the disk afterwards still writes that, not the stale entry the
+    // session started from.
+    await service.writeNow([11, 12]);
+
+    const written = writtenStructure();
+    expect(written.windows.map((entry) => firstTabIdOf(entry.layout))).toEqual([
+      'one',
+      'two-edited',
+    ]);
+    expect(written.windows[1].bounds).toEqual({ x: 5, y: 6, width: 700, height: 800 });
   });
 
   test('a layout pushed while a flush waits behind an in-flight write still lands in the flush', async () => {
