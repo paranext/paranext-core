@@ -1925,7 +1925,9 @@ export function throwIfWindowIsClosing(operation: string): void {
 
 /**
  * Hold content at the edge of this window's dock until it may enter, and refuse it if it may not.
- * Called from the two places anything is put into this dock, immediately before the add.
+ * Called immediately before a tab is put into this dock. The other dock write, the web view add,
+ * asks the two halves for itself: its refusal belongs inside the try that cleans up after a
+ * provider that has already run, and only the wait belongs ahead of reading the dock layout out.
  *
  * Both questions are asked at every entry point already, and both are asked again here, because
  * what an entry point answers is what was true when the request arrived. What lies between there
@@ -1942,7 +1944,7 @@ export function throwIfWindowIsClosing(operation: string): void {
  * an existing web view and returns on finding one, never reaching a write site at all.
  *
  * A function declaration rather than an arrow, for the same reason as {@link noteContentArrived}
- * above it: one of the two dock adds sits above this in the file.
+ * above it: the tab add that calls it sits above this in the file.
  *
  * @param operation What was being asked of this window, for the refusal's error message
  */
@@ -1961,6 +1963,10 @@ async function admitContentToDock(operation: string): Promise<void> {
  *   tab. Does nothing on an existing WebView
  * @param optionsDefaulted Options that affect what this method does. **YOU MUST RUN
  *   {@link getWebViewOptionsDefaults} ON THIS OBJECT BEFORE PASSING IT IN!**
+ * @param isReloadOfAnOpenWebView Whether the caller found this web view in this window's dock and
+ *   is asking for it again, which is what makes the same web view's absence at the dock write
+ *   meaningful — see the check there. An open and an adopt both name an id no tab here has yet, so
+ *   there is nothing for them to have lost.
  * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
  *   not create a WebView for this request.
  */
@@ -1968,6 +1974,7 @@ async function openOrReloadWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
   layout: Layout = { type: 'tab' },
   optionsDefaulted: OpenWebViewOptions = {},
+  isReloadOfAnOpenWebView = false,
 ): Promise<WebViewId | undefined> {
   const { webViewType } = savedWebViewDefinition;
 
@@ -2361,12 +2368,33 @@ async function openOrReloadWebView(
 
   let finalLayout: Layout | undefined;
   // Ahead of reading the dock layout out, not after it: a wait is exactly the stretch in which a
-  // re-register invalidates a dock layout already read into a variable (see `getDockLayout`). Ahead
-  // of the try as well — what it refuses never reached the dock to fail there, and the cleanup that
-  // catch does is for a web view the dock itself turned down.
-  await admitContentToDock(`dock web view ${webView.id}`);
+  // re-register invalidates a dock layout already read into a variable (see `getDockLayout`). The
+  // close half of the same question is asked inside the try below — see `admitContentToDock` for
+  // what the two halves are for.
+  await waitForLayoutLoadToSettle();
   const dockLayoutVar = await getDockLayout();
+  // A reload's caller read this web view out of the dock before the provider ran and before the
+  // wait above, and either stretch is long enough to lose it: a load that runs inside one takes the
+  // dock wholesale — the user switching to simple mode while a restored tab is still fetching its
+  // content is exactly that — and a tab dragged into another window leaves the same way. Whatever
+  // took it emitted the close event that disposed what backed it, so an add here would put a tab
+  // the user is rid of back in front of them with nothing behind it. The state stays: it is keyed
+  // by the web view rather than by the tab, and is what brings the view back where it lands next.
+  if (isReloadOfAnOpenWebView && !dockLayoutVar.getWebViewDefinition(webView.id)) {
+    logger.debug(
+      `Not reloading web view ${webView.id} (type ${webView.webViewType}): it left this window's dock before the reload reached it`,
+    );
+    // The nonce this call may have minted is for a web view that is not coming back — the same
+    // cleanup a provider declining to create one gets
+    deleteWebViewNonce(webView.id);
+    return undefined;
+  }
   try {
+    // Immediately before the add, and inside the try because by here the provider has already run:
+    // a controller may be registered in the extension host, a nonce minted and state persisted, and
+    // that residue is the same whether the dock turned this web view down or this window did. The
+    // catch below is what clears it, so the refusal has to land where the catch can see it.
+    throwIfWindowIsClosing(`dock web view ${webView.id}`);
     finalLayout = dockLayoutVar.addWebViewToDock(
       finalWebView,
       layout,
@@ -2375,9 +2403,10 @@ async function openOrReloadWebView(
   } catch (e) {
     // A throw can leave this web view's own tab in the dock: a definition its tab loader refuses
     // surfaces as an error tab under a fresh id, and the add throws with the named web view's
-    // live tab still docked — reloading an open web view with a bad definition lands here.
-    // Emitting the close event and evicting state then would gut a view the user still sees, so
-    // that failure is logged and rethrown with the dock and the state untouched.
+    // live tab still docked — reloading an open web view with a bad definition lands here, as does
+    // the refusal above when what it refuses is a reload. Emitting the close event and evicting
+    // state then would gut a view the user still sees, so such a failure is logged and rethrown
+    // with the dock and the state untouched.
     if (dockLayoutVar.getWebViewDefinition(webView.id) !== undefined) {
       logger.error(
         `Could not update webview ${webView.id} (type ${webView.webViewType}) in the dock; its existing tab is unchanged. ${getErrorMessage(e)}`,
@@ -2655,8 +2684,15 @@ export async function reloadWebView(
   // If the web view is not found, return undefined
   if (!existingSavedWebView) return undefined;
 
-  // If the web view is found, open it again with the same ID
-  return openOrReloadWebView(existingSavedWebView, undefined, getWebViewOptionsDefaults(options));
+  // If the web view is found, open it again with the same ID. Flagged as a reload, because this
+  // reading of the dock is taken before the provider runs and before the dock write's own wait —
+  // whether it is still true is asked again where it is acted on
+  return openOrReloadWebView(
+    existingSavedWebView,
+    undefined,
+    getWebViewOptionsDefaults(options),
+    true,
+  );
 }
 
 /** See {@link WebViewServiceShard.dockContainsTab} */
