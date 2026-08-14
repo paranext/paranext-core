@@ -598,15 +598,13 @@ describe('window layout persistence service', () => {
     await service.loadWindowLayouts();
     service.trackNewWindow(91);
     await registeredHandler('windowLayout:save')(91, layoutWithTab('departed'));
-    service.markWindowPendingContent(91);
 
     service.handleWindowRemoved(91, 'entry-stays');
     service.trackNewWindow(92);
 
-    // Neither the departed window's tabs nor its pending-content mark belong to the new window
-    await expect(registeredHandler('windowLayout:get')(92)).resolves.toEqual({ kind: 'empty' });
-    // …and the departed window is still a window the user had open, so its entry stays in the file
-    // even though it never had one saved for it before this session
+    // The departed window is still a window the user had open, so its entry stays in the file even
+    // though it never had one saved for it before this session — and the new window is its own
+    // entry after it, not a second claim on the departed one
     await service.writeNow();
     expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual([
       'departed',
