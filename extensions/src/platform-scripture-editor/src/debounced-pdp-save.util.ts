@@ -7,12 +7,17 @@
  *    the trailing window cannot lose the final edits.
  * 2. THIS MODULE — the fire-time decision: save the CAPTURED content through the CAPTURED chapter's
  *    save function when the user has navigated away (never read the editor, which now shows the new
- *    chapter), settle pending mid-edit marker text first on same-chapter saves, and strip an
- *    un-settled passive-palette literal from the saved copy.
+ *    chapter). A same-chapter save takes `EditorRef.getUsj()` as-is — it is already settled, and it
+ *    already excludes any in-flight input an open command surface declared via
+ *    `EditorRef.setTransientInput`. Nothing here mutates the document: a pre-save settle used to,
+ *    and that mutation is exactly what let a debounced save re-settle an explicitly-undone literal.
  * 3. A self-clearing write guard (`write-in-flight-guard.util.ts`) — serializes writes, with the
  *    flag's lifecycle owned by the write promise itself.
  * 4. Echo deferral (`use-editor-pdp-sync.hook.ts`) — an incoming same-document echo is not applied
- *    while the user is actively editing; local content wins and is pushed back up.
+ *    while the user is actively editing; local content wins and is pushed back up, except when the
+ *    echo is a pure repeat of our own unchanged push, which is damped so a non-idempotent
+ *    round-trip cannot loop forever. That hook also reports a lossy round-trip once per distinct
+ *    difference.
  *
  * When is this much machinery warranted? Only when all three of these hold: writes are driven by
  * every keystroke, the backend round-trips the payload through a normalizing format (so echoes come
