@@ -24,4 +24,7 @@ export {
   type ScriptureBounds,
 } from './scripture/scripture-navigation.util';
 export { resolveReferenceHistoryDirection } from './reference-history-direction.util';
-export type { PaletteDriver, PaletteItem } from './palette.types';
+// `PaletteItem` is deliberately NOT here: the renderer's `CommandPaletteItem` (a stable
+// `@papi/core` type) extends it, and a stable type must not inherit from the no-guarantees tier.
+// It is exported from `index.ts` instead. `PaletteDriver` has no such stable dependent.
+export type { PaletteDriver } from './palette.types';

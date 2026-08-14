@@ -33,7 +33,8 @@ import {
   RefObject,
 } from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
-import type { PaletteDriver, PaletteItem } from 'platform-bible-utils/experimental';
+import type { PaletteItem } from 'platform-bible-utils';
+import type { PaletteDriver } from 'platform-bible-utils/experimental';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Tooltip,

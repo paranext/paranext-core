@@ -9838,7 +9838,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * so this service provides a way for them to request overlays that the renderer hosts on their
    * behalf.
    */
-  import { LocalizeKey, PlatformError } from 'platform-bible-utils';
+  import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
   import type { ReactElement } from 'react';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   /**
@@ -9925,29 +9925,15 @@ declare module 'renderer/services/overlays/overlay.service-model' {
   /**
    * A single item in a command palette. Items are displayed in a searchable, filterable list. The
    * user types to filter and selects one item.
+   *
+   * Extends the shared {@link PaletteItem} contract (id/label/description/badge/disabled/muted) with
+   * the presentation extras only this overlay renders.
    */
-  export type CommandPaletteItem = {
-    /** Unique identifier returned when this item is selected */
-    id: string;
-    /** Primary display text (e.g., marker code like "ft" or command name) */
-    label: string | LocalizeKey;
-    /** Secondary description text displayed below the label */
-    description?: string | LocalizeKey;
+  export type CommandPaletteItem = PaletteItem & {
     /** Optional icon displayed to the left of the label */
     icon?: string;
-    /** Optional badge text (e.g., "Deprecated", "Disallowed") */
-    badge?: string | LocalizeKey;
     /** Optional group key for visual sectioning with group headers */
     group?: string;
-    /** Whether the item is grayed out and non-selectable. Defaults to false. */
-    disabled?: boolean;
-    /**
-     * Whether the item's text is rendered de-emphasized (reduced opacity) while remaining fully
-     * selectable — e.g. PT9's grey cue for non-basic markers. Unlike
-     * {@link CommandPaletteItem.disabled}, a muted item can still be highlighted and selected.
-     * Defaults to false.
-     */
-    muted?: boolean;
   };
   /** Request payload for {@link IOverlayService.showCommandPalette}. */
   export interface CommandPaletteRequest {

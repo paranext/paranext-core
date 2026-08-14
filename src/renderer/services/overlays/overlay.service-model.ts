@@ -6,8 +6,7 @@
  * behalf.
  */
 
-import { LocalizeKey, PlatformError } from 'platform-bible-utils';
-import type { PaletteItem } from 'platform-bible-utils/experimental';
+import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
 import type { ReactElement } from 'react';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 
