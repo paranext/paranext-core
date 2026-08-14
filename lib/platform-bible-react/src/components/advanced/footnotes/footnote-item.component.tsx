@@ -4,19 +4,12 @@ import { AlertCircle } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { FootnoteItemProps } from './footnotes.types';
 
-function makeKey(parentMarker: string | undefined, content?: MarkerContent[]): string {
-  if (!content || content.length === 0) return parentMarker ?? 'empty';
-
-  const firstString = content.find((part) => typeof part === 'string');
-  if (firstString) {
-    return `key-${parentMarker ?? 'unknown'}-${firstString.slice(0, 10)}`;
-  }
-
-  // Fallback: combine markers
-  const firstMarker =
-    typeof content[0] === 'string' ? 'impossible' : (content[0].marker ?? 'unknown');
-  return `key-${parentMarker ?? 'unknown'}-${firstMarker}`;
-}
+// Keys below are POSITIONAL (the child's index within its own siblings), not derived from the
+// content. A footnote's parts are frequently indistinguishable by content — two `\fp` paragraphs,
+// or two spans sharing a marker and leading text — so a content-derived key collides, and React
+// then duplicates or omits children. Position is unique among siblings by construction, which is
+// the only uniqueness React requires. These lists are a read-only projection re-rendered wholesale
+// from `footnote`, so there is no reordering for a positional key to lose identity across.
 
 function renderParagraphs(
   parentMarker: string | undefined,
@@ -48,7 +41,12 @@ function renderParagraphs(
   return paragraphs.map((para, i) => {
     const isLast = i === paragraphs.length - 1;
     return (
-      <p key={makeKey(parentMarker, para)}>
+      // A footnote's paragraphs have no stable id, and keying on their CONTENT is what produced
+      // duplicate keys (two `\fp` paragraphs collide). This list is a read-only projection
+      // re-rendered wholesale and never reordered, so the identity the rule protects cannot be
+      // lost here. See the note above.
+      // eslint-disable-next-line react/no-array-index-key
+      <p key={`para-${i}`}>
         {renderContent(parentMarker, para, showMarkers, true, markerHierarchy)}
         {isLast && footnoteClosing}
       </p>
@@ -65,10 +63,9 @@ function renderContent(
 ): React.ReactNode {
   if (!content || content.length === 0) return undefined;
 
-  return content.map((footnotePart) => {
+  return content.map((footnotePart, partIndex) => {
+    const key = `part-${partIndex}`;
     if (typeof footnotePart === 'string') {
-      // Build a key based on the hierarchy and text
-      const key = `${parentMarker}-text-${footnotePart.slice(0, 10)}`;
       if (allowUnmarkedText) {
         const classes = cn(`usfm_${parentMarker}`);
         return (
@@ -91,7 +88,7 @@ function renderContent(
 
     return renderMarkerObject(
       footnotePart,
-      makeKey(`${parentMarker}\\${footnotePart.marker}`, [footnotePart]),
+      key,
       showMarkers,
       [...markerHierarchy, parentMarker ?? 'unknown'],
     );
