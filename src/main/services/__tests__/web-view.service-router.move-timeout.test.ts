@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
-import { testingWebViewServiceRouter } from '@main/services/web-view.service-router';
+import {
+  setWebViewWindowCreator,
+  testingWebViewServiceRouter,
+} from '@main/services/web-view.service-router';
+import { getWebViewMoveFailureDisposition } from '@shared/models/web-view-move.model';
 import {
   withWindows as withWindowsServingShards,
   type ShardAnnouncementListeners,
@@ -123,6 +127,9 @@ function windowShard(openWebViewIds: string[]) {
     adoptWebView: vi.fn<
       (savedWebViewDefinition: SavedWebViewDefinition) => Promise<WebViewId | undefined>
     >(async (savedWebViewDefinition) => `${savedWebViewDefinition.id}-window-${windowId}`),
+    // A window with nothing docked in it since its last emptiness report, which is what a window
+    // created to receive a moved web view is until the adopt lands
+    hasContentArrivedSinceEmptyReport: vi.fn(async () => false),
   };
 }
 
@@ -242,5 +249,101 @@ describe('moveWebView when the target adopt times out', () => {
     // Only the ownership search asked the target: an answer the target produced itself means the
     // adopt definitively did not happen, so no probe may delay the recovery reopen
     expect(target.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
+  });
+
+  describe('moving to a window created for the move', () => {
+    /** The window facilities the new-window path runs through, creating window 7 for the move */
+    function withWindowCreator() {
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      return creator;
+    }
+
+    test('an adopt that landed after its request expired completes the move without recovery', async () => {
+      const owner = windowShard(['view-1']);
+      const created = windowShard([]);
+      created.adoptWebView.mockRejectedValue(requestTimedOutError());
+      // The dock took the tab, which is what an adopt that landed after its request expired looks
+      // like from outside — so the window created for the move keeps standing
+      created.hasContentArrivedSinceEmptyReport.mockResolvedValue(true);
+      // Asked during the ownership search, before the window was created for this move; asked
+      // again by the probe, by which time the adopt has landed under the window's own scoping
+      created.getOpenWebViewDefinition.mockResolvedValueOnce(undefined);
+      created.getOpenWebViewDefinition.mockResolvedValue({ id: 'view-1-window-7' });
+      withWindows({ 2: owner, 7: created });
+      const creator = withWindowCreator();
+
+      const movedId = await moveWebView('view-1', 'new');
+
+      // What the created window says it holds the view under, exactly as a move into an existing
+      // window answers with the target's id
+      expect(movedId).toBe('view-1-window-7');
+      // The move succeeded late, so nothing may reopen the captured definition anywhere — that
+      // would put the same web view id live in two windows
+      expect(owner.adoptWebView).not.toHaveBeenCalled();
+      expect(creator.closeWindow).not.toHaveBeenCalled();
+      // The window is holding content now, so it must stop restoring as one still waiting for it
+      expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith(7);
+    });
+
+    test('a probe that finds nothing in a window left standing rejects rather than reopening', async () => {
+      vi.useFakeTimers();
+      try {
+        const focused = windowShard([]);
+        const owner = windowShard(['view-1']);
+        const created = windowShard([]);
+        created.adoptWebView.mockRejectedValue(requestTimedOutError());
+        created.hasContentArrivedSinceEmptyReport.mockResolvedValue(true);
+        withWindows({ 1: focused, 2: owner, 7: created });
+        const creator = withWindowCreator();
+
+        const moving = moveWebView('view-1', 'new');
+        moving.catch(() => undefined);
+
+        await vi.runAllTimersAsync();
+
+        const failure = await moving.then(
+          () => undefined,
+          (e: unknown) => e,
+        );
+
+        // Content reached the window, so the adopt may yet land there — reopening the captured
+        // definition anywhere else is what would put the same id live in two windows
+        expect(failure).toBeDefined();
+        expect(owner.adoptWebView).not.toHaveBeenCalled();
+        expect(focused.adoptWebView).not.toHaveBeenCalled();
+        // The window holds content the user can see, whoever put it there
+        expect(creator.closeWindow).not.toHaveBeenCalled();
+        // The caller has to be able to tell the user their tab could not be reopened, without
+        // reading a sentence written for the log
+        expect(getWebViewMoveFailureDisposition(failure)).toBe('not-reopened');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    test('an adopt whose window closed with it runs the recovery ladder without probing', async () => {
+      const owner = windowShard(['view-1']);
+      const created = windowShard([]);
+      created.adoptWebView.mockRejectedValue(requestTimedOutError());
+      // Nothing reached the window, so it closed — there is no window left to ask
+      created.hasContentArrivedSinceEmptyReport.mockResolvedValue(false);
+      withWindows({ 2: owner, 7: created });
+      const creator = withWindowCreator();
+
+      const failure = await moveWebView('view-1', 'new').then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+
+      expect(creator.closeWindow).toHaveBeenCalledWith(7);
+      expect(owner.adoptWebView).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
+      );
+      expect(getWebViewMoveFailureDisposition(failure)).toBe('reopened-in-source-window');
+      // Only the ownership search asked: a window that is definitively gone cannot have taken the
+      // adopt, so no probe may delay the recovery the user is waiting on
+      expect(created.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
+    });
   });
 });
