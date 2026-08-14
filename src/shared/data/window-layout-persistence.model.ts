@@ -100,8 +100,9 @@ export type WindowLayoutGetResponse =
  * Why a window is reporting itself empty:
  *
  * - `emptied-by-removal`: it held tabs and the last one was just removed.
- * - `born-empty`: it started with nothing to restore (a {@link WindowLayoutGetResponse} of `empty` or
- *   `pending-content` that never received content) and stayed that way.
+ * - `born-empty`: it started with nothing to restore (a {@link WindowLayoutGetResponse} of `empty`)
+ *   and stayed that way. A `pending-content` window never reports this: its load returns before the
+ *   born-empty check, because the content it is waiting for is routed to it separately.
  */
 export type WindowEmptiedReason = 'emptied-by-removal' | 'born-empty';
 

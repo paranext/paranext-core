@@ -115,33 +115,43 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     expect(closeWindow).toHaveBeenCalledTimes(1);
   });
 
-  test('once a closing window is really gone, the window left behind docks Home', async () => {
+  test('a window really going away lets a report under its id be decided afresh', async () => {
+    // Reporting again under the same id is how an entry that was never let go becomes observable.
+    // Electron hands out each id at most once per process, so this is a probe for the entry
+    // outliving its window rather than a session that could happen — and an entry that outlives its
+    // window keeps answering 'closing' for the rest of the process, with no close behind it to make
+    // that true, which is a window left standing empty forever.
+    vi.useFakeTimers();
+    countWindows.mockReturnValue(3);
+    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    vi.runAllTimers();
+    expect(closeWindow).toHaveBeenCalledTimes(1);
+
+    handler.handleWindowGone(1);
+
+    // The repeat-answer guard is what the release lifts: this report is decided from scratch, close
+    // and all, rather than handed the answer the previous one got
+    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+    vi.runAllTimers();
+    expect(closeWindow).toHaveBeenCalledTimes(2);
+  });
+
+  test('an id let go with its window cannot answer closing for the window left standing', async () => {
+    // The same probe as above, against the answer that costs the most: a decision taken afresh sees
+    // the last window standing and docks Home, where a stale 'closing' would leave that window
+    // neither docking anything nor going away — empty, with nothing coming to heal it.
     vi.useFakeTimers();
     countWindows.mockReturnValue(2);
     await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
     vi.runAllTimers();
+    expect(closeWindow).toHaveBeenCalledTimes(1);
 
     handler.handleWindowGone(1);
     countWindows.mockReturnValue(1);
 
-    await expect(handler(2, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
+    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'open-home' });
     vi.runAllTimers();
-    expect(closeWindow).not.toHaveBeenCalledWith(2);
-  });
-
-  test('a window that has gone away stops counting against the windows that are left', async () => {
-    vi.useFakeTimers();
-    countWindows.mockReturnValue(2);
-    await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
-    vi.runAllTimers();
-
-    handler.handleWindowGone(1);
-    // Window 1 is gone and window 3 has opened since, so there are two windows open again
-    countWindows.mockReturnValue(2);
-
-    await expect(handler(3, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
-    vi.runAllTimers();
-    expect(closeWindow).toHaveBeenCalledWith(3);
+    expect(closeWindow).toHaveBeenCalledTimes(1);
   });
 
   test('a close that throws is warned about rather than left to escape the deferred callback', async () => {

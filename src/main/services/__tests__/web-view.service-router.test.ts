@@ -448,6 +448,10 @@ describe('web view service router', () => {
     await expect(
       router.openWebView('comments', undefined, { existingId: '?', createNewIfNotFound: false }),
     ).resolves.toBeUndefined();
+    // The not-found answer has to be the routing target's own, reached by falling through to it —
+    // a decline that short-circuits before asking would answer "not found" for a web view sitting
+    // in the very window it never asked
+    expect(target.openWebView).toHaveBeenCalled();
   });
 
   test('an open that names a web view refuses to guess when a window could not be asked', async () => {

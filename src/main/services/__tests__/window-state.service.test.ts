@@ -887,8 +887,10 @@ describe('window state tracking', () => {
     });
 
     test('stops reporting a window as closing once it is gone', () => {
-      // Electron reuses window ids, so a leftover flag would tell the next window to take this id
-      // that it is already on its way out
+      // The flag is this window's own state, keyed by its id, and nothing else takes it off. Left
+      // behind it answers for a window that is not there for the rest of the process: anything
+      // still holding that id is told it is on its way out, with no close behind that to make it
+      // true.
       const closing = fakeWindow(1);
       addWindow(closing);
       markWindowClosing(1);
@@ -900,16 +902,16 @@ describe('window state tracking', () => {
 
     test('ignores a closing mark for a window that is no longer tracked', () => {
       // A window that has gone away can still have a report in flight — its dock emptying during
-      // teardown is answered after it is gone. Electron reuses window ids, so recording that mark
-      // would leave the next window to take this id born closing: passed over by routing, and told
-      // 'closing' when it reports its own emptiness, with no close ever scheduled for it.
+      // teardown is answered after it is gone. Recording that mark would add one nothing ever takes
+      // off again: the removal that clears this window's marks has already run, so it would sit
+      // there for the life of the process, answering 'closing' for a window that is not there and
+      // never had a close scheduled for it.
       const gone = fakeWindow(1);
       addWindow(gone);
       removeWindow(gone, 1);
 
       markWindowClosing(1);
 
-      addWindow(fakeWindow(1));
       expect(isWindowClosing(1)).toBe(false);
     });
 
@@ -946,10 +948,13 @@ describe('window state tracking', () => {
       expect(isAppGoingDownForSecondWindow).toBe(true);
     });
 
-    test('forgets that a window was closing once it is gone, since ids are reused', () => {
-      // Electron reuses BrowserWindow ids. A leftover mark would tell the next window opened with
-      // that id that it is already on its way out, and its close would run the whole app's shutdown
-      // while other windows were still open.
+    test('forgets that a window was closing once it is gone', () => {
+      // The mark is keyed by window id and nothing else takes it off, so one left behind answers
+      // for a window that is not there for the rest of the process — here by making the app look
+      // like it is going down while a window the user is working in is still open, so that window's
+      // close would run the whole app's shutdown. Electron hands out each id at most once per
+      // process, so handing the id to another window is a probe for the mark outliving its window
+      // rather than a session that could happen.
       const closing = fakeWindow(1);
       addWindow(closing);
       markWindowClosing(1);
