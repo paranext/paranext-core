@@ -173,6 +173,15 @@ type WindowShard = ReturnType<typeof windowShard>;
  * its prose: it names where the web view ended up as a disposition, which is what a caller telling
  * the user about the failure acts on.
  */
+async function failedMove(moving: Promise<WebViewId>): Promise<unknown> {
+  return moving.then(
+    (movedWebViewId) => {
+      throw new Error(`Expected the move to fail; it answered ${movedWebViewId}`);
+    },
+    (error: unknown) => error,
+  );
+}
+
 /**
  * When a window's shard was resolved, on the same clock `vi`'s `invocationCallOrder` counts on — so
  * an ordering assertion can name a step that is not a call on any one window's stand-in. A shard is
@@ -185,15 +194,6 @@ function resolvedShardOfWindowAt(windowId: number): number {
   );
   if (resolutionIndex < 0) throw new Error(`Window ${windowId}'s shard was never resolved`);
   return mocks.networkObjectGet.mock.invocationCallOrder[resolutionIndex];
-}
-
-async function failedMove(moving: Promise<WebViewId>): Promise<unknown> {
-  return moving.then(
-    (movedWebViewId) => {
-      throw new Error(`Expected the move to fail; it answered ${movedWebViewId}`);
-    },
-    (error: unknown) => error,
-  );
 }
 
 describe('moveWebView', () => {
@@ -429,6 +429,29 @@ describe('moveWebView', () => {
     // The window that held it a moment ago says it does not: the tab is not where the user left
     // it, and a caller told only that the move failed would report an action that did nothing
     expect(getWebViewMoveFailureDisposition(failure)).toBe('possibly-closed');
+    // That disposition sends the user to the log for what became of their tab, so the owner
+    // search's definition has to be there — an empty capture says nothing itself, so without this
+    // the log holds only that the window did not have it
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.stringContaining(JSON.stringify({ id: 'view-1' })),
+    );
+  });
+
+  test('a capture that comes back empty closes the window the move created to receive the view', async () => {
+    // The other way a move to a new window ends holding a window nothing will ever fill: the owner
+    // answers that it does not have the web view, rather than failing to hand it over. The window is
+    // just as empty either way.
+    const owner = windowShard(['view-1']);
+    owner.captureAndCloseWebView.mockResolvedValue(undefined);
+    const created = windowShard([]);
+    withWindows({ 2: owner, 7: created });
+    const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+    setWebViewWindowCreator(creator);
+
+    await expect(moveWebView('view-1', 'new')).rejects.toThrow(/no longer had it/);
+
+    expect(created.adoptWebView).not.toHaveBeenCalled();
+    expect(creator.closeWindow).toHaveBeenCalledWith(7);
   });
 
   test('a capture that throws fails the move with the owner-search definition in the log', async () => {

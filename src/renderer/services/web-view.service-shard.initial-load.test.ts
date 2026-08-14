@@ -432,4 +432,24 @@ describe('a mid-session layout load racing content arriving', () => {
     await expect(adopting).rejects.toThrow(/closing/);
     expect(dockedWebViews.map((webView) => webView.id)).not.toContain('moved-view');
   });
+
+  test('a settings tab parked on the load is refused once this window is told it is closing', async () => {
+    // The refusal matters most here: a settings tab is in none of the lists a close diffs, so one
+    // that lands in a window whose close is decided goes with it reported nowhere at all
+    const { shard, dockedTabs, reloading, releaseLayoutGet, emptyTheDockAndBeToldItIsClosing } =
+      await windowReloadingWithSavedLayoutHanging();
+
+    const openingSettings = shard.openSettingsTab();
+    // Marked handled from the start (see the open above)
+    openingSettings.catch(() => {});
+    await settle();
+
+    await emptyTheDockAndBeToldItIsClosing();
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+
+    await expect(openingSettings).rejects.toThrow(/closing/);
+    expect(dockedTabs.map((tab) => tab.tabType)).not.toContain('settings-tab');
+  });
 });
