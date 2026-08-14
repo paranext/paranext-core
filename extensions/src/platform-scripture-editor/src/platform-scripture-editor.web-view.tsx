@@ -428,6 +428,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       logger.warn(
         `Error getting project editable setting: ${getErrorMessage(isProjectEditablePossiblyError)}`,
       );
+      // Fail open: don't lock a legitimate translator out of a working project on a transient
+      // read error. Contrast with CanUserEditScripture()'s C# implementation and the one-shot
+      // `pdp.canUserEditScripture()` caller in this extension's utils.ts, which both fail closed
+      // (treat an error as "cannot edit") — that's the right call there because the *initial*
+      // default-project-picker decision is one-shot and non-recoverable, whereas this signal is
+      // live and self-corrects on the next successful PAPI update.
       return true;
     }
     return isProjectEditablePossiblyError;
@@ -443,6 +449,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       logger.warn(
         `Error getting Scripture edit permission: ${getErrorMessage(canUserEditScripturePossiblyError)}`,
       );
+      // Fail open: don't lock a legitimate translator out of a working project on a transient
+      // read error. Contrast with CanUserEditScripture()'s C# implementation and the one-shot
+      // `pdp.canUserEditScripture()` caller in this extension's utils.ts, which both fail closed
+      // (treat an error as "cannot edit") — that's the right call there because the *initial*
+      // default-project-picker decision is one-shot and non-recoverable, whereas this signal is
+      // live and self-corrects on the next successful PAPI update.
       return true;
     }
     return canUserEditScripturePossiblyError;
@@ -586,7 +598,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
     useCallback(async () => {
-      if (unformattedTitle === NO_UPDATE_TITLE || projectName === defaultProjectName)
+      if (
+        unformattedTitle === NO_UPDATE_TITLE ||
+        projectName === defaultProjectName ||
+        isReadOnlyForTitle === undefined
+      )
         return NO_UPDATE_TITLE;
       const updatedTitle = await formatEditorTitle(
         unformattedTitle,

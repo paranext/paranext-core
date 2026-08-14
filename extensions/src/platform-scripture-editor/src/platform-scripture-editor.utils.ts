@@ -112,9 +112,9 @@ export async function formatEditorTitle(
     // `{editable}` placeholder below, this ternary treats `isReadOnly === undefined` the same as
     // `false` (falls through to `SCRIPTURE_EDITOR_KEY`), not as a distinct neutral state. That's
     // acceptable because no current caller can reach this branch with `isReadOnly === undefined`:
-    // `main.ts` always passes an already-resolved `boolean`, and the webview's title effect (a
-    // later task) only calls this function once a project is loaded, i.e. with a defined
-    // `projectId` — which never reaches this branch. If a future caller can hit this branch with
+    // `main.ts` always passes an already-resolved `boolean`, and the webview's title effect only
+    // calls this function once a project is loaded, i.e. with a defined `projectId` — which never
+    // reaches this branch. If a future caller can hit this branch with
     // `isReadOnly === undefined`, revisit this ternary for tri-state handling too.
     else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
   }
