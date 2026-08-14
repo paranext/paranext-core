@@ -19,13 +19,20 @@ export type WebViewMoveFailureDisposition =
   /** Reopened in the focused window: it did move, just not to the window that was asked for */
   | 'reopened-in-focused-window'
   /** Nothing took it: it is open in no window, and only the log holds what it was */
-  | 'not-reopened';
+  | 'not-reopened'
+  /**
+   * Where it is cannot be told: taking it out of the window it was in is the step that failed, and
+   * that step can have closed it without handing anything back. Neither "nothing changed" nor "it
+   * is gone" can be claimed, so a caller says as much rather than picking one
+   */
+  | 'possibly-closed';
 
 /** Every disposition, so a reader can look for each one without a second list to keep in step */
 const ALL_DISPOSITIONS: WebViewMoveFailureDisposition[] = [
   'reopened-in-source-window',
   'reopened-in-focused-window',
   'not-reopened',
+  'possibly-closed',
 ];
 
 /**

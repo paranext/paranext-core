@@ -4,6 +4,7 @@ import type {
   Layout,
   LayoutInfo,
   PapiDockLayout,
+  SavedTabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
 import type {
@@ -82,9 +83,10 @@ vi.mock('@renderer/services/usersnap.service', () => ({
 /** Layout with no tab anywhere */
 const EMPTY_LAYOUT = { dockbox: { mode: 'horizontal', children: [] } } as unknown as LayoutInfo;
 
-/** Narrow view of the published shard covering only the adopt method these tests drive */
-type AdoptShard = {
+/** Narrow view of the published shard covering only the routed methods these tests drive */
+type RoutedShard = {
   adoptWebView(savedWebViewDefinition: SavedWebViewDefinition): Promise<WebViewId | undefined>;
+  openSettingsTab(projectIdToLimitSettings?: string): Promise<Layout | undefined>;
 };
 
 /**
@@ -92,10 +94,15 @@ type AdoptShard = {
  * up in `getAllWebViewDefinitions`, the way the real dock's do, so the initial load's view of the
  * dock changes when an adopt lands mid-load. Whole-layout loads are recorded rather than
  * interpreted — a recorded load IS the dock being replaced, which is what these tests assert on.
+ *
+ * Non-web-view tabs go in through `addTabToDock` and are recorded separately, matching the dock's
+ * own split: a settings tab is not a web view, so it is in none of the web view lists a load
+ * reads.
  */
 function makeLiveDockLayout() {
   const loadedLayouts: LayoutInfo[] = [];
   const dockedWebViews: WebViewDefinition[] = [];
+  const dockedTabs: SavedTabInfo[] = [];
   const dockLayout = {
     onLayoutChangeRef: { current: undefined },
     loadLayout: (layout: LayoutInfo) => {
@@ -108,10 +115,14 @@ function makeLiveDockLayout() {
       dockedWebViews.push(webView);
       return layout;
     },
+    addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => {
+      dockedTabs.push(savedTabInfo);
+      return layout;
+    },
     simpleLayout: EMPTY_LAYOUT,
     testLayout: EMPTY_LAYOUT,
   } as unknown as PapiDockLayout;
-  return { dockLayout, loadedLayouts, dockedWebViews };
+  return { dockLayout, loadedLayouts, dockedWebViews, dockedTabs };
 }
 
 /** Stub the web view provider (and the theme it needs) so `adoptWebView`'s open path can run */
@@ -165,7 +176,7 @@ async function registerWithHangingLayoutGet() {
 
   const [, shard] = vi.mocked(networkObjectService.set).mock.calls[0];
   return {
-    shard: shard as unknown as AdoptShard,
+    shard: shard as unknown as RoutedShard,
     loadedLayouts,
     dockedWebViews,
     releaseLayoutGet: (response: unknown) => releaseLayoutGet(response),
@@ -267,7 +278,12 @@ describe('a mid-session layout load racing content arriving', () => {
     );
     let releaseLayoutGet: (response: unknown) => void = () => {};
     let doesLayoutGetHang = false;
+    // `stay` until a test says otherwise: this window loads an empty layout, so it reports itself
+    // born-empty, and the two answers that act — docking Home, latching the close — would both
+    // arrive unasked in tests that are about neither
+    let emptiedResponse: unknown = { action: 'stay' };
     mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:emptied') return emptiedResponse;
       if (requestType !== 'windowLayout:get') return undefined;
       if (!doesLayoutGetHang) return { kind: 'empty' };
       return new Promise((resolve) => {
@@ -277,13 +293,13 @@ describe('a mid-session layout load racing content arriving', () => {
 
     const module = await import('@renderer/services/web-view.service-shard');
     const { networkObjectService } = await import('@shared/services/network-object.service');
-    const { dockLayout, loadedLayouts, dockedWebViews } = makeLiveDockLayout();
+    const { dockLayout, loadedLayouts, dockedWebViews, dockedTabs } = makeLiveDockLayout();
     module.registerDockLayout(dockLayout);
     await module.startWebViewServiceShard();
     await primeProvider();
     await vi.waitFor(() => expect(loadedLayouts.length).toBe(1));
     const [, publishedShard] = vi.mocked(networkObjectService.set).mock.calls[0];
-    const shard = publishedShard as unknown as AdoptShard;
+    const shard = publishedShard as unknown as RoutedShard;
     // Content in the dock is what makes the reload below one with something to lose
     await shard.adoptWebView({ id: 'settled-view', webViewType: 'test.type' });
 
@@ -300,8 +316,18 @@ describe('a mid-session layout load racing content arriving', () => {
       module,
       shard,
       dockedWebViews,
+      dockedTabs,
       reloading,
       releaseLayoutGet: (response: unknown) => releaseLayoutGet(response),
+      /**
+       * Empty this window's dock and have the main process answer that it is closing — the one
+       * moment `isWindowToldToClose` is latched, and one that can come at any time, including while
+       * something is parked waiting for the load
+       */
+      emptyTheDockAndBeToldItIsClosing: async () => {
+        emptiedResponse = { action: 'closing' };
+        await module.handleDockEmptiedByRemoval(EMPTY_LAYOUT);
+      },
     };
   }
 
@@ -340,5 +366,70 @@ describe('a mid-session layout load racing content arriving', () => {
 
     await expect(opening).resolves.toEqual(expect.any(String));
     expect(dockedWebViews.map((webView) => webView.webViewType)).toContain('test.opened');
+  });
+
+  test('a settings tab waits for the load instead of landing in a dock about to be replaced', async () => {
+    // A settings tab is routed here the same way an open is, and the load in flight is worse for it
+    // than for a web view: a settings tab is in no web view list, so the load's wholesale replacement
+    // takes it with nothing reported anywhere — the user's Settings command answers with a layout
+    // for a tab that is not there.
+    const { shard, dockedTabs, reloading, releaseLayoutGet } =
+      await windowReloadingWithSavedLayoutHanging();
+
+    const openingSettings = shard.openSettingsTab();
+    await settle();
+
+    expect(dockedTabs.map((tab) => tab.tabType)).not.toContain('settings-tab');
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+
+    await expect(openingSettings).resolves.toBeDefined();
+    expect(dockedTabs.map((tab) => tab.tabType)).toContain('settings-tab');
+  });
+
+  test('an open parked on the load is refused once this window is told it is closing', async () => {
+    const {
+      module,
+      dockedWebViews,
+      reloading,
+      releaseLayoutGet,
+      emptyTheDockAndBeToldItIsClosing,
+    } = await windowReloadingWithSavedLayoutHanging();
+
+    const opening = module.openWebView('test.opened');
+    // Marked handled from the start: the refusal lands while the release below is being awaited,
+    // and an unhandled rejection in that gap would fail the run for the wrong reason
+    opening.catch(() => {});
+    await settle();
+
+    // The user closes this window's last tab while the open is parked, and main decides the close
+    await emptyTheDockAndBeToldItIsClosing();
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+
+    await expect(opening).rejects.toThrow(/closing/);
+    expect(dockedWebViews.map((webView) => webView.webViewType)).not.toContain('test.opened');
+  });
+
+  test('an adopt parked on the load is refused once this window is told it is closing', async () => {
+    const { shard, dockedWebViews, reloading, releaseLayoutGet, emptyTheDockAndBeToldItIsClosing } =
+      await windowReloadingWithSavedLayoutHanging();
+
+    const adopting = shard.adoptWebView({ id: 'moved-view', webViewType: 'test.type' });
+    // Marked handled from the start (see the open above)
+    adopting.catch(() => {});
+    await settle();
+
+    await emptyTheDockAndBeToldItIsClosing();
+
+    releaseLayoutGet({ kind: 'empty' });
+    await reloading;
+
+    // Refusing sends the move back up the router's recovery ladder, which puts it in a window that
+    // will still be there; docking it here loses it with this window
+    await expect(adopting).rejects.toThrow(/closing/);
+    expect(dockedWebViews.map((webView) => webView.id)).not.toContain('moved-view');
   });
 });

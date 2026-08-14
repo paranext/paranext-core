@@ -143,7 +143,7 @@ function requestTimedOutError() {
   );
 }
 
-describe('moveWebView when the target adopt times out', () => {
+describe('moveWebView when the target adopt does not come back a success', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getTargetWindowId.mockReturnValue(1);
@@ -320,6 +320,36 @@ describe('moveWebView when the target adopt times out', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+
+    test('a rejection that is not a timeout refuses to reopen while the window stands too', async () => {
+      const focused = windowShard([]);
+      const owner = windowShard(['view-1']);
+      const created = windowShard([]);
+      // Thrown after the dock already took the tab — anything raised past that point in the open,
+      // or a failure on the answer's way back. The window is holding the web view exactly as it is
+      // after a timed-out adopt, and the error class it came back as says nothing about that
+      created.adoptWebView.mockRejectedValue(new Error('the answer never made it back'));
+      created.hasContentArrivedSinceEmptyReport.mockResolvedValue(true);
+      withWindows({ 1: focused, 2: owner, 7: created });
+      const creator = withWindowCreator();
+
+      const failure = await moveWebView('view-1', 'new').then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+
+      // Reopening the captured definition anywhere would put the same web view id live in two
+      // windows, whatever kind of error said the adopt did not succeed
+      expect(failure).toBeDefined();
+      expect(owner.adoptWebView).not.toHaveBeenCalled();
+      expect(focused.adoptWebView).not.toHaveBeenCalled();
+      // The window holds content the user can see, whoever put it there
+      expect(creator.closeWindow).not.toHaveBeenCalled();
+      expect(getWebViewMoveFailureDisposition(failure)).toBe('not-reopened');
+      // Only the ownership search asked: an adopt that came back an answer of its own is not one
+      // that could still be running, so no probe may delay the recovery the user is waiting on
+      expect(created.getOpenWebViewDefinition).toHaveBeenCalledTimes(1);
     });
 
     test('an adopt whose window closed with it runs the recovery ladder without probing', async () => {

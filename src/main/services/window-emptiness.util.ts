@@ -201,6 +201,19 @@ export function createWindowEmptinessHandler(
       return { action: 'stay' };
     }
 
+    // The guard above, asked again: the close it looks for is decided on a path this handler's
+    // serialization does not cover, so the user can close the reporting window with its own close
+    // button while its re-check is in flight. The count below cannot stand in for this — a window
+    // whose close has begun is excluded from the count rather than reported by it — and every
+    // answer past this point is the wrong one for a window on its way out: a second close trips
+    // main's force-close escape hatch, and Home docks a tab into a window mid-teardown.
+    if (closingWindowIds.has(windowId) || deps.isWindowClosing?.(windowId)) {
+      logger.debug(
+        `windowLayout:emptied window ${windowId} reason ${reason}: close began during its re-check, answering closing`,
+      );
+      return { action: 'closing' };
+    }
+
     // Asked again, because the count above is from before the re-check. Decisions from this handler
     // are serialized against each other, but a window the user closes with its own X button marks
     // itself closing on a path that serialization does not cover — so the number can drop while a
