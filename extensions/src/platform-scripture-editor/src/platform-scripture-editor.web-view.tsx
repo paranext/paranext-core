@@ -417,6 +417,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
 
+  const [isProjectEditablePossiblyError, , , isProjectEditableLoading] = useProjectSetting(
+    projectId,
+    'platform.isEditable',
+    true,
+  );
+
+  const isProjectEditable = useMemo(() => {
+    if (isPlatformError(isProjectEditablePossiblyError)) {
+      logger.warn(
+        `Error getting project editable setting: ${getErrorMessage(isProjectEditablePossiblyError)}`,
+      );
+      return true;
+    }
+    return isProjectEditablePossiblyError;
+  }, [isProjectEditablePossiblyError]);
+
+  const [canUserEditScripturePossiblyError, , canUserEditScriptureLoading] = useProjectData(
+    'platformScripture.scriptureEditPermissions',
+    projectId,
+  ).CanUserEditScripture(undefined, true);
+
+  const canUserEditScripture = useMemo(() => {
+    if (isPlatformError(canUserEditScripturePossiblyError)) {
+      logger.warn(
+        `Error getting Scripture edit permission: ${getErrorMessage(canUserEditScripturePossiblyError)}`,
+      );
+      return true;
+    }
+    return canUserEditScripturePossiblyError;
+  }, [canUserEditScripturePossiblyError]);
+
   const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
 
   const isPowerMode = useMemo(() => {
@@ -515,17 +546,28 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   /**
-   * Whether the editor is effectively read-only, considering both the isReadOnly flag and the view
-   * type. This can probably be removed and replaced with `isReadOnly` once we allow editing in
-   * markers view
+   * Whether the editor is effectively read-only, considering the isReadOnly flag, the project's
+   * `platform.isEditable` setting, the user's Scripture-edit permission, sync-blocked state, and
+   * view type. This can probably be removed and replaced with `isReadOnly` once we allow editing in
+   * markers view.
    */
   const isReadOnlyEffective = useMemo(
     () =>
       isReadOnly ||
-      // An automatic Send/Receive is syncing this project — freeze editing until it finishes.
+      !isProjectEditable ||
+      !canUserEditScripture ||
       isSyncBlocked ||
       (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
-    [isReadOnly, isSyncBlocked, viewType],
+    [isReadOnly, isProjectEditable, canUserEditScripture, isSyncBlocked, viewType],
+  );
+
+  // `undefined` means isProjectEditable/canUserEditScripture are still resolving — formatEditorTitle
+  // renders the `{editable}` placeholder blank rather than committing to a possibly-wrong label
+  // until a real value is available. See formatEditorTitle's isReadOnly parameter.
+  const isReadOnlyForTitle = useMemo(
+    () =>
+      isProjectEditableLoading || canUserEditScriptureLoading ? undefined : isReadOnlyEffective,
+    [isProjectEditableLoading, canUserEditScriptureLoading, isReadOnlyEffective],
   );
 
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
@@ -549,7 +591,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const updatedTitle = await formatEditorTitle(
         unformattedTitle,
         projectId,
-        isReadOnlyEffective,
+        isReadOnlyForTitle,
         async () => projectName,
         papi.localization.getLocalizedStrings,
       );
@@ -558,7 +600,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (updatedTitle === title) return NO_UPDATE_TITLE;
 
       return updatedTitle;
-    }, [isReadOnlyEffective, title, projectId, projectName, unformattedTitle]),
+    }, [isReadOnlyForTitle, title, projectId, projectName, unformattedTitle]),
     NO_UPDATE_TITLE,
   );
 
