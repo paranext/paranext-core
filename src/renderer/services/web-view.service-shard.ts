@@ -1995,7 +1995,17 @@ export const addTab = async <TData = unknown>(
   layout: Layout,
   shouldBringToFront = true,
 ): Promise<Layout | undefined> => {
-  return (await getDockLayout()).addTabToDock(savedTabInfo, layout, shouldBringToFront);
+  const finalLayout = (await getDockLayout()).addTabToDock(
+    savedTabInfo,
+    layout,
+    shouldBringToFront,
+  );
+  // The dock took it. Noted here rather than at each caller because every one of them is a tab
+  // landing in this dock, which is the whole of what this records. The refusals those same callers
+  // make deliberately stay with them instead: those need an operation name and each caller's own
+  // reading of when the close was decided.
+  noteContentArrived();
+  return finalLayout;
 };
 
 /**
@@ -2466,21 +2476,35 @@ function applyAndLogLegacyColorVarTransforms(
  * empty ({@link reportDockEmptied} resets it immediately before reporting).
  *
  * The main process asks this before acting on an emptiness report, because the report describes a
- * moment that has already passed by the time it is answered: a routed open or a move's adopt can
- * land here while the report is in flight, and closing the window then takes content the user is
- * looking at with it.
+ * moment that has already passed by the time it is answered: a routed open, a move's adopt, a
+ * settings tab, or a dialog can land here while the report is in flight, and closing the window
+ * then takes content the user is looking at with it.
  *
  * A flag rather than a live reading of the dock, because there is no moment at which the dock can
  * be read for this. The report is sent from the layout-change handler, where
  * `dockLayoutRef.current` still holds the layout the dock is changing FROM — so a reading taken
  * then describes the state before the removal that emptied it, and would answer "content is here"
- * for every emptied window in the app. Known blind spot, unchanged from before this flag existed: a
- * dialog or another float arriving in the gap is not a dock add and does not set it.
+ * for every emptied window in the app. Set from the two places anything is put into this dock: the
+ * open path for a web view, and {@link addTab} for everything that is not one.
  *
  * A retry of the same report does not reset it again: content that arrives while a report is still
  * being retried has still arrived.
  */
 let didContentArriveSinceEmptyReport = false;
+
+/**
+ * Record that something was put into this window's dock, so that whatever this window may have just
+ * told the main process about being empty reads as out of date — see
+ * {@link didContentArriveSinceEmptyReport}.
+ *
+ * A function rather than the assignment written out at each site because one of the two dock adds
+ * ({@link addTab}) sits above this declaration in the file, where writing to the flag directly would
+ * be a use before define. Both sites then say it the one way rather than one of them saying it
+ * differently.
+ */
+function noteContentArrived(): void {
+  didContentArriveSinceEmptyReport = true;
+}
 
 /**
  * Whether the main process has answered one of this window's emptiness reports with `closing`.
@@ -2970,8 +2994,8 @@ export async function openOrReloadWebView(
   trackSimpleEditorReplaceTab(layout, finalWebView.id);
 
   // The dock took it: whatever this window may have just told the main process about being empty is
-  // now out of date — see `didContentArriveSinceEmptyReport`
-  didContentArriveSinceEmptyReport = true;
+  // now out of date
+  noteContentArrived();
 
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
   // inform web view consumers that we added a new web view
@@ -3462,8 +3486,6 @@ async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layou
       floatSize: { height: 600, width: 1000 },
     },
   );
-  // The other way content reaches this window — see `didContentArriveSinceEmptyReport`
-  didContentArriveSinceEmptyReport = true;
   return layout;
 }
 
