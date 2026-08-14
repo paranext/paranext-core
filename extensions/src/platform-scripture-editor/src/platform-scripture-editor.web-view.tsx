@@ -1249,34 +1249,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [scrRef, canUserCreateComments, isSyncBlocked, notifySyncEditBlocked]);
 
   /**
-   * Corrects `editingNoteKey.current` to the newly-inserted note's TRUE Lexical key after
-   * `insertMarker` creates it (Ctrl+T footnote/cross-reference insertion). `insertMarker`'s return
-   * value IS that true key (`platform-editor`'s `EditorRef.insertMarker`), but the auto-open path
-   * below (`handleEditorialUsjChange` -> `openFootnoteEditorOnNewNote`) hasn't run yet at this
-   * point: Lexical's `editor.update()` callback runs synchronously, but the DOM reconciliation +
-   * update-listener dispatch that fires `onUsjChange` is deferred to a microtask (confirmed
-   * empirically against `lexical@0.43`'s `updateEditor`/`scheduleMicroTask`).
-   * `openFootnoteEditorOnNewNote` therefore runs on an EARLIER-queued microtask and sets
-   * `editingNoteKey.current` to the WRONG key - derived from "delta-doc" OT coordinates via
-   * `getInsertedNodeKey`, which double-counts editable VerseNodes and lands past the note when one
-   * precedes it (root cause of Cancel's `replaceEmbedUpdate` silently no-opping on the wrong key).
-   * Queuing this correction as a SECOND microtask guarantees FIFO ordering behind that first one,
-   * so it runs after and overwrites it - fixing the bug without touching
-   * `openFootnoteEditorOnNewNote`, `DeltaOnChangePlugin`, or any other OT coordinate code.
-   */
-  const correctEditingNoteKeyAfterInsert = useCallback((insertedNoteKey: string | undefined) => {
-    if (!insertedNoteKey) return;
-    queueMicrotask(() => {
-      // Only correct a key the auto-open path actually set. If it early-returned (no popover
-      // opened - e.g. its ops/element checks failed - so editingNoteKey was never set), writing
-      // the true key here would wedge a truthy key with no editing session, permanently
-      // suppressing future auto-opens via handleEditorialUsjChange's editingNoteKey guard.
-      if (!editingNoteKey.current) return;
-      editingNoteKey.current = insertedNoteKey;
-    });
-  }, []);
-
-  /**
    * Inserts a footnote at the current selection. Shared by the "Insert footnote" context-menu item,
    * the Ctrl+T keyboard shortcut, and the top-menu
    * `platformScriptureEditor.insertFootnoteAtSelection` command (via the `webViewMessageListener`
@@ -1293,8 +1265,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       'inserting footnote',
     );
 
-    correctEditingNoteKeyAfterInsert(editorRef.current?.insertMarker('f'));
-  }, [projectId, localizedStrings, correctEditingNoteKeyAfterInsert]);
+    editorRef.current?.insertMarker('f');
+  }, [projectId, localizedStrings]);
 
   /**
    * Inserts a cross-reference at the current selection. Shared by the "Insert cross-reference"
@@ -1310,8 +1282,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       'inserting cross-reference',
     );
 
-    correctEditingNoteKeyAfterInsert(editorRef.current?.insertMarker('x'));
-  }, [projectId, localizedStrings, correctEditingNoteKeyAfterInsert]);
+    editorRef.current?.insertMarker('x');
+  }, [projectId, localizedStrings]);
 
   const options = useMemo<EditorOptions>(
     () => ({
@@ -1726,16 +1698,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               // first from the focus-out capture; focus() then re-asserts it.
               restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
               editorRef.current?.focus();
-              // A note-kind selection creates a footnote/cross-reference; the returned TRUE key
-              // feeds the same editing-session correction the Ctrl+T path uses — the auto-open
-              // path's delta-doc-derived key can land past the note (silent replaceEmbedUpdate
-              // no-ops from the popover).
-              correctEditingNoteKeyAfterInsert(
-                editorRef.current?.applyMarkerMenuSelection(selected, {
-                  trigger: 'backslash',
-                  literalPrefixLanded,
-                }),
-              );
+              editorRef.current?.applyMarkerMenuSelection(selected, {
+                trigger: 'backslash',
+                literalPrefixLanded,
+              });
             } else {
               editorRef.current?.focus();
             }
@@ -1754,7 +1720,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           if (!passive) editorRef.current?.focus();
         });
     },
-    [webViewId, correctEditingNoteKeyAfterInsert, declarePaletteTransientInput],
+    [webViewId, declarePaletteTransientInput],
   );
 
   /**
