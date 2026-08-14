@@ -589,6 +589,13 @@ describe('window layout persistence service', () => {
 
     // Neither the departed window's tabs nor its pending-content mark belong to the new window
     await expect(registeredHandler('windowLayout:get')(91)).resolves.toEqual({ kind: 'empty' });
+    // …and the departed window is still a window the user had open: taking its runtime id back
+    // must not take its entry out of the file
+    await service.writeNow([91]);
+    expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual([
+      'departed',
+      undefined,
+    ]);
   });
 
   test('reloading window layouts clears pending-content marks left over from the previous session', async () => {
