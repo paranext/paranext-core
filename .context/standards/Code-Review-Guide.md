@@ -102,6 +102,13 @@ Running `roborev init` is not required, and installs a second hook in `.husky/_/
 That is harmless: the daemon coalesces duplicate requests for the same repository, git
 reference, and review target into a single review.
 
+**Always pass `--global` to `roborev config set`.** It defaults to `--local`, and a local write
+does not patch the committed `.roborev.toml` — it regenerates the whole file from roborev's
+template. The values survive, but every explanatory comment is replaced by generated ones and the
+file balloons to roughly 225 lines, which `git commit -a` will happily carry into your branch.
+Machine-level settings belong in `~/.roborev/config.toml` anyway; edit `.roborev.toml` by hand
+when the repository genuinely needs a change.
+
 ---
 
 ## Reviewer Responsibilities

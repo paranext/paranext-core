@@ -10,9 +10,12 @@ owns the rule — when a change matches a trigger, open the cited file and enfor
 actually says. If a rule seems to be missing here, the standards in `.context/standards/` and
 `.claude/rules/` are authoritative regardless.
 
-Several rows point at rule files carrying a `paths:` glob in their frontmatter. Those attach
-automatically only inside an editing session, so an external reviewer never receives them — these
-rows are the only way they reach a per-commit review.
+The table lists **every** rule under `.claude/rules/`, including ones a Claude Code session would
+pick up on its own. Rules carrying a `paths:` glob attach only inside an editing session, so no
+external reviewer receives them; rules without one attach only for a reviewer that reads
+`.claude/rules/` in the first place, which a reviewer running under a different agent does not.
+Since this repo deliberately leaves the review agent unpinned, these rows are the only channel
+that works regardless of who is reviewing.
 
 Prefer a small number of high-confidence findings over exhaustive nitpicking.
 
@@ -49,6 +52,8 @@ sandboxed and reach the platform only through PAPI. Architecture detail:
 | `.claude/agents/**`, `.claude/commands/**`, `.claude/skills/**`                                                                                                                                                                                                                   | `.claude/rules/agent-authoring-link-dont-paraphrase.md`                                              |
 | New or relocated guidance — `.claude/rules/**`, `.context/standards/**`, `lib/platform-bible-react/src/stories/guidelines/**`, `CLAUDE.md`, `docs/adr/**`                                                                                                                         | `.claude/rules/where-to-add-guidance.md`                                                             |
 | `.claude/commands/prd-to-jira.md`                                                                                                                                                                                                                                                 | `.claude/rules/jira-issue-creation.md`                                                               |
+| A commit whose stated purpose is clearing lint across many files                                                                                                                                                                                                                  | `.claude/rules/code-quality/lint-sweep-verification.md`                                              |
+| Selecting a subset from a large list by judgment — files, symbols, usages, importers                                                                                                                                                                                              | `.claude/rules/grep-safety-net.md`                                                                   |
 | Every change — this repository is public                                                                                                                                                                                                                                          | `.claude/rules/code-quality/no-secrets.md`                                                           |
 
 ## Do not flag
