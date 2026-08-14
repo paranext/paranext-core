@@ -574,6 +574,23 @@ describe('window layout persistence service', () => {
     await expect(registeredHandler('windowLayout:get')(84)).resolves.toEqual({ kind: 'empty' });
   });
 
+  test('a window that went down with the app leaves nothing for a reused id to inherit', async () => {
+    // A last-window close counts as the app going down, but on macOS the app stays resident with no
+    // windows, and a window created from there (an extension calling for one, rather than the
+    // activate path that reloads layouts) takes the departed window's runtime id back.
+    const service = await startService();
+    await service.loadWindowLayouts();
+    service.trackNewWindow(91);
+    await registeredHandler('windowLayout:save')(91, layoutWithTab('departed'));
+    service.markWindowPendingContent(91);
+
+    service.handleWindowRemoved(91, 'entry-stays');
+    service.trackNewWindow(91);
+
+    // Neither the departed window's tabs nor its pending-content mark belong to the new window
+    await expect(registeredHandler('windowLayout:get')(91)).resolves.toEqual({ kind: 'empty' });
+  });
+
   test('reloading window layouts clears pending-content marks left over from the previous session', async () => {
     const service = await startService();
     await service.loadWindowLayouts();
