@@ -70,32 +70,45 @@ import {
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
 } from '@main/services/shutdown-latch.service';
-import { startWebViewServiceRouter } from '@main/services/web-view.service-router';
+import {
+  getWebViewShard,
+  setWebViewWindowCreator,
+  startWebViewServiceRouter,
+} from '@main/services/web-view.service-router';
 import {
   addWindow,
+  announceRoutingTargetChange,
+  countWindowsThatCouldBeTheLastOne,
   doesNavigationReplaceRendererRegistrations,
   getFocusedWindowId,
   getTargetWindowId,
   getWindows,
-  isWindowClosing,
+  handleWindowBlurred,
+  isWindowClosing as isWindowMarkedClosing,
+  isWindowReady,
   markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
   markWindowReady,
   removeWindow,
   setFocusedWindowId,
+  setWindowPendingContentPredicate,
 } from '@main/services/window-state.service';
 import {
   assignEntryToWindow,
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
+  isWindowPendingContent,
   loadWindowLayouts,
+  markWindowPendingContent,
   setMainWindowId,
+  setPendingContentChangeListener,
   trackLegacyWindow,
   trackNewWindow,
   updateWindowBounds,
   writeNow,
 } from '@main/services/window-layout-persistence.service';
+import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
@@ -106,9 +119,10 @@ import {
   MAX_CONSECUTIVE_RENDERER_CRASH_RELOADS,
   NO_RENDERER_CRASH_RELOADS_YET,
 } from '@main/renderer-crash-reload-budget.util';
-import type {
-  WindowBoundsState,
-  WindowLayoutEntry,
+import {
+  WINDOW_EMPTIED_REQUEST_TYPE,
+  type WindowBoundsState,
+  type WindowLayoutEntry,
 } from '@shared/data/window-layout-persistence.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import {
@@ -358,6 +372,71 @@ async function main() {
   // renderer's layout load can never race the registration
   await initializeWindowLayoutPersistence();
 
+  // The routing target passes over a window that is still waiting for its routed content the same
+  // way it passes over one whose close has begun: the window takes OS focus the moment it is
+  // shown, and anything focus-routed into it before its content arrives is destroyed if the
+  // operation that created it fails and closes it. Injected because the pending-content mark lives
+  // with window-layout persistence, which the window-state tracker does not import.
+  setWindowPendingContentPredicate(isWindowPendingContent);
+  // The other half of that injection: the tracker reads the mark but has nothing to tell it the
+  // mark changed, so a window gaining or losing one moves the routing target with no event —
+  // leaving the routers that hold a resolved shard pointed at the window routing just left.
+  setPendingContentChangeListener(announceRoutingTargetChange);
+
+  // Same reasoning as above: a window can report itself empty as soon as it exists, so the handler
+  // that decides what happens next must already be registered
+  const handleWindowEmptied = createWindowEmptinessHandler({
+    // Which windows may stand in as another window's reason to close is the window-state tracker's
+    // rule, whole — see `countWindowsThatCouldBeTheLastOne` for what it leaves out and why
+    countWindows: countWindowsThatCouldBeTheLastOne,
+    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+    markWindowClosing,
+    // The shared registry, not only this handler's own decisions: a window the user is closing can
+    // report empty mid-teardown, and it must get the same "closing" answer instead of a second close
+    isWindowClosing: isWindowMarkedClosing,
+    // The reporting window's own reading, asked only when a close is otherwise about to be decided
+    hasContentArrivedSinceEmptyReport: async (windowId) => {
+      // A window that is not serving requests cannot be asked, and waiting on one that will never
+      // answer would hold up every window's decision behind it. `false` is what the handler reads
+      // as "could not tell", which closes the window — the report was its own word about its own
+      // dock.
+      if (!isWindowReady(windowId)) return false;
+      const shard = await getWebViewShard(windowId);
+      if (!shard) return false;
+      return shard.hasContentArrivedSinceEmptyReport();
+    },
+  });
+  await networkService.registerRequestHandler(
+    WINDOW_EMPTIED_REQUEST_TYPE,
+    async (...args) => handleWindowEmptied(args[0], args[1]),
+    {
+      method: {
+        'x-experimental': true,
+        summary: "Report a window's dock empty and learn whether it closes or docks Home",
+        params: [
+          {
+            name: 'windowId',
+            required: true,
+            summary: 'Electron BrowserWindow ID of the window reporting itself empty',
+            schema: { type: 'number' },
+          },
+          {
+            name: 'reason',
+            required: true,
+            summary: 'Why the window is empty',
+            schema: { type: 'string', enum: ['emptied-by-removal', 'born-empty'] },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary:
+            'Whether the window should dock Home, that it is being closed, or that it should stay as it is because content reached it after it reported',
+          schema: { type: 'object' },
+        },
+      },
+    },
+  );
+
   // A window is tracked and takes OS focus the moment it is shown, but it cannot serve a routed
   // call until its renderer has registered. Its window service shard appearing is that signal, and
   // routing waits for it rather than following focus alone — see `getTargetWindowId`.
@@ -547,7 +626,10 @@ async function main() {
   }
 
   /** Sets up the electron BrowserWindow renderer process */
-  const createWindow = async (restoreInfo?: WindowRestoreInfo): Promise<BrowserWindow> => {
+  const createWindow = async (
+    restoreInfo?: WindowRestoreInfo,
+    creationOptions?: { pendingContent?: boolean },
+  ): Promise<BrowserWindow> => {
     // The menu and the `platform.createWindow` command stay live through a quit, because every
     // window sits in `preventDefault()` waiting on the shared shutdown run for as long as that run
     // takes. Opening a window in that gap would start a session the app is in no position to serve:
@@ -649,9 +731,16 @@ async function main() {
     else if (restoreInfo?.kind === 'legacy') trackLegacyWindow(windowId);
     else trackNewWindow(windowId);
 
+    if (creationOptions?.pendingContent) markWindowPendingContent(windowId);
+
     // Track which window is focused for multi-window command routing
     newWindow.on('focus', () => {
       setFocusedWindowId(windowId);
+    });
+    // The other half of focus tracking: a blur with no focus following it is the whole application
+    // going to the background, which is what isApplicationFocused answers from
+    newWindow.on('blur', () => {
+      handleWindowBlurred(windowId);
     });
 
     // Set our custom protocol handler to load assets from extensions
@@ -731,7 +820,7 @@ async function main() {
       if (
         details.reason === 'clean-exit' ||
         newWindow.isDestroyed() ||
-        isWindowClosing(windowId) ||
+        isWindowMarkedClosing(windowId) ||
         isAppShuttingDown()
       )
         return;
@@ -986,18 +1075,21 @@ async function main() {
           // be torn down.
           startupTasksAbort.abort();
 
-          // Flush the window-layouts structure with every still-tracked window in it, before any
-          // `closed` handler trims the list — a window that is not live at save time is not
-          // written, so this is what preserves the closing windows' entries across a quit (and the
-          // final window's entry on a last-window close). Capture this window's placement first so
-          // the flush holds its freshest bounds; on a multi-window quit each window's close handler
-          // does the same, so the last flush holds everyone's.
+          // Flush the window-layouts structure so this window's entry holds what it had open when
+          // the app went down. Capture its placement first so the flush holds its freshest bounds.
+          //
+          // On a multi-window quit every window flushes, and the flushes queue behind one another
+          // while the windows go down around them. A flush writes the structure as it stands when
+          // it reaches the front of the queue — so the LAST flush, the one that survives on disk,
+          // is only complete because a window going down with the app keeps its entry (see
+          // `handleWindowRemoved`'s disposition below).
+          //
           // Only on this path: a window closing while the app stays up is leaving the structure,
           // and its `closed` handler below rewrites the structure without it.
           try {
             cancelPendingBoundsCapture();
             updateWindowBounds(windowId, captureWindowBoundsState());
-            await writeNow(getWindows().map((window) => window.id));
+            await writeNow();
           } catch (e) {
             // Losing the structure costs the user their window arrangement. Skipping the shutdown
             // tasks below would cost them their unsynced edits, which nothing can write back once
@@ -1063,16 +1155,21 @@ async function main() {
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       removeWindow(newWindow, windowId);
 
-      // Stop persisting this window. When the close was deliberate — the app stays up — rewrite the
-      // structure without it so the window does not come back next session. During a quit the
-      // structure was already flushed with this window still in it, and must NOT be rewritten
-      // smaller here.
+      // What this window's disappearance means for its entry. A deliberate close — the app stays up
+      // — takes the entry with it, and the structure is rewritten without it below so the window
+      // does not come back next session. A window going down with the app is NOT leaving the
+      // structure: it has to be there next session, so its entry stays — including in every flush
+      // still queued behind this moment.
       // After the announcement above, which is synchronous and must not wait on a disk write, and
       // before the unsubscribers below, which spend the network service's whole registration retry
       // failing against a renderer that is already gone.
       cancelPendingBoundsCapture();
-      handleWindowRemoved(windowId);
-      if (!isAppGoingDown) await writeNow(getWindows().map((window) => window.id));
+      handleWindowRemoved(windowId, isAppGoingDown ? 'entry-stays' : 'entry-goes-with-it');
+      // A window told to close counts as gone from the moment it is told, and stops counting for
+      // real only here — its close runs the async work above, and it is open and counted for all of
+      // it. Told or not, every window passes through here, and untracked ids are ignored.
+      handleWindowEmptied.handleWindowGone(windowId);
+      if (!isAppGoingDown) await writeNow();
 
       try {
         await windowCloseUnsubscribers.runAllUnsubscribers();
@@ -1310,6 +1407,14 @@ async function main() {
 
     return newWindow;
   };
+
+  // The router that serves `openWebView` starts before this closure exists, so it is handed the
+  // window facilities once they are real
+  setWebViewWindowCreator({
+    createPendingContentWindow: async () =>
+      (await createWindow(undefined, { pendingContent: true })).id,
+    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+  });
 
   /**
    * Create the app's windows from the persisted window-layouts structure: one window per saved

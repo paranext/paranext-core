@@ -533,6 +533,18 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    */
   existingId?: string | '?';
   /**
+   * Limit an `existingId: '?'` search to web views showing this project.
+   *
+   * Only meaningful with `existingId: '?'` — a concrete `existingId` already names one exact web
+   * view, so combining it with a project filter is contradictory and is rejected as an error.
+   * Without this, `'?'` matches any web view of the type regardless of project. Providing this
+   * without any `existingId` at all is the same contradiction — there is no `'?'` search for it to
+   * limit — and is rejected the same way.
+   *
+   * @experimental
+   */
+  existingProjectId?: string;
+  /**
    * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
    * relevant if `existingId` is provided. If `existingId` is not provided, this property is
    * ignored.
@@ -554,6 +566,21 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    * disturb whatever window the user is currently looking at.
    */
   bringToFront?: boolean;
+  /**
+   * Id of the application window to open the web view in, instead of the window the user is working
+   * in. Applies to `tab`, `panel`, and `float` layouts; combining it with a `'window'` layout
+   * (which asks for a NEW window) is an error. The open fails if no such window is serving web
+   * views — a caller that names a window wants that window, not a guess.
+   *
+   * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
+   * names the window.
+   *
+   * This is a runtime-only handle: window ids are reused across sessions, so never persist one. Get
+   * the current window's id via the `platform.getFocusedWindowId` command.
+   *
+   * @experimental This option is unstable and may change or disappear without notice
+   */
+  targetWindowId?: number;
 };
 
 /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */

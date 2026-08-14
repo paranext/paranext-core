@@ -226,6 +226,43 @@ Never use editable content in list item keys:
 {items.map(item => <Input key={item.id} value={item.name} />)}
 ```
 
+### Opening WebViews with Layouts
+
+When opening a WebView via `papi.webViews.openWebView()`, you can specify how it displays using the `layout` option:
+
+- `'tab'` (default): Opens as a tab within the current dock panel.
+- `'panel'`: Opens as a panel adjacent to the active tab (specify `direction` to control placement: `'left'`, `'right'`, `'bottom'`, `'top'`, etc.).
+- `'float'`: Opens as a floating window; can specify `floatSize` and `position`: `'cascade'` or `'center'`.
+- `'window'` **(experimental)**: Opens in its own application window. In Simple mode—which is single-window by design—this degrades to `'tab'`.
+- `'replace-tab'`: Replaces an existing tab (requires `targetTabId`).
+
+Additionally, `targetWindowId` **(experimental)** lets you open a WebView into a specific named window instead of the one the user is working in. Applies to `'tab'`, `'panel'`, and `'float'` layouts only; combining it with `'window'` is an error, and combining it with `'replace-tab'` is likewise an error—the tab being replaced already names the window. The open fails if no such window exists — it never falls back to another window. This is a runtime-only handle; window IDs are reused across sessions, so never persist one. Retrieve the current window's ID via `platform.getFocusedWindowId`.
+
+Two **experimental** commands expose moving a WebView between windows:
+`platform.moveWebViewToNewWindow(webViewId)` and
+`platform.moveWebViewToWindow(webViewId, targetWindowId)`. A move closes the WebView in its
+current window and reopens it — same `useWebViewState` state — in the target, so consumers see a
+close event then an open event, and a WebView controller reference held across a move must be
+re-acquired. The commands return the WebView's authoritative post-move id, which can differ from
+the id passed in: a WebView restored from a persisted layout carries a window-scoped id that a
+move does not keep, so use the returned id for anything after the move.
+
+`existingId: '?'` reuse is **cross-window** (experimental): the search covers every window,
+prefers the window the user is working in when more than one matches, and raises the window
+where the match was found. The optional, **experimental** `existingProjectId` limits that search —
+in every window, not just the one the call was headed for — to web views showing that project, so
+a match for the project asked for outranks a web view of the same type showing another one
+(combining it with a concrete `existingId` — or with no `existingId` at all — is an error). What a
+window that cannot be asked means depends on which `existingId` was given. A `'?'` search names a
+type, and every caller of one is an entry point the user just clicked, so an open that would create
+goes ahead in the window the user is working in rather than doing nothing — accepting that it may
+make a second copy of a view that already exists somewhere; a passive probe
+(`createNewIfNotFound: false`) falls through to that same window and simply gets its not-found
+answer. A `'window'` layout degrades to `'tab'` for such an open, so a duplicate is a tab the user
+can see and close rather than a window taking the screen. A concrete `existingId` names one specific
+view, so it refuses to guess instead: an open that would create fails, while a passive probe
+(`createNewIfNotFound: false`) simply answers not-found.
+
 ### Styling Requirements
 
 - Use **TailwindCSS** (Tailwind v4) with the `tw:` prefix for theming

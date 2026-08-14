@@ -119,6 +119,57 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+
+    // These commands are provided in `web-view.service-router.ts` (main)
+    /**
+     * Move a web view to a window created for it.
+     *
+     * A move closes the web view in the window that holds it and reopens it — same
+     * `useWebViewState` state — in the target window. Consumers see a close event in the source and
+     * an open event in the target, and the web view controller is disposed and re-created: a held
+     * controller reference must be re-acquired after a move. The returned id is the authoritative
+     * id of the web view after the move, and it can differ from the id passed in: a web view
+     * restored from a persisted layout carries a window-scoped id, and a move does not carry that
+     * scope along — so use the returned id for anything after the move. In Simple mode —
+     * single-window by design — there is no other window to move to, and this does nothing.
+     *
+     * A move that fails once it has taken the web view out of its window says where it left it, as
+     * a machine-readable marker at the front of the error message: `[webViewMoveFailure:<where>]`,
+     * where `<where>` is `reopened-in-source-window` (nothing about where it lives changed),
+     * `reopened-in-focused-window` (it did move, just not to the window that was asked for),
+     * `not-reopened` (it is open in no window, and only the log holds what it was), or
+     * `possibly-closed` (taking it out of its window is what failed, so where it is cannot be
+     * told). The marker rides in the message because a rejection that crosses processes reaches its
+     * caller as a code and a message and nothing else. A failure decided before the move touches
+     * the web view carries no marker. Strip the marker before showing the message to a user — it is
+     * there to be classified on, not read.
+     *
+     * @param webViewId Web view to move
+     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
+     *   see above
+     * @experimental
+     */
+    'platform.moveWebViewToNewWindow': (webViewId: WebViewId) => Promise<WebViewId>;
+    /**
+     * Move a web view to an existing window, named by its runtime window id (see
+     * `platform.getFocusedWindowId`; window ids are reused across sessions — never persist one).
+     *
+     * Same semantics as `platform.moveWebViewToNewWindow` — including the marker a failed move
+     * carries to say where it left the web view — and: moving a web view to the window it is
+     * already in does nothing, and naming a window that does not exist is an error that leaves the
+     * web view where it is.
+     *
+     * @param webViewId Web view to move
+     * @param targetWindowId Window to move it to
+     * @returns Authoritative id of the web view in its new window — can differ from `webViewId`;
+     *   see `platform.moveWebViewToNewWindow`
+     * @experimental
+     */
+    'platform.moveWebViewToWindow': (
+      webViewId: WebViewId,
+      targetWindowId: number,
+    ) => Promise<WebViewId>;
+
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
     /** Open Usersnap feedback form to submit an idea */

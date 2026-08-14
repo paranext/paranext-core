@@ -2,9 +2,11 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ProcessType } from '@shared/global-this.model';
 import { TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import type {
+  Layout,
   LayoutInfo,
   PapiDockLayout,
   SavedTabInfo,
+  WebViewTabProps,
 } from '@shared/models/docking-framework.model';
 import { serialize } from 'platform-bible-utils';
 
@@ -14,6 +16,12 @@ globalThis.processType = ProcessType.Renderer;
 
 const ANCHOR_WEB_VIEW_TYPE = 'test.anchor';
 const SUPPLEMENT_TAB_ID = 'supplement-tab';
+/**
+ * The setting the mocked supplement entry is gated on. A supplement entry without one is enabled
+ * unconditionally, which would leave the flag-off branch of the load — the one a vanilla build
+ * takes — unreachable from this file, and the flag read itself unobservable.
+ */
+const SUPPLEMENT_FLAG_SETTING = 'test.isSupplementEnabled';
 
 const mocks = vi.hoisted(() => ({
   settingsGet: vi.fn(),
@@ -24,6 +32,7 @@ const mocks = vi.hoisted(() => ({
     ) => Promise<() => Promise<boolean>>
   >(async () => async () => true),
   networkRequest: vi.fn(),
+  bufferedEmitters: new Map<string, { emit: ReturnType<typeof vi.fn> }>(),
 }));
 
 // The supplement is product-specific data; supply our own so these tests describe the merge
@@ -33,6 +42,7 @@ vi.mock('@renderer/components/docking/default-layout-supplement.json', () => ({
     tabs: [
       {
         anchorWebViewType: ANCHOR_WEB_VIEW_TYPE,
+        flagSetting: SUPPLEMENT_FLAG_SETTING,
         tab: {
           id: SUPPLEMENT_TAB_ID,
           tabType: TAB_TYPE_WEBVIEW,
@@ -60,7 +70,11 @@ vi.mock('@shared/services/logger.service');
 // Everything below is module-load or startup machinery the layout path does not exercise; stub it
 // so importing the service shard in a test does not stand up the whole renderer service graph.
 vi.mock('@shared/services/network.service', () => ({
-  createBufferedNetworkEventEmitter: () => ({ emit: vi.fn(), dispose: vi.fn() }),
+  createBufferedNetworkEventEmitter: (eventName: string) => {
+    const emitter = { emit: vi.fn(), dispose: vi.fn() };
+    mocks.bufferedEmitters.set(eventName, emitter);
+    return emitter;
+  },
   getNetworkEvent: () => vi.fn(),
   request: mocks.networkRequest,
 }));
@@ -131,6 +145,13 @@ function layoutWithTab(tabId: string): LayoutInfo {
   } as unknown as LayoutInfo;
 }
 
+/** Layout with no tab anywhere — only the empty placeholder panel in the dock */
+function layoutWithNoTabsAnywhere(): LayoutInfo {
+  return {
+    dockbox: { mode: 'horizontal', children: [{ id: '+0', tabs: [] }] },
+  } as unknown as LayoutInfo;
+}
+
 /** Every tab id anywhere in a layout, in order */
 function tabIdsIn(layout: LayoutInfo): string[] {
   const ids: string[] = [];
@@ -157,6 +178,7 @@ function makeDockLayout(simpleLayout: LayoutInfo) {
       loadedLayouts.push(layout);
     },
     getAllWebViewDefinitions: () => [],
+    getWebViewDefinition: () => undefined,
     simpleLayout,
     testLayout: simpleLayout,
   } as unknown as PapiDockLayout;
@@ -172,17 +194,104 @@ async function registerWindow(simpleLayout: LayoutInfo) {
   return { dockLayout, loadedLayouts };
 }
 
+/**
+ * A dock layout stand-in that also records `addWebViewToDock` calls, so a test can observe
+ * `reportDockEmptied` actually opening Home as a tab rather than just the `windowLayout:emptied`
+ * request going out.
+ *
+ * `vi.spyOn` on this module's own `openWebView` export was tried first (the harness's usual way to
+ * observe a web view open), but it does not see calls `reportDockEmptied` makes internally: Vitest
+ * only redirects a same-module caller to a spied export for some export forms, and it does not do
+ * so here — confirmed with a minimal caller/callee repro in this same test environment. Standing up
+ * the real path (as "a failed dock add rolls back what the open already did" below already does for
+ * the failure case) is the reliable alternative.
+ */
+function makeDockLayoutThatTracksAdds(simpleLayout: LayoutInfo) {
+  const loadedLayouts: LayoutInfo[] = [];
+  const addWebViewToDockCalls: WebViewTabProps[] = [];
+  const dockLayout = {
+    onLayoutChangeRef: { current: undefined },
+    loadLayout: (layout: LayoutInfo) => {
+      loadedLayouts.push(layout);
+    },
+    getAllWebViewDefinitions: () => [],
+    addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => {
+      addWebViewToDockCalls.push(webView);
+      return layout;
+    },
+    simpleLayout,
+    testLayout: simpleLayout,
+  } as unknown as PapiDockLayout;
+  return { dockLayout, loadedLayouts, addWebViewToDockCalls };
+}
+
+/** Wire up a web view provider and theme so `openWebView`'s dock-add path can run to completion */
+async function primeWebViewOpenPath() {
+  const module = await import('@renderer/services/web-view.service-shard');
+  const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+  const { localThemeService } = await import('@renderer/services/theme.service');
+  // `webViewProviderService` and `localThemeService` are mocked as `{}` (file-level mocks above);
+  // attaching stub methods needs a type assertion because the plain-object mock type doesn't model
+  // them. Same reasoning as "a failed dock add rolls back what the open already did" below.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
+    async () => ({
+      getWebView: async (saved: { id: string; webViewType: string }) => ({
+        id: saved.id,
+        webViewType: saved.webViewType,
+        contentType: 'html',
+        content: '<p>Home</p>',
+        state: {},
+      }),
+    }),
+  );
+  // `localThemeService` is mocked as `{}` too; same untyped-attach reasoning as the provider stub
+  // above requires the assertion here as well.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
+    cssVariables: {},
+  }));
+  await module.startWebViewServiceShard();
+  return module;
+}
+
+/**
+ * The shard object this window registered, as the main process's router calls it. Only the members
+ * a test reaches for are named; the shard's own type carries the rest.
+ */
+async function registeredShard() {
+  const { networkObjectService } = await import('@shared/services/network-object.service');
+  const set = networkObjectService.set as unknown as ReturnType<typeof vi.fn>;
+  const lastSetCall = set.mock.calls[set.mock.calls.length - 1];
+  return lastSetCall[1] as {
+    hasContentArrivedSinceEmptyReport: () => Promise<boolean>;
+    openSettingsTab: (projectIdToLimitSettings?: string) => Promise<unknown>;
+    openWebView: (webViewType: string) => Promise<string | undefined>;
+    adoptWebView: (savedWebViewDefinition: unknown) => Promise<string | undefined>;
+  };
+}
+
 /** Register a dock layout and return the layout the initial load landed on */
 async function loadLayoutInWindow(simpleLayout: LayoutInfo) {
   const { loadedLayouts } = await registerWindow(simpleLayout);
   return loadedLayouts[loadedLayouts.length - 1];
 }
 
-/** Answer `windowLayout:get` with the given response; every other request resolves undefined */
+/**
+ * Answer `windowLayout:get` with the given response and `windowLayout:emptied` with `closing`;
+ * every other request resolves undefined.
+ *
+ * The emptied answer matters even for tests that are not about emptiness: several of them load a
+ * layout with no tabs in it, and a report the shard cannot read an action out of is a failed
+ * attempt — which puts the report into a retry loop that runs for seconds, fire-and-forget, past
+ * the end of the test that started it.
+ */
 function respondToGetLayout(response: unknown) {
-  mocks.networkRequest.mockImplementation(async (requestType: string) =>
-    requestType === 'windowLayout:get' ? response : undefined,
-  );
+  mocks.networkRequest.mockImplementation(async (requestType: string) => {
+    if (requestType === 'windowLayout:get') return response;
+    if (requestType === 'windowLayout:emptied') return { action: 'closing' };
+    return undefined;
+  });
 }
 
 /** All `windowLayout:save` pushes made so far, as [windowId, layout] pairs */
@@ -201,6 +310,7 @@ const openWindow = globalThis.open;
 beforeEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
+  mocks.bufferedEmitters.clear();
   globalThis.open = openWindow;
   localStorage.clear();
   globalThis.windowId = '2';
@@ -354,6 +464,381 @@ describe('loadLayout restores this window’s layout from the main process', () 
     // here holds the anchor tab; the supplement then merges onto that anchor as usual)
     expect(tabIdsIn(loaded)).toContain('anchor-tab-w2');
   });
+
+  test('a window created for pending content starts truly empty', async () => {
+    respondToGetLayout({ kind: 'pending-content' });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(tabIdsIn(loaded)).toEqual([]);
+  });
+
+  test('a window created for pending content skips the default-layout supplement even when its flag is enabled', async () => {
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : true,
+    );
+    respondToGetLayout({ kind: 'pending-content' });
+
+    const loaded = await loadLayoutInWindow(layoutWithAnchor());
+
+    expect(tabIdsIn(loaded)).toEqual([]);
+    // The empty base has no anchor panel for a supplement tab to attach to, so an empty result
+    // alone says nothing about whether the supplement was considered. The pending-content path
+    // leaves before the entries are fetched at all — which is exactly what the unread flag shows.
+    expect(mocks.settingsGet).not.toHaveBeenCalledWith(SUPPLEMENT_FLAG_SETTING);
+  });
+
+  test('a window created for pending content is not held back from pushing its layout', async () => {
+    respondToGetLayout({ kind: 'pending-content' });
+
+    // Unlike the every-attempt-failed fallback (which holds pushes because the dock does not hold
+    // the user's real saved layout), a pending-content answer is a genuine answer: the dock's
+    // (empty) contents are the real state to persist once this window's content arrives.
+    const { dockLayout } = await registerWindow(layoutWithAnchor());
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('routed-in'), undefined, undefined);
+
+    expect(layoutPushes()).toHaveLength(1);
+  });
+});
+
+describe('loadLayout reports a dock that landed empty', () => {
+  /** Let any already-scheduled fire-and-forget continuation run before asserting a negative */
+  async function flushMicrotasks() {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+
+  /** Answer `windowLayout:get` and `windowLayout:emptied`; every other request resolves undefined */
+  function respondToGetLayoutAndEmptied(getResponse: unknown, emptiedResponse: unknown) {
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') return getResponse;
+      if (requestType === 'windowLayout:emptied') return emptiedResponse;
+      return undefined;
+    });
+  }
+
+  beforeEach(() => {
+    // Power mode with the supplement flag off: `loadLayout` takes the direct-load (unmerged) branch
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+  });
+
+  test('a window that lands empty reports born-empty and opens Home when main says to', async () => {
+    respondToGetLayoutAndEmptied({ kind: 'empty' }, { action: 'open-home' });
+    const module = await primeWebViewOpenPath();
+    const { dockLayout, addWebViewToDockCalls } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+
+    module.registerDockLayout(dockLayout);
+
+    await vi.waitFor(() =>
+      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+    );
+    await vi.waitFor(() =>
+      expect(addWebViewToDockCalls).toEqual([
+        expect.objectContaining({ webViewType: 'platformGetResources.home' }),
+      ]),
+    );
+  });
+
+  test('a window that lands empty via the merged-supplement branch also reports born-empty', async () => {
+    // Flag on, so `loadLayout` takes the supplemented branch instead of the direct-load one above —
+    // but the base (empty) layout has no anchor panel for the supplement tab to attach to, so
+    // merging still leaves the loaded layout with zero tabs
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : true,
+    );
+    respondToGetLayoutAndEmptied({ kind: 'empty' }, { action: 'closing' });
+
+    await loadLayoutInWindow(layoutWithAnchor());
+
+    await vi.waitFor(() =>
+      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+    );
+  });
+
+  test('a window created for pending content does not report emptiness', async () => {
+    respondToGetLayoutAndEmptied({ kind: 'pending-content' }, { action: 'open-home' });
+
+    await loadLayoutInWindow(layoutWithAnchor());
+    await flushMicrotasks();
+
+    expect(mocks.networkRequest).not.toHaveBeenCalledWith(
+      'windowLayout:emptied',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  test('a window whose loaded layout has a tab does not report emptiness', async () => {
+    respondToGetLayoutAndEmptied(
+      { kind: 'entry', layout: layoutWithTab('t1') },
+      { action: 'open-home' },
+    );
+
+    await loadLayoutInWindow(layoutWithAnchor());
+    await flushMicrotasks();
+
+    expect(mocks.networkRequest).not.toHaveBeenCalledWith(
+      'windowLayout:emptied',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  test('main answering closing does not open Home', async () => {
+    respondToGetLayoutAndEmptied({ kind: 'empty' }, { action: 'closing' });
+    const module = await primeWebViewOpenPath();
+    const { dockLayout, addWebViewToDockCalls } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+
+    module.registerDockLayout(dockLayout);
+
+    await vi.waitFor(() =>
+      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+    );
+    await flushMicrotasks();
+    expect(addWebViewToDockCalls).toEqual([]);
+  });
+
+  describe('when the emptied round trip fails', () => {
+    /**
+     * Every `windowLayout:emptied` report made so far.
+     *
+     * The request mock is shared by the whole file, and a report's retries are fire-and-forget, so
+     * counting reports here only says something about THIS test as long as no other test leaves a
+     * report retrying (see `respondToGetLayout`) — an abandoned retry lands in whichever test is
+     * running when its delay elapses.
+     */
+    function emptiedReports() {
+      return mocks.networkRequest.mock.calls.filter(
+        ([requestType]) => requestType === 'windowLayout:emptied',
+      );
+    }
+
+    /** Stand up the open path, register a dock layout, and drive the report's retry delays */
+    async function registerThroughEmptiedRetries() {
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, loadedLayouts, addWebViewToDockCalls } =
+        makeDockLayoutThatTracksAdds(layoutWithAnchor());
+      vi.useFakeTimers();
+      try {
+        module.registerDockLayout(dockLayout);
+        await vi.advanceTimersByTimeAsync(60_000);
+      } finally {
+        vi.useRealTimers();
+      }
+      expect(loadedLayouts.length).toBeGreaterThan(0);
+      return { addWebViewToDockCalls };
+    }
+
+    test('retries the report and acts on the answer a later attempt brings', async () => {
+      // Home-on-empty hangs off this one round trip, so a transport hiccup that would have been
+      // over by the next attempt otherwise decides what the window shows for the rest of the
+      // session
+      let emptiedCalls = 0;
+      mocks.networkRequest.mockImplementation(async (requestType: string) => {
+        if (requestType === 'windowLayout:get') return { kind: 'empty' };
+        if (requestType !== 'windowLayout:emptied') return undefined;
+        emptiedCalls += 1;
+        if (emptiedCalls < 3) throw new Error('transport not up yet');
+        return { action: 'closing' };
+      });
+
+      const { addWebViewToDockCalls } = await registerThroughEmptiedRetries();
+
+      expect(emptiedReports()).toHaveLength(3);
+      // The answer that finally arrived says this window is on its way out, so nothing is docked
+      // into it
+      expect(addWebViewToDockCalls).toEqual([]);
+    });
+
+    test('docks Home locally when every attempt fails, without reporting again', async () => {
+      // No answer is coming, and an empty dock offers the user no way to open anything. Home is
+      // the one outcome that cannot strand them; closing is not this side's decision to take.
+      mocks.networkRequest.mockImplementation(async (requestType: string) => {
+        if (requestType === 'windowLayout:get') return { kind: 'empty' };
+        if (requestType === 'windowLayout:emptied') throw new Error('transport is down');
+        return undefined;
+      });
+
+      const { addWebViewToDockCalls } = await registerThroughEmptiedRetries();
+
+      expect(addWebViewToDockCalls).toEqual([
+        expect.objectContaining({ webViewType: 'platformGetResources.home' }),
+      ]);
+      expect(emptiedReports()).toHaveLength(3);
+    });
+  });
+
+  describe('a dock that lost its last docked tab', () => {
+    /**
+     * Layout with one tab floating above a dock that holds nothing but the empty placeholder panel
+     * rc-dock puts in a root box with no panels left
+     */
+    function layoutWithOnlyAFloatingTab(): LayoutInfo {
+      return {
+        dockbox: { mode: 'horizontal', children: [{ id: '+0', tabs: [] }] },
+        floatbox: {
+          mode: 'float',
+          children: [
+            {
+              tabs: [
+                {
+                  id: 'floated-tab',
+                  tabType: TAB_TYPE_WEBVIEW,
+                  data: { id: 'floated-tab', webViewType: 'test.type', state: {} },
+                },
+              ],
+            },
+          ],
+        },
+      } as unknown as LayoutInfo;
+    }
+
+    /** Stand up the open path and a registered dock layout, with the initial load already landed */
+    async function windowHoldingOneTab() {
+      respondToGetLayoutAndEmptied(
+        { kind: 'entry', layout: layoutWithTab('t1') },
+        { action: 'closing' },
+      );
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, loadedLayouts, addWebViewToDockCalls } =
+        makeDockLayoutThatTracksAdds(layoutWithAnchor());
+      module.registerDockLayout(dockLayout);
+      await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+      return { module, addWebViewToDockCalls };
+    }
+
+    test('a tab floated out of the dock keeps the window: Home fills the dock, nothing is reported', async () => {
+      const { module, addWebViewToDockCalls } = await windowHoldingOneTab();
+
+      await module.handleDockEmptiedByRemoval(layoutWithOnlyAFloatingTab());
+
+      // Reporting here would have the main process close a window whose floating tab (or open
+      // dialog, which is also a float) is very much still there
+      expect(mocks.networkRequest).not.toHaveBeenCalledWith(
+        'windowLayout:emptied',
+        expect.anything(),
+        'emptied-by-removal',
+      );
+      expect(addWebViewToDockCalls).toEqual([
+        expect.objectContaining({ webViewType: 'platformGetResources.home' }),
+      ]);
+    });
+
+    test('the last tab in the window leaving reports the dock emptied', async () => {
+      const { module, addWebViewToDockCalls } = await windowHoldingOneTab();
+
+      await module.handleDockEmptiedByRemoval(layoutWithNoTabsAnywhere());
+
+      expect(mocks.networkRequest).toHaveBeenCalledWith(
+        'windowLayout:emptied',
+        2,
+        'emptied-by-removal',
+      );
+      // Main answered `closing`, so nothing is docked into a window on its way out
+      expect(addWebViewToDockCalls).toEqual([]);
+    });
+  });
+
+  describe('the arrival flag the main process re-checks a report against', () => {
+    test('says content arrived once Home is docked in answer to the report', async () => {
+      respondToGetLayoutAndEmptied({ kind: 'empty' }, { action: 'open-home' });
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, addWebViewToDockCalls } =
+        makeDockLayoutThatTracksAdds(layoutWithAnchor());
+
+      module.registerDockLayout(dockLayout);
+      await vi.waitFor(() => expect(addWebViewToDockCalls.length).toBeGreaterThan(0));
+
+      // The report went out while this dock was empty and Home landed after it. A main process
+      // still deciding what to do about that report has to be able to see it is out of date.
+      await expect((await registeredShard()).hasContentArrivedSinceEmptyReport()).resolves.toBe(
+        true,
+      );
+    });
+
+    test('says nothing arrived while the window is as empty as it reported', async () => {
+      respondToGetLayoutAndEmptied({ kind: 'empty' }, { action: 'closing' });
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, addWebViewToDockCalls } =
+        makeDockLayoutThatTracksAdds(layoutWithAnchor());
+
+      module.registerDockLayout(dockLayout);
+      await vi.waitFor(() =>
+        expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+      );
+      await flushMicrotasks();
+
+      expect(addWebViewToDockCalls).toEqual([]);
+      await expect((await registeredShard()).hasContentArrivedSinceEmptyReport()).resolves.toBe(
+        false,
+      );
+    });
+
+    test('a settings tab counts as content arriving, the same as a web view', async () => {
+      respondToGetLayoutAndEmptied(
+        { kind: 'entry', layout: layoutWithTab('t1') },
+        { action: 'closing' },
+      );
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, loadedLayouts } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+      // A settings tab goes in through `addTabToDock`, which the shared stand-in does not carry
+      (dockLayout as unknown as { addTabToDock: unknown }).addTabToDock = vi.fn(() => ({
+        type: 'float',
+      }));
+      module.registerDockLayout(dockLayout);
+      await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+      const shard = await registeredShard();
+      await expect(shard.hasContentArrivedSinceEmptyReport()).resolves.toBe(false);
+
+      await shard.openSettingsTab();
+
+      await expect(shard.hasContentArrivedSinceEmptyReport()).resolves.toBe(true);
+    });
+
+    test('a window that has held content still answers for the report it is sending now', async () => {
+      // The flag answers one question — has anything reached this dock SINCE the report the main
+      // process is holding — so every report starts it over. A window that keeps the answer it
+      // earned from earlier content says "content arrived" to every report it ever sends, and the
+      // main process, which re-checks before acting, then never closes it.
+      let releaseEmptiedReport: ((response: unknown) => void) | undefined;
+      mocks.networkRequest.mockImplementation(async (requestType: string) => {
+        if (requestType === 'windowLayout:get')
+          return { kind: 'entry', layout: layoutWithTab('t1') };
+        if (requestType !== 'windowLayout:emptied') return undefined;
+        // Held open, because the flag has to be read at the moment the main process reads it:
+        // while the report it describes is still in flight
+        return new Promise((resolve) => {
+          releaseEmptiedReport = resolve;
+        });
+      });
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, loadedLayouts } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+      // A settings tab goes in through `addTabToDock`, which the shared stand-in does not carry
+      (dockLayout as unknown as { addTabToDock: unknown }).addTabToDock = vi.fn(() => ({
+        type: 'float',
+      }));
+      module.registerDockLayout(dockLayout);
+      await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+      const shard = await registeredShard();
+
+      // Content arrives, putting this window on record as having had some
+      await shard.openSettingsTab();
+      await expect(shard.hasContentArrivedSinceEmptyReport()).resolves.toBe(true);
+
+      // That content goes away again and the window reports the dock emptied. Deliberately not
+      // awaited: the report is what this test reads the flag underneath, so it has to still be in
+      // flight — the same fire-and-forget shape the dock layout's change handler uses.
+      module.handleDockEmptiedByRemoval(layoutWithNoTabsAnywhere());
+      await vi.waitFor(() => expect(releaseEmptiedReport).toBeDefined());
+
+      // Nothing has arrived since THAT report went out, whatever this window held before it
+      await expect(shard.hasContentArrivedSinceEmptyReport()).resolves.toBe(false);
+      releaseEmptiedReport?.({ action: 'closing' });
+    });
+  });
 });
 
 describe('loadLayout when the saved-layout request fails', () => {
@@ -450,6 +935,166 @@ describe('loadLayout when the saved-layout request fails', () => {
       undefined,
     );
     expect(layoutPushes()).toHaveLength(1);
+  });
+
+  test('a window on a fallback layout does not report itself born empty', async () => {
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+
+    await registerWindowThroughRetries(layoutWithAnchor());
+
+    // The fallback dock is empty, but it is not the user's layout: this window keeps the behavior
+    // it had before windows started reporting emptiness at all
+    expect(mocks.networkRequest).not.toHaveBeenCalledWith(
+      'windowLayout:emptied',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+});
+
+describe('a window the main process has told is closing', () => {
+  /**
+   * Stand the shard up in a window whose emptiness report was answered `closing`.
+   *
+   * Deliberately without a web view provider or a theme stubbed in: an open or an adopt that got as
+   * far as the provider would fail with a `TypeError` off the empty service mock instead of the
+   * refusal these tests are about, so the refusal has to happen before any of that to pass.
+   */
+  async function windowToldItIsClosing() {
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+    respondToGetLayout({ kind: 'empty' });
+    const module = await import('@renderer/services/web-view.service-shard');
+    await module.startWebViewServiceShard();
+    const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+    await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+    await vi.waitFor(() =>
+      expect(mocks.networkRequest).toHaveBeenCalledWith('windowLayout:emptied', 2, 'born-empty'),
+    );
+    // Let the answer to that report land before anything asks this window to do work
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    return registeredShard();
+  }
+
+  test('refuses a web view moved into it rather than losing it with the window', async () => {
+    const shard = await windowToldItIsClosing();
+
+    await expect(
+      shard.adoptWebView({ id: 'moved-view', webViewType: 'test.type' }),
+    ).rejects.toThrow(/closing/);
+  });
+
+  test('refuses to open a web view in itself', async () => {
+    const shard = await windowToldItIsClosing();
+
+    await expect(shard.openWebView('test.type')).rejects.toThrow(/closing/);
+  });
+
+  test('refuses to open a settings tab in itself', async () => {
+    // A settings tab is routed work like any other: the main process picks the window it lands in,
+    // and one whose close is decided takes the tab with it moments later
+    const shard = await windowToldItIsClosing();
+
+    await expect(shard.openSettingsTab()).rejects.toThrow(/closing/);
+  });
+
+  test('throws rather than answering nothing, which would read as a provider declining', async () => {
+    const shard = await windowToldItIsClosing();
+    // A provider that declines every open, so that a shard which did NOT refuse would resolve
+    // `undefined` here rather than throw. `undefined` is the established "the provider chose not to
+    // create it" answer, and the router acts on it by cleaning up as though the open had been
+    // considered and turned down — which is not what happened.
+    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+    (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
+      async () => ({ getWebView: async () => undefined }),
+    );
+
+    await expect(shard.openWebView('test.type')).rejects.toThrow();
+  });
+});
+
+describe('a dock emptied by removal while running on a fallback layout', () => {
+  test('reports nothing — a fallback dock made empty is treated like one born empty', async () => {
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+    const module = await import('@renderer/services/web-view.service-shard');
+    // Docking Home waits on the shard having started, and this window docks Home now
+    await module.startWebViewServiceShard();
+    vi.useFakeTimers();
+    const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+    await vi.advanceTimersByTimeAsync(60_000);
+    vi.useRealTimers();
+    expect(loadedLayouts.length).toBeGreaterThan(0);
+
+    await module.handleDockEmptiedByRemoval(layoutWithNoTabsAnywhere());
+
+    // Same guard as born-empty: reporting would have main close this window and rewrite the
+    // persisted structure without it — deleting the saved entry the held pushes exist to protect
+    expect(mocks.networkRequest).not.toHaveBeenCalledWith(
+      'windowLayout:emptied',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  test('docks Home rather than leaving the user a blank window', async () => {
+    // Not reporting is not the same as doing nothing: this window's dock is empty and its user has
+    // nothing left to open anything from. Home fills it here, where it costs nothing — the pushes
+    // this window makes are held from persistence anyway.
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+    vi.useFakeTimers();
+    const module = await primeWebViewOpenPath();
+    const { dockLayout, loadedLayouts, addWebViewToDockCalls } =
+      makeDockLayoutThatTracksAdds(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+    await vi.advanceTimersByTimeAsync(60_000);
+    vi.useRealTimers();
+    expect(loadedLayouts.length).toBeGreaterThan(0);
+
+    await module.handleDockEmptiedByRemoval(layoutWithNoTabsAnywhere());
+
+    expect(addWebViewToDockCalls).toEqual([
+      expect.objectContaining({ webViewType: 'platformGetResources.home' }),
+    ]);
+  });
+
+  test('a Home open that fails is logged rather than left as an unhandled rejection', async () => {
+    // The dock layout's change handler does not await this, so a throw escaping it would surface as
+    // an unhandled rejection with nothing to attribute it to
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') throw new Error('transport is down');
+      return undefined;
+    });
+    const module = await import('@renderer/services/web-view.service-shard');
+    // Started, but with no web view provider stubbed in, so opening Home cannot get past the
+    // provider lookup
+    await module.startWebViewServiceShard();
+    vi.useFakeTimers();
+    const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
+    module.registerDockLayout(dockLayout);
+    await vi.advanceTimersByTimeAsync(60_000);
+    vi.useRealTimers();
+    expect(loadedLayouts.length).toBeGreaterThan(0);
+
+    await expect(
+      module.handleDockEmptiedByRemoval(layoutWithNoTabsAnywhere()),
+    ).resolves.toBeUndefined();
   });
 });
 
@@ -734,5 +1379,63 @@ describe('setDetachedScrRef', () => {
     expect(await shard.setDetachedScrRef('some-web-view', { book: 'MAT' })).toBe(false);
     expect(await shard.setDetachedScrRef('some-web-view', 'MAT 1:1')).toBe(false);
     expect(updates).toEqual([]);
+  });
+});
+
+describe('a failed dock add rolls back what the open already did', () => {
+  test('emits the close event and evicts state when addWebViewToDock throws', async () => {
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
+    const { localThemeService } = await import('@renderer/services/theme.service');
+    // Provider succeeds — the failure comes later, at the dock
+    // `webViewProviderService` is mocked as `{}` (see the file-level mock above); attaching a stub
+    // method to it needs a type assertion because the plain-object mock type doesn't model it.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (webViewProviderService as { getWebViewProvider?: unknown }).getWebViewProvider = vi.fn(
+      async () => ({
+        getWebView: async (saved: { id: string }) => ({
+          id: saved.id,
+          webViewType: 'test.type',
+          contentType: 'html',
+          content: '<p>content</p>',
+          state: { some: 'state' },
+        }),
+      }),
+    );
+    // `openOrReloadWebView` builds the injected theme stylesheet from `theme.cssVariables` before
+    // it ever reaches the dock add, so the stub needs that field even though nothing in this test
+    // reads it back.
+    // `localThemeService` is mocked as `{}` (see the file-level mock above); same untyped-attach
+    // reasoning as the provider stub above requires the assertion here too.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
+      cssVariables: {},
+    }));
+    await module.startWebViewServiceShard();
+    const { dockLayout } = await registerWindow(layoutWithTab('unrelated-tab'));
+    // `dockLayout` comes back from `makeDockLayout` typed as the full `PapiDockLayout`; overriding
+    // one method to throw needs the same untyped-attach assertion as the stubs above.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (dockLayout as { addWebViewToDock?: unknown }).addWebViewToDock = vi.fn(() => {
+      throw new Error('Replacing tab failed: target not found');
+    });
+
+    await expect(
+      module.openWebView('test.type', { type: 'replace-tab', targetTabId: 'gone-tab' }),
+    ).rejects.toThrow('Replacing tab failed');
+
+    const { deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+    expect(deleteFullWebViewStateById).toHaveBeenCalledTimes(1);
+    const closeEmitter = [...mocks.bufferedEmitters.entries()].find(([name]) =>
+      /close/i.test(name),
+    )?.[1];
+    if (!closeEmitter) throw new Error('close emitter was never created');
+    expect(closeEmitter.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        webView: expect.objectContaining({ webViewType: 'test.type' }),
+      }),
+    );
   });
 });

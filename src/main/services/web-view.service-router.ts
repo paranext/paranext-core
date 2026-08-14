@@ -12,14 +12,19 @@
 import {
   focusWindow,
   getAbandonedWindowIds,
-  getFocusedWindowId,
   getReadyWindowIds,
   getTargetWindowId,
   getUnreachableWindowIds,
+  isApplicationFocused,
+  isWindowClosing,
   isWindowReady,
 } from '@main/services/window-state.service';
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
-import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
+import { clearWindowPendingContent } from '@main/services/window-layout-persistence.service';
+import {
+  createTargetShardResolver,
+  resolveShardForWindow,
+} from '@main/services/target-shard-resolver.util';
 import {
   GetWebViewOptions,
   OpenWebViewOptions,
@@ -28,17 +33,23 @@ import {
   WebViewId,
   WebViewType,
 } from '@shared/models/web-view.model';
+import {
+  describeWebViewMoveFailure,
+  WebViewMoveFailureDisposition,
+} from '@shared/models/web-view-move.model';
 import { Layout } from '@shared/models/docking-framework.model';
 import { logger } from '@shared/services/logger.service';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, wait } from 'platform-bible-utils';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { createServiceShardIndex } from '@main/services/service-shard-index';
 import { WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE } from '@shared/models/service-shard.model';
 import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
-import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
+import { CATEGORY_COMMAND, isRequestTimedOutError } from '@shared/data/rpc.model';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
+import { settingsService } from '@shared/services/settings.service';
+import { SettingTypes } from 'papi-shared-types';
 import {
   CloseWebViewEvent,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
@@ -87,12 +98,72 @@ const getTargetWebViewShard = createTargetShardResolver(
  */
 type OwnerMatcher =
   | { kind: 'id'; webViewId: WebViewId }
-  | { kind: 'type'; webViewType: WebViewType };
+  | {
+      kind: 'type';
+      webViewType: WebViewType;
+      /**
+       * Narrows the search to web views showing this project. Left out, a type matches whatever
+       * project it is showing.
+       */
+      projectId?: string;
+    };
 
 function describeMatcher(matcher: OwnerMatcher): string {
-  return matcher.kind === 'id'
-    ? `webview ${matcher.webViewId}`
-    : `a ${matcher.webViewType} web view`;
+  if (matcher.kind === 'id') return `webview ${matcher.webViewId}`;
+  return matcher.projectId === undefined
+    ? `a ${matcher.webViewType} web view`
+    : `a ${matcher.webViewType} web view showing project ${matcher.projectId}`;
+}
+
+/** A web view a move has taken out of one window and not yet put into another */
+type WebViewMoveInFlight = {
+  /** Ids the view answers to for the length of the move: the one named, and the captured one */
+  webViewIds: WebViewId[];
+  webViewType: WebViewType;
+  /** Project the captured view was showing, if any */
+  projectId?: string;
+};
+
+/**
+ * Moves that have closed a web view in its source window and not yet opened it in its target.
+ *
+ * For that gap the web view is open in no window at all, so every window answers an ownership
+ * search truthfully and the search still comes back wrong: the view exists, and a caller that
+ * creates on a miss mints a second copy of one the app means to have exactly one of.
+ *
+ * Deliberately nothing to wait on. A search that lands in the gap is told the question could not be
+ * answered right now — which is what {@link findOwner}'s `hadUnreachableWindows` already means — so
+ * every caller keeps the weighing it already applies to that: a passive probe answers not-found,
+ * and a caller that creates opens where the user is rather than refuse for the length of a move.
+ */
+const webViewMovesInFlight = new Set<WebViewMoveInFlight>();
+
+/** Whether a move in flight is holding the web view a search is looking for */
+function isMatchedByMoveInFlight(matcher: OwnerMatcher): boolean {
+  return [...webViewMovesInFlight].some((move) =>
+    matcher.kind === 'id'
+      ? move.webViewIds.includes(matcher.webViewId)
+      : move.webViewType === matcher.webViewType &&
+        (matcher.projectId === undefined || move.projectId === matcher.projectId),
+  );
+}
+
+/**
+ * The main-process window facilities the window-layout rung needs. Injected by `main.ts` after it
+ * defines its window-creating closure — this router starts before that closure exists.
+ */
+export type WebViewWindowCreator = {
+  /** Create a window that starts truly empty and waits for routed content. Answers its window id */
+  createPendingContentWindow: () => Promise<number>;
+  /** Close a window this router created whose content never arrived */
+  closeWindow: (windowId: number) => void;
+};
+
+let windowCreator: WebViewWindowCreator | undefined;
+
+/** Wire the window facilities the window-layout rung uses. See {@link WebViewWindowCreator} */
+export function setWebViewWindowCreator(creator: WebViewWindowCreator): void {
+  windowCreator = creator;
 }
 
 /** A window a search settled on, and the shard an operation runs in it through */
@@ -165,7 +236,9 @@ async function findOwner(
           matcher.kind === 'id'
             ? await webViewShard.getOpenWebViewDefinition(matcher.webViewId)
             : (await webViewShard.getAllOpenWebViewDefinitions()).find(
-                (candidate) => candidate.webViewType === matcher.webViewType,
+                (candidate) =>
+                  candidate.webViewType === matcher.webViewType &&
+                  (matcher.projectId === undefined || candidate.projectId === matcher.projectId),
               );
         if (definition) return { windowId, shard: webViewShard, definition };
         return undefined;
@@ -207,6 +280,14 @@ async function findOwner(
         `Found ${matches.length} open '${matcher.webViewType}' web views (${matches.map((match) => match.definition.id).join(', ')}); using the one in window ${owner.windowId}.`,
       );
   }
+  // Asked only once nothing was found: a window that holds the view settles the search, and a move
+  // registered for a view some window still holds has not reached its capture yet.
+  if (!owner && isMatchedByMoveInFlight(matcher)) {
+    logger.warn(
+      `${describeMatcher(matcher)} is between windows on a move, so no window holds it right now; ${operation} is told the question could not be answered rather than that nothing has it`,
+    );
+    hadServiceErrors = true;
+  }
   return { owner, hadUnreachableWindows: hadServiceErrors };
 }
 
@@ -238,23 +319,28 @@ function getLayoutTargetTabId(layout?: Layout): string | undefined {
  * Asks each window what its dock holds rather than which window owns a web view with that id. A
  * layout can name a tab that is no web view — a settings tab, a dialog — and a tab group id is not
  * a web view id at all, so an ownership lookup answers "nobody" for both and the open lands
- * wherever the user happens to be instead of where it was aimed.
+ * wherever the user happens to be instead of where it was aimed. That is why every layout target,
+ * `replace-tab` included, is resolved here: the strict ownership search is blind to those targets
+ * by construction, so its "nobody" says nothing about whether the target exists.
  *
- * A window that could not be asked does NOT fail the open here, which is the one way this differs
- * from the `existingId` search. Guessing wrong there costs a second copy of a web view meant to be
- * unique; guessing wrong here costs only placement — the tab still opens, in the window the user is
- * in, beside whatever is already there. Failing instead would mean that for as long as ANY window
- * cannot answer — a second window still starting, or one whose renderer crashed and never
- * re-registered — every open naming a tab produces nothing at all.
+ * Like {@link findOwner}, this does not decide what an unresolved target means —
+ * `hadUnreachableWindows` carries that forward, and the two layout kinds weigh it differently. For
+ * a `panel` or `tab` layout, guessing wrong costs only placement: the tab still opens, in the
+ * window the user is in. For `replace-tab`, replacing IS the operation, and a window that guessed
+ * wrong throws only after the web view provider has run and its side effects (controller, nonce,
+ * state) exist — so that caller refuses rather than guess. Either way a window that positively
+ * holds the target settles the question, and another window failing to answer cannot make that
+ * answer wrong.
  */
-async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard | undefined> {
-  // Every window that could not be asked is warned about and then treated as one that does not hold
-  // the target — see the doc comment above for why that is the right call for a layout target
-  // specifically. A window whose renderer has not registered anything yet is not even worth the
-  // warning: its dock holds nothing, so it is a window with a real answer rather than one that
-  // could not be asked.
+async function findLayoutTargetOwner(
+  targetTabId: string,
+): Promise<{ owner: WindowShard | undefined; hadUnreachableWindows: boolean }> {
+  // A window whose renderer has not registered anything yet is not worth a warning and does not
+  // count as unreachable: its dock holds nothing, so it is a window with a real answer rather than
+  // one that could not be asked.
   const unreachableWindowIds = getUnreachableWindowIds();
-  if (unreachableWindowIds.length > 0)
+  let hadServiceErrors = unreachableWindowIds.length > 0;
+  if (hadServiceErrors)
     logger.warn(
       `Windows ${unreachableWindowIds.join(', ')} stopped serving requests, so they could not be asked whether they hold '${targetTabId}' for openWebView beside a layout target`,
     );
@@ -266,6 +352,7 @@ async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard |
           logger.warn(
             `WebView service for window ${windowId} is not registered, so it could not be asked whether it holds '${targetTabId}' for openWebView beside a layout target`,
           );
+          hadServiceErrors = true;
           return undefined;
         }
         return (await webViewShard.dockContainsTab(targetTabId))
@@ -275,6 +362,7 @@ async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard |
         logger.warn(
           `Failed to ask window ${windowId} whether it holds '${targetTabId}' for openWebView beside a layout target: ${getErrorMessage(e)}`,
         );
+        hadServiceErrors = true;
         return undefined;
       }
     }),
@@ -286,10 +374,10 @@ async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard |
   // the rest so that a target held by neither the routing target nor a single window still goes
   // somewhere predictable rather than wherever answered first.
   const targetWindowId = getTargetWindowId();
-  return (
+  const owner =
     holdingWindows.find((candidate) => candidate.windowId === targetWindowId) ??
-    holdingWindows.sort((a, b) => a.windowId - b.windowId)[0]
-  );
+    holdingWindows.sort((a, b) => a.windowId - b.windowId)[0];
+  return { owner, hadUnreachableWindows: hadServiceErrors };
 }
 
 /**
@@ -320,21 +408,731 @@ async function openWebViewInOwningWindow(
   layout?: Layout,
   options?: OpenWebViewOptions,
 ): Promise<WebViewId | undefined> {
+  // Read again here, at the last moment before the window is asked to do the work. Finding this
+  // window meant asking every window in the app, which takes as long as the slowest of them — long
+  // enough for this one's close to have been decided since any earlier read, including the one the
+  // caller's own rung took.
+  if (isWindowClosing(owner.windowId))
+    throw new Error(
+      `Cannot open ${webViewType} in window ${owner.windowId}: that window is closing.`,
+    );
   const openedWebViewId = await owner.shard.openWebView(webViewType, layout, options);
   const isCrossWindow = owner.windowId !== getTargetWindowId();
   // A caller who opted out of bringToFront is opting out at the window level too: the shard already
   // honours this for the tab it raises inside its own window, and an OS-level raise the caller did
   // not ask for is the louder half of the same action. Skipping it here is what keeps a passive
   // probe from pulling a window to the front every time it runs.
-  if (
-    openedWebViewId &&
-    isCrossWindow &&
-    getFocusedWindowId() !== undefined &&
-    options?.bringToFront !== false
-  )
+  if (openedWebViewId && isCrossWindow && isApplicationFocused() && options?.bringToFront !== false)
     focusWindow(owner.windowId);
   return openedWebViewId;
 }
+
+/**
+ * A window created to receive content that has not been put in it yet: created, marked
+ * pending-content, and already reachable through the shard {@link createFreshWindow} resolved.
+ *
+ * The two halves are separate because they cost different things. Getting this far is a cold
+ * renderer start — bundle, network service, shard registration — and it OPENS NOTHING; running the
+ * open is the part that puts content somewhere. A caller holding something it would have to undo,
+ * like a move that has to empty the source window first, can therefore pay the whole start before
+ * it commits to anything, and a window that never becomes reachable costs it a wait and an error
+ * rather than content stranded mid-flight.
+ *
+ * Either half leaves the window closed again when it does not end in content: a window whose
+ * content never arrived is an empty shell the user never asked to manage.
+ */
+type FreshWindow = {
+  /**
+   * Run an open against the created window. A failure — and a provider decline — closes the window
+   * again. Success takes the pending-content mark off, so a reload before the first layout push
+   * restores as an ordinary (empty) window instead of waiting forever for content that already
+   * arrived.
+   *
+   * @param onWindowLeftStanding Called when an open that did not end in content did NOT take the
+   *   window down with it, because content reached it anyway — with the window and the shard to
+   *   reach it through. This window is the only place that knows whether that happened, so a caller
+   *   whose next move depends on it has to be told from in here; one that has nothing to do with
+   *   the answer may leave this out. A failure and a provider decline both reach here, so a window
+   *   left standing does not mean the open threw — and on a decline it cannot be holding THIS
+   *   open's content, since a decline docks nothing, so a caller reasoning about where its own
+   *   content went may ignore that one
+   */
+  runOpen: (
+    open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+    onWindowLeftStanding?: (standingWindow: WindowShard) => void,
+  ) => Promise<WebViewId | undefined>;
+  /**
+   * Close the created window for a caller that will never run its open — what became impossible
+   * between creating the window and being ready to fill it. Nothing was ever opened here, so there
+   * is nothing to report about where it went.
+   *
+   * The window is closed once however many times this is called, and whether or not the open above
+   * already took it down: calls after the first join that one attempt rather than issuing a close
+   * of their own, so a caller need not await one before making another.
+   */
+  discard: () => Promise<void>;
+};
+
+/**
+ * Create a pending-content window and resolve the shard to reach it through, so the window is ready
+ * to be filled. See {@link FreshWindow} for why filling it is a separate step.
+ *
+ * Never leaks the window: a shard that never arrives closes it again before this throws.
+ *
+ * @param webViewDescription What the window is being created for, for the errors this raises
+ */
+async function createFreshWindow(webViewDescription: string): Promise<FreshWindow> {
+  if (!windowCreator)
+    throw new Error(
+      `Cannot open ${webViewDescription} in a new window: window creation is not wired up`,
+    );
+  const creator = windowCreator;
+  const windowId = await creator.createPendingContentWindow();
+
+  // Closes the window this call created, and never lets a failure to close replace the reason the
+  // window is being closed in the first place — a window that fails to close is a leak to warn
+  // about, not grounds to hide why the open itself did not succeed.
+  //
+  // Asks the window first whether anything reached it in the meantime: an open whose request timed
+  // out can still have landed afterwards, and this window is the only place that knows. Every other
+  // outcome closes, including one where the question itself could not be answered — a
+  // pending-content window kept by mistake never reports itself born-empty and never docks Home, so
+  // it stands there blank with nothing to heal it, which is worse than closing one window too many.
+  //
+  // A window kept this way is reported to the caller, since it is the one window that can be asked
+  // what became of the open that appeared to fail.
+  const closeWindowUnlessContentArrived = async (
+    onWindowLeftStanding?: (standingWindow: WindowShard) => void,
+  ) => {
+    try {
+      const shard = await webViewShards.getShard(windowId);
+      if (shard && (await shard.hasContentArrivedSinceEmptyReport())) {
+        logger.warn(
+          `Window ${windowId}'s new-window open did not succeed, but content reached the window anyway; leaving it open.`,
+        );
+        // It is holding content, so it is a window routed work can go to — and it must stop
+        // restoring as a window still waiting for content that has already arrived. Changing the
+        // mark announces the routing-target change itself, so nothing else has to.
+        clearWindowPendingContent(windowId);
+        onWindowLeftStanding?.({ windowId, shard });
+        return;
+      }
+    } catch (recheckError) {
+      logger.warn(
+        `Could not ask window ${windowId} whether content reached it before closing it: ${getErrorMessage(recheckError)}`,
+      );
+    }
+    try {
+      creator.closeWindow(windowId);
+    } catch (closeError) {
+      logger.warn(
+        `Could not close window ${windowId} after its new-window open did not succeed: ${getErrorMessage(closeError)}`,
+      );
+    }
+  };
+
+  /**
+   * The one close this window ever gets, memoized so every later call joins it instead of starting
+   * another.
+   *
+   * At most once is enforced here rather than left to callers: both of the returned methods close,
+   * so a caller that discards after a failed open — or discards twice — would otherwise issue a
+   * second close on a window whose close is already running, which trips the force-close escape
+   * hatch and abandons the first close's close-time work (see `window-emptiness.util.ts`). A flag
+   * inside the close cannot enforce that: the only place to set one is past the cross-process
+   * awaits above, and calls that overlap all read it before any of them gets there.
+   *
+   * What a joining call therefore skips is the whole attempt, including the arrival re-check —
+   * whose answer cannot have changed under it, since the flag it reads stays set until the window
+   * next reports its dock empty, which a window holding content does not do — and its own
+   * `onWindowLeftStanding`, a report nothing but `runOpen` asks for and no caller runs twice, so
+   * joining costs nobody an answer they were waiting on.
+   */
+  let closeAttempt: Promise<void> | undefined;
+  const closeAbandonedWindow = (onWindowLeftStanding?: (standingWindow: WindowShard) => void) => {
+    closeAttempt ??= closeWindowUnlessContentArrived(onWindowLeftStanding);
+    return closeAttempt;
+  };
+
+  let shard: WebViewServiceShard;
+  try {
+    shard = await resolveShardForWindow(
+      NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+      webViewShards,
+      windowId,
+    );
+  } catch (e) {
+    await closeAbandonedWindow();
+    throw e;
+  }
+
+  return {
+    runOpen: async (open, onWindowLeftStanding) => {
+      let openedWebViewId: WebViewId | undefined;
+      try {
+        openedWebViewId = await open(shard);
+      } catch (e) {
+        await closeAbandonedWindow(onWindowLeftStanding);
+        throw e;
+      }
+
+      if (openedWebViewId === undefined) {
+        // The provider chose not to create the web view — the established "it did not happen"
+        // answer. The window it would have lived in has no reason to exist, and a decline never
+        // docked anything, so the re-check inside cannot mistake this open's own content for an
+        // interloper.
+        await closeAbandonedWindow(onWindowLeftStanding);
+      } else {
+        // The routed content is in the window now. Un-mark it, so a reload before its first layout
+        // push restores as an ordinary (empty) window instead of waiting forever for content that
+        // already arrived.
+        clearWindowPendingContent(windowId);
+      }
+      return openedWebViewId;
+    },
+    discard: () => closeAbandonedWindow(),
+  };
+}
+
+/**
+ * Create a pending-content window and open in it, for a caller with nothing to protect from the
+ * window's start — the two steps of {@link createFreshWindow} back to back.
+ */
+async function openInFreshWindow(
+  webViewDescription: string,
+  open: (shard: WebViewServiceShard) => Promise<WebViewId | undefined>,
+): Promise<WebViewId | undefined> {
+  const freshWindow = await createFreshWindow(webViewDescription);
+  return freshWindow.runOpen(open);
+}
+
+/**
+ * Open a web view in a window created for it. In Simple mode — single-window by design — the window
+ * layout degrades to a tab in the window the user is working in; the platform owns placement there.
+ * The mode read fails closed to the degraded path, matching how window restore treats an unreadable
+ * mode.
+ *
+ * Any failure after the window exists closes it again: a window whose content never arrived is an
+ * empty shell the user never asked to manage.
+ */
+async function openWebViewInNewWindow(
+  webViewType: WebViewType,
+  options?: OpenWebViewOptions,
+): Promise<WebViewId | undefined> {
+  let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
+  try {
+    interfaceMode = await settingsService.get('platform.interfaceMode');
+  } catch (e) {
+    logger.warn(
+      `Could not read platform.interfaceMode for a window-layout open; opening as a tab instead: ${getErrorMessage(e)}`,
+    );
+  }
+  if (interfaceMode !== 'power') {
+    const webViewShard = await getTargetWebViewShard();
+    return webViewShard.openWebView(webViewType, { type: 'tab' }, options);
+  }
+
+  return openInFreshWindow(webViewType, (shard) =>
+    shard.openWebView(webViewType, { type: 'tab' }, options),
+  );
+}
+
+/** Where a move sends a web view: an existing window's id, or `'new'` for a window created for it */
+type MoveWebViewTarget = number | 'new';
+
+/** How many times {@link findWebViewAdoptedAfterTimeout} asks the target whether the adopt landed */
+const LATE_ADOPT_PROBE_ATTEMPTS = 3;
+
+/** How long {@link findWebViewAdoptedAfterTimeout} waits between attempts */
+const LATE_ADOPT_PROBE_RETRY_DELAY_MS = 2_000;
+
+/**
+ * Whether a move's target holds the web view whose adopt call timed out — asked before any
+ * recovery, because a timed-out adopt is ambiguous where every other failure is not: the request
+ * expired client-side, but the target may still be running it (a provider can legitimately take
+ * longer than the request timeout), and reopening the captured definition elsewhere while the
+ * target finishes would put the same web view id live in two windows, where messages for it become
+ * unroutable.
+ *
+ * Bounded to a few attempts a couple of seconds apart: a target that never answers must not stall
+ * the recovery the user is waiting on forever. A provider still slower than these attempts ends in
+ * recovery anyway and the collision window comes back — that residual is accepted over an unbounded
+ * wait.
+ *
+ * @param webViewId The id the target would hold the web view under — the captured definition's id,
+ *   which the capture already stripped of its source window's scope
+ * @returns The id the web view is open under in the target, or undefined when the probe confirmed
+ *   absence or could not ask
+ */
+async function findWebViewAdoptedAfterTimeout(
+  targetShard: WebViewServiceShard,
+  webViewId: WebViewId,
+  targetDescription: string,
+): Promise<WebViewId | undefined> {
+  for (let attempt = 1; attempt <= LATE_ADOPT_PROBE_ATTEMPTS; attempt += 1) {
+    try {
+      // Sequential attempts: each one must settle before the next may start
+      // eslint-disable-next-line no-await-in-loop
+      const definition = await targetShard.getOpenWebViewDefinition(webViewId);
+      if (definition) {
+        logger.info(
+          `Webview ${webViewId}'s adopt into ${targetDescription} timed out but landed anyway; probe attempt ${attempt} of ${LATE_ADOPT_PROBE_ATTEMPTS} found it open as ${definition.id}`,
+        );
+        return definition.id;
+      }
+      logger.debug(
+        `Webview ${webViewId}'s timed-out adopt has not landed in ${targetDescription} (probe attempt ${attempt} of ${LATE_ADOPT_PROBE_ATTEMPTS})`,
+      );
+    } catch (e) {
+      logger.warn(
+        `Could not ask ${targetDescription} whether webview ${webViewId}'s timed-out adopt landed (probe attempt ${attempt} of ${LATE_ADOPT_PROBE_ATTEMPTS}): ${getErrorMessage(e)}`,
+      );
+    }
+    if (attempt < LATE_ADOPT_PROBE_ATTEMPTS)
+      // Sequential attempts (see above)
+      // eslint-disable-next-line no-await-in-loop
+      await wait(LATE_ADOPT_PROBE_RETRY_DELAY_MS);
+  }
+  return undefined;
+}
+
+/**
+ * Raise the window a completed move put the web view in. Raising is how the user sees where the web
+ * view went — same narrow rule as cross-window opens: only between this app's windows, never taking
+ * focus from another application. A new window raises itself when it is created.
+ */
+function raiseMoveTarget(target: MoveWebViewTarget): void {
+  if (typeof target === 'number' && isApplicationFocused()) focusWindow(target);
+}
+
+/**
+ * Move a web view: make the destination ready, close the view in the window that holds it, reopen
+ * it from the captured definition in the destination.
+ *
+ * Close-source-first is load-bearing for the OPEN — a one-instance web view cannot be opened in the
+ * destination while the source instance is alive, because reuse logic would find and raise the
+ * source instead. It is not load-bearing for getting the destination ready, which opens nothing: a
+ * window created for the move and the shard to reach it through are both settled before the
+ * capture, so the wait for a window to finish starting — the one step here that can take a cold
+ * renderer start — is spent with the web view still in the window the user left it in.
+ *
+ * @returns Authoritative id of the web view in its new window. Can differ from the id passed in: a
+ *   web view restored from a persisted layout carries a window-scoped id, and the capture strips
+ *   that scope rather than carry one window's scope into another — callers use the returned id for
+ *   anything after the move
+ * @throws If no window holds the web view; if the destination could not be made ready — a named
+ *   target window that does not exist or is closing, or a window created for the move that never
+ *   became reachable, all of which leave the web view where it was; if taking the web view out of
+ *   its window failed, which can have closed it without handing anything back, so the error says
+ *   its whereabouts are unknown; or if the open in the destination failed, where the error says
+ *   where the web view ended up instead (see {@link recoverAfterFailedMove})
+ */
+async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Promise<WebViewId> {
+  const matcher: OwnerMatcher = { kind: 'id', webViewId };
+  const { owner, hadUnreachableWindows } = await findOwner(matcher, 'move');
+  // A move always names an existing web view, so a window that could not be asked may be the one
+  // holding it. Reading that as "nobody has it" would fail the move for the wrong reason, and the
+  // caller could not tell a view that is not open from one in a window that never answered.
+  if (!owner && hadUnreachableWindows)
+    throw new Error(`Could not move ${describeMatcher(matcher)}: some windows were unreachable.`);
+  if (!owner) throw new Error(`Cannot move webview ${webViewId}: no window has it open.`);
+
+  const targetDescription = target === 'new' ? 'a new window' : `window ${target}`;
+
+  /**
+   * The window a move to a new window created and left standing, because content reached it while
+   * its adopt was not succeeding. Only that window can say what became of the adopt, and only a
+   * move that has one has anywhere to put the question. A provider decline sets this too, and the
+   * decline path below ignores it: a decline docks nothing, so a window standing after one is not
+   * holding this move's web view.
+   */
+  let standingNewWindow: WindowShard | undefined;
+  /** The named target window's shard. A move to a new window has no named target */
+  let targetShard: WebViewServiceShard | undefined;
+  /** Puts the captured definition in the destination resolved below */
+  let adoptIntoDestination: (definition: SavedWebViewDefinition) => Promise<WebViewId | undefined>;
+  /**
+   * Undo the destination, for a move that ends before it ever adopts into it. Only a move to a new
+   * window has anything to undo — it created a window — so anything else leaves this out.
+   */
+  let discardDestination: (() => Promise<void>) | undefined;
+
+  if (target === 'new') {
+    // Same read as opening into a new window, but not the same degrade. In Simple mode —
+    // single-window by design — there is no other window to move to, and the view already is a
+    // tab in the only window there is, so there is nothing to do. A mode that could not be READ is
+    // not that answer: resolving as though it were reports a move that did not happen, and the
+    // caller has nothing to tell it apart from one that did — the tab-title notification driven by
+    // this result would tell the user their web view is in a new window while it sits where it was.
+    let interfaceMode: SettingTypes['platform.interfaceMode'];
+    try {
+      interfaceMode = await settingsService.get('platform.interfaceMode');
+    } catch (e) {
+      throw new Error(
+        `Cannot move webview ${webViewId} to a new window: the interface mode could not be read (${getErrorMessage(e)}).`,
+      );
+    }
+    if (interfaceMode !== 'power') return webViewId;
+    // Created and reachable before anything closes. This is the step that can take a whole cold
+    // renderer start, and the one that fails when a window never gets there — so it belongs where a
+    // window that never comes up costs the user a wait and an error rather than a web view open in
+    // no window at all. It opens nothing: an empty window gives reuse logic nothing to find, so
+    // what makes the capture below have to come before the adopt is untouched by doing this early.
+    const freshWindow = await createFreshWindow(webViewId);
+    adoptIntoDestination = (definition) =>
+      freshWindow.runOpen(
+        (shard) => shard.adoptWebView(definition),
+        (standingWindow) => {
+          standingNewWindow = standingWindow;
+        },
+      );
+    discardDestination = freshWindow.discard;
+  } else {
+    // The web view is already there; closing and reopening it would be churn for nothing
+    if (target === owner.windowId) return webViewId;
+    // A window whose close has been decided is a stale target the caller cannot know about:
+    // adopting into it would report success and then lose the view when the close lands
+    if (isWindowClosing(target))
+      throw new Error(
+        `Cannot move webview ${webViewId} to window ${target}: that window is closing.`,
+      );
+    // Resolved before anything closes: an unknown target must fail the move with the web view
+    // untouched
+    const shard = await resolveShardForWindow(
+      NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+      webViewShards,
+      target,
+    );
+    targetShard = shard;
+    adoptIntoDestination = (definition) => shard.adoptWebView(definition);
+  }
+
+  let captured: SavedWebViewDefinition | undefined;
+  try {
+    captured = await owner.shard.captureAndCloseWebView(webViewId);
+  } catch (e) {
+    // A cross-process capture that fails may have closed the tab without delivering the capture.
+    // There is no captured definition to recover from — and blindly reopening from the owner
+    // search's definition could duplicate a view whose tab never closed — so log that definition
+    // (enough to reconstruct the web view by hand) and surface the move context the raw shard
+    // error lacks
+    logger.error(
+      `Capturing webview ${webViewId} for a move to ${targetDescription} failed; window ${owner.windowId} may or may not still have it. Definition from the owner search: ${JSON.stringify(owner.definition)}`,
+    );
+    // Nothing is coming to fill a window this move created, and an empty window the user never
+    // asked to manage must not outlive the move that made it
+    await discardDestination?.();
+    // Named as a failure whose outcome is unknown, because it is one: a caller that reported this
+    // as a move that changed nothing would tell the user their action did nothing while their tab
+    // may be gone from the screen with only the log holding what it was
+    throw new Error(
+      describeWebViewMoveFailure(
+        'possibly-closed',
+        `Could not move webview ${webViewId} to ${targetDescription}: capturing it failed (${getErrorMessage(e)}). Window ${owner.windowId} may or may not still have it, and its definition from before the move is in the log.`,
+      ),
+    );
+  }
+  if (!captured) {
+    // Same as above: there is nothing to put in a window this move created, and the window that
+    // held the web view a moment ago says it does not — where it is now is not this move's to say
+    await discardDestination?.();
+    // And the same log, for the same reason: this rejects with the disposition that sends the user
+    // to the log for what became of their tab, and an owner that answers nothing says nothing about
+    // what the web view was. The owner search's definition is the only description still in hand
+    logger.error(
+      `Window ${owner.windowId} no longer had webview ${webViewId} when the move tried to capture it. Definition from the owner search: ${JSON.stringify(owner.definition)}`,
+    );
+    throw new Error(
+      describeWebViewMoveFailure(
+        'possibly-closed',
+        `Cannot move webview ${webViewId}: window ${owner.windowId} no longer had it when the move tried to capture it.`,
+      ),
+    );
+  }
+
+  // From here the web view is open in NO window until the target takes it, or until recovery
+  // puts it back — see `webViewMovesInFlight`, which is what keeps a search landing in that gap
+  // from being told the view does not exist.
+  const moveInFlight: WebViewMoveInFlight = {
+    webViewIds: [webViewId, captured.id],
+    webViewType: captured.webViewType,
+    projectId: captured.projectId,
+  };
+  webViewMovesInFlight.add(moveInFlight);
+  try {
+    try {
+      // Read again at the last moment: the capture above closed the source tab, and everything
+      // between the target check at the top of this move and here has been cross-process work the
+      // target's close could have been decided during. Throwing hands the web view to the recovery
+      // below rather than into a window that is about to take it away.
+      if (typeof target === 'number' && isWindowClosing(target))
+        throw new Error(`window ${target}'s close was decided while the move was in flight`);
+      const movedWebViewId = await adoptIntoDestination(captured);
+      if (movedWebViewId !== undefined) {
+        raiseMoveTarget(target);
+        return movedWebViewId;
+      }
+      logger.warn(
+        `Moving webview ${webViewId} to ${targetDescription} did not happen: the provider did not recreate it there. Reopening it where it can go.`,
+      );
+    } catch (e) {
+      // A timed-out adopt may have succeeded after its request expired, and only the window that
+      // ran it knows — see findWebViewAdoptedAfterTimeout. The window to ask is the target a move
+      // named, or, for a move to a new window, the window that path created and left standing:
+      // content reaching a window created for this one adopt is what a late-landing adopt looks
+      // like from outside. A new-window attempt that took its window down with it has nobody to
+      // ask and nothing that could have landed, so it goes straight to the recovery the user is
+      // waiting on rather than spending the probe's attempts on a window that is gone.
+      const shardToProbe = targetShard ?? standingNewWindow?.shard;
+      /**
+       * Whether the adopt can still be running: only a request that expired client-side can be. An
+       * answer the destination produced itself — of any kind — is the destination saying it is
+       * done
+       */
+      const mightAdoptStillLand = isRequestTimedOutError(e);
+      if (shardToProbe !== undefined && mightAdoptStillLand) {
+        const lateAdoptedWebViewId = await findWebViewAdoptedAfterTimeout(
+          shardToProbe,
+          captured.id,
+          targetDescription,
+        );
+        if (lateAdoptedWebViewId !== undefined) {
+          raiseMoveTarget(target);
+          return lateAdoptedWebViewId;
+        }
+      }
+      if (standingNewWindow !== undefined) {
+        // The window created for this move is holding content: the dock took the tab, and the
+        // failure came back after that. Reopening the captured definition anywhere would put the
+        // same web view id live in two windows, where messages for it become unroutable and
+        // closing either copy takes the other's controller with it. What decides that is the
+        // content standing in the window, not what kind of failure came back — an adopt that threw
+        // past the dock, or an answer lost on its way home, leaves the same window holding the same
+        // web view as the timed-out adopt the probe above chases. So the move ends here: the window
+        // keeps whatever reached it — closing it would destroy content that may be in front of the
+        // user — and the caller is told that nothing it can name holds the web view, which is the
+        // answer to give a user whose tab did not come back.
+        logger.error(
+          `Webview ${webViewId}'s adopt into window ${standingNewWindow.windowId} did not report success (${getErrorMessage(e)}), but that window is holding content, so nothing may reopen the web view elsewhere. Captured definition: ${JSON.stringify(captured)}`,
+        );
+        /** What became of the adopt, said no more definitely than this failure allows */
+        const whatTheAdoptDid = mightAdoptStillLand
+          ? `timed out and could not be confirmed (${getErrorMessage(e)})`
+          : `failed (${getErrorMessage(e)})`;
+        throw new Error(
+          describeWebViewMoveFailure(
+            'not-reopened',
+            `Could not move webview ${webViewId} to ${targetDescription}: adopting it there ${whatTheAdoptDid}, and window ${standingNewWindow.windowId} is holding content, so it was not reopened anywhere. Its captured definition is in the log.`,
+          ),
+        );
+      }
+      logger.warn(
+        `Moving webview ${webViewId} to ${targetDescription} failed: ${getErrorMessage(e)}. Reopening it where it can go.`,
+      );
+    }
+
+    return await recoverAfterFailedMove(webViewId, owner, captured, targetDescription);
+  } finally {
+    webViewMovesInFlight.delete(moveInFlight);
+  }
+}
+
+/**
+ * Reopen a captured web view in one window, answering whether it is now open there.
+ *
+ * A timed-out readopt is asked about rather than given up on, exactly as the move's own adopt is —
+ * see {@link findWebViewAdoptedAfterTimeout}. The recovery ladder walks on to the next window when a
+ * rung answers no, so reading a timeout as a no is what would put this web view id live in two
+ * windows, where messages for it become unroutable.
+ *
+ * @param webViewId The id the caller named, for the log; `captured.id` is what a landed readopt is
+ *   found under
+ */
+async function readoptAfterFailedMove(
+  shard: WebViewServiceShard,
+  webViewId: WebViewId,
+  captured: SavedWebViewDefinition,
+  destinationDescription: string,
+): Promise<boolean> {
+  try {
+    if ((await shard.adoptWebView(captured)) !== undefined) return true;
+  } catch (e) {
+    if (
+      isRequestTimedOutError(e) &&
+      (await findWebViewAdoptedAfterTimeout(shard, captured.id, destinationDescription)) !==
+        undefined
+    )
+      return true;
+    logger.warn(
+      `Could not reopen webview ${webViewId} in ${destinationDescription}: ${getErrorMessage(e)}`,
+    );
+  }
+  return false;
+}
+
+/**
+ * Reopen a web view whose move could not open it in its target, escalating until something takes
+ * it: the source window — unless its close has begun, which a move that emptied it will have made
+ * true — then the focused window. Always rejects: wherever the web view ended up, the move the
+ * caller asked for did not happen, and the error says where it is.
+ *
+ * Where it is rides on the error as a {@link WebViewMoveFailureDisposition} and not only in its
+ * prose. These three outcomes are as far apart as "nothing changed" and "the web view is open
+ * nowhere at all", and a caller reporting a failed move to the user has to tell them apart without
+ * reading a sentence written for the log.
+ */
+async function recoverAfterFailedMove(
+  webViewId: WebViewId,
+  owner: WebViewOwner,
+  captured: SavedWebViewDefinition,
+  targetDescription: string,
+): Promise<never> {
+  logger.debug(
+    `Reopening webview ${webViewId} after its failed move to ${targetDescription}. Captured definition: ${JSON.stringify(captured)}`,
+  );
+  /** The window that took the web view back: how to name it, and how a caller must read that */
+  let reopenedIn: { description: string; disposition: WebViewMoveFailureDisposition } | undefined;
+  if (!isWindowClosing(owner.windowId)) {
+    const sourceDescription = `window ${owner.windowId}, where it came from`;
+    if (await readoptAfterFailedMove(owner.shard, webViewId, captured, sourceDescription)) {
+      // Read again, because capturing out of this window is what emptied it: its close can be
+      // decided while the readopt is in flight, and a web view in a window that is closing is not
+      // recovered — it is about to be lost with it. The next rung reopens it somewhere that will
+      // still be there, which duplicates it for as long as the closing window takes to go.
+      if (isWindowClosing(owner.windowId))
+        logger.warn(
+          `Webview ${webViewId} was reopened in window ${owner.windowId}, but that window's close was decided in the meantime; reopening it somewhere else as well.`,
+        );
+      else
+        reopenedIn = { description: sourceDescription, disposition: 'reopened-in-source-window' };
+    }
+  }
+  if (reopenedIn === undefined) {
+    try {
+      const focusedShard = await getTargetWebViewShard();
+      if (await readoptAfterFailedMove(focusedShard, webViewId, captured, 'the focused window'))
+        reopenedIn = {
+          description: 'the focused window',
+          disposition: 'reopened-in-focused-window',
+        };
+    } catch (e) {
+      logger.warn(
+        `Could not reopen webview ${webViewId} in the focused window: ${getErrorMessage(e)}`,
+      );
+    }
+  }
+  if (reopenedIn === undefined) {
+    // Last resort short of silent loss: the definition in the log is enough to reconstruct the
+    // web view by hand
+    logger.error(
+      `Nothing could reopen webview ${webViewId} after its failed move. Captured definition: ${JSON.stringify(captured)}`,
+    );
+    throw new Error(
+      describeWebViewMoveFailure(
+        'not-reopened',
+        `Could not move webview ${webViewId} to ${targetDescription}, and could not reopen it anywhere afterwards. Its captured definition is in the log.`,
+      ),
+    );
+  }
+  throw new Error(
+    describeWebViewMoveFailure(
+      reopenedIn.disposition,
+      `Could not move webview ${webViewId} to ${targetDescription}; it was reopened in ${reopenedIn.description}.`,
+    ),
+  );
+}
+
+/** The move command names this router claims */
+type MoveCommandName = 'platform.moveWebViewToNewWindow' | 'platform.moveWebViewToWindow';
+
+/** OpenRPC documentation for the move commands, keyed like {@link SETTINGS_COMMAND_DOCS} */
+const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
+  'platform.moveWebViewToNewWindow': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Move a web view to a window created for it: close it where it is, reopen it there. ' +
+        'Does nothing in Simple mode',
+      params: [
+        {
+          name: 'webViewId',
+          required: true,
+          summary: 'Web view to move',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        summary:
+          'Authoritative id of the web view in its new window. Can differ from the passed ' +
+          'webViewId (a web view restored from a persisted layout carries a window-scoped id ' +
+          'the move does not keep) — use the returned id for anything after the move',
+        schema: { type: 'string' },
+      },
+    },
+  },
+  'platform.moveWebViewToWindow': {
+    method: {
+      'x-experimental': true,
+      summary:
+        'Move a web view to the given window: close it where it is, reopen it there. Moving it ' +
+        'to its own window does nothing; naming a window that does not exist is an error',
+      params: [
+        {
+          name: 'webViewId',
+          required: true,
+          summary: 'Web view to move',
+          schema: { type: 'string' },
+        },
+        {
+          name: 'targetWindowId',
+          required: true,
+          summary:
+            "The target window's runtime id — ids restart at 1 each launch, so never persist one",
+          schema: { type: 'number' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        summary:
+          'Authoritative id of the web view in its new window. Can differ from the passed ' +
+          'webViewId (a web view restored from a persisted layout carries a window-scoped id ' +
+          'the move does not keep) — use the returned id for anything after the move',
+        schema: { type: 'string' },
+      },
+    },
+  },
+};
+
+/** Handle `platform.moveWebViewToNewWindow`. Arguments arrive untyped over the network */
+async function moveWebViewToNewWindow(webViewId: unknown): Promise<WebViewId> {
+  if (typeof webViewId !== 'string')
+    throw new Error(`platform.moveWebViewToNewWindow needs a web view id; got ${typeof webViewId}`);
+  return moveWebView(webViewId, 'new');
+}
+
+/** Handle `platform.moveWebViewToWindow`. Arguments arrive untyped over the network */
+async function moveWebViewToWindow(
+  webViewId: unknown,
+  targetWindowId: unknown,
+): Promise<WebViewId> {
+  if (typeof webViewId !== 'string')
+    throw new Error(`platform.moveWebViewToWindow needs a web view id; got ${typeof webViewId}`);
+  if (typeof targetWindowId !== 'number')
+    throw new Error(
+      `platform.moveWebViewToWindow needs a target window id number; got ${typeof targetWindowId}`,
+    );
+  return moveWebView(webViewId, targetWindowId);
+}
+
+/**
+ * Internal-only export for testing; not for use in development.
+ *
+ * `createFreshWindow` is here because what it promises about overlapping closes cannot be exercised
+ * through any router method: every caller of one awaits each close before the next, which is the
+ * sequential case the promise is not about.
+ */
+export const testingWebViewServiceRouter = { moveWebView, createFreshWindow };
 
 // Router methods that route to the focused window's WebView service shard
 
@@ -343,11 +1141,48 @@ async function openWebView(
   layout?: Layout,
   options?: OpenWebViewOptions,
 ): Promise<WebViewId | undefined> {
+  // Contradictions among the arguments themselves, decided together and before anything else runs.
+  // A call that cannot be honored must not fan a search out to every window on the way to being
+  // refused — and, since a search that finds a match returns from the owner rung below, checking
+  // any of these later would make enforcement depend on what the docks happened to hold.
+
+  // `existingProjectId` only qualifies a '?' search; a concrete existingId already names one
+  // exact web view, and no existingId at all names no search for it to limit, so combining it
+  // with either is contradictory. Caught here rather than only in the window shard.
+  if (options?.existingProjectId !== undefined && options.existingId !== '?')
+    throw new Error(
+      options.existingId === undefined
+        ? "openWebView: existingProjectId requires existingId: '?'; it was not given at all."
+        : `openWebView: existingProjectId only qualifies an existingId of '?'; existingId ${JSON.stringify(options.existingId)} already names an exact web view.`,
+    );
+
+  if (options?.targetWindowId !== undefined) {
+    if (layout?.type === 'window')
+      throw new Error(
+        `Cannot open ${webViewType}: a 'window' layout asks for a new window, but targetWindowId names an existing one. Pass one or the other.`,
+      );
+    if (layout?.type === 'replace-tab')
+      throw new Error(
+        `Cannot open ${webViewType}: a replace-tab layout names its own window through its target tab, so targetWindowId cannot also name one. Pass one or the other.`,
+      );
+  }
+
+  /**
+   * Whether the reuse search below ended without an answer and this open carried on anyway — the
+   * `'?'` fall-through, which trades a possible duplicate for the click doing something. Declared
+   * out here because the layout is decided below the search, where the search's own reachability
+   * reading is out of scope.
+   */
+  let didSearchFallThroughInconclusively = false;
+
   // If an existingId is provided, search all windows for the webview's owner
   if (options?.existingId) {
+    // A project filter narrows which web views count as a match before the search picks among the
+    // windows that have one, so a match for the asked-for project outranks the routing target's
+    // preference for a web view of the type showing something else
     const matcher: OwnerMatcher =
       options.existingId === '?'
-        ? { kind: 'type', webViewType }
+        ? { kind: 'type', webViewType, projectId: options.existingProjectId }
         : { kind: 'id', webViewId: options.existingId };
     const { owner, hadUnreachableWindows } = await findOwner(matcher, 'openWebView');
     if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
@@ -370,21 +1205,92 @@ async function openWebView(
     // long as one window is unreachable, which for a crashed renderer is the rest of the session.
     // Guessing wrong costs a second copy of the view, in the window the user is looking at, where
     // they can see and close it. Falling through to open where the user is beats not opening.
+    didSearchFallThroughInconclusively = hadUnreachableWindows && matcher.kind === 'type';
+  }
+
+  /**
+   * The layout the rest of this open acts on.
+   *
+   * A `window` layout becomes a tab when the reuse search fell through without an answer: what the
+   * fall-through accepts is a duplicate in the window the user is looking at, where they can see it
+   * and close it. A whole new window is a different bargain — it takes the screen and OS focus, and
+   * the copy it may be duplicating can be sitting behind it on another monitor.
+   *
+   * Substituted rather than skipping the window rung: every path below hands the layout to a
+   * window's shard, and rc-dock acts on `window` itself, so skipping would produce the popup
+   * anyway.
+   */
+  const effectiveLayout =
+    didSearchFallThroughInconclusively && layout?.type === 'window'
+      ? ({ type: 'tab' } satisfies Layout)
+      : layout;
+
+  if (effectiveLayout?.type === 'window') {
+    // A caller that declined creation only wanted the reuse search above, which found nothing (its
+    // own not-found and unreachable answers are decided up there). A window layout from here on
+    // only ever creates, so the decline is honored before any window exists — a created window is
+    // shown and takes OS focus the moment it appears, which no passive probe may cause just for
+    // its shard to decline the open and the scaffold to close the window again.
+    if (options?.existingId && options.createNewIfNotFound === false) return undefined;
+    return openWebViewInNewWindow(webViewType, options);
+  }
+
+  // A named window outranks placement inference: the caller said where. It never outranks
+  // `existingId` reuse above — an existing view stays wherever it lives.
+  if (options?.targetWindowId !== undefined) {
+    // A window whose close has been decided is a stale target the caller cannot know about — same
+    // rule the move commands apply: opening into it would report success and then lose the web
+    // view when the close lands
+    if (isWindowClosing(options.targetWindowId))
+      throw new Error(
+        `Cannot open ${webViewType} in window ${options.targetWindowId}: that window is closing.`,
+      );
+
+    const shard = await resolveShardForWindow(
+      NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+      webViewShards,
+      options.targetWindowId,
+    );
+    return shard.openWebView(webViewType, effectiveLayout, options);
   }
 
   // A layout naming a tab or tab group names the window that holds it, so it routes the same way an
   // existingId does — and after it, because a window shard that finds the existing web view raises it and
   // returns before it ever reads the layout. Routing in the other order would send the call to a
   // window that then ignores the reason it was sent there.
-  const layoutTargetTabId = getLayoutTargetTabId(layout);
+  const layoutTargetTabId = getLayoutTargetTabId(effectiveLayout);
   if (layoutTargetTabId) {
-    const owner = await findLayoutTargetOwner(layoutTargetTabId);
-    if (owner) return openWebViewInOwningWindow(owner, webViewType, layout, options);
+    // The docks are asked, not the ownership index: a replace-tab target is routinely a settings
+    // tab or a dialog, which an ownership lookup cannot see at all, so its "nobody" would say
+    // nothing about whether the target exists — and refusing on it took every such open down for as
+    // long as one window stayed unreachable.
+    const { owner, hadUnreachableWindows } = await findLayoutTargetOwner(layoutTargetTabId);
+    // For `replace-tab`, replacing IS the operation, not placement advice: a window that guessed
+    // wrong throws only after the web view provider has run and its side effects (controller,
+    // nonce, state) exist. So when nothing that could be asked holds the target and some window
+    // could not be asked — the window that may be holding it — this open refuses rather than guess.
+    // A `panel` or `tab` layout falls through instead: guessing wrong there costs placement only.
+    if (effectiveLayout?.type === 'replace-tab' && !owner && hadUnreachableWindows)
+      throw new Error(
+        `Could not openWebView ${webViewType} over replace-tab target '${layoutTargetTabId}': some windows were unreachable.`,
+      );
+    if (owner) {
+      // Same rule a caller-named targetWindowId gets above: a window whose close has been decided
+      // would take this content and lose it when the close lands. A layout names a tab rather than a
+      // window, so the caller has even less way of knowing which window it resolved to — falling
+      // through to the focused window instead would put the tab somewhere the caller did not ask
+      // for and never say so.
+      if (isWindowClosing(owner.windowId))
+        throw new Error(
+          `Cannot open ${webViewType} in window ${owner.windowId}: that window is closing.`,
+        );
+      return openWebViewInOwningWindow(owner, webViewType, effectiveLayout, options);
+    }
   }
 
   // No existingId or not found in any window — route to focused window
   const webViewShard = await getTargetWebViewShard();
-  return webViewShard.openWebView(webViewType, layout, options);
+  return webViewShard.openWebView(webViewType, effectiveLayout, options);
 }
 
 async function reloadWebView(
@@ -641,6 +1547,9 @@ async function openSettingsForWebView(webViewId?: WebViewId): Promise<void> {
         `Could not openSettings ${describeMatcher({ kind: 'id', webViewId })}: some windows were unreachable.`,
       );
   }
+  logger.debug(
+    `openSettingsForWebView has no owner to route by; focus-routing to window ${getTargetWindowId()}`,
+  );
   await (await getTargetWebViewShard()).openSettingsTab(undefined);
 }
 
@@ -652,6 +1561,7 @@ async function openSettingsForWebView(webViewId?: WebViewId): Promise<void> {
  * their routing.
  */
 async function openUserSettings(): Promise<void> {
+  logger.debug(`openUserSettings is focus-routing to window ${getTargetWindowId()}`);
   await (await getTargetWebViewShard()).openSettingsTab(undefined);
 }
 
@@ -735,6 +1645,16 @@ export async function startWebViewServiceRouter(): Promise<void> {
       docs: SETTINGS_COMMAND_DOCS['platform.openUserSettings'],
       routing: 'focus',
     },
+    {
+      commandName: 'platform.moveWebViewToNewWindow',
+      docs: MOVE_COMMAND_DOCS['platform.moveWebViewToNewWindow'],
+      routing: 'owner',
+    },
+    {
+      commandName: 'platform.moveWebViewToWindow',
+      docs: MOVE_COMMAND_DOCS['platform.moveWebViewToWindow'],
+      routing: 'owner',
+    },
   ]);
 
   await networkObjectService.set<WebViewServiceType>(
@@ -764,6 +1684,16 @@ export async function startWebViewServiceRouter(): Promise<void> {
       serializeRequestType(CATEGORY_COMMAND, 'platform.openUserSettings'),
       openUserSettings,
       SETTINGS_COMMAND_DOCS['platform.openUserSettings'],
+    ),
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, 'platform.moveWebViewToNewWindow'),
+      moveWebViewToNewWindow,
+      MOVE_COMMAND_DOCS['platform.moveWebViewToNewWindow'],
+    ),
+    registerRequestHandler(
+      serializeRequestType(CATEGORY_COMMAND, 'platform.moveWebViewToWindow'),
+      moveWebViewToWindow,
+      MOVE_COMMAND_DOCS['platform.moveWebViewToWindow'],
     ),
   ]);
   logger.info('WebView service router registered');
