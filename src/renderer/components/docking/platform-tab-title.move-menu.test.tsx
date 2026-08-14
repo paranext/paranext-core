@@ -243,6 +243,32 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     );
   });
 
+  it('a move that may have taken the tab with it says so rather than that nothing happened', async () => {
+    // The move failed at the step that takes the tab out of its window, so nobody knows whether the
+    // tab is still there. "Could not move it" reads as "nothing changed", which sends a user whose
+    // tab did vanish looking at the window it was in instead of at the log
+    vi.mocked(sendCommand).mockRejectedValue(
+      new Error(
+        describeWebViewMoveFailure(
+          'possibly-closed',
+          'Could not move webview web-view-1 to a new window: capturing it failed (round trip lost). Window 2 may or may not still have it. Its definition from before the move is in the log.',
+        ),
+      ),
+    );
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByText('Move tab to new window'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
   it('a disposition that survived the network round trip is still read', async () => {
     // What the renderer actually receives: the request plumbing wraps a handler's rejection in its
     // own message, so a disposition only reaches here if it is read out of the whole text rather

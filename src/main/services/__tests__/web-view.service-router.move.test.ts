@@ -418,12 +418,17 @@ describe('moveWebView', () => {
     expect(owner.captureAndCloseWebView).not.toHaveBeenCalled();
   });
 
-  test('a capture that comes back empty fails the move', async () => {
+  test('a capture that comes back empty fails the move, saying the tab may be gone', async () => {
     const owner = windowShard(['view-1']);
     owner.captureAndCloseWebView.mockResolvedValue(undefined);
     withWindows({ 2: owner, 3: windowShard([]) });
 
-    await expect(moveWebView('view-1', 3)).rejects.toThrow('no longer had it');
+    const failure = await failedMove(moveWebView('view-1', 3));
+
+    expect(getErrorMessage(failure)).toContain('no longer had it');
+    // The window that held it a moment ago says it does not: the tab is not where the user left
+    // it, and a caller told only that the move failed would report an action that did nothing
+    expect(getWebViewMoveFailureDisposition(failure)).toBe('possibly-closed');
   });
 
   test('a capture that throws fails the move with the owner-search definition in the log', async () => {
@@ -432,10 +437,15 @@ describe('moveWebView', () => {
     const target = windowShard([]);
     withWindows({ 2: owner, 3: target });
 
-    await expect(moveWebView('view-1', 3)).rejects.toThrow(
+    const failure = await failedMove(moveWebView('view-1', 3));
+
+    expect(getErrorMessage(failure)).toMatch(
       /Could not move webview view-1 to window 3: capturing it failed/,
     );
-
+    // A capture that failed across processes can have closed the tab without delivering anything,
+    // so where the web view is cannot be told from here. Reporting it as a failure that changed
+    // nothing tells the user their action did nothing while the tab may be gone from the screen.
+    expect(getWebViewMoveFailureDisposition(failure)).toBe('possibly-closed');
     // The owner search's own answer is what gets logged — the only definition still in hand once
     // the capture itself is the thing that failed
     expect(mocks.loggerError).toHaveBeenCalledWith(
