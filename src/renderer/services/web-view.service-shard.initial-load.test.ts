@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   networkRequest: vi.fn(),
   bufferedEmitters: new Map<string, { emit: ReturnType<typeof vi.fn> }>(),
   loggerDebug: vi.fn(),
+  loggerError: vi.fn(),
 }));
 
 // Same file-level mock set as `web-view.service-shard.test.ts` — this file imports the same
@@ -40,9 +41,10 @@ vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: mocks.settingsGet, subscribe: mocks.settingsSubscribe },
 }));
 // Factory rather than the repo's automock (whose methods are plain functions): these tests assert
-// on the debug line the skipped load leaves behind, which needs a spy
+// on the debug line the skipped load leaves behind, and on which level a refused dock write is
+// reported at, both of which need spies
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { debug: mocks.loggerDebug, info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+  logger: { debug: mocks.loggerDebug, info: vi.fn(), warn: vi.fn(), error: mocks.loggerError },
 }));
 vi.mock('@shared/services/network.service', () => ({
   createBufferedNetworkEventEmitter: (eventName: string) => {
@@ -110,6 +112,7 @@ function makeLiveDockLayout({ doesLoadReplaceTheDock = false } = {}) {
   const loadedLayouts: LayoutInfo[] = [];
   const dockedWebViews: WebViewDefinition[] = [];
   const dockedTabs: SavedTabInfo[] = [];
+  let addFailure: Error | undefined;
   const dockLayout = {
     onLayoutChangeRef: { current: undefined },
     loadLayout: (layout: LayoutInfo) => {
@@ -123,6 +126,7 @@ function makeLiveDockLayout({ doesLoadReplaceTheDock = false } = {}) {
     getWebViewDefinition: (webViewId: string) =>
       dockedWebViews.find((webView) => webView.id === webViewId),
     addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => {
+      if (addFailure) throw addFailure;
       dockedWebViews.push(webView);
       return layout;
     },
@@ -133,7 +137,20 @@ function makeLiveDockLayout({ doesLoadReplaceTheDock = false } = {}) {
     simpleLayout: EMPTY_LAYOUT,
     testLayout: EMPTY_LAYOUT,
   } as unknown as PapiDockLayout;
-  return { dockLayout, loadedLayouts, dockedWebViews, dockedTabs };
+  return {
+    dockLayout,
+    loadedLayouts,
+    dockedWebViews,
+    dockedTabs,
+    /**
+     * Make every web view add from here on throw — what the dock does with a definition its tab
+     * loader turns down, the other way a dock write fails with the named web view's own tab still
+     * docked
+     */
+    makeAddsFail: (error: Error) => {
+      addFailure = error;
+    },
+  };
 }
 
 /**
@@ -546,9 +563,10 @@ describe('content admitted to the dock after the entry point had its say', () =>
 
     const module = await import('@renderer/services/web-view.service-shard');
     const { networkObjectService } = await import('@shared/services/network-object.service');
-    const { dockLayout, loadedLayouts, dockedWebViews, dockedTabs } = makeLiveDockLayout({
-      doesLoadReplaceTheDock,
-    });
+    const { dockLayout, loadedLayouts, dockedWebViews, dockedTabs, makeAddsFail } =
+      makeLiveDockLayout({
+        doesLoadReplaceTheDock,
+      });
     module.registerDockLayout(dockLayout);
     await module.startWebViewServiceShard();
     const provider = await primeProvider();
@@ -573,6 +591,7 @@ describe('content admitted to the dock after the entry point had its say', () =>
       dockedWebViews,
       dockedTabs,
       provider,
+      makeAddsFail,
       /**
        * Start the load this window's incoming content has to survive, hanging on its saved-layout
        * request until {@link releaseLayoutGet}. Answers once the load is actually in flight.
@@ -691,6 +710,48 @@ describe('content admitted to the dock after the entry point had its say', () =>
     // The close event is what disposes the controller and the nonce; the state is evicted directly
     expect(getClosedWebViewIds()).toContain('moved-view');
     expect(deleteFullWebViewStateById).toHaveBeenCalledWith('moved-view');
+  });
+
+  test('a reload refused while its own tab is still docked leaves that tab standing', async () => {
+    // The complement of the test above, and what the failed-add cleanup asks the dock about this
+    // web view for: a refusal aimed at a reload names a web view whose tab is already here. The
+    // close event disposes the controller and the nonce, and the eviction takes the state, so
+    // running that cleanup would gut a view the user is still looking at. The refusal is the whole
+    // of what happens — and it is what an ordinary window close looks like from here, so it is
+    // reported as such rather than as a failure to update the dock.
+    const { module, dockedWebViews, emptyTheDockAndBeToldItIsClosing } =
+      await windowHoldingOneWebViewWithNothingLoading();
+    const { deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+
+    await emptyTheDockAndBeToldItIsClosing();
+
+    await expect(module.reloadWebView('test.type', 'settled-view')).rejects.toThrow(/closing/);
+
+    expect(dockedWebViews.map((webView) => webView.id)).toContain('settled-view');
+    expect(getClosedWebViewIds()).not.toContain('settled-view');
+    expect(deleteFullWebViewStateById).not.toHaveBeenCalledWith('settled-view');
+    expect(mocks.loggerError).not.toHaveBeenCalledWith(expect.stringMatching(/settled-view/));
+    expect(mocks.loggerDebug).toHaveBeenCalledWith(expect.stringMatching(/settled-view.*closing/));
+  });
+
+  test('a reload the dock itself turns down is reported as the failure it is', async () => {
+    // The control for the level the test above asserts is not used: the same catch and the same tab
+    // still docked, reached by the other throw the try covers. A definition the dock's tab loader
+    // refuses leaves the user with a view that answered a reload by not changing and no account of
+    // why, which is a failure and stays an error.
+    const { module, dockedWebViews, makeAddsFail } =
+      await windowHoldingOneWebViewWithNothingLoading();
+
+    makeAddsFail(new Error('the tab loader refused this definition'));
+
+    await expect(module.reloadWebView('test.type', 'settled-view')).rejects.toThrow(/refused/);
+
+    expect(mocks.loggerError).toHaveBeenCalledWith(
+      expect.stringMatching(/settled-view.*existing tab is unchanged/),
+    );
+    expect(dockedWebViews.map((webView) => webView.id)).toContain('settled-view');
   });
 
   test('a reload does not re-add a web view the load it waited out removed', async () => {
