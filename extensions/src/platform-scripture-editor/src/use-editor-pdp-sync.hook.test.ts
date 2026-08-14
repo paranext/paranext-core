@@ -423,18 +423,24 @@ describe('useEditorPdpSync', () => {
     expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
   });
 
-  // Partial identity: a document with a book marker but no chapter marker still has an identity
-  // ("LEV|"). Against a full identity ("LEV|14") the identities differ, so the documents are NOT
-  // treated as the same one: the incoming full-chapter update replaces the actively-edited
-  // chapter-less content instead of being deferred (and nothing is saved back through it).
-  it('replaces the actively-edited editor holding book-only content when a full book|chapter update arrives', () => {
-    const bookOnlyEditorContent: Usj = {
-      type: 'USJ',
-      version: '3.1',
-      content: [
-        { type: 'book', marker: 'id', code: 'LEV' },
-        { type: 'para', marker: 'p', content: ['intro text before any chapter marker'] },
-      ],
+  // The third identity field. Book and chapter agree, so an implementation that compared only
+  // those two would call this the same document, defer the update, and save the old
+  // versification's content through the new one's selector. Same shape as the cross-BOOK
+  // regression above, moved onto versificationStr.
+  it('replaces the actively-edited editor when only the versification differs', () => {
+    const original = makeChapterUsj('1', 'In the beginning...', { verseNumber: '1' });
+    const reversified = makeChapterUsj('1', 'In the beginning (other versification)...', {
+      verseNumber: '1',
+    });
+    const englishSelector: EditorDocumentSelector = {
+      book: 'GEN',
+      chapterNum: 1,
+      versificationStr: 'English',
+    };
+    const septuagintSelector: EditorDocumentSelector = {
+      book: 'GEN',
+      chapterNum: 1,
+      versificationStr: 'Septuagint',
     };
 
     const setUsjSpy = vi.fn();
@@ -444,7 +450,7 @@ describe('useEditorPdpSync', () => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       current: {
         setUsj: setUsjSpy,
-        getUsj: () => bookOnlyEditorContent,
+        getUsj: () => original,
         isFocused: () => true,
       } as unknown as EditorRef,
     };
@@ -452,80 +458,33 @@ describe('useEditorPdpSync', () => {
     const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
 
     const { rerender } = renderHook(
-      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+      ({
+        usjFromPdp,
+        documentSelector,
+      }: {
+        usjFromPdp: Usj;
+        documentSelector: EditorDocumentSelector;
+      }) => {
         useEditorPdpSync({
           usjFromPdp,
+          documentSelector,
           editorRef,
           usjSentToPdp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
       },
-      { initialProps: { usjFromPdp: bookOnlyEditorContent } },
+      { initialProps: { usjFromPdp: original, documentSelector: englishSelector } },
     );
     setUsjSpy.mockClear();
     saveUsjToPdpIfUpdated.mockClear();
 
-    act(() => rerender({ usjFromPdp: levUsj }));
+    act(() => rerender({ usjFromPdp: reversified, documentSelector: septuagintSelector }));
 
-    expect(setUsjSpy).toHaveBeenCalledWith(levUsj); // "LEV|" !== "LEV|14" — replaced, not deferred
-    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled(); // book-only content never saved back
-  });
-
-  // The partial identity is still an IDENTITY (not the unidentifiable case): two book-only
-  // documents with the same book both resolve to "LEV|", so a differing echo defers to the
-  // actively-edited editor exactly as full-identity same-document echoes do.
-  it('defers to the actively-edited editor when both documents have only a matching book marker', () => {
-    const bookOnlyEditorContent: Usj = {
-      type: 'USJ',
-      version: '3.1',
-      content: [
-        { type: 'book', marker: 'id', code: 'LEV' },
-        { type: 'para', marker: 'p', content: ['newer typing before any chapter marker'] },
-      ],
-    };
-    const bookOnlyEcho: Usj = {
-      type: 'USJ',
-      version: '3.1',
-      content: [
-        { type: 'book', marker: 'id', code: 'LEV' },
-        { type: 'para', marker: 'p', content: ['normalized echo before any chapter marker'] },
-      ],
-    };
-
-    const setUsjSpy = vi.fn();
-    const saveUsjToPdpIfUpdated = vi.fn();
-    const editorRef: { current: EditorRef | null } = {
-      // EditorRef has many members; casting from a minimal stub is intentional in tests
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      current: {
-        setUsj: setUsjSpy,
-        getUsj: () => bookOnlyEditorContent,
-        isFocused: () => true,
-      } as unknown as EditorRef,
-    };
-    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
-    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
-
-    const { rerender } = renderHook(
-      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
-        useEditorPdpSync({
-          usjFromPdp,
-          editorRef,
-          usjSentToPdp,
-          setEditorUsj,
-          saveUsjToPdpIfUpdated,
-        });
-      },
-      { initialProps: { usjFromPdp: bookOnlyEditorContent } },
-    );
-    setUsjSpy.mockClear();
-    saveUsjToPdpIfUpdated.mockClear();
-
-    act(() => rerender({ usjFromPdp: bookOnlyEcho }));
-
-    expect(setUsjSpy).not.toHaveBeenCalled(); // same "LEV|" identity — editor not clobbered
-    expect(saveUsjToPdpIfUpdated).toHaveBeenCalled(); // newer local content pushed up instead
+    expect(setUsjSpy).toHaveBeenCalledOnce(); // a different document: replaced, not deferred
+    expect(setUsjSpy).toHaveBeenCalledWith(reversified);
+    // The old versification's content must NOT be pushed through the new one's selector.
+    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
   });
 
   it('still replaces the editor for a content-different update that is not our own write echo', () => {
