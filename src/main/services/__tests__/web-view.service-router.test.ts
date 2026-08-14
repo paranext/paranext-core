@@ -5,6 +5,7 @@ import {
   getOpenWebViewDefinitionsForWindow,
   setWebViewWindowCreator,
   startWebViewServiceRouter,
+  testingWebViewServiceRouter,
 } from '@main/services/web-view.service-router';
 import {
   getRegisteredRouter,
@@ -94,6 +95,8 @@ vi.mock('@shared/services/settings.service', () => ({
 vi.mock('@main/services/window-layout-persistence.service', () => ({
   clearWindowPendingContent: mocks.clearWindowPendingContent,
 }));
+
+const { createFreshWindow } = testingWebViewServiceRouter;
 
 /** Capture the router object registered under the generic name */
 async function getRouter() {
@@ -913,6 +916,28 @@ describe('web view service router', () => {
 
       expect(creator.closeWindow).toHaveBeenCalledWith(7);
       expect(mocks.clearWindowPendingContent).not.toHaveBeenCalled();
+    });
+
+    test('a second close of a created window joins the first instead of issuing another', async () => {
+      // Two closes on one window is not a louder version of one: the second lands on a window whose
+      // close is already running, which trips the force-close escape hatch and abandons the first
+      // close's close-time work. The scaffold is what holds that off, so the calls overlap the way
+      // a caller that fires one without awaiting the one before it does — a guard read at entry and
+      // set after the awaits inside lets both through.
+      const focused = windowShard([]);
+      const created = windowShard([]);
+      withWindows({ 1: focused, 7: created });
+      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      setWebViewWindowCreator(creator);
+      await getRouter();
+      const freshWindow = await createFreshWindow('someType');
+
+      await Promise.all([freshWindow.discard(), freshWindow.discard()]);
+
+      expect(creator.closeWindow).toHaveBeenCalledTimes(1);
+      // The whole attempt is what the second call joins, re-check included: asking a window that is
+      // already going away whether content reached it is a round trip whose answer nothing acts on
+      expect(created.hasContentArrivedSinceEmptyReport).toHaveBeenCalledTimes(1);
     });
   });
 
