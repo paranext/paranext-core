@@ -7,6 +7,13 @@ export interface DefaultLayoutSupplementEntry {
    * panel that already contains a tab of this type. If no such panel exists, the entry is skipped.
    */
   anchorWebViewType: string;
+  /**
+   * Optional `webViewType` of a tab in the anchor's panel that the supplement tab must be inserted
+   * _before_, instead of being appended last. Lets the base layout keep a tab pinned at the end of
+   * its panel even though supplement tabs are merged in afterward. Ignored (falls back to
+   * appending) when no tab of this type is in the panel.
+   */
+  insertBeforeWebViewType?: string;
   /** The tab to add, in the same `SavedTabInfo` shape the layout data files use. */
   tab: SavedTabInfo;
   /**

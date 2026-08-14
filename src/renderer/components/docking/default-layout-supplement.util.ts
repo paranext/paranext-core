@@ -82,10 +82,12 @@ export async function filterEnabledSupplementEntries(
 }
 
 /**
- * Append each supplement entry's tab to the panel containing its `anchorWebViewType`. Pure and
- * idempotent: returns a deep clone, never mutates `baseLayout`, and skips entries whose id already
- * exists or whose anchor is absent. `entries` should already be filtered by any `flagSetting` (see
- * {@link filterEnabledSupplementEntries} and the caller in `web-view.service-host.ts`).
+ * Add each supplement entry's tab to the panel containing its `anchorWebViewType` — appended last,
+ * or before the tab named by the entry's `insertBeforeWebViewType` when that tab is in the panel.
+ * Pure and idempotent: returns a deep clone, never mutates `baseLayout`, and skips entries whose id
+ * already exists or whose anchor is absent. `entries` should already be filtered by any
+ * `flagSetting` (see {@link filterEnabledSupplementEntries} and the caller in
+ * `web-view.service-host.ts`).
  */
 export function mergeDefaultLayoutSupplement(
   baseLayout: LayoutBase,
@@ -110,9 +112,17 @@ export function mergeDefaultLayoutSupplement(
     if (existingIds.has(entry.tab.id)) return;
     const panel = findPanelByWebViewType(dockbox, entry.anchorWebViewType);
     if (!panel) return;
+    const tabs = panel.tabs ?? [];
+    const insertAt = entry.insertBeforeWebViewType
+      ? tabs.findIndex((t) => webViewTypeOf(t) === entry.insertBeforeWebViewType)
+      : -1;
     // Our SavedTabInfo satisfies rc-dock TabData at runtime; the generic union prevents direct assign
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    panel.tabs = [...(panel.tabs ?? []), entry.tab as unknown as TabData];
+    const tab = entry.tab as unknown as TabData;
+    // `findIndex` returning -1 covers both "no `insertBeforeWebViewType`" and "that tab isn't in this
+    // panel" — both mean append.
+    panel.tabs =
+      insertAt < 0 ? [...tabs, tab] : [...tabs.slice(0, insertAt), tab, ...tabs.slice(insertAt)];
     existingIds.add(entry.tab.id);
   });
 
