@@ -12,6 +12,11 @@ in its own pull request, so the pin stays reviewable. Everything below in this f
 every rule under `.claude/rules/`, is a "more specific repository instruction" and overrides
 it per § 1.
 
+Upstream is actively maintained, so the pin is watched rather than trusted to stay current:
+[`.github/workflows/constitution-pin-check.yml`](.github/workflows/constitution-pin-check.yml)
+runs monthly and opens an issue when upstream publishes a newer release than the one pinned
+here.
+
 Where this repository deviates:
 
 - **§ 2, ceremony.** "Scale process to the task" wins over the Superpowers `brainstorming`

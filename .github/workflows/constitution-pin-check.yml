@@ -1,0 +1,84 @@
+name: 'Constitution pin check'
+
+# CONSTITUTION.md is a pinned verbatim copy of an upstream release. Pinning is deliberate — the
+# file loads into every agent session here, so its content should change only through review — but
+# a pin nobody watches goes stale silently. This opens an issue when upstream publishes a newer
+# release than the one we have pinned.
+
+on:
+  schedule:
+    # 09:00 UTC on the 1st of each month
+    - cron: '0 9 1 * *'
+  workflow_dispatch:
+
+jobs:
+  check-pin:
+    name: Compare pinned constitution to latest upstream release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare and report
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM: kenn-io/constitution
+        run: |
+          set -euo pipefail
+
+          # Both versions are constrained to the vYYYY.MM.DD shape before use. They are
+          # interpolated into a heredoc below, so an upstream tag containing shell metacharacters
+          # would otherwise be an injection path.
+          version_re='^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}$'
+
+          # The pinned version lives in the HTML comment on line 1, e.g.
+          # <!-- Clanker Constitution v2026.08.11 | https://github.com/kenn-io/constitution -->
+          pinned="$(head -1 CONSTITUTION.md | grep -oE 'v[0-9]{4}\.[0-9]{2}\.[0-9]{2}' | head -1 || true)"
+          if ! printf '%s' "$pinned" | grep -qE "$version_re"; then
+            echo "::error::Could not read a pinned version from line 1 of CONSTITUTION.md."
+            echo "If the upstream header format changed, update the pattern in this workflow."
+            exit 1
+          fi
+
+          # Sort the tags here rather than trusting API ordering. Calendar tags order correctly
+          # under sort -V, and reading tags rather than the releases endpoint keeps this working
+          # if upstream ever stops cutting formal releases.
+          latest="$(gh api "repos/${UPSTREAM}/tags" --jq '.[].name' | grep -E "$version_re" | sort -V | tail -1 || true)"
+          if [ -z "$latest" ]; then
+            echo "::error::Fetched no well-formed version tags from ${UPSTREAM}."
+            echo "Failing loudly rather than reporting a false all-clear."
+            exit 1
+          fi
+
+          echo "pinned: $pinned"
+          echo "latest: $latest"
+
+          if [ "$pinned" = "$latest" ]; then
+            echo "Constitution pin is current."
+            exit 0
+          fi
+
+          title="Clanker Constitution: pinned ${pinned}, upstream has ${latest}"
+
+          # One issue per upstream version — the title carries the version, so a still-open issue
+          # with this title means we have already reported it.
+          existing="$(gh issue list --state open --search "${title} in:title" --json title --jq "map(select(.title == \"${title}\")) | length")"
+          if [ "$existing" != "0" ]; then
+            echo "An open issue already reports ${latest}. Nothing to do."
+            exit 0
+          fi
+
+          gh issue create --title "$title" --body "$(cat <<EOF
+          [\`${UPSTREAM}\`](https://github.com/${UPSTREAM}) published **${latest}**. This repository pins **${pinned}**.
+
+          Read the upstream diff before bumping — \`CONSTITUTION.md\` is imported by \`CLAUDE.md\`, so a change to it changes agent behaviour for everyone working in this repository:
+
+          https://github.com/${UPSTREAM}/compare/${pinned}...${latest}
+
+          To update, copy \`CONSTITUTION.md\` from the ${latest} tag over the local copy verbatim — it must stay byte-identical so the next bump can be diffed — and open a pull request. Re-check the deviations recorded in \`CLAUDE.md\` § Agent Operating Principles against the new text: a bumped constitution can silently resolve one of them, or invalidate it.
+
+          Opened automatically by \`.github/workflows/constitution-pin-check.yml\`.
+          EOF
+          )"
