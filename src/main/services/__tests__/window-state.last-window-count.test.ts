@@ -114,8 +114,11 @@ describe('counting the windows that could be the last one', () => {
   });
 
   test('a window that has gone away takes its marks with it', () => {
-    // Electron reuses window ids; a leftover mark would count a brand new window out of the
-    // arithmetic before it had finished opening
+    // The marks are this window's state, keyed by its id, and nothing else ever takes them off:
+    // left behind they go on answering for a window that is not there and pile up for the life of
+    // the process. Electron hands out each id at most once per process, so handing the id to
+    // another window is a probe for marks outliving their window rather than a session that could
+    // happen — a mark left behind counts a window out of the arithmetic that should be in it.
     const closing = fakeWindow(1);
     addWindow(closing);
     addWindow(fakeWindow(2));
