@@ -501,9 +501,16 @@ async function createFreshWindow(webViewDescription: string): Promise<FreshWindo
   //
   // A window kept this way is reported to the caller, since it is the one window that can be asked
   // what became of the open that appeared to fail.
+  //
+  // At most once is enforced here rather than left to callers: both of the returned methods close,
+  // so a caller that discards after a failed open — or discards twice — would otherwise issue a
+  // second close on a window whose close is already running, which trips the force-close escape
+  // hatch and abandons the first close's close-time work (see `window-emptiness.util.ts`).
+  let hasClosed = false;
   const closeAbandonedWindow = async (
     onWindowLeftStanding?: (standingWindow: WindowShard) => void,
   ) => {
+    if (hasClosed) return;
     try {
       const shard = await webViewShards.getShard(windowId);
       if (shard && (await shard.hasContentArrivedSinceEmptyReport())) {
@@ -522,6 +529,9 @@ async function createFreshWindow(webViewDescription: string): Promise<FreshWindo
         `Could not ask window ${windowId} whether content reached it before closing it: ${getErrorMessage(recheckError)}`,
       );
     }
+    // Marked before the call, not after: a close that threw may still have started, and the second
+    // close is the one this is protecting against
+    hasClosed = true;
     try {
       creator.closeWindow(windowId);
     } catch (closeError) {
@@ -813,6 +823,12 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
     // Same as above: there is nothing to put in a window this move created, and the window that
     // held the web view a moment ago says it does not — where it is now is not this move's to say
     await discardDestination?.();
+    // And the same log, for the same reason: this rejects with the disposition that sends the user
+    // to the log for what became of their tab, and an owner that answers nothing says nothing about
+    // what the web view was. The owner search's definition is the only description still in hand
+    logger.error(
+      `Window ${owner.windowId} no longer had webview ${webViewId} when the move tried to capture it. Definition from the owner search: ${JSON.stringify(owner.definition)}`,
+    );
     throw new Error(
       describeWebViewMoveFailure(
         'possibly-closed',
