@@ -201,8 +201,21 @@ export function createWindowEmptinessHandler(
       return { action: 'stay' };
     }
 
+    // Asked again, because the count above is from before the re-check. Decisions from this handler
+    // are serialized against each other, but a window the user closes with its own X button marks
+    // itself closing on a path that serialization does not cover — so the number can drop while a
+    // re-check is in flight. Closing on the earlier number closes the only window that would have
+    // been left, and an app whose every window is closing exits.
+    const windowsLeftAfterRecheck = deps.countWindows();
+    if (windowsLeftAfterRecheck <= 1) {
+      logger.debug(
+        `windowLayout:emptied window ${windowId} reason ${reason} saw ${windowsLeftAfterRecheck} window(s) remaining once its re-check answered: answering open-home`,
+      );
+      return { action: 'open-home' };
+    }
+
     logger.debug(
-      `windowLayout:emptied window ${windowId} reason ${reason} saw ${remainingWindows} windows remaining: answering closing`,
+      `windowLayout:emptied window ${windowId} reason ${reason} saw ${windowsLeftAfterRecheck} windows remaining: answering closing`,
     );
     closingWindowIds.add(windowId);
     // Marked before the close is even scheduled: from this decision on, the window must not
