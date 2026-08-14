@@ -75,3 +75,7 @@ e2e-tests/playwright-report
 .claude
 .context
 CLAUDE.md
+
+# Pinned verbatim copy of https://github.com/kenn-io/constitution — must stay byte-identical
+# to its upstream release tag so it can be diffed against a new one. Never reformat.
+CONSTITUTION.md

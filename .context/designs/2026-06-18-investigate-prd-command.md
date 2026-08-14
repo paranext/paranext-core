@@ -1,5 +1,10 @@
 # `/investigate-prd` Command Implementation Plan
 
+> **Frozen record** — this plan was executed and its capability shipped; it now lives at
+> `.claude/commands/investigate-prd.md` with its agents under `.claude/agents/`. Do not
+> re-execute it. The worker instructions and checkboxes below are preserved as history only —
+> follow the current command and agent files, not this document.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 > **Provenance:** This plan was authored and executed for the ai-prompts `general/` Claude profile; that profile is now embedded directly in paranext-core. The delivered capability lives at `.claude/…` and `.context/…` (no `general/` prefix), and this plan + its design spec live here under `.context/designs/`. The `general/…` paths, the ai-prompts / `ai-porting` source-mining, and PR #326 references throughout reflect that original build context — kept as the historical record.

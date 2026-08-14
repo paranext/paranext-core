@@ -2,6 +2,10 @@
 
 **Status:** Draft for review · **Date:** 2026-06-18 · **Profile:** `general/`
 
+> **Frozen record** — design as drafted 2026-06-18, since implemented. The "Draft for review"
+> status above is historical; the capability shipped and has evolved past this document.
+> Follow the current command and agent files, not this design.
+
 > **Provenance:** Authored for the ai-prompts `general/` Claude profile during the design of `/investigate-prd`. That profile is now embedded directly in paranext-core, so the capability lives at `.claude/…` and `.context/…` (no `general/` prefix) and this design record lives under `.context/designs/`. References below to `general/`, ai-prompts, PR #326, and the `ai-porting` source reflect that original build context.
 
 ## 1. Goal
