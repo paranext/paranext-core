@@ -20,8 +20,8 @@ aspirational marker (see "Exemptions").
 Checked: `.context/standards/**`, `.claude/rules/**`, `.claude/skills/**`, `.claude/agents/**`,
 `.claude/commands/**`, and the root `CLAUDE.md`.
 
-Not checked: `.context/research/**`, `.context/designs/**`, `.context/plans/**` — these are
-frozen records or pinned-snapshot corpora with their own provenance rules.
+Not checked: `.context/research/**`, `.context/designs/**` — these are frozen records or
+pinned-snapshot corpora with their own provenance rules.
 
 ## Exemptions
 
