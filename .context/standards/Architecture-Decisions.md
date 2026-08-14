@@ -415,3 +415,61 @@ step, no automation. Just a record.
   than inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
+
+## ADR-0013: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
+
+- **Date:** 2026-08-14
+- **Status:** Accepted
+- **Context:** PT-4337 asked for a provider-agnostic analytics abstraction (call sites never touch a
+  vendor SDK or write-key directly) that is fire-and-forget and fail-safe, and that correctly targets
+  a "test" vs "production" analytics audience so dev/tester activity never pollutes production
+  numbers. Determining which audience applies requires reading the current Send/Receive server
+  target, which is only reachable via the `paratextRegistration.internetSettingsDataProvider` PAPI
+  data provider (`c-sharp/Users/InternetSettingsDataProvider.cs`) — a lookup available only from the
+  extension-host and renderer processes, not from Electron's main process. This ticket's own DoD was
+  narrow (wire up one proof-of-concept `app_launch` event with a console-log stand-in provider), but
+  the abstraction itself — shared types, the resolution/queueing engine, and the provider seam — is
+  the actual deliverable and shapes every later analytics call site under epic PT-1797.
+- **Decision:** New top-level structure `analytics-providers/` under
+  `src/extension-host/services/`, holding provider implementations behind the shared
+  `AnalyticsProvider` interface (`src/shared/models/analytics.model.ts`). The engine
+  (`analytics.service-host.ts`) lives in extension-host — chosen over main or a shared/cross-process
+  module specifically because it's the process that can reach the PAPI data provider the resolution
+  needs. `AnalyticsEvent.environment` is decided once, when an event is fired (or when it leaves the
+  service's `unresolved` queue), never re-decided at transmission time, so an event that sits queued
+  through an app upgrade still lands with the vendor account that was correct when it happened.
+  Environment resolution itself is fail-safe: any timeout or error resolves to `'test'` rather than
+  `'production'`, since under-counting is an acceptable cost and mis-tagging test/dev activity as
+  production data is not. `ConsoleAnalyticsProvider` — the only provider this ticket ships — is not
+  disposable proof-of-concept scaffolding; it is expected to remain the permanent "don't actually hit
+  the vendor" implementation for normal dev/tester activity and for most automated E2E runs, even
+  after a real vendor provider exists.
+- **Alternatives:** **Host the engine in main**, closest to true process-start timing — rejected: main
+  cannot consume PAPI data providers, so the S/R-target check would need new cross-process plumbing
+  just to relocate a process boundary the design doesn't otherwise need yet. **Build the full
+  cross-process facade now** (a `src/shared/services/analytics.service.ts` every process imports,
+  mirroring `logger.service.ts`) so call sites already look ubiquitous — rejected for this ticket:
+  logger's ubiquity comes from being a dumb per-process module needing no IPC, but environment
+  resolution genuinely needs one process to own the PAPI round-trip, so a shared facade would need
+  real IPC transport built now for zero current call sites outside extension-host. Types were still
+  placed in `src/shared/models/` immediately so this facade can be added later additively, without a
+  call-site rename. **Re-resolve environment fresh at transmission time instead of stamping at fire
+  time** — rejected: an event can sit queued indefinitely while offline, and by send time the app may
+  have upgraded to a different vendor; stamping at fire time is what lets the queue design extend
+  cleanly to a durable, cross-restart queue later. **Resolve environment reactively when the user
+  changes S/R server mid-session** — deferred to PT-4378; this ticket resolves once per session and
+  caches it, an accepted simplification for the POC's single startup-time event.
+- **Consequences:** Every future analytics call site funnels through `trackEvent()`/the
+  `AnalyticsProvider` seam rather than touching a vendor SDK directly, so swapping vendors later means
+  writing one new provider, not auditing call sites. Until PT-4378 lands, an event fired after a
+  mid-session S/R server change still targets the environment resolved at startup. Until a follow-on
+  ticket adds cross-process transport, only extension-host can call `trackEvent()`/`initialize()` —
+  main and renderer cannot yet emit analytics events. Until a follow-on ticket adds durable
+  persistence, the `test`/`production`/`unresolved` in-memory queue is lost on crash or restart; its
+  three-bucket shape was chosen specifically so that ticket can persist three queues without a format
+  rewrite. No user-consent gating exists yet (PT-4366 builds the actual setting), though the design
+  leaves the same async-resolve-once seam open for it that environment resolution uses.
+- **Source:** PT-4337 (epic PT-1797, "Analytics II (Implementation)"); design spec
+  `docs/superpowers/specs/2026-08-13-analytics-abstraction-layer-design.md`; final whole-branch review
+  of the implementing branch, which surfaced and fixed a startup-path regression (analytics
+  initialization briefly gated extension-host activation) before merge.
