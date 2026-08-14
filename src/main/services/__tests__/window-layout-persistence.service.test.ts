@@ -622,6 +622,29 @@ describe('window layout persistence service', () => {
     ]);
   });
 
+  test('windows that went down with the app survive a write that only knows about later ones', async () => {
+    // A write from a deliberate close pins the windows alive at that moment, which are not the
+    // departed ones. Their entries have to be written anyway: they are what the app comes back to.
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [{ layout: layoutWithTab('one'), isMain: true }, { layout: layoutWithTab('two') }],
+      11,
+    );
+    service.handleWindowRemoved(11, 'entry-stays');
+    service.handleWindowRemoved(12, 'entry-stays');
+    service.trackNewWindow(12);
+
+    // The write a deliberate close makes: only the window still open is pinned
+    await service.writeNow([12]);
+
+    expect(writtenStructure().windows.map((entry) => firstTabIdOf(entry.layout))).toEqual([
+      'one',
+      'two',
+      undefined,
+    ]);
+  });
+
   test('a reused main-window id does not take isMain from the entry that still holds the layout', async () => {
     // `setMainWindowId` only runs at startup, so the id it holds outlives the window. A new window
     // taking that id back would otherwise be written as the main entry, and the entry that really
