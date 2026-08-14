@@ -631,6 +631,37 @@ function getWindowIdOrThrow(): number {
  */
 let currentInterfaceMode: 'simple' | 'power' | undefined;
 
+/**
+ * How many no-argument {@link loadLayout} calls have started but not yet put their layout in the
+ * dock. While this is above zero, {@link saveLayout} holds its pushes: the dock does not yet hold
+ * the layout this window is supposed to be showing, so pushing what it DOES hold overwrites the
+ * user's real saved entry in the main process's structure.
+ *
+ * Such a load takes a while — it reads the interface mode, asks the main process for this window's
+ * saved layout (a round trip that retries, so seconds), and reads the supplement flags — and every
+ * ordinary layout change runs through `onLayoutChange` into `saveLayout` meanwhile: a web view
+ * writing state, focus moving into a tab, a tab being activated. Two loads are exposed:
+ *
+ * - The INTERFACE-MODE SWITCH, which flips {@link currentInterfaceMode} the instant the setting
+ *   changes (so a `saveLayout` racing the switch can't push under the mode the user just left)
+ *   while the dock still holds the OLD mode's layout. Switching TO simple that is harmless, since
+ *   simple mode never pushes. Switching to POWER it persisted the static simple layout as this
+ *   window's power layout — permanently. Every later power-mode load then restored the simple
+ *   layout (headless columns and all, so two of its tab groups render with no tab bar in power
+ *   mode), and neither switching back and forth nor restarting recovered it, because the clobbered
+ *   entry is what the main process answers with from then on.
+ * - The INITIAL LOAD in `registerDockLayout`, before which the dock holds rc-dock's empty default
+ *   layout rather than anything of this window's. Pushing that replaces the saved entry with an
+ *   empty one — and an entry that HAS a layout is not eligible for the legacy fallback either (see
+ *   `TrackedWindow.usesLegacyLayout` in `window-layout-persistence.service.ts`), so the window then
+ *   starts empty from then on.
+ *
+ * A counter rather than a flag so a load starting before an earlier one finishes keeps the hold up
+ * until BOTH are done, and released in a `finally` (see {@link loadLayoutHoldingPushes}) so a load
+ * that throws can never latch it on for the rest of the session.
+ */
+let layoutLoadsInFlight = 0;
+
 /** Create a new dock layout promise variable */
 function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
   return new AsyncVariable<PapiDockLayout>('web-view.service-host.platformDockLayout');
@@ -962,6 +993,21 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
 }
 
 /**
+ * Runs a no-argument {@link loadLayout} with layout pushes held until the layout it loads is in the
+ * dock. EVERY no-argument load must go through here — see {@link layoutLoadsInFlight} for what a
+ * push during one of them destroys. (The one-argument form is deliberately not covered: that caller
+ * hands us the layout it wants and `loadLayout` persists it on purpose.)
+ */
+async function loadLayoutHoldingPushes(): Promise<void> {
+  layoutLoadsInFlight += 1;
+  try {
+    await loadLayout();
+  } finally {
+    layoutLoadsInFlight -= 1;
+  }
+}
+
+/**
  * The pre-multi-window saved layout, read from raw `localStorage` (not `localWindowStorage`, whose
  * migration path would clone the legacy layout into every window). Builds that scoped
  * `localStorage` per window wrote the dock layout only under prefixed keys
@@ -1090,6 +1136,11 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
   const interfaceMode =
     currentInterfaceMode ?? (await settingsService.get('platform.interfaceMode'));
   if (interfaceMode === 'simple') return;
+  // A load is still fetching the layout this window should be showing, so what the dock holds is
+  // something else — the layout of the mode the user just left, or rc-dock's empty default at
+  // startup. Persisting that overwrites the real saved entry; see `layoutLoadsInFlight`. Nothing is
+  // lost by holding: the load on its way replaces the dock's whole contents anyway.
+  if (layoutLoadsInFlight > 0) return;
   if (isRunningOnFallbackLayout) {
     // The dock holds a fallback, not the user's saved layout (see getPersistedLayout); pushing it
     // would replace the real saved entry in the main process's structure
@@ -1134,7 +1185,9 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
   // Fire-and-forget so `registerDockLayout` can stay sync. Guard the rejection, though: `loadLayout`
   // awaits settings reads (supplement flags), and an unhandled rejection here would leave the dock
   // unloaded (blank window).
-  loadLayout().catch((err) => logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`));
+  loadLayoutHoldingPushes().catch((err) =>
+    logger.warn(`Initial loadLayout failed: ${getErrorMessage(err)}`),
+  );
 
   // Reload the layout whenever `platform.interfaceMode` changes so the user-facing mode switcher
   // (see `UserProfilePopover`) can swap layouts live without a restart. Use
@@ -1169,7 +1222,11 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
           currentInterfaceMode = newMode;
           try {
-            await loadLayout();
+            // Holds layout pushes until the new mode's layout is actually in the dock. Until then
+            // the dock still holds the old mode's layout, and pushing that under the new mode is
+            // what destroyed saved power layouts on a simple->power switch — see
+            // `layoutLoadsInFlight`.
+            await loadLayoutHoldingPushes();
           } catch (err) {
             logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
           }

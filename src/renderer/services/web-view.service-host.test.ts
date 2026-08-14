@@ -658,4 +658,89 @@ describe('saveLayout pushes this window’s layout to the main process', () => {
 
     expect(layoutPushes()).toEqual([]);
   });
+
+  test('a layout change before the initial load lands pushes nothing', async () => {
+    // Until the initial load lands, the dock holds rc-dock's empty default rather than anything of
+    // this window's. Pushing that would replace the saved entry with an empty layout — and an entry
+    // that HAS a layout is no longer eligible for the legacy fallback, so the window would start
+    // empty from then on.
+    let answerGet: ((response: unknown) => void) | undefined;
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType !== 'windowLayout:get') return undefined;
+      return new Promise((resolve) => {
+        answerGet = resolve;
+      });
+    });
+
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
+    registerDockLayout(dockLayout);
+    await vi.waitFor(() => expect(answerGet).toBeDefined());
+
+    await dockLayout.onLayoutChangeRef.current?.(
+      layoutWithTab('rc-dock-default'),
+      undefined,
+      undefined,
+    );
+    expect(layoutPushes()).toEqual([]);
+
+    // Once the saved layout lands, pushes resume from there
+    if (!answerGet) throw new Error('the saved-layout request was never made');
+    answerGet({ kind: 'entry', layout: layoutWithTab('saved-tab') });
+    await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('after'), undefined, undefined);
+    expect(layoutPushes()).toHaveLength(1);
+  });
+
+  test('a layout change while the switch to power is still loading pushes nothing', async () => {
+    // The switch to power flips the mode cache before the saved power layout can reach the dock, so
+    // for the length of that load the dock still holds the SIMPLE layout while pushes are armed. A
+    // web view writing state or focus moving in that window (both run through the dock's
+    // onLayoutChange) would push the simple layout as this window's power layout, destroying the
+    // saved one for good.
+    let interfaceMode = 'simple';
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    mocks.settingsSubscribe.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    // Hold the power-mode load's saved-layout request open the way a slow main process would
+    let answerGet: ((response: unknown) => void) | undefined;
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType !== 'windowLayout:get') return undefined;
+      return new Promise((resolve) => {
+        answerGet = resolve;
+      });
+    });
+
+    const { dockLayout, loadedLayouts } = await registerWindow(layoutWithAnchor());
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+
+    interfaceMode = 'power';
+    const switchToPower = interfaceModeCallback('power');
+    await vi.waitFor(() => expect(answerGet).toBeDefined());
+
+    // The dock still holds the simple layout at this point
+    await dockLayout.onLayoutChangeRef.current?.(
+      layoutWithTab('still-the-simple-layout'),
+      undefined,
+      undefined,
+    );
+    expect(layoutPushes()).toEqual([]);
+
+    // Once the saved power layout lands, it is what the dock gets — and pushes resume from there
+    if (!answerGet) throw new Error('the saved-layout request was never made');
+    answerGet({ kind: 'entry', layout: layoutWithTab('saved-power-tab') });
+    await switchToPower;
+    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).toEqual(['saved-power-tab-w2']);
+
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('after'), undefined, undefined);
+    expect(layoutPushes()).toHaveLength(1);
+  });
 });
