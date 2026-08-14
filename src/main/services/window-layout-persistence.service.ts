@@ -5,11 +5,17 @@
  * the `windowLayout:get`/`windowLayout:save` request handlers registered here.
  *
  * Identity model: a window's position in the structure's list IS its identity across sessions;
- * Electron window ids are runtime-only and are never persisted. At startup the caller assigns file
- * entries to freshly created windows in order; at save time the live windows are written back out.
- * A file entry that was never assigned to a window (e.g. a power-mode secondary window while the
- * app runs in simple mode, which restores only the main window) is preserved in place, so a session
- * that restores fewer windows than the file holds can never destroy the other windows' entries.
+ * Electron window ids are runtime-only and are never persisted (they restart at 1 each process
+ * launch, so a persisted one would name a different window). Every window has a slot in that list
+ * from the moment it is created — a restored window binds to the slot it restores, a window opened
+ * mid-session appends one — and the slot is the only place that window's layout and bounds live. A
+ * slot with no window in it is a preserved entry: one this session never restored (a power-mode
+ * secondary window while the app runs in simple mode, which restores only the main window), or one
+ * whose window has gone down with the app. Either way it is written back out untouched, so a
+ * session that holds fewer windows than the file holds entries can never destroy the others.
+ *
+ * A write is that list, in order. Nothing has to be joined to anything, and there is no second
+ * account of which windows exist that a departure could leave stale.
  */
 
 import path from 'path';
@@ -24,7 +30,6 @@ import {
   WindowLayoutStructure,
   WindowRectangle,
 } from '@shared/data/window-layout-persistence.model';
-import type { LayoutInfo } from '@shared/models/docking-framework.model';
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import {
@@ -58,14 +63,17 @@ export type StartupWindowsPlan =
   | { kind: 'restore'; entries: readonly WindowLayoutEntry[]; mainEntryIndex: number }
   | { kind: 'legacy'; boundsState?: WindowBoundsState };
 
-/** A file entry and, once startup assigns it, the runtime window living in it */
-type FileSlot = { entry: WindowLayoutEntry; windowId?: number };
-
-/** Live state of one tracked window, written out at save time */
-type TrackedWindow = {
-  windowId: number;
-  layout?: LayoutInfo;
-  boundsState: WindowBoundsState;
+/**
+ * One window's entry in the persisted list, and the runtime window living in it. The entry holds
+ * everything that gets written — layout, bounds, `isMain` — so a live window's state and a
+ * preserved entry are the same thing, and updating one IS updating the other.
+ *
+ * `windowId` is absent for a preserved entry: a slot this session never restored, or one whose
+ * window has gone away while its entry stays (see {@link handleWindowRemoved}).
+ */
+type FileSlot = {
+  entry: WindowLayoutEntry;
+  windowId?: number;
   /**
    * Whether this window should fall back to the legacy (pre-multi-window) saved layout when it has
    * no layout of its own: the single window of a legacy startup, or the MAIN entry when it has
@@ -74,28 +82,13 @@ type TrackedWindow = {
    * localStorage). Never a secondary entry: layout-less there means a deliberately empty window,
    * which must stay empty rather than cloning the legacy layout.
    */
-  usesLegacyLayout: boolean;
-  /**
-   * Whether the window itself is gone while its state is deliberately kept — the app was going
-   * down, so the writes still queued must be able to build this window's entry from it.
-   *
-   * Runtime window ids are reused, so this is what separates "this id is already tracked" from
-   * "this id belonged to a window that has departed": a new window taking the id back is tracked
-   * afresh instead of inheriting the departed window's layout and bounds.
-   */
-  hasGoneAway?: boolean;
+  usesLegacyLayout?: boolean;
 };
 
-/** File entries in file order; unassigned slots are preserved verbatim at save time */
+/** Every window's entry in file order — the whole of what a write puts on disk */
 let fileSlots: FileSlot[] = [];
-/** Index into {@link fileSlots} of the main entry, so only that entry may use the legacy fallback */
-let mainSlotIndex: number | undefined;
-/** Live windows in creation order */
-let trackedWindows: TrackedWindow[] = [];
 /** Windows created to receive specific content, until their first layout push arrives */
 const pendingContentWindowIds = new Set<number>();
-/** Window whose entry the save walk marks `isMain` */
-let mainWindowId: number | undefined;
 /** Bounds the previous keeper saved, seeded into the legacy window so an upgrade keeps placement */
 let legacyBoundsState: WindowBoundsState | undefined;
 /** Pending debounced write, if any */
@@ -202,8 +195,9 @@ async function readLegacyWindowState(): Promise<WindowBoundsState | undefined> {
   }
 }
 
-function findTrackedWindow(windowId: number): TrackedWindow | undefined {
-  return trackedWindows.find((tracked) => tracked.windowId === windowId);
+/** The slot the given runtime window is living in, if this service knows the window at all */
+function findSlotByWindowId(windowId: number): FileSlot | undefined {
+  return fileSlots.find((slot) => slot.windowId === windowId);
 }
 
 /** Cancel the pending debounced write, if any */
@@ -232,9 +226,6 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
   // be built from the previous file contents.
   await writeChain;
   fileSlots = [];
-  mainSlotIndex = undefined;
-  trackedWindows = [];
-  mainWindowId = undefined;
   legacyBoundsState = undefined;
   pendingContentWindowIds.clear();
 
@@ -257,13 +248,16 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
           (entry.layout !== undefined && savedLayoutHasViewableTabs(entry.layout)),
       );
       const keptEntries = keptParsedEntries.map(({ entry }) => entry);
-      mainSlotIndex = keptParsedEntries.indexOf(parsedEntries[mainIndex]);
+      const mainEntryIndex = keptParsedEntries.indexOf(parsedEntries[mainIndex]);
+      // Main-ness lives in the entry, here as much as on disk. A file whose entries carry no flag
+      // at all — or more than one — is resolved to the single chosen entry right here, so this is
+      // the only place the choice is ever made and everything after it just reads the flag.
+      keptEntries.forEach((entry, index) => {
+        if (index === mainEntryIndex) entry.isMain = true;
+        else delete entry.isMain;
+      });
       fileSlots = keptEntries.map((entry) => ({ entry }));
-      return {
-        kind: 'restore',
-        entries: keptEntries,
-        mainEntryIndex: mainSlotIndex,
-      };
+      return { kind: 'restore', entries: keptEntries, mainEntryIndex };
     }
     logger.warn(
       `${WINDOW_LAYOUTS_FILE_NAME} is unreadable or holds no windows; restoring a single legacy window`,
@@ -274,23 +268,14 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
   return { kind: 'legacy', boundsState: legacyBoundsState };
 }
 
-/** The bounds-state slice of a file entry, seeding a freshly assigned window's live state */
-function boundsStateOfEntry(entry: WindowLayoutEntry): WindowBoundsState {
-  return {
-    bounds: entry.bounds,
-    isMaximized: entry.isMaximized,
-    isFullScreen: entry.isFullScreen,
-    displayBounds: entry.displayBounds,
-  };
-}
-
 /**
- * Tie a freshly created window to the file entry it restores. The window's live state seeds from
- * the entry, so a session that never updates it writes the entry back out unchanged.
+ * Tie a freshly created window to the file entry it restores. The entry is where that window's
+ * layout and bounds live from here on, so a session that never updates it writes the entry back out
+ * unchanged.
  */
 export function assignEntryToWindow(windowId: number, entryIndex: number): void {
   const slot = fileSlots[entryIndex];
-  if (!slot || slot.windowId !== undefined || findTrackedWindow(windowId)) {
+  if (!slot || slot.windowId !== undefined || findSlotByWindowId(windowId)) {
     logger.warn(
       `Cannot assign window ${windowId} to window-layout entry ${entryIndex}; tracking it as a new window instead`,
     );
@@ -298,78 +283,61 @@ export function assignEntryToWindow(windowId: number, entryIndex: number): void 
     return;
   }
   slot.windowId = windowId;
-  trackedWindows.push({
-    windowId,
-    layout: slot.entry.layout,
-    boundsState: boundsStateOfEntry(slot.entry),
-    // Only the MAIN entry may fall back to the legacy saved layout when it never captured one —
-    // see TrackedWindow.usesLegacyLayout. A layout-less secondary entry is an empty window and
-    // must stay empty: falling back would clone the pre-multi-window layout into it.
-    usesLegacyLayout: slot.entry.layout === undefined && entryIndex === mainSlotIndex,
-  });
+  // Only the MAIN entry may fall back to the legacy saved layout when it never captured one — see
+  // FileSlot.usesLegacyLayout. A layout-less secondary entry is an empty window and must stay
+  // empty: falling back would clone the pre-multi-window layout into it.
+  slot.usesLegacyLayout = slot.entry.layout === undefined && slot.entry.isMain === true;
 }
 
 /**
- * Track the single window of a legacy startup (no structure file). Its renderer falls back to the
- * pre-multi-window saved layout, and its bounds seed from the previous keeper's file so an upgrade
- * keeps the user's window placement.
+ * Give the single window of a legacy startup (no structure file) the first slot of a structure that
+ * does not exist yet. Its renderer falls back to the pre-multi-window saved layout, and its bounds
+ * seed from the previous keeper's file so an upgrade keeps the user's window placement.
  */
 export function trackLegacyWindow(windowId: number): void {
-  if (findTrackedWindow(windowId)) return;
-  trackedWindows.push({
-    windowId,
-    boundsState: legacyBoundsState ? { ...legacyBoundsState } : {},
-    usesLegacyLayout: true,
-  });
+  if (findSlotByWindowId(windowId)) return;
+  fileSlots.push({ entry: { ...legacyBoundsState }, windowId, usesLegacyLayout: true });
 }
 
-/** Track a window created mid-session. It has no saved entry, so it starts with an empty layout */
+/** Give a window created mid-session a slot. It has no saved entry, so it starts with an empty one */
 export function trackNewWindow(windowId: number): void {
-  const tracked = findTrackedWindow(windowId);
-  // A departed window's state is kept for writes still queued behind it, and runtime ids are
-  // reused, so an id can be tracked by a window that no longer exists. This window is not that one
-  // and must not inherit what it held — but the departed window's ENTRY still has to be there next
-  // session, so its state is folded into an entry nothing is living in rather than dropped.
-  if (tracked?.hasGoneAway) {
-    const slot = fileSlots.find((candidate) => candidate.windowId === windowId);
-    if (slot) {
-      slot.entry = entryForTrackedWindow(tracked);
-      slot.windowId = undefined;
-    } else {
-      // Departed without a slot: it was opened mid-session, so its entry has never been in the
-      // file. It is still a window the user had open when the app went down.
-      fileSlots.push({ entry: entryForTrackedWindow(tracked) });
-    }
-    trackedWindows = trackedWindows.filter((candidate) => candidate !== tracked);
-    // The main window is recorded by runtime id at startup and never again, so that id outlives
-    // its window as well. Left pointing at a reclaimed id, the save walk marks the NEW window's
-    // entry `isMain` and the entry actually holding the main layout loses the flag — which is the
-    // entry simple mode restores. Forgetting it falls the walk back to the first entry.
-    if (mainWindowId === windowId) mainWindowId = undefined;
-  } else if (tracked) return;
-  trackedWindows.push({ windowId, boundsState: {}, usesLegacyLayout: false });
+  if (findSlotByWindowId(windowId)) return;
+  fileSlots.push({ entry: {}, windowId });
 }
 
-/** Record which window's entry the save walk should mark `isMain` */
+/**
+ * Record which window's entry is the main one — the entry simple mode restores next session, and
+ * the only one allowed the legacy layout fallback.
+ *
+ * Main-ness is a property of the ENTRY, which is how it is persisted and how it is held here. It
+ * therefore stays with that entry for the rest of the session however the window itself ends, and
+ * leaves the structure only when the entry does.
+ */
 export function setMainWindowId(windowId: number): void {
-  mainWindowId = windowId;
+  const mainSlot = findSlotByWindowId(windowId);
+  if (!mainSlot) {
+    logger.warn(`Ignoring the main-window mark for untracked window ${windowId}`);
+    return;
+  }
+  fileSlots.forEach((slot) => {
+    if (slot !== mainSlot) delete slot.entry.isMain;
+  });
+  mainSlot.entry.isMain = true;
 }
 
-/** Merge captured bounds into a window's live state and schedule a write */
+/** Merge captured bounds into a window's entry and schedule a write */
 export function updateWindowBounds(windowId: number, boundsState: WindowBoundsState): void {
-  const tracked = findTrackedWindow(windowId);
-  if (!tracked) {
+  const slot = findSlotByWindowId(windowId);
+  if (!slot) {
     logger.warn(`Ignoring bounds update for untracked window ${windowId}`);
     return;
   }
-  tracked.boundsState = {
-    // Bounds are captured only while the window is in its normal state; a maximized/minimized/
-    // full-screen capture carries no bounds and must keep the last normal placement
-    bounds: boundsState.bounds ?? tracked.boundsState.bounds,
-    displayBounds: boundsState.displayBounds ?? tracked.boundsState.displayBounds,
-    isMaximized: boundsState.isMaximized ?? tracked.boundsState.isMaximized,
-    isFullScreen: boundsState.isFullScreen ?? tracked.boundsState.isFullScreen,
-  };
+  // Bounds are captured only while the window is in its normal state; a maximized/minimized/
+  // full-screen capture carries no bounds and must keep the last normal placement
+  slot.entry.bounds = boundsState.bounds ?? slot.entry.bounds;
+  slot.entry.displayBounds = boundsState.displayBounds ?? slot.entry.displayBounds;
+  slot.entry.isMaximized = boundsState.isMaximized ?? slot.entry.isMaximized;
+  slot.entry.isFullScreen = boundsState.isFullScreen ?? slot.entry.isFullScreen;
   scheduleWrite();
 }
 
@@ -384,89 +352,43 @@ export function updateWindowBounds(windowId: number, boundsState: WindowBoundsSt
 export type RemovedWindowDisposition = 'entry-goes-with-it' | 'entry-stays';
 
 /**
- * Stop tracking a window that is gone. This alone does not write — a caller that wants the smaller
+ * Record that a window is gone. This alone does not write — a caller that wants the smaller
  * structure written (a deliberate close) calls {@link writeNow} itself.
  *
- * `entry-stays` keeps the window's live state exactly where it is rather than clearing it. The
- * state is what a write BUILDS FROM, and writes build when they execute, not when they are enqueued
- * (see {@link enqueueWrite}) — so on a multi-window shutdown each window's flush is still queued
- * behind the ones before it when that window's own `closed` handling runs. Clearing here would take
- * the window out of every flush still waiting its turn, including the last one, which is the write
- * that survives on disk. The state is dropped when the next {@link loadWindowLayouts} resets it, or
- * with the process.
+ * `entry-stays` only lets go of the runtime id, leaving the entry in place as a preserved one: the
+ * same shape as an entry this session never restored, which every write already carries out
+ * untouched. That is what a multi-window shutdown needs — writes build when they execute, not when
+ * they are enqueued (see {@link enqueueWrite}), so each window's flush is still queued behind the
+ * ones before it when that window's own `closed` handling runs, and the last flush is the one that
+ * survives on disk.
  *
  * @param windowId Window that has gone away
  * @param disposition What that means for the window's entry — see {@link RemovedWindowDisposition}
  */
 export function handleWindowRemoved(windowId: number, disposition: RemovedWindowDisposition): void {
-  // Unconditional, whatever the disposition and whether or not the id is one being tracked: a write
-  // scheduled before the removal fires into a session that is either rewriting the structure itself
-  // (a deliberate close) or on its way down, and neither wants a debounce landing behind it.
+  // Unconditional, whatever the disposition and whether or not the id is one this service knows: a
+  // write scheduled before the removal fires into a session that is either rewriting the structure
+  // itself (a deliberate close) or on its way down, and neither wants a debounce landing behind it.
   cancelScheduledWrite();
-  // Whatever the disposition: no write reads this mark — a queued write builds an entry from
-  // `layout` and `boundsState` alone — and a window that has gone away is not waiting for content.
-  // Left set, it is inherited by whatever window takes this runtime id next.
+  // Whatever the disposition: no write reads this mark, a window that has gone away is not waiting
+  // for content, and nothing else takes the mark off once its window is gone.
   pendingContentWindowIds.delete(windowId);
-  if (disposition === 'entry-stays') {
-    // The state stays for the queued writes to build from, but the window itself is gone. Recording
-    // that is what lets a window taking this runtime id back be tracked as the new window it is,
-    // rather than being waved through as already tracked and adopting what the departed one held.
-    const tracked = findTrackedWindow(windowId);
-    if (tracked) tracked.hasGoneAway = true;
-    return;
-  }
-  trackedWindows = trackedWindows.filter((tracked) => tracked.windowId !== windowId);
-  fileSlots = fileSlots.filter((slot) => slot.windowId !== windowId);
-}
-
-/** A window's live state as a file entry */
-function entryForTrackedWindow(tracked: TrackedWindow): WindowLayoutEntry {
-  return { layout: tracked.layout, ...tracked.boundsState };
+  const slotIndex = fileSlots.findIndex((slot) => slot.windowId === windowId);
+  if (slotIndex < 0) return;
+  if (disposition === 'entry-stays') fileSlots[slotIndex].windowId = undefined;
+  else fileSlots.splice(slotIndex, 1);
 }
 
 /**
- * The structure as it should be written right now: every file slot in file order — a slot's live
- * window state when its window is live, the preserved entry when the slot was never assigned this
- * session, nothing when its window was removed — then every live window that has no slot (opened
- * mid-session), in the given order. Exactly one entry ends up marked `isMain`: the tracked main
- * window's, falling back to the first entry when the main window is gone.
+ * The structure as it should be written right now: every slot's entry, in file order — the entry a
+ * live window has been keeping up to date, or a preserved one where no window is living.
+ *
+ * Which entry carries `isMain` is not decided here: the flag is held on the entries themselves,
+ * stamped by {@link loadWindowLayouts} and moved by {@link setMainWindowId}, and it leaves only when
+ * its entry does.
  */
-function buildStructure(windowIdsInOrder: readonly number[]): WindowLayoutStructure {
-  const liveIds = new Set(windowIdsInOrder);
-  const built: { entry: WindowLayoutEntry; windowId?: number }[] = [];
-  fileSlots.forEach((slot) => {
-    if (slot.windowId === undefined) {
-      built.push({ entry: { ...slot.entry } });
-      return;
-    }
-    const tracked = findTrackedWindow(slot.windowId);
-    if (!liveIds.has(slot.windowId)) {
-      // Not a window this write knows about. A window that went down with the app is still one the
-      // user had open — the write that pins it may be one this one is ahead of, or may never come
-      // (a later deliberate close pins only what is still open) — so its entry goes out either
-      // way. Anything else here is a window that has genuinely left the structure.
-      if (tracked?.hasGoneAway) built.push({ entry: entryForTrackedWindow(tracked) });
-      return;
-    }
-    if (tracked) built.push({ entry: entryForTrackedWindow(tracked), windowId: slot.windowId });
-  });
-  const slottedWindowIds = new Set(
-    fileSlots.map((slot) => slot.windowId).filter((id) => id !== undefined),
-  );
-  windowIdsInOrder.forEach((windowId) => {
-    if (slottedWindowIds.has(windowId)) return;
-    const tracked = findTrackedWindow(windowId);
-    if (tracked) built.push({ entry: entryForTrackedWindow(tracked), windowId });
-  });
-
-  built.forEach(({ entry }) => {
-    delete entry.isMain;
-  });
-  const mainBuilt =
-    built.find(({ windowId }) => windowId !== undefined && windowId === mainWindowId) ?? built[0];
-  if (mainBuilt) mainBuilt.entry.isMain = true;
-
-  return { windows: built.map(({ entry }) => entry) };
+function buildStructure(): WindowLayoutStructure {
+  return { windows: fileSlots.map((slot) => ({ ...slot.entry })) };
 }
 
 /**
@@ -485,18 +407,15 @@ async function writeStructureToDisk(structure: WindowLayoutStructure): Promise<v
 /**
  * Queue a write of the structure behind any write already in flight. The structure is built when
  * the write EXECUTES, not when it is enqueued, so state that changes while earlier writes drain —
- * e.g. a layout pushed while a quit-time flush waits its turn — still lands in the write. Only the
- * window list is pinned at enqueue time: which windows a write covers is the caller's decision (see
- * {@link writeNow}), while their state should be the freshest available.
+ * e.g. a layout pushed while a quit-time flush waits its turn — still lands in the write.
  *
- * The flip side of building late: a pinned window whose state has GONE by then is silently left out
- * of the write, however firmly the caller pinned it. State a queued write still needs has to
- * outlive it — which is what {@link handleWindowRemoved}'s `entry-stays` disposition is for.
+ * Nothing is pinned at enqueue time. A write is whatever the slot list holds when it reaches the
+ * front of the queue, so which windows a write covers is decided by when a slot leaves the list —
+ * which is {@link handleWindowRemoved}'s disposition, not the caller of the write.
  */
-function enqueueWrite(windowIdsInOrder: readonly number[]): Promise<void> {
-  const windowIds = [...windowIdsInOrder];
+function enqueueWrite(): Promise<void> {
   writeChain = writeChain
-    .then(() => writeStructureToDisk(buildStructure(windowIds)))
+    .then(() => writeStructureToDisk(buildStructure()))
     // The one error boundary for persistence, deliberately placed here rather than inside
     // `writeStructureToDisk` so that it also covers `buildStructure`. It is what keeps a failure
     // from spreading: every later write chains off this promise, so a rejection left here would
@@ -509,23 +428,23 @@ function enqueueWrite(windowIdsInOrder: readonly number[]): Promise<void> {
   return writeChain;
 }
 
-/** Schedule a debounced write of the currently tracked windows */
+/** Schedule a debounced write of the structure */
 function scheduleWrite(): void {
   if (writeTimeout) clearTimeout(writeTimeout);
   writeTimeout = setTimeout(() => {
     writeTimeout = undefined;
-    enqueueWrite(trackedWindows.map((tracked) => tracked.windowId));
+    enqueueWrite();
   }, WRITE_DEBOUNCE_MS);
 }
 
 /**
- * Write the structure for the given live windows immediately, absorbing any pending debounced
- * write. Callers pass the windows that should survive in the file: all still-tracked windows when
- * the app is going down, or the remaining windows after one was deliberately closed.
+ * Write the structure immediately, absorbing any pending debounced write. Called when the app is
+ * going down, and after a window was deliberately closed — both are moments the file has to catch
+ * up with rather than wait out a debounce for.
  */
-export async function writeNow(windowIdsInOrder: readonly number[]): Promise<void> {
+export async function writeNow(): Promise<void> {
   cancelScheduledWrite();
-  return enqueueWrite(windowIdsInOrder);
+  return enqueueWrite();
 }
 
 /**
@@ -582,14 +501,14 @@ function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
     logger.warn(`${GET_WINDOW_LAYOUT_REQUEST_TYPE} called without a window id`);
     return { kind: 'empty' };
   }
-  const tracked = findTrackedWindow(windowId);
-  if (!tracked) {
+  const slot = findSlotByWindowId(windowId);
+  if (!slot) {
     logger.warn(`${GET_WINDOW_LAYOUT_REQUEST_TYPE} called for untracked window ${windowId}`);
     return { kind: 'empty' };
   }
   if (pendingContentWindowIds.has(windowId)) return { kind: 'pending-content' };
-  if (tracked.layout) return { kind: 'entry', layout: tracked.layout };
-  if (tracked.usesLegacyLayout) return { kind: 'legacy' };
+  if (slot.entry.layout) return { kind: 'entry', layout: slot.entry.layout };
+  if (slot.usesLegacyLayout) return { kind: 'legacy' };
   return { kind: 'empty' };
 }
 
@@ -603,14 +522,14 @@ function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
     logger.warn(`${SAVE_WINDOW_LAYOUT_REQUEST_TYPE} called without a layout (window ${windowId})`);
     return;
   }
-  const tracked = findTrackedWindow(windowId);
-  if (!tracked) {
+  const slot = findSlotByWindowId(windowId);
+  if (!slot) {
     logger.warn(`Ignoring layout push from untracked window ${windowId}`);
     return;
   }
   // Reconcile on arrival so phantom content (duplicate or orphaned tabs, empty panels) cannot
   // enter the persisted structure even when a pusher skipped its own reconciliation
-  tracked.layout = reconcileSavedLayout(layoutRecord);
+  slot.entry.layout = reconcileSavedLayout(layoutRecord);
   // This push is the window's real content arriving, so it stops being pending-content — a
   // second get request must be answered with the entry it just saved, not told to wait again.
   // Announced like any other change to the mark: the window becomes one routed work can go to.
