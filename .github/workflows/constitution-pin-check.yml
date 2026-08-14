@@ -48,8 +48,10 @@ jobs:
 
           # Sort the tags here rather than trusting API ordering. Calendar tags order correctly
           # under sort -V, and reading tags rather than the releases endpoint keeps this working
-          # if upstream ever stops cutting formal releases.
-          latest="$(gh api "repos/${UPSTREAM}/tags" --jq '.[].name' | grep -E "$version_re" | sort -V | tail -1 || true)"
+          # if upstream ever stops cutting formal releases. --paginate matters: without it this
+          # reads only the first 30 tags, and once upstream passes that count an unlucky ordering
+          # would resolve a stale tag, compare equal, and report a false all-clear.
+          latest="$(gh api --paginate "repos/${UPSTREAM}/tags" --jq '.[].name' | grep -E "$version_re" | sort -V | tail -1 || true)"
           if [ -z "$latest" ]; then
             echo "::error::Fetched no well-formed version tags from ${UPSTREAM}."
             echo "Failing loudly rather than reporting a false all-clear."
