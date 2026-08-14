@@ -59,6 +59,13 @@ export class FindWebViewProvider implements IWebViewProvider {
       ...savedWebView,
       title,
       projectId,
+      // Simple mode pins Find into Column 3's fixed layout, where it must always remain open, so
+      // it's non-closable there — closing it would leave `openFind` with nothing to bring to the
+      // front, and it would reopen as a panel beside the editor instead. Power mode allows closing
+      // and rearranging freely. This also determines the tab's rc-dock group (`getTabGroup`):
+      // `isClosable === false` routes it to TAB_GROUP_RESOURCES, which `getGroups()` only registers
+      // in Simple mode.
+      isClosable: interfaceMode === 'power',
       content: findWebView,
       styles: tailwindStyles,
       scrollGroupScrRef: resolveFindScrollGroupScrRef(
