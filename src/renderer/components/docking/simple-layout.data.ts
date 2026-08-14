@@ -95,6 +95,10 @@ export const simpleLayout: LayoutBase = {
                 },
               },
               {
+                // Find is a permanent tab here rather than a panel opened beside the editor.
+                // `openFind` locates it with an `existingId: '?'` probe and brings it to the front,
+                // so every Find entry point lands on this one tab. It starts with no project; the
+                // first invocation supplies one through `openFind`'s reload branch.
                 id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
