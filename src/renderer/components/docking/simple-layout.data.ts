@@ -94,6 +94,20 @@ export const simpleLayout: LayoutBase = {
                   state: {},
                 },
               },
+              {
+                // Find is a permanent tab here rather than a panel opened beside the editor.
+                // `openFind` locates it with an `existingId: '?'` probe and brings it to the front,
+                // so every Find entry point lands on this one tab. It starts with no project; the
+                // first invocation supplies one through `openFind`'s reload branch.
+                id: 'b9e05956-da03-497e-ad58-2f1e6377ba5b',
+                tabType: TAB_TYPE_WEBVIEW,
+                data: {
+                  webViewType: 'platformScripture.find',
+                  id: 'b9e05956-da03-497e-ad58-2f1e6377ba5b',
+                  contentType: 'react',
+                  state: {},
+                },
+              },
             ] as SavedTabInfo[],
           },
         ],
