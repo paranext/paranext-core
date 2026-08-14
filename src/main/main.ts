@@ -539,6 +539,13 @@ async function main() {
       }
     }
 
+    // PT-4314 spike. Hoisted out of the options object so it can be logged after the window exists:
+    // a window's type is fixed at creation and Electron silently ignores an unrecognized `type`, so
+    // without a log line "the panel changed nothing" and "the switch never parsed" would be the same
+    // observation.
+    const isSpikePanelWindow =
+      !isFirstWindow && getCommandLineSwitch(CommandLineArgs.SpikePanelWindow);
+
     const newWindow = new BrowserWindow({
       show: true,
       ...(mainWindowState ? { x: mainWindowState.x, y: mainWindowState.y } : {}),
@@ -555,16 +562,18 @@ async function main() {
       ...(!isFirstWindow && getCommandLineSwitch(CommandLineArgs.SpikeParentWindow)
         ? { parent: windows[0] }
         : {}),
-      // PT-4314 spike, enabled only by --spikePanelWindow. Makes secondary windows panels (an
-      // NSPanel on macOS), the native idiom for a utility window that floats over its own app and
-      // yields when the app is left — which is exactly PT-4284's "above Paratext only" requirement.
-      // A window's type is fixed at creation, so unlike the other PT-4314 candidates this cannot be
-      // a runtime toggle. Watch for the failure that killed `parent:`: panels are conventionally
-      // excluded from the window cycle too, so this may lose the Cmd+backtick entry for the same
-      // structural reason.
-      ...(!isFirstWindow && getCommandLineSwitch(CommandLineArgs.SpikePanelWindow)
-        ? { type: 'panel' }
-        : {}),
+      // PT-4314 spike, enabled only by --spikePanelWindow. Makes secondary windows panels
+      // (`NSWindowStyleMaskNonactivatingPanel` on macOS). The motive is that a panel is
+      // DECLARATIVE — macOS maintains the ordering itself — so unlike the `moveTop()` candidate
+      // there is nothing reactive to flicker.
+      //
+      // Note what Electron's docs actually promise, which is narrower than "above its own app":
+      // a panel "floats on top of full-screened apps" and "appears on all spaces". Neither is
+      // above-own-app-only ordering, and both are behaviors PT-4284 would have to accept. Two
+      // further risks: nonactivating means clicking the panel does not bring the app forward, and
+      // panels are conventionally excluded from the window cycle — the failure that killed
+      // `parent:`.
+      ...(isSpikePanelWindow ? { type: 'panel' } : {}),
       // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
       ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
       // re-add window controls
@@ -590,6 +599,11 @@ async function main() {
 
     // Capture the window ID before it can be destroyed (used in the `closed` handler)
     const windowId = newWindow.id;
+
+    // PT-4314 spike: confirms the switch parsed and the option was passed, so a null result can be
+    // read as "a panel changes nothing here" rather than "the flag never took effect".
+    if (isSpikePanelWindow)
+      logger.info(`PT-4314 spike: window ${windowId} created with type: 'panel'`);
 
     // Track this window immediately
     addWindow(newWindow);
