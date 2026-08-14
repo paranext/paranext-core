@@ -25,6 +25,12 @@ globalThis.processType = ProcessType.Renderer;
 // and the handleSwitchToSimpleMode suite's `bible-texts-tab` fixture below.
 const ANCHOR_WEB_VIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const SUPPLEMENT_TAB_ID = 'supplement-tab';
+/**
+ * The setting the mocked supplement entry is gated on. A supplement entry without one is enabled
+ * unconditionally, which would leave the flag-off branch of the load — the one a vanilla build
+ * takes — unreachable from this file, and the flag read itself unobservable.
+ */
+const SUPPLEMENT_FLAG_SETTING = 'test.isSupplementEnabled';
 
 const mocks = vi.hoisted(() => ({
   networkRequest: vi.fn(),
@@ -291,6 +297,13 @@ function layoutWithTab(tabId: string): LayoutInfo {
         },
       ],
     },
+  } as unknown as LayoutInfo;
+}
+
+/** Layout with no tab anywhere — only the empty placeholder panel in the dock */
+function layoutWithNoTabsAnywhere(): LayoutInfo {
+  return {
+    dockbox: { mode: 'horizontal', children: [{ id: '+0', tabs: [] }] },
   } as unknown as LayoutInfo;
 }
 
@@ -1582,6 +1595,10 @@ describe('loadLayout restores this window’s layout from the main process', () 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 
     expect(tabIdsIn(loaded)).toEqual([]);
+    // The empty base has no anchor panel for a supplement tab to attach to, so an empty result
+    // alone says nothing about whether the supplement was considered. The pending-content path
+    // leaves before the entries are fetched at all — which is exactly what the unread flag shows.
+    expect(mocks.settingsGet).not.toHaveBeenCalledWith(SUPPLEMENT_FLAG_SETTING);
   });
 
   test('a window created for pending content is not held back from pushing its layout', async () => {
@@ -1792,13 +1809,6 @@ describe('loadLayout reports a dock that landed empty', () => {
       } as unknown as LayoutInfo;
     }
 
-    /** Layout with no tab anywhere — only the empty placeholder panel in the dock */
-    function layoutWithNoTabsAnywhere(): LayoutInfo {
-      return {
-        dockbox: { mode: 'horizontal', children: [{ id: '+0', tabs: [] }] },
-      } as unknown as LayoutInfo;
-    }
-
     /** Stand up the open path and a registered dock layout, with the initial load already landed */
     async function windowHoldingOneTab() {
       respondToGetLayoutAndEmptied(
@@ -1899,6 +1909,47 @@ describe('loadLayout reports a dock that landed empty', () => {
       await shard.openSettingsTab();
 
       await expect(shard.hasContentArrivedSinceEmptyReport()).resolves.toBe(true);
+    });
+
+    test('a window that has held content still answers for the report it is sending now', async () => {
+      // The flag answers one question — has anything reached this dock SINCE the report the main
+      // process is holding — so every report starts it over. A window that keeps the answer it
+      // earned from earlier content says "content arrived" to every report it ever sends, and the
+      // main process, which re-checks before acting, then never closes it.
+      let releaseEmptiedReport: ((response: unknown) => void) | undefined;
+      mocks.networkRequest.mockImplementation(async (requestType: string) => {
+        if (requestType === 'windowLayout:get')
+          return { kind: 'entry', layout: layoutWithTab('t1') };
+        if (requestType !== 'windowLayout:emptied') return undefined;
+        // Held open, because the flag has to be read at the moment the main process reads it:
+        // while the report it describes is still in flight
+        return new Promise((resolve) => {
+          releaseEmptiedReport = resolve;
+        });
+      });
+      const module = await primeWebViewOpenPath();
+      const { dockLayout, loadedLayouts } = makeDockLayoutThatTracksAdds(layoutWithAnchor());
+      // A settings tab goes in through `addTabToDock`, which the shared stand-in does not carry
+      (dockLayout as unknown as { addTabToDock: unknown }).addTabToDock = vi.fn(() => ({
+        type: 'float',
+      }));
+      module.registerDockLayout(dockLayout);
+      await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+      const shard = await registeredShard();
+
+      // Content arrives, putting this window on record as having had some
+      await shard.openSettingsTab();
+      await expect(shard.hasContentArrivedSinceEmptyReport()).resolves.toBe(true);
+
+      // That content goes away again and the window reports the dock emptied. Deliberately not
+      // awaited: the report is what this test reads the flag underneath, so it has to still be in
+      // flight — the same fire-and-forget shape the dock layout's change handler uses.
+      module.handleDockEmptiedByRemoval(layoutWithNoTabsAnywhere());
+      await vi.waitFor(() => expect(releaseEmptiedReport).toBeDefined());
+
+      // Nothing has arrived since THAT report went out, whatever this window held before it
+      await expect(shard.hasContentArrivedSinceEmptyReport()).resolves.toBe(false);
+      releaseEmptiedReport?.({ action: 'closing' });
     });
   });
 });
@@ -2059,6 +2110,14 @@ describe('a window the main process has told is closing', () => {
     await expect(shard.openWebView('test.type')).rejects.toThrow(/closing/);
   });
 
+  test('refuses to open a settings tab in itself', async () => {
+    // A settings tab is routed work like any other: the main process picks the window it lands in,
+    // and one whose close is decided takes the tab with it moments later
+    const shard = await windowToldItIsClosing();
+
+    await expect(shard.openSettingsTab()).rejects.toThrow(/closing/);
+  });
+
   test('throws rather than answering nothing, which would read as a provider declining', async () => {
     const shard = await windowToldItIsClosing();
     // A provider that declines every open, so that a shard which did NOT refuse would resolve
@@ -2075,13 +2134,6 @@ describe('a window the main process has told is closing', () => {
 });
 
 describe('a dock emptied by removal while running on a fallback layout', () => {
-  /** Layout with no tab anywhere — only the empty placeholder panel in the dock */
-  function layoutWithNoTabsAnywhere(): LayoutInfo {
-    return {
-      dockbox: { mode: 'horizontal', children: [{ id: '+0', tabs: [] }] },
-    } as unknown as LayoutInfo;
-  }
-
   test('reports nothing — a fallback dock made empty is treated like one born empty', async () => {
     mocks.settingsGet.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'power' : false,
