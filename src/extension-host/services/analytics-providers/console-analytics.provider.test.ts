@@ -2,17 +2,19 @@ import { beforeEach, expect, test, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   debug: vi.fn(),
+  info: vi.fn(),
   warn: vi.fn(),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
   __esModule: true,
-  default: { debug: mocks.debug, warn: mocks.warn },
-  logger: { debug: mocks.debug, warn: mocks.warn },
+  default: { debug: mocks.debug, info: mocks.info, warn: mocks.warn },
+  logger: { debug: mocks.debug, info: mocks.info, warn: mocks.warn },
 }));
 
 beforeEach(() => {
   mocks.debug.mockClear();
+  mocks.info.mockClear();
   mocks.warn.mockClear();
 });
 
@@ -29,8 +31,8 @@ test('a test-environment provider logs the event with a Test prefix, including i
     environment: 'test',
   });
 
-  expect(mocks.debug).toHaveBeenCalledTimes(1);
-  const [message] = mocks.debug.mock.calls[0];
+  expect(mocks.info).toHaveBeenCalledTimes(1);
+  const [message] = mocks.info.mock.calls[0];
   expect(message).toContain('Test: ');
   expect(message).toContain('"name":"app_launch"');
   expect(message).toContain('"version":"1.2.3"');
@@ -49,8 +51,8 @@ test('a production-environment provider logs the event with a Production prefix,
     environment: 'production',
   });
 
-  expect(mocks.debug).toHaveBeenCalledTimes(1);
-  const [message] = mocks.debug.mock.calls[0];
+  expect(mocks.info).toHaveBeenCalledTimes(1);
+  const [message] = mocks.info.mock.calls[0];
   expect(message).toContain('Production: ');
   expect(message).toContain('"name":"subscription_renewed"');
   expect(message).toContain('"timestamp":1705000000000');
@@ -70,8 +72,8 @@ test('a test provider given a production-tagged event still logs its real data, 
   });
 
   expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining("tagged as 'production'"));
-  expect(mocks.debug).toHaveBeenCalledTimes(1);
-  const [message] = mocks.debug.mock.calls[0];
+  expect(mocks.info).toHaveBeenCalledTimes(1);
+  const [message] = mocks.info.mock.calls[0];
   expect(message).toContain('Test: ');
   expect(message).toContain('"name":"project_synced"');
   expect(message).toContain('"source":"test-harness"');
@@ -91,5 +93,5 @@ test('a production provider given a test-tagged event warns and refuses to log/t
   });
 
   expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining("tagged as 'test'"));
-  expect(mocks.debug).not.toHaveBeenCalled();
+  expect(mocks.info).not.toHaveBeenCalled();
 });

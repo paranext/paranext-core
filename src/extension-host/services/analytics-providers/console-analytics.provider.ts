@@ -30,6 +30,6 @@ export class ConsoleAnalyticsProvider implements AnalyticsProvider {
     }
 
     const label = this.environment === 'production' ? 'Production' : 'Test';
-    logger.debug(`${label}: ${JSON.stringify(event)}`);
+    logger.info(`${label}: ${JSON.stringify(event)}`);
   }
 }

@@ -91,6 +91,12 @@ process.on('unhandledRejection', (reason) => {
 
     // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
+    // Analytics initialization must not gate extension-host startup — it can take up to
+    // ENVIRONMENT_RESOLUTION_TIMEOUT_MS if the Send/Receive server-target lookup is slow.
+    // trackEvent()'s `unresolved` queue tolerates this finishing at any point.
+    analyticsService.initialize().catch((error) => {
+      logger.error(`Analytics: failed to initialize: ${String(error)}`);
+    });
     await initializeSharedStoreService(networkService);
 
     // Prepare all services that need to be running because extensions might rely on them
@@ -103,7 +109,6 @@ process.on('unhandledRejection', (reason) => {
       startProjectSettingsService(),
       initializeDatabaseService(),
       startLocalOAuthServer(),
-      analyticsService.initialize(),
     ]);
     markStartup('host-services-ready');
 

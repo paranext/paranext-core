@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   debug: vi.fn(),
+  info: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
 }));
@@ -12,13 +13,13 @@ vi.mock('@shared/services/data-provider.service', () => ({
 }));
 vi.mock('@shared/services/logger.service', () => ({
   __esModule: true,
-  default: { debug: mocks.debug, warn: mocks.warn, error: mocks.error },
-  logger: { debug: mocks.debug, warn: mocks.warn, error: mocks.error },
+  default: { debug: mocks.debug, info: mocks.info, warn: mocks.warn, error: mocks.error },
+  logger: { debug: mocks.debug, info: mocks.info, warn: mocks.warn, error: mocks.error },
 }));
 
 /** Find the console-provider log line for a given environment label, if one was logged. */
 function findSentLog(label: 'Test' | 'Production'): string | undefined {
-  return mocks.debug.mock.calls
+  return mocks.info.mock.calls
     .map(([message]) => message)
     .find((message) => message.startsWith(`${label}: `));
 }

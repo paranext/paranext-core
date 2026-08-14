@@ -4,6 +4,7 @@ import { waitForDuration } from 'platform-bible-utils';
 import {
   AnalyticsEnvironment,
   AnalyticsEvent,
+  AnalyticsProvider,
   UnresolvedAnalyticsEvent,
 } from '@shared/models/analytics.model';
 import { ConsoleAnalyticsProvider } from '@extension-host/services/analytics-providers/console-analytics.provider';
@@ -25,7 +26,7 @@ const queues: {
   unresolved: [],
 };
 
-const providers: Record<AnalyticsEnvironment, ConsoleAnalyticsProvider> = {
+const providers: Record<AnalyticsEnvironment, AnalyticsProvider> = {
   test: new ConsoleAnalyticsProvider('test'),
   production: new ConsoleAnalyticsProvider('production'),
 };
@@ -67,9 +68,13 @@ function flushQueue(environment: AnalyticsEnvironment): void {
     // Capture this iteration's event in a per-iteration const: `next` is reassigned before the
     // `.catch()` callback below runs, so closing over `next` directly would log the wrong event.
     const event = next;
-    provider.send(event).catch((error) => {
+    try {
+      provider.send(event).catch((error) => {
+        logger.error(`Analytics: failed to send event '${event.name}': ${String(error)}`);
+      });
+    } catch (error) {
       logger.error(`Analytics: failed to send event '${event.name}': ${String(error)}`);
-    });
+    }
     next = queue.shift();
   }
 }
