@@ -56,7 +56,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Current Epic            | [Current-Epic.md](.context/standards/Current-Epic.md)                     | What the current epic is, where it is articulated (roadmap, JIRA sprint board, Discord), is work item in epic? |
 | Security                | [Security-Guide.md](.context/standards/Security-Guide.md)                 | CSP, module import restrictions, extension sandboxing        |
 | PT9 Feature Inventory   | [paratext-9-features/](.context/research/paratext-9-features/README.md) | Catalogue of Paratext 9 features (entry points, forms, classes, sources) — used by `/investigate-prd` |
-| Capability Designs      | [designs/](.context/designs/)                                             | Frozen rationale for the PRD tooling (`/investigate-prd`, `/refine-prd`, `/prd-to-jira`). Nothing reads it at runtime; **do not add to it** — see [Agentic-Engineering-Guide.md § Where artifacts live](.context/standards/Agentic-Engineering-Guide.md#where-artifacts-live) |
+| PRD Tooling             | [PRD-Tooling-Guide.md](.context/standards/PRD-Tooling-Guide.md)           | Why `/refine-prd`, `/investigate-prd`, and `/prd-to-jira` are shaped as they are: the two audiences, the four agents, the access model, and what is deliberately excluded |
 | Startup performance     | [README.md](README.md#startup-performance-timing)                         | Enable `PT_STARTUP_MARKS`, capture marks, render the waterfall (`npm run startup-waterfall`), packaged-vs-dev caveat |
 
 ## Terminology
