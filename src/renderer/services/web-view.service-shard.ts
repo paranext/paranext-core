@@ -2993,6 +2993,10 @@ export const openWebView = async (
   // diffed against the same reading. Ahead of the existing-web-view search below as well as the
   // dock add: that search reads a dock the load is about to replace.
   await waitForLayoutLoadToSettle();
+  // Again, because the wait above parks for as long as a load takes and this window's close can be
+  // decided inside it: `isWindowToldToClose` latches whenever an emptiness report is answered, which
+  // can be at any moment. The guard above spoke for the moment this open arrived, not for this one.
+  throwIfWindowIsClosing(`open web view ${webViewType}`);
 
   const optionsDefaulted = getWebViewOptionsDefaults(options);
 
@@ -3422,6 +3426,15 @@ async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layou
   // Routed here by the main process, the same as an open or an adopt, so it needs the same refusal:
   // a tab put in a window whose close is decided is destroyed with it moments later
   throwIfWindowIsClosing('open a settings tab');
+  // And the same wait, for the same reason and then some: a layout load in flight replaces this dock
+  // wholesale with what it read before this tab existed. A settings tab is not a web view, so it is
+  // in none of the lists a load diffs — it goes with nothing reported anywhere, leaving the user's
+  // Settings command answering with a layout for a tab that is not there.
+  await waitForLayoutLoadToSettle();
+  // Again, because the wait above parks for as long as a load takes and this window's close can be
+  // decided inside it: `isWindowToldToClose` latches whenever an emptiness report is answered, which
+  // can be at any moment. The guard above spoke for the moment this request arrived, not for this one.
+  throwIfWindowIsClosing('open a settings tab');
   const settingsTabId = newGuid();
 
   const layout = await addTab<SettingsTabData>(
@@ -3475,6 +3488,10 @@ async function adoptWebView(
   throwIfWindowIsClosing(`adopt web view ${savedWebViewDefinition.id}`);
   await waitForInitialize();
   await waitForLayoutLoadToSettle();
+  // Again, because the wait above parks for as long as a load takes and this window's close can be
+  // decided inside it: `isWindowToldToClose` latches whenever an emptiness report is answered, which
+  // can be at any moment. The guard above spoke for the moment this adopt arrived, not for this one.
+  throwIfWindowIsClosing(`adopt web view ${savedWebViewDefinition.id}`);
   // Seeded before the provider runs: the moved view's state must be in this window's storage
   // for the view to read, including when the provider does not echo state back. A provider
   // that returns state still wins — the open persists the provider's state after this

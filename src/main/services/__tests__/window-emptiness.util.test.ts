@@ -202,6 +202,10 @@ describe('re-checking whether a window is still empty before closing it', () => 
       countWindows,
       closeWindow,
       markWindowClosing,
+      // `markedIds` stands in for the shared registry in main: `markWindowClosing` writes it, the
+      // count subtracts it, and the user's own close button writes it too — so a scenario that
+      // adds to it mid-re-check is closing a window the way the close button would
+      isWindowClosing: (windowId: number) => markedIds.has(windowId),
       hasContentArrivedSinceEmptyReport,
     });
   }
@@ -277,6 +281,54 @@ describe('re-checking whether a window is still empty before closing it', () => 
 
     expect(closeWindow).not.toHaveBeenCalled();
     expect(markWindowClosing).not.toHaveBeenCalled();
+  });
+
+  test('a window the user closes during its own re-check is told closing, without a second close', async () => {
+    // The close button marks the reporting window closing on the same path a sibling's close takes
+    // — one this handler's serialization does not cover — so the close can be decided while the
+    // re-check is in flight. The window count cannot stand in for noticing it: a window whose close
+    // has begun is excluded from the count rather than reported by it, so with three windows open
+    // the count still reads two and the close branch would hand a closing window a second close,
+    // which trips main's force-close escape hatch and abandons the close-time work (the shutdown
+    // sync) the first close started.
+    vi.useFakeTimers();
+    try {
+      hasContentArrivedSinceEmptyReport.mockImplementation(async () => {
+        markedIds.add(1);
+        return false;
+      });
+      const handler = handlerOverWindows(3);
+
+      await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+
+      vi.runAllTimers();
+      expect(closeWindow).not.toHaveBeenCalled();
+      expect(markWindowClosing).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('a window the user closes during its own re-check docks nothing, even as the last one counted', async () => {
+    // The same close with one fewer window open. Excluding the closing reporting window leaves a
+    // count of one, so the last-window branch would answer open-home — docking a tab, and a web
+    // view provider's side effects with it, into a window that is on its way out.
+    vi.useFakeTimers();
+    try {
+      hasContentArrivedSinceEmptyReport.mockImplementation(async () => {
+        markedIds.add(1);
+        return false;
+      });
+      const handler = handlerOverWindows(2);
+
+      await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+
+      vi.runAllTimers();
+      expect(closeWindow).not.toHaveBeenCalled();
+      expect(markWindowClosing).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test('a re-check that throws proceeds with the close', async () => {
