@@ -143,12 +143,37 @@ describe('useEventAsync', () => {
 
   it('warns instead of throwing when subscribing fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const controlled = createControlledAsyncEvent<string>();
-    renderHook(() => useEventAsync(controlled.event, vi.fn()));
+    // A subscribe failure surfaces asynchronously, so escaping as an unhandled rejection is the
+    // async shape of "throwing" — nothing in an effect could ever catch it.
+    const escapedRejections: unknown[] = [];
+    const recordRejection = (reason: unknown) => {
+      escapedRejections.push(reason);
+    };
+    process.on('unhandledRejection', recordRejection);
 
-    await act(async () => controlled.rejectSubscribe(0, new Error('subscribe failed')));
+    try {
+      const controlled = createControlledAsyncEvent<string>();
+      const { unmount } = renderHook(() => useEventAsync(controlled.event, vi.fn()));
 
-    expect(warn).toHaveBeenCalledOnce();
+      const failedSubscribe = act(async () => {
+        controlled.rejectSubscribe(0, new Error('subscribe failed'));
+      });
+
+      // The failure must settle quietly rather than reject the render pass...
+      await expect(failedSubscribe).resolves.toBeUndefined();
+      // ...and tearing down a subscription that never got established must not throw either.
+      expect(() => unmount()).not.toThrow();
+
+      // Node reports unhandled rejections on the next macrotask, once the microtask queue drains.
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+
+      expect(escapedRejections).toEqual([]);
+      expect(warn).toHaveBeenCalledOnce();
+    } finally {
+      process.off('unhandledRejection', recordRejection);
+    }
   });
 
   it('warns instead of throwing when the unsubscriber fails', async () => {

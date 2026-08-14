@@ -1,3 +1,10 @@
+// The hook under test does its subscribing through `useEventAsync`, which it imports by package
+// name from `platform-bible-react`. No path alias maps that package name to the library's source,
+// so the import resolves through the workspace symlink to `lib/platform-bible-react/dist` — the
+// CHECKED-IN BUILD OUTPUT. The subscribe/teardown race behavior these tests pin therefore comes
+// from the built bundle, not from `lib/platform-bible-react/src/hooks/use-event-async.hook.ts`:
+// editing that source leaves these tests green until the library is rebuilt
+// (`npm run build --workspace=lib/platform-bible-react`) and the refreshed `dist` is committed.
 import { act, renderHook } from '@testing-library/react';
 import { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
