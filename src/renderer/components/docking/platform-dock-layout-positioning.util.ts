@@ -104,6 +104,7 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
   'platformScriptureEditor.commentaries': TAB_GROUP_RESOURCES,
   'legacyCommentManager.commentListPanel': TAB_GROUP_RESOURCES,
   'platformScriptureEditor.scriptureTextGrid': TAB_GROUP_RESOURCES,
+  'platformScripture.find': TAB_GROUP_RESOURCES,
 };
 
 /**
