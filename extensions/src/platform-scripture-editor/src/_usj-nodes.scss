@@ -2376,6 +2376,19 @@
   white-space: nowrap;
 }
 
+/* Standard view only. Ported from the library's packages/platform/src/usj-nodes.css, where it had
+   been missed in this vendored copy — the app therefore painted the badge in a view the library
+   does not, which is a real app-vs-demo difference at the one element the caret rests in here.
+   In standard view (`marker-editable`) a verse is a VerseNode, i.e. editable text whose content is
+   literally `\v 4 `, so the caret can and does come to rest INSIDE this span; the grey badge from
+   `.formatted-font .verse` above then sits directly behind that caret. PT9's Standard view has no
+   background badge on verse tokens (the formatted, non-editable views keep theirs). */
+.formatted-font.marker-editable .verse {
+  white-space: nowrap;
+  unicode-bidi: embed;
+  background-color: transparent;
+}
+
 /* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).
    Destructive styling — light-destructive background, destructive text, roomier padding, and a
    caret-like glow-underline blink — signals "press again to delete". Bound to the live theme
