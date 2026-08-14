@@ -140,10 +140,19 @@ exists now — not as a history of the approaches that were tried and discarded.
 A planning document lands on the default branch only with a stated reason — for example, a
 follow-up PR depends on it — and it is deleted when that reason expires.
 
-This repository has no exceptions to that rule. The one it had —
-`.context/designs/`, four planning documents for the PRD tooling — was converted into
-[PRD-Tooling-Guide.md](PRD-Tooling-Guide.md) and deleted, which is the worked example of what
-phase 6 asks for: the reasoning survived, the plans did not.
+`.context/designs/` was the worked example of what phase 6 asks for: four planning documents for
+the PRD tooling became [PRD-Tooling-Guide.md](PRD-Tooling-Guide.md) and were deleted. The
+reasoning survived; the plans did not.
+
+**Superpowers writes into the repository by default — redirect it.** The `brainstorming` and
+`writing-plans` skills save to `docs/superpowers/specs/` and `docs/superpowers/plans/` unless
+told otherwise, and their own instructions defer to a stated location preference. State one:
+keep specs and plans outside this working tree.
+
+**Pre-rule planning trees still here.** `docs/plans/`, `docs/specs/`, and `docs/superpowers/`
+hold planning documents that predate this rule — several written by the skills above. They are
+unfenced and unreferenced. **Do not add to them.** Converting their durable content and deleting
+them is outstanding work, and until it happens this is the rule's one honest exception.
 
 ## Opting out
 

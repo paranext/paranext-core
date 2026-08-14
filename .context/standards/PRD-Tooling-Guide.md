@@ -35,7 +35,9 @@ exists to prevent.
 ## Why four agents rather than one
 
 The command is a thin orchestrator: it dispatches agents, collates their structured output,
-runs one human checkpoint, and hands off to planning. It owns no investigation logic.
+runs one human checkpoint, and hands off to Jira creation (`/prd-to-jira`). Per-work-item design
+and implementation planning happen after that, one item at a time — not inside the
+investigation. It owns no investigation logic.
 
 The four agents split along **when they run**, not merely by topic — which is what makes the
 split earn its keep:
@@ -76,9 +78,11 @@ to product language is the *coach command's* job, not the agent's.
 
 - **The bundled Feature Inventory is canonical.** It was brought over once and has no upstream
   sync. Correct it in place.
-- **Sibling repositories are read live** from the `~/git/<repo>` convention: `Paratext` (PT9
-  source), `paranext-core`, `paratext-10-studio`, `paratext-bible-extensions`,
-  `paratext-bible-internal-extensions`.
+- **Sibling repositories are read live**, resolved relative to a repos root rather than an
+  absolute path: `{ROOT}` is the parent of this checkout, overridable with `PT_REPOS_ROOT`. No
+  absolute path is ever assumed, because machines differ in where that parent lives. The
+  constellation is `Paratext` (PT9 source), `paranext-core`, `paratext-10-studio`,
+  `paratext-bible-extensions`, `paratext-bible-internal-extensions`.
 - **Absence degrades, it does not fail.** Any unreachable repository is reported as a named gap
   and the brief is still produced from what is available. `/refine-prd` skips its PT10 scan with
   an explicit note rather than guessing.
@@ -91,8 +95,9 @@ These are load-bearing. Changing one changes what the output is worth.
   disproves the bundled inventory, the run says so and the fix lands with it. Everything the
   coach asserts about PT9 is capped by the bundle's accuracy — this is not hypothetical: the
   inventory once asserted F9 = Send/Receive, which two archaeology runs disproved.
-- **Present options, do not auto-decide.** Scope decisions reach the human as a three-way option
-  set (reduce / expand / stub-or-defer) with a recommendation, at the checkpoint.
+- **Decide nothing on the user's behalf.** Where a scope boundary is unclear, the investigation
+  presents it with a suggested answer and lets the human settle it at the checkpoint, rather
+  than picking silently and reporting a conclusion.
 - **No Paratext 10 implementation leakage in archaeology.** `pt9-archaeologist` records what
   exists and where, at `file:line`. Proposing PT10 service names or signatures belongs to
   `pt10-reuse-scout`, and mixing them produces confident designs built on unverified ground.
