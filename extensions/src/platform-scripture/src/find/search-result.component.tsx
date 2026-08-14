@@ -172,6 +172,14 @@ export default function SearchResult({
   }, [searchResult.isReplaced]);
 
   // When this result becomes selected, scroll it into view.
+  //
+  // Hidden case: intentionally not handled. In Simple mode Find is a permanent tab that spends most
+  // of the session inactive, and rc-dock keeps inactive panes mounted with `display: none`, where
+  // this `scrollIntoView` no-ops. So a selection that changes while hidden (e.g. a scripture edit
+  // re-runs the search and auto-selects a result) leaves the list scrolled where it was. Accepted
+  // because the selected card stays highlighted and the very next selection change — including any
+  // keyboard navigation once the tab is active — scrolls it into view. Not worth a
+  // `useViewVisibility` catch-up for a scroll offset the user can correct by scrolling.
   useEffect(() => {
     if (isSelected) {
       cardRef.current?.scrollIntoView({ block: 'nearest' });

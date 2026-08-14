@@ -196,7 +196,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-find',
-    purpose: 'Open the find dialog',
+    purpose:
+      'Bring Find to the front — a permanent tab in Simple mode, a panel beside the editor in Power mode',
     category: 'Navigation',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃F (not the usual ⌘F) to match the handler in
@@ -204,6 +205,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⌃F', windows: 'Ctrl+F', linux: 'Ctrl+F' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture/src/main.ts',
     ],
   },
   {
