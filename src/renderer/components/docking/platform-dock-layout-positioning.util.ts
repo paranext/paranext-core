@@ -92,10 +92,10 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
 
 /**
  * WebViewTypes that make up Simple mode's fixed 3-column layout, mapped to the rc-dock group each
- * is confined to while pinned there. Kept in sync with the webViewTypes hardcoded in
- * `simple-layout.data.ts` (Columns 1/2) — Column 3 also includes `scriptureTextGrid` (Text
- * Collection), which isn't part of that static default layout but joins Column 3 at runtime once
- * enabled.
+ * is confined to while pinned there. Kept in sync with two sources: every webViewType hardcoded in
+ * `simple-layout.data.ts` (all of Columns 1 and 2, and all of Column 3 except the one below), plus
+ * `scriptureTextGrid` (Text Collection), which is absent from that static layout and instead joins
+ * Column 3 at runtime from `default-layout-supplement.json` once its feature flag is enabled.
  */
 const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
   'platformScriptureEditor.modelText': HEADLESS_GROUP,

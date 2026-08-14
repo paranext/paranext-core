@@ -65,6 +65,33 @@ describe('mergeDefaultLayoutSupplement', () => {
       'scripture-text-grid-tab',
     ]);
   });
+  it('inserts the supplement tab before the tab named by insertBeforeWebViewType', () => {
+    // Simple mode's Column 3 keeps Find last, so Text Collection has to land before it rather than
+    // at the end of the panel.
+    const layout = baseLayout();
+    tabsInFirstPanel(layout).push({
+      id: 'find-tab',
+      tabType: 'webView',
+      data: { webViewType: 'platformScripture.find', id: 'find-tab' },
+    });
+    const merged = mergeDefaultLayoutSupplement(layout, [
+      { ...gridEntry, insertBeforeWebViewType: 'platformScripture.find' },
+    ]);
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
+      'anchor-tab',
+      'scripture-text-grid-tab',
+      'find-tab',
+    ]);
+  });
+  it('appends when insertBeforeWebViewType names a tab that is not in the panel', () => {
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [
+      { ...gridEntry, insertBeforeWebViewType: 'not.in.this.panel' },
+    ]);
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
+      'anchor-tab',
+      'scripture-text-grid-tab',
+    ]);
+  });
   it('does not mutate the input layout', () => {
     const input = baseLayout();
     mergeDefaultLayoutSupplement(input, [gridEntry]);

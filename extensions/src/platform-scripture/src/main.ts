@@ -389,8 +389,16 @@ async function openFind(
     resolveFindInvocation(webViewDefinition, editorWebViewId, sourceProjectId);
 
   if (!projectId) {
-    logger.debug('No project!');
-    return undefined;
+    logger.debug('No project! Bringing any existing Find web view to the front as-is.');
+    // Simple mode keeps Find as a permanent tab, so invoking Find must always land on that tab —
+    // doing nothing would look like a dead shortcut with the tab sitting in plain view. Bring an
+    // existing Find web view to the front without touching its project, and don't create one if
+    // none exists: a Find with no project has nothing to search, so there is nothing to open.
+    return papi.webViews.openWebView(findWebViewType, undefined, {
+      existingId: '?',
+      createNewIfNotFound: false,
+      bringToFront: true,
+    });
   }
 
   const options: FindWebViewOptions = {
