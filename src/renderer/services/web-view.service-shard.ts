@@ -1992,6 +1992,7 @@ export const addTab = async <TData = unknown>(
   layout: Layout,
   shouldBringToFront = true,
 ): Promise<Layout | undefined> => {
+  await admitContentToDock(`dock a ${savedTabInfo.tabType} tab`);
   const finalLayout = (await getDockLayout()).addTabToDock(
     savedTabInfo,
     layout,
@@ -2541,6 +2542,34 @@ export function throwIfWindowIsClosing(operation: string): void {
 }
 
 /**
+ * Hold content at the edge of this window's dock until it may enter, and refuse it if it may not.
+ * Called from the two places anything is put into this dock, immediately before the add.
+ *
+ * Both questions are asked at every entry point already, and both are asked again here, because
+ * what an entry point answers is what was true when the request arrived. What lies between there
+ * and the dock is the web view provider — a round trip into the extension host running extension
+ * code, of no bounded duration — and both answers can turn over inside it. A layout load that
+ * starts in that stretch replaces this dock with what it read before the arrival, and does it
+ * silently: the close events a load emits are diffed against that same reading, and the checkpoint
+ * that catches an arrival mid-load can only speak for a load that began against an EMPTY dock. A
+ * close is the other half — the answer that latches it can come at any moment, so the last reading
+ * that can be right about it is the one taken here.
+ *
+ * This is the last line of defence and not the only one: an entry point still needs its own guard
+ * and wait, for what it does BEFORE reaching a dock write. `openWebView` reads the dock looking for
+ * an existing web view and returns on finding one, never reaching a write site at all.
+ *
+ * A function declaration rather than an arrow, for the same reason as {@link noteContentArrived}
+ * above it: one of the two dock adds sits above this in the file.
+ *
+ * @param operation What was being asked of this window, for the refusal's error message
+ */
+async function admitContentToDock(operation: string): Promise<void> {
+  await waitForLayoutLoadToSettle();
+  throwIfWindowIsClosing(operation);
+}
+
+/**
  * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
  * @param savedWebViewDefinition Saved WebView definition to pass to
@@ -2954,6 +2983,11 @@ export async function openOrReloadWebView(
   };
 
   let finalLayout: Layout | undefined;
+  // Ahead of reading the dock layout out, not after it: a wait is exactly the stretch in which a
+  // re-register invalidates a dock layout already read into a variable (see `getDockLayout`). Ahead
+  // of the try as well — what it refuses never reached the dock to fail there, and the cleanup that
+  // catch does is for a web view the dock itself turned down.
+  await admitContentToDock(`dock web view ${webView.id}`);
   const dockLayoutVar = await getDockLayout();
   try {
     finalLayout = dockLayoutVar.addWebViewToDock(
