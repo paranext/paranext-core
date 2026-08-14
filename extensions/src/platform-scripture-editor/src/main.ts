@@ -1483,6 +1483,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       ),
     {
       method: {
+        'x-experimental': true,
         summary:
           "Replay the project-switch side effects (S/R sync, shared-layout auto-apply, recently-opened) for a project whose Scripture Editor tab is already showing correctly, bypassing openScriptureEditor's focus-existing short-circuit",
         params: [

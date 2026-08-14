@@ -833,6 +833,7 @@ declare module 'papi-shared-types' {
      * `openScriptureEditor`.
      *
      * @param projectId The project now showing in the Scripture Editor.
+     * @experimental This command is unstable and may change or disappear without notice
      */
     'platformScriptureEditor.finalizeProjectSwitch': (projectId: string) => Promise<void>;
     /**
