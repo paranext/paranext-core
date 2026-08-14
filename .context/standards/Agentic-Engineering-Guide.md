@@ -140,13 +140,10 @@ exists now — not as a history of the approaches that were tried and discarded.
 A planning document lands on the default branch only with a stated reason — for example, a
 follow-up PR depends on it — and it is deleted when that reason expires.
 
-**One grandfathered exception: `.context/designs/`.** It holds four planning documents — two
-design specs and two implementation plans — for the PRD tooling (`/investigate-prd`,
-`/refine-prd`, `/prd-to-jira`). Nothing reads them at runtime; the commands behave identically
-without them. They survive only as the recorded rationale for why that tooling is shaped the
-way it is, including what was deliberately not ported and which alternatives were rejected.
-They predate this rule. The intent is to fold that rationale into `.context/standards/` and
-then delete the directory, as a separate change. **Do not add to it.**
+This repository has no exceptions to that rule. The one it had —
+`.context/designs/`, four planning documents for the PRD tooling — was converted into
+[PRD-Tooling-Guide.md](PRD-Tooling-Guide.md) and deleted, which is the worked example of what
+phase 6 asks for: the reasoning survived, the plans did not.
 
 ## Opting out
 

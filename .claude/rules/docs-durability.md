@@ -22,10 +22,10 @@ dozens of expired status claims).
   [Agentic-Engineering-Guide.md § Where artifacts live](../../.context/standards/Agentic-Engineering-Guide.md#where-artifacts-live).
   A document that never lands cannot rot.
 - **Fence the point-in-time documents that do belong here.** Some legitimately live in the repo
-  — investigation briefs written by `/investigate-prd` under `.context/research/investigations/`,
-  and designs grandfathered in before the rule above. Those get a `> **Frozen record** — …`
-  blockquote at the top telling readers (and agents) to follow the current files, not the
-  document. Fenced files are history, exempt from staleness fixes.
+  — investigation briefs written by `/investigate-prd` under `.context/research/investigations/`.
+  Those get a `> **Frozen record** — …` blockquote at the top telling readers (and agents) to
+  follow the current files, not the document. Fenced files are history, exempt from staleness
+  fixes.
 - **Verify claims before landing them.** A concrete path, symbol, script name, or behavior
   stated in a living doc must be checked against the live repo when written — or explicitly
   marked "aspirational, not yet in repo". Most staleness found by the audit was never true.
