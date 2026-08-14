@@ -344,16 +344,36 @@ export function updateWindowBounds(windowId: number, boundsState: WindowBoundsSt
 }
 
 /**
- * Stop tracking a window that is gone. This alone does not write — the caller decides whether the
- * close was deliberate (rewrite without the window) or part of app shutdown (the structure was
- * already flushed with the window still in it, and must not be rewritten smaller).
+ * What a window going away means for its entry in the persisted structure.
+ *
+ * - `entry-goes-with-it`: the user closed this window while the app stays up, so it must not come
+ *   back next session.
+ * - `entry-stays`: the window is going down with the app, so it is not leaving the structure — it has
+ *   to be there next session, holding whatever it held when the app went down.
  */
-export function handleWindowRemoved(windowId: number): void {
-  // A write scheduled before the removal would capture the shrunken window list when its debounce
-  // fires — after a quit-time flush that would rewrite the structure without the removed window,
-  // losing its entry — so any pending write dies with the window. A caller that wants the smaller
-  // structure written (a deliberate close) calls writeNow itself.
+export type RemovedWindowDisposition = 'entry-goes-with-it' | 'entry-stays';
+
+/**
+ * Stop tracking a window that is gone. This alone does not write — a caller that wants the smaller
+ * structure written (a deliberate close) calls {@link writeNow} itself.
+ *
+ * `entry-stays` keeps the window's live state exactly where it is rather than clearing it. The
+ * state is what a write BUILDS FROM, and writes build when they execute, not when they are enqueued
+ * (see {@link enqueueWrite}) — so on a multi-window shutdown each window's flush is still queued
+ * behind the ones before it when that window's own `closed` handling runs. Clearing here would take
+ * the window out of every flush still waiting its turn, including the last one, which is the write
+ * that survives on disk. The state is dropped when the next {@link loadWindowLayouts} resets it, or
+ * with the process.
+ *
+ * @param windowId Window that has gone away
+ * @param disposition What that means for the window's entry — see {@link RemovedWindowDisposition}
+ */
+export function handleWindowRemoved(windowId: number, disposition: RemovedWindowDisposition): void {
+  // Unconditional, whatever the disposition and whether or not the id is one being tracked: a write
+  // scheduled before the removal fires into a session that is either rewriting the structure itself
+  // (a deliberate close) or on its way down, and neither wants a debounce landing behind it.
   cancelScheduledWrite();
+  if (disposition === 'entry-stays') return;
   trackedWindows = trackedWindows.filter((tracked) => tracked.windowId !== windowId);
   fileSlots = fileSlots.filter((slot) => slot.windowId !== windowId);
   pendingContentWindowIds.delete(windowId);
@@ -421,6 +441,10 @@ async function writeStructureToDisk(structure: WindowLayoutStructure): Promise<v
  * e.g. a layout pushed while a quit-time flush waits its turn — still lands in the write. Only the
  * window list is pinned at enqueue time: which windows a write covers is the caller's decision (see
  * {@link writeNow}), while their state should be the freshest available.
+ *
+ * The flip side of building late: a pinned window whose state has GONE by then is silently left out
+ * of the write, however firmly the caller pinned it. State a queued write still needs has to
+ * outlive it — which is what {@link handleWindowRemoved}'s `entry-stays` disposition is for.
  */
 function enqueueWrite(windowIdsInOrder: readonly number[]): Promise<void> {
   const windowIds = [...windowIdsInOrder];

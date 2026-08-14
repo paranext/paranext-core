@@ -1135,8 +1135,14 @@ async function main() {
           // `closed` handler trims the list — a window that is not live at save time is not
           // written, so this is what preserves the closing windows' entries across a quit (and the
           // final window's entry on a last-window close). Capture this window's placement first so
-          // the flush holds its freshest bounds; on a multi-window quit each window's close handler
-          // does the same, so the last flush holds everyone's.
+          // the flush holds its freshest bounds.
+          //
+          // On a multi-window quit every window flushes, and the flushes queue behind one another
+          // while the windows go down around them. Which windows a flush covers is fixed here, but
+          // what it writes for them is read when it reaches the front of the queue — so the LAST
+          // flush, the one that survives on disk, is only complete because a window going down with
+          // the app keeps its persistence state (see `handleWindowRemoved`'s disposition below).
+          //
           // Only on this path: a window closing while the app stays up is leaving the structure,
           // and its `closed` handler below rewrites the structure without it.
           try {
@@ -1208,15 +1214,16 @@ async function main() {
       // of this teardown, leaving the window tracked forever and the app never told it closed.
       removeWindow(newWindow, windowId);
 
-      // Stop persisting this window. When the close was deliberate — the app stays up — rewrite the
-      // structure without it so the window does not come back next session. During a quit the
-      // structure was already flushed with this window still in it, and must NOT be rewritten
-      // smaller here.
+      // What this window's disappearance means for its entry. A deliberate close — the app stays up
+      // — takes the entry with it, and the structure is rewritten without it below so the window
+      // does not come back next session. A window going down with the app is NOT leaving the
+      // structure: it has to be there next session, so its entry (and the state every flush still
+      // queued behind this moment builds from) stays.
       // After the announcement above, which is synchronous and must not wait on a disk write, and
       // before the unsubscribers below, which spend the network service's whole registration retry
       // failing against a renderer that is already gone.
       cancelPendingBoundsCapture();
-      handleWindowRemoved(windowId);
+      handleWindowRemoved(windowId, isAppGoingDown ? 'entry-stays' : 'entry-goes-with-it');
       // A window told to close counts as gone from the moment it is told, and stops counting for
       // real only here — its close runs the async work above, and it is open and counted for all of
       // it. Told or not, every window passes through here, and untracked ids are ignored.
