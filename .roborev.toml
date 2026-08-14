@@ -1,5 +1,12 @@
 # roborev per-repository configuration — https://roborev.io/configuration/
 #
+# EDIT THIS FILE BY HAND. Do NOT use `roborev config set` on it.
+# `config set` defaults to --local, and a local write REGENERATES this file from roborev's
+# built-in template rather than patching it: the values survive, but every comment below is
+# replaced by generated ones and the file grows to ~225 lines. Verified 2026-08-14 on roborev
+# v0.64.0. Use `roborev config set --global ...` for your own machine-level settings, which
+# writes ~/.roborev/config.toml and leaves this file alone.
+#
 # Review guidelines deliberately live in REVIEW.md at the repo root rather than in a
 # `review_guidelines` key here: roborev falls back to REVIEW.md when that key is unset, and
 # Claude Code's /code-review auto-discovers the same file. One file, both reviewers.
