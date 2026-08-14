@@ -417,6 +417,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
 
+  // The next two reactive signals gate whether the Scripture Editor is writable: whether the
+  // project itself is editable (`platform.isEditable`) and whether the current user has a
+  // non-Observer Scripture-edit role. Both fail OPEN below (return `true`, i.e. don't block
+  // editing) on a read error, because these are LIVE signals that self-correct on the next
+  // successful PAPI update — unlike the one-shot `CanUserEditScripture()` C# method and its
+  // `pdp.canUserEditScripture()` TS caller in this extension's utils.ts (used for the
+  // non-recoverable, one-time default-project-picker decision), which both fail closed instead.
   const [isProjectEditablePossiblyError, , , isProjectEditableLoading] = useProjectSetting(
     projectId,
     'platform.isEditable',
@@ -428,12 +435,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       logger.warn(
         `Error getting project editable setting: ${getErrorMessage(isProjectEditablePossiblyError)}`,
       );
-      // Fail open: don't lock a legitimate translator out of a working project on a transient
-      // read error. Contrast with CanUserEditScripture()'s C# implementation and the one-shot
-      // `pdp.canUserEditScripture()` caller in this extension's utils.ts, which both fail closed
-      // (treat an error as "cannot edit") — that's the right call there because the *initial*
-      // default-project-picker decision is one-shot and non-recoverable, whereas this signal is
-      // live and self-corrects on the next successful PAPI update.
+      // Fail open — see comment above.
       return true;
     }
     return isProjectEditablePossiblyError;
@@ -449,12 +451,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       logger.warn(
         `Error getting Scripture edit permission: ${getErrorMessage(canUserEditScripturePossiblyError)}`,
       );
-      // Fail open: don't lock a legitimate translator out of a working project on a transient
-      // read error. Contrast with CanUserEditScripture()'s C# implementation and the one-shot
-      // `pdp.canUserEditScripture()` caller in this extension's utils.ts, which both fail closed
-      // (treat an error as "cannot edit") — that's the right call there because the *initial*
-      // default-project-picker decision is one-shot and non-recoverable, whereas this signal is
-      // live and self-corrects on the next successful PAPI update.
+      // Fail open — see comment above.
       return true;
     }
     return canUserEditScripturePossiblyError;
@@ -560,8 +557,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /**
    * Whether the editor is effectively read-only, considering the isReadOnly flag, the project's
    * `platform.isEditable` setting, the user's Scripture-edit permission, sync-blocked state, and
-   * view type. This can probably be removed and replaced with `isReadOnly` once we allow editing in
-   * markers view.
+   * view type. The markers-view clause is the one placeholder piece here: once editing is allowed
+   * in markers view, that clause can be dropped, but the rest of this combination stays.
    */
   const isReadOnlyEffective = useMemo(
     () =>
