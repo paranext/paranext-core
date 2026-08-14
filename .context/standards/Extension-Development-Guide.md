@@ -272,9 +272,13 @@ where the match was found. The optional, **experimental** `existingProjectId` li
 in every window, not just the one the call was headed for — to web views showing that project, so
 a match for the project asked for outranks a web view of the same type showing another one
 (combining it with a concrete `existingId` — or with no `existingId` at all — is an error). What a
-window that cannot be asked means depends on the call: an open that would create refuses to guess
-and fails, since guessing wrong duplicates a view meant to be unique, while a passive probe
-(`createNewIfNotFound: false`) simply answers not-found.
+window that cannot be asked means depends on which `existingId` was given. A `'?'` search names a
+type, and every caller of one is an entry point the user just clicked, so the open goes ahead in the
+window the user is working in rather than doing nothing — accepting that it may make a second copy
+of a view that already exists somewhere. A `'window'` layout degrades to `'tab'` for such an open,
+so a duplicate is a tab the user can see and close rather than a window taking the screen. A
+concrete `existingId` names one specific view, so it refuses to guess instead: an open that would
+create fails, while a passive probe (`createNewIfNotFound: false`) simply answers not-found.
 
 ### Styling Requirements
 
