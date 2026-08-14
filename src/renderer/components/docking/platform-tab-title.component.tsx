@@ -3,6 +3,10 @@ import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
 import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-shard';
+import {
+  getWebViewMoveFailureDisposition,
+  WebViewMoveFailureDisposition,
+} from '@shared/models/web-view-move.model';
 import { WebViewId } from '@shared/models/web-view.model';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
@@ -89,6 +93,29 @@ const handleFloatTab = async (tabId: string) => {
   }
 };
 
+/**
+ * What the user is told for each way a failed move can have left the tab. A move that did not do
+ * what was asked leaves the tab in three very different places, and "could not move it" is only
+ * true of one of them: the tab that ended up in a window nobody chose DID move, and the tab that
+ * nothing could reopen is not on screen at all — telling its owner the action merely failed sends
+ * them looking for a tab that is gone.
+ *
+ * Keyed by the disposition rather than mapped inline so that adding one to
+ * {@link WebViewMoveFailureDisposition} fails to compile here until it has copy of its own.
+ */
+const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeKey> = {
+  'reopened-in-source-window': '%tab_contextMenu_moveTabToNewWindow_failed%',
+  'reopened-in-focused-window': '%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%',
+  'not-reopened': '%tab_contextMenu_moveTabToNewWindow_failedNotReopened%',
+};
+
+/**
+ * What a failure that named no disposition is reported as. Those are the failures decided before
+ * the move takes the tab out of its window — an unknown window, a target on its way out, a mode
+ * that could not be read — so nothing about where the tab lives has changed.
+ */
+const MOVE_FAILURE_DEFAULT_MESSAGE_KEY: LocalizeKey = '%tab_contextMenu_moveTabToNewWindow_failed%';
+
 const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
   try {
     await sendCommand('platform.moveWebViewToNewWindow', webViewIdToMove);
@@ -97,11 +124,14 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
       `Failed to move web view ${webViewIdToMove} to a new window: ${getErrorMessage(error)}`,
     );
     // This menu item is a user action, and the move's rejection is the only signal that the tab is
-    // not where they asked (it reopens where it can — the rejection message the log keeps says
-    // where), so the failure has to reach the user, not only the log
+    // not where they asked, so the failure has to reach the user and not only the log — saying
+    // which of the three failures it was, because they call for three different reactions
+    const disposition = getWebViewMoveFailureDisposition(error);
     try {
       await notificationService.send({
-        message: '%tab_contextMenu_moveTabToNewWindow_failed%',
+        message: disposition
+          ? MOVE_FAILURE_MESSAGE_KEYS[disposition]
+          : MOVE_FAILURE_DEFAULT_MESSAGE_KEY,
         severity: 'error',
       });
     } catch (notificationError) {
