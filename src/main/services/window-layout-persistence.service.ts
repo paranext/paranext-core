@@ -341,6 +341,11 @@ export function trackNewWindow(windowId: number): void {
       fileSlots.push({ entry: entryForTrackedWindow(tracked) });
     }
     trackedWindows = trackedWindows.filter((candidate) => candidate !== tracked);
+    // The main window is recorded by runtime id at startup and never again, so that id outlives
+    // its window as well. Left pointing at a reclaimed id, the save walk marks the NEW window's
+    // entry `isMain` and the entry actually holding the main layout loses the flag — which is the
+    // entry simple mode restores. Forgetting it falls the walk back to the first entry.
+    if (mainWindowId === windowId) mainWindowId = undefined;
   } else if (tracked) return;
   trackedWindows.push({ windowId, boundsState: {}, usesLegacyLayout: false });
 }
