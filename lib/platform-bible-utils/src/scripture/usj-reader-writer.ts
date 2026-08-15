@@ -2668,7 +2668,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     let markerUsfmOutput;
     let markerFragmentsInfo: UsjFragmentInfoMinimal[];
 
-    const { markerNameOriginal, markerType, markerTypeInfo } = this.getInfoForMarker(
+    const { markerType, markerTypeInfo } = this.getInfoForMarker(
       'isClosingMarker' in marker ? marker.forMarker : marker,
     );
 
@@ -2730,25 +2730,15 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       }
     }
 
-    // Special case: `ca` after chapter marker needs a newline and space before in Paratext USFM for
-    // some reason
-    // Note that there is not a newline and space before `ca` after importing from USX in Paratext,
-    // so maybe we should just remove the newline and space in the PDP
-    if (this.markersMap.isSpaceAfterAttributeMarkersContent && markerNameOriginal === 'ca') {
-      // Find the last marker in the current USFM output
-      const lastMarkerBackslashIndex = usfmOutput.lastIndexOf('\\');
-      if (lastMarkerBackslashIndex >= 0) {
-        // We just want to know if it's a chapter marker, so we can just get two characters, c and space
-        const lastMarker = usfm.substring(
-          lastMarkerBackslashIndex + 1,
-          lastMarkerBackslashIndex + 3,
-        );
-        if (lastMarker === 'c ') {
-          usfmOutput = UsjReaderWriter.removeEndSpace(usfmOutput);
-          usfmOutput += '\n ';
-        }
-      }
-    }
+    // `ca` after a chapter marker gets NO special treatment: ParatextData's own USX -> USFM
+    // write (`SetChapterUsx` -> `GetChapterUsfm`, the same provider path the editor's save
+    // uses) puts it on the SAME line as `\c`, separated by the chapter marker's ordinary
+    // trailing structural space — `\c 1 \ca 2\ca*` — which is exactly what falls out of the
+    // default path here. A previous special case emitted a newline-plus-space instead
+    // (`\c 1\n \ca 2\ca*`), reproducing a hand-authored test-fixture shape that PARSES
+    // identically (line-break whitespace before an attribute marker is structural) but that no
+    // ParatextData writer produces. The captured pins live in
+    // c-sharp-tests/Projects/VerseAttributeFoldRoundTripCaptureTests.cs.
 
     // Add the marker fragments and USFM into the existing fragments and USFM
     if (fragmentsInfo)
