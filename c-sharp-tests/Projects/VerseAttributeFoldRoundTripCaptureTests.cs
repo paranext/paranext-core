@@ -375,6 +375,17 @@ namespace TestParanextDataProvider.Projects
             false,
             TestName = "UnclosedCa_StaysFirstClassOpenChar"
         )]
+        // The one-token whitespace skip after a folded \ca is UNCONDITIONAL, not gated on a \cp
+        // following: the whitespace-only text token after the fold is consumed even when what
+        // follows is an ordinary char span, so the space never becomes content. (This is the same
+        // skip that lets the FilledCaThenCp row's \cp fold across the space after \ca*.)
+        [TestCase(
+            @"\id GEN \c 1 \ca 2\ca* \nd x\nd* \p \v 1 text.",
+            "<chapter number=\"1\" style=\"c\" altnumber=\"2\" sid=\"GEN 1\" />"
+                + "<char style=\"nd\">x</char>",
+            true,
+            TestName = "SpaceAfterFoldedCa_IsConsumedEvenWithoutCp"
+        )]
         public void ChapterAttributeSpans_FoldOnlyWhenNonEmpty_ThroughParatextData(
             string usfm,
             string expectedChapterFragment,
