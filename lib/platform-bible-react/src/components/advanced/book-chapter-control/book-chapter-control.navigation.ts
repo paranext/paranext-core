@@ -39,8 +39,7 @@ export function useQuickNavButtons(
   // boundaries the way the keyboard commands do) but intentionally pass no ScriptureBounds — there
   // is no versification source here, so verse navigation keeps its pre-versification
   // floor-at-0 / unbounded-increment behavior within a book. Making the buttons versification-aware
-  // to match the keyboard commands is tracked in PT-4379. (This previously cited PT-4143, which is
-  // actually about global keyboard shortcuts overriding context-sensitive ones.)
+  // to match the keyboard commands is tracked in PT-4379.
   //
   // Each target ref is computed once and reused for both the click handler and the disabled state,
   // so the button is disabled exactly when the step would be a no-op (no target, or the same ref).
