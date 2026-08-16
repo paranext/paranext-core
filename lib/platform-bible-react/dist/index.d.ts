@@ -3735,8 +3735,11 @@ export interface TourProps {
  *
  * Navigated with Back / Next / Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target
  * selector is not found in the DOM — or resolves to a zero-size element — when the tour opens are
- * skipped, so an absent target degrades gracefully instead of killing the overlay. Returns `null`
- * when `open` is false or no step targets resolve.
+ * skipped, so an absent target degrades gracefully instead of killing the overlay. A step whose
+ * target disappears _after_ the tour opens is dropped the same way when it becomes current. If that
+ * leaves nothing to spotlight, `onSkip` is called so the caller is never left with an open tour
+ * that renders nothing. Returns `null` when `open` is false or the current step is not yet
+ * measured.
  */
 export declare function Tour({ steps, open, onDone, onSkip, stepCounter, nextLabel, backLabel, skipLabel, doneLabel, }: TourProps): import("react/jsx-runtime").JSX.Element | null;
 /**

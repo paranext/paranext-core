@@ -126,47 +126,9 @@ vi.mock('./scripture-text-grid/dbl-resource-lookup.utils', () => ({
   findCachedDblResource: vi.fn(() => undefined),
 }));
 
-vi.mock('./install-state-views.component', () => ({
-  InstallFailedView: ({
-    message,
-    retryLabel,
-    onRetry,
-  }: {
-    message: string;
-    retryLabel: string;
-    onRetry: () => void;
-  }) =>
-    React.createElement(
-      'div',
-      {},
-      React.createElement('p', {}, message),
-      React.createElement('button', { type: 'button', onClick: onRetry }, retryLabel),
-    ),
-  InstallingView: ({ label }: { label: string }) => React.createElement('p', {}, label),
-  ExpandableInfo: ({
-    moreLabel,
-    lessLabel,
-    body,
-  }: {
-    moreLabel: React.ReactNode;
-    lessLabel: React.ReactNode;
-    body: React.ReactNode;
-  }) => {
-    const [expanded, setExpanded] = React.useState(false);
-    return React.createElement(
-      'div',
-      {},
-      React.createElement(
-        'button',
-        { type: 'button', onClick: () => setExpanded((e) => !e), 'aria-expanded': expanded },
-        expanded ? lessLabel : moreLabel,
-      ),
-      // Always render the body but hide it via HTML hidden attribute when collapsed,
-      // matching the real ExpandableInfo behavior so toBeVisible() assertions work correctly.
-      React.createElement('p', { hidden: !expanded }, body),
-    );
-  },
-}));
+// NOTE: './install-state-views.component' is deliberately NOT mocked. The disclosure tests below
+// assert on expand/collapse, `hidden`, and `aria-expanded` — a stand-in reimplementation would
+// make them assertions about the mock, passing even if the real ExpandableInfo were broken.
 
 // ---------------------------------------------------------------------------
 // Import the component AFTER all mocks are set up.

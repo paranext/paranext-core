@@ -87,9 +87,49 @@ describe('Tour', () => {
     expect(onSkip).toHaveBeenCalledOnce();
   });
 
-  it('renders nothing when no targets resolve', () => {
-    const { container } = renderWithTargets(THREE_STEPS, []);
+  it('renders nothing and calls onSkip when no targets resolve', () => {
+    // Without the onSkip call the caller would be left with `open` stuck true behind an overlay
+    // that renders nothing and never reports back, so the tour would be retried forever.
+    const onSkip = vi.fn();
+    const { container } = render(
+      <div>
+        <Tour steps={THREE_STEPS} open onDone={vi.fn()} onSkip={onSkip} />
+      </div>,
+    );
     expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(onSkip).toHaveBeenCalledOnce();
+  });
+
+  it('does not swallow Escape while the tour is open but renders nothing', () => {
+    // The overlay intercepts Escape in the capture phase so the tour always wins it — but only
+    // while it is actually on screen. An open-but-invisible tour must let Escape through to a
+    // popover or dialog underneath.
+    const onEscapeBelow = vi.fn();
+    const { container } = render(
+      <div>
+        <button type="button">Below</button>
+        <Tour steps={THREE_STEPS} open onDone={vi.fn()} onSkip={vi.fn()} />
+      </div>,
+    );
+    container.addEventListener('keydown', onEscapeBelow);
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Below' }), { key: 'Escape' });
+    expect(onEscapeBelow).toHaveBeenCalledOnce();
+  });
+
+  it('drops a step whose target disappears after the tour opens', () => {
+    // The open-time filter is a snapshot; a target can vanish afterwards (e.g. a conditional
+    // toolbar item whose availability probe resolves late). Without dropping the step, its card
+    // would render the vanished step's copy over the previous step's still-current rect.
+    renderWithTargets(THREE_STEPS, ['a', 'b', 'c']);
+    expect(screen.getByText('1 / 3')).toBeInTheDocument();
+
+    document.getElementById('b')?.remove();
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+    // B is gone, so the tour lands on C — not on B's copy over A's spotlight.
+    expect(screen.queryByText('B')).not.toBeInTheDocument();
+    expect(screen.getByText('C')).toBeInTheDocument();
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
   });
 
   it('skips a step whose target is present but has zero size (e.g. an empty wrapper div)', () => {

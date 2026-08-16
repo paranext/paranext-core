@@ -78,7 +78,11 @@ async function waitForPortFree(port: number, timeout: number): Promise<void> {
       const ws = new WebSocket(`ws://localhost:${port}`);
       const timer = setTimeout(() => {
         ws.close();
-        resolve(true); // Connection timed out → port is free (no one listening)
+        // Connect neither succeeded nor was refused within the probe window. A dying-but-still-
+        // listening extension host that is slow to complete the handshake looks exactly like
+        // this, and it is the case this helper exists to catch — so treat a timeout as "still in
+        // use" and keep polling. Only a refused connection is evidence the port is free.
+        resolve(false);
       }, 500);
       ws.on('open', () => {
         clearTimeout(timer);

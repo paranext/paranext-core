@@ -160,8 +160,11 @@ function computeCardPosition(
  *
  * Navigated with Back / Next / Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target
  * selector is not found in the DOM — or resolves to a zero-size element — when the tour opens are
- * skipped, so an absent target degrades gracefully instead of killing the overlay. Returns `null`
- * when `open` is false or no step targets resolve.
+ * skipped, so an absent target degrades gracefully instead of killing the overlay. A step whose
+ * target disappears _after_ the tour opens is dropped the same way when it becomes current. If that
+ * leaves nothing to spotlight, `onSkip` is called so the caller is never left with an open tour
+ * that renders nothing. Returns `null` when `open` is false or the current step is not yet
+ * measured.
  */
 export function Tour({
   steps,
@@ -178,7 +181,16 @@ export function Tour({
   // Steps whose targets mount after open() fires are not picked up until the tour re-opens.
   const [visibleSteps, setVisibleSteps] = useState<TourStep[]>([]);
   const [stepIndex, setStepIndex] = useState(0);
-  const [targetRect, setTargetRect] = useState<TargetRect | undefined>(undefined);
+  // The measured rect is stored together with the step it was measured for, so `targetRect` below
+  // can be derived by identity. Without that pairing a rect measured for one step would still be
+  // on screen after advancing to the next, spotlighting the previous step's element under the new
+  // step's copy whenever the new target can no longer be measured.
+  const [measuredTarget, setMeasuredTarget] = useState<
+    { step: TourStep; rect: TargetRect } | undefined
+  >(undefined);
+  // True once the open-time filter has run. Distinguishes "every step was filtered out" from
+  // "not filtered yet" — both of which leave `visibleSteps` empty.
+  const [stepsResolved, setStepsResolved] = useState(false);
   // Tracks real card height; starts with an approximation for the first render's position math.
   const [cardHeight, setCardHeight] = useState(CARD_APPROX_HEIGHT_PX);
 
@@ -192,6 +204,14 @@ export function Tour({
   // Non-DOM ref: stores prior active element for focus restoration on close.
   const savedFocusRef = useRef<Element | undefined>(undefined);
 
+  // Latest onSkip, so the "nothing left to spotlight" effect below can call it without taking it
+  // as a dependency — a caller passing an inline arrow would otherwise re-run that effect (and
+  // re-fire onSkip) on every render.
+  const onSkipRef = useRef(onSkip);
+  useEffect(() => {
+    onSkipRef.current = onSkip;
+  });
+
   // Per-instance ids so the SVG mask stays unique and the dialog can describe its body text.
   const maskId = useId();
   const descId = useId();
@@ -200,7 +220,8 @@ export function Tour({
     if (!open) {
       setVisibleSteps([]);
       setStepIndex(0);
-      setTargetRect(undefined);
+      setMeasuredTarget(undefined);
+      setStepsResolved(false);
       return;
     }
     // Use measureTarget (not bare querySelector) so presence and measurability agree: a target
@@ -208,12 +229,17 @@ export function Tour({
     // would otherwise be counted as a step that can never be spotlighted.
     setVisibleSteps(steps.filter((step) => measureTarget(step.target) !== undefined));
     setStepIndex(0);
+    setStepsResolved(true);
     // Snapshot steps once on open; intentionally excludes 'steps' from deps so mid-tour
     // locale updates do not reset the user back to step 1.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const currentStep = visibleSteps[stepIndex];
+  // `measuredTarget &&` rather than optional chaining: with both sides undefined (nothing measured
+  // and no current step) the identity check would otherwise pass and dereference undefined.
+  const targetRect =
+    measuredTarget && measuredTarget.step === currentStep ? measuredTarget.rect : undefined;
   // The card mounts one commit after the step becomes current (the render guard below returns
   // null until the target has been measured). Effects that reach into the card via refs must
   // re-run when the card appears, not only when the step changes.
@@ -223,22 +249,34 @@ export function Tour({
   useEffect(() => {
     if (!open || !currentStep) return undefined;
     let remeasureFrameId: number | undefined;
+    // Reset per step, since the effect re-runs whenever currentStep changes. Separates a target
+    // that has never been measurable for this step from one that momentarily cannot be measured.
+    let hasMeasuredThisStep = false;
     const measure = () => {
       const r = measureTarget(currentStep.target);
-      // Keep last-known-good rect if the target momentarily can't be measured, so the overlay
-      // never blanks mid-tour while other steps remain viable. Returning the previous object when
-      // nothing moved skips the re-render entirely — capture-phase scroll ticks fire for scrolls
-      // that don't move the target at all.
-      if (r)
-        setTargetRect((prev) =>
-          prev &&
-          prev.top === r.top &&
-          prev.left === r.left &&
-          prev.width === r.width &&
-          prev.height === r.height
-            ? prev
-            : r,
-        );
+      if (!r) {
+        // The target resolved during the open-time filter but has since disappeared (e.g. a
+        // conditional toolbar item whose availability probe resolved to false after the tour
+        // opened). Drop the step so the tour advances instead of freezing on a blank overlay.
+        if (!hasMeasuredThisStep)
+          setVisibleSteps((prev) => prev.filter((step) => step !== currentStep));
+        // Once measured, keep the last-known-good rect so a momentary layout blip (e.g. a target
+        // mid-transition) never blanks the overlay while the step is still viable.
+        return;
+      }
+      hasMeasuredThisStep = true;
+      // Returning the previous object when nothing moved skips the re-render entirely —
+      // capture-phase scroll ticks fire for scrolls that don't move the target at all.
+      setMeasuredTarget((prev) =>
+        prev &&
+        prev.step === currentStep &&
+        prev.rect.top === r.top &&
+        prev.rect.left === r.left &&
+        prev.rect.width === r.width &&
+        prev.rect.height === r.height
+          ? prev
+          : { step: currentStep, rect: r },
+      );
     };
     const scheduleRemeasure = () => {
       if (remeasureFrameId !== undefined) return;
@@ -258,10 +296,24 @@ export function Tour({
     };
   }, [open, currentStep]);
 
+  // Dropping the final step leaves stepIndex past the end of the list. Pull it back so the tour
+  // lands on the new last step instead of rendering nothing with no way forward.
+  useEffect(() => {
+    if (visibleSteps.length > 0 && stepIndex >= visibleSteps.length)
+      setStepIndex(visibleSteps.length - 1);
+  }, [visibleSteps, stepIndex]);
+
+  // Nothing left to spotlight — either no step's target resolved when the tour opened, or every
+  // one disappeared while it was open. Report it as a dismissal so the caller can close the tour
+  // and record that it ran; otherwise `open` stays true forever behind an overlay that renders
+  // nothing and fires no callback.
+  useEffect(() => {
+    if (open && stepsResolved && visibleSteps.length === 0) onSkipRef.current();
+  }, [open, stepsResolved, visibleSteps.length]);
+
   // Measure real card height after step changes so position math uses the actual size rather than
   // the approximation constant. The functional setter prevents re-render loops.
   // Scoped to step changes and card mount only; card content is stable within a step.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const measured = cardRef.current?.offsetHeight;
     if (measured) setCardHeight((prev) => (prev !== measured ? measured : prev));
@@ -301,7 +353,10 @@ export function Tour({
   }, [isFirst]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    // Gated on the card actually being on screen, not on `open` alone: the overlay renders nothing
+    // until the current step's target has been measured, and an invisible tour must not swallow
+    // Escape from a popover or dialog underneath it.
+    if (!open || !isCardRendered) return undefined;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         // Capture-phase intercept prevents Escape from reaching popovers or dialogs that might be
@@ -312,7 +367,7 @@ export function Tour({
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [open, onSkip]);
+  }, [open, isCardRendered, onSkip]);
 
   // Focus trap: cycle Tab/Shift+Tab among the card's buttons while the dialog is open. Depends on
   // the card being mounted — on first open the card mounts a commit later than the step, and a
