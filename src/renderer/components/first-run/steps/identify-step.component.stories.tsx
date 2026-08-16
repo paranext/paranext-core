@@ -114,10 +114,21 @@ export const ReRegisterMode: Story = {
  */
 export const RestartPending: Story = {
   beforeEach: () => {
-    const spy = spyOn(commandService, 'sendCommand')
-      .mockResolvedValueOnce(true) // validateParatextRegistrationData → valid
-      .mockResolvedValueOnce(undefined) // setParatextRegistrationData → ok
-      .mockReturnValueOnce(new Promise<never>(() => {})); // platform.restart → never settles
+    // Route by command name so the mount-time registry-URL lookup can't consume the
+    // validation/save mocks off a positional queue (it would leave Save disabled). Restart never
+    // settles because the real process reboots here.
+    const spy = spyOn(commandService, 'sendCommand').mockImplementation((command: string) => {
+      switch (command) {
+        case 'paratextRegistration.validateParatextRegistrationData':
+          return Promise.resolve(true);
+        case 'paratextRegistration.setParatextRegistrationData':
+          return Promise.resolve(undefined);
+        case 'platform.restart':
+          return new Promise<never>(() => {});
+        default:
+          return Promise.resolve(undefined);
+      }
+    });
     return () => spy.mockRestore();
   },
   play: async ({ canvasElement }) => {

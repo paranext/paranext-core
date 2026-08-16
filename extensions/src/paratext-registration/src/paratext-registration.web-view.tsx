@@ -1,7 +1,7 @@
 import { WebViewProps } from '@papi/core';
-import papi from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import { MarkdownRenderer, usePromise } from 'platform-bible-react';
 import { RegistrationForm } from './components/registration-form.component';
@@ -22,7 +22,10 @@ async function fetchRegistryUrl() {
   try {
     const url = await papi.commands.sendCommand('paratextRegistration.getParatextRegistryUrl');
     return url || PRODUCTION_REGISTRY_URL;
-  } catch {
+  } catch (error) {
+    logger.warn(
+      `Could not resolve the selected registry URL; falling back to production: ${getErrorMessage(error)}`,
+    );
     return PRODUCTION_REGISTRY_URL;
   }
 }
