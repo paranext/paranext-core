@@ -437,21 +437,36 @@ step, no automation. Just a record.
   - **Display-only, and it needs an explicit guard.** The resolved verse is never written back to
     the scroll group — writing it back would yank the Scripture Editor off the intro the user came
     from. This does not happen for free: `Editorial`'s `ScriptureReferencePlugin` mounts even when
-    `isReadonly` is set (`Editor.tsx` gates it on `scrRef && onScrRefChange` only) and reports any
-    selection whose verse differs from `scrRef`. Fall-forward makes that mismatch permanent, so
-    `ResourceCell` swallows the echo. Without the guard one click writes verse 1 — and, because the
-    slice drops chapter chrome, `$findAndSetChapterAndVerse`'s
-    `parseInt(chapterNode?.getNumber() ?? '1', 10)` yields chapter 1, turning Luke 5:0 into
-    Luke 1:1.
+    `isReadonly` is set (`Editor.tsx` gates it on `scrRef && onScrRefChange` only) and
+    `$findAndSetChapterAndVerse` reports any selection whose **chapter or verse** disagrees with
+    `scrRef` — a chapter mismatch when the document has a chapter node, or a `scrRef` verse outside
+    the selected verse marker's range. Fall-forward makes that disagreement permanent
+    (`isVerseInRange(0, '1')` is false on every click), so `ResourceCell` swallows the echo. Without
+    the guard one click writes verse 1 — and, because the slice drops chapter chrome,
+    `parseInt(chapterNode?.getNumber() ?? '1', 10)` yields chapter 1, turning Luke 5:0 into Luke 1:1.
 
-    **The guard belongs in the consumer, not upstream in the plugin** (raised in review of #2663;
-    verified against `@eten-tech-foundation/platform-editor` ~0.8.14). Gating the plugin on
+    **Version-pinned:** traced against `@eten-tech-foundation/platform-editor` **0.8.14**, which is
+    what `package-lock.json` resolves and npm's current `latest` (as of 2026-08-16; 0.8.15 is not
+    published). This matters because upstream `main` in `eten-tech-foundation/scripture-editors` has
+    since rewritten the plugin around a `$resolvePosition` / `onSelectionSettled` / `report` machine
+    whose `$resolvePosition` returns `undefined` for a document with no `BookNode` and no
+    `ChapterNode` (pinned upstream as invariant I5). A verse-mode slice is exactly that document, so
+    **on the release that lands, the plugin will report nothing here and this guard becomes
+    defense-in-depth** rather than a live fix. Neither the guard nor this ADR changes at that point;
+    re-verify at the next version bump. (Raised in review of #2663 against an unreleased build.)
+
+    **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
     `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
     **bidirectional** — `$moveCursorToVerseStart` applies `scrRef` to the caret, and
-    `$findAndSetChapterAndVerse` reports the caret back — and read-only surfaces need both halves.
-    Not mounting it when read-only would break navigation-to-verse in every read-only editor (the
-    Resource Viewer, this grid's chapter mode) and would break read-only click-to-sync, which
-    **these very cells rely on at every normal verse**. `isReadonly` is therefore the wrong
+    `$findAndSetChapterAndVerse` reports the caret back (`$moveCaretToVerseStart` and
+    `$resolvePosition` after the upstream rewrite) — and read-only surfaces need both halves. Not
+    mounting it when read-only would break navigation-to-verse in every read-only editor and would
+    break read-only click-to-sync, which **this grid's chapter mode and the Resource Viewer rely on**.
+    (Scoped deliberately: click-to-sync is *not* load-bearing in verse mode. There the slice holds
+    exactly the verse `scrRef` names, so a click resolves to that same verse, the plugin finds no
+    disagreement, and nothing is reported — a verse cell has nowhere to sync TO. That predates this
+    decision: `sliceUsjToVerse` has dropped chapter chrome since #2509. It is not a lost capability
+    and is deliberately not filed.) `isReadonly` is therefore the wrong
     predicate: a read-only editor reporting its caret position is correct behavior, not the bug.
     The bug is narrower and entirely host-made — *we* hand the editor verse 1's USJ while telling it
     verse 0, so the only component that knows the reference is a deliberate lie is the one that told
@@ -525,9 +540,14 @@ step, no automation. Just a record.
   `lib/platform-bible-utils/src/scripture/` (which already owns `getPreviousVerseRef`, the producer
   of verse-0 refs) at the second consumer _of this rule_** rather than re-typing it. The qualifier is
   load-bearing: "second consumer" counted as surfaces would be wrong, because other surfaces already
-  handle verse-0 references under deliberately different rules — review of #2663 cites the
-  interlinearizer extension, which treats verse 0 as tokenizable content to be kept rather than
-  routed around, because it renders a whole chapter. A whole-chapter surface should look like the
-  chapter-surface exemption above, not like this rule. Promoting on a surface count would turn a
-  deliberate single-verse-vs-whole-chapter difference into apparent drift from a shared util.
+  handle verse-0 references under deliberately different rules. The worked example is the
+  interlinearizer extension (`sillsdev/interlinearizer-extension`, `InterlinearizerLoader.tsx`, the
+  `activeScrRef` memo): it renders a whole chapter and treats verse 0 as tokenizable content, so it
+  **keeps** verse 0 whenever a segment covers it — its USJ extractor emits a synthetic verse-0 scope
+  with SID `"<book> <chapter>:0"` for pre-verse-1 content — and falls back to verse 1 only when the
+  loaded book has no verse-0 segment for that chapter. That is content-awareness this rule
+  deliberately rejects (alternative (d) above), affordable there precisely because the whole book is
+  already parsed into segments before a reference is resolved. A whole-chapter surface should look
+  like the chapter-surface exemption above, not like this rule. Promoting on a surface count would
+  turn a deliberate single-verse-vs-whole-chapter difference into apparent drift from a shared util.
 - **Source:** PT-4061 (B3), which resolves PT-3133; Ian Hewerdine confirmed parity 2026-08-05.

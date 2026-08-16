@@ -332,9 +332,12 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
     expect(capturedEditorScrRef).toHaveBeenLastCalledWith(expect.objectContaining({ verseNum: 0 }));
   });
 
-  // Editorial's reference plugin runs even when read-only and reports any selection whose verse
-  // doesn't match scrRef. Under fall-forward that mismatch is permanent, so without a guard a click
-  // writes verse 1 — and, because the slice drops chapter chrome, chapter 1 — into the scroll group.
+  // `Editorial` is mocked, so these two exercise ResourceCell's own write-back channel directly:
+  // they pin OUR side of the contract (which reports we forward and which we swallow), not the
+  // plugin's behavior — a mocked plugin cannot be evidence about the real one. The payload below is
+  // modeled on what platform-editor 0.8.14's `$findAndSetChapterAndVerse` emits for this case rather
+  // than invented, so the guard is pinned against a realistic input; see the comment in
+  // `resource-cell.component.tsx` for that trace and for why the payload changes shape upstream.
   it('swallows the editor write-back at verse 0 so a click cannot move the scroll group', async () => {
     const setScrRef = vi.fn();
     setUsjResult(twoVerseChapterUsj, false);
@@ -347,11 +350,14 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
       />,
     );
     await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
-    // What the real plugin reports for a click on verse-1 text in a chapter-chrome-free slice.
     getEditorScrRefChange()?.({ book: 'GEN', chapterNum: 1, verseNum: 1 });
     expect(setScrRef).not.toHaveBeenCalled();
   });
 
+  // The other half of the same contract: the guard is scoped to fall-forward, not to verse mode. In
+  // verse mode the real plugin has nothing to report (the slice holds exactly the verse `scrRef`
+  // names), so this pins that the guard would not swallow a report if one arrived — it is about
+  // reachability of OUR branch, not a claim that the plugin fires here.
   it('still reports editor selection changes when the verse did not fall forward', async () => {
     const setScrRef = vi.fn();
     setUsjResult(twoVerseChapterUsj, false);
