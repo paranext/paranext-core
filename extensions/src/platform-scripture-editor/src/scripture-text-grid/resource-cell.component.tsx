@@ -162,19 +162,36 @@ export function ResourceCell({
   const displayVerseNum = resolveDisplayVerseNum(scrRef.verseNum);
   const isFallenForward = displayVerseNum !== scrRef.verseNum;
 
-  // Editorial's reference plugin is active even when read-only, and it reports any selection whose
-  // verse doesn't match `scrRef`. Under fall-forward that mismatch is permanent — we hand it verse
-  // 1's text while telling it verse 0 — so a single click would push verse 1 into the shared scroll
-  // group, dragging the Scripture Editor off the intro the user came from. Worse, the slice carries
-  // no chapter marker, so the plugin defaults to chapter 1 and Luke 5:0 would report Luke 1:1.
-  // Swallow that echo: fall-forward is display-only. Non-fallen-forward cells report normally.
+  // Editorial's reference plugin is active even when read-only, and `$findAndSetChapterAndVerse`
+  // reports a selection whose CHAPTER or VERSE disagrees with `scrRef` (a chapter mismatch when the
+  // document has a chapter node, or a `scrRef` verse outside the selected verse marker's range) —
+  // not the verse alone. Under fall-forward that disagreement is permanent: we hand the editor verse
+  // 1's text while telling it verse 0, so `isVerseInRange(0, '1')` is false on every click. A single
+  // click would therefore push verse 1 into the shared scroll group, dragging the Scripture Editor
+  // off the intro the user came from. Worse, the slice carries no chapter marker, so
+  // `parseInt(chapterNode?.getNumber() ?? '1', 10)` yields chapter 1 and Luke 5:0 reports Luke 1:1 —
+  // a chapter jump. Swallow that echo: fall-forward is display-only.
+  //
+  // Non-fallen-forward cells report normally, but note what that means per mode. In CHAPTER mode the
+  // document carries real chapter chrome, so click-to-sync works. In VERSE mode the slice holds
+  // exactly the verse `scrRef` names, so a click resolves to that same verse, the plugin finds no
+  // disagreement, and nothing is reported — clicking a verse cell has nowhere to sync TO. That is
+  // pre-existing (the slice has dropped chapter chrome since #2509) and is not a lost capability.
+  //
+  // Traced against `@eten-tech-foundation/platform-editor` 0.8.14 — what `package-lock.json` pins
+  // and npm's current `latest`. Upstream `main` has since rewritten this plugin around
+  // `$resolvePosition`, which refuses to describe a position in a document with no BookNode and no
+  // ChapterNode; a chrome-free slice is exactly that, so on the release that lands the plugin goes
+  // silent here and this guard becomes defense-in-depth rather than a live fix. Re-check at the next
+  // version bump.
   //
   // This guard belongs here, not upstream in `ScriptureReferencePlugin`. Gating that plugin on
   // `isReadonly` would break the read-only surfaces that need it: it is bidirectional (it also moves
-  // the caret to `scrRef`), and these very cells depend on its reporting for click-to-sync at every
-  // normal verse. A read-only editor reporting its caret is correct; the bug is that WE told it a
-  // reference we then contradicted, so the component that created the mismatch is the one that owns
-  // it. Full reasoning, and what a future single-verse surface must copy: ADR-0013.
+  // the caret to `scrRef`), and read-only click-to-sync — which this grid's CHAPTER mode and the
+  // Resource Viewer depend on — would go with it. A read-only editor reporting its caret is correct;
+  // the bug is that WE told it a reference we then contradicted, so the component that created the
+  // mismatch is the one that owns it. Full reasoning, and what a future single-verse surface must
+  // copy: ADR-0013.
   const handleScrRefChange = useCallback(
     (nextScrRef: SerializedVerseRef) => {
       if (viewMode === 'verse' && isFallenForward) return;
