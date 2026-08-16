@@ -108,6 +108,7 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import { getEditorOpenFindArgs } from './find-trigger.util';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
@@ -1157,8 +1158,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Find dialog trigger listener
       if (event.ctrlKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
-        const selectedText = window.getSelection()?.toString() ?? '';
-        papi.commands.sendCommand('platformScripture.openFind', webViewId, selectedText);
+        const findArgs = getEditorOpenFindArgs(webViewId, window.getSelection()?.toString());
+        papi.commands.sendCommand(
+          'platformScripture.openFind',
+          findArgs.webViewId,
+          findArgs.selectedText,
+        );
       } else {
         const isInsertCommentHotkey = isMac
           ? event.metaKey &&
