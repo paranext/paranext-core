@@ -375,6 +375,28 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
     expect(setScrRef).toHaveBeenCalledWith(reported);
   });
 
+  // The `viewMode` half of the guard. Chapter mode is where click-to-sync is genuinely load-bearing
+  // (the document carries real chapter chrome, so the plugin resolves and reports), and verse 0 is
+  // a perfectly ordinary reference there — the cell shows the front matter. Dropping `viewMode`
+  // from the guard would leave the grid's chapter mode and the Resource Viewer unable to sync at
+  // any chapter's verse 0, which no other test here would catch.
+  it('does not swallow the write-back in chapter mode at verse 0 — the guard is verse-mode only', async () => {
+    const setScrRef = vi.fn();
+    setUsjResult(frontMatterChapterUsj, false);
+    render(
+      <ResourceCell
+        {...props}
+        setScrRef={setScrRef}
+        viewMode="chapter"
+        scrRef={{ book: 'PSA', chapterNum: 3, verseNum: 0 }}
+      />,
+    );
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+    const reported = { book: 'PSA', chapterNum: 3, verseNum: 1 };
+    getEditorScrRefChange()?.(reported);
+    expect(setScrRef).toHaveBeenCalledWith(reported);
+  });
+
   it('chapter mode keeps verse-0 front matter — it is exempt from fall-forward', async () => {
     renderResourceCell({
       viewMode: 'chapter',
