@@ -1,6 +1,7 @@
 import * as nodeFS from '@node/services/node-file-system.service';
 import { LanguageStrings, LocalizedStringDataContribution } from 'platform-bible-utils';
 import { ExtensionIcon, FullExtensionData } from '@shared/models/full-extension-data.model';
+import { ExtensionIdentifier } from '@shared/models/manage-extensions-privilege.model';
 import { logger } from '@shared/services/logger.service';
 import path from 'path';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
@@ -28,6 +29,36 @@ export function getExtensionUri(
   extensionVersion: string,
 ): string {
   return `${baseUri}/${extensionName}_${extensionVersion}.zip`;
+}
+
+/**
+ * Derives the "packaged" extensions — the ones bundled into the build — from the extensions
+ * discovered for it, dropping any also installed as a zip since those belong in the `enabled`
+ * list.
+ *
+ * Takes _discovered_ rather than _activated_ extensions deliberately: extensions activate
+ * sequentially after discovery, so an activation-based list answers "is extension X part of this
+ * build?" with a `false` that is temporary during startup — or permanent, if that extension times
+ * out or throws while activating. Discovery happens once, up front, so every caller gets the same
+ * answer whenever it asks. See ADR-0013 in `.context/standards/Architecture-Decisions.md`.
+ *
+ * @param discoveredExtensions Extensions discovered for this build that have code to run
+ * @param enabledExtensions Extensions installed as zips, which can be dynamically disabled
+ * @returns Identifiers of the discovered extensions that are not installed as zips
+ */
+export function derivePackagedExtensionIdentifiers(
+  discoveredExtensions: readonly ExtensionInfo[],
+  enabledExtensions: readonly ExtensionIdentifier[],
+): ExtensionIdentifier[] {
+  return discoveredExtensions
+    .filter(
+      (discovered) =>
+        !enabledExtensions.some((enabled) => enabled.extensionName === discovered.name),
+    )
+    .map((discovered) => ({
+      extensionName: discovered.name,
+      extensionVersion: discovered.version,
+    }));
 }
 
 async function parseExtensionData(

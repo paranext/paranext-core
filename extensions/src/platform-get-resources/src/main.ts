@@ -305,6 +305,12 @@ export async function activate(context: ExecutionActivationContext) {
           .some((extension) => {
             return extension.extensionName === 'paratextBibleSendReceive';
           });
+      } else {
+        // Callers can't tell this apart from "send/receive isn't installed" in the return value, and
+        // the difference matters when diagnosing a missing sync button, so say so here.
+        logger.warn(
+          'platformGetResources cannot check whether send/receive is available without the manageExtensions privilege; reporting unavailable',
+        );
       }
       return isSendReceiveAvailable;
     },

@@ -10,6 +10,7 @@ import {
   useProjectSetting,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-availability.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
@@ -30,6 +31,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { menuDataService } from '@shared/services/menu-data.service';
+import { notificationService } from '@shared/services/notification.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { CircleCheck, HomeIcon } from 'lucide-react';
 import {
@@ -61,16 +63,18 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CSSProperties, useCallback, useMemo, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
-const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
+/**
+ * Message shown when the Sync button is clicked but send/receive can't answer. Declared here rather
+ * than inline so the key is spelled exactly once — `PlatformNotification.message` accepts any
+ * string, so a typo would not fail the build; it would ship a raw `%key%` into a toast.
+ */
+export const SYNC_UNAVAILABLE_MESSAGE_KEY: LocalizeKey = '%toolbar_sync_unavailable%';
 
-// Heuristic delay before retrying the send/receive availability check on startup. The extension
-// host may not be ready when the toolbar first mounts. onDidReloadExtensions handles recovery
-// after that initial window, so a single retry here is sufficient.
-const SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS = 2000;
+const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
 // Visual breathing room between content and the native buttons on top of the live-measured overlay
 // width. Tuned by eye — smaller than the static reserved-space guess's 1rem (see
@@ -286,10 +290,9 @@ export function PlatformBibleToolbar() {
     'Marketing Version',
   );
 
-  // Default is `undefined` (not yet resolved); the command itself always returns `boolean`.
-  const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
-    undefined,
-  );
+  // `undefined` while unknown — the render gate below treats that as available (fail open). Only
+  // checked in simple mode, since that gate is the only thing the answer feeds.
+  const isSendReceiveAvailable = useSendReceiveAvailability({ enabled: !isPowerMode });
 
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'synced'>('idle');
 
@@ -304,35 +307,28 @@ export function PlatformBibleToolbar() {
   );
   useEvent(onSyncStateChanged, handleSyncStateChanged);
 
-  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  const checkIfSendReceiveAvailable = useCallback(async () => {
+  const openSyncStatus = useCallback(async () => {
     try {
-      // This command comes from an extension and is not typed in CommandHandlers.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      const isAvailable = await (sendCommand as any)('platformGetResources.isSendReceiveAvailable');
-      setIsSendReceiveAvailable(isAvailable);
+      await sendCommand('paratextBibleSendReceive.openSyncStatus');
     } catch (e) {
-      // Don't set false — a throw means the extension host wasn't ready yet (startup race), not
-      // that the extension is absent. Schedule a retry so the button isn't permanently hidden.
-      logger.warn(`Toolbar could not determine send/receive availability: ${getErrorMessage(e)}`);
-      retryTimeoutRef.current = setTimeout(
-        checkIfSendReceiveAvailable,
-        SEND_RECEIVE_AVAILABILITY_STARTUP_RETRY_MS,
+      // The button is shown whenever send/receive is part of the build, which is true before its
+      // commands finish registering — so a click can land while nothing is listening. Tell the user
+      // instead of leaving them with a button that appears to do nothing.
+      logger.warn(
+        `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
       );
+      try {
+        await notificationService.send({
+          message: SYNC_UNAVAILABLE_MESSAGE_KEY,
+          severity: 'warning',
+        });
+      } catch (notificationError) {
+        logger.warn(
+          `Toolbar could not notify the user that sync is unavailable: ${getErrorMessage(notificationError)}`,
+        );
+      }
     }
   }, []);
-
-  useEffect(() => {
-    checkIfSendReceiveAvailable();
-    return () => clearTimeout(retryTimeoutRef.current);
-  }, [checkIfSendReceiveAvailable]);
-
-  const onDidReloadExtensions = useMemo(
-    () => getNetworkEvent('platform.onDidReloadExtensions'),
-    [],
-  );
-  useEvent(onDidReloadExtensions, checkIfSendReceiveAvailable);
 
   return (
     <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
@@ -358,11 +354,11 @@ export function PlatformBibleToolbar() {
         appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
-            {isSendReceiveAvailable !== false && (
-              // Fail open. Show the button whenever send/receive is available — including
-              // while the availability probe is still unresolved (undefined), e.g. the extension
-              // host is busy/hung during a startup auto-sync. Visibility must not hinge on that
-              // probe resolving; only a confirmed `false` (extension genuinely absent) hides it.
+            {!isPowerMode && isSendReceiveAvailable !== false && (
+              // Simple mode only — power users send/receive per project from the Home
+              // view. Fail open on availability: `undefined` means not known yet (the extension
+              // host is busy, or send/receive is still activating), and the button must not hinge
+              // on that resolving. Only a settled `false` hides it.
               <TooltipProvider delayDuration={TOOLTIP_DELAY}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -371,13 +367,7 @@ export function PlatformBibleToolbar() {
                       variant="ghost"
                       size="sm"
                       className="pr-twp tw:h-8 tw:shrink-0"
-                      onClick={() => {
-                        sendCommand('paratextBibleSendReceive.openSyncStatus').catch((e: unknown) =>
-                          logger.warn(
-                            `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
-                          ),
-                        );
-                      }}
+                      onClick={openSyncStatus}
                     >
                       {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
                       {syncState === 'synced' && (
