@@ -100,9 +100,6 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
   ...RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
 ];
 
-// The Scripture Text Grid shows Bible-text resources.
-const GRID_RESOURCE_TYPE = 'ScriptureResource';
-
 // Theme-adaptive tab icon: the platform paints the tab icon as a static CSS background-image, so a
 // `currentColor` SVG can't follow the theme. We swap the `iconUrl` based on both the current theme
 // and the tab's selected state (light theme: white when selected, near-black when unselected,
@@ -442,10 +439,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
-    useMemo(
-      () => ({ resourceType: GRID_RESOURCE_TYPE, selectedResourceIds, isModal: true }),
-      [selectedResourceIds],
-    ),
+    useMemo(() => ({ selectedResourceIds, isModal: true }), [selectedResourceIds]),
     useCallback(
       (resource: DblResourceData | undefined) => {
         if (!resource) return;
