@@ -336,8 +336,8 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
   // they pin OUR side of the contract (which reports we forward and which we swallow), not the
   // plugin's behavior — a mocked plugin cannot be evidence about the real one. The payload below is
   // modeled on what platform-editor 0.8.14's `$findAndSetChapterAndVerse` emits for this case rather
-  // than invented, so the guard is pinned against a realistic input; see the comment in
-  // `resource-cell.component.tsx` for that trace and for why the payload changes shape upstream.
+  // than invented, so the guard is pinned against a realistic input; newer editor builds report
+  // nothing here instead. See the comment in `resource-cell.component.tsx` for both traces.
   it('swallows the editor write-back at verse 0 so a click cannot move the scroll group', async () => {
     const setScrRef = vi.fn();
     setUsjResult(twoVerseChapterUsj, false);

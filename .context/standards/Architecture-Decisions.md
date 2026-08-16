@@ -790,15 +790,23 @@ step, no automation. Just a record.
     the guard one click writes verse 1 — and, because the slice drops chapter chrome,
     `parseInt(chapterNode?.getNumber() ?? '1', 10)` yields chapter 1, turning Luke 5:0 into Luke 1:1.
 
-    **Version-pinned:** traced against `@eten-tech-foundation/platform-editor` **0.8.14**, which is
-    what `package-lock.json` resolves and npm's current `latest` (as of 2026-08-16; 0.8.15 is not
-    published). This matters because upstream `main` in `eten-tech-foundation/scripture-editors` has
-    since rewritten the plugin around a `$resolvePosition` / `onSelectionSettled` / `report` machine
-    whose `$resolvePosition` returns `undefined` for a document with no `BookNode` and no
-    `ChapterNode` (pinned upstream as invariant I5). A verse-mode slice is exactly that document, so
-    **on the release that lands, the plugin will report nothing here and this guard becomes
-    defense-in-depth** rather than a live fix. Neither the guard nor this ADR changes at that point;
-    re-verify at the next version bump. (Raised in review of #2663 against an unreleased build.)
+    **Which editor build this describes (as of 2026-08-16).** The trace above is against
+    `@eten-tech-foundation/platform-editor` **0.8.14** — what `package-lock.json` resolves, what npm
+    serves as `latest`, and what is installed locally. But 0.8.14 was published 2026-04-14 and this
+    repo's `main` already imports editor APIs it does not export (`PARAGRAPH_STRUCTURE_VIEW_MODE`,
+    `StructureProtectionMode`, `ViewOptions.hasGutterParaMarkers`, `EditorRef.removeCharacterMarker`),
+    so **the effective target is a newer build than the lockfile pins** and the lockfile should not be
+    read as authoritative here.
+
+    In that newer build the plugin is rewritten around a `$resolvePosition` / `onSelectionSettled` /
+    `report` machine whose `$resolvePosition` returns `undefined` for a document with no `BookNode`
+    and no `ChapterNode` (upstream invariant I5). A verse-mode slice is exactly that document, so
+    there the plugin reports **nothing** here. Both states are recorded deliberately, because the
+    guard is right under either: a live fix against 0.8.14's `$findAndSetChapterAndVerse`, and
+    defense-in-depth against the rewrite — the thing that keeps the write-back closed if a future
+    editor makes chrome-free slices addressable again. Re-verify at the next version bump; do not
+    delete the guard on the strength of the rewrite alone. (Both mechanisms surfaced in review of
+    #2663.)
 
     **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
     `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
