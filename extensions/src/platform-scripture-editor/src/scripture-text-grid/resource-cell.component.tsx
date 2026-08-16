@@ -178,12 +178,13 @@ export function ResourceCell({
   // disagreement, and nothing is reported — clicking a verse cell has nowhere to sync TO. That is
   // pre-existing (the slice has dropped chapter chrome since #2509) and is not a lost capability.
   //
-  // Traced against `@eten-tech-foundation/platform-editor` 0.8.14 — what `package-lock.json` pins
-  // and npm's current `latest`. Upstream `main` has since rewritten this plugin around
-  // `$resolvePosition`, which refuses to describe a position in a document with no BookNode and no
-  // ChapterNode; a chrome-free slice is exactly that, so on the release that lands the plugin goes
-  // silent here and this guard becomes defense-in-depth rather than a live fix. Re-check at the next
-  // version bump.
+  // The trace above is against `@eten-tech-foundation/platform-editor` 0.8.14 (lockfile-resolved and
+  // installed). Treat that as the floor, not the target: this repo's `main` already imports editor
+  // APIs 0.8.14 does not export, so the build we actually run is newer. In the newer build the
+  // plugin is rewritten around `$resolvePosition`, which refuses to describe a position in a
+  // document with no BookNode and no ChapterNode — a chrome-free slice is exactly that, so it
+  // reports nothing here. The guard is correct either way: a live fix against 0.8.14,
+  // defense-in-depth against the rewrite. Don't delete it on the strength of the rewrite alone.
   //
   // This guard belongs here, not upstream in `ScriptureReferencePlugin`. Gating that plugin on
   // `isReadonly` would break the read-only surfaces that need it: it is bidirectional (it also moves
