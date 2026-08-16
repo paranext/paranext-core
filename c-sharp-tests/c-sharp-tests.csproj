@@ -23,7 +23,7 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="ParatextData" Version="9.5.0.22" />
+    <PackageReference Include="ParatextData" Version="9.5.0.24" />
   </ItemGroup>
 
   <ItemGroup>
