@@ -8,6 +8,7 @@ import {
 } from '@papi/core';
 import findWebView from './find.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
+import { buildFindWebViewState } from './find/find-web-view-state.utils';
 
 export const findWebViewType = 'platformScripture.find';
 
@@ -47,20 +48,7 @@ export class FindWebViewProvider implements IWebViewProvider {
       content: findWebView,
       styles: tailwindStyles,
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
-      state: {
-        ...savedWebView.state,
-        // Use the caller's value when openFind supplies it (it always sets the key) so a panel
-        // trigger can CLEAR a stale editor id; a `??` here would resurrect an editor id from a prior
-        // open-from-editor and re-point Find at the wrong (or a closed) editor. Content
-        // reload/restore omits the key, so the saved value is preserved there.
-        editorWebViewId:
-          'editorWebViewId' in getWebViewOptions
-            ? getWebViewOptions.editorWebViewId
-            : savedWebView.state?.editorWebViewId,
-        ...(getWebViewOptions.initialSearchText
-          ? { findSearchTerm: getWebViewOptions.initialSearchText }
-          : {}),
-      },
+      state: buildFindWebViewState(savedWebView, getWebViewOptions),
     };
   }
 }
