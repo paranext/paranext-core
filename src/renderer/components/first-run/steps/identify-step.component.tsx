@@ -53,7 +53,10 @@ async function fetchRegistryUrl() {
   try {
     const url = await commandService.sendCommand('paratextRegistration.getParatextRegistryUrl');
     return url || PRODUCTION_REGISTRY_URL;
-  } catch {
+  } catch (error) {
+    logger.warn(
+      `Could not resolve the selected registry URL; falling back to production: ${getErrorMessage(error)}`,
+    );
     return PRODUCTION_REGISTRY_URL;
   }
 }
