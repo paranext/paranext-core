@@ -1,4 +1,4 @@
-import type { ScrollGroupScrRef } from '@papi/core';
+import type { SavedWebViewDefinition, ScrollGroupScrRef } from '@papi/core';
 
 /**
  * Web view type of the Scripture editor / Resource viewer. Kept as a literal (this extension does
@@ -47,4 +47,32 @@ export function resolveFindInvocation(
         ? editorWebViewId
         : undefined,
   };
+}
+
+/**
+ * Decide whether an already-open Find panel must be reloaded to reflect a new trigger. Reloading is
+ * the only way fresh options reach an existing panel, so it must fire whenever any of these differ
+ * from what the panel already holds:
+ *
+ * - `projectId` — the project/resource to search;
+ * - `selectedText` — a caller-supplied selection to pre-fill (only a reload injects it into an
+ *   already-open panel's search box); or
+ * - `editorWebViewIdForFind` — the editor coupling. A panel trigger resolves this to `undefined`
+ *   (read-only panels register no controller), so without a reload the panel keeps a stale
+ *   `editorWebViewId` from a prior open-from-editor and re-points Find at the wrong — or a closed —
+ *   editor, hanging `useWebViewController('platformScriptureEditor.react', staleId)` ~20s. The same
+ *   clause also re-points Find when Ctrl+F fires in a different editor for the same project.
+ *
+ * Returning `false` leaves the existing panel untouched; it is still brought to front by the
+ * detect-and-reuse `openWebView` call in {@link openFind}, so no reload is needed just for focus.
+ */
+export function shouldReloadExistingFind(
+  existingFind: SavedWebViewDefinition | undefined,
+  projectId: string | undefined,
+  editorWebViewIdForFind: string | undefined,
+  selectedText: string | undefined,
+): boolean {
+  if (existingFind?.projectId !== projectId) return true;
+  if (selectedText) return true;
+  return existingFind?.state?.editorWebViewId !== editorWebViewIdForFind;
 }

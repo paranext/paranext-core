@@ -15,7 +15,11 @@ import {
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import { FindHistoryDataProviderEngine } from './find/find-history.data-provider';
-import { resolveFindInvocation, type FindTriggerWebViewDefinition } from './find/open-find.utils';
+import {
+  resolveFindInvocation,
+  shouldReloadExistingFind,
+  type FindTriggerWebViewDefinition,
+} from './find/open-find.utils';
 import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
@@ -316,13 +320,21 @@ async function openFind(
     { ...options, existingId: '?', createNewIfNotFound: false },
   );
 
-  // If found an existing web view, reload it when the project differs OR when the caller supplied
-  // text to pre-fill (e.g. Ctrl+F with a selection) — reloading is how initialSearchText reaches the
-  // existing panel's search box; without it the selection would be dropped for an already-open panel.
+  // If found an existing web view, reload it when the project differs, when the caller supplied text
+  // to pre-fill (e.g. Ctrl+F with a selection), or when the editor coupling changed — reloading is
+  // the only way fresh options (initialSearchText, a cleared editorWebViewId) reach an already-open
+  // panel. See shouldReloadExistingFind for why the editor-coupling clause matters (stale-id hang).
   if (findWebViewId) {
     const existingFindWebViewDefinition =
       await papi.webViews.getOpenWebViewDefinition(findWebViewId);
-    if (existingFindWebViewDefinition?.projectId !== projectId || selectedText) {
+    if (
+      shouldReloadExistingFind(
+        existingFindWebViewDefinition,
+        projectId,
+        editorWebViewIdForFind,
+        selectedText,
+      )
+    ) {
       await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
     }
   } else {
