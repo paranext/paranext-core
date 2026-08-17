@@ -11,6 +11,7 @@
           "webViewType": "platformScriptureEditor.scriptureTextGrid",
           "id": "scripture-text-grid-tab",
           "contentType": "react",
+          "isClosable": false,
           "state": {}
         }
       }

@@ -1003,7 +1003,12 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   // mirroring platform-dock-layout.component.tsx
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const layoutToLoadAsBase = layoutToLoad as unknown as LayoutBase;
-  const supplementedLayout = mergeDefaultLayoutSupplement(layoutToLoadAsBase, enabledEntries);
+  const supplementedLayout = mergeDefaultLayoutSupplement(
+    layoutToLoadAsBase,
+    enabledEntries,
+    (entry, message) =>
+      logger.warn(`mergeDefaultLayoutSupplement: supplement tab '${entry.tab.id}': ${message}`),
+  );
   // convert back to the opaque LayoutInfo the dock layout API expects
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const supplementedLayoutInfo = supplementedLayout as unknown as LayoutInfo;
