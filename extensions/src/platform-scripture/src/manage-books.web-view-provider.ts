@@ -97,6 +97,15 @@ export class ManageBooksWebViewProvider implements IWebViewProvider {
       state: {
         ...savedWebView.state,
         webViewType: MANAGE_BOOKS_WEB_VIEW_TYPE,
+        // Always rebuild from the CURRENT options, never from saved state. These two keys are
+        // transient launch parameters owned by the `openManageBooks` create-missing-book path: they
+        // must apply to the open/reload call that supplied them and to nothing else. Assigning
+        // unconditionally (rather than spreading only when present) is what scrubs a stale value off
+        // a restored layout — otherwise reopening the app with the dialog still docked would jump to
+        // Create with a preselected book the user never asked for. Mirrors the `isSyncBlocked: false`
+        // scrub in platform-scripture-editor's main.ts and legacy-comment-manager's main.ts.
+        initialSection: getWebViewOptions.initialSection,
+        initialSelectedBooks: getWebViewOptions.initialSelectedBooks,
       },
       shouldShowToolbar: false,
     };
