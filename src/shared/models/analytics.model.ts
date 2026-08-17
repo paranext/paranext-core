@@ -2,7 +2,7 @@
  * Which analytics audience an event targets. Fixed when the event is fired (or when it leaves the
  * `unresolved` queue), never re-decided when it's actually transmitted — an event queued while
  * offline must not retarget just because the app was upgraded to a new vendor or the user has
- * changed the S/R sever configuration before it finally sends.
+ * changed the S/R server configuration before it finally sends.
  */
 export type AnalyticsEnvironment = 'test' | 'production';
 

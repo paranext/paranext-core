@@ -84,14 +84,23 @@ function sanitizeProperties(
   return Object.keys(sanitized).length > 0 ? sanitized : undefined;
 }
 
-function flushQueue(environment: AnalyticsEnvironment): void {
-  const queue = queues[environment];
-  const provider = providers[environment];
+/**
+ * Removes and processes every item currently in `queue`, in FIFO order. `onItem` receives a
+ * per-iteration copy (not the mutable `let` a hand-rolled shift-loop would need), so a callback
+ * that closes over its argument asynchronously — as `flushQueue`'s does — always sees the right
+ * item.
+ */
+function drainQueue<T>(queue: T[], onItem: (item: T) => void): void {
   let next = queue.shift();
   while (next) {
-    // Capture this iteration's event in a per-iteration const: `next` is reassigned before the
-    // `.catch()` callback below runs, so closing over `next` directly would log the wrong event.
-    const event = next;
+    onItem(next);
+    next = queue.shift();
+  }
+}
+
+function flushQueue(environment: AnalyticsEnvironment): void {
+  const provider = providers[environment];
+  drainQueue(queues[environment], (event) => {
     try {
       provider.send(event).catch((error) => {
         logger.error(`Analytics: failed to send event '${event.name}': ${String(error)}`);
@@ -99,19 +108,16 @@ function flushQueue(environment: AnalyticsEnvironment): void {
     } catch (error) {
       logger.error(`Analytics: failed to send event '${event.name}': ${String(error)}`);
     }
-    next = queue.shift();
-  }
+  });
 }
 
 export const initialize = createCachedInitializer(async (): Promise<void> => {
   resolvedEnvironment = await resolveEnvironment();
   const environment = resolvedEnvironment;
 
-  let unresolvedEvent = queues.unresolved.shift();
-  while (unresolvedEvent) {
+  drainQueue(queues.unresolved, (unresolvedEvent) => {
     queues[environment].push({ ...unresolvedEvent, environment });
-    unresolvedEvent = queues.unresolved.shift();
-  }
+  });
 
   flushQueue(environment);
 });
