@@ -760,3 +760,44 @@ step, no automation. Just a record.
   should not be assumed to remount anything.
 - **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
   `srcNonce` to its use site.
+
+## ADR-0019: Find follows the editor onto read-only resources, with replace withheld
+
+- **Date:** 2026-08-17
+- **Status:** Accepted
+- **Context:** Simple mode's Column 3 panels follow the *active translation project*: the editor gates
+  `openOrUpdateRelatedPanels` on `projectForWebView.isEditable` precisely so that opening a published
+  resource in the editor column does not switch the related panels over to the resource. Making Find a
+  permanent Column 3 tab put it inside that contract for the first time, and it was the one panel
+  exempt from it — `openFind` took whatever project the triggering editor held, with no editability
+  check, so Ctrl+F on a resource re-pointed the always-visible Find tab at the resource while its
+  three siblings stayed on the translation project.
+- **Decision:** Find is deliberately *not* held to the follow-the-translation-project rule. It may
+  bind to a read-only resource, because searching a resource is a legitimate read operation and the
+  panel's whole purpose is search. What it may not do is offer edits the project will reject, so the
+  Find web view reads `platform.isEditable` for whatever project it is currently bound to
+  (`useProjectSetting` in `find.web-view.tsx`, failing closed while the read is in flight or if it
+  errors) and withholds Replace, Replace All, and the per-result replace affordances while it is
+  false. The per-result gate matters separately: each result's own Replace button and its Enter/Space
+  shortcut call `onReplace` directly and would otherwise bypass the disabled top-level buttons.
+  Separately, `platformScripture.updateFindProject` re-points an already-open Find from
+  `openOrUpdateRelatedPanels`, which is what returns Find to the translation project after a switch —
+  Find is the only Column 3 panel that command re-points without also being able to open it.
+- **Alternatives:** **Hold Find to the sibling contract** (refuse to follow a resource; keep the
+  current project and just bring the tab to front) — rejected: consistent with the other three panels,
+  but it makes resource text unsearchable from the panel built to search, for a data-safety benefit
+  already obtained by withholding replace. **Hide the replace UI entirely when read-only**, reusing
+  the `hideModeToggle` path Simple mode uses — rejected: it removes the control with no explanation;
+  a disabled control with a reason mirrors the nearest precedent (structure protection) and tells the
+  user why. **Thread the editor's already-resolved `state.isReadOnly` through `FindWebViewOptions`**
+  — rejected: it only answers for editor-triggered opens, so the seeded Column 3 tab (which exists
+  from startup with no triggering editor) would have no answer, and a Find bound to a project by any
+  other route would silently fall back to "writable".
+- **Consequences:** Find can search resources in both modes; only Power mode ever shows the withheld
+  replace controls, since Simple-mode Find has no replace UI at all. Editability is re-read per bound
+  project rather than latched, so it cannot go stale across a switch back to a translation project.
+  Column 3 now has one panel that can legitimately show a different project from its siblings;
+  anything that later assumes all four are on the same project must account for Find.
+- **Source:** Review of the `pt-4342-dock-find-in-simple` branch — merge-blocking findings on Find
+  re-binding to read-only resources and on Find not following project switches. Mechanism reconciled
+  with PT-4343's `platform.isEditable` read (ADR-0015's sibling work) when the branch rebased.

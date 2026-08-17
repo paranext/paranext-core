@@ -1,4 +1,4 @@
-import papi, { logger } from '@papi/backend';
+import papi from '@papi/backend';
 import {
   IWebViewProvider,
   OpenWebViewOptions,
@@ -6,7 +6,6 @@ import {
   ScrollGroupScrRef,
   WebViewDefinition,
 } from '@papi/core';
-import { getErrorMessage } from 'platform-bible-utils';
 import findWebView from './find.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
 import {
@@ -49,34 +48,19 @@ export class FindWebViewProvider implements IWebViewProvider {
   ): Promise<WebViewDefinition | undefined> {
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    // Both reads are independent, so run them together. `allSettled`, not `all`: simple mode keeps
-    // this tab permanently open, so a failed read here would otherwise reject `getWebView` and turn
-    // the tab into an error tab at startup. The interface mode is re-read every call so mode changes
-    // are picked up at open/replace/restore time.
-    const [titleResult, interfaceModeResult] = await Promise.allSettled([
+    // Both reads are independent, so run them together. `all`, not `allSettled`: neither branch of a
+    // guessed interface mode is safe. Guessing 'simple' yields `isClosable: false`, which routes the
+    // tab to `TAB_GROUP_RESOURCES` — a group `getGroups` only registers in simple mode — so in power
+    // mode it would land in rc-dock's unregistered-name fallback as a tab with no close button and no
+    // way back. Guessing 'power' yields a closable tab in simple mode, which the user can close and
+    // strand. Letting a failed read reject is the honest outcome: no wrong-mode definition is ever
+    // committed, matching every sibling provider's bare `await` (the Text Collection provider reads
+    // this same setting that way). The interface mode is re-read every call so mode changes are
+    // picked up at open/replace/restore time.
+    const [title, interfaceMode] = await Promise.all([
       papi.localization.getLocalizedString({ localizeKey: '%webView_find_title%' }),
       papi.settings.get('platform.interfaceMode'),
     ]);
-
-    if (titleResult.status === 'rejected')
-      logger.warn(
-        `Find web view provider could not localize its title; keeping the saved one. ${getErrorMessage(
-          titleResult.reason,
-        )}`,
-      );
-    const title = titleResult.status === 'fulfilled' ? titleResult.value : savedWebView.title;
-
-    if (interfaceModeResult.status === 'rejected')
-      logger.warn(
-        `Find web view provider could not read interfaceMode; failing safe to 'simple'. ${getErrorMessage(
-          interfaceModeResult.reason,
-        )}`,
-      );
-    // Fail safe to 'simple' — the platform default, and the branch that keeps this tab pinned rather
-    // than leaving a Column 3 tab closable and draggable across columns. Mirrors the Scripture Finder
-    // PDP's fail-safe read (platform-scripture-finder-pdpe.model.ts).
-    const interfaceMode =
-      interfaceModeResult.status === 'fulfilled' ? interfaceModeResult.value : 'simple';
 
     return {
       ...savedWebView,
