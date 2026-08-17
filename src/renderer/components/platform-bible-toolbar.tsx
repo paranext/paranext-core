@@ -1,5 +1,6 @@
 import logo from '@assets/icon.png';
 import { ReferenceHistoryButtons } from '@renderer/components/reference-history-buttons.component';
+import { SyncStatusButton } from '@renderer/components/sync-status-button.component';
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
   useData,
@@ -28,12 +29,10 @@ import {
 } from 'platform-bible-utils/experimental';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
-import { getNetworkEvent } from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { menuDataService } from '@shared/services/menu-data.service';
-import { notificationService } from '@shared/services/notification.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { CircleCheck, HomeIcon } from 'lucide-react';
+import { HomeIcon } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -48,13 +47,11 @@ import {
   SelectTrigger,
   SelectValue,
   ScrollGroupSelector,
-  Spinner,
   Toolbar,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  useEvent,
   usePromise,
 } from 'platform-bible-react';
 import {
@@ -63,16 +60,9 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { CSSProperties, useCallback, useMemo, useState } from 'react';
+import { CSSProperties, useCallback, useMemo } from 'react';
 
 const TOOLTIP_DELAY = 300;
-
-/**
- * Message shown when the Sync button is clicked but send/receive can't answer. Declared here rather
- * than inline so the key is spelled exactly once — `PlatformNotification.message` accepts any
- * string, so a typo would not fail the build; it would ship a raw `%key%` into a toast.
- */
-export const SYNC_UNAVAILABLE_MESSAGE_KEY: LocalizeKey = '%toolbar_sync_unavailable%';
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
@@ -85,10 +75,6 @@ const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availabl
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%mainMenu_openHome%',
-  '%toolbar_sync%',
-  '%toolbar_sync_open_status%',
-  '%toolbar_sync_status_synced%',
-  '%toolbar_sync_status_syncing%',
   '%projectPicker_toolbar_select_project%',
   '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
@@ -294,42 +280,6 @@ export function PlatformBibleToolbar() {
   // checked in simple mode, since that gate is the only thing the answer feeds.
   const isSendReceiveAvailable = useSendReceiveAvailability({ enabled: !isPowerMode });
 
-  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'synced'>('idle');
-
-  const handleSyncStateChanged = useCallback(
-    ({ isSyncing }: { isSyncing: boolean }) => setSyncState(isSyncing ? 'syncing' : 'synced'),
-    [],
-  );
-
-  const onSyncStateChanged = useMemo(
-    () => getNetworkEvent<{ isSyncing: boolean }>('paratextBibleSendReceive.onSyncStateChanged'),
-    [],
-  );
-  useEvent(onSyncStateChanged, handleSyncStateChanged);
-
-  const openSyncStatus = useCallback(async () => {
-    try {
-      await sendCommand('paratextBibleSendReceive.openSyncStatus');
-    } catch (e) {
-      // The button is shown whenever send/receive is part of the build, which is true before its
-      // commands finish registering — so a click can land while nothing is listening. Tell the user
-      // instead of leaving them with a button that appears to do nothing.
-      logger.warn(
-        `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
-      );
-      try {
-        await notificationService.send({
-          message: SYNC_UNAVAILABLE_MESSAGE_KEY,
-          severity: 'warning',
-        });
-      } catch (notificationError) {
-        logger.warn(
-          `Toolbar could not notify the user that sync is unavailable: ${getErrorMessage(notificationError)}`,
-        );
-      }
-    }
-  }, []);
-
   return (
     <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
       <Toolbar
@@ -359,36 +309,7 @@ export function PlatformBibleToolbar() {
               // view. Fail open on availability: `undefined` means not known yet (the extension
               // host is busy, or send/receive is still activating), and the button must not hinge
               // on that resolving. Only a settled `false` hides it.
-              <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      data-testid="toolbar-sync-button"
-                      variant="ghost"
-                      size="sm"
-                      className="pr-twp tw:h-8 tw:shrink-0"
-                      onClick={openSyncStatus}
-                    >
-                      {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
-                      {syncState === 'synced' && (
-                        <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
-                      )}
-                      {
-                        {
-                          idle: localizedStrings['%toolbar_sync%'],
-                          syncing: localizedStrings['%toolbar_sync_status_syncing%'],
-                          synced: localizedStrings['%toolbar_sync_status_synced%'],
-                        }[syncState]
-                      }
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="tw:font-light">
-                      {localizedStrings['%toolbar_sync_open_status%']}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <SyncStatusButton />
             )}
             {marketingVersion !== '' && (
               <TooltipProvider delayDuration={TOOLTIP_DELAY}>

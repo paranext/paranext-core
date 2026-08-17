@@ -463,3 +463,47 @@ step, no automation. Just a record.
   redefinition of this one.
 - **Source:** PT-3954 (Sync button on toolbar sometimes does not show), with the activation timeline
   measured from a Paratext 10 Studio `main.log`.
+
+## ADR-0014: The toolbar's sync status is local renderer UI, and names in-progress projects from a new upstream field
+
+- **Date:** 2026-08-17
+- **Status:** Accepted
+- **Context:** PT-4336 NN-4 asks for a single truthful sync status with a one-click cancel. Two
+  obstacles surfaced while implementing PT-4348. First, the existing toolbar button's only action was
+  `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface — a web view that
+  updates on its own schedule — alongside the button, which is exactly the "two messages that seem to
+  contradict each other" the NN exists to remove. Second, the ticket specified naming the syncing
+  projects from `SyncState.lastRequestedProjectIds`, but that field is written only by the Send/Receive
+  extension's `setResults` (on completion), never at `beginSync` — deliberately, so a failed sync
+  cannot pair its ids with the previous run's results. Read during a sync it names the PREVIOUS
+  sync's projects, so implementing the ticket as written would have shipped a confidently wrong label.
+- **Decision:** The status lives entirely in the renderer: `SyncStatusButton` renders a
+  `platform-bible-react` `Popover` in place (no overlay service, no web view) with the project list
+  and a single-shot Cancel wired to `paratextBibleSendReceive.cancelSync`. `useSyncStatus` seeds from
+  a one-shot `paratextBibleSendReceive.getSyncState` on mount, because `onSyncStateChanged` fires on
+  transitions only and a consumer mounting mid-sync would otherwise read idle until that sync ended.
+  For the names, a companion change to `paratext-bible-internal-extensions` adds
+  `SyncState.syncingProjectIds` (derived from the live claim map, so it cannot drift from `isSyncing`),
+  and core declares that field **optional** in its mirrored `src/@types/paratext-bible-send-receive`
+  copy so core merges independently of the upstream release. Absent field ⇒ a bare "Syncing" that
+  names no project.
+- **Alternatives:** **Read `lastRequestedProjectIds` during a sync** (the ticket as written) —
+  rejected: names the wrong projects, which is the specific failure NN-4 exists to fix. **Derive names
+  from `onSyncProgress.progressText`** — rejected: it carries the current *item*, not the set, and for
+  indeterminate progress it is a full localized sentence, so the label's meaning would change shape
+  mid-sync. **Ship without names** — viable and fully truthful, but misses the NN's explicit "shows
+  which project(s) are syncing". **Declare `syncingProjectIds` required in core** — rejected: it would
+  make core's types lie for any Studio build predating the upstream change.
+- **Consequences:** Core now ships a type declaration for a field that only exists once the companion
+  extension PR lands; the optional marker plus a fallback path is what makes that safe, and the same
+  pattern is available the next time core needs to consume an upstream contract addition ahead of its
+  release. `getSyncState` reflects only syncs run through the Send/Receive extension's own wrappers —
+  callers reaching the dotnet commands directly stay invisible (upstream PT-4214) — so this status is
+  best-effort, not ground truth; core's startup/shutdown session syncs are unaffected because they
+  route through `runScheduledSessionSync` and claim through the same controller. The four richer UX
+  states in the NN-4 design ("Sync conflict", "Connection problem", "Unsaved changes", "Unsynced
+  changes") are deferred and marked as such in `sync-status-button.component.tsx`: none is derivable
+  from what Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this
+  work removes.
+- **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
+  the `lastRequestedProjectIds` contract.

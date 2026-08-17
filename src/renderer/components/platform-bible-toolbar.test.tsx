@@ -1,6 +1,4 @@
-import { readFileSync } from 'fs';
-import path from 'path';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
@@ -12,12 +10,11 @@ import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { menuDataService } from '@shared/services/menu-data.service';
-import { notificationService } from '@shared/services/notification.service';
 import {
   SEND_RECEIVE_UNKNOWN_GRACE_MS,
   useSendReceiveAvailability,
 } from '@renderer/hooks/use-send-receive-availability.hook';
-import { PlatformBibleToolbar, SYNC_UNAVAILABLE_MESSAGE_KEY } from './platform-bible-toolbar';
+import { PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
@@ -364,17 +361,9 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  it('calls openSyncStatus command when clicked', async () => {
-    mockSendCommand(true);
-    render(<PlatformBibleToolbar />);
-    const btn = await screen.findByRole('button', { name: 'Sync' });
-    fireEvent.click(btn);
-    await waitFor(() => {
-      expect(vi.mocked(sendCommand)).toHaveBeenLastCalledWith(
-        'paratextBibleSendReceive.openSyncStatus',
-      );
-    });
-  });
+  // What the button reports and does once rendered — status labels, the popover, Cancel — is
+  // covered by sync-status-button.component.test.tsx. This suite stays on the toolbar's own
+  // question: whether the button is rendered at all.
 
   it('shows Syncing label when onSyncStateChanged fires with isSyncing: true', async () => {
     let capturedSyncStateCallback: ((arg: { isSyncing: boolean }) => void) | undefined;
@@ -458,49 +447,6 @@ describe('PlatformBibleToolbar — Sync button', () => {
     await waitFor(() => {
       expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
     });
-  });
-
-  it('uses a message key that actually exists in the localization file', async () => {
-    // `PlatformNotification.message` is typed `string | LocalizeKey`, so a typo or a key later
-    // renamed in en.json type-checks fine and reaches the user as literal `%key%` text in a toast.
-    const englishStrings: Record<string, string> = JSON.parse(
-      readFileSync(path.join(__dirname, '../../../assets/localization/en.json'), 'utf8'),
-    );
-
-    expect(englishStrings).toHaveProperty(SYNC_UNAVAILABLE_MESSAGE_KEY);
-  });
-
-  it('tells the user when the sync status view cannot be opened', async () => {
-    // The button shows whenever send/receive is part of the build, which includes the moment before
-    // its commands finish registering. A click then has to say something — otherwise the button
-    // just appears broken.
-    const { logger } = await import('@shared/services/logger.service');
-    vi.mocked(sendCommand).mockImplementation(
-      // sendCommand has a complex generic signature; cast is required for the mock implementation
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      (async (commandName: string) => {
-        if (commandName === 'paratextBibleSendReceive.openSyncStatus')
-          throw new Error('Sync failed');
-        if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
-        if (commandName === 'platform.getOSPlatform') return 'win32';
-        if (commandName === 'platform.isFullScreen') return false;
-        return undefined;
-        // sendCommand has a complex generic signature; cast is required for the mock implementation
-        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      }) as any,
-    );
-    render(<PlatformBibleToolbar />);
-    const btn = await screen.findByRole('button', { name: 'Sync' });
-    fireEvent.click(btn);
-    await waitFor(() => {
-      expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith({
-        message: SYNC_UNAVAILABLE_MESSAGE_KEY,
-        severity: 'warning',
-      });
-    });
-    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
-      expect.stringContaining('Toolbar caught an error while trying to open sync status:'),
-    );
   });
 });
 
