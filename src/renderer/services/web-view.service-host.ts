@@ -2618,9 +2618,6 @@ export async function openOrReloadWebView(
   // See `trackSimpleEditorReplaceTab`'s doc: keeps the last-opened-project cache's id tracking
   // current the instant a `replace-tab` placement lands, regardless of webview type — the function
   // itself no-ops unless `layout.targetTabId` is already a tracked Simple editor id.
-  // See `trackSimpleEditorReplaceTab`'s doc: keeps the last-opened-project cache's id tracking
-  // current the instant a `replace-tab` placement lands, regardless of webview type — the function
-  // itself no-ops unless `layout.targetTabId` is already a tracked Simple editor id.
   trackSimpleEditorReplaceTab(layout, finalWebView.id);
 
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
