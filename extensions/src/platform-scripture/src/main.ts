@@ -1,6 +1,6 @@
 import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator, ScrollGroupScrRef } from '@papi/core';
-import { PlatformEventEmitter } from 'platform-bible-utils';
+import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
 import { CheckResultsInvalidated } from 'platform-scripture';
 import {
   ChecksSidePanelWebViewOptions,
@@ -430,11 +430,21 @@ async function openFind(
     // doing nothing would look like a dead shortcut with the tab sitting in plain view. Bring an
     // existing Find web view to the front without touching its project, and don't create one if
     // none exists: a Find with no project has nothing to search, so there is nothing to open.
-    return papi.webViews.openWebView(findWebViewType, undefined, {
-      existingId: '?',
-      createNewIfNotFound: false,
-      bringToFront: true,
-    });
+    try {
+      return await papi.webViews.openWebView(findWebViewType, undefined, {
+        existingId: '?',
+        createNewIfNotFound: false,
+        bringToFront: true,
+      });
+    } catch (e) {
+      // Swallowed deliberately. Passing any `existingId` routes through the main process's
+      // `findOwner`, which throws when a window cannot be reached — a rejection this branch did not
+      // have back when it returned `undefined` outright. The Ctrl+F handler sends this command
+      // without awaiting it, so letting the rejection escape would surface as an unhandled rejection
+      // for what is, from the user's side, a no-op: there was no project to search anyway.
+      logger.warn(`Could not bring an existing Find web view to the front: ${getErrorMessage(e)}`);
+      return undefined;
+    }
   }
 
   const options: FindWebViewOptions = {
@@ -824,7 +834,8 @@ export async function activate(context: ExecutionActivationContext) {
 
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
-      summary: 'Open the find UI',
+      summary:
+        'Open the find UI, or bring an already-open one to the front when no project can be resolved',
       params: [
         {
           name: 'editorWebViewId',
@@ -849,7 +860,8 @@ export async function activate(context: ExecutionActivationContext) {
       ],
       result: {
         name: 'return value',
-        summary: 'The ID of the find web view, or undefined if not opened',
+        summary:
+          'The ID of the find web view (opened, reloaded, or brought to front), or undefined if none was opened and none was already open',
         schema: { type: ['string', 'null'] },
       },
     },

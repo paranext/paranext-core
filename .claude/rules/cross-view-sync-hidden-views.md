@@ -17,6 +17,13 @@ design for BOTH visibility states, not just the live case.
   service's focus subject tracks focus, not visibility). Detection requires geometry checks or an
   `IntersectionObserver` inside the iframe — use `useViewVisibility` from `platform-bible-react`
   (reference consumer: `useBcvSyncScroll` in `extensions/src/legacy-comment-manager/`).
+- Geometry is not the only reason to care. A hidden pane keeps reacting to shared state at full
+  rate, so **expensive** data-driven work is just as much a problem as layout-dependent work: it
+  burns the same CPU, network, and IPC for a view nobody can see, and its result is usually
+  superseded before the tab is ever shown. `useRunWhenVisible`
+  (`extensions/src/platform-scripture/src/find/use-run-when-visible.hook.ts`) is the reusable
+  defer-and-collapse form of the catch-up shape below — requests made while hidden collapse into one
+  run on activation.
 
 ## The rule
 

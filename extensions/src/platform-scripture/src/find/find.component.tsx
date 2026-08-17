@@ -576,8 +576,8 @@ export function Find({
   // receives every input the rule needs.
   const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
 
-  // Single source of truth for which (if any) results-area placeholder shows, so the three states
-  // are mutually exclusive by construction instead of by three separately-maintained boolean
+  // Single source of truth for which (if any) results-area placeholder shows, so the four states
+  // are mutually exclusive by construction instead of by four separately-maintained boolean
   // expressions. 'none' covers both "results are present" and "a search finished with 0 results" —
   // in the latter case the status bar's message (see resultsMessage) handles the feedback instead.
   // 'noOpenProjectsPrompt' is checked FIRST, ahead of even `results.length > 0`: with no project
