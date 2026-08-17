@@ -152,6 +152,13 @@ export default function SearchResult({
 
   useEffect(() => {
     // Registers a `IntersectionObserver` instance to determine when the component is visible in the DOM
+    //
+    // Hidden case: self-correcting, so nothing to do. rc-dock keeps an inactive tab's pane mounted
+    // under `display: none`, where nothing has layout and the observer reports `isIntersecting:
+    // false` — which is why `textParts` below bails and an expanded card reads "Loading verse
+    // text…". Activating the tab gives the pane layout, the observer fires again with a true
+    // intersection, and the text fills in. The only cost is one frame of the loading state on tab
+    // activation, so this deliberately gets no `useViewVisibility` catch-up.
     const observer = new IntersectionObserver(([entry]) => setIsVisible(entry.isIntersecting));
     if (cardRef.current) {
       observer.observe(cardRef.current);
@@ -162,6 +169,12 @@ export default function SearchResult({
     };
   }, [cardRef]);
 
+  // Hidden case: intentionally not handled. `requestAnimationFrame` does not progress inside a
+  // `display: none` pane, so a replace performed while Find is the inactive tab leaves this progress
+  // bar at 0% for the whole 1-second revert window instead of animating through it. Accepted: the
+  // bar only paces an undo window whose real timer runs on its own in the web view regardless, so
+  // the replace and its revert opportunity both behave correctly — what is missed is the animation,
+  // and a user who cannot see the tab has nothing to time against anyway.
   useEffect(() => {
     if (!searchResult.isReplaced) {
       setIsProgressAnimating(false);

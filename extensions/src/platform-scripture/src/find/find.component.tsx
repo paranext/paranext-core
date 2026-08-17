@@ -73,6 +73,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_matchCase%',
   '%webView_find_matchContentIn%',
   '%webView_find_nextResult%',
+  '%webView_find_noProjectPrompt%',
   '%webView_find_noResultsFound%',
   '%webView_find_pattern%',
   '%webView_find_preserveCase%',
@@ -173,6 +174,12 @@ export type FindProps = {
    * available; only Replace and Replace All are withheld.
    */
   isReadOnly?: boolean;
+  /**
+   * Whether a project is bound to search. False leaves every search a no-op, so the results region
+   * explains that instead of showing the usual "type to search" prompt. Defaults to true so callers
+   * that always have a project need not pass it.
+   */
+  hasProject?: boolean;
   /**
    * Whether the current replacement text itself contains a paragraph/verse marker — guaranteed to
    * be rejected while protected, so Replace is proactively disabled.
@@ -292,6 +299,7 @@ export function Find({
   isStructureProtected = false,
   isReplacementStructureChanging = false,
   isReadOnly = false,
+  hasProject = true,
   results,
   resultsByBook,
   focusedResultIndex,
@@ -836,10 +844,15 @@ export function Find({
         onKeyDown={handleResultsKeyDown}
       >
         {/* Idle placeholder: no search has run yet (e.g. first open, or after clearing the search),
-            so the results region would otherwise be blank. */}
+            so the results region would otherwise be blank. With no project bound there is nothing
+            to search at all, and searching genuinely does nothing — in Simple mode this tab is
+            on screen from startup, so it is reachable simply by clicking it before any project is
+            open. Say so rather than inviting a search that will silently return nothing. */}
         {results.length === 0 && searchStatus === undefined && (
           <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4 tw:text-center tw:text-sm tw:font-light tw:text-muted-foreground">
-            {localizedStrings['%webView_find_searchPrompt%']}
+            {hasProject
+              ? localizedStrings['%webView_find_searchPrompt%']
+              : localizedStrings['%webView_find_noProjectPrompt%']}
           </div>
         )}
         {(() => {

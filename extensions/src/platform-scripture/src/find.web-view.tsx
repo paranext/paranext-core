@@ -12,7 +12,7 @@ import {
 } from '@papi/frontend/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { Scope, SCOPE_SELECTOR_STRING_KEYS, sonner } from 'platform-bible-react';
+import { Scope, SCOPE_SELECTOR_STRING_KEYS, sonner, useViewVisibility } from 'platform-bible-react';
 import {
   debounce,
   DEBOUNCE_CANCELED_ERROR_MESSAGE,
@@ -49,6 +49,7 @@ import {
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './find/search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
+import { useRunWhenVisible } from './find/use-run-when-visible.hook';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -909,6 +910,21 @@ global.webViewComponent = function FindWebView({
     }, SEARCH_DEBOUNCE_DELAY_MS),
   );
 
+  // Hidden case: auto-searches are deferred, not dropped. In Simple mode Find is a permanent tab
+  // bound to the editor's scroll group, so `relevantScopeKey` changes on every book the user moves
+  // to (and, under chapter scope, every chapter) whether or not the Find tab is on screen. Left
+  // unguarded, each of those launches a full find job into a `display: none` pane: uninterruptible
+  // once past its scope boundary, polled at ~10 Hz over JSON-RPC, and pulling a whole book's USJ
+  // into an iframe whose result cards then decline to render it (they gate on an
+  // `IntersectionObserver` that reports nothing intersecting while hidden). Before this tab was
+  // permanent the user could stop that by closing the panel; now they cannot. Requests made while
+  // hidden collapse into one catch-up that runs when the tab is activated, so the tab still opens
+  // showing results for where the user actually is.
+  const isViewVisible = useViewVisibility();
+  const requestAutoSearch = useRunWhenVisible(isViewVisible, () =>
+    debouncedHandleStartSearch.current(),
+  );
+
   // Auto-search with debounce when the search term or any filter changes
   useEffect(() => {
     if (isInitialAutoSearchRef.current) {
@@ -918,7 +934,7 @@ global.webViewComponent = function FindWebView({
       if (searchTerm.trim() === '') return undefined;
       initialSearchTriggeredRef.current = true;
     }
-    debouncedHandleStartSearch.current();
+    requestAutoSearch();
   }, [
     searchTerm,
     shouldMatchCase,
@@ -926,6 +942,7 @@ global.webViewComponent = function FindWebView({
     isRegexAllowed,
     searchTextType,
     relevantScopeKey,
+    requestAutoSearch,
   ]);
 
   // Fallback for startup search: if findPdp wasn't ready when the debounce fired on mount,
@@ -1465,6 +1482,7 @@ global.webViewComponent = function FindWebView({
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
       isReadOnly={isReadOnly}
+      hasProject={projectId !== undefined}
       results={results}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
