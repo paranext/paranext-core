@@ -45,11 +45,16 @@ function deriveStatusFromSnapshot(state: SyncState): SyncStatus {
  * mounts.
  *
  * The seed is the point. `paratextBibleSendReceive.onSyncStateChanged` fires on transitions only,
- * so a consumer that mounts during a sync — a startup auto-sync, or a renderer reload mid-sync —
- * would otherwise show `idle` until that sync ENDS. This reads
- * `paratextBibleSendReceive.getSyncState` once on mount to cover exactly that gap. An event that
- * lands while the seed is still in flight wins: it describes a later moment than the snapshot
- * does.
+ * so a consumer that mounts during a sync — a scheduled sync, or a renderer reload mid-sync — would
+ * otherwise show `idle` until that sync ENDS. This reads `paratextBibleSendReceive.getSyncState`
+ * once on mount to cover exactly that gap. An event that lands while the seed is still in flight
+ * wins: it describes a later moment than the snapshot does.
+ *
+ * What the seed CANNOT cover: a sync that never reached the Send/Receive extension's wrappers is
+ * absent from `getSyncState` and fires no event, so this reports `idle` throughout it. In Simple
+ * mode that currently includes the startup sync itself (`main/startup-tasks.ts` calls the dotnet
+ * `syncProjects` command directly), so "correct from startup" holds for manual and scheduled syncs
+ * but not yet for that one. See {@link SyncState} for the full list and PT-4214 for the fix.
  *
  * Project names are resolved from project metadata rather than the event, which carries no ids.
  * They are absent (empty, with `status` still `syncing`) in two cases callers must handle: a

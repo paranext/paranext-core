@@ -499,8 +499,16 @@ step, no automation. Just a record.
   pattern is available the next time core needs to consume an upstream contract addition ahead of its
   release. `getSyncState` reflects only syncs run through the Send/Receive extension's own wrappers —
   callers reaching the dotnet commands directly stay invisible (upstream PT-4214) — so this status is
-  best-effort, not ground truth; core's startup/shutdown session syncs are unaffected because they
-  route through `runScheduledSessionSync` and claim through the same controller. The four richer UX
+  best-effort, not ground truth. **Corrected 2026-08-17, after this decision was first written:** an
+  earlier draft of this entry claimed core's startup syncs were unaffected because they route through
+  `runScheduledSessionSync`. That holds for Power mode only. In Simple mode — the only mode this
+  button renders in — `main/startup-tasks.ts` calls the dotnet `syncProjects` command directly, and
+  the picker's `syncOnProjectSwitch` (`platform-scripture-editor`) does the same, so neither raises a
+  claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: NN-4's "status is
+  correct from app startup" is met for manual and scheduled syncs, but the Simple-mode startup sync
+  still shows no status. Closing that needs either PT-4214 or routing those two call sites through a
+  claiming wrapper (e.g. `runManualSync`); this decision deliberately does neither, since both are
+  changes to sync behavior rather than to how status is reported. The four richer UX
   states in the NN-4 design ("Sync conflict", "Connection problem", "Unsaved changes", "Unsynced
   changes") are deferred and marked as such in `sync-status-button.component.tsx`: none is derivable
   from what Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this

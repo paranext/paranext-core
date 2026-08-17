@@ -260,11 +260,21 @@ declare module 'paratext-bible-send-receive' {
    * consumer that mounts mid-sync (or after a renderer reload) seed its state instead of waiting
    * for the next `onSyncStateChanged` event, which may not arrive for the rest of the sync.
    *
-   * Reflects only syncs run through the Send/Receive extension's own wrappers. Callers that reach
-   * the dotnet `syncProjects`/`sendReceiveProjects` commands directly are invisible here (tracked
-   * upstream as PT-4214), so treat this as best-effort rather than ground truth. Core's own
-   * startup/shutdown session syncs are NOT affected — they route through the extension's
-   * `runScheduledSessionSync`, which claims through the same state controller.
+   * Reflects only syncs run through the Send/Receive extension's own wrappers (`runManualSync`,
+   * `syncOpenProjects`, `runScheduledSessionSync`, and the auto-sync engine), which claim through
+   * its state controller. Callers that reach the dotnet `syncProjects`/`sendReceiveProjects`
+   * commands directly are invisible here — nothing in `c-sharp/` emits `onSyncStateChanged` — so
+   * treat this as best-effort rather than ground truth. A core-authoritative signal over the C#
+   * sync semaphore is tracked upstream as PT-4214.
+   *
+   * Two core paths are on the invisible side today, both worth knowing before relying on this for a
+   * startup status:
+   *
+   * - **Simple mode startup sync** (`main/startup-tasks.ts`) calls `syncProjects` directly.
+   * - **The picker's per-project sync** (`syncOnProjectSwitch` in `platform-scripture-editor`) calls
+   *   `syncProjects`/`sendReceiveProjects` directly.
+   *
+   * Power mode's session-boundary sync IS visible: it goes through `runScheduledSessionSync`.
    */
   export type SyncState = {
     /** Whether any sync is running right now */
