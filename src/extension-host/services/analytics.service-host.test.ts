@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { MAX_REQUEST_ATTEMPTS, REQUEST_ATTEMPT_WAIT_TIME_MS } from '@shared/data/rpc.model';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -113,10 +114,65 @@ test('an S/R server lookup that never resolves falls back to test after the time
   trackEvent('app_launch');
   const initializePromise = initialize();
 
-  await vi.advanceTimersByTimeAsync(5000);
+  // The timeout must exceed the RPC layer's own missing-handler retry window
+  // (MAX_REQUEST_ATTEMPTS * REQUEST_ATTEMPT_WAIT_TIME_MS), so advance well past that.
+  await vi.advanceTimersByTimeAsync(MAX_REQUEST_ATTEMPTS * REQUEST_ATTEMPT_WAIT_TIME_MS + 5000);
   await initializePromise;
 
   expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining('test environment'));
+  expect(findSentLog('Test')).toBeDefined();
+});
+
+test("an S/R server lookup that succeeds only after the RPC layer's missing-handler retry window elapses still resolves production correctly", async () => {
+  vi.useFakeTimers();
+
+  // Simulate the data provider becoming reachable only once the RPC layer's own retry loop
+  // (MAX_REQUEST_ATTEMPTS * REQUEST_ATTEMPT_WAIT_TIME_MS, ~10s) has nearly run its course — this
+  // is the normal case at extension-host startup, since the C# InternetSettingsDataProvider is
+  // not registered yet when initialize() first runs.
+  const delayMs = MAX_REQUEST_ATTEMPTS * REQUEST_ATTEMPT_WAIT_TIME_MS - 500;
+  mocks.get.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            getInternetSettings: vi.fn().mockResolvedValue({ selectedServer: 'Production' }),
+          });
+        }, delayMs);
+      }),
+  );
+
+  const { initialize, trackEvent } = await import(
+    '@extension-host/services/analytics.service-host'
+  );
+  trackEvent('app_launch');
+  const initializePromise = initialize();
+
+  await vi.advanceTimersByTimeAsync(delayMs);
+  await initializePromise;
+
+  // A too-short timeout (shorter than the RPC retry window) would have already given up and
+  // resolved 'test' well before this point.
+  expect(findSentLog('Production')).toBeDefined();
+  expect(findSentLog('Test')).toBeUndefined();
+});
+
+test('an error while probing the S/R server target resolves promptly instead of waiting out the full timeout', async () => {
+  vi.useFakeTimers();
+  mocks.get.mockRejectedValue(new Error('network object service unavailable'));
+
+  const { initialize, trackEvent } = await import(
+    '@extension-host/services/analytics.service-host'
+  );
+  trackEvent('app_launch');
+  const initializePromise = initialize();
+
+  // Only a small amount of fake time is needed for the rejection to be caught and resolved to
+  // 'test' -- if the probe let the rejection propagate, waitForDuration's Promise.any would
+  // instead wait out the full multi-second timeout before falling through.
+  await vi.advanceTimersByTimeAsync(50);
+  await initializePromise;
+
   expect(findSentLog('Test')).toBeDefined();
 });
 

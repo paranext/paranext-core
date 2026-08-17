@@ -1,6 +1,6 @@
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { logger } from '@shared/services/logger.service';
-import { waitForDuration } from 'platform-bible-utils';
+import { getErrorMessage, waitForDuration } from 'platform-bible-utils';
 import {
   AnalyticsEnvironment,
   AnalyticsEvent,
@@ -9,12 +9,22 @@ import {
 } from '@shared/models/analytics.model';
 import { ConsoleAnalyticsProvider } from '@extension-host/services/analytics-providers/console-analytics.provider';
 import { createCachedInitializer } from '@shared/utils/cached-initializer';
+import { MAX_REQUEST_ATTEMPTS, REQUEST_ATTEMPT_WAIT_TIME_MS } from '@shared/data/rpc.model';
 
 /** Env var that forces analytics to target the test environment regardless of build/S-R target. */
 const ANALYTICS_TEST_OVERRIDE_ENV_VAR = 'PARATEXT_ANALYTICS_TEST_OVERRIDE';
 
-/** Max time to wait for the current Send/Receive server target before falling back to test. */
-const ENVIRONMENT_RESOLUTION_TIMEOUT_MS = 5000;
+/**
+ * Max time to wait for the current Send/Receive server target before falling back to test. Must
+ * exceed the RPC layer's own retry window for a not-yet-registered handler (MAX_REQUEST_ATTEMPTS *
+ * REQUEST_ATTEMPT_WAIT_TIME_MS, ~10s) — initialize() runs at the very start of extension-host
+ * startup, before the C# InternetSettingsDataProvider has typically registered, so a shorter
+ * timeout would fire before that retry could ever succeed, permanently mistagging every
+ * packaged-build session as 'test'. See resolve-registration-validity.ts's
+ * REGISTRATION_RESOLVE_TIMEOUT_MS for the same reasoning against the same underlying race.
+ */
+const ENVIRONMENT_RESOLUTION_TIMEOUT_MS =
+  MAX_REQUEST_ATTEMPTS * REQUEST_ATTEMPT_WAIT_TIME_MS + 2000;
 
 const queues: {
   test: AnalyticsEvent[];
@@ -34,12 +44,26 @@ const providers: Record<AnalyticsEnvironment, AnalyticsProvider> = {
 let resolvedEnvironment: AnalyticsEnvironment | undefined;
 
 async function getSelectedServer(): Promise<string | undefined> {
-  const provider = await dataProviderService.get(
-    'paratextRegistration.internetSettingsDataProvider',
-  );
-  if (!provider) return undefined;
-  const settings = await provider.getInternetSettings(undefined);
-  return settings.selectedServer;
+  // waitForDuration races this against a timeout via Promise.any, which only settles once BOTH
+  // branches have either fulfilled or (for the timeout) always-fulfills -- a rejection here would
+  // not fail fast, it would make the caller wait out the full timeout regardless. Catch and
+  // resolve to undefined instead, matching resolve-registration-validity.ts's same pattern for
+  // the same reason.
+  try {
+    const provider = await dataProviderService.get(
+      'paratextRegistration.internetSettingsDataProvider',
+    );
+    if (!provider) return undefined;
+    const settings = await provider.getInternetSettings(undefined);
+    return settings.selectedServer;
+  } catch (error) {
+    // Debug, not warn: resolveEnvironment already warns once if the overall probe ultimately
+    // times out; this is the expected transient during a busy startup, not a standalone failure.
+    logger.debug(
+      `Analytics: Send/Receive server-target probe did not complete: ${getErrorMessage(error)}`,
+    );
+    return undefined;
+  }
 }
 
 async function resolveEnvironment(): Promise<AnalyticsEnvironment> {
