@@ -1070,6 +1070,16 @@ export async function openOrUpdateRelatedPanels(
   } catch (e) {
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
   }
+  try {
+    // Find is the one Column 3 panel this function re-points without opening. In Simple mode it is
+    // part of the fixed layout from startup, so it is always already there; anywhere else it is a
+    // panel the user opened deliberately, and a project switch is not a request to open it. Without
+    // this call the always-visible Find tab would keep searching and showing results for the project
+    // the user just switched away from.
+    await papi.commands.sendCommand('platformScripture.updateFindProject', projectId);
+  } catch (e) {
+    papi.logger.warn(`Error updating find panel project: ${getErrorMessage(e)}`);
+  }
 }
 
 // #endregion Text Connection Panels

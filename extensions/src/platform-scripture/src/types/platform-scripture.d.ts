@@ -2518,6 +2518,19 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
+     * Re-point an already-open Find / Replace web view at a different project, so it searches that
+     * project instead of the one it was opened for. Clears any pre-filled search text restrictions
+     * tied to the previous project's results by rebuilding the web view.
+     *
+     * Creates nothing: when no Find web view is open this does nothing and returns `undefined`. Use
+     * `platformScripture.openFind` to open one.
+     *
+     * @param projectId Id of the project the Find / Replace UI should search from now on.
+     * @returns Id of the re-pointed find web view, or `undefined` if no find web view was open.
+     */
+    'platformScripture.updateFindProject': (projectId: string) => Promise<string | undefined>;
+
+    /**
      * Open the Markers Checklist web view.
      *
      * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked

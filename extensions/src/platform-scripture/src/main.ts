@@ -285,6 +285,42 @@ async function openManageBooks(
   return papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, options);
 }
 
+/**
+ * Re-points an already-open Find web view at `projectId`, creating nothing.
+ *
+ * Simple mode's Column 3 panels follow the active translation project, and the editor re-points
+ * them as a group whenever the project changes. Find is one of those panels but is not opened by
+ * that group operation — it lives in the fixed layout from startup — so without this it would keep
+ * showing the previous project's results and searching the previous project while its three
+ * siblings had already moved on, in a tab that is always on screen.
+ *
+ * Deliberately does not create a Find web view when none is open: outside the fixed Simple-mode
+ * layout, Find is a panel the user opens explicitly, and a project switch is not a request to open
+ * it.
+ */
+async function updateFindProject(projectId: string): Promise<string | undefined> {
+  const findWebViewId = await papi.webViews.openWebView(findWebViewType, undefined, {
+    existingId: '?',
+    createNewIfNotFound: false,
+  });
+  if (!findWebViewId) return undefined;
+
+  const existingFindWebViewDefinition = await papi.webViews.getOpenWebViewDefinition(findWebViewId);
+  if (existingFindWebViewDefinition?.projectId === projectId) return findWebViewId;
+
+  const options: FindWebViewOptions = {
+    projectId,
+    // Preserved rather than passed as undefined: the provider writes this straight to
+    // `scrollGroupScrRef`, so dropping it would unbind the Find tab from the scroll group it shares
+    // with the editor.
+    editorScrollGroupId: existingFindWebViewDefinition?.scrollGroupScrRef,
+    // Not brought to front: a project switch should not yank Column 3 away from whichever tab the
+    // user was on.
+  };
+  await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
+  return findWebViewId;
+}
+
 async function openFind(
   editorWebViewId: string | undefined,
   selectedText?: string,
@@ -723,6 +759,28 @@ export async function activate(context: ExecutionActivationContext) {
       },
     },
   });
+  const updateFindProjectPromise = papi.commands.registerCommand(
+    'platformScripture.updateFindProject',
+    updateFindProject,
+    {
+      method: {
+        summary: 'Re-point an already-open find web view at a different project',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The ID of the project the find web view should search from now on',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the find web view, or undefined if none was open',
+          schema: { type: ['string', 'null'] },
+        },
+      },
+    },
+  );
   const openFindWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     findWebViewType,
     findWebViewProvider,
@@ -821,6 +879,7 @@ export async function activate(context: ExecutionActivationContext) {
     await markersChecklistWebViewProviderPromise,
     openSettingsEventEmitter,
     await openFindPromise,
+    await updateFindProjectPromise,
     await openFindWebViewProviderPromise,
     await findHistoryDataProviderPromise,
     await openManageBooksPromise,
