@@ -6,7 +6,15 @@
  * using webpack. This gives us some performance wins.
  */
 
-import { app, BrowserWindow, ipcMain, RenderProcessGoneDetails, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  MouseInputEvent,
+  RenderProcessGoneDetails,
+  session,
+  shell,
+} from 'electron';
 import os from 'os';
 import path from 'path';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -762,20 +770,37 @@ async function main() {
         // window level at all. `moveTop()` raises without taking focus, so the main window keeps the
         // keystrokes. Nothing is reparented, which is the whole point: reparenting is what inflicted
         // the permanent damage in PT-4276. Watch for flicker — the main window is briefly on top
-        // between the click and this raise, on every single click into it — and for gaps, since
-        // focus is not the only way a window comes forward (Mission Control, Cmd+backtick, spaces).
+        // between the click and this raise, on every single click into it.
         const raiseAboveMain = () => {
           if (!newWindow.isDestroyed()) newWindow.moveTop();
         };
         mainWindow.on('focus', raiseAboveMain);
         mainWindow.on('show', raiseAboveMain);
         mainWindow.on('restore', raiseAboveMain);
+
+        // `focus` fires only on a TRANSITION. Clicking a main window that is already focused raises
+        // it just the same but emits nothing, so focus events alone leave the pin silently broken
+        // from the second click onward — which is the ordinary case, since a user clicks into the
+        // main window repeatedly while working in it. `before-mouse-event` fires for every click in
+        // the main window's web contents regardless of whether it was already focused, which is the
+        // gap that gets closed here.
+        //
+        // Deferred with setImmediate because this event arrives BEFORE the click is processed:
+        // raising synchronously would put the pinned window up first and let the OS raise the main
+        // window over it a moment later, reproducing the very ordering being fixed.
+        const raiseOnMainMouseDown = (_event: unknown, input: MouseInputEvent) => {
+          if (input.type !== 'mouseDown') return;
+          setImmediate(raiseAboveMain);
+        };
+        mainWindow.webContents.on('before-mouse-event', raiseOnMainMouseDown);
+
         raiseAboveMain();
         clearSpikePinMode = () => {
           if (mainWindow.isDestroyed()) return;
           mainWindow.removeListener('focus', raiseAboveMain);
           mainWindow.removeListener('show', raiseAboveMain);
           mainWindow.removeListener('restore', raiseAboveMain);
+          mainWindow.webContents.removeListener('before-mouse-event', raiseOnMainMouseDown);
         };
       } else if (mode === 'active-aot') {
         // Candidate 3. True always-on-top, but only while Paratext is the frontmost application:
