@@ -31,13 +31,25 @@
     -->
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!--
+      ParatextData and ParatextChecks are built from the same Paratext 9 source tree, and
+      ParatextChecks declares a dependency on its exact matching ParatextData version. Pinning them
+      to different versions is an ABI hazard, so they share one version here rather than being kept
+      in step by hand. This is the single source of truth for the Paratext package version: the test
+      project deliberately does NOT pin ParatextData, it inherits it through its ProjectReference to
+      this project.
+    -->
+    <ParatextPackageVersion>9.5.0.24</ParatextPackageVersion>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="icu.net" Version="3.0.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.1" />
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.3" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
-    <PackageReference Include="ParatextChecks" Version="9.5.0.22" />
-    <PackageReference Include="ParatextData" Version="9.5.0.22" />
+    <PackageReference Include="ParatextChecks" Version="$(ParatextPackageVersion)" />
+    <PackageReference Include="ParatextData" Version="$(ParatextPackageVersion)" />
     <PackageReference Include="StreamJsonRpc" Version="2.22.11" />
     <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.9" />
