@@ -434,47 +434,36 @@ step, no automation. Just a record.
 - **Decision:** Single-verse display surfaces resolve a verse-0 reference to verse 1 via
   `resolveDisplayVerseNum` (`extensions/src/platform-scripture-editor/src/scripture-text-grid/verse-display.utils.ts`),
   confirmed by Ian Hewerdine 2026-08-05. Three constraints make this safe:
-  - **Display-only, and it needs an explicit guard.** The resolved verse is never written back to
+  - **Display-only, and it carries an explicit guard.** The resolved verse is never written back to
     the scroll group — writing it back would yank the Scripture Editor off the intro the user came
-    from. This does not happen for free: `Editorial`'s `ScriptureReferencePlugin` mounts even when
-    `isReadonly` is set (`Editor.tsx` gates it on `scrRef && onScrRefChange` only) and
-    `$findAndSetChapterAndVerse` reports any selection whose **chapter or verse** disagrees with
-    `scrRef` — a chapter mismatch when the document has a chapter node, or a `scrRef` verse outside
-    the selected verse marker's range. Fall-forward makes that disagreement permanent
-    (`isVerseInRange(0, '1')` is false on every click), so `ResourceCell` swallows the echo. Without
-    the guard one click writes verse 1 — and, because the slice drops chapter chrome,
-    `parseInt(chapterNode?.getNumber() ?? '1', 10)` yields chapter 1, turning Luke 5:0 into Luke 1:1.
+    from. `Editorial`'s `ScriptureReferencePlugin` mounts even when `isReadonly` is set (`Editor.tsx`
+    gates it on `scrRef && onScrRefChange` only) and reports a selection whose book, chapter, or
+    verse disagrees with `scrRef`, so `ResourceCell` swallows the echo.
 
-    **Which editor build this describes (as of 2026-08-16).** The trace above is against
-    `@eten-tech-foundation/platform-editor` **0.8.14** — what `package-lock.json` resolves, what npm
-    serves as `latest`, and what is installed locally. But 0.8.14 was published 2026-04-14 and this
-    repo's `main` already imports editor APIs it does not export (`PARAGRAPH_STRUCTURE_VIEW_MODE`,
-    `StructureProtectionMode`, `ViewOptions.hasGutterParaMarkers`, `EditorRef.removeCharacterMarker`),
-    so **the effective target is a newer build than the lockfile pins** and the lockfile should not be
-    read as authoritative here.
-
-    In that newer build the plugin is rewritten around a `$resolvePosition` / `onSelectionSettled` /
-    `report` machine whose `$resolvePosition` returns `undefined` for a document with no `BookNode`
-    and no `ChapterNode` (upstream invariant I5). A verse-mode slice is exactly that document, so
-    there the plugin reports **nothing** here. Both states are recorded deliberately, because the
-    guard is right under either: a live fix against 0.8.14's `$findAndSetChapterAndVerse`, and
-    defense-in-depth against the rewrite — the thing that keeps the write-back closed if a future
-    editor makes chrome-free slices addressable again. Re-verify at the next version bump; do not
-    delete the guard on the strength of the rewrite alone. (Both mechanisms surfaced in review of
-    #2663.)
+    **The guard is defense-in-depth, not a fix for a live report.** `$resolvePosition` refuses to
+    describe a position in a document with no `BookNode` and no `ChapterNode` (upstream invariant I5),
+    and `sliceUsjToVerse` drops both — so today the plugin is silent in verse mode, and the
+    `viewMode === 'verse'` branch of `handleScrRefChange` is unreachable. It is kept because it costs
+    nothing and is the right shape if a future editor makes slices addressable; do not read it as
+    evidence that a write-back currently occurs. Verified against the editor this repo actually
+    builds: `dev-packages/scripture-editors` `packages/platform` at **0.8.15**, which `postinstall` →
+    `link-dev-packages` builds and yalc-links over `node_modules`. (The npm-published 0.8.14 that
+    `package-lock.json` names is a placeholder the link replaces; an earlier draft of this ADR
+    described 0.8.14's `$findAndSetChapterAndVerse` and its chapter-1 fallback as the live mechanism,
+    which was wrong — that plugin is not what runs here. Corrected in review of #2663.)
 
     **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
     `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
-    **bidirectional** — `$moveCursorToVerseStart` applies `scrRef` to the caret, and
-    `$findAndSetChapterAndVerse` reports the caret back (`$moveCaretToVerseStart` and
-    `$resolvePosition` after the upstream rewrite) — and read-only surfaces need both halves. Not
-    mounting it when read-only would break navigation-to-verse in every read-only editor and would
-    break read-only click-to-sync, which **this grid's chapter mode and the Resource Viewer rely on**.
-    (Scoped deliberately: click-to-sync is *not* load-bearing in verse mode. There the slice holds
-    exactly the verse `scrRef` names, so a click resolves to that same verse, the plugin finds no
-    disagreement, and nothing is reported — a verse cell has nowhere to sync TO. That predates this
-    decision: `sliceUsjToVerse` has dropped chapter chrome since #2509. It is not a lost capability
-    and is deliberately not filed.) `isReadonly` is therefore the wrong
+    **bidirectional** — `$moveCaretToVerseStart` applies `scrRef` to the caret, and `$resolvePosition`
+    → `onSelectionSettled` → `report` reports the caret back — and read-only surfaces need both
+    halves. Not mounting it when read-only would break navigation-to-verse in every read-only editor
+    and would break read-only click-to-sync, which **this grid's chapter mode and the Resource Viewer
+    rely on** — those feed a whole chapter, so the document carries the book and chapter nodes
+    `$resolvePosition` needs. (Scoped deliberately: click-to-sync is *not* load-bearing in verse mode,
+    where the slice is unaddressable and no click reports anything. That predates this decision —
+    `sliceUsjToVerse` has dropped chapter chrome since #2509 — and is not a lost capability, since a
+    verse cell holds only the verse you are already on and so has nowhere to sync TO. Deliberately
+    not filed.) `isReadonly` is therefore the wrong
     predicate: a read-only editor reporting its caret position is correct behavior, not the bug.
     The bug is narrower and entirely host-made — *we* hand the editor verse 1's USJ while telling it
     verse 0, so the only component that knows the reference is a deliberate lie is the one that told
