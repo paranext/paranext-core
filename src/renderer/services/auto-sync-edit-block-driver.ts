@@ -49,6 +49,15 @@ import {
  * sync-edit-blocked handling (no cross-boundary imports); if those extension web-view types are
  * ever renamed, update them here to match. Each of these web views reads `isSyncBlocked` from its
  * own web view state and folds it into a read-only / write-disabled mode.
+ *
+ * Known gap: `platformScripture.find` is absent. Its Replace / Replace All controls write scripture
+ * through the replace PDP, so during an automatic Send/Receive they hit the armed
+ * `SendReceiveWriteLock` and fail mid-batch with the `(SR_EDIT_BLOCKED)` sentinel and no
+ * explanation in the UI. Adding it here is only the first of four steps — the provider must scrub
+ * the flag on rebuild and the web view must read it and disable its replace controls, the way the
+ * comment views do. Note this is reachable in Power mode only: Simple-mode Find hides the replace
+ * UI entirely (`hideModeToggle` in find.web-view.tsx), so the always-visible Column 3 Find tab
+ * cannot write.
  */
 const EDIT_BLOCKABLE_WEB_VIEW_TYPES: ReadonlySet<string> = new Set([
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,

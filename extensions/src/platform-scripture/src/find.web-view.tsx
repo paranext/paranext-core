@@ -256,6 +256,11 @@ global.webViewComponent = function FindWebView({
 
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
 
+  // Set by the web view provider from the editor Find was invoked from. Withholds Replace/Replace
+  // All (search is unaffected) so Find can be pointed at a published resource without offering edits
+  // the project would reject. Only reachable in power mode, where the replace UI exists at all.
+  const [isReadOnly] = useWebViewState<boolean>('isReadOnly', false);
+
   const editorWebViewController = useWebViewController(
     'platformScriptureEditor.react',
     editorWebViewId,
@@ -1459,6 +1464,7 @@ global.webViewComponent = function FindWebView({
       isReplacing={isReplacing}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
+      isReadOnly={isReadOnly}
       results={results}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}

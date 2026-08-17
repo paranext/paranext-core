@@ -224,6 +224,11 @@ type HarnessConfig = {
    * a paragraph/verse/chapter marker disables Replace with an explanatory tooltip.
    */
   isStructureProtected?: boolean;
+  /**
+   * Whether the bound project is read-only. When `true`, the read-only note shows and Replace /
+   * Replace All are disabled no matter what the replace term is.
+   */
+  isReadOnly?: boolean;
 };
 
 /**
@@ -458,6 +463,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       isReplacing={false}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
+      isReadOnly={config.isReadOnly}
       results={displayedResults}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
@@ -574,4 +580,15 @@ export const StructureProtected: Story = {
   decorators: [
     createDecorator({ activeMode: 'replace', isStructureProtected: true, replaceTerm: '\\p text' }),
   ],
+};
+
+/**
+ * Replace mode pointed at read-only text — what the user sees after invoking Find from an editor
+ * holding a published resource. Searching works exactly as it does anywhere else; only the
+ * replacement is withheld, so the note explains why and Replace / Replace All stay disabled for
+ * every replace term. The per-result Replace buttons are withheld too, since they would otherwise
+ * apply the same edit the disabled buttons refuse.
+ */
+export const ReadOnlyProject: Story = {
+  decorators: [createDecorator({ activeMode: 'replace', isReadOnly: true, replaceTerm: 'word' })],
 };

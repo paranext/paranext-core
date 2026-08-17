@@ -57,6 +57,7 @@ import {
   ReplacePreviewOptionsStrings,
 } from './replace-preview-options.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
+import { getReplaceUnavailableReason } from './replace-availability.util';
 
 /** Localization keys used by the {@link Find} component itself (excludes child component keys). */
 export const FIND_LOCALIZED_STRING_KEYS = [
@@ -82,6 +83,8 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_replaceAll%',
   '%webView_find_replaceTab%',
   '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_replace_readOnlyNote%',
+  '%webView_find_replace_readOnlyTooltip%',
   '%webView_find_replace_structureProtectedError%',
   '%webView_find_replace_structureProtectedMarkerTooltip%',
   '%webView_find_replace_structureProtectedNote%',
@@ -164,6 +167,12 @@ export type FindProps = {
   isReplacing: boolean;
   /** Whether the project's structure is currently protected (replace restrictions apply). */
   isStructureProtected?: boolean;
+  /**
+   * Whether the bound project is read-only, in which case no replacement can ever be applied. True
+   * when Find is pointed at a published resource opened in the editor column. Search stays fully
+   * available; only Replace and Replace All are withheld.
+   */
+  isReadOnly?: boolean;
   /**
    * Whether the current replacement text itself contains a paragraph/verse marker — guaranteed to
    * be rejected while protected, so Replace is proactively disabled.
@@ -282,6 +291,7 @@ export function Find({
   isReplacing,
   isStructureProtected = false,
   isReplacementStructureChanging = false,
+  isReadOnly = false,
   results,
   resultsByBook,
   focusedResultIndex,
@@ -488,6 +498,19 @@ export function Find({
   // deletion bar rather than silently showing no preview.
   const replaceConfig = activeMode === 'replace' ? { term: replaceTerm, preserveCase } : undefined;
 
+  // Why Replace/Replace All are withheld this render, if they are. Both buttons and the explanatory
+  // note read from this single resolution so they can never disagree about whether replace is
+  // possible or about which reason to name.
+  const replaceUnavailableReason = getReplaceUnavailableReason(
+    isReadOnly,
+    isStructureProtected,
+    isReplacementStructureChanging,
+  );
+  const replaceUnavailableTooltip =
+    replaceUnavailableReason === 'readOnly'
+      ? localizedStrings['%webView_find_replace_readOnlyTooltip%']
+      : localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%'];
+
   // Map the flat localized-string bag into the shape the preview-options picker expects.
   const previewOptionsStrings: ReplacePreviewOptionsStrings = {
     togglePreviewOptions: localizedStrings['%webView_find_previewOptions_toggle%'],
@@ -633,7 +656,14 @@ export function Find({
                 className="tw:w-full tw:min-w-16 tw:!pl-8 tw:!pr-4 scripture-font"
               />
             </div>
-            {isStructureProtected && (
+            {isReadOnly && (
+              <p className="tw:text-xs tw:text-muted-foreground">
+                {localizedStrings['%webView_find_replace_readOnlyNote%']}
+              </p>
+            )}
+            {/* Structure protection only matters where a replacement could otherwise be applied, so
+                it is not worth naming alongside the read-only note above. */}
+            {!isReadOnly && isStructureProtected && (
               <p className="tw:text-xs tw:text-muted-foreground">
                 {localizedStrings['%webView_find_replace_structureProtectedNote%']}
               </p>
@@ -670,10 +700,8 @@ export function Find({
               </div>
               <DisabledActionTooltip
                 className="tw:flex tw:gap-2"
-                disabled={isStructureProtected && isReplacementStructureChanging}
-                tooltipText={
-                  localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%']
-                }
+                disabled={replaceUnavailableReason !== undefined}
+                tooltipText={replaceUnavailableTooltip}
               >
                 <Button
                   variant="outline"
@@ -682,7 +710,7 @@ export function Find({
                     visibleResults.length === 0 ||
                     searchStatus === 'running' ||
                     isReplacing ||
-                    (isStructureProtected && isReplacementStructureChanging)
+                    replaceUnavailableReason !== undefined
                   }
                 >
                   <ReplaceAll className="tw:h-4 tw:w-4" />
@@ -694,7 +722,7 @@ export function Find({
                     focusedResultIndex === undefined ||
                     searchStatus === 'running' ||
                     isReplacing ||
-                    (isStructureProtected && isReplacementStructureChanging)
+                    replaceUnavailableReason !== undefined
                   }
                 >
                   <Replace className="tw:h-4 tw:w-4" />
@@ -857,7 +885,12 @@ export function Find({
                 }
                 onCancelReplace={cancelReplace}
                 localizedStrings={searchResultLocalizedStrings}
-                isReplaceMode={activeMode === 'replace'}
+                // Read-only projects drop out of replace mode for the result list specifically: this
+                // prop is what renders each result's own Replace button and its Enter/Space replace
+                // shortcut, both of which call `onReplace` directly and so would bypass the disabled
+                // Replace/Replace All buttons above. Per-result replace previews go with them, which
+                // is the right trade — a preview of an edit that can never be applied is noise.
+                isReplaceMode={activeMode === 'replace' && !isReadOnly}
                 isReplacing={isReplacing}
                 replaceConfig={replaceConfig}
                 previewOptions={previewOptions}

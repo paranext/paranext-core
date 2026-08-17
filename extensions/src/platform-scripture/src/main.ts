@@ -280,6 +280,46 @@ async function openManageBooks(
   return papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, options);
 }
 
+/**
+ * Re-points an already-open Find web view at `projectId`, creating nothing.
+ *
+ * Simple mode's Column 3 panels follow the active translation project, and the editor re-points
+ * them as a group whenever the project changes. Find is one of those panels but is not opened by
+ * that group operation — it lives in the fixed layout from startup — so without this it would keep
+ * showing the previous project's results and searching the previous project while its three
+ * siblings had already moved on, in a tab that is always on screen.
+ *
+ * Deliberately does not create a Find web view when none is open: outside the fixed Simple-mode
+ * layout, Find is a panel the user opens explicitly, and a project switch is not a request to open
+ * it.
+ */
+async function updateFindProject(projectId: string): Promise<string | undefined> {
+  const findWebViewId = await papi.webViews.openWebView(findWebViewType, undefined, {
+    existingId: '?',
+    createNewIfNotFound: false,
+  });
+  if (!findWebViewId) return undefined;
+
+  const existingFindWebViewDefinition = await papi.webViews.getOpenWebViewDefinition(findWebViewId);
+  if (existingFindWebViewDefinition?.projectId === projectId) return findWebViewId;
+
+  const options: FindWebViewOptions = {
+    projectId,
+    // Preserved rather than passed as undefined: the provider writes this straight to
+    // `scrollGroupScrRef`, so dropping it would unbind the Find tab from the scroll group it shares
+    // with the editor.
+    editorScrollGroupId: existingFindWebViewDefinition?.scrollGroupScrRef,
+    // Only ever called for the active translation project, which is editable by definition — this
+    // also clears a read-only flag left behind by a Find that had followed the editor onto a
+    // published resource.
+    isReadOnly: false,
+    // Not brought to front: a project switch should not yank Column 3 away from whichever tab the
+    // user was on.
+  };
+  await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
+  return findWebViewId;
+}
+
 async function openFind(
   editorWebViewId: string | undefined,
   selectedText?: string,
@@ -287,6 +327,7 @@ async function openFind(
   let projectId: FindWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
   let editorScrollGroupId: FindWebViewOptions['editorScrollGroupId'];
+  let isReadOnly = false;
 
   logger.debug('Opening find UI');
 
@@ -295,6 +336,11 @@ async function openFind(
     projectId = webViewDefinition?.projectId;
     tabIdFromWebViewId = webViewDefinition?.id;
     editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
+    // The editor already resolved whether what it holds is editable; reuse that answer rather than
+    // re-deriving it. Find follows the editor onto a published resource so the text stays
+    // searchable, but the resource rejects every write, so the replace controls are withheld.
+    // Coerced rather than asserted because web view state is untyped.
+    isReadOnly = !!webViewDefinition?.state?.isReadOnly;
   }
 
   if (!projectId) {
@@ -316,6 +362,7 @@ async function openFind(
     bringToFront: true,
     editorWebViewId,
     initialSearchText: selectedText,
+    isReadOnly,
   };
 
   // First tries to open an existing find web view
@@ -331,7 +378,15 @@ async function openFind(
   if (findWebViewId) {
     const existingFindWebViewDefinition =
       await papi.webViews.getOpenWebViewDefinition(findWebViewId);
-    if (existingFindWebViewDefinition?.projectId !== projectId || selectedText) {
+    // The read-only comparison matters when the project is unchanged but its editability isn't: with
+    // only the project check, invoking Find again after the same project became writable (or stopped
+    // being) would skip the reload and leave the replace controls in the previous state.
+    const hasReadOnlyChanged = !!existingFindWebViewDefinition?.state?.isReadOnly !== isReadOnly;
+    if (
+      existingFindWebViewDefinition?.projectId !== projectId ||
+      hasReadOnlyChanged ||
+      selectedText
+    ) {
       await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
     }
   } else {
@@ -701,6 +756,28 @@ export async function activate(context: ExecutionActivationContext) {
       },
     },
   });
+  const updateFindProjectPromise = papi.commands.registerCommand(
+    'platformScripture.updateFindProject',
+    updateFindProject,
+    {
+      method: {
+        summary: 'Re-point an already-open find web view at a different project',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The ID of the project the find web view should search from now on',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the find web view, or undefined if none was open',
+          schema: { type: ['string', 'null'] },
+        },
+      },
+    },
+  );
   const openFindWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     findWebViewType,
     findWebViewProvider,
@@ -799,6 +876,7 @@ export async function activate(context: ExecutionActivationContext) {
     await markersChecklistWebViewProviderPromise,
     openSettingsEventEmitter,
     await openFindPromise,
+    await updateFindProjectPromise,
     await openFindWebViewProviderPromise,
     await findHistoryDataProviderPromise,
     await openManageBooksPromise,
