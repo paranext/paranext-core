@@ -262,6 +262,18 @@ export type ManageBooksDialogProps = {
    * fully-populated object sourced from `manageBooks_projectSelector_*` localize keys.
    */
   projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
+
+  /**
+   * Section to open on first mount. Defaults to `'view'`. Applied once at mount — later changes are
+   * ignored, because the user's in-dialog navigation must not be overridden by a stale launch
+   * value.
+   */
+  initialSection?: ManageBooksAction;
+  /**
+   * Book ids preselected for `initialSection` on first mount. Applied once at mount, same rationale
+   * as `initialSection`.
+   */
+  initialSelectedBooks?: string[];
 };
 
 // --------------------------------------------------------------------------
@@ -529,6 +541,8 @@ export function ManageBooksDialog({
   sidebarProjects = [],
   openTabs,
   projectSelectorLocalizedStrings,
+  initialSection,
+  initialSelectedBooks,
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
@@ -600,8 +614,14 @@ export function ManageBooksDialog({
   }, [open, projectId, refreshBooks]);
 
   // -- UI state ------------------------------------------------------------
-  const [action, setAction] = useState<ManageBooksAction>('view');
-  const [selectionsByAction, setSelectionsByAction] = useState<Record<string, Set<string>>>({});
+  // Lazy initializers, so the launch values seed the FIRST render only. Re-applying them on a later
+  // render would fight the user's own navigation and selection inside the dialog.
+  const [action, setAction] = useState<ManageBooksAction>(() => initialSection ?? 'view');
+  const [selectionsByAction, setSelectionsByAction] = useState<Record<string, Set<string>>>(() =>
+    initialSection && initialSelectedBooks?.length
+      ? { [initialSection]: new Set(initialSelectedBooks) }
+      : {},
+  );
   const [filter, setFilter] = useState('');
   const [copySourceId, setCopySourceId] = useState<string | undefined>(undefined);
   // Default Create method is "Create based on" (FromTemplate): the prompt copy reads "Create based

@@ -33,6 +33,7 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import {
   AlertEntry,
   EstherTemplate,
+  ManageBooksAction,
   ManageBooksCopyStrategy,
   ManageBooksCreateMethod,
   ManageBooksDialog,
@@ -311,6 +312,19 @@ global.webViewComponent = function ManageBooksWebView({
   const [persistedProjectId, setPersistedProjectId] = useWebViewState<string>(
     'projectId',
     initialProjectId ?? '',
+  );
+
+  // Transient launch parameters from `openManageBooks(..., 'createMissingBook')`. The provider
+  // rebuilds these from the current open/reload options on every getWebView and scrubs them
+  // otherwise, so they are already guaranteed not to survive a layout restore — no clearing needed
+  // here.
+  const [initialSection] = useWebViewState<ManageBooksAction | undefined>(
+    'initialSection',
+    undefined,
+  );
+  const [initialSelectedBooks] = useWebViewState<string[] | undefined>(
+    'initialSelectedBooks',
+    undefined,
   );
 
   // The EXPLICIT open context wins over persisted state: the dialog is only
@@ -1055,6 +1069,8 @@ global.webViewComponent = function ManageBooksWebView({
       <ManageBooksDialog
         open
         projectId={projectId}
+        initialSection={initialSection}
+        initialSelectedBooks={initialSelectedBooks}
         onProjectIdChange={setProjectIdLocal}
         loadProjects={loadProjects}
         loadBooks={loadBooks}
