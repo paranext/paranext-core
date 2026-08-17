@@ -1,5 +1,5 @@
 import papi, { logger } from '@papi/backend';
-import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
+import { ExecutionActivationContext, ProjectSettingValidator, ScrollGroupScrRef } from '@papi/core';
 import { PlatformEventEmitter } from 'platform-bible-utils';
 import { CheckResultsInvalidated } from 'platform-scripture';
 import {
@@ -21,6 +21,10 @@ import {
 } from './checks/check-aggregator.service';
 import { checkHostingService } from './checks/extension-host-check-runner.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
+import {
+  MANAGE_BOOKS_CREATE_INTENT_FLOAT_SIZE,
+  resolveMissingBookId,
+} from './manage-books-launch.utils';
 import {
   MANAGE_BOOKS_WEB_VIEW_TYPE,
   ManageBooksWebViewOptions,
@@ -236,8 +240,10 @@ async function openMarkersChecklistSettings(): Promise<void> {
  */
 async function openManageBooks(
   webViewIdOrProjectId: string | undefined,
+  intent?: 'createMissingBook',
 ): Promise<string | undefined> {
   let projectId: string | undefined;
+  let scrollGroupScrRef: ScrollGroupScrRef | undefined;
 
   if (webViewIdOrProjectId) {
     // Try to resolve as a web view id first; if that fails treat the value
@@ -246,12 +252,30 @@ async function openManageBooks(
     try {
       const def = await papi.webViews.getOpenWebViewDefinition(webViewIdOrProjectId);
       projectId = def?.projectId ?? webViewIdOrProjectId;
+      scrollGroupScrRef = def?.scrollGroupScrRef;
     } catch {
       projectId = webViewIdOrProjectId;
     }
   }
 
   const options: ManageBooksWebViewOptions = { projectId };
+
+  // Only the intent is passed by the caller; the target book is derived from the calling editor's
+  // scroll-group reference rather than plumbed through the command signature.
+  if (intent === 'createMissingBook' && projectId) {
+    options.initialSection = 'create';
+    const bookId = await resolveMissingBookId(
+      scrollGroupScrRef,
+      projectId,
+      papi.scrollGroups.getScrRefForProject,
+    );
+    if (bookId) options.initialSelectedBooks = [bookId];
+  }
+
+  const floatLayoutSize =
+    intent === 'createMissingBook'
+      ? MANAGE_BOOKS_CREATE_INTENT_FLOAT_SIZE
+      : { width: 1100, height: 720 };
 
   // Reuse the existing Manage Books tab if one is already open (per FN-003 — only one
   // Manage Books dialog at a time). `existingId: '?'` matches any open instance of this
@@ -265,7 +289,7 @@ async function openManageBooks(
   const floatingLayout = {
     type: 'float',
     position: 'center',
-    floatSize: { width: 1100, height: 720 },
+    floatSize: floatLayoutSize,
   } as const;
   const existingId = await papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, {
     ...options,
@@ -273,7 +297,12 @@ async function openManageBooks(
     createNewIfNotFound: false,
   });
   if (existingId) {
-    // Bring the existing tab to the front and update it with the new project context.
+    // Bring the existing tab to the front and update it with the new project context. Reloading is
+    // also how `initialSection`/`initialSelectedBooks` reach an already-open dialog; without it a
+    // second click on the editor's Manage books button would silently do nothing. Mirrors
+    // `openFind`'s reload-when-`selectedText`-present branch. The panel is deliberately NOT resized
+    // to the intent float size here — resizing a window the user already placed is more surprising
+    // than leaving it.
     await papi.webViews.reloadWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, existingId, options);
     return existingId;
   }
@@ -650,6 +679,13 @@ export async function activate(context: ExecutionActivationContext) {
             summary:
               'Either the active editor web view id (resolves its project) or a literal project id; omit to open with the project picker visible.',
             schema: { type: 'string' },
+          },
+          {
+            name: 'intent',
+            required: false,
+            summary:
+              "Pass 'createMissingBook' to open on the Create-books section with the calling editor's current book pre-selected; omit for the default view.",
+            schema: { type: 'string', enum: ['createMissingBook'] },
           },
         ],
         result: {

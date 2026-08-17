@@ -2548,12 +2548,15 @@ declare module 'papi-shared-types' {
      *   `papi.webViews.getOpenWebViewDefinition` — if it resolves to a web view with a project, the
      *   dialog opens pre-targeted at that project; otherwise the value itself is treated as the
      *   project id. Omit to open the dialog with the project picker visible.
+     * @param intent Pass `'createMissingBook'` to open the dialog on its Create-books section with
+     *   the calling editor's current book pre-selected, instead of the default view.
      * @returns Id of the Manage Books web view — the existing one if reused, or a newly opened one
      *   — or `undefined` if the provider did not create one.
      * @experimental
      */
     'platformScripture.openManageBooks': (
-      webViewIdOrProjectId?: string | undefined,
+      webViewIdOrProjectId?: string,
+      intent?: 'createMissingBook',
     ) => Promise<string | undefined>;
 
     /**

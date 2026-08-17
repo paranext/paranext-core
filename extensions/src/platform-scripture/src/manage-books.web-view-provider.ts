@@ -11,6 +11,7 @@ import {
   WebViewDefinition,
 } from '@papi/core';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
+import type { ManageBooksAction } from './manage-books-dialog/manage-books-dialog.types';
 import manageBooksWebView from './manage-books.web-view?inline';
 // Reuse the inventory styles for now — Tailwind classes resolve at the
 // platform-bible-react level; we mainly need the base body styles. If the
@@ -28,6 +29,14 @@ export const MANAGE_BOOKS_WEB_VIEW_TYPE = 'platformScripture.manageBooks';
  */
 export interface ManageBooksWebViewOptions extends GetWebViewOptions {
   projectId: string | undefined;
+  /**
+   * Section to open the dialog on. TRANSIENT — scrubbed from the web view's saved state on every
+   * `getWebView` rebuild, so it applies only to the open/reload call that supplied it and can never
+   * be restored from a persisted layout.
+   */
+  initialSection?: ManageBooksAction;
+  /** Book ids to pre-select in `initialSection`. TRANSIENT — same scrubbing as `initialSection`. */
+  initialSelectedBooks?: string[];
 }
 
 /**
