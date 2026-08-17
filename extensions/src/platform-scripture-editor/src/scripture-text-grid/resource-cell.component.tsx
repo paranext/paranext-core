@@ -162,37 +162,29 @@ export function ResourceCell({
   const displayVerseNum = resolveDisplayVerseNum(scrRef.verseNum);
   const isFallenForward = displayVerseNum !== scrRef.verseNum;
 
-  // Editorial's reference plugin is active even when read-only, and `$findAndSetChapterAndVerse`
-  // reports a selection whose CHAPTER or VERSE disagrees with `scrRef` (a chapter mismatch when the
-  // document has a chapter node, or a `scrRef` verse outside the selected verse marker's range) —
-  // not the verse alone. Under fall-forward that disagreement is permanent: we hand the editor verse
-  // 1's text while telling it verse 0, so `isVerseInRange(0, '1')` is false on every click. A single
-  // click would therefore push verse 1 into the shared scroll group, dragging the Scripture Editor
-  // off the intro the user came from. Worse, the slice carries no chapter marker, so
-  // `parseInt(chapterNode?.getNumber() ?? '1', 10)` yields chapter 1 and Luke 5:0 reports Luke 1:1 —
-  // a chapter jump. Swallow that echo: fall-forward is display-only.
+  // Fall-forward is display-only: we hand the editor verse 1's text while telling it verse 0, and
+  // that resolved verse must never reach the shared scroll group — it would drag the Scripture
+  // Editor off the intro the user came from. `Editorial`'s reference plugin stays mounted when
+  // read-only (`Editor.tsx` gates it on `scrRef && onScrRefChange` only) and reports selections that
+  // disagree with `scrRef`, so this swallows any such echo in a fallen-forward verse cell.
   //
-  // Non-fallen-forward cells report normally, but note what that means per mode. In CHAPTER mode the
-  // document carries real chapter chrome, so click-to-sync works. In VERSE mode the slice holds
-  // exactly the verse `scrRef` names, so a click resolves to that same verse, the plugin finds no
-  // disagreement, and nothing is reported — clicking a verse cell has nowhere to sync TO. That is
-  // pre-existing (the slice has dropped chapter chrome since #2509) and is not a lost capability.
+  // DEFENSE-IN-DEPTH, NOT A FIX FOR A LIVE REPORT. `$resolvePosition` refuses to describe a position
+  // in a document with no BookNode and no ChapterNode (upstream invariant I5), and `sliceUsjToVerse`
+  // drops both — so today the plugin is silent in verse mode and this branch is unreachable. It is
+  // kept because it costs nothing and is the right shape if slices ever become addressable. Don't
+  // read it as evidence that a write-back currently happens; the next person to touch this should
+  // not reason from a mechanism that isn't there. Verified against the editor this repo actually
+  // builds: `dev-packages/scripture-editors` `packages/platform` 0.8.15, which `postinstall` ->
+  // `link-dev-packages` yalc-links over `node_modules` (the 0.8.14 in `package-lock.json` is a
+  // placeholder the link replaces — don't verify against it).
   //
-  // The trace above is against `@eten-tech-foundation/platform-editor` 0.8.14 (lockfile-resolved and
-  // installed). Treat that as the floor, not the target: this repo's `main` already imports editor
-  // APIs 0.8.14 does not export, so the build we actually run is newer. In the newer build the
-  // plugin is rewritten around `$resolvePosition`, which refuses to describe a position in a
-  // document with no BookNode and no ChapterNode — a chrome-free slice is exactly that, so it
-  // reports nothing here. The guard is correct either way: a live fix against 0.8.14,
-  // defense-in-depth against the rewrite. Don't delete it on the strength of the rewrite alone.
-  //
-  // This guard belongs here, not upstream in `ScriptureReferencePlugin`. Gating that plugin on
+  // The guard belongs here, not upstream in `ScriptureReferencePlugin`. Gating that plugin on
   // `isReadonly` would break the read-only surfaces that need it: it is bidirectional (it also moves
   // the caret to `scrRef`), and read-only click-to-sync — which this grid's CHAPTER mode and the
-  // Resource Viewer depend on — would go with it. A read-only editor reporting its caret is correct;
-  // the bug is that WE told it a reference we then contradicted, so the component that created the
-  // mismatch is the one that owns it. Full reasoning, and what a future single-verse surface must
-  // copy: ADR-0013.
+  // Resource Viewer depend on, both feeding a whole chapter so the document is addressable — would
+  // go with it. A read-only editor reporting its caret is correct; the bug would be ours, since WE
+  // told it a reference we then contradicted. Full reasoning, and what a future single-verse surface
+  // must copy: ADR-0013.
   const handleScrRefChange = useCallback(
     (nextScrRef: SerializedVerseRef) => {
       if (viewMode === 'verse' && isFallenForward) return;

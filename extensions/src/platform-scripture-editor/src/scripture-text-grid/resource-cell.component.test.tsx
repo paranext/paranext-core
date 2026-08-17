@@ -332,12 +332,13 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
     expect(capturedEditorScrRef).toHaveBeenLastCalledWith(expect.objectContaining({ verseNum: 0 }));
   });
 
-  // `Editorial` is mocked, so these two exercise ResourceCell's own write-back channel directly:
-  // they pin OUR side of the contract (which reports we forward and which we swallow), not the
-  // plugin's behavior — a mocked plugin cannot be evidence about the real one. The payload below is
-  // modeled on what platform-editor 0.8.14's `$findAndSetChapterAndVerse` emits for this case rather
-  // than invented, so the guard is pinned against a realistic input; newer editor builds report
-  // nothing here instead. See the comment in `resource-cell.component.tsx` for both traces.
+  // `Editorial` is mocked, so these exercise ResourceCell's own write-back channel directly: they
+  // pin OUR side of the contract — which reports we forward and which we swallow. They are NOT
+  // evidence about the plugin, and the payloads are constructed, not observed. With the editor this
+  // repo builds (dev-packages 0.8.15) the plugin reports nothing at all in verse mode, because
+  // `$resolvePosition` will not describe a position in a document with no BookNode and no
+  // ChapterNode and `sliceUsjToVerse` drops both. These stay because they pin the guard's shape for
+  // the day slices become addressable — see `resource-cell.component.tsx`.
   it('swallows the editor write-back at verse 0 so a click cannot move the scroll group', async () => {
     const setScrRef = vi.fn();
     setUsjResult(twoVerseChapterUsj, false);
@@ -354,10 +355,8 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
     expect(setScrRef).not.toHaveBeenCalled();
   });
 
-  // The other half of the same contract: the guard is scoped to fall-forward, not to verse mode. In
-  // verse mode the real plugin has nothing to report (the slice holds exactly the verse `scrRef`
-  // names), so this pins that the guard would not swallow a report if one arrived — it is about
-  // reachability of OUR branch, not a claim that the plugin fires here.
+  // The other half of the same contract: the guard keys on fall-forward, not on verse mode alone.
+  // Again about OUR branch, not a claim that the plugin fires here.
   it('still reports editor selection changes when the verse did not fall forward', async () => {
     const setScrRef = vi.fn();
     setUsjResult(twoVerseChapterUsj, false);
@@ -375,11 +374,11 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
     expect(setScrRef).toHaveBeenCalledWith(reported);
   });
 
-  // The `viewMode` half of the guard. Chapter mode is where click-to-sync is genuinely load-bearing
-  // (the document carries real chapter chrome, so the plugin resolves and reports), and verse 0 is
-  // a perfectly ordinary reference there — the cell shows the front matter. Dropping `viewMode`
-  // from the guard would leave the grid's chapter mode and the Resource Viewer unable to sync at
-  // any chapter's verse 0, which no other test here would catch.
+  // The `viewMode` half of the guard, and the one case here that is NOT hypothetical: chapter mode
+  // feeds a whole chapter, so the document is addressable and the plugin really does report. Verse 0
+  // is an ordinary reference there — the cell shows the front matter. Dropping `viewMode` from the
+  // guard would leave the grid's chapter mode and the Resource Viewer unable to sync at any
+  // chapter's verse 0, which no other test here would catch.
   it('does not swallow the write-back in chapter mode at verse 0 — the guard is verse-mode only', async () => {
     const setScrRef = vi.fn();
     setUsjResult(frontMatterChapterUsj, false);
