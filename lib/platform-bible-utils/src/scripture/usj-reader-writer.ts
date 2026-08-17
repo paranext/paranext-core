@@ -2668,7 +2668,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     let markerUsfmOutput;
     let markerFragmentsInfo: UsjFragmentInfoMinimal[];
 
-    const { markerType, markerTypeInfo } = this.getInfoForMarker(
+    const { markerNameOriginal, markerType, markerTypeInfo } = this.getInfoForMarker(
       'isClosingMarker' in marker ? marker.forMarker : marker,
     );
 
@@ -2730,15 +2730,40 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       }
     }
 
-    // `ca` after a chapter marker gets NO special treatment: ParatextData's own USX -> USFM
-    // write (`SetChapterUsx` -> `GetChapterUsfm`, the same provider path the editor's save
-    // uses) puts it on the SAME line as `\c`, separated by the chapter marker's ordinary
-    // trailing structural space — `\c 1 \ca 2\ca*` — which is exactly what falls out of the
-    // default path here. A previous special case emitted a newline-plus-space instead
-    // (`\c 1\n \ca 2\ca*`), reproducing a hand-authored test-fixture shape that PARSES
-    // identically (line-break whitespace before an attribute marker is structural) but that no
-    // ParatextData writer produces. The captured pins live in
-    // c-sharp-tests/Projects/VerseAttributeFoldRoundTripCaptureTests.cs.
+    // Special case: `ca` after a chapter marker gets a newline plus one leading space —
+    // `\c 1\n \ca 2\ca*` — because that is what Paratext 9's STANDARD VIEW writes on save, and
+    // Standard View is how the overwhelming majority of real USFM files get saved. Its display
+    // structure is the reason (ParatextInternalShared/ScriptureViews/Standard.xslt): the chapter
+    // renders as a block `div` and the `\ca` span sits OUTSIDE that div as its following
+    // sibling, so the HTML -> USFM save emits the chapter's line break before the `\ca` bytes.
+    // Preserving that shape keeps this writer's output byte-faithful to the files users have.
+    //
+    // Two facts that must not be misread as reasons to remove this again:
+    // - ParatextData's own USX -> USFM write (`SetChapterUsx` -> `GetChapterUsfm`) puts `\ca` on
+    //   the SAME line (`\c 1 \ca 2\ca*`) — captured in
+    //   c-sharp-tests/Projects/VerseAttributeFoldRoundTripCaptureTests.cs — so a chapter saved
+    //   THROUGH ParatextData normalizes to same-line on disk regardless of what this writer
+    //   emits. The two writers genuinely disagree; this one sides with Standard View.
+    // - The two spellings PARSE identically (line-break whitespace before an attribute marker is
+    //   structural; the fold happens either way — same capture suite), so nothing downstream can
+    //   distinguish them semantically. The choice here is byte fidelity only.
+    if (this.markersMap.isSpaceAfterAttributeMarkersContent && markerNameOriginal === 'ca') {
+      // Find the last marker in the current USFM output. Both the index and the slice read
+      // `usfmOutput` — the string earlier branches may have trimmed — never the untouched `usfm`
+      // parameter, which can have diverged from it by the time this runs.
+      const lastMarkerBackslashIndex = usfmOutput.lastIndexOf('\\');
+      if (lastMarkerBackslashIndex >= 0) {
+        // We just want to know if it's a chapter marker, so two characters (`c` + space) suffice.
+        const lastMarker = usfmOutput.substring(
+          lastMarkerBackslashIndex + 1,
+          lastMarkerBackslashIndex + 3,
+        );
+        if (lastMarker === 'c ') {
+          usfmOutput = UsjReaderWriter.removeEndSpace(usfmOutput);
+          usfmOutput += '\n ';
+        }
+      }
+    }
 
     // Add the marker fragments and USFM into the existing fragments and USFM
     if (fragmentsInfo)

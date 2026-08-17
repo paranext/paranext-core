@@ -609,7 +609,6 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       },
     },
   },
-  // begin altnumber - first example of an attribute marker
   {
     usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
@@ -625,11 +624,12 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
         sid: '2SA 1',
       },
       documentLocation: {
-        jsonPath: '$.content[4]',
-        keyName: 'altnumber',
+        jsonPath: "$.content[4]['number']",
+        propertyOffset: 2,
       },
     },
   },
+  // begin altnumber - first example of an attribute marker
   {
     usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
@@ -647,7 +647,6 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       documentLocation: {
         jsonPath: '$.content[4]',
         keyName: 'altnumber',
-        keyOffset: 0,
       },
     },
   },
@@ -668,7 +667,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       documentLocation: {
         jsonPath: '$.content[4]',
         keyName: 'altnumber',
-        keyOffset: 1,
+        keyOffset: 0,
       },
     },
   },
@@ -689,7 +688,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       documentLocation: {
         jsonPath: '$.content[4]',
         keyName: 'altnumber',
-        keyOffset: 2,
+        keyOffset: 1,
       },
     },
   },
@@ -708,8 +707,9 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
         sid: '2SA 1',
       },
       documentLocation: {
-        jsonPath: "$.content[4]['altnumber']",
-        propertyOffset: 0,
+        jsonPath: '$.content[4]',
+        keyName: 'altnumber',
+        keyOffset: 2,
       },
     },
   },
@@ -729,7 +729,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       },
       documentLocation: {
         jsonPath: "$.content[4]['altnumber']",
-        propertyOffset: 1,
+        propertyOffset: 0,
       },
     },
   },
@@ -749,7 +749,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       },
       documentLocation: {
         jsonPath: "$.content[4]['altnumber']",
-        propertyOffset: 2,
+        propertyOffset: 1,
       },
     },
   },
@@ -769,7 +769,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       },
       documentLocation: {
         jsonPath: "$.content[4]['altnumber']",
-        propertyOffset: 3,
+        propertyOffset: 2,
       },
     },
   },
@@ -788,9 +788,8 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
         sid: '2SA 1',
       },
       documentLocation: {
-        jsonPath: '$.content[4]',
-        keyName: 'altnumber',
-        keyClosingMarkerOffset: 0,
+        jsonPath: "$.content[4]['altnumber']",
+        propertyOffset: 3,
       },
     },
   },
@@ -811,7 +810,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       documentLocation: {
         jsonPath: '$.content[4]',
         keyName: 'altnumber',
-        keyClosingMarkerOffset: 1,
+        keyClosingMarkerOffset: 0,
       },
     },
   },
@@ -832,7 +831,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       documentLocation: {
         jsonPath: '$.content[4]',
         keyName: 'altnumber',
-        keyClosingMarkerOffset: 2,
+        keyClosingMarkerOffset: 1,
       },
     },
   },
@@ -853,7 +852,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       documentLocation: {
         jsonPath: '$.content[4]',
         keyName: 'altnumber',
-        keyClosingMarkerOffset: 3,
+        keyClosingMarkerOffset: 2,
       },
     },
   },
@@ -861,6 +860,27 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 79,
+    },
+    usjContent: {
+      node: {
+        type: 'chapter',
+        marker: 'c',
+        number: '1',
+        altnumber: '1 ca',
+        pubnumber: '1 cp',
+        sid: '2SA 1',
+      },
+      documentLocation: {
+        jsonPath: '$.content[4]',
+        keyName: 'altnumber',
+        keyClosingMarkerOffset: 3,
+      },
+    },
+  },
+  {
+    usfmVerseLocation: {
+      verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
+      offset: 80,
     },
     usjContent: {
       node: {
@@ -882,26 +902,6 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 80,
-    },
-    usjContent: {
-      node: {
-        type: 'chapter',
-        marker: 'c',
-        number: '1',
-        altnumber: '1 ca',
-        pubnumber: '1 cp',
-        sid: '2SA 1',
-      },
-      documentLocation: {
-        jsonPath: '$.content[4]',
-        keyName: 'pubnumber',
-      },
-    },
-  },
-  {
-    usfmVerseLocation: {
-      verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 81,
     },
     usjContent: {
@@ -916,7 +916,6 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       documentLocation: {
         jsonPath: '$.content[4]',
         keyName: 'pubnumber',
-        keyOffset: 0,
       },
     },
   },
@@ -937,7 +936,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       documentLocation: {
         jsonPath: '$.content[4]',
         keyName: 'pubnumber',
-        keyOffset: 1,
+        keyOffset: 0,
       },
     },
   },
@@ -958,7 +957,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       documentLocation: {
         jsonPath: '$.content[4]',
         keyName: 'pubnumber',
-        keyOffset: 2,
+        keyOffset: 1,
       },
     },
   },
@@ -977,8 +976,9 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
         sid: '2SA 1',
       },
       documentLocation: {
-        jsonPath: "$.content[4]['pubnumber']",
-        propertyOffset: 0,
+        jsonPath: '$.content[4]',
+        keyName: 'pubnumber',
+        keyOffset: 2,
       },
     },
   },
@@ -998,7 +998,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       },
       documentLocation: {
         jsonPath: "$.content[4]['pubnumber']",
-        propertyOffset: 1,
+        propertyOffset: 0,
       },
     },
   },
@@ -1018,7 +1018,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       },
       documentLocation: {
         jsonPath: "$.content[4]['pubnumber']",
-        propertyOffset: 2,
+        propertyOffset: 1,
       },
     },
   },
@@ -1038,7 +1038,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
       },
       documentLocation: {
         jsonPath: "$.content[4]['pubnumber']",
-        propertyOffset: 3,
+        propertyOffset: 2,
       },
     },
   },
@@ -1046,6 +1046,26 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
     usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
       offset: 88,
+    },
+    usjContent: {
+      node: {
+        type: 'chapter',
+        marker: 'c',
+        number: '1',
+        altnumber: '1 ca',
+        pubnumber: '1 cp',
+        sid: '2SA 1',
+      },
+      documentLocation: {
+        jsonPath: "$.content[4]['pubnumber']",
+        propertyOffset: 3,
+      },
+    },
+  },
+  {
+    usfmVerseLocation: {
+      verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
+      offset: 89,
     },
     usjContent: {
       node: {
@@ -1066,7 +1086,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 89,
+      offset: 90,
     },
     usjContent: {
       node: {
@@ -1082,7 +1102,7 @@ export const testUSFM2SaCh1Locations: LocationUsfmAndUsj[] = [
   {
     usfmVerseLocation: {
       verseRef: { book: '2SA', chapterNum: 1, verseNum: 0 },
-      offset: 195,
+      offset: 196,
     },
     usjContent: {
       node: {
