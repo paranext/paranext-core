@@ -16,6 +16,7 @@ import {
   CardContent,
   Checkbox,
   DisabledActionTooltip,
+  EmptyState,
   Input,
   Label,
   Popover,
@@ -264,9 +265,14 @@ export type FindProps = {
   allowInvisibleCharacters?: boolean;
 };
 
-/** Shared styling for the results-area placeholders (idle prompt, invalid-query prompt). */
-const RESULTS_PLACEHOLDER_CLASS_NAME =
-  'tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4 tw:text-center tw:text-sm tw:font-light tw:text-muted-foreground';
+/**
+ * Shared layout for the results-area placeholders (idle prompt, invalid-query prompt); the message
+ * text itself is rendered by {@link EmptyState}, which already supplies the muted/small text styling
+ * and a `role="status"` region so screen readers announce it.
+ */
+const RESULTS_PLACEHOLDER_WRAPPER_CLASS_NAME =
+  'tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4';
+const RESULTS_PLACEHOLDER_TEXT_CLASS_NAME = 'tw:text-center tw:font-light';
 
 /**
  * Presentational find/replace UI. It owns the rendering and the presentational derivations (visible
@@ -466,8 +472,20 @@ export function Find({
     ],
   );
 
+  // Single source of truth for which (if any) results-area placeholder shows, so the three states
+  // are mutually exclusive by construction instead of by three separately-maintained boolean
+  // expressions. 'none' covers both "results are present" and "a search finished with 0 results" —
+  // in the latter case the status bar's message (see resultsMessage) handles the feedback instead.
+  const resultsAreaState: 'skeleton' | 'idlePrompt' | 'invalidQueryPrompt' | 'none' =
+    useMemo(() => {
+      if (results.length > 0) return 'none';
+      if (searchStatus === 'running') return 'skeleton';
+      if (searchStatus !== undefined) return 'none';
+      if (searchTerm.trim() === '') return 'idlePrompt';
+      return isSearchQueryValid ? 'skeleton' : 'invalidQueryPrompt';
+    }, [results.length, searchStatus, searchTerm, isSearchQueryValid]);
+
   const resultsMessage = useMemo(() => {
-    if (!results) return '';
     if (results.length === 0) {
       return localizedStrings['%webView_find_noResultsFound%'];
     }
@@ -504,14 +522,24 @@ export function Find({
   // deletion bar rather than silently showing no preview.
   const replaceConfig = activeMode === 'replace' ? { term: replaceTerm, preserveCase } : undefined;
 
-  // Replace/Replace All are blocked for two independent reasons: the project is read-only, or
-  // structure is locked and the replacement itself would change it. When both apply, the read-only
-  // reason takes precedence since it is the more fundamental blocker.
+  // Replace/Replace All (and the per-result replace action) are blocked for two independent
+  // reasons: the project is read-only, or structure is locked and the replacement itself would
+  // change it. When both apply, the read-only reason takes precedence since it is the more
+  // fundamental blocker. The two buttons additionally disable for their own busy/precondition
+  // reasons (see isReplaceUnavailable below).
   const isReplaceActionBlocked =
     !isEditable || (isStructureProtected && isReplacementStructureChanging);
-  const replaceBlockedTooltipText = !isEditable
-    ? localizedStrings['%webView_find_replace_readOnlyTooltip%']
-    : localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%'];
+  // Only meaningful while isReplaceActionBlocked; kept empty otherwise so a future consumer of this
+  // value (e.g. an aria-label) can't inherit a tooltip for a reason that doesn't apply.
+  let replaceBlockedTooltipText = '';
+  if (isReplaceActionBlocked) {
+    replaceBlockedTooltipText = !isEditable
+      ? localizedStrings['%webView_find_replace_readOnlyTooltip%']
+      : localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%'];
+  }
+  // Both Replace and Replace All additionally disable while a search is running, a replace is
+  // already in flight, or the action is blocked (above) — only their own precondition differs.
+  const isReplaceUnavailable = searchStatus === 'running' || isReplacing || isReplaceActionBlocked;
 
   // Map the flat localized-string bag into the shape the preview-options picker expects.
   const previewOptionsStrings: ReplacePreviewOptionsStrings = {
@@ -701,24 +729,14 @@ export function Find({
                 <Button
                   variant="outline"
                   onClick={onReplaceAll}
-                  disabled={
-                    visibleResults.length === 0 ||
-                    searchStatus === 'running' ||
-                    isReplacing ||
-                    isReplaceActionBlocked
-                  }
+                  disabled={visibleResults.length === 0 || isReplaceUnavailable}
                 >
                   <ReplaceAll className="tw:h-4 tw:w-4" />
                   {localizedStrings['%webView_find_replaceAll%']}
                 </Button>
                 <Button
                   onClick={() => onReplace()}
-                  disabled={
-                    focusedResultIndex === undefined ||
-                    searchStatus === 'running' ||
-                    isReplacing ||
-                    isReplaceActionBlocked
-                  }
+                  disabled={focusedResultIndex === undefined || isReplaceUnavailable}
                 >
                   <Replace className="tw:h-4 tw:w-4" />
                   {localizedStrings['%webView_find_replace%']}
@@ -800,25 +818,22 @@ export function Find({
       {/* Search Results Placeholder: shown while actually running, and while a valid non-empty term
           is about to auto-search (debounce pending, or waiting on the data provider) — otherwise a
           restored/carried-over term would flash the idle prompt below before the search starts. */}
-      {results &&
-        results.length === 0 &&
-        (searchStatus === 'running' ||
-          (searchStatus === undefined && searchTerm.trim() !== '' && isSearchQueryValid)) && (
-          <div className="tw:space-y-2">
-            {Array.from({ length: 5 }).map((_value, index) => (
-              // As this is a placeholder, it is safe to use the index as a key
-              // eslint-disable-next-line react/no-array-index-key
-              <Card key={index}>
-                <CardContent className="tw:flex tw:items-center tw:space-x-4 tw:p-4">
-                  <div className="tw:space-y-2">
-                    <Skeleton className="tw:h-4 tw:w-[250px]" />
-                    <Skeleton className="tw:h-4 tw:w-[200px]" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+      {resultsAreaState === 'skeleton' && (
+        <div className="tw:space-y-2">
+          {Array.from({ length: 5 }).map((_value, index) => (
+            // As this is a placeholder, it is safe to use the index as a key
+            // eslint-disable-next-line react/no-array-index-key
+            <Card key={index}>
+              <CardContent className="tw:flex tw:items-center tw:space-x-4 tw:p-4">
+                <div className="tw:space-y-2">
+                  <Skeleton className="tw:h-4 tw:w-[250px]" />
+                  <Skeleton className="tw:h-4 tw:w-[200px]" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Search Results */}
       {/* This div is a scroll container that handles keyboard navigation (arrow keys) between search
@@ -837,22 +852,27 @@ export function Find({
       >
         {/* Idle placeholder: no search has run yet (e.g. first open, or after clearing the search),
             so the results region would otherwise be blank. */}
-        {results.length === 0 && searchStatus === undefined && searchTerm.trim() === '' && (
-          <div className={RESULTS_PLACEHOLDER_CLASS_NAME}>
-            {localizedStrings['%webView_find_searchPrompt%']}
+        {resultsAreaState === 'idlePrompt' && (
+          <div className={RESULTS_PLACEHOLDER_WRAPPER_CLASS_NAME}>
+            <EmptyState
+              id="find-idle-placeholder"
+              className={RESULTS_PLACEHOLDER_TEXT_CLASS_NAME}
+              message={localizedStrings['%webView_find_searchPrompt%']}
+            />
           </div>
         )}
         {/* Invalid-query placeholder: a term is present but won't run (e.g. `selectedBooks` scope
             with no books selected — can happen after a project switch invalidates a carried-over
             selection). Distinct from the idle prompt so the user knows why nothing is happening. */}
-        {results.length === 0 &&
-          searchStatus === undefined &&
-          searchTerm.trim() !== '' &&
-          !isSearchQueryValid && (
-            <div className={RESULTS_PLACEHOLDER_CLASS_NAME}>
-              {localizedStrings['%webView_find_selectBooksPrompt%']}
-            </div>
-          )}
+        {resultsAreaState === 'invalidQueryPrompt' && (
+          <div className={RESULTS_PLACEHOLDER_WRAPPER_CLASS_NAME}>
+            <EmptyState
+              id="find-invalid-query-placeholder"
+              className={RESULTS_PLACEHOLDER_TEXT_CLASS_NAME}
+              message={localizedStrings['%webView_find_selectBooksPrompt%']}
+            />
+          </div>
+        )}
         {(() => {
           // Only the first book that has a replaced result gets the cancel handler.
           // All replaced rows share one pending operation, so only one Cancel button
@@ -898,6 +918,7 @@ export function Find({
                 localizedStrings={searchResultLocalizedStrings}
                 isReplaceMode={activeMode === 'replace'}
                 isReplacing={isReplacing}
+                isReplaceBlocked={isReplaceActionBlocked}
                 replaceConfig={replaceConfig}
                 previewOptions={previewOptions}
                 allowInvisibleCharacters={allowInvisibleCharacters}
@@ -921,8 +942,9 @@ export function Find({
           )}
           {(searchStatus === 'completed' ||
             searchStatus === 'stopped' ||
-            searchStatus === 'exceeded') &&
-            results && <p className="tw:font-light tw:text-center">{resultsMessage}</p>}
+            searchStatus === 'exceeded') && (
+            <p className="tw:font-light tw:text-center">{resultsMessage}</p>
+          )}
           {searchStatus === 'errored' && searchError && (
             <p className="tw:font-light tw:text-center">
               {formatReplacementString(localizedStrings['%webView_find_errorOccurred%'], {

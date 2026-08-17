@@ -20,6 +20,28 @@ beforeAll(() => {
     globalThis.ResizeObserver = stubResizeObserver as unknown as typeof ResizeObserver;
   }
 
+  // jsdom does not implement IntersectionObserver; each result card uses one to track visibility.
+  if (typeof globalThis.IntersectionObserver === 'undefined') {
+    const stubObserver = vi.fn(() => ({
+      observe: vi.fn(),
+      unobserve: vi.fn(),
+      disconnect: vi.fn(),
+      takeRecords: vi.fn(() => []),
+      root: undefined,
+      rootMargin: '',
+      thresholds: [],
+    }));
+    // IntersectionObserver constructor as a vi.fn factory satisfies runtime contract but not
+    // structural typing; we cast through unknown to adapt it to the required type
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    globalThis.IntersectionObserver = stubObserver as unknown as typeof IntersectionObserver;
+  }
+
+  // jsdom does not implement scrollIntoView; the selected result card scrolls itself into view.
+  if (typeof Element.prototype.scrollIntoView === 'undefined') {
+    Element.prototype.scrollIntoView = vi.fn();
+  }
+
   // jsdom does not implement matchMedia; the unconditionally-rendered <Sonner /> toaster reads it
   // on mount to pick a theme.
   if (typeof window.matchMedia === 'undefined') {
@@ -75,7 +97,7 @@ const STRINGS = {
   '%webView_find_showingResults%': 'Showing {visibleNumber} of {totalNumber} results',
   '%webView_find_showingResultsOfMore%': 'Showing {visibleNumber} of more than {totalNumber}',
   '%webView_find_replace_structureProtectedMarkerTooltip%':
-    'This replacement adds a marker, which is not allowed while structure is locked.',
+    "This replacement adds a paragraph, verse, or chapter marker, which isn't allowed while structure is locked.",
   '%webView_find_replace_structureProtectedNote%': 'Structure is locked.',
   '%webView_find_replace_readOnlyTooltip%':
     "This project is read-only, so replacements can't be made.",
@@ -157,6 +179,29 @@ describe('Find — results-area placeholder', () => {
     );
     expect(screen.getByText('Select at least one book to search')).toBeInTheDocument();
     expect(screen.queryByText('Enter search text to find results')).not.toBeInTheDocument();
+  });
+
+  it('announces the idle and invalid-query placeholders via role="status" for screen readers', () => {
+    // role="status" doesn't take its accessible NAME from content per the ARIA spec (only an
+    // explicit aria-label would), so the live region is located by role alone and its announced
+    // text is asserted via textContent, not the `name` matcher.
+    const { rerender } = render(
+      <Find {...buildProps({ searchTerm: '', searchStatus: undefined })} />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Enter search text to find results');
+
+    rerender(
+      <Find
+        {...buildProps({
+          searchTerm: 'God',
+          searchStatus: undefined,
+          isSearchQueryValid: false,
+          scope: 'selectedBooks',
+          selectedBookIds: [],
+        })}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Select at least one book to search');
   });
 
   it('shows the loading skeleton (not the idle prompt) when a valid term is pending search', () => {
@@ -245,8 +290,51 @@ describe('Find — permission-blocked Replace', () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByRole('group', {
-        name: 'This replacement adds a marker, which is not allowed while structure is locked.',
+        name: "This replacement adds a paragraph, verse, or chapter marker, which isn't allowed while structure is locked.",
       }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('Find — permission-blocked Replace (per-result button)', () => {
+  // Regression test: the per-result Replace button/keyboard-shortcut used to receive neither
+  // isEditable nor isStructureProtected, so it stayed clickable even while the toolbar Replace /
+  // Replace All buttons were correctly disabled — a bypass of the exact gate this component exists
+  // to enforce. Uses a distinct label ("Replace card") from searchResultLocalizedStrings so this
+  // button is unambiguous from the toolbar's "Replace" button in the same render.
+  function buildPerResultProps(overrides: Partial<FindProps>): FindProps {
+    return buildProps({
+      activeMode: 'replace',
+      searchTerm: 'God',
+      searchStatus: 'completed',
+      results: [FAKE_RESULT],
+      resultsByBook: new Map([['GEN', [{ result: FAKE_RESULT, originalIndex: 0 }]]]),
+      focusedResultIndex: 0,
+      searchResultLocalizedStrings: { '%webView_find_replace%': 'Replace card' },
+      ...overrides,
+    });
+  }
+
+  it('disables the per-result Replace button when isEditable is false', () => {
+    render(<Find {...buildPerResultProps({ isEditable: false })} />);
+    expect(screen.getByRole('button', { name: 'Replace card' })).toBeDisabled();
+  });
+
+  it('disables the per-result Replace button when structure is protected and the replacement would change it', () => {
+    render(
+      <Find
+        {...buildPerResultProps({
+          isEditable: true,
+          isStructureProtected: true,
+          isReplacementStructureChanging: true,
+        })}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Replace card' })).toBeDisabled();
+  });
+
+  it('leaves the per-result Replace button enabled when nothing blocks replace', () => {
+    render(<Find {...buildPerResultProps({ isEditable: true })} />);
+    expect(screen.getByRole('button', { name: 'Replace card' })).toBeEnabled();
   });
 });

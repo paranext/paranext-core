@@ -79,6 +79,12 @@ interface SearchResultProps {
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
+  /**
+   * Whether replace is blocked for a reason unrelated to `isReplacing` (project is read-only, or
+   * structure is locked and the pending replacement would change it) — mirrors the toolbar Replace
+   * / Replace All gating so this per-result action and its keyboard shortcut can't bypass it.
+   */
+  isReplaceBlocked: boolean;
   /** Configuration for the replacement preview (used in replace mode) */
   replaceConfig?: ReplaceConfig;
   /** Options controlling how the replace preview is displayed */
@@ -138,6 +144,7 @@ export default function SearchResult({
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  isReplaceBlocked,
   replaceConfig,
   previewOptions = DEFAULT_FIND_PREVIEW_OPTIONS,
   allowInvisibleCharacters = false,
@@ -281,7 +288,7 @@ export default function SearchResult({
       className="tw:m-1 tw:h-6 tw:text-foreground"
       variant="outline"
       size="sm"
-      disabled={isReplacing}
+      disabled={isReplacing || isReplaceBlocked}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
@@ -521,6 +528,7 @@ export default function SearchResult({
           isReplaceMode &&
           !searchResult.isReplaced &&
           !isReplacing &&
+          !isReplaceBlocked &&
           (e.key === 'Enter' || e.key === ' ') &&
           !(e.target instanceof HTMLButtonElement)
         ) {

@@ -5,6 +5,7 @@ import {
   buildSearchRegex,
   CharacterCategorizer,
   gateStartSearch,
+  isFindQueryValid,
   isSimpleInterfaceMode,
   MAX_CONSECUTIVE_POLL_MISSES,
   nextPollMissState,
@@ -387,6 +388,34 @@ describe('nextPollMissState', () => {
     const result = nextPollMissState(MAX_CONSECUTIVE_POLL_MISSES - 1);
     expect(result.consecutiveMisses).toBe(MAX_CONSECUTIVE_POLL_MISSES);
     expect(result.hasExceededRetryLimit).toBe(true);
+  });
+});
+
+describe('isFindQueryValid', () => {
+  it('is false for an empty (or whitespace-only) search term regardless of scope', () => {
+    expect(isFindQueryValid({ searchTerm: '', scope: 'book', selectedBookIds: [] })).toBe(false);
+    expect(isFindQueryValid({ searchTerm: '   ', scope: 'chapter', selectedBookIds: [] })).toBe(
+      false,
+    );
+  });
+
+  it('is true for a non-empty term in the chapter/book scopes, which need no book selection', () => {
+    expect(isFindQueryValid({ searchTerm: 'God', scope: 'chapter', selectedBookIds: [] })).toBe(
+      true,
+    );
+    expect(isFindQueryValid({ searchTerm: 'God', scope: 'book', selectedBookIds: [] })).toBe(true);
+  });
+
+  it('is false for the selectedBooks scope with no books selected, even with a non-empty term', () => {
+    expect(
+      isFindQueryValid({ searchTerm: 'God', scope: 'selectedBooks', selectedBookIds: [] }),
+    ).toBe(false);
+  });
+
+  it('is true for the selectedBooks scope once at least one book is selected', () => {
+    expect(
+      isFindQueryValid({ searchTerm: 'God', scope: 'selectedBooks', selectedBookIds: ['GEN'] }),
+    ).toBe(true);
   });
 });
 

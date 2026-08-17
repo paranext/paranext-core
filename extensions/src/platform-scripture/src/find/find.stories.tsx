@@ -13,6 +13,7 @@ import { getLocalizedStrings } from '../../../../../.storybook/localization.util
 import { alertCommand } from '../../../../../.storybook/story.utils';
 import { Find, FIND_LOCALIZED_STRING_KEYS, type BookResultEntry } from './find.component';
 import { replacementContainsStructuralMarker } from './structure-protection.util';
+import { isFindQueryValid } from './find.utils';
 import { LocalizedBookData, SearchTextType } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
@@ -427,12 +428,14 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   }, []);
 
   const numberOfHiddenResults = hiddenKeys.size + committedKeys.size;
-  // Mirrors the real webview's isSearchQueryValid: an empty term never searches, and neither does
-  // an empty selectedBooks selection — matches find.web-view.tsx so the NoBooksSelected story
-  // reaches the same "select a book" placeholder path as production.
-  const isSearchQueryValid = scope !== 'selectedBooks' || selectedBookIds.length > 0;
-  const liveSearchStatus: FindJobStatus | undefined =
-    searchTerm.trim() && isSearchQueryValid ? completedStatus : undefined;
+  // Shares find.utils.ts's isFindQueryValid with the webview so the two can't silently diverge —
+  // this exact divergence (the harness's own copy dropped the empty-term check) shipped once
+  // already (see PT-4343 review) and made the NoBooksSelected story pass despite testing the wrong
+  // rule.
+  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+  const liveSearchStatus: FindJobStatus | undefined = isSearchQueryValid
+    ? completedStatus
+    : undefined;
   const searchStatus: FindJobStatus | undefined = isLive ? liveSearchStatus : config.searchStatus;
   const totalNumberOfResults = isLive
     ? baseResults.length

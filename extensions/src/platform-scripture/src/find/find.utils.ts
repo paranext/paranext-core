@@ -1,3 +1,4 @@
+import { Scope } from 'platform-bible-react';
 import {
   escapeStringRegexp,
   isPlatformError,
@@ -123,6 +124,23 @@ export function nextPollMissState(consecutiveMisses: number): {
     consecutiveMisses: nextConsecutiveMisses,
     hasExceededRetryLimit: nextConsecutiveMisses >= MAX_CONSECUTIVE_POLL_MISSES,
   };
+}
+
+/**
+ * Whether the current search term + scope/filters combination would actually run a search: false
+ * for an empty term, and false for the `selectedBooks` scope with no books selected. Shared between
+ * `find.web-view.tsx` (the source of truth) and `find.stories.tsx`'s harness so the two can't
+ * silently diverge — they previously each hand-rolled this rule, and the harness's copy dropped the
+ * empty-term check.
+ */
+export function isFindQueryValid(params: {
+  searchTerm: string;
+  scope: Scope;
+  selectedBookIds: string[];
+}): boolean {
+  if (params.searchTerm.trim() === '') return false;
+  if (params.scope === 'selectedBooks' && params.selectedBookIds.length === 0) return false;
+  return true;
 }
 
 /** The decision {@link gateStartSearch} makes for a given attempt to start a search. */

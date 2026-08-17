@@ -41,6 +41,7 @@ import { Find, FIND_LOCALIZED_STRING_KEYS } from './find/find.component';
 import {
   applyPreserveCase,
   gateStartSearch,
+  isFindQueryValid,
   isSimpleInterfaceMode,
   nextPollMissState,
 } from './find/find.utils';
@@ -288,6 +289,12 @@ global.webViewComponent = function FindWebView({
   );
 
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
+  // useLocalizedStrings returns a freshly-allocated object on its loading/error branch, so its
+  // identity is not stable across renders — reading it via a ref (rather than depending on it
+  // directly) keeps the poll effect below from tearing down and resetting its miss counter on an
+  // unrelated localization re-render.
+  const localizedStringsRef = useRef(localizedStrings);
+  localizedStringsRef.current = localizedStrings;
 
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(
     useMemo(() => {
@@ -420,10 +427,15 @@ global.webViewComponent = function FindWebView({
     : allowInvisibleCharactersPossiblyError;
 
   // Whether the active project can be edited. Replace mutates the project, so it's disabled (with
-  // an explanatory tooltip) while this is false; Find itself is read-only and stays unaffected.
+  // an explanatory tooltip) while this is false; Find itself is read-only and stays unaffected. The
+  // `true` third argument is `useProjectSetting`'s own documented default for the *unset* case
+  // (matching platform.isEditable's platform-level default) and is returned while the setting is
+  // still loading — NOT what's used below. If the read genuinely errors, fail closed (matching this
+  // extension's other permission-adjacent read in use-checklist.ts): the safer default for a
+  // write-gating permission is to assume not-editable rather than silently allow a mutation.
   const [isEditablePossiblyError] = useProjectSetting(projectId, 'platform.isEditable', true);
   const isEditable: boolean = isPlatformError(isEditablePossiblyError)
-    ? true
+    ? false
     : isEditablePossiblyError;
 
   const availableBooksIds = useMemo(() => {
@@ -557,11 +569,10 @@ global.webViewComponent = function FindWebView({
 
   // #region Search related functions
 
-  const isSearchQueryValid = useMemo(() => {
-    if (searchTerm.trim() === '') return false;
-    if (scope === 'selectedBooks' && selectedBookIds.length === 0) return false;
-    return true;
-  }, [scope, searchTerm, selectedBookIds]);
+  const isSearchQueryValid = useMemo(
+    () => isFindQueryValid({ searchTerm, scope, selectedBookIds }),
+    [scope, searchTerm, selectedBookIds],
+  );
 
   const findScope = useMemo((): FindScope[] => {
     switch (scope) {
@@ -776,7 +787,7 @@ global.webViewComponent = function FindWebView({
           consecutiveMisses = missState.consecutiveMisses;
           if (missState.hasExceededRetryLimit) {
             setSearchStatus('errored');
-            setSearchError(localizedStrings['%webView_find_pollConnectionLost%']);
+            setSearchError(localizedStringsRef.current['%webView_find_pollConnectionLost%']);
             return;
           }
           timeoutId = setTimeout(checkForUpdates, 100);
@@ -800,8 +811,10 @@ global.webViewComponent = function FindWebView({
           timeoutId = setTimeout(checkForUpdates, 100);
       } catch (error) {
         if (isEffectActive) {
-          logger.error(`Error checking search results: ${getErrorMessage(error)}`);
+          const message = getErrorMessage(error);
+          logger.error(`Error checking search results: ${message}`);
           setSearchStatus('errored');
+          setSearchError(message);
         }
       }
     };
@@ -813,7 +826,7 @@ global.webViewComponent = function FindWebView({
       isEffectActive = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [activeJobId, loadMoreResults, retrieveFindJobUpdate, localizedStrings]);
+  }, [activeJobId, loadMoreResults, retrieveFindJobUpdate]);
 
   // #endregion
 
@@ -962,14 +975,16 @@ global.webViewComponent = function FindWebView({
 
   // Readiness retry: if handleStartSearch bailed because findPdp wasn't available (mount-time race,
   // or findPdp dropping later during a long idle period), retry as soon as it becomes available —
-  // not just once at mount. Set explicitSearchPendingRef so a debounce timer still pending from the
-  // same keystroke skips its redundant second call.
+  // not just once at mount. Deliberately does NOT gate on searchStatus: pendingSearchDesiredRef is
+  // only ever set after a search already ran once and bailed on !findPdp, so by definition any
+  // findPdp-driven auto-search debounce that could have raced this retry has already fired — there
+  // is nothing left to deduplicate against, so explicitSearchPendingRef is not set here either
+  // (setting it unconditionally previously risked swallowing the user's next legitimate keystroke).
   useEffect(() => {
-    if (!findPdp || !pendingSearchDesiredRef.current || searchStatus !== undefined) return;
+    if (!findPdp || !pendingSearchDesiredRef.current) return;
     pendingSearchDesiredRef.current = false;
-    explicitSearchPendingRef.current = true;
     handleStartSearchRef.current();
-  }, [findPdp, searchStatus]);
+  }, [findPdp]);
 
   // Reset isPostReplaceSearch once the search finishes so a subsequent search in replace mode
   // (e.g. triggered by an external change) is not mistakenly treated as a post-replace search.
