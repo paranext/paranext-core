@@ -108,7 +108,8 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
-import { getEditorOpenFindArgs } from './find-trigger.util';
+import { getEditorOpenFindArgs, resolveFindSelectionText } from './find-trigger.util';
+import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
@@ -1134,6 +1135,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [showMarkersMenu]);
 
+  // `.editor-input` is the Lexical content element (the same selector the marker-menu handler uses).
+  const getSelectionBeforePointerPress = useSelectionSnapshot('.editor-input');
+
+  /**
+   * The text a Find trigger in this tab should search for: the live selection, or — when a click on
+   * the tab's chrome has already collapsed it — what was selected just before that click.
+   */
+  const getFindSelectionText = useCallback(
+    () =>
+      resolveFindSelectionText(window.getSelection()?.toString(), getSelectionBeforePointerPress()),
+    [getSelectionBeforePointerPress],
+  );
+
   // Listen for Ctrl+F to open find dialog and for the marker menu trigger to open the marker menu
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
@@ -1158,7 +1172,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Find dialog trigger listener
       if (event.ctrlKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
-        const findArgs = getEditorOpenFindArgs(webViewId, window.getSelection()?.toString());
+        const findArgs = getEditorOpenFindArgs(webViewId, getFindSelectionText());
         papi.commands.sendCommand(
           'platformScripture.openFind',
           findArgs.webViewId,
@@ -1185,7 +1199,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu, isMac]);
+  }, [
+    webViewId,
+    insertCommentAtCurrentSelection,
+    showMarkersMenu,
+    showInlineMarkersMenu,
+    isMac,
+    getFindSelectionText,
+  ]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
@@ -1875,11 +1896,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
+      // Find is the one menu command that needs more than the tab id: it carries this tab's current
+      // text selection so the Find panel pre-fills and searches it, matching Ctrl+F.
+      // Hidden-target case: the Find panel may be an inactive (display:none) tab when this fires.
+      // Nothing here is layout-dependent — the text travels as web view state (findSearchTerm) and
+      // openFind brings the panel to front — so a hidden Find catches up on activation by
+      // construction, with no deferred side effect to replay.
+      if (projectMenuCommand.command === 'platformScripture.openFind') {
+        const findArgs = getEditorOpenFindArgs(webViewId, getFindSelectionText());
+        papi.commands
+          .sendCommand('platformScripture.openFind', findArgs.webViewId, findArgs.selectedText)
+          .catch((e) =>
+            logger.warn(`Failed to open Find from the editor tab menu: ${getErrorMessage(e)}`),
+          );
+        return;
+      }
       // Assuming that the project menu command is one of the registered command handlers in papi
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       papi.commands.sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId);
     },
-    [webViewId],
+    [getFindSelectionText, webViewId],
   );
 
   function renderEditor() {

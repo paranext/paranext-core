@@ -205,6 +205,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts',
+      'extensions/src/platform-scripture-editor/src/use-selection-snapshot.hook.ts',
     ],
   },
   {

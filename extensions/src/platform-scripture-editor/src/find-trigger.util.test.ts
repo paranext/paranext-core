@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { getEditorOpenFindArgs, getOpenFindTriggerArgs } from './find-trigger.util';
+import {
+  getEditorOpenFindArgs,
+  getOpenFindTriggerArgs,
+  resolveFindSelectionText,
+} from './find-trigger.util';
 
 describe('getOpenFindTriggerArgs', () => {
   it('returns args when a resource is displayed', () => {
@@ -32,5 +36,30 @@ describe('getEditorOpenFindArgs', () => {
       webViewId: 'wv-editor',
       selectedText: '',
     });
+  });
+});
+
+describe('resolveFindSelectionText', () => {
+  it('prefers the live selection', () => {
+    expect(resolveFindSelectionText('grace', 'mercy')).toBe('grace');
+  });
+
+  it('falls back to the pre-press snapshot when the live selection is gone', () => {
+    // Opening a dropdown can collapse the document selection before the menu item is chosen.
+    expect(resolveFindSelectionText('', 'mercy')).toBe('mercy');
+  });
+
+  it('treats a whitespace-only live selection as no selection', () => {
+    expect(resolveFindSelectionText('   \n', 'mercy')).toBe('mercy');
+  });
+
+  it('trims the chosen text so a double-click trailing space does not join the search term', () => {
+    expect(resolveFindSelectionText('grace ', undefined)).toBe('grace');
+    expect(resolveFindSelectionText(undefined, ' mercy\n')).toBe('mercy');
+  });
+
+  it('returns an empty string when nothing is or was selected', () => {
+    expect(resolveFindSelectionText(undefined, undefined)).toBe('');
+    expect(resolveFindSelectionText('', '   ')).toBe('');
   });
 });

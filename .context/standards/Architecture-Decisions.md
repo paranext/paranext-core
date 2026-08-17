@@ -415,3 +415,38 @@ step, no automation. Just a record.
   than inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
+
+## ADR-0013: A tab's own web view supplies its selection to Find, rather than a shared selection store
+
+- **Date:** 2026-08-16
+- **Status:** Accepted
+- **Context:** Opening Find from a scripture editor tab's menu needed that tab's text selection. The
+  work item proposed publishing the selection into the platform's shared store so a command handler
+  could read it. Two facts made that unnecessary and unavailable: (a) the scripture editor sets
+  `shouldShowToolbar: false` (`extensions/src/platform-scripture-editor/src/main.ts:617` and
+  `:1030`) and instead renders its own `TabToolbar` *inside* its web view
+  (`extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`), so its
+  menu handler already runs in the document that owns the selection; (b) `sharedStoreService`
+  (`src/shared/services/shared-store.service.ts`) is explicitly not part of the public API and is not
+  reachable from extensions.
+- **Decision:** Find takes the selection of the tab it was triggered from, read in that tab's own web
+  view (`window.getSelection()`, with a capture-phase pointer-press snapshot so a click on the tab's
+  chrome cannot erase it) and passed through the existing `platformScripture.openFind` `selectedText`
+  parameter. No cross-tab selection state.
+- **Alternatives:** (a) Shared store — rejected: not extension-accessible, and unnecessary once the
+  menu handler's location is understood. (b) A global "last selection" registry in the editor
+  extension built on the existing `platformScriptureEditor.onDidSelectionChange` event — deferred:
+  every Find entry point today is tab-scoped, so the triggering tab *is* the focused editor; a
+  registry would add cross-tab state with no current consumer. (c) Deriving the text from the
+  existing `PlatformScriptureEditorWebViewController.getSelection()` — rejected: that carries USJ
+  document offsets, not text, so it would mean re-reading and slicing USJ to recover a string the
+  triggering document already has.
+- **Consequences:** The selection path stays inside one file per tab type and needs no new
+  cross-process state. Revisit if a Find entry point ever lives outside a tab (a top-toolbar or
+  application-menu Find, or an extension asking "what is selected right now" to enable/disable menu
+  items) — that is the point where alternative (b) becomes the right answer. The end-to-end test
+  written to prove the selection survives a chrome click could not be run in this development
+  environment: the `find-replace` isolated suite's own pre-existing `beforeAll` warm-up times out
+  waiting for the `findInScripture` results counter, independent of this change (confirmed by running
+  a pre-existing test from the same suite with this feature's code absent and watching it fail
+  identically), so that verification gap carries into CI rather than being closed locally.

@@ -1,7 +1,7 @@
 import papi, { logger } from '@papi/frontend';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useEffect } from 'react';
-import { getOpenFindTriggerArgs } from './find-trigger.util';
+import { getOpenFindTriggerArgs, resolveFindSelectionText } from './find-trigger.util';
 
 /**
  * Binds Ctrl+F to open Find for the resource currently shown in a read-only reference panel (model
@@ -25,7 +25,9 @@ export function useOpenFindShortcut(
       const args = getOpenFindTriggerArgs(
         webViewId,
         displayedResourceProjectId,
-        window.getSelection()?.toString() ?? '',
+        // Panels have no tab menu, so there is no chrome click to survive — only the live selection,
+        // trimmed so a double-click's trailing space does not narrow the search.
+        resolveFindSelectionText(window.getSelection()?.toString(), undefined),
       );
       if (!args) return;
       papi.commands

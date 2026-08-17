@@ -53,4 +53,20 @@ describe('useOpenFindShortcut', () => {
     pressKey('f');
     expect(sendCommand).not.toHaveBeenCalled();
   });
+
+  it('trims the selection so a double-click trailing space does not narrow the search', () => {
+    // Only toString() is exercised by the hook; a full Selection cannot be constructed here.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const fakeSelection = { toString: () => 'grace ' } as unknown as Selection;
+    vi.spyOn(window, 'getSelection').mockReturnValue(fakeSelection);
+    renderHook(() => useOpenFindShortcut('wv-1', 'resource-proj'));
+    pressKey('f');
+    expect(sendCommand).toHaveBeenCalledWith(
+      'platformScripture.openFind',
+      'wv-1',
+      'grace',
+      'resource-proj',
+    );
+    vi.restoreAllMocks();
+  });
 });

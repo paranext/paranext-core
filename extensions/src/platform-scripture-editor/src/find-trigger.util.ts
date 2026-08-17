@@ -45,3 +45,25 @@ export function getEditorOpenFindArgs(
 ): EditorOpenFindArgs {
   return { webViewId, selectedText: selectedText ?? '' };
 }
+
+/**
+ * Choose the text a Find trigger should search for.
+ *
+ * The live document selection wins when there is one. It can be gone by the time a tab-menu item is
+ * chosen — the pointer press that opens the dropdown may collapse the selection — so a snapshot
+ * taken immediately before that press is the fallback. The result is trimmed: a double-click word
+ * selection often carries a trailing space, and searching for `"grace "` finds far less than
+ * `"grace"`.
+ *
+ * @param liveSelectionText Text currently selected in the document, if any.
+ * @param selectionTextBeforePointerPress Text that was selected immediately before the most recent
+ *   pointer press outside the editor's text content.
+ * @returns The search text, or an empty string when nothing is or was selected. An empty string
+ *   means "open Find without pre-filling" — it leaves an already-open panel's search box alone.
+ */
+export function resolveFindSelectionText(
+  liveSelectionText: string | undefined,
+  selectionTextBeforePointerPress: string | undefined,
+): string {
+  return (liveSelectionText ?? '').trim() || (selectionTextBeforePointerPress ?? '').trim();
+}
