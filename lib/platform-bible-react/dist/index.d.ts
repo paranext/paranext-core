@@ -3029,6 +3029,50 @@ export declare function DropdownMenuSubTrigger({ className, inset, children, ...
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuSubContent({ className, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * The Empty component displays a centered zero-state message — typically a title, description, and
+ * an optional action — for when there is no content to show. The component is built and styled by
+ * Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function Empty({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the Empty component's icon/media, title, and description. The component is built
+ * and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+declare const emptyMediaVariants: (props?: ({
+	variant?: "default" | "icon" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Container for the Empty component's icon or other media, e.g. an illustration or avatar. The
+ * component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyMedia({ className, variant, ...props }: React$1.ComponentProps<"div"> & VariantProps<typeof emptyMediaVariants>): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component's title text. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyTitle({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component's description text. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyDescription({ className, ...props }: React$1.ComponentProps<"p">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the Empty component's main content, typically actions such as buttons. The
+ * component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyContent({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
  * Input component displays a form input field or a component that looks like an input field. Built
  * and styled with Shadcn UI.
  *
