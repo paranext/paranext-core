@@ -35,6 +35,11 @@ import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-previ
 const localizedStrings = getLocalizedStrings([...FIND_LOCALIZED_STRING_KEYS]);
 const scopeSelectorLocalizedStrings = getLocalizedStrings([...SCOPE_SELECTOR_STRING_KEYS]);
 const searchResultLocalizedStrings = getLocalizedStrings([...SEARCH_RESULT_LOCALIZED_STRING_KEYS]);
+// Owned by the webview container (WEB_VIEW_LOCALIZED_STRINGS in find.web-view.tsx), not the
+// presentational Find component, so it's resolved separately from the FIND_LOCALIZED_STRING_KEYS set.
+const pollConnectionLostString = getLocalizedStrings(['%webView_find_pollConnectionLost%'])[
+  '%webView_find_pollConnectionLost%'
+];
 
 const DEFAULT_SEARCH_TERM = 'God';
 
@@ -215,6 +220,10 @@ type HarnessConfig = {
   searchProgress?: number;
   /** Total results the job reports (fixed-state stories only). */
   totalNumberOfResults?: number;
+  /** The find-job error message (fixed-state stories only; requires `searchStatus: 'errored'`). */
+  searchError?: string;
+  /** Whether the active project can be edited. When false, Replace / Replace All are disabled. */
+  isEditable?: boolean;
   /** Start with every result already in the replaced state (the Replaced showcase). */
   initiallyReplacedAll?: boolean;
   /** Initial replace term (defaults to a sample word). */
@@ -418,9 +427,12 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   }, []);
 
   const numberOfHiddenResults = hiddenKeys.size + committedKeys.size;
-  const liveSearchStatus: FindJobStatus | undefined = searchTerm.trim()
-    ? completedStatus
-    : undefined;
+  // Mirrors the real webview's isSearchQueryValid: an empty term never searches, and neither does
+  // an empty selectedBooks selection — matches find.web-view.tsx so the NoBooksSelected story
+  // reaches the same "select a book" placeholder path as production.
+  const isSearchQueryValid = scope !== 'selectedBooks' || selectedBookIds.length > 0;
+  const liveSearchStatus: FindJobStatus | undefined =
+    searchTerm.trim() && isSearchQueryValid ? completedStatus : undefined;
   const searchStatus: FindJobStatus | undefined = isLive ? liveSearchStatus : config.searchStatus;
   const totalNumberOfResults = isLive
     ? baseResults.length
@@ -432,8 +444,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const isStructureProtected = config.isStructureProtected ?? false;
   const isReplacementStructureChanging =
     isStructureProtected && replacementContainsStructuralMarker(replaceTerm);
-
-  const isSearchQueryValid = scope !== 'selectedBooks' || selectedBookIds.length > 0;
+  const isEditable = config.isEditable ?? true;
 
   return (
     <Find
@@ -461,11 +472,12 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       isReplacing={false}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
+      isEditable={isEditable}
       results={displayedResults}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
       searchStatus={searchStatus}
-      searchError={undefined}
+      searchError={isLive ? undefined : config.searchError}
       searchProgress={config.searchProgress ?? 0}
       totalNumberOfResults={totalNumberOfResults}
       numberOfHiddenResults={numberOfHiddenResults}
@@ -576,5 +588,39 @@ export const Replaced: Story = {
 export const StructureProtected: Story = {
   decorators: [
     createDecorator({ activeMode: 'replace', isStructureProtected: true, replaceTerm: '\\p text' }),
+  ],
+};
+
+/**
+ * The active project is read-only (`platform.isEditable` is false). Replace / Replace All are
+ * disabled with a tooltip explaining why, even though there's a focused result to replace; Find
+ * itself stays fully live and interactive since search never mutates the project.
+ */
+export const ReadOnly: Story = {
+  decorators: [createDecorator({ activeMode: 'replace', isEditable: false })],
+};
+
+/**
+ * `selectedBooks` scope with no books chosen: the search term is non-empty but the query can't run,
+ * so the results area shows a dedicated "select a book" placeholder rather than the generic idle
+ * prompt or a stuck loading spinner. Pick a book from the scope selector to see the search resume.
+ */
+export const NoBooksSelected: Story = {
+  decorators: [createDecorator({ scope: 'selectedBooks', selectedBookIds: [] })],
+};
+
+/**
+ * The find-job poll lost its connection to the data provider (e.g. during an extended idle period)
+ * and gave up after repeated retries — the status bar shows the connection-lost error instead of
+ * leaving the last-seen progress bar frozen with no feedback.
+ */
+export const ConnectionLost: Story = {
+  decorators: [
+    createDecorator({
+      live: false,
+      results: [],
+      searchStatus: 'errored',
+      searchError: pollConnectionLostString,
+    }),
   ],
 };

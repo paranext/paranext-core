@@ -264,6 +264,10 @@ export type FindProps = {
   allowInvisibleCharacters?: boolean;
 };
 
+/** Shared styling for the results-area placeholders (idle prompt, invalid-query prompt). */
+const RESULTS_PLACEHOLDER_CLASS_NAME =
+  'tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4 tw:text-center tw:text-sm tw:font-light tw:text-muted-foreground';
+
 /**
  * Presentational find/replace UI. It owns the rendering and the presentational derivations (visible
  * results, focused-result navigation, scope display text, results message) but no async logic. The
@@ -834,7 +838,7 @@ export function Find({
         {/* Idle placeholder: no search has run yet (e.g. first open, or after clearing the search),
             so the results region would otherwise be blank. */}
         {results.length === 0 && searchStatus === undefined && searchTerm.trim() === '' && (
-          <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4 tw:text-center tw:text-sm tw:font-light tw:text-muted-foreground">
+          <div className={RESULTS_PLACEHOLDER_CLASS_NAME}>
             {localizedStrings['%webView_find_searchPrompt%']}
           </div>
         )}
@@ -845,7 +849,7 @@ export function Find({
           searchStatus === undefined &&
           searchTerm.trim() !== '' &&
           !isSearchQueryValid && (
-            <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4 tw:text-center tw:text-sm tw:font-light tw:text-muted-foreground">
+            <div className={RESULTS_PLACEHOLDER_CLASS_NAME}>
               {localizedStrings['%webView_find_selectBooksPrompt%']}
             </div>
           )}
