@@ -358,48 +358,60 @@ export function PlatformBibleToolbar() {
         appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
-            {isSendReceiveAvailable !== false && (
-              // Fail open. Show the button whenever send/receive is available — including
-              // while the availability probe is still unresolved (undefined), e.g. the extension
-              // host is busy/hung during a startup auto-sync. Visibility must not hinge on that
-              // probe resolving; only a confirmed `false` (extension genuinely absent) hides it.
-              <TooltipProvider delayDuration={TOOLTIP_DELAY}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      data-testid="toolbar-sync-button"
-                      variant="ghost"
-                      size="sm"
-                      className="pr-twp tw:h-8 tw:shrink-0"
-                      onClick={() => {
-                        sendCommand('paratextBibleSendReceive.openSyncStatus').catch((e: unknown) =>
-                          logger.warn(
-                            `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
-                          ),
-                        );
-                      }}
-                    >
-                      {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
-                      {syncState === 'synced' && (
-                        <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
-                      )}
-                      {
+            {/* toolbar-sync-area: always in the DOM so onboarding-tour step 4
+                (onboarding-tour.component.tsx) can target [data-testid="toolbar-sync-area"]
+                regardless of isSendReceiveAvailable — the sync button inside is still
+                conditional so the toolbar stays compact when sync is unavailable.
+                shrink-0 because this wrapper, not the Button, is now the flex item in the
+                config area's `min-w-0` row — without it a narrow window compresses the Sync
+                button. empty:hidden keeps the wrapper out of the flex flow when the button is
+                not rendered, so it contributes no gap-2 spacing; it stays in the DOM (and stays
+                zero-size, which is how Tour already skips the step) either way. */}
+            <div data-testid="toolbar-sync-area" className="tw:shrink-0 tw:empty:hidden">
+              {isSendReceiveAvailable !== false && (
+                // Fail open. Show the button whenever send/receive is available — including
+                // while the availability probe is still unresolved (undefined), e.g. the extension
+                // host is busy/hung during a startup auto-sync. Visibility must not hinge on that
+                // probe resolving; only a confirmed `false` (extension genuinely absent) hides it.
+                <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        data-testid="toolbar-sync-button"
+                        variant="ghost"
+                        size="sm"
+                        className="pr-twp tw:h-8 tw:shrink-0"
+                        onClick={() => {
+                          sendCommand('paratextBibleSendReceive.openSyncStatus').catch(
+                            (e: unknown) =>
+                              logger.warn(
+                                `Toolbar caught an error while trying to open sync status: ${getErrorMessage(e)}`,
+                              ),
+                          );
+                        }}
+                      >
+                        {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
+                        {syncState === 'synced' && (
+                          <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
+                        )}
                         {
-                          idle: localizedStrings['%toolbar_sync%'],
-                          syncing: localizedStrings['%toolbar_sync_status_syncing%'],
-                          synced: localizedStrings['%toolbar_sync_status_synced%'],
-                        }[syncState]
-                      }
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="tw:font-light">
-                      {localizedStrings['%toolbar_sync_open_status%']}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+                          {
+                            idle: localizedStrings['%toolbar_sync%'],
+                            syncing: localizedStrings['%toolbar_sync_status_syncing%'],
+                            synced: localizedStrings['%toolbar_sync_status_synced%'],
+                          }[syncState]
+                        }
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="tw:font-light">
+                        {localizedStrings['%toolbar_sync_open_status%']}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
             {marketingVersion !== '' && (
               <TooltipProvider delayDuration={TOOLTIP_DELAY}>
                 <Tooltip>

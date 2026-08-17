@@ -51,7 +51,7 @@ import {
   getRefLabel,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
-import { InstallFailedView, InstallingView } from './install-state-views.component';
+import { ExpandableInfo, InstallFailedView, InstallingView } from './install-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -64,6 +64,9 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_installFailedOffline%',
   '%webView_resourcePanel_retry%',
   '%webView_resourcePanel_downloadResources%',
+  '%webView_resourcePanel_bibleTexts_emptyState_moreInfo%',
+  '%webView_resourcePanel_bibleTexts_emptyState_lessInfo%',
+  '%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
   '%webView_resourcePanel_bibleTexts_title%',
@@ -558,6 +561,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
         <p>{localizedStrings[emptyStatePromptKey]}</p>
+        {resourceType === 'ScriptureResource' && (
+          <ExpandableInfo
+            moreLabel={localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo%']}
+            lessLabel={localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_lessInfo%']}
+            body={localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%']}
+          />
+        )}
         <Button onClick={() => showResourcePicker()}>{localizedStrings[pickButtonKey]}</Button>
       </div>
     );
