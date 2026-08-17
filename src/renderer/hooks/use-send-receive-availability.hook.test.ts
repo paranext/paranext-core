@@ -221,6 +221,29 @@ describe('useSendReceiveAvailability', () => {
     expect(result.current).toBe(true);
   });
 
+  it('retains the answer it already reported when it becomes disabled', async () => {
+    // Documented behavior: disabling stops further checking but does not erase what was learned.
+    // The toolbar disables this in power mode, where the answer gates nothing.
+    mockAvailabilityAnswers(true);
+    const { result, rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useSendReceiveAvailability({ enabled }),
+      { initialProps: { enabled: true } },
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current).toBe(true);
+
+    rerender({ enabled: false });
+    const callsWhenDisabled = countAvailabilityCalls();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SEND_RECEIVE_AVAILABILITY_RECHECK_WINDOW_MS);
+    });
+
+    expect(result.current).toBe(true);
+    expect(countAvailabilityCalls()).toBe(callsWhenDisabled);
+  });
+
   it('abandons a check still in flight at unmount instead of re-arming the chain', async () => {
     // Without abandoning the run, the awaited call resolves after teardown, sees nothing has
     // superseded it, and schedules a fresh timer on a dead component — a chain that then re-arms

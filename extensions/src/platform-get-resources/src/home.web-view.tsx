@@ -9,6 +9,7 @@ import {
   isErrorMessageAboutRegistryAuthFailure,
   isPlatformError,
   newGuid,
+  retryUntil,
 } from 'platform-bible-utils';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,7 +20,7 @@ const defaultInterfaceLanguages: string[] = ['en'];
 
 // Bounded retries for the two send/receive-dependent calls below, sized to outlast the remaining
 // extension activations (~1.5s in a Paratext 10 Studio build).
-const SEND_RECEIVE_RETRY_COUNT = 3;
+const SEND_RECEIVE_ATTEMPTS = 4;
 const SEND_RECEIVE_RETRY_MS = 2000;
 
 globalThis.webViewComponent = function HomeWebView() {
@@ -89,34 +90,36 @@ globalThis.webViewComponent = function HomeWebView() {
     );
   }, []);
 
-  const checkIfSendReceiveAvailable = useCallback(async (remainingRetries: number) => {
-    try {
-      const isAvailable = await papi.commands.sendCommand(
-        'platformGetResources.isSendReceiveAvailable',
-      );
-      if (isMounted.current) {
-        setIsSendReceiveAvailable(isAvailable);
-      }
-    } catch (e) {
-      // A throw means the extension host couldn't answer yet, not that send/receive is missing.
-      // Without a retry the answer stays unknown for the session — `platform.onDidReloadExtensions`,
-      // the only other thing that re-checks, does not fire on a cold start.
-      logger.warn(`Home web view could not determine send/receive availability: ${e}`);
-      if (remainingRetries > 0 && isMounted.current)
-        setTimeout(() => checkIfSendReceiveAvailable(remainingRetries - 1), SEND_RECEIVE_RETRY_MS);
-    }
+  const checkIfSendReceiveAvailable = useCallback(async () => {
+    // A throw means the extension host couldn't answer yet, not that send/receive is missing, so
+    // retry: without one the answer stays unknown for the session, since
+    // `platform.onDidReloadExtensions` — the only other thing that re-checks — does not fire on a
+    // cold start. `undefined` marks an attempt that threw, which is what keeps the retries going.
+    const isAvailable = await retryUntil(
+      async () => {
+        try {
+          return await papi.commands.sendCommand('platformGetResources.isSendReceiveAvailable');
+        } catch (e) {
+          logger.warn(
+            `Home web view could not determine send/receive availability: ${getErrorMessage(e)}`,
+          );
+          return undefined;
+        }
+      },
+      (isAvailableResult) => isAvailableResult !== undefined || !isMounted.current,
+      { maxAttempts: SEND_RECEIVE_ATTEMPTS, delayMs: SEND_RECEIVE_RETRY_MS },
+    );
+
+    if (isAvailable !== undefined && isMounted.current) setIsSendReceiveAvailable(isAvailable);
   }, []);
 
   useEffect(() => {
-    checkIfSendReceiveAvailable(SEND_RECEIVE_RETRY_COUNT);
+    checkIfSendReceiveAvailable();
   }, [checkIfSendReceiveAvailable]);
 
   useEvent(
     papi.network.getNetworkEvent('platform.onDidReloadExtensions'),
-    useCallback(
-      () => checkIfSendReceiveAvailable(SEND_RECEIVE_RETRY_COUNT),
-      [checkIfSendReceiveAvailable],
-    ),
+    checkIfSendReceiveAvailable,
   );
 
   const [isSendReceiveInProgress, setIsSendReceiveInProgress] = useState<boolean>(false);
@@ -129,6 +132,10 @@ globalThis.webViewComponent = function HomeWebView() {
       if (!isSyncing) setSyncsCompletedCount((k) => k + 1);
     }, []),
   );
+
+  // Declared before the first use below: both send/receive failure paths report through the same
+  // notification id so a repeat failure replaces the previous toast instead of stacking.
+  const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
 
   const sendReceiveProject = async (projectId: string) => {
     if (!isSendReceiveAvailable) return;
@@ -144,22 +151,46 @@ globalThis.webViewComponent = function HomeWebView() {
         setIsSendReceiveInProgress(false);
       }
     } catch (e) {
-      logger.warn(`Home web view failed to send/receive project ${projectId}: ${e}`);
+      const errorMessage = getErrorMessage(e);
+      logger.warn(`Home web view failed to send/receive project ${projectId}: ${errorMessage}`);
       if (isMounted.current) {
         setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
         setIsSendReceiveInProgress(false);
       }
-      // Re-throw so Home's own "Sync failed" alert reports it. Swallowing here is what made a failed
-      // send/receive look like nothing happened: Home already catches this callback's rejection and
-      // renders the message, but only ever saw a resolved promise.
+
+      // The two failures we can recognize get their own notification with a link to the setting
+      // that fixes them, the same way the shared-projects fetch reports them — their raw messages
+      // are ParatextData internals and say nothing a user can act on.
+      if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
+        papi.notifications.send({
+          severity: 'error',
+          message: '%data_loading_error_internetAccess_disabled_2%',
+          clickCommandLabel: '%general_open%',
+          clickCommand: 'paratextRegistration.showInternetSettings',
+          notificationId: sharedProjectErrorNotificationId,
+        });
+        return;
+      }
+      if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
+        papi.notifications.send({
+          severity: 'error',
+          message: '%data_loading_error_paratextData_auth_failure%',
+          clickCommandLabel: '%general_open%',
+          clickCommand: 'paratextRegistration.showParatextRegistration',
+          notificationId: sharedProjectErrorNotificationId,
+        });
+        return;
+      }
+
+      // Anything else re-throws so Home's own "Sync failed" alert reports it. Swallowing here is
+      // what made a failed send/receive look like nothing happened: Home already catches this
+      // callback's rejection and renders the message, but only ever saw a resolved promise.
       throw e;
     }
   };
 
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
   const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
-
-  const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
 
   useEffect(() => {
     if (!isSendReceiveAvailable) {
@@ -169,7 +200,9 @@ globalThis.webViewComponent = function HomeWebView() {
 
     let promiseIsCurrent = true;
     let retryTimeout: ReturnType<typeof setTimeout> | undefined;
-    let remainingRetries = SEND_RECEIVE_RETRY_COUNT;
+    // Deliberately not `retryUntil`: two error branches below must not retry at all (they notify
+    // instead), and this needs a cancellable timer so a stale effect run stops on cleanup.
+    let remainingRetries = SEND_RECEIVE_ATTEMPTS - 1;
     const getSharedProjects = async () => {
       try {
         const projectsInfo = await papi.commands.sendCommand(
@@ -199,7 +232,7 @@ globalThis.webViewComponent = function HomeWebView() {
             notificationId: sharedProjectErrorNotificationId,
           });
         } else if (remainingRetries > 0 && promiseIsCurrent && isMounted.current) {
-          // Availability reports what shipped in this build, not what has finished activating
+          // Availability reports what shipped in this build, not what has finished activating,
           // so an unclassified failure this early usually means send/receive hasn't
           // registered its commands yet. Without a retry the list stays empty until a sync completes
           // or extensions reload.

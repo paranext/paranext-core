@@ -6,7 +6,7 @@ import { useEvent } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** Delay between re-checks while the answer is still being reported as unknown. */
-const RECHECK_INTERVAL_MS = 2000;
+const UNSETTLED_RECHECK_INTERVAL_MS = 2000;
 /**
  * Delay between re-checks after the answer has settled. Slower because by then the UI is already
  * showing the settled answer and these re-checks only exist to catch a late arrival.
@@ -50,9 +50,9 @@ export const SEND_RECEIVE_AVAILABILITY_RECHECK_WINDOW_MS = 60_000;
  * check that throws is never reported as `false` at all, since a throw means the extension host
  * couldn't answer, not that the extension is missing.
  *
- * @param options.enabled When false, no checking happens and the answer stays `undefined`. Use it
- *   to avoid the network traffic where the answer can't affect anything — power mode has no
- *   send/receive UI to gate. Defaults to true.
+ * @param options.enabled When false, no further checking happens; an answer already reported is
+ *   retained rather than reset. Use it to avoid the network traffic where the answer can't affect
+ *   anything — power mode has no send/receive UI to gate. Defaults to true.
  */
 export function useSendReceiveAvailability({ enabled = true }: { enabled?: boolean } = {}):
   | boolean
@@ -83,7 +83,7 @@ export function useSendReceiveAvailability({ enabled = true }: { enabled?: boole
       }
       recheckTimeoutRef.current = setTimeout(
         check,
-        hasSettled ? SETTLED_RECHECK_INTERVAL_MS : RECHECK_INTERVAL_MS,
+        hasSettled ? SETTLED_RECHECK_INTERVAL_MS : UNSETTLED_RECHECK_INTERVAL_MS,
       );
     };
 

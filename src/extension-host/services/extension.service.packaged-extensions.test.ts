@@ -22,12 +22,22 @@ import { describe, expect, it } from 'vitest';
 
 const EXTENSION_SERVICE_PATH = path.join(__dirname, 'extension.service.ts');
 
-/** Returns the body of the named top-level `async function`, up to its closing brace at column 0. */
+/**
+ * Returns the body of the named top-level `async function`, up to its closing brace at column 0.
+ *
+ * Reading source text means a benign refactor can break this check without breaking the code — so
+ * both failure paths say to suspect this file first.
+ */
 function readFunctionBody(source: string, functionName: string): string {
+  const suspectTheGuard = `This guard reads source text, so it may just need updating to match a rename or refactor of ${functionName} — check that before assuming a regression.`;
   const startIndex = source.indexOf(`async function ${functionName}(`);
-  if (startIndex < 0) throw new Error(`Could not find 'async function ${functionName}' in source`);
+  if (startIndex < 0)
+    throw new Error(
+      `Could not find 'async function ${functionName}' in source. ${suspectTheGuard}`,
+    );
   const endIndex = source.indexOf('\n}', startIndex);
-  if (endIndex < 0) throw new Error(`Could not find the end of '${functionName}' in source`);
+  if (endIndex < 0)
+    throw new Error(`Could not find the end of '${functionName}' in source. ${suspectTheGuard}`);
   return source.slice(startIndex, endIndex);
 }
 
@@ -37,11 +47,11 @@ describe('getInstalledExtensions packaged-list source', () => {
     'getInstalledExtensions',
   );
 
-  it('derives packaged extensions from the discovered list', () => {
+  it('derives packaged extensions from the discovered list (if only renamed, update this guard)', () => {
     expect(body).toMatch(/derivePackagedExtensionIdentifiers\(\s*availableExtensions\s*,/);
   });
 
-  it('does not consult activation state', () => {
+  it('does not consult activation state (the regression this guards against)', () => {
     expect(body).not.toMatch(/activeExtensions/);
   });
 });
