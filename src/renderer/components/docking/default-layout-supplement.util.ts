@@ -92,6 +92,7 @@ export async function filterEnabledSupplementEntries(
 export function mergeDefaultLayoutSupplement(
   baseLayout: LayoutBase,
   entries: DefaultLayoutSupplementEntry[],
+  onPlacementAnomaly?: (entry: DefaultLayoutSupplementEntry, message: string) => void,
 ): LayoutBase {
   const layout: LayoutBase = deepClone(baseLayout);
   if (!layout.dockbox) return layout;
@@ -119,6 +120,16 @@ export function mergeDefaultLayoutSupplement(
     // Our SavedTabInfo satisfies rc-dock TabData at runtime; the generic union prevents direct assign
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const tab = entry.tab as unknown as TabData;
+    // Appending is the right fallback, but it is indistinguishable from a successful placement once
+    // it has happened, and the two ways to reach it are not equally benign. An entry that asked to
+    // be placed before a specific tab and did not find it has a stale or misspelled webViewType —
+    // the JSON is hand-edited and reaches this code as an untyped property access, so a typo
+    // compiles, lints, and silently reorders the column. Report it; "no request" stays silent.
+    if (entry.insertBeforeWebViewType && insertAt < 0)
+      onPlacementAnomaly?.(
+        entry,
+        `insertBeforeWebViewType '${entry.insertBeforeWebViewType}' was not found in the panel anchored by '${entry.anchorWebViewType}'; appending '${webViewTypeOf(tab)}' last instead`,
+      );
     // `findIndex` returning -1 covers both "no `insertBeforeWebViewType`" and "that tab isn't in this
     // panel" — both mean append.
     panel.tabs =

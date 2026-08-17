@@ -2495,21 +2495,27 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Open the Find / Replace UI for a project. Reuses an existing find web view rather than
-     * opening a new one when possible, reloading it if the resolved project differs from the
-     * existing web view's project, and brings the web view to front.
+     * Open the Find / Replace UI for a project, bringing it to the front. Reuses an existing find
+     * web view rather than opening a new one when possible, reloading it when the resolved project,
+     * the project's editability, or the triggering editor differs from what the existing web view
+     * holds, or when there is text to pre-fill.
      *
-     * @param editorWebViewId Id of the triggering editor's web view — not a project id. The project
-     *   and scroll group for the Find / Replace UI are resolved from it internally via
-     *   `papi.webViews.getOpenWebViewDefinition`.
+     * When no project can be resolved — no editor web view id was passed, or the one passed holds
+     * no project — this opens nothing and creates nothing, but still brings an already-open find
+     * web view to the front unchanged, so that in Simple mode (where Find is a permanent tab)
+     * invoking Find always lands on that tab rather than appearing to do nothing.
+     *
+     * @param editorWebViewId Id of the triggering editor's web view — not a project id. The
+     *   project, scroll group, and editability for the Find / Replace UI are resolved from it
+     *   internally via `papi.webViews.getOpenWebViewDefinition`.
      * @param selectedText Text to pre-fill the search box with (e.g. the editor's current selection
      *   when invoked via Ctrl+F). Pass `undefined` to open without a pre-filled search.
      * @param sourceProjectId Explicit project/resource id to search, overriding the project
      *   resolved from `editorWebViewId`. Passed by resource panels (model text, Bible texts,
      *   commentaries) whose displayed resource differs from the tab's own project.
-     * @returns Id of the find web view (existing or newly opened), or `undefined` when no project
-     *   can be resolved — no `sourceProjectId` was given and the triggering web view has no project
-     *   — in which case nothing is opened.
+     * @returns Id of the find web view — newly opened, reloaded, or (when no project could be
+     *   resolved) the existing one brought to front — or `undefined` when no project could be
+     *   resolved and no find web view was open.
      */
     'platformScripture.openFind': (
       editorWebViewId?: string | undefined,
