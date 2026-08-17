@@ -82,6 +82,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_replaceAll%',
   '%webView_find_replaceTab%',
   '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_replace_readOnlyTooltip%',
   '%webView_find_replace_structureProtectedError%',
   '%webView_find_replace_structureProtectedMarkerTooltip%',
   '%webView_find_replace_structureProtectedNote%',
@@ -93,6 +94,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_result%',
   '%webView_find_searchPlaceholder%',
   '%webView_find_searchPrompt%',
+  '%webView_find_selectBooksPrompt%',
   '%webView_find_showing%',
   '%webView_find_showingResults%',
   '%webView_find_showingResultsOfMore%',
@@ -146,6 +148,12 @@ export type FindProps = {
   wordRestriction: WordRestriction;
   /** Whether the search string is treated as a regular expression. */
   isRegexAllowed: boolean;
+  /**
+   * Whether the current search term + scope/filters combination would actually run a search (e.g.
+   * false for the `selectedBooks` scope with no books selected). Drives which results-area
+   * placeholder shows while `searchStatus` is `undefined`.
+   */
+  isSearchQueryValid: boolean;
 
   // Mode + replace state
   /** Whether the UI is in find or replace mode. */
@@ -164,6 +172,8 @@ export type FindProps = {
   isReplacing: boolean;
   /** Whether the project's structure is currently protected (replace restrictions apply). */
   isStructureProtected?: boolean;
+  /** Whether the active project can be edited. When false, Replace / Replace All are disabled. */
+  isEditable?: boolean;
   /**
    * Whether the current replacement text itself contains a paragraph/verse marker — guaranteed to
    * be rejected while protected, so Replace is proactively disabled.
@@ -275,6 +285,7 @@ export function Find({
   searchTextType,
   wordRestriction,
   isRegexAllowed,
+  isSearchQueryValid,
   activeMode,
   hideModeToggle = false,
   replaceTerm,
@@ -282,6 +293,7 @@ export function Find({
   isReplacing,
   isStructureProtected = false,
   isReplacementStructureChanging = false,
+  isEditable = true,
   results,
   resultsByBook,
   focusedResultIndex,
@@ -488,6 +500,15 @@ export function Find({
   // deletion bar rather than silently showing no preview.
   const replaceConfig = activeMode === 'replace' ? { term: replaceTerm, preserveCase } : undefined;
 
+  // Replace/Replace All are blocked for two independent reasons: the project is read-only, or
+  // structure is locked and the replacement itself would change it. When both apply, the read-only
+  // reason takes precedence since it is the more fundamental blocker.
+  const isReplaceActionBlocked =
+    !isEditable || (isStructureProtected && isReplacementStructureChanging);
+  const replaceBlockedTooltipText = !isEditable
+    ? localizedStrings['%webView_find_replace_readOnlyTooltip%']
+    : localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%'];
+
   // Map the flat localized-string bag into the shape the preview-options picker expects.
   const previewOptionsStrings: ReplacePreviewOptionsStrings = {
     togglePreviewOptions: localizedStrings['%webView_find_previewOptions_toggle%'],
@@ -670,10 +691,8 @@ export function Find({
               </div>
               <DisabledActionTooltip
                 className="tw:flex tw:gap-2"
-                disabled={isStructureProtected && isReplacementStructureChanging}
-                tooltipText={
-                  localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%']
-                }
+                disabled={isReplaceActionBlocked}
+                tooltipText={replaceBlockedTooltipText}
               >
                 <Button
                   variant="outline"
@@ -682,7 +701,7 @@ export function Find({
                     visibleResults.length === 0 ||
                     searchStatus === 'running' ||
                     isReplacing ||
-                    (isStructureProtected && isReplacementStructureChanging)
+                    isReplaceActionBlocked
                   }
                 >
                   <ReplaceAll className="tw:h-4 tw:w-4" />
@@ -694,7 +713,7 @@ export function Find({
                     focusedResultIndex === undefined ||
                     searchStatus === 'running' ||
                     isReplacing ||
-                    (isStructureProtected && isReplacementStructureChanging)
+                    isReplaceActionBlocked
                   }
                 >
                   <Replace className="tw:h-4 tw:w-4" />
@@ -774,23 +793,28 @@ export function Find({
         </div>
       </div>
 
-      {/* Search Results Placeholder */}
-      {results && results.length === 0 && searchStatus === 'running' && (
-        <div className="tw:space-y-2">
-          {Array.from({ length: 5 }).map((_value, index) => (
-            // As this is a placeholder, it is safe to use the index as a key
-            // eslint-disable-next-line react/no-array-index-key
-            <Card key={index}>
-              <CardContent className="tw:flex tw:items-center tw:space-x-4 tw:p-4">
-                <div className="tw:space-y-2">
-                  <Skeleton className="tw:h-4 tw:w-[250px]" />
-                  <Skeleton className="tw:h-4 tw:w-[200px]" />
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      {/* Search Results Placeholder: shown while actually running, and while a valid non-empty term
+          is about to auto-search (debounce pending, or waiting on the data provider) — otherwise a
+          restored/carried-over term would flash the idle prompt below before the search starts. */}
+      {results &&
+        results.length === 0 &&
+        (searchStatus === 'running' ||
+          (searchStatus === undefined && searchTerm.trim() !== '' && isSearchQueryValid)) && (
+          <div className="tw:space-y-2">
+            {Array.from({ length: 5 }).map((_value, index) => (
+              // As this is a placeholder, it is safe to use the index as a key
+              // eslint-disable-next-line react/no-array-index-key
+              <Card key={index}>
+                <CardContent className="tw:flex tw:items-center tw:space-x-4 tw:p-4">
+                  <div className="tw:space-y-2">
+                    <Skeleton className="tw:h-4 tw:w-[250px]" />
+                    <Skeleton className="tw:h-4 tw:w-[200px]" />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
 
       {/* Search Results */}
       {/* This div is a scroll container that handles keyboard navigation (arrow keys) between search
@@ -809,11 +833,22 @@ export function Find({
       >
         {/* Idle placeholder: no search has run yet (e.g. first open, or after clearing the search),
             so the results region would otherwise be blank. */}
-        {results.length === 0 && searchStatus === undefined && (
+        {results.length === 0 && searchStatus === undefined && searchTerm.trim() === '' && (
           <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4 tw:text-center tw:text-sm tw:font-light tw:text-muted-foreground">
             {localizedStrings['%webView_find_searchPrompt%']}
           </div>
         )}
+        {/* Invalid-query placeholder: a term is present but won't run (e.g. `selectedBooks` scope
+            with no books selected — can happen after a project switch invalidates a carried-over
+            selection). Distinct from the idle prompt so the user knows why nothing is happening. */}
+        {results.length === 0 &&
+          searchStatus === undefined &&
+          searchTerm.trim() !== '' &&
+          !isSearchQueryValid && (
+            <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4 tw:text-center tw:text-sm tw:font-light tw:text-muted-foreground">
+              {localizedStrings['%webView_find_selectBooksPrompt%']}
+            </div>
+          )}
         {(() => {
           // Only the first book that has a replaced result gets the cancel handler.
           // All replaced rows share one pending operation, so only one Cancel button

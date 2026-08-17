@@ -38,7 +38,12 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Find, FIND_LOCALIZED_STRING_KEYS } from './find/find.component';
-import { applyPreserveCase, isSimpleInterfaceMode } from './find/find.utils';
+import {
+  applyPreserveCase,
+  gateStartSearch,
+  isSimpleInterfaceMode,
+  nextPollMissState,
+} from './find/find.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
@@ -60,6 +65,7 @@ const WEB_VIEW_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_replacedOneOccurrence%',
   '%webView_find_replacedNOccurrences%',
   '%webView_find_replacementReverted%',
+  '%webView_find_pollConnectionLost%',
 ];
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
@@ -413,6 +419,13 @@ global.webViewComponent = function FindWebView({
     ? false
     : allowInvisibleCharactersPossiblyError;
 
+  // Whether the active project can be edited. Replace mutates the project, so it's disabled (with
+  // an explanatory tooltip) while this is false; Find itself is read-only and stays unaffected.
+  const [isEditablePossiblyError] = useProjectSetting(projectId, 'platform.isEditable', true);
+  const isEditable: boolean = isPlatformError(isEditablePossiblyError)
+    ? true
+    : isEditablePossiblyError;
+
   const availableBooksIds = useMemo(() => {
     return getBookIdsFromBooksPresent(booksPresent).filter(
       (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
@@ -598,17 +611,25 @@ global.webViewComponent = function FindWebView({
   const pendingAdvanceIndexRef = useRef<number | undefined>(undefined);
   // On the initial render, skip the debounce-triggered auto-search only when searchTerm is empty.
   // When searchTerm is non-empty (restored from state), let the search run so results appear on
-  // startup. A separate effect handles the case where findPdp isn't ready within the debounce
-  // window.
+  // startup. A separate effect handles the case where findPdp isn't ready.
   const isInitialAutoSearchRef = useRef(true);
-  // Tracks whether the startup search (for a pre-filled search term) has already been triggered,
-  // so the findPdp-readiness effect below only fires once. Intentionally never reset: the fallback
-  // effect is a one-shot safety net for mount-time races and should not re-fire on project switch.
-  const initialSearchTriggeredRef = useRef(false);
+  // Set whenever handleStartSearch bails specifically because findPdp isn't ready (query was
+  // otherwise valid). The readiness-retry effect below clears it and retries as soon as findPdp
+  // becomes available — covering both a mount-time race and findPdp dropping later during a long
+  // idle period, not just the first attempt ever.
+  const pendingSearchDesiredRef = useRef(false);
 
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
-      if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
+      const gate = gateStartSearch({
+        isSearchQueryValid,
+        hasPdp: !!findPdp,
+        isAlreadyStarting: isStartingSearchRef.current,
+      });
+      if (gate.action === 'skip') {
+        if (gate.shouldRetryWhenPdpReady) pendingSearchDesiredRef.current = true;
+        return;
+      }
 
       const isPostReplace = isPostReplaceSearchRef.current;
       isPostReplaceSearchRef.current = false;
@@ -737,6 +758,10 @@ global.webViewComponent = function FindWebView({
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
     let isEffectActive = true;
+    // Consecutive polls that came back with no update (a transient PDP/connection blip). Reset on
+    // any successful update; past MAX_CONSECUTIVE_POLL_MISSES the job is treated as lost rather
+    // than left to poll forever with a frozen, stale UI and no feedback.
+    let consecutiveMisses = 0;
 
     const checkForUpdates = async () => {
       // Check if this effect is still active to avoid race conditions
@@ -744,7 +769,20 @@ global.webViewComponent = function FindWebView({
 
       try {
         const update = await retrieveFindJobUpdate(0);
-        if (!update || !isEffectActive) return;
+        if (!isEffectActive) return;
+
+        if (!update) {
+          const missState = nextPollMissState(consecutiveMisses);
+          consecutiveMisses = missState.consecutiveMisses;
+          if (missState.hasExceededRetryLimit) {
+            setSearchStatus('errored');
+            setSearchError(localizedStrings['%webView_find_pollConnectionLost%']);
+            return;
+          }
+          timeoutId = setTimeout(checkForUpdates, 100);
+          return;
+        }
+        consecutiveMisses = 0;
 
         setSearchProgress(update.percentComplete);
         setTotalNumberOfResults(update.totalResultsCount);
@@ -775,7 +813,7 @@ global.webViewComponent = function FindWebView({
       isEffectActive = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [activeJobId, loadMoreResults, retrieveFindJobUpdate]);
+  }, [activeJobId, loadMoreResults, retrieveFindJobUpdate, localizedStrings]);
 
   // #endregion
 
@@ -911,7 +949,6 @@ global.webViewComponent = function FindWebView({
       // Only skip the initial auto-search when the field is empty. When searchTerm is non-empty
       // (e.g. restored from state), fall through so results appear immediately on startup.
       if (searchTerm.trim() === '') return undefined;
-      initialSearchTriggeredRef.current = true;
     }
     debouncedHandleStartSearch.current();
   }, [
@@ -923,21 +960,16 @@ global.webViewComponent = function FindWebView({
     relevantScopeKey,
   ]);
 
-  // Fallback for startup search: if findPdp wasn't ready when the debounce fired on mount,
-  // run the search as soon as findPdp becomes available (fires at most once).
-  // Set explicitSearchPendingRef so the debounce timer (still pending when findPdp was already
-  // available at mount) skips its redundant second call.
+  // Readiness retry: if handleStartSearch bailed because findPdp wasn't available (mount-time race,
+  // or findPdp dropping later during a long idle period), retry as soon as it becomes available —
+  // not just once at mount. Set explicitSearchPendingRef so a debounce timer still pending from the
+  // same keystroke skips its redundant second call.
   useEffect(() => {
-    if (
-      !findPdp ||
-      !initialSearchTriggeredRef.current ||
-      searchStatus !== undefined ||
-      searchTerm.trim() === ''
-    )
-      return;
+    if (!findPdp || !pendingSearchDesiredRef.current || searchStatus !== undefined) return;
+    pendingSearchDesiredRef.current = false;
     explicitSearchPendingRef.current = true;
     handleStartSearchRef.current();
-  }, [findPdp, searchStatus, searchTerm]);
+  }, [findPdp, searchStatus]);
 
   // Reset isPostReplaceSearch once the search finishes so a subsequent search in replace mode
   // (e.g. triggered by an external change) is not mistakenly treated as a post-replace search.
@@ -1450,6 +1482,7 @@ global.webViewComponent = function FindWebView({
       searchTextType={searchTextType}
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
+      isSearchQueryValid={isSearchQueryValid}
       activeMode={isSimpleMode ? 'find' : activeMode}
       hideModeToggle={isSimpleMode}
       replaceTerm={replaceTerm}
@@ -1459,6 +1492,7 @@ global.webViewComponent = function FindWebView({
       isReplacing={isReplacing}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
+      isEditable={isEditable}
       results={results}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}

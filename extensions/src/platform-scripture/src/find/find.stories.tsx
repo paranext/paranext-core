@@ -433,6 +433,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const isReplacementStructureChanging =
     isStructureProtected && replacementContainsStructuralMarker(replaceTerm);
 
+  const isSearchQueryValid = scope !== 'selectedBooks' || selectedBookIds.length > 0;
+
   return (
     <Find
       localizedStrings={localizedStrings}
@@ -449,6 +451,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       searchTextType={searchTextType}
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
+      isSearchQueryValid={isSearchQueryValid}
       activeMode={activeMode}
       hideModeToggle={config.hideModeToggle}
       previewOptions={previewOptions}

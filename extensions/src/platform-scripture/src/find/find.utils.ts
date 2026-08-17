@@ -100,6 +100,59 @@ export function applyPreserveCase(matchedText: string, replacementText: string):
 }
 
 /**
+ * How many consecutive find-job poll misses (the PDP/connection blipping and returning no update)
+ * to tolerate before giving up on a running search.
+ */
+export const MAX_CONSECUTIVE_POLL_MISSES = 10;
+
+/**
+ * Decides whether the find-job poll loop should keep retrying after a poll comes back with no
+ * update, given how many consecutive misses have already happened. A single miss is treated as a
+ * transient blip and retried; only a sustained run of misses is treated as a real failure.
+ *
+ * @param consecutiveMisses The number of consecutive misses before this one.
+ * @returns The updated miss count, and whether it has now reached
+ *   {@link MAX_CONSECUTIVE_POLL_MISSES}.
+ */
+export function nextPollMissState(consecutiveMisses: number): {
+  consecutiveMisses: number;
+  hasExceededRetryLimit: boolean;
+} {
+  const nextConsecutiveMisses = consecutiveMisses + 1;
+  return {
+    consecutiveMisses: nextConsecutiveMisses,
+    hasExceededRetryLimit: nextConsecutiveMisses >= MAX_CONSECUTIVE_POLL_MISSES,
+  };
+}
+
+/** The decision {@link gateStartSearch} makes for a given attempt to start a search. */
+export type StartSearchGate =
+  | { action: 'run' }
+  | { action: 'skip'; shouldRetryWhenPdpReady: boolean };
+
+/**
+ * Decides whether an attempt to start a find-job search should actually run, and — if not — whether
+ * it is worth automatically retrying once the data provider becomes available. Only a missing data
+ * provider is retryable: it is a temporary condition (mount-time race, or the provider dropping
+ * during a long idle period) that resolves on its own once the provider reconnects. An invalid
+ * query or a search already in flight are not retryable — retrying them would either loop forever
+ * (the query stays invalid until the user changes it) or duplicate work.
+ */
+export function gateStartSearch(params: {
+  isSearchQueryValid: boolean;
+  hasPdp: boolean;
+  isAlreadyStarting: boolean;
+}): StartSearchGate {
+  if (!params.isSearchQueryValid || params.isAlreadyStarting) {
+    return { action: 'skip', shouldRetryWhenPdpReady: false };
+  }
+  if (!params.hasPdp) {
+    return { action: 'skip', shouldRetryWhenPdpReady: true };
+  }
+  return { action: 'run' };
+}
+
+/**
  * Whether the Find panel should treat the given `platform.interfaceMode` value as "simple" — i.e.
  * hide the find/replace toggle and stay in find mode. Replace is a power-mode-only capability, so
  * this returns `false` ONLY when the mode is definitively `'power'`; a {@link PlatformError} (the

@@ -4,7 +4,10 @@ import {
   applyPreserveCase,
   buildSearchRegex,
   CharacterCategorizer,
+  gateStartSearch,
   isSimpleInterfaceMode,
+  MAX_CONSECUTIVE_POLL_MISSES,
+  nextPollMissState,
 } from './find.utils';
 
 /** Default character categorizer matching the project-settings defaults used in production */
@@ -360,5 +363,58 @@ describe('buildSearchRegex – trailing space', () => {
     );
     // "Abraham." ends the sentence — no space follows
     expect(matchAll(regex, 'the son of Abraham.')).toEqual([]);
+  });
+});
+
+describe('nextPollMissState', () => {
+  it('does not exceed the retry limit on the first miss', () => {
+    const result = nextPollMissState(0);
+    expect(result).toEqual({ consecutiveMisses: 1, hasExceededRetryLimit: false });
+  });
+
+  it('increments the miss count on each successive call', () => {
+    expect(nextPollMissState(1)).toEqual({ consecutiveMisses: 2, hasExceededRetryLimit: false });
+    expect(nextPollMissState(2)).toEqual({ consecutiveMisses: 3, hasExceededRetryLimit: false });
+  });
+
+  it('has not exceeded the retry limit one miss below the threshold', () => {
+    const result = nextPollMissState(MAX_CONSECUTIVE_POLL_MISSES - 2);
+    expect(result.consecutiveMisses).toBe(MAX_CONSECUTIVE_POLL_MISSES - 1);
+    expect(result.hasExceededRetryLimit).toBe(false);
+  });
+
+  it('exceeds the retry limit once the miss count reaches the threshold', () => {
+    const result = nextPollMissState(MAX_CONSECUTIVE_POLL_MISSES - 1);
+    expect(result.consecutiveMisses).toBe(MAX_CONSECUTIVE_POLL_MISSES);
+    expect(result.hasExceededRetryLimit).toBe(true);
+  });
+});
+
+describe('gateStartSearch', () => {
+  it('runs the search when the query is valid, the PDP is ready, and nothing else is starting', () => {
+    expect(
+      gateStartSearch({ isSearchQueryValid: true, hasPdp: true, isAlreadyStarting: false }),
+    ).toEqual({ action: 'run' });
+  });
+
+  it('skips without retry when the query itself is invalid, regardless of PDP readiness', () => {
+    expect(
+      gateStartSearch({ isSearchQueryValid: false, hasPdp: true, isAlreadyStarting: false }),
+    ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: false });
+    expect(
+      gateStartSearch({ isSearchQueryValid: false, hasPdp: false, isAlreadyStarting: false }),
+    ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: false });
+  });
+
+  it('skips without retry when a search is already starting', () => {
+    expect(
+      gateStartSearch({ isSearchQueryValid: true, hasPdp: true, isAlreadyStarting: true }),
+    ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: false });
+  });
+
+  it('skips WITH retry when the query is valid but the data provider is not ready yet', () => {
+    expect(
+      gateStartSearch({ isSearchQueryValid: true, hasPdp: false, isAlreadyStarting: false }),
+    ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: true });
   });
 });
