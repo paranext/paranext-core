@@ -888,6 +888,12 @@ let layoutLoadGeneration = 0;
  * landed, so it cannot lift the hold on a dock it never wrote; and it cannot extend the hold
  * either, since the load that DOES reach the dock sets the marker to the current generation and
  * pushes resume immediately, however long the abandoned one takes to settle.
+ *
+ * That holds only because EVERY site that writes the dock checks `isSuperseded()` first, so this
+ * can only ever move to the generation whose layout is actually in the dock — never backwards to a
+ * load a newer one already replaced. A write site without that check would regress the marker below
+ * `layoutLoadGeneration` and hold every push from then on, with nothing scheduled to reconcile the
+ * dock. Keep the checkpoint if you add another write site.
  */
 let layoutLoadGenerationInDock = 0;
 
@@ -908,12 +914,21 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   const webViewsBeforeLoad = dockLayoutVar.getAllWebViewDefinitions();
   if (layout) {
     // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
-    // Applied unconditionally: the caller handed us the layout, so there is nothing here that a
-    // later load could make stale — and bumping the generation above is what lets this call cancel
-    // an in-flight no-argument load that would otherwise land on top of it.
+    // Bumping the generation above is what lets this call cancel an in-flight no-argument load that
+    // would otherwise land on top of it — when THIS is the newer load, the checkpoint below passes
+    // and the older one drops its answer instead.
     // NOTE: we intentionally do NOT apply the default-layout supplement here — a caller passing an
     // explicit layout owns its full contents. If a future "reset to default layout" path routes
     // through here and should include supplement tabs, merge `getEnabledSupplementEntries()` in too.
+    if (isSuperseded()) {
+      // The reverse ordering: a newer load reached the dock while this one was still awaiting it.
+      // Writing now would replace the dock with content the user has already moved past AND regress
+      // `layoutLoadGenerationInDock` below `layoutLoadGeneration`, which holds every subsequent
+      // push with nothing scheduled to reconcile the dock. The caller owning this layout does not
+      // make it current; only being the newest load does.
+      logger.debug('Dropping an explicit layout load that a newer one superseded');
+      return;
+    }
     dockLayoutVar.loadLayout(layout);
     layoutLoadGenerationInDock = thisGeneration;
     emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layout);
