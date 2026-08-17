@@ -248,6 +248,8 @@ type HarnessConfig = {
   isStructureProtected?: boolean;
   /** Showcase the empty state when no scripture project is open anywhere. */
   noOpenProjects?: boolean;
+  /** Showcase the project selector while the project metadata fetch is still in flight. */
+  isLoadingProjects?: boolean;
 };
 
 /**
@@ -468,6 +470,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       selectedProjectId={selectedProjectId}
       selectedScrollGroupId={selectedScrollGroupId}
       openTabs={config.noOpenProjects ? [] : STORY_OPEN_TABS}
+      isLoadingProjects={config.isLoadingProjects ?? false}
       noOpenProjects={config.noOpenProjects ?? false}
       onSelectProjectScrollGroup={(newProjectId, newScrollGroupId) => {
         setSelectedProjectId(newProjectId);
@@ -618,4 +621,12 @@ export const StructureProtected: Story = {
  */
 export const NoOpenProjects: Story = {
   decorators: [createDecorator({ live: false, results: [], noOpenProjects: true })],
+};
+
+/**
+ * The project metadata fetch is still in flight. `projects` is empty but tabs ARE open, so the
+ * selector shows a loading affordance rather than falsely claiming no projects are open.
+ */
+export const LoadingProjects: Story = {
+  decorators: [createDecorator({ live: false, results: [], isLoadingProjects: true })],
 };

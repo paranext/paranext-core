@@ -8,6 +8,7 @@ import {
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
 import { FindOptions } from 'platform-scripture';
+import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
@@ -115,18 +116,105 @@ export function isSimpleInterfaceMode(interfaceMode: 'simple' | 'power' | Platfo
   return isPlatformError(interfaceMode) || interfaceMode !== 'power';
 }
 
-/** A currently open scripture-editor tab, as tracked by `useOpenProjectTabs`. */
-export type OpenScrollGroupTab = {
-  projectId: string;
-  scrollGroupId: ScrollGroupId;
-  webViewId: string;
-};
+/**
+ * A currently open scripture-editor tab, as tracked by `useOpenProjectTabs`.
+ *
+ * Derived from the hook's own type rather than restated, so the two cannot drift. The import is
+ * `import type`, which TypeScript erases entirely — so this module stays free of the runtime
+ * `@papi/frontend` import `use-open-project-tabs.ts` performs, and remains importable by the
+ * presentational component, its story, and this file's unit tests.
+ */
+export type OpenScrollGroupTab = Omit<OpenProjectTabWithWebView, 'webViewType'>;
+
+/**
+ * Runs a web-view-controller call, containing BOTH ways a controller for a CLOSED editor tab fails.
+ *
+ * A controller is a network object: disposing it revokes its proxy. After that, even READING a
+ * method off it (`controller.runAnnotationAction`) throws `TypeError: Cannot perform 'get' on a
+ * proxy that has been revoked` — **synchronously**, before any promise exists. So the
+ * natural-looking `controller?.method(...).catch(() => {})` cannot contain it: `?.` only guards
+ * nullish, and `.catch` only sees rejections. The escaping TypeError crashed the whole Find web
+ * view whenever the selected project's editor tab closed while an annotation-cleanup ran against
+ * the disposed controller.
+ *
+ * Wrapping the call in a thunk lets this helper own the property read too, so the sync throw and
+ * the async rejection funnel into one place.
+ *
+ * @param call Thunk that reads the method off the controller and invokes it. May return `undefined`
+ *   when there is no controller to call.
+ * @param onError Optional handler for either failure mode. Omit to swallow silently (correct for
+ *   best-effort cleanup, where the editor is already gone and there is nothing to report).
+ */
+export function callControllerSafely(
+  call: () => Promise<unknown> | undefined,
+  onError?: (error: unknown) => void,
+): void {
+  try {
+    call()?.catch((error: unknown) => onError?.(error));
+  } catch (error) {
+    // Synchronous throw from a revoked proxy (see above) — the editor tab is gone, so there is
+    // nothing to act on beyond reporting it.
+    onError?.(error);
+  }
+}
 
 /** A `(projectId, scrollGroupId)` pair Find's project selector has selected. */
 export type SelectedProjectScrollGroup = {
   projectId: string;
   scrollGroupId: ScrollGroupId;
 };
+
+/**
+ * Whether selecting `newProjectId` moves Find to a DIFFERENT project — the decision that gates
+ * abandoning the running find job, clearing results, and re-running the search.
+ *
+ * Compared case-INSENSITIVELY on purpose. `useOpenProjectTabs` reports lowercased project ids while
+ * canonical ids are UPPERCASE, so the selection can legitimately be corrected from `web` to `WEB`
+ * for the very same project. Treating that casing-only correction as a switch would abandon the
+ * job, wipe the results the user is reading, and start a second identical search.
+ *
+ * @param newProjectId The project id being selected.
+ * @param currentProjectId The project Find currently operates on, or `undefined` before any initial
+ *   selection has been made.
+ * @returns `true` when this is a move to a different project (including the initial selection,
+ *   where there is no current project); `false` for the same project, whatever its casing.
+ */
+export function isDifferentProjectSelection(
+  newProjectId: string,
+  currentProjectId: string | undefined,
+): boolean {
+  if (!currentProjectId) return true;
+  return normalizeProjectId(newProjectId) !== normalizeProjectId(currentProjectId);
+}
+
+/**
+ * Narrows a persisted book selection to the books the currently selected project actually has.
+ *
+ * `selectedBookIds` is persisted per web view, so switching projects can leave it naming books the
+ * new project doesn't contain. The finder engine skips absent books gracefully, so this is not a
+ * crash — but with the `selectedBooks` scope the search would silently cover fewer books than the
+ * checkbox list shows.
+ *
+ * An EMPTY `availableBookIds` means "not known yet", NOT "the project has no books": `booksPresent`
+ * sits at its all-zero default while the project setting resolves, and pruning against that
+ * transient empty set would wipe the whole selection instead of narrowing it. In that case the
+ * selection is returned untouched.
+ *
+ * @param availableBookIds Book ids the selected project has, or empty when not yet known.
+ * @param selectedBookIds The currently selected book ids.
+ * @returns The pruned ids, or the ORIGINAL `selectedBookIds` array reference when nothing needed
+ *   removing — so callers can compare by identity to skip a redundant state write (which also keeps
+ *   an effect that depends on this from re-triggering itself).
+ */
+export function prunePresentBookIds(
+  availableBookIds: readonly string[],
+  selectedBookIds: string[],
+): string[] {
+  if (availableBookIds.length === 0) return selectedBookIds;
+  const availableBookIdSet = new Set(availableBookIds);
+  const prunedBookIds = selectedBookIds.filter((bookId) => availableBookIdSet.has(bookId));
+  return prunedBookIds.length === selectedBookIds.length ? selectedBookIds : prunedBookIds;
+}
 
 /**
  * Resolves which `(project, scroll group)` pair Find's project selector should have selected, given

@@ -1,11 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { newPlatformError } from 'platform-bible-utils';
 import {
   applyPreserveCase,
   buildSearchRegex,
+  callControllerSafely,
   CharacterCategorizer,
+  isDifferentProjectSelection,
   isSimpleInterfaceMode,
   OpenScrollGroupTab,
+  prunePresentBookIds,
   resolveSelectedProjectScrollGroup,
 } from './find.utils';
 
@@ -430,5 +433,126 @@ describe('resolveSelectedProjectScrollGroup', () => {
 
   it('returns undefined when no tabs are open anywhere', () => {
     expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, [], undefined)).toBeUndefined();
+  });
+});
+
+describe('isDifferentProjectSelection', () => {
+  it('reports a genuinely different project as a switch', () => {
+    expect(isDifferentProjectSelection('PROJ-B', 'PROJ-A')).toBe(true);
+  });
+
+  it('reports the same project as NOT a switch', () => {
+    expect(isDifferentProjectSelection('PROJ-A', 'PROJ-A')).toBe(false);
+  });
+
+  // The regression this guards: `useOpenProjectTabs` reports lowercased ids while canonical ids are
+  // UPPERCASE, so the reassignment effect can hand back the same project in different casing. A
+  // case-sensitive comparison treated that as a switch, which abandoned the running job, cleared the
+  // results the user was reading, and started a second identical search.
+  it('does NOT treat a casing-only correction of the same project as a switch', () => {
+    expect(isDifferentProjectSelection('WEB', 'web')).toBe(false);
+    expect(isDifferentProjectSelection('web', 'WEB')).toBe(false);
+    expect(isDifferentProjectSelection('WeB', 'wEb')).toBe(false);
+  });
+
+  it('treats the initial selection (no current project) as a switch', () => {
+    expect(isDifferentProjectSelection('PROJ-A', undefined)).toBe(true);
+  });
+
+  it('treats an empty current project id as a switch', () => {
+    expect(isDifferentProjectSelection('PROJ-A', '')).toBe(true);
+  });
+
+  it('still distinguishes projects whose ids differ by more than casing', () => {
+    expect(isDifferentProjectSelection('web', 'WEBBT')).toBe(true);
+  });
+});
+
+describe('prunePresentBookIds', () => {
+  it('removes books the project does not have', () => {
+    expect(prunePresentBookIds(['GEN', 'EXO'], ['GEN', 'LEV', 'EXO'])).toEqual(['GEN', 'EXO']);
+  });
+
+  it('returns the ORIGINAL array reference when nothing needs removing', () => {
+    // Identity, not just equality: the caller skips its state write on `!==`, which is what stops the
+    // effect from re-triggering itself.
+    const selectedBookIds = ['GEN', 'EXO'];
+    expect(prunePresentBookIds(['GEN', 'EXO', 'LEV'], selectedBookIds)).toBe(selectedBookIds);
+  });
+
+  // The regression this guards: `booksPresent` sits at its all-zero default while the project setting
+  // resolves after a switch, so `availableBookIds` is briefly empty. Pruning against that would wipe
+  // the user's entire book selection rather than narrowing it. "Not known yet" != "no books".
+  it('leaves the selection untouched when the available books are not known yet', () => {
+    const selectedBookIds = ['GEN', 'EXO'];
+    expect(prunePresentBookIds([], selectedBookIds)).toBe(selectedBookIds);
+  });
+
+  it('empties the selection when the project genuinely shares no books with it', () => {
+    expect(prunePresentBookIds(['MAT', 'MRK'], ['GEN', 'EXO'])).toEqual([]);
+  });
+
+  it('preserves the selection order rather than the available-books order', () => {
+    expect(prunePresentBookIds(['GEN', 'EXO', 'LEV'], ['LEV', 'GEN'])).toEqual(['LEV', 'GEN']);
+  });
+
+  it('handles an empty selection', () => {
+    const selectedBookIds: string[] = [];
+    expect(prunePresentBookIds(['GEN'], selectedBookIds)).toBe(selectedBookIds);
+  });
+
+  it('is case-sensitive on book ids, which are canonical uppercase', () => {
+    expect(prunePresentBookIds(['GEN'], ['gen'])).toEqual([]);
+  });
+});
+
+describe('callControllerSafely', () => {
+  it('invokes the call and reports nothing when the controller is healthy', async () => {
+    const call = vi.fn(async () => 'ok');
+    const onError = vi.fn();
+    callControllerSafely(call, onError);
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1));
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('swallows a rejected call and reports the reason', async () => {
+    const reason = new Error('network gone');
+    const onError = vi.fn();
+    expect(() => callControllerSafely(() => Promise.reject(reason), onError)).not.toThrow();
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(reason));
+  });
+
+  // The regression this guards, reproduced with a REAL revoked proxy — exactly what disposing a
+  // network object does to a web-view controller. Reading the method off it throws SYNCHRONOUSLY, so
+  // the previous `controller?.method(...).catch(() => {})` shape could not contain it: `.catch` only
+  // sees rejections. That uncaught TypeError crashed the Find web view whenever the selected
+  // project's editor tab closed and the annotation-cleanup effect fired on the disposed controller.
+  it('swallows the SYNCHRONOUS throw from reading a method off a revoked proxy', () => {
+    const { proxy, revoke } = Proxy.revocable<{ runAnnotationAction: () => Promise<void> }>(
+      { runAnnotationAction: async () => {} },
+      {},
+    );
+    revoke();
+    const onError = vi.fn();
+
+    expect(() => callControllerSafely(() => proxy.runAnnotationAction(), onError)).not.toThrow();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(String(onError.mock.calls[0][0])).toContain('revoked');
+  });
+
+  it('does not throw on a revoked proxy even with no error handler supplied', () => {
+    const { proxy, revoke } = Proxy.revocable<{ runAnnotationAction: () => Promise<void> }>(
+      { runAnnotationAction: async () => {} },
+      {},
+    );
+    revoke();
+
+    expect(() => callControllerSafely(() => proxy.runAnnotationAction())).not.toThrow();
+  });
+
+  it('tolerates a call that returns undefined rather than a promise', () => {
+    const onError = vi.fn();
+    expect(() => callControllerSafely(() => undefined, onError)).not.toThrow();
+    expect(onError).not.toHaveBeenCalled();
   });
 });

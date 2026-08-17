@@ -43,7 +43,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
 import {
   applyPreserveCase,
+  callControllerSafely,
+  isDifferentProjectSelection,
   isSimpleInterfaceMode,
+  prunePresentBookIds,
   resolveSelectedProjectScrollGroup,
 } from './find/find.utils';
 import {
@@ -65,6 +68,7 @@ const WEB_VIEW_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%versionHistoryCommit_beforeReplace_failureMessage%',
   '%versionHistoryCommit_afterReplace%',
   '%webView_find_findInProject%',
+  '%webView_find_project_unavailableError%',
   '%webView_find_replacedOneOccurrence%',
   '%webView_find_replacedNOccurrences%',
   '%webView_find_replacementReverted%',
@@ -90,6 +94,9 @@ const DEFAULT_RECENT_SEARCHES: string[] = [];
  * open.
  */
 const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
+
+/** Short and full names for every scripture project/resource, keyed by canonical project id. */
+type ProjectNamesById = { [id: string]: Pick<FindProject, 'shortName' | 'fullName'> };
 
 /**
  * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
@@ -283,16 +290,30 @@ global.webViewComponent = function FindWebView({
     );
   }, [results]);
 
-  const [verseRefSetting, setVerseRefSetting] = useWebViewScrollGroupScrRef();
+  // `setFindScrollGroupId` repoints Find's OWN scroll group so it always tracks the scroll group of
+  // the editor tab the project selector has chosen (see `handleSelectProjectScrollGroup`). Without
+  // that, Find keeps the group it was seeded with at open time
+  // (`find.web-view-provider.ts` -> `scrollGroupScrRef: getWebViewOptions.editorScrollGroupId`) and
+  // every reference-derived behavior reads the WRONG tab: `findScope` would resolve `Current
+  // book`/`Current chapter` against the originating tab's group instead of the selected one, and the
+  // `setVerseRefSetting` call on result activation would navigate unrelated editors in that stale
+  // group. Keeping the two equal makes both correct by construction and keeps the scroll-group
+  // letter in Find's tab toolbar agreeing with the one in the project selector.
+  // The returned `scrollGroupId` (index 2) is intentionally skipped: it is always
+  // `selectedScrollGroupId`, which we already hold.
+  const [verseRefSetting, setVerseRefSetting, , setFindScrollGroupId] =
+    useWebViewScrollGroupScrRef();
 
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
 
   // #region Project selector
 
-  // Project data loading — fetched once for all scripture projects/resources so names/canonical
-  // ids are available immediately once a project opens; filtered down to only open ones below.
-  type ProjectNamesById = { [id: string]: Pick<FindProject, 'shortName' | 'fullName'> };
-  const [projectIdsAndNames]: [ProjectNamesById, boolean] = usePromise(
+  // Project data loading — fetched for all scripture projects/resources so names/canonical ids are
+  // available once a project opens; filtered down to only open ones below. Re-fetched when an open
+  // project turns out to be missing from the result (see `projectMetadataGeneration`), so a project
+  // created/cloned/downloaded after Find mounted still reaches the picker.
+  const [projectMetadataGeneration, setProjectMetadataGeneration] = useState(0);
+  const [projectIdsAndNames, isLoadingProjects]: [ProjectNamesById, boolean] = usePromise(
     useCallback(async () => {
       const projectDict: ProjectNamesById = {};
 
@@ -300,16 +321,36 @@ global.webViewComponent = function FindWebView({
         includeProjectInterfaces: ['Scripture', 'Paratext'],
       });
 
-      await Promise.all(
-        allMetadata.map(async (metadata) => {
-          const names = await getProjectNames(metadata.id);
-          if (!names) return;
-          projectDict[metadata.id] = names;
-        }),
+      // `allSettled`, NOT `all`. These are independent per-project reads, and `usePromise` has no
+      // `.catch` around its factory — so with `all`, one project whose PDP or `platform.name` read
+      // rejects would reject the whole batch, the rejection would escape this callback, and neither
+      // `setValue` nor `setIsLoading(false)` would ever run: `projectIdsAndNames` would stay `{}`
+      // and `isLoadingProjects` stuck `true`, permanently. That state is UNRECOVERABLE here,
+      // because the refetch effect and the reassignment effect's canonical-id gate both wait on
+      // `isLoadingProjects` — the one path that could retry is gated off by the failure itself. And
+      // the batch spans every Scripture/Paratext project, not just open ones, so a single bad
+      // project would take out the whole picker. Skip the failures, keep the rest.
+      const projectNameResults = await Promise.allSettled(
+        allMetadata.map(async (metadata) => ({
+          id: metadata.id,
+          names: await getProjectNames(metadata.id),
+        })),
       );
+      projectNameResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          projectDict[result.value.id] = result.value.names;
+          return;
+        }
+        logger.warn(
+          `Find: could not read names for project ${allMetadata[index].id}; omitting it from the project picker: ${getErrorMessage(result.reason)}`,
+        );
+      });
 
       return projectDict;
-    }, []),
+      // `projectMetadataGeneration` is an invalidation token, not a value read in the body — bumping
+      // it is what re-runs this fetch.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [projectMetadataGeneration]),
     useMemo(() => ({}), []),
   );
 
@@ -326,7 +367,9 @@ global.webViewComponent = function FindWebView({
   // Find's project picker only ever lists projects that are open in an editor tab (a project
   // isn't a candidate to search until it's actually open): once a project's last tab closes, the
   // reassignment effect below moves the selection to another open project before this list update
-  // even renders, so there is no "selected but not listed" gap to bridge here.
+  // even renders. A transient "selected but not listed" gap IS possible while the metadata fetch
+  // above is in flight or stale — the refetch effect below and the `isLoadingProjects` gate in the
+  // reassignment effect close it rather than letting a half-known list drive the selection.
   const openProjectIds = useMemo(() => {
     const ids = new Set<string>();
     allOpenProjectTabs.forEach((tab) => ids.add(normalizeProjectId(tab.projectId)));
@@ -340,6 +383,24 @@ global.webViewComponent = function FindWebView({
         .map(([id, names]) => ({ id, ...names })),
     [projectIdsAndNames, openProjectIds],
   );
+
+  // An open editor tab whose project the metadata fetch never returned means the fetch predates the
+  // project (created/cloned/downloaded after Find mounted). Re-fetch so it can appear in the picker.
+  // Each missing id is recorded before bumping the token so a project that genuinely has no
+  // Scripture/Paratext metadata triggers exactly one retry rather than an infinite refetch loop.
+  const refetchAttemptedProjectIdsRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (isLoadingProjects) return;
+    const knownProjectIds = new Set(
+      Object.keys(projectIdsAndNames).map((id) => normalizeProjectId(id)),
+    );
+    const missingProjectIds = [...openProjectIds].filter(
+      (id) => !knownProjectIds.has(id) && !refetchAttemptedProjectIdsRef.current.has(id),
+    );
+    if (missingProjectIds.length === 0) return;
+    missingProjectIds.forEach((id) => refetchAttemptedProjectIdsRef.current.add(id));
+    setProjectMetadataGeneration((generation) => generation + 1);
+  }, [isLoadingProjects, projectIdsAndNames, openProjectIds]);
 
   const projectSelectorOpenTabs = useMemo<ProjectSelectorOpenTab[]>(
     () =>
@@ -385,6 +446,34 @@ global.webViewComponent = function FindWebView({
 
   const findPdp = useProjectDataProvider('platformScripture.findInScripture', projectId);
   const replacePdp = useProjectDataProvider('platformScripture.replaceWithUsfm', projectId);
+
+  // Whether the SELECTED project's find provider can actually be resolved. Needed because
+  // `useProjectDataProvider` cannot express failure: it runs `usePromise` with the default
+  // `preserveValue: true` and no `.catch`, so if resolution rejects (e.g. `getMetadataForProject`
+  // hitting its `waitForNetworkObject` timeout, or the project not providing the interface),
+  // `findPdp` silently keeps the PREVIOUS project's provider while the picker shows the new one —
+  // and a subsequent search would run against the old project. `isLoading` can't disambiguate
+  // either: an unhandled rejection means it is never cleared, and the hook discards it anyway.
+  // This probe is additive rather than a replacement so `useProjectDataProvider` keeps owning
+  // `findPdp`'s `onDidDispose` handling; `papi.projectDataProviders.get` resolves the same cached
+  // network object, so this is not a second connection. `preserveValue: false` is load-bearing —
+  // it is what stops a stale verdict outliving a `projectId` change.
+  const [findPdpAvailability] = usePromise<'resolving' | 'ready' | 'unavailable'>(
+    useCallback(async () => {
+      if (!projectId) return 'unavailable';
+      try {
+        await papi.projectDataProviders.get('platformScripture.findInScripture', projectId);
+        return 'ready';
+      } catch (error) {
+        logger.warn(
+          `Find: could not resolve findInScripture PDP for ${projectId}: ${getErrorMessage(error)}`,
+        );
+        return 'unavailable';
+      }
+    }, [projectId]),
+    'resolving',
+    { preserveValue: false },
+  );
 
   const [isStructureProtectedPossiblyError] = useProjectData(
     'platformScripture.replaceWithUsfm',
@@ -541,6 +630,26 @@ global.webViewComponent = function FindWebView({
     );
   }, [booksPresent]);
 
+  // `selectedBookIds` is persisted per web view, so a project switch can leave it naming books the
+  // NEW project doesn't have. The finder engine skips absent books gracefully (see
+  // `isScriptureNotFoundError` in the finder PDPE), so this is not a crash — but with
+  // `scope === 'selectedBooks'` the search would silently cover fewer books than the checkbox list
+  // shows. Prune the selection to what the newly selected project actually has.
+  //
+  // Guarded on a NON-EMPTY `availableBooksIds`: `booksPresent` sits at `BOOKS_PRESENT_DEFAULT` (all
+  // zeros — no books) while `useProjectSetting` resolves for the new project, and pruning against
+  // that transient empty set would wipe the entire selection instead of narrowing it. "Don't know
+  // the books yet" must not read as "the project has no books".
+  //
+  // Depends on `selectedBookIds` because `useWebViewState`'s setter takes a value, not an updater.
+  // That is safe: `prunePresentBookIds` returns the original array reference when nothing needs
+  // removing, so the identity check makes the write conditional and the effect converges after a
+  // single prune instead of re-triggering itself.
+  useEffect(() => {
+    const prunedBookIds = prunePresentBookIds(availableBooksIds, selectedBookIds);
+    if (prunedBookIds !== selectedBookIds) setSelectedBookIds(prunedBookIds);
+  }, [availableBooksIds, selectedBookIds, setSelectedBookIds]);
+
   const availableBooksLocalizationKeys = useMemo(() => {
     const keys: `%${string}%`[] = [];
     availableBooksIds.forEach((book) => {
@@ -610,7 +719,10 @@ global.webViewComponent = function FindWebView({
   // callback in this component can reach the old PDP anymore.
   const handleSelectProjectScrollGroup = useCallback(
     (newProjectId: string, newScrollGroupId: ScrollGroupId) => {
-      if (newProjectId !== projectId) {
+      // Case-INSENSITIVE so a casing-only correction (canonical UPPERCASE replacing the lowercased
+      // id `useOpenProjectTabs` reports) is not mistaken for a project switch — that would abandon
+      // the job, clear results and re-search a project the user never left. See the helper's TSDoc.
+      if (isDifferentProjectSelection(newProjectId, projectId)) {
         abandonFindJob();
         setResults([]);
         loadedResultsLengthRef.current = 0;
@@ -620,11 +732,23 @@ global.webViewComponent = function FindWebView({
         setSearchError(undefined);
         setSearchProgress(0);
         pendingProjectSwitchRerunRef.current = true;
-        updateWebViewDefinition({ projectId: newProjectId });
       }
+      // Propagated whenever the string differs at all, so a casing-only correction still lands in
+      // the web view definition (keeping `findPdp` keyed on the canonical id) without the reset above.
+      if (newProjectId !== projectId) updateWebViewDefinition({ projectId: newProjectId });
       setSelectedScrollGroupId(newScrollGroupId);
+      // Keep Find's own scroll group equal to the selected tab's group so scope resolution and the
+      // result-activation broadcast both act on the tab the user picked. See the
+      // `useWebViewScrollGroupScrRef` call site for why this is load-bearing rather than cosmetic.
+      setFindScrollGroupId(newScrollGroupId);
     },
-    [projectId, abandonFindJob, updateWebViewDefinition, setSelectedScrollGroupId],
+    [
+      projectId,
+      abandonFindJob,
+      updateWebViewDefinition,
+      setSelectedScrollGroupId,
+      setFindScrollGroupId,
+    ],
   );
 
   // Restricting the picker to only open projects means the selection can go stale the instant a
@@ -645,6 +769,14 @@ global.webViewComponent = function FindWebView({
     // `resolved.projectId` may carry `useOpenProjectTabs`'s lowercased casing when it names a
     // fallback project (canonical ids are UPPERCASE) — resolve back to the canonical id so
     // `updateWebViewDefinition`/`findPdp` stay keyed consistently.
+    const isCrossProjectFallback =
+      normalizeProjectId(resolved.projectId) !== normalizeProjectId(projectId);
+    // Canonical casing lives in `projects`, which is empty until the metadata fetch resolves. Wait
+    // rather than fall back to the lowercased id: writing that into the web view definition keys
+    // `findPdp` on a non-canonical id and, once metadata arrives, flips it back — a churn the
+    // reassignment is not meant to cause. Only the cross-project branch needs the canonical id; a
+    // same-project scroll-group move can proceed immediately.
+    if (isCrossProjectFallback && isLoadingProjects) return;
     const canonicalProjectId =
       projects.find(
         (project) => normalizeProjectId(project.id) === normalizeProjectId(resolved.projectId),
@@ -658,6 +790,7 @@ global.webViewComponent = function FindWebView({
     allOpenProjectTabs,
     editorWebViewId,
     projects,
+    isLoadingProjects,
     handleSelectProjectScrollGroup,
   ]);
 
@@ -746,8 +879,29 @@ global.webViewComponent = function FindWebView({
   const isSearchQueryValid = useMemo(() => {
     if (searchTerm.trim() === '') return false;
     if (scope === 'selectedBooks' && selectedBookIds.length === 0) return false;
+    // Never start a job while the selected project's provider is unresolved or unresolvable — with
+    // `preserveValue: true` on `findPdp` that job would silently target the PREVIOUS project.
+    if (findPdpAvailability !== 'ready') return false;
     return true;
-  }, [scope, searchTerm, selectedBookIds]);
+  }, [scope, searchTerm, selectedBookIds, findPdpAvailability]);
+
+  // Surface an unresolvable provider through the existing error path instead of leaving the panel
+  // looking idle. The ref tracks whether the displayed error is OURS, so recovery only clears the
+  // message this effect set and never wipes a real find-job error.
+  const isShowingPdpUnavailableErrorRef = useRef(false);
+  useEffect(() => {
+    if (findPdpAvailability === 'unavailable') {
+      isShowingPdpUnavailableErrorRef.current = true;
+      setSearchStatus('errored');
+      setSearchError(localizedStrings['%webView_find_project_unavailableError%']);
+      return;
+    }
+    if (findPdpAvailability === 'ready' && isShowingPdpUnavailableErrorRef.current) {
+      isShowingPdpUnavailableErrorRef.current = false;
+      setSearchStatus(undefined);
+      setSearchError(undefined);
+    }
+  }, [findPdpAvailability, localizedStrings]);
 
   const findScope = useMemo((): FindScope[] => {
     switch (scope) {
@@ -895,9 +1049,9 @@ global.webViewComponent = function FindWebView({
         // There is no focused result anymore, so remove the current-result highlight from the editor.
         // The cleanup effect only removes it on controller change / unmount, so clearing (or starting
         // a new search) would otherwise leave a stale amber highlight painted with nothing selected.
-        editorWebViewController
-          ?.runAnnotationAction('find-current-result', 'removed')
-          .catch(() => {});
+        callControllerSafely(() =>
+          editorWebViewController?.runAnnotationAction('find-current-result', 'removed'),
+        );
         await abandonFindJob();
       } else await stopFindJob();
     },
@@ -1103,19 +1257,38 @@ global.webViewComponent = function FindWebView({
     }, SEARCH_DEBOUNCE_DELAY_MS),
   );
 
-  // Re-run the current search term against the new project once `handleSelectProject` has
-  // switched it: `findPdp` only takes on the new project's identity after this render, so the
-  // rerun can't happen inside `handleSelectProject` itself. Gated by the ref `handleSelectProject`
-  // sets (rather than comparing `projectId` to its previous value) because this must fire
-  // specifically for a user-initiated project switch, not for `findPdp` re-identifying itself for
-  // any other reason.
+  // Re-run the current search term against the new project once `handleSelectProjectScrollGroup`
+  // has switched it: `findPdp` only takes on the new project's identity after this render, so the
+  // rerun can't happen inside `handleSelectProjectScrollGroup` itself. Gated by the ref that
+  // `handleSelectProjectScrollGroup` sets (rather than comparing `projectId` to its previous value)
+  // so it fires for every project switch that handler performs — and only for those, not for
+  // `findPdp` re-identifying itself for any other reason. Both switch paths are intended to
+  // re-search: the user picking a different project from the selector, AND the reassignment effect
+  // above picking one automatically when the selected project's last editor tab closes. So closing
+  // that tab does not just repoint the picker — it also runs the existing search term and scope
+  // against the newly selected project, replacing the closed project's results.
+  //
+  // Keyed on BOTH `findPdp` and `findPdpAvailability` because a project switch settles them
+  // independently, and the rerun needs both: `handleStartSearch` bails on `isSearchQueryValid`, which
+  // gates on availability being `'ready'`. `findPdpAvailability` resets to `'resolving'` on every
+  // `projectId` change (`preserveValue: false`, so a stale verdict cannot outlive the switch), and
+  // `findPdp`'s new identity usually arrives first — so this effect must WAIT for availability rather
+  // than consume the pending flag on the first wake-up. Clearing the ref before the search actually
+  // starts silently drops the rerun, since nothing re-arms it when availability later settles.
   useEffect(() => {
     if (!pendingProjectSwitchRerunRef.current) return;
+    // Only clear the flag for conditions that will NOT resolve on their own; an unavailable provider
+    // surfaces its own error, so there is nothing to wait for there.
+    if (!findPdp || searchTermRef.current.trim() === '' || findPdpAvailability === 'unavailable') {
+      pendingProjectSwitchRerunRef.current = false;
+      return;
+    }
+    // Still resolving — keep the flag set and let the availability change re-run this effect.
+    if (findPdpAvailability !== 'ready') return;
     pendingProjectSwitchRerunRef.current = false;
-    if (!findPdp || searchTermRef.current.trim() === '') return;
     explicitSearchPendingRef.current = true;
     handleStartSearchRef.current(true);
-  }, [findPdp]);
+  }, [findPdp, findPdpAvailability]);
 
   // Auto-search with debounce when the search term or any filter changes
   useEffect(() => {
@@ -1196,10 +1369,19 @@ global.webViewComponent = function FindWebView({
   }, [activeMode, focusedResultIndex, results, searchStatus]);
 
   // Remove the find-result-highlight annotation when the editor changes or the find panel closes.
+  //
+  // `callControllerSafely` is load-bearing here, not defensive dressing: this cleanup fires exactly
+  // when `editorWebViewController` changes identity, and the most common cause of that is the
+  // selected project's editor tab CLOSING — which disposes the controller and revokes its proxy
+  // first. Reading `.runAnnotationAction` off it then throws synchronously, and an uncaught throw in
+  // an effect cleanup crashes the whole Find web view. Swallowed silently: the editor is already
+  // gone, so a failed highlight removal is a no-op with nothing to report.
   useEffect(() => {
     const currentController = editorWebViewController;
     return () => {
-      currentController?.runAnnotationAction('find-current-result', 'removed').catch(() => {});
+      callControllerSafely(() =>
+        currentController?.runAnnotationAction('find-current-result', 'removed'),
+      );
     };
   }, [editorWebViewController]);
 
@@ -1247,19 +1429,24 @@ global.webViewComponent = function FindWebView({
       if (targetEditorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: targetEditorWebViewId });
         // Await selectRange before setAnnotation so the websocket is settled (avoids
-        // "Tried to send payload while not connected" races).
-        editorWebViewController
-          .selectRange({ start: searchResult.start, end: searchResult.end })
-          .then(() => {
-            if (targetEditorWebViewId && editorWebViewController)
-              return editorWebViewController.setAnnotation(
-                { start: searchResult.start, end: searchResult.end },
-                'find-result-highlight',
-                'find-current-result',
-              );
-            return undefined;
-          })
-          .catch((e) => logger.warn(`Find: failed to update editor: ${getErrorMessage(e)}`));
+        // "Tried to send payload while not connected" races). Wrapped because the tab can close
+        // between this callback being handed to the result list and the user activating it, leaving a
+        // revoked proxy whose property read throws synchronously — see `callControllerSafely`.
+        callControllerSafely(
+          () =>
+            editorWebViewController
+              .selectRange({ start: searchResult.start, end: searchResult.end })
+              .then(() => {
+                if (targetEditorWebViewId && editorWebViewController)
+                  return editorWebViewController.setAnnotation(
+                    { start: searchResult.start, end: searchResult.end },
+                    'find-result-highlight',
+                    'find-current-result',
+                  );
+                return undefined;
+              }),
+          (e) => logger.warn(`Find: failed to update editor: ${getErrorMessage(e)}`),
+        );
       }
     },
     [editorWebViewController, targetEditorWebViewId, setVerseRefSetting],
@@ -1655,6 +1842,7 @@ global.webViewComponent = function FindWebView({
       selectedProjectId={projectId}
       selectedScrollGroupId={selectedScrollGroupId}
       openTabs={projectSelectorOpenTabs}
+      isLoadingProjects={isLoadingProjects}
       noOpenProjects={noOpenProjects}
       onSelectProjectScrollGroup={handleSelectProjectScrollGroup}
       onOpenProjectInGroup={handleOpenProjectInGroup}
