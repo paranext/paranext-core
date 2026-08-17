@@ -52,7 +52,7 @@ const RENDERER_HOSTED_DIALOG_REQUEST_NAME_SET = {
 /**
  * Dialog requests served by the renderer process. A dialog belongs to the window the user is
  * working in, so each renderer registers these under window-scoped names and the main process
- * registers proxies under the generic names that forward to the focused window.
+ * registers service routers under the generic names that forward to the focused window.
  *
  * @experimental
  */

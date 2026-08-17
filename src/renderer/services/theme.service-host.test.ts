@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
 
 // The theme service host reads the OS dark-mode preference at module load, which jsdom does not
 // implement, so stub it before the module under test is imported.
 const mocks = vi.hoisted(() => {
-  /** Handlers the module under test registered for the window-close announcement */
-  const windowCloseHandlers: ((windowId: number) => void)[] = [];
   /** Handlers the module under test subscribed to the theme data service's all-themes updates */
   const allThemesHandlers: ((allThemes: unknown) => void)[] = [];
   return {
@@ -15,8 +12,6 @@ const mocks = vi.hoisted(() => {
       allThemesHandlers.push(handler);
       return async () => true;
     }),
-    forgetUnreachableRemoteObjects: vi.fn(async (): Promise<string[]> => []),
-    windowCloseHandlers,
     allThemesHandlers,
   };
 });
@@ -40,21 +35,6 @@ vi.mock('@shared/services/data-provider.service', () => ({
 vi.mock('@shared/services/theme-data.service', () => ({
   themeDataService: { subscribeAllThemes: mocks.subscribeAllThemes },
 }));
-vi.mock('@shared/services/network.service', () => ({
-  getNetworkEvent: (eventName: string) => (handler: (windowId: number) => void) => {
-    if (eventName === EVENT_NAME_ON_DID_CLOSE_WINDOW) mocks.windowCloseHandlers.push(handler);
-    return () => true;
-  },
-}));
-vi.mock('@shared/services/network-object.service', () => ({
-  forgetUnreachableRemoteObjects: mocks.forgetUnreachableRemoteObjects,
-}));
-
-/** Stand in for the main process announcing that a window closed */
-function closeWindow(windowId: number) {
-  mocks.windowCloseHandlers.forEach((handler) => handler(windowId));
-}
-
 /** Stand in for the theme data service publishing the extension-contributed theme families */
 function publishExtensionThemes(allThemes: unknown) {
   mocks.allThemesHandlers.forEach((handler) => handler(allThemes));
@@ -97,7 +77,11 @@ function makeProvider() {
         },
       ),
     },
-    /** Simulate the hosting window closing, which disposes the provider the other windows consumed */
+    /**
+     * Simulate the window hosting the engine going away. Nothing it hosted is disposed by that
+     * window itself; the process owning the connections announces the disposal on its behalf once
+     * its registrations are gone, and this provider's `onDidDispose` is what that reaches.
+     */
     dispose: () => [...disposeCallbacks].forEach((callback) => callback()),
     /** Simulate this provider's engine publishing a new current theme */
     emitCurrentTheme: (currentTheme: TestTheme) =>
@@ -115,7 +99,6 @@ describe('theme service host across multiple windows', () => {
     vi.clearAllMocks();
     vi.resetModules();
     stubSystemTheme(false);
-    mocks.windowCloseHandlers.length = 0;
     mocks.allThemesHandlers.length = 0;
     // The module under test reads its persisted state from localStorage at load, which jsdom
     // shares across the tests in this file
@@ -215,11 +198,7 @@ describe('theme service host across multiple windows', () => {
 
     const { provider: ownProvider } = makeProvider();
     mocks.registerEngine.mockResolvedValue(ownProvider);
-    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
-      hosted.dispose();
-      return ['platform.themeServiceDataProvider-data'];
-    });
-    closeWindow(1);
+    hosted.dispose();
     await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
     await settlePendingWork();
 
@@ -252,35 +231,6 @@ describe('theme service host across multiple windows', () => {
     mocks.registerEngine.mockResolvedValue(ownProvider);
     hosted.dispose();
     await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
-  });
-
-  // A closing window drops its RPC connection without disposing anything, so the dispose hook above
-  // never fires on its own. The main process announcing the close is what the handover actually
-  // runs on.
-  test('a later window takes the engine over when it hears the hosting window closed', async () => {
-    mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
-    const hosted = makeProvider();
-    mocks.get.mockResolvedValue(hosted.provider);
-
-    const { initialize } = await import('@renderer/services/theme.service-host');
-    await initialize();
-    expect(mocks.registerEngine).toHaveBeenCalledTimes(1);
-
-    const { provider: ownProvider } = makeProvider();
-    mocks.registerEngine.mockResolvedValue(ownProvider);
-    // The dead provider is still cached locally, and a cached registration makes the engine's name
-    // look taken, so re-registering can only succeed once it has been dropped. Dropping a
-    // registration fires its dispose event, which is how the windows attached to it find out.
-    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
-      hosted.dispose();
-      return ['platform.themeServiceDataProvider-data'];
-    });
-
-    // The hosting window closes. Nothing disposes its provider — this announcement is all we get.
-    closeWindow(1);
-
-    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
-    expect(mocks.forgetUnreachableRemoteObjects).toHaveBeenCalled();
   });
 
   // localStorage is shared across every window of the app, so the values persisted right now are
@@ -329,11 +279,7 @@ describe('theme service host across multiple windows', () => {
 
     const { provider: ownProvider } = makeProvider();
     mocks.registerEngine.mockResolvedValue(ownProvider);
-    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
-      hosted.dispose();
-      return ['platform.themeServiceDataProvider-data'];
-    });
-    closeWindow(1);
+    hosted.dispose();
     await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
 
     // The engine this window re-registered must serve what is persisted NOW
@@ -346,77 +292,9 @@ describe('theme service host across multiple windows', () => {
     expect(allThemes['user-stale']).toBeUndefined();
   });
 
-  test('a window that lost nothing when another window closed stays attached to its engine', async () => {
-    mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
-    const hosted = makeProvider();
-    mocks.get.mockResolvedValue(hosted.provider);
-
-    const { initialize } = await import('@renderer/services/theme.service-host');
-    await initialize();
-    expect(mocks.get).toHaveBeenCalledTimes(1);
-
-    // A window that was not hosting the engine closed, so nothing this window was using went away
-    mocks.forgetUnreachableRemoteObjects.mockResolvedValue([]);
-    closeWindow(3);
-    await settlePendingWork();
-
-    // Resolving the same live provider again would only pile another dispose handler onto it
-    expect(mocks.registerEngine).toHaveBeenCalledTimes(1);
-    expect(mocks.get).toHaveBeenCalledTimes(1);
-  });
-
-  // The theme engine and the scroll group service are independent first-come races, so they can
-  // land in different windows. Closing the window that hosted the scroll group service forgets that
-  // object while this window's theme provider goes on serving it.
-  test('a window whose provider outlived the closed window stays attached to it', async () => {
-    mocks.registerEngine.mockRejectedValue(new Error('already registered'));
-    const hosted = makeProvider();
-    mocks.get.mockResolvedValue(hosted.provider);
-
-    const { initialize } = await import('@renderer/services/theme.service-host');
-    await initialize();
-    expect(mocks.get).toHaveBeenCalledTimes(1);
-
-    // The closed window did host something this window was holding — just not the theme engine
-    mocks.forgetUnreachableRemoteObjects.mockResolvedValue(['ScrollGroupService']);
-    closeWindow(3);
-    await settlePendingWork();
-
-    // Resolving the same live provider again would only pile another dispose handler onto it
-    expect(mocks.registerEngine).toHaveBeenCalledTimes(1);
-    expect(mocks.get).toHaveBeenCalledTimes(1);
-  });
-
-  // Several independent cleanups race to drop a closed window's objects, and whichever gets to a
-  // given object first is the only one that reports it. So this window's own sweep coming back with
-  // nothing does not mean the theme engine survived — the dispose that dropping it fires is the
-  // signal that matters, whichever cleanup fired it.
-  test('takes the engine over when another cleanup forgot the theme provider first', async () => {
-    mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
-    const hosted = makeProvider();
-    mocks.get.mockResolvedValue(hosted.provider);
-
-    const { initialize } = await import('@renderer/services/theme.service-host');
-    await initialize();
-    expect(mocks.registerEngine).toHaveBeenCalledTimes(1);
-
-    const { provider: ownProvider } = makeProvider();
-    mocks.registerEngine.mockResolvedValue(ownProvider);
-    // A sibling cleanup already forgot the theme provider — firing its dispose — so this sweep has
-    // nothing of its own left to report
-    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
-      hosted.dispose();
-      return [];
-    });
-
-    closeWindow(1);
-
-    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
-  });
-
-  // A retry started for one close can still be in flight when the next window closes. That trigger
-  // is about a death the running attempt started too early to have seen, so dropping it leaves the
-  // app with no theme engine at all.
+  // A window can lose the engine's host again while it is still re-entering the race for the last
+  // one. That trigger is about a death the running attempt started too early to have seen, so
+  // dropping it leaves the app with no theme engine at all.
   test('a trigger raised during an in-flight retry gets a run of its own', async () => {
     mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
     const hosted = makeProvider();
@@ -425,11 +303,7 @@ describe('theme service host across multiple windows', () => {
     const { initialize } = await import('@renderer/services/theme.service-host');
     await initialize();
 
-    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
-      hosted.dispose();
-      return ['platform.themeServiceDataProvider-data'];
-    });
-    // Hold this window's re-registration in flight so the next close lands mid-run
+    // Hold this window's re-registration in flight so the next trigger lands mid-run
     let settleRetryRegistration = () => {};
     mocks.registerEngine.mockImplementationOnce(
       () =>
@@ -441,11 +315,11 @@ describe('theme service host across multiple windows', () => {
     // engine to attach to either
     mocks.get.mockResolvedValue(undefined);
 
-    closeWindow(1);
+    hosted.dispose();
     await settlePendingWork();
     expect(mocks.registerEngine).toHaveBeenCalledTimes(2);
 
-    closeWindow(2);
+    hosted.dispose();
     await settlePendingWork();
     // Still the one in-flight attempt: concurrent triggers must not race each other for the name
     expect(mocks.registerEngine).toHaveBeenCalledTimes(2);
@@ -456,39 +330,6 @@ describe('theme service host across multiple windows', () => {
 
     // The run settles having found nothing, so the trigger it swallowed has to be answered
     await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(3));
-  });
-
-  // The sweep fires the dead provider's dispose as soon as it drops it, then keeps probing the rest
-  // of the closed window's objects — seconds, in the worst case. This window can win hosting inside
-  // that gap.
-  test('a window that wins hosting mid-sweep does not retry when the sweep finishes', async () => {
-    mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
-    const hosted = makeProvider();
-    mocks.get.mockResolvedValue(hosted.provider);
-
-    const { initialize } = await import('@renderer/services/theme.service-host');
-    await initialize();
-
-    let settleSweep = () => {};
-    mocks.forgetUnreachableRemoteObjects.mockImplementation(() => {
-      hosted.dispose();
-      return new Promise<string[]>((resolve) => {
-        settleSweep = () => resolve(['platform.themeServiceDataProvider-data']);
-      });
-    });
-    const { provider: ownProvider } = makeProvider();
-    mocks.registerEngine.mockResolvedValue(ownProvider);
-
-    closeWindow(1);
-    // This window wins hosting off the dispose while the sweep is still probing
-    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
-
-    settleSweep();
-    await settlePendingWork();
-
-    // Retrying now would reload persisted state over what this window is already serving, fail to
-    // register against its own engine, and log that another window is hosting
-    expect(mocks.registerEngine).toHaveBeenCalledTimes(2);
   });
 
   // Every surviving window reloads the persisted state when a host closes, including the N-1 that
@@ -527,12 +368,7 @@ describe('theme service host across multiple windows', () => {
     // and then closes
     localStorage.setItem('theme.service-host.currentTheme', JSON.stringify(themeLight));
     localStorage.setItem('theme.service-host.shouldMatchSystem', 'true');
-    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
-      hosted.dispose();
-      return ['platform.themeServiceDataProvider-data'];
-    });
-
-    closeWindow(1);
+    hosted.dispose();
     await settlePendingWork();
 
     // This window lost the race to host, so what it read must still be what is persisted
@@ -542,27 +378,10 @@ describe('theme service host across multiple windows', () => {
     expect(localStorage.getItem('theme.service-host.shouldMatchSystem')).toBe('true');
   });
 
-  test('the window already hosting the engine keeps hosting it when another window closes', async () => {
-    const { provider } = makeProvider();
-    mocks.registerEngine.mockResolvedValue(provider);
-
-    const { initialize } = await import('@renderer/services/theme.service-host');
-    await initialize();
-    expect(mocks.registerEngine).toHaveBeenCalledTimes(1);
-
-    closeWindow(2);
-    await settlePendingWork();
-
-    // Re-entering the race here would drop the engine this window is serving to everyone else
-    expect(mocks.registerEngine).toHaveBeenCalledTimes(1);
-    expect(mocks.forgetUnreachableRemoteObjects).not.toHaveBeenCalled();
-  });
-
-  // Clearing the unreachable provider fires its dispose hook (wired to the retry), and the sweep
-  // retries again on its own completion. Both triggers fire on every real host close, so they must
-  // share one host-or-attach run: two concurrent runs would race each other for the engine name and
-  // the loser would noisily fail against a registry that rejects even the same handler.
-  test('concurrent takeover triggers share one host-or-attach run, and a later close still retries', async () => {
+  // A window that loses the engine's host attaches to whichever window won the race that followed,
+  // and has to be able to take over again when that one goes away too. The re-arm must not latch
+  // after the first handover.
+  test('a window that attached again takes the engine over when that host goes away too', async () => {
     mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
     const hosted1 = makeProvider();
     mocks.get.mockResolvedValue(hosted1.provider);
@@ -571,15 +390,8 @@ describe('theme service host across multiple windows', () => {
     await initialize();
     expect(mocks.registerEngine).toHaveBeenCalledTimes(1);
 
-    // The sweep both fires the cached provider's dispose (first trigger) and reports that it forgot
-    // something (second trigger) — exactly what a real host close produces.
-    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
-      hosted1.dispose();
-      return ['platform.themeServiceDataProvider'];
-    });
-
-    // Hold the retry's registration in flight so the second trigger arrives before the run started
-    // by the first trigger has settled.
+    // Hold the retry's registration in flight so the run started by the first trigger is still
+    // settling while the assertions below run.
     let settleRetryRegistration = () => {};
     mocks.registerEngine.mockImplementationOnce(
       () =>
@@ -590,10 +402,9 @@ describe('theme service host across multiple windows', () => {
     const hosted2 = makeProvider();
     mocks.get.mockResolvedValue(hosted2.provider);
 
-    closeWindow(1);
+    hosted1.dispose();
     await settlePendingWork();
 
-    // One registration attempt shared by both triggers, not one per trigger
     expect(mocks.registerEngine).toHaveBeenCalledTimes(2);
 
     // The in-flight run settles by losing the race to another surviving window and attaching
@@ -601,16 +412,12 @@ describe('theme service host across multiple windows', () => {
     await vi.waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(2));
     await settlePendingWork();
 
-    // The guard must not latch: when the window that won that race closes later, this window
+    // The guard must not latch: when the window that won that race goes away later, this window
     // re-enters the race again.
-    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
-      hosted2.dispose();
-      return ['platform.themeServiceDataProvider'];
-    });
     const { provider: ownProvider } = makeProvider();
     mocks.registerEngine.mockResolvedValue(ownProvider);
 
-    closeWindow(2);
+    hosted2.dispose();
     await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(3));
   });
 
@@ -637,11 +444,7 @@ describe('theme service host across multiple windows', () => {
 
     const ownEngine = makeProvider();
     mocks.registerEngine.mockResolvedValue(ownEngine.provider);
-    mocks.forgetUnreachableRemoteObjects.mockImplementation(async () => {
-      hosted.dispose();
-      return ['platform.themeServiceDataProvider-data'];
-    });
-    closeWindow(1);
+    hosted.dispose();
     await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
 
     // The subscription is re-established against the engine this window now hosts
@@ -670,5 +473,68 @@ describe('theme service host across multiple windows', () => {
     // The message says which state this is — lost the race, and could not find the window that won
     // it — rather than only that something was undefined
     await expect(initialize()).rejects.toThrow('no theme service to attach to');
+  });
+
+  /**
+   * Drive a window from attached, through a takeover attempt that comes up empty-handed — it loses
+   * the name to a window that goes away before it can be found — and return the provider the window
+   * will be handed when it eventually wins.
+   */
+  async function attachThenLoseTheEngineToNobody() {
+    mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
+    const hosted = makeProvider();
+    mocks.get.mockResolvedValue(hosted.provider);
+
+    const { initialize } = await import('@renderer/services/theme.service-host');
+    await initialize();
+
+    // The hosting window closes. This window's re-race loses the name, and by the time it looks for
+    // the window that took it, that window is gone too — so this run ends with no engine at all.
+    mocks.registerEngine.mockRejectedValueOnce(new Error('already registered'));
+    mocks.get.mockResolvedValue(undefined);
+    hosted.dispose();
+    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(2));
+
+    return makeProvider().provider;
+  }
+
+  // Coming out of a takeover with nothing is the one state nothing else re-enters the race from:
+  // the trigger is the disposal of the provider this window holds, and it holds none. If every
+  // surviving window lands here — which is what an interleaved re-race does — the app has no theme
+  // engine at all, while `getCurrentThemeSync` keeps every screen looking right.
+  test('races again after a takeover attempt that neither hosted nor attached', async () => {
+    const ownProvider = await attachThenLoseTheEngineToNobody();
+
+    mocks.registerEngine.mockResolvedValue(ownProvider);
+
+    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(3), {
+      timeout: 4000,
+    });
+  });
+
+  // The persisted theme keys are app-global, so the engine a window publishes has to be built from
+  // what is persisted at the moment it wins — on every route into the race, not only the one route
+  // that reloads on its way in. A window that wins on a later attempt would otherwise republish the
+  // snapshot it read at window load and persist it over everything saved since.
+  test('serves the state persisted by the time a later attempt wins the engine', async () => {
+    localStorage.setItem(
+      'theme.service-host.currentTheme',
+      JSON.stringify({ themeFamilyId: 'user-stale', type: 'light', cssVariables: {} }),
+    );
+    const ownProvider = await attachThenLoseTheEngineToNobody();
+
+    // Whoever briefly held the name saved newer state before going away too
+    localStorage.setItem(
+      'theme.service-host.currentTheme',
+      JSON.stringify({ themeFamilyId: 'user-fresh', type: 'light', cssVariables: {} }),
+    );
+    mocks.registerEngine.mockResolvedValue(ownProvider);
+    await vi.waitFor(() => expect(mocks.registerEngine).toHaveBeenCalledTimes(3), {
+      timeout: 4000,
+    });
+
+    const engineTakingOver: { getCurrentTheme: () => Promise<{ themeFamilyId: string }> } =
+      mocks.registerEngine.mock.calls[2][1];
+    expect((await engineTakingOver.getCurrentTheme()).themeFamilyId).toBe('user-fresh');
   });
 });

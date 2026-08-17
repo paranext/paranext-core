@@ -101,7 +101,7 @@ export function countOccurrences(haystack: string, needle: string): number {
 /**
  * Per-test elapsed-time step logger, so the runner output records how long each phase actually took
  * — the evidence for judging whether a pass exercised the intended waits (e.g. a hosting takeover
- * that includes an unreachability probe) or short-circuited.
+ * that waits on the disposal announced for the departed window) or short-circuited.
  */
 export function createStepLogger(prefix: string): (label: string) => void {
   const start = Date.now();
@@ -303,7 +303,7 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 /**
  * Wait until a window's renderer has registered its window-scoped services with the main process:
  * its scoped `platform.about-{windowId}` command (the last of the renderer's command registrations)
- * and its scoped window service (what the routing proxies forward to). Only then can generic-name
+ * and its scoped window service (what the service routers forward to). Only then can generic-name
  * calls be routed to this window.
  */
 export async function waitForRendererRegistered(

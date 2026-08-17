@@ -8,7 +8,7 @@ import type {
 } from '@shared/models/docking-framework.model';
 import { serialize } from 'platform-bible-utils';
 
-// The service host logs through the shared logger, which warns on every call when it cannot tell
+// The service shard logs through the shared logger, which warns on every call when it cannot tell
 // which process it is running in
 globalThis.processType = ProcessType.Renderer;
 
@@ -53,7 +53,7 @@ vi.mock('@shared/services/settings.service', () => ({
 }));
 
 // Everything below is module-load or startup machinery the layout path does not exercise; stub it
-// so importing the service host in a test does not stand up the whole renderer service graph.
+// so importing the service shard in a test does not stand up the whole renderer service graph.
 vi.mock('@shared/services/network.service', () => ({
   createBufferedNetworkEventEmitter: () => ({ emit: vi.fn(), dispose: vi.fn() }),
   getNetworkEvent: () => vi.fn(),
@@ -160,7 +160,7 @@ function makeDockLayout(simpleLayout: LayoutInfo) {
 
 /** Register a dock layout and wait for the fire-and-forget initial `loadLayout` to land */
 async function registerWindow(simpleLayout: LayoutInfo) {
-  const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+  const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
   const { dockLayout, loadedLayouts } = makeDockLayout(simpleLayout);
   registerDockLayout(dockLayout);
   await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
@@ -358,7 +358,7 @@ describe('loadLayout when the saved-layout request fails', () => {
   /** Register a dock layout under fake timers and drive the retry delays until the load lands */
   async function registerWindowThroughRetries(simpleLayout: LayoutInfo) {
     vi.useFakeTimers();
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout, loadedLayouts } = makeDockLayout(simpleLayout);
     registerDockLayout(dockLayout);
     await vi.advanceTimersByTimeAsync(60_000);
@@ -482,7 +482,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
       });
     });
 
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(getLayoutCalls).toBe(1));
@@ -534,7 +534,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
     );
     respondToGetLayout({ kind: 'empty' });
 
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(releaseFirstModeRead).toBeDefined());
@@ -586,7 +586,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
     });
 
     vi.useFakeTimers();
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     // Drive the two retry delays so the initial load reaches its final, hanging attempt

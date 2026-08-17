@@ -113,7 +113,7 @@ declare module 'papi-shared-types' {
      */
     'platform.openWindow': (url: string) => Promise<void>;
 
-    // These commands are provided in `web-view.service-host.ts`
+    // These commands are provided in `web-view.service-shard.ts`
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
