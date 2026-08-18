@@ -2537,6 +2537,10 @@ export type EmptyStateProps = {
  * A presentational empty-state message for a list, grid, or panel that currently has nothing to
  * show. Renders the localized `message` in a `role="status"` region so screen readers announce it
  * when the surrounding content becomes empty. Layout is left to the caller via `className`.
+ *
+ * For a richer zero-state that needs media, a heading, or an action, use the `Empty` composition
+ * (`Empty`, `EmptyHeader`, `EmptyMedia`, `EmptyTitle`, `EmptyDescription`, `EmptyContent`)
+ * instead.
  */
 export declare function EmptyState({ message, id, className }: EmptyStateProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
@@ -3033,6 +3037,12 @@ export declare function DropdownMenuSubContent({ className, children, ...props }
  * an optional action — for when there is no content to show. The component is built and styled by
  * Shadcn UI.
  *
+ * Use this composition when the zero-state needs media, a heading, or an action. For a plain
+ * one-line "nothing to show" message inside a list, grid, or panel, use {@link EmptyState} instead —
+ * it takes a single localized `message` and renders it in a `role="status"` region. These
+ * primitives set no ARIA role, so pass `role="status"` yourself when the zero-state replaces
+ * content that just changed.
+ *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
  */
 export declare function Empty({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
@@ -3064,7 +3074,7 @@ export declare function EmptyTitle({ className, ...props }: React$1.ComponentPro
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
  */
-export declare function EmptyDescription({ className, ...props }: React$1.ComponentProps<"p">): import("react/jsx-runtime").JSX.Element;
+export declare function EmptyDescription({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /**
  * Container for the Empty component's main content, typically actions such as buttons. The
  * component is built and styled by Shadcn UI.
