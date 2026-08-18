@@ -108,6 +108,7 @@ import {
   StructureProtectionButton,
   STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
 } from './structure-protection-button.component';
+import { useMarkerSettleDelay } from './use-marker-settle-delay.hook';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
 import {
@@ -938,6 +939,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return isStructureProtected ? 'protected' : 'guarded';
   }, [isProtectionActive, isStructureProtected]);
 
+  // EXPERIMENTAL idle marker-settle delay override, fed into
+  // EditorOptions.markerSettleDelayMs below; undefined leaves the editor on its own default.
+  const markerSettleDelayMs = useMarkerSettleDelay();
+
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
     useCallback(async () => {
@@ -1295,6 +1300,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       markerMenuTrigger: '\\',
       view: viewOptions,
       styleInfo,
+      markerSettleDelayMs,
       hasExternalUI: true,
       contextMenu: [
         {
@@ -1325,6 +1331,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       nodeOptions,
       viewOptions,
       styleInfo,
+      markerSettleDelayMs,
       localizedStrings,
       insertCommentAtCurrentSelection,
       insertFootnoteAtCurrentSelection,

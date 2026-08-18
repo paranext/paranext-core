@@ -182,7 +182,9 @@
       "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Show the scripture text grid view for viewing multiple resources side by side.",
       "%settings_platformScriptureEditor_enableScriptureTextGrid_label%": "Enable scripture text grid",
       "%settings_platformScriptureEditor_group_description%": "Settings for the Scripture Editor and Resource Viewer.",
-      "%settings_platformScriptureEditor_group_label%": "Scripture Editor"
+      "%settings_platformScriptureEditor_group_label%": "Scripture Editor",
+      "%settings_platformScriptureEditor_markerSettleDelayMs_description%": "Experimental: how many milliseconds of typing inactivity before the editor finishes (settles) pending marker edits in place, in editable marker views. Leave empty for the editor default (1000). 0 settles immediately after each edit; -1 turns the idle timer off so edits settle only when the cursor moves away.",
+      "%settings_platformScriptureEditor_markerSettleDelayMs_label%": "Marker settle delay (ms)"
     },
     "es": {
       "%mainMenu_openPlatformResourceViewer%": "Abrir el visor de recursos",
@@ -346,7 +348,9 @@
       "%settings_platformScriptureEditor_enableScriptureTextGrid_description%": "Mostrar la vista de cuadrícula de textos bíblicos para ver varios recursos en paralelo.",
       "%settings_platformScriptureEditor_enableScriptureTextGrid_label%": "Habilitar la cuadrícula de textos bíblicos",
       "%settings_platformScriptureEditor_group_description%": "Configuración del editor de Escrituras y del visor de recursos.",
-      "%settings_platformScriptureEditor_group_label%": "Editor de Escrituras"
+      "%settings_platformScriptureEditor_group_label%": "Editor de Escrituras",
+      "%settings_platformScriptureEditor_markerSettleDelayMs_description%": "Experimental: cuántos milisegundos de inactividad de escritura antes de que el editor complete (asiente) las ediciones de marcadores pendientes en su lugar, en las vistas de marcadores editables. Dejar vacío para usar el valor predeterminado del editor (1000). 0 asienta inmediatamente después de cada edición; -1 desactiva el temporizador de inactividad, de modo que las ediciones se asientan solo cuando el cursor se aleja.",
+      "%settings_platformScriptureEditor_markerSettleDelayMs_label%": "Retraso de asentamiento de marcadores (ms)"
     }
   }
 }
