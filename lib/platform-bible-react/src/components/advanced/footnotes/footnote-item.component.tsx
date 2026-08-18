@@ -86,12 +86,10 @@ function renderContent(
       );
     }
 
-    return renderMarkerObject(
-      footnotePart,
-      key,
-      showMarkers,
-      [...markerHierarchy, parentMarker ?? 'unknown'],
-    );
+    return renderMarkerObject(footnotePart, key, showMarkers, [
+      ...markerHierarchy,
+      parentMarker ?? 'unknown',
+    ]);
   });
 }
 

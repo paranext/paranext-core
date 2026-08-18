@@ -98,7 +98,8 @@ describe('FootnoteEditor popover init (wrapper-para marker prefix suppressed)', 
     const lastOps = saved[saved.length - 1];
     expect(lastOps).toHaveLength(1);
     // Byte-level expectation: the loaded op with 'X' appended to the \ft text — and nothing else.
-    const expected = JSON.parse(JSON.stringify(sentinelNoteOp)) as DeltaOpInsertNoteEmbed;
+    // structuredClone deep-copies while keeping the fixture's declared type (no assertion needed).
+    const expected = structuredClone(sentinelNoteOp);
     const ftOp = expected.insert.note?.contents?.ops?.[1];
     if (!ftOp) throw new Error('fixture shape changed: ft op not found');
     ftOp.insert = 'sentinel note textX';

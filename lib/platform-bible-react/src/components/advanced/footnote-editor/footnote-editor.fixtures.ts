@@ -35,8 +35,8 @@ export const scrRef: SerializedVerseRef = {
  * implicitly-closed span (`\fr`/`\ft`/`\fp` take no end marker; the next bare marker terminates
  * them) — the shape the host editor's note ops actually carry. The editor's footnote-paragraph
  * break keys on that state: writing `\fp` inside an implicitly-closed `\ft` ENDS the `\ft` and
- * takes the remainder as the break's content, whereas an explicitly-closed span (which omitting
- * the flag would claim) closes and REOPENS around the break.
+ * takes the remainder as the break's content, whereas an explicitly-closed span (which omitting the
+ * flag would claim) closes and REOPENS around the break.
  */
 export const sentinelNoteOp: DeltaOpInsertNoteEmbed = {
   insert: {
