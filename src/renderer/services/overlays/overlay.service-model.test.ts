@@ -86,7 +86,7 @@ describe('filterPaletteItems', () => {
     });
 
     it('should rank an exact label match first, never buried under containment matches', () => {
-      // TJ's measured symptom: a marker palette's typed `w` ranked the exact `w` 9th because
+      // The measured symptom: a marker palette's typed `w` ranked the exact `w` 9th because
       // description hits (qt, addpn, ...) filled the list in context order. Label-only matching
       // + exact-first ranking — identical to the editor palette — is the fix.
       const markerItems: CommandPaletteItem[] = [

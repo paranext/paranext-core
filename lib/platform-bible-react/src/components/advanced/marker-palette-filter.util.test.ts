@@ -64,7 +64,7 @@ describe('filterAndRankPaletteItems', () => {
 
   describe('active mode (label-only containment, exact > startsWith > contains)', () => {
     it('ranks the exact match first — never buried behind description matches', () => {
-      // TJ's measured symptom: typing `w` surfaced qt/addpn/... via DESCRIPTION containment and
+      // The measured symptom: typing `w` surfaced qt/addpn/... via DESCRIPTION containment and
       // ranked the exact `w` 9th. Matching is label-only now, identical to the editor palette
       // (`NodeSelectionMenu` filters on the marker name).
       const filtered = filterAndRankPaletteItems(characterItems, 'w', 'active');
