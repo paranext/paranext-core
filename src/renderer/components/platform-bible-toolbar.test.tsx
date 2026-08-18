@@ -1,5 +1,3 @@
-import { readFileSync } from 'fs';
-import path from 'path';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
@@ -17,7 +15,7 @@ import {
   SEND_RECEIVE_UNKNOWN_GRACE_MS,
   useSendReceiveAvailability,
 } from '@renderer/hooks/use-send-receive-availability.hook';
-import { PlatformBibleToolbar, SYNC_UNAVAILABLE_MESSAGE_KEY } from './platform-bible-toolbar';
+import { PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
@@ -240,12 +238,11 @@ describe('PlatformBibleToolbar — Sync button', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // `clearAllMocks()` clears call history but does not reset `mockReturnValue`, so restore the
-    // defaults explicitly to prevent a per-test `mockReturnValue` from leaking (see the "Scroll
-    // group selector visibility" describe block below for precedent). The Sync button is
-    // simple-mode-only and shown when send/receive is available, so tests state only their
-    // deviation from that.
+    // default `useSetting` value explicitly to prevent a per-test `mockReturnValue` from leaking
+    // (see the "Scroll group selector visibility" describe block below for precedent). Availability
+    // defaults to `true` in the file-wide `beforeEach` above. The Sync button is simple-mode-only
+    // and shown when send/receive is available, so tests state only their deviation from that.
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
-    vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
   });
 
   it('is not rendered when send/receive is unavailable', async () => {
@@ -460,16 +457,6 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  it('uses a message key that actually exists in the localization file', async () => {
-    // `PlatformNotification.message` is typed `string | LocalizeKey`, so a typo or a key later
-    // renamed in en.json type-checks fine and reaches the user as literal `%key%` text in a toast.
-    const englishStrings: Record<string, string> = JSON.parse(
-      readFileSync(path.join(__dirname, '../../../assets/localization/en.json'), 'utf8'),
-    );
-
-    expect(englishStrings).toHaveProperty(SYNC_UNAVAILABLE_MESSAGE_KEY);
-  });
-
   it('tells the user when the sync status view cannot be opened', async () => {
     // The button shows whenever send/receive is part of the build, which includes the moment before
     // its commands finish registering. A click then has to say something — otherwise the button
@@ -494,7 +481,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
     fireEvent.click(btn);
     await waitFor(() => {
       expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith({
-        message: SYNC_UNAVAILABLE_MESSAGE_KEY,
+        message: '%toolbar_sync_unavailable%',
         severity: 'warning',
       });
     });

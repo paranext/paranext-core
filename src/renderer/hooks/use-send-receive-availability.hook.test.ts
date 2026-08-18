@@ -17,7 +17,7 @@ vi.mock('@shared/services/logger.service', () => ({
 }));
 
 /** Answers the availability command with `answers` in order, repeating the last one thereafter. */
-function mockAvailabilityAnswers(...answers: (boolean | Error)[]) {
+function mockAvailabilityAnswers(...answers: (boolean | undefined | Error)[]) {
   let callIndex = -1;
   const implementation = async () => {
     callIndex = Math.min(callIndex + 1, answers.length - 1);
@@ -155,6 +155,30 @@ describe('useSendReceiveAvailability', () => {
     });
 
     expect(result.current).toBeUndefined();
+  });
+
+  it('never reports unavailable when the check only ever answers `undefined`', async () => {
+    // The command answers `undefined` when it has no way to determine availability (it lacks the
+    // `manageExtensions` privilege). Like a throw, that is "couldn't tell", not "not installed".
+    mockAvailabilityAnswers(undefined);
+    const { result } = renderHook(() => useSendReceiveAvailability());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SEND_RECEIVE_AVAILABILITY_RECHECK_WINDOW_MS + 1000);
+    });
+
+    expect(result.current).toBeUndefined();
+  });
+
+  it('recovers from an `undefined` answer when a later re-check answers', async () => {
+    mockAvailabilityAnswers(undefined, true);
+    const { result } = renderHook(() => useSendReceiveAvailability());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SEND_RECEIVE_UNKNOWN_GRACE_MS);
+    });
+
+    expect(result.current).toBe(true);
   });
 
   it('recovers from a throw when a later re-check answers', async () => {

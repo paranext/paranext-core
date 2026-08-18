@@ -67,13 +67,6 @@ import { CSSProperties, useCallback, useMemo, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
-/**
- * Message shown when the Sync button is clicked but send/receive can't answer. Declared here rather
- * than inline so the key is spelled exactly once — `PlatformNotification.message` accepts any
- * string, so a typo would not fail the build; it would ship a raw `%key%` into a toast.
- */
-export const SYNC_UNAVAILABLE_MESSAGE_KEY: LocalizeKey = '%toolbar_sync_unavailable%';
-
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
 // Visual breathing room between content and the native buttons on top of the live-measured overlay
@@ -307,6 +300,14 @@ export function PlatformBibleToolbar() {
   );
   useEvent(onSyncStateChanged, handleSyncStateChanged);
 
+  const openHome = useCallback(async () => {
+    try {
+      await sendCommand('platformGetResources.openHome');
+    } catch (e) {
+      logger.warn(`Toolbar caught an error while trying to open Home: ${getErrorMessage(e)}`);
+    }
+  }, []);
+
   const openSyncStatus = useCallback(async () => {
     try {
       await sendCommand('paratextBibleSendReceive.openSyncStatus');
@@ -319,7 +320,7 @@ export function PlatformBibleToolbar() {
       );
       try {
         await notificationService.send({
-          message: SYNC_UNAVAILABLE_MESSAGE_KEY,
+          message: '%toolbar_sync_unavailable%',
           severity: 'warning',
         });
       } catch (notificationError) {
@@ -420,11 +421,7 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="tw:h-8"
-                  onClick={() => {
-                    // This command comes from an extension and is not typed in CommandHandlers.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                    (sendCommand as any)('platformGetResources.openHome');
-                  }}
+                  onClick={openHome}
                 >
                   <HomeIcon />
                 </Button>
