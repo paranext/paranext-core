@@ -8,7 +8,10 @@ import {
 } from '@papi/core';
 import findWebView from './find.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
-import { buildFindWebViewState } from './find/find-web-view-state.utils';
+import {
+  buildFindWebViewState,
+  resolveFindScrollGroupScrRef,
+} from './find/find-web-view-state.utils';
 
 export const findWebViewType = 'platformScripture.find';
 
@@ -49,26 +52,20 @@ export class FindWebViewProvider implements IWebViewProvider {
       localizeKey: '%webView_find_title%',
     });
 
+    // Re-read every call so mode changes are picked up at open/replace/restore time.
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
+
     return {
       ...savedWebView,
       title,
       projectId,
       content: findWebView,
       styles: tailwindStyles,
-      // Fall back to the saved group when the caller supplies none, so a trigger with no scroll
-      // group of its own (a read-only reference panel, or a content reload/restore, which passes no
-      // options at all) leaves an already-grouped Find panel in the group it was following.
-      //
-      // Deliberate consequence: the reference panels are intentionally in NO scroll group in simple
-      // mode (see createResourceTextPanelProvider in platform-scripture-editor/src/main.ts), so a
-      // panel-triggered Find keeps whatever group a previous editor-triggered Find left it in —
-      // usually 0. Clicking a result then moves the scripture editor to that reference. That is the
-      // better of the two available behaviors: the alternative (take the panel's own `undefined`)
-      // leaves Find in no group at all, and since a panel trigger also clears the editor-controller
-      // coupling, clicking a result would move nothing on screen. Neither option can navigate the
-      // panel itself; driving the triggering panel needs a controller the read-only panels do not
-      // register (PT-4372).
-      scrollGroupScrRef: getWebViewOptions.editorScrollGroupId ?? savedWebView.scrollGroupScrRef,
+      scrollGroupScrRef: resolveFindScrollGroupScrRef(
+        interfaceMode,
+        savedWebView,
+        getWebViewOptions,
+      ),
       state: buildFindWebViewState(savedWebView, getWebViewOptions),
     };
   }

@@ -117,10 +117,22 @@ async function revertBookSnapshots(
 }
 
 global.webViewComponent = function FindWebView({
-  projectId,
+  projectId: webViewProjectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
+  const [verseRefSetting, setVerseRefSetting, , , scrollGroupSourceProjectId] =
+    useWebViewScrollGroupScrRef();
+
+  // The project to search. Normally the tab's own — `openFind` sets it from the trigger (the
+  // editor's project, or the resource a reference panel is displaying). The simple-mode layout also
+  // seeds a Find tab that carries no projectId at all, so fall back to whichever project is driving
+  // this web view's scroll group reference (the Scripture editor, since the provider puts Find in
+  // group 0 in simple mode). Without the fallback that seeded tab renders a search box that silently
+  // searches nothing until the user's first Ctrl+F. Mirrors the Text Collection tab, which resolves
+  // its own default-layout tab the same way.
+  const projectId = webViewProjectId ?? scrollGroupSourceProjectId;
+
   // Each instance needs its own mutex — a module-level mutex would cause operations from one Find
   // panel to block another if two panels are open for different projects simultaneously.
   const findPdpMutex = useRef(new Mutex()).current;
@@ -254,8 +266,6 @@ global.webViewComponent = function FindWebView({
       (result, _key, index) => ({ result, originalIndex: index }),
     );
   }, [results]);
-
-  const [verseRefSetting, setVerseRefSetting] = useWebViewScrollGroupScrRef();
 
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
 
