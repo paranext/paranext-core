@@ -3,6 +3,22 @@ import { FIND_WEBVIEW_TYPE, SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models
 import { LayoutBase } from 'rc-dock';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
+/**
+ * Minimum width of each Simple-mode column, derived from the smallest window the app allows so the
+ * three columns can never total more than the window that holds them.
+ *
+ * UX asked for "roughly 300 each inside a 900px window" (2026-08-18). 298 rather than a literal 300
+ * because rc-dock's two dividers are real layout width — `flex: 0 0 2px` each in Simple mode
+ * (dock-layout-wrapper.simple-mode.scss), and the dock spans the full window with no horizontal
+ * inset (getDockLayoutOuterInset returns left/right 0 in Simple). A literal 300 would need 904px
+ * inside 900 and reintroduce the very scrollbar this removes.
+ *
+ * The columns do not need a floor to rescale: rc-dock renders each as `flex: (size) (size × 1e6)
+ * (size)px` (DockBox.js), so the `size` weights already make them proportional to the window in
+ * pure CSS. This floor only stops a splitter drag from collapsing a column to nothing.
+ */
+export const SIMPLE_COLUMN_MIN_WIDTH_PX = 298;
+
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
 export const simpleLayout: LayoutBase = {
@@ -16,17 +32,7 @@ export const simpleLayout: LayoutBase = {
         children: [
           {
             group: HEADLESS_GROUP,
-            // 200, not 300. rc-dock renders each column as `flex: (size) (size * 1e6) (size)px`
-            // (DockBox.js), so the `size` weights above already make the columns rescale
-            // continuously with the window — proportional layout is not something that needs
-            // building, it is what happens once nothing floors it. A 300px floor on all three
-            // meant 900px of columns inside a window allowed down to 800px (main.ts), so the dock
-            // overflowed and the third column vanished behind a horizontal scrollbar.
-            //
-            // At 800px the 1:2:1 weighting gives 200/400/200, so this floor sits exactly at the
-            // narrowest natural width and never binds during a window resize; it only stops a
-            // splitter drag from collapsing a column to nothing.
-            panelLock: { minWidth: 200 },
+            panelLock: { minWidth: SIMPLE_COLUMN_MIN_WIDTH_PX },
             tabs: [
               {
                 id: '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2',
@@ -49,7 +55,7 @@ export const simpleLayout: LayoutBase = {
         children: [
           {
             group: HEADLESS_GROUP,
-            panelLock: { minWidth: 200 },
+            panelLock: { minWidth: SIMPLE_COLUMN_MIN_WIDTH_PX },
             tabs: [
               {
                 id: '3cf575f0-2cc2-464b-8765-b588f216dfce',
@@ -72,7 +78,7 @@ export const simpleLayout: LayoutBase = {
         children: [
           {
             group: TAB_GROUP_RESOURCES,
-            panelLock: { minWidth: 200 },
+            panelLock: { minWidth: SIMPLE_COLUMN_MIN_WIDTH_PX },
             tabs: [
               {
                 id: '27616073-bf60-4f2b-9518-922d1a7d3601',

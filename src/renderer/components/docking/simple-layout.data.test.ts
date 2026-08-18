@@ -112,15 +112,31 @@ describe('simple-layout.data', () => {
       });
     });
 
-    it('leaves the three columns collectively narrower than the smallest window the app allows, so narrowing to the minimum cannot force a horizontal scrollbar', () => {
+    it('leaves the three columns plus their dividers narrower than the smallest window the app allows, so narrowing to the minimum cannot force a horizontal scrollbar', () => {
       // Kept in step with `minWidth` on the BrowserWindow in src/main/main.ts. If either number
       // moves, this test is what should fail — not a user dragging the window edge and losing the
-      // third column behind a scrollbar, which is exactly what a 3 x 300 floor used to cause.
-      const WINDOW_MIN_WIDTH_PX = 800;
+      // third column behind a scrollbar, which is exactly what the old 3 x 300 floor caused inside
+      // an 800px window.
+      const WINDOW_MIN_WIDTH_PX = 900;
+      // rc-dock's dividers are real layout width, not decoration: `flex: 0 0 2px` per divider in
+      // Simple mode (dock-layout-wrapper.simple-mode.scss). Leaving them out of this sum is how
+      // "3 x 300 fits in 900" looks right on paper and still overflows by 4px in the app.
+      const DIVIDER_WIDTH_PX = 2;
 
-      const totalMinWidth = columnMinWidths().reduce((sum, minWidth) => sum + minWidth, 0);
+      const minWidths = columnMinWidths();
+      const dividerCount = minWidths.length - 1;
+      const totalMinWidth =
+        minWidths.reduce((sum, minWidth) => sum + minWidth, 0) + dividerCount * DIVIDER_WIDTH_PX;
 
       expect(totalMinWidth).toBeLessThanOrEqual(WINDOW_MIN_WIDTH_PX);
+    });
+
+    it('keeps each column close to the ~300px UX asked for, so the fit is not bought by shrinking columns', () => {
+      // Guards the other direction from the invariant above: that test alone would pass if someone
+      // "fixed" an overflow by dropping the columns to 100px each.
+      columnMinWidths().forEach((minWidth) => {
+        expect(minWidth).toBeGreaterThanOrEqual(290);
+      });
     });
 
     it('keeps the editor column weighted wider than the two side columns', () => {
