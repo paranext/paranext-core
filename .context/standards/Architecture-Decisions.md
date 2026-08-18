@@ -415,3 +415,141 @@ step, no automation. Just a record.
   than inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
+
+## ADR-0013: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
+
+- **Date:** 2026-08-05
+- **Status:** Accepted
+- **Context:** A verse-0 reference means "everything preceding verse 1" — book/chapter intros,
+  titles, outlines, Psalm `\d` superscriptions. It is reachable three ways: placing the cursor in
+  pre-verse-1 editor content (`usj-reader-writer.ts` reports `verseNum: 0`); the toolbar
+  previous-verse button, which calls `getPreviousVerseRef` **without** `bounds`
+  (`book-chapter-control.navigation.ts`), so its no-versification branch floors at verse 0 in any
+  chapter, not just chapter 1; and typing a `C:0` reference. A one-verse-tall surface has no useful
+  way to render that content, so the Text Collection showed an empty cell at Luke 1:0 —
+  [PT-3133](https://paratextstudio.atlassian.net/browse/PT-3133). PT9's
+  Text Collection shows verse 1 there instead. A4/PT-4052 (PR #2509) shipped a "No text for this
+  verse" ghost-text state, contradicting PT-3133's written acceptance (display verse 1); the
+  divergence went unflagged until PT-4061.
+- **Decision:** Single-verse display surfaces resolve a verse-0 reference to verse 1 via
+  `resolveDisplayVerseNum` (`extensions/src/platform-scripture-editor/src/scripture-text-grid/verse-display.utils.ts`),
+  confirmed by Ian Hewerdine 2026-08-05. Three constraints make this safe:
+  - **Display-only, and it carries an explicit guard.** The resolved verse is never written back to
+    the scroll group — writing it back would yank the Scripture Editor off the intro the user came
+    from. `Editorial`'s `ScriptureReferencePlugin` mounts even when `isReadonly` is set (`Editor.tsx`
+    gates it on `scrRef && onScrRefChange` only) and reports a selection whose book, chapter, or
+    verse disagrees with `scrRef`, so `ResourceCell` swallows the echo.
+
+    **The guard is defense-in-depth, not a fix for a live report.** `$resolvePosition` refuses to
+    describe a position in a document with no `BookNode` and no `ChapterNode` (upstream invariant I5),
+    and `sliceUsjToVerse` drops both — so the plugin is silent in verse mode, and the
+    `viewMode === 'verse'` branch of `handleScrRefChange` is unreachable. It is kept because it costs
+    nothing and is the right shape if a future editor makes slices addressable; do not read it as
+    evidence that a write-back currently occurs.
+
+    Verified 2026-08-16 against `@eten-tech-foundation/platform-editor` **0.8.15**, in both places it
+    can be read: the published npm package, and `dev-packages/scripture-editors` `packages/platform`,
+    which `postinstall` → `link-dev-packages` builds and yalc-links over `node_modules`. They agree
+    on this mechanism (the vendored copy trails published 0.8.15 by one caret-placement line in
+    `$moveCaretToVerseStart`). **Verify against the linked build, not `package-lock.json`** — the lock
+    still named 0.8.14 when this was written, and reading that stale tarball is exactly how an earlier
+    draft of this ADR came to describe `$findAndSetChapterAndVerse` and its chapter-1 fallback as the
+    live mechanism. That was wrong; that plugin does not exist in 0.8.15. Corrected in review of
+    #2663.
+
+    **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
+    `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
+    **bidirectional** — `$moveCaretToVerseStart` applies `scrRef` to the caret, and `$resolvePosition`
+    → `onSelectionSettled` → `report` reports the caret back — and read-only surfaces need both
+    halves. Not mounting it when read-only would break navigation-to-verse in every read-only editor
+    and would break read-only click-to-sync, which **this grid's chapter mode and the Resource Viewer
+    rely on** — those feed a whole chapter, so the document carries the book and chapter nodes
+    `$resolvePosition` needs. (Scoped deliberately: click-to-sync is *not* load-bearing in verse mode,
+    where the slice is unaddressable and no click reports anything. That predates this decision —
+    `sliceUsjToVerse` has dropped chapter chrome since #2509 — and is not a lost capability, since a
+    verse cell holds only the verse you are already on and so has nowhere to sync TO. Deliberately
+    not filed.) `isReadonly` is therefore the wrong
+    predicate: a read-only editor reporting its caret position is correct behavior, not the bug.
+    The bug is narrower and entirely host-made — *we* hand the editor verse 1's USJ while telling it
+    verse 0, so the only component that knows the reference is a deliberate lie is the one that told
+    it. Whoever creates the mismatch owns swallowing it. The generalizable fix, if a third surface
+    ever wants one, is not an `isReadonly` gate but for the promoted helper to carry the guard with
+    it (see Consequences) — the rule and its guard are one unit.
+  - **Chapter surfaces are exempt.** Anything rendering a whole chapter shows verse-0 front matter
+    directly: the Text Collection's chapter mode, its chapter-context split, its single-resource
+    path (`ScriptureTextGrid` renders one shown resource as `viewMode="chapter"`, so verse-0
+    behavior differs between one and several resources), and the Resource Viewer
+    (`resource-text-panel.web-view.tsx`). Correct behavior, signed off by Ian on PT-3133.
+  - **Genuinely-missing verses keep the ghost text.** Fall-forward applies only to verse 0. A verse
+    absent from a resource (an NT-only resource at an OT reference, an untranslated verse) still
+    renders "No text for this verse".
+  Accessible names resolve the same way, so the announcement names the verse the cells display. It
+  names the row, not its contents: a resource lacking verse 1 shows the empty state under the same
+  label, and a combined opener renders a "1-3" verse number under a label saying "1".
+- **Alternatives:** (a) *Keep the ghost-text empty state* — rejected: it blanks every cell at once
+  exactly when the user crosses a chapter or book boundary, so the tool reads as broken at the
+  moment it should be most useful; it also contradicts PT-3133's written acceptance. (b) *Normalize
+  the reference — forbid verse 0 in the Text Collection, or write verse 1 back to the scroll group*
+  (Todd Hoatson's suggestion on PT-3133) — rejected: the scroll group is shared, so it would move
+  every other view off the intro. (c) *Put the rule inside `sliceUsjToVerse`* — rejected: the
+  decision is about the **reference**, not the USJ, and the accessible-name site needs it without
+  having any USJ; burying a copy there would centralize nothing while making
+  `sliceUsjToVerse(usj, 0)` silently return verse 1. (d) *Fall forward only when verse 0 has no
+  content of its own* — a content-aware rule (raised in review of #2663). The distinction it draws is
+  real in the source: a `\d` superscription is one short line that a one-verse-tall cell renders
+  fine, whereas book/chapter intros and outlines are what genuinely cannot be rendered there. Under
+  it, PT9 parity would hold where it actually matters (the intro case), `<` from Psalms verse 1 would
+  produce a visible change instead of a silent one, and no real Scripture would be hidden in verse
+  view. Rejected on cost and consistency: the helper would need the chapter USJ, and the
+  accessible-name site in `ScriptureTextGrid` has none — it names the row before any resource has
+  fetched anything — which is exactly why the rule is reference-only. Making it content-aware would
+  either force a USJ through the naming path or split the rule in two (a USJ-aware version for cells,
+  a reference-only version for labels), and per-resource content-awareness would make the *same*
+  reference fall forward in one cell and not in its neighbor, so a row of cells would disagree about
+  which verse they are showing. Worth revisiting if the superscription case draws real complaints,
+  since it is the one place this decision hides genuine content.
+- **Consequences:** verse-0 content is not shown in verse view — deliberately. It stays one click
+  away via the chapter-context split, which renders the chapter unsliced; that escape hatch is what
+  makes the trade acceptable, so **revisit if the chapter-context split is ever removed or made
+  non-obvious**. Verse 0 and verse 1 now render identically and carry the same accessible name, so
+  stepping backward across that boundary produces no visible or announced change **within the grid**
+  — accepted, since the alternative is a row of ghost text at every chapter boundary.
+
+  **Verse 0 becomes unobservable inside the Text Collection, including to assistive tech** (raised
+  in review of #2663). At a verse-0 reference the row label announces "MAT 5:1", the cells render
+  verse 1, and nothing in the grid states that the shared reference is actually 5:0 — so a
+  screen-reader user has no in-grid signal that they are at the boundary. This is a genuine accepted
+  cost of naming the row after what it displays, not an oversight: the alternative is a label that
+  announces a verse the cells demonstrably do not show, which is worse. Two things keep it from
+  being a true silent dead end, and both live outside the grid: the BCV control still displays the
+  real reference (`5:0`), and its **previous-verse button is disabled** at verse 0, which is an
+  announced state change rather than an inert control — `isNoOpNavigation` in
+  `book-chapter-control.navigation.ts` disables a step that would return the same ref, pinned by the
+  `'Is disabled when at verse 0'` test in `book-chapter-control.navigation.test.ts`. (An earlier
+  draft of this ADR called the button "inert" and claimed fall-forward removed its "last remaining
+  cue"; that was wrong on both counts and is corrected here.) What the button cannot do is roll
+  backward to the previous chapter's last verse: with no `bounds`, `getPreviousVerseRef` floors at
+  `{chapterNum, verseNum: 0}` in every chapter rather than only chapter 1, so the reference dead-ends
+  there. That pin predates this decision and is now tracked as
+  [PT-4379](https://paratextstudio.atlassian.net/browse/PT-4379) — out of scope here because the fix
+  is not passing an argument but threading an async, PAPI-built `ScriptureBounds` through a
+  `platform-bible-react` component into every consumer of the BCV control.
+
+  Any future single-verse surface must call `resolveDisplayVerseNum` — `sliceUsjToVerse` is
+  deliberately mechanical and slices a raw verse 0 to nothing (pinned by a test) — and must carry the
+  write-back guard with it. The helper is currently private to `platform-scripture-editor`, so a
+  surface in another extension cannot import it; **promote it to
+  `lib/platform-bible-utils/src/scripture/` (which already owns `getPreviousVerseRef`, the producer
+  of verse-0 refs) at the second consumer _of this rule_** rather than re-typing it. The qualifier is
+  load-bearing: "second consumer" counted as surfaces would be wrong, because other surfaces already
+  handle verse-0 references under deliberately different rules. The worked example is the
+  interlinearizer extension (`sillsdev/interlinearizer-extension`, `InterlinearizerLoader.tsx`, the
+  `activeScrRef` memo): it renders a whole chapter and treats verse 0 as tokenizable content, so it
+  **keeps** verse 0 whenever a segment covers it — its USJ extractor emits a synthetic verse-0 scope
+  with SID `"<book> <chapter>:0"` for pre-verse-1 content — and falls back to verse 1 only when the
+  loaded book has no verse-0 segment for that chapter. That is content-awareness this rule
+  deliberately rejects (alternative (d) above), affordable there precisely because the whole book is
+  already parsed into segments before a reference is resolved. A whole-chapter surface should look
+  like the chapter-surface exemption above, not like this rule. Promoting on a surface count would
+  turn a deliberate single-verse-vs-whole-chapter difference into apparent drift from a shared util.
+- **Source:** PT-4061 (B3), which resolves PT-3133; Ian Hewerdine confirmed parity 2026-08-05.

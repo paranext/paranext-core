@@ -14,7 +14,7 @@ import {
 } from './resource-cell-view.component';
 import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from './resource-zoom.utils';
 import type { ResourceZoomController } from './use-resource-zoom.hook';
-import { sliceUsjToVerse } from './verse-display.utils';
+import { resolveDisplayVerseNum, sliceUsjToVerse } from './verse-display.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 const STRING_KEYS: LocalizeKey[] = [...RESOURCE_CELL_STRING_KEYS];
@@ -52,8 +52,9 @@ type ResourceCellProps = {
 /**
  * One resource, the focused chapter or verse. Reuses the resource-text-panel render path: fetch the
  * chapter, feed it to Editorial, which navigates to `scrRef`. In verse mode, feeds Editorial only
- * the slice for `scrRef.verseNum` (via `sliceUsjToVerse`) instead of the whole chapter. Delegates
- * layout and the downloading/failed visuals to `ResourceCellView`.
+ * that verse's slice instead of the whole chapter — a verse-0 reference shows verse 1
+ * ({@link resolveDisplayVerseNum}). Delegates layout and the downloading/failed visuals to
+ * `ResourceCellView`.
  */
 export function ResourceCell({
   resourceRef,
@@ -155,13 +156,51 @@ export function ResourceCell({
     }),
     [textDirection, extraValidMarkers],
   );
-  // Slice depends on scrRef.verseNum (unlike the chapter fetch memo above, which intentionally
-  // omits it — the chapter is identical across verses, but the slice is not).
+  // Only the USJ fed to the editor is resolved — `scrRef` passes through untouched. Keying the memo
+  // on the resolved verse (not scrRef.verseNum) also keeps 1:0 -> 1:1 from re-feeding identical
+  // content.
+  const displayVerseNum = resolveDisplayVerseNum(scrRef.verseNum);
+  const isFallenForward = displayVerseNum !== scrRef.verseNum;
+
+  // Fall-forward is display-only: we hand the editor verse 1's text while telling it verse 0, and
+  // that resolved verse must never reach the shared scroll group — it would drag the Scripture
+  // Editor off the intro the user came from. `Editorial`'s reference plugin stays mounted when
+  // read-only (`Editor.tsx` gates it on `scrRef && onScrRefChange` only) and reports selections that
+  // disagree with `scrRef`, so this swallows any such echo in a fallen-forward verse cell.
+  //
+  // DEFENSE-IN-DEPTH, NOT A FIX FOR A LIVE REPORT. `$resolvePosition` refuses to describe a position
+  // in a document with no BookNode and no ChapterNode (upstream invariant I5), and `sliceUsjToVerse`
+  // drops both — so today the plugin is silent in verse mode and this branch is unreachable. It is
+  // kept because it costs nothing and is the right shape if slices ever become addressable. Don't
+  // read it as evidence that a write-back currently happens; the next person to touch this should
+  // not reason from a mechanism that isn't there. Verified 2026-08-16 against platform-editor 0.8.15
+  // — both the published package and `dev-packages/scripture-editors`, which `postinstall` ->
+  // `link-dev-packages` yalc-links over `node_modules`. Read the LINKED build, not whatever
+  // `package-lock.json` names; a stale 0.8.14 tarball there is how this comment previously came to
+  // describe a chapter-1 write-back that cannot occur.
+  //
+  // The guard belongs here, not upstream in `ScriptureReferencePlugin`. Gating that plugin on
+  // `isReadonly` would break the read-only surfaces that need it: it is bidirectional (it also moves
+  // the caret to `scrRef`), and read-only click-to-sync — which this grid's CHAPTER mode and the
+  // Resource Viewer depend on, both feeding a whole chapter so the document is addressable — would
+  // go with it. A read-only editor reporting its caret is correct; the bug would be ours, since WE
+  // told it a reference we then contradicted. Full reasoning, and what a future single-verse surface
+  // must copy: ADR-0013.
+  const handleScrRefChange = useCallback(
+    (nextScrRef: SerializedVerseRef) => {
+      if (viewMode === 'verse' && isFallenForward) return;
+      setScrRef(nextScrRef);
+    },
+    [viewMode, isFallenForward, setScrRef],
+  );
+
+  // Slice depends on the verse, unlike the chapter fetch memo above, which intentionally omits it —
+  // the chapter is identical across verses, but the slice is not.
   const verseSlice = useMemo(() => {
     if (viewMode !== 'verse') return undefined;
     if (!usjPossiblyError || isPlatformError(usjPossiblyError)) return undefined;
-    return sliceUsjToVerse(usjPossiblyError, scrRef.verseNum);
-  }, [viewMode, usjPossiblyError, scrRef.verseNum]);
+    return sliceUsjToVerse(usjPossiblyError, displayVerseNum);
+  }, [viewMode, usjPossiblyError, displayVerseNum]);
 
   useEffect(() => {
     if (state !== 'ready' || !usjPossiblyError || isPlatformError(usjPossiblyError)) return;
@@ -198,7 +237,7 @@ export function ResourceCell({
         <Editorial
           ref={editorRef}
           scrRef={scrRef}
-          onScrRefChange={setScrRef}
+          onScrRefChange={handleScrRefChange}
           options={options}
           logger={logger}
         />
