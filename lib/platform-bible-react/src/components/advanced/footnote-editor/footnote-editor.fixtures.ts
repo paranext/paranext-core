@@ -28,7 +28,16 @@ export const scrRef: SerializedVerseRef = {
   verse: '1',
 };
 
-/** A single well-formed footnote op (`\fr` reference + `\ft` text) loaded into the popover. */
+/**
+ * A single well-formed footnote op (`\fr` reference + `\ft` text) loaded into the popover.
+ *
+ * The `closed: 'false'` on each note-content char mirrors what ParatextData stamps on every
+ * implicitly-closed span (`\fr`/`\ft`/`\fp` take no end marker; the next bare marker terminates
+ * them) — the shape the host editor's note ops actually carry. The editor's footnote-paragraph
+ * break keys on that state: writing `\fp` inside an implicitly-closed `\ft` ENDS the `\ft` and
+ * takes the remainder as the break's content, whereas an explicitly-closed span (which omitting
+ * the flag would claim) closes and REOPENS around the break.
+ */
 export const sentinelNoteOp: DeltaOpInsertNoteEmbed = {
   insert: {
     note: {
@@ -36,8 +45,8 @@ export const sentinelNoteOp: DeltaOpInsertNoteEmbed = {
       caller: '+',
       contents: {
         ops: [
-          { insert: '1:1 ', attributes: { char: { style: 'fr' } } },
-          { insert: 'sentinel note text', attributes: { char: { style: 'ft' } } },
+          { insert: '1:1 ', attributes: { char: { style: 'fr', closed: 'false' } } },
+          { insert: 'sentinel note text', attributes: { char: { style: 'ft', closed: 'false' } } },
         ],
       },
     },
@@ -56,10 +65,16 @@ export const twoFpNoteOp: DeltaOpInsertNoteEmbed = {
       caller: '+',
       contents: {
         ops: [
-          { insert: '1:1 ', attributes: { char: { style: 'fr' } } },
-          { insert: 'first paragraph ', attributes: { char: { style: 'ft' } } },
-          { insert: 'second paragraph ', attributes: { char: { style: 'fp', cid: 'fp-1' } } },
-          { insert: 'third paragraph', attributes: { char: { style: 'fp', cid: 'fp-2' } } },
+          { insert: '1:1 ', attributes: { char: { style: 'fr', closed: 'false' } } },
+          { insert: 'first paragraph ', attributes: { char: { style: 'ft', closed: 'false' } } },
+          {
+            insert: 'second paragraph ',
+            attributes: { char: { style: 'fp', closed: 'false', cid: 'fp-1' } },
+          },
+          {
+            insert: 'third paragraph',
+            attributes: { char: { style: 'fp', closed: 'false', cid: 'fp-2' } },
+          },
         ],
       },
     },
