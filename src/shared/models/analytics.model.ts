@@ -28,5 +28,17 @@ export type UnresolvedAnalyticsEvent = Omit<AnalyticsEvent, 'environment'>;
  * passed per call.
  */
 export interface AnalyticsProvider {
+  /**
+   * Transmits a single resolved analytics event to this provider's destination.
+   *
+   * @param event The event to send. Its `environment` was fixed when it was fired, not when `send`
+   *   is called — implementations must not re-derive or override it.
+   * @returns A promise that resolves once the event has been handled (sent, queued, or otherwise
+   *   accepted by the provider).
+   * @throws Implementations may reject. Callers are expected to catch both a rejection and a
+   *   synchronous throw and log-and-drop the event on failure — see `flushQueue` in
+   *   `src/extension-host/services/analytics.service.ts` — so an implementation does not need to
+   *   guarantee it never throws.
+   */
   send(event: AnalyticsEvent): Promise<void>;
 }

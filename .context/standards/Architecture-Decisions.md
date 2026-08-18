@@ -433,7 +433,7 @@ step, no automation. Just a record.
 - **Decision:** New top-level structure `analytics-providers/` under
   `src/extension-host/services/`, holding provider implementations behind the shared
   `AnalyticsProvider` interface (`src/shared/models/analytics.model.ts`). The engine
-  (`analytics.service-host.ts`) lives in extension-host — chosen over main or a shared/cross-process
+  (`analytics.service.ts`) lives in extension-host — chosen over main or a shared/cross-process
   module specifically because it's the process that can reach the PAPI data provider the resolution
   needs. `AnalyticsEvent.environment` is decided once, when an event is fired (or when it leaves the
   service's `unresolved` queue), never re-decided at transmission time, so an event that sits queued
@@ -469,6 +469,21 @@ step, no automation. Just a record.
   three-bucket shape was chosen specifically so that ticket can persist three queues without a format
   rewrite. No user-consent gating exists yet (PT-4366 builds the actual setting), though the design
   leaves the same async-resolve-once seam open for it that environment resolution uses.
+
+  **Core depending on an extension-owned data provider:** `analytics.service.ts` calls
+  `dataProviderService.get('paratextRegistration.internetSettingsDataProvider')` — a data provider
+  namespaced under the `paratextRegistration` **extension**, not a core-owned one sourced from a
+  shared `*.service-model.ts`/`*.service.ts` file the way every other core `dataProviderService.get`
+  call site is (`themeServiceDataProviderName`, `localizationServiceProviderName`,
+  `settingsServiceDataProviderName`, `menuDataServiceProviderName`). This typechecks only because
+  `tsconfig.json` puts `./extensions/src` on `typeRoots`, making the extension's ambient
+  `DataProviders` augmentation (`paratext-registration.d.ts`) visible from core without an explicit
+  import — that's an incidental property of the typeRoots configuration, not a reviewed decision
+  that core may depend on extension-provided data providers in general. The dependency exists here
+  because the S/R server target has no core-owned equivalent; it does not establish that pattern as
+  generally sanctioned. Code that wants to depend on a different extension-provided data provider
+  from core should treat this as a one-off, not a precedent, and reconsider whether a core-owned
+  alternative should exist instead.
 - **Source:** PT-4337 (epic PT-1797, "Analytics II (Implementation)"); design spec
   `docs/superpowers/specs/2026-08-13-analytics-abstraction-layer-design.md`; final whole-branch review
   of the implementing branch, which surfaced and fixed a startup-path regression (analytics

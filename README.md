@@ -300,6 +300,16 @@ Notes:
 - **Use a packaged build for numbers you intend to compare.** In dev, the .NET provider runs under `dotnet watch`, which inflates the C# portion of the timeline and is not representative.
 - `main.log` accumulates across launches; the tool shows only the latest run and warns when it drops older ones. For a clean capture, delete (or copy aside) the log between runs.
 
+### Analytics test-environment override
+
+Platform.Bible's analytics abstraction (`src/extension-host/services/analytics.service.ts`) normally decides whether events target the "test" or "production" analytics audience by checking whether the build is packaged and which Send/Receive server it's configured against. Developers and testers who need to force "test" targeting regardless of build/server configuration — so their activity never lands in production analytics — can set the `PT_ANALYTICS_TEST_OVERRIDE=true` environment variable when launching:
+
+```bash
+PT_ANALYTICS_TEST_OVERRIDE=true npm start
+```
+
+The value must be exactly `true`; any other value (including other truthy-looking strings) is ignored and normal resolution applies.
+
 ## GitHub Pages
 
 **[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**

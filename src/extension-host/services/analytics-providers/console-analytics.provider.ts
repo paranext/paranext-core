@@ -30,6 +30,16 @@ export class ConsoleAnalyticsProvider implements AnalyticsProvider {
     }
 
     const label = this.environment === 'production' ? 'Production' : 'Test';
-    logger.info(`${label}: ${JSON.stringify(event)}`);
+    // Two log lines, deliberately at different levels. `properties` is arbitrary caller-supplied
+    // data that tends to accumulate user/project identifiers over the life of an epic -- writing
+    // it to the `info` line would land it verbatim in a packaged build's persistent log file
+    // (info is the packaged default; see analytics.service.ts's ENVIRONMENT_RESOLUTION_TIMEOUT_MS
+    // neighbor comment for why info-level visibility matters here at all). The info line stays
+    // limited to what proves correct targeting -- name, timestamp, environment -- and is safe to
+    // land in any user's log. The full payload, properties included, only reaches debug.
+    logger.info(
+      `${label}: ${JSON.stringify({ name: event.name, timestamp: event.timestamp, environment: event.environment })}`,
+    );
+    logger.debug(`${label} (full event): ${JSON.stringify(event)}`);
   }
 }
