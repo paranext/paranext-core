@@ -1,10 +1,17 @@
 import { vi } from 'vitest';
 import { BoxData, LayoutBase, PanelData } from 'rc-dock';
-import { SavedTabInfo } from '@shared/models/docking-framework.model';
+import { readdirSync, readFileSync } from 'fs';
+import { resolve } from 'path';
+import { SavedTabInfo, TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import { simpleLayout } from './simple-layout.data';
 import defaultLayoutSupplement from './default-layout-supplement.json';
 import { mergeDefaultLayoutSupplement } from './default-layout-supplement.util';
 import { DefaultLayoutSupplementEntry } from './default-layout-supplement.model';
+import {
+  getTabGroup,
+  HEADLESS_GROUP,
+  TAB_GROUP_RESOURCES,
+} from './platform-dock-layout-positioning.util';
 
 vi.mock('../../../shared/services/logger.service');
 vi.mock('@renderer/services/theme.service-host', () => ({
@@ -104,6 +111,82 @@ describe('shipped Simple-mode Column 3 order', () => {
       expect(anchorColumnTypes).toBeDefined();
       expect(anchorColumnTypes).toContain(entry.insertBeforeWebViewType);
     });
+  });
+
+  it('every pinned tab is confined to its column group', () => {
+    // FIXED_LAYOUT_WEBVIEW_GROUPS claims to be "kept in sync" with these two files by hand, and
+    // nothing enforced it. The failure is silent by construction: a pinned webViewType missing from
+    // the map falls back to TAB_GROUP, which IS registered in simple mode, so no error surfaces —
+    // the tab just becomes draggable across columns, defeating the confinement the map exists to
+    // provide.
+    const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries);
+    const expectedGroups = [HEADLESS_GROUP, HEADLESS_GROUP, TAB_GROUP_RESOURCES];
+
+    [0, 1, 2].forEach((columnIndex) => {
+      columnWebViewTypes(merged, columnIndex).forEach((webViewType) => {
+        const tabInfo: TabInfo = {
+          id: `${webViewType}-tab`,
+          tabType: TAB_TYPE_WEBVIEW,
+          tabTitle: 'Test',
+          content: undefined,
+          // Pinned tabs are exactly the non-closable ones; that is what routes them to a column group.
+          isClosable: false,
+          data: { id: `${webViewType}-tab`, webViewType },
+        };
+        expect(getTabGroup(tabInfo)).toBe(expectedGroups[columnIndex]);
+      });
+    });
+  });
+
+  it('every pinned webViewType still exists in the extension that provides it', () => {
+    // Core cannot import extension source, so these webViewTypes are bare string literals in the
+    // layout data — four of them predate this column's Find tab. Renaming a provider's webViewType
+    // is a pure-rename refactor inside its own extension: it type-checks, it lints, and Simple mode
+    // silently loses that tab, because a saved tab with no registered provider just fails to load.
+    // Reading the extension source is the same technique the SCRIPTURE_EDITOR_WEBVIEW_TYPE drift
+    // guard uses (web-view.model.test.ts); matching on the literal rather than a constant name keeps
+    // it working across the several differently-named (and mostly non-exported) constants these six
+    // types are declared under.
+    const extensionSourceDirs: Record<string, string> = {
+      platformScripture: 'extensions/src/platform-scripture/src',
+      platformScriptureEditor: 'extensions/src/platform-scripture-editor/src',
+      legacyCommentManager: 'extensions/src/legacy-comment-manager/src',
+    };
+
+    /**
+     * Every production .ts/.tsx source file under `dir`, skipping generated build output and
+     * tests/stories. Excluding those matters: a test fixture or story that hard-codes the same
+     * webViewType string would otherwise vouch for a constant production code no longer declares,
+     * turning this guard into a false negative.
+     */
+    function sourceFilesIn(dir: string): string[] {
+      return readdirSync(dir, { withFileTypes: true }).flatMap((dirent) => {
+        const full = resolve(dir, dirent.name);
+        if (dirent.isDirectory()) return dirent.name === 'temp-build' ? [] : sourceFilesIn(full);
+        if (/\.(test|stories)\.tsx?$/.test(dirent.name)) return [];
+        return /\.tsx?$/.test(dirent.name) ? [full] : [];
+      });
+    }
+
+    const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries);
+    const pinnedTypes = [0, 1, 2].flatMap((index) => columnWebViewTypes(merged, index));
+    expect(pinnedTypes.length).toBeGreaterThan(0);
+
+    // Collected rather than asserted per type so a failure names every missing one at once.
+    const undeclared = pinnedTypes.filter((webViewType) => {
+      const extensionName = webViewType?.split('.')[0] ?? '';
+      const sourceDir = extensionSourceDirs[extensionName];
+      // An unrecognized prefix means a new extension started contributing a pinned tab without
+      // being added here, which would silently skip the check for it.
+      expect(sourceDir).toBeDefined();
+
+      // Vitest runs with the repo root as cwd.
+      return !sourceFilesIn(resolve(process.cwd(), sourceDir)).some((file) =>
+        readFileSync(file, 'utf8').includes(`'${webViewType}'`),
+      );
+    });
+
+    expect(undeclared).toEqual([]);
   });
 
   it('merging the real supplement puts Text Collection before Find', () => {

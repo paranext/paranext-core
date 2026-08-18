@@ -39,9 +39,9 @@ describe('buildFindWebViewFields', () => {
       expect(fields.tooltip).toBe(LOCALIZED_TITLE);
     });
 
-    it('leaves the tab closable and un-iconed in power mode, preserving any saved tooltip and icon', () => {
+    it('leaves the tab closable and un-iconed in power mode, preserving any saved icon', () => {
       const fields = buildFindWebViewFields(
-        savedWebView({ tooltip: 'saved tooltip', iconUrl: 'saved-icon.svg' }),
+        savedWebView({ iconUrl: 'saved-icon.svg' }),
         findOptions(),
         'power',
         LOCALIZED_TITLE,
@@ -49,7 +49,17 @@ describe('buildFindWebViewFields', () => {
 
       expect(fields.isClosable).toBe(true);
       expect(fields.iconUrl).toBe('saved-icon.svg');
-      expect(fields.tooltip).toBe('saved tooltip');
+    });
+
+    it('sets the tooltip in both modes and leaves the redundancy for the renderer to suppress', () => {
+      // PlatformTabTitle drops a tooltip that only repeats the visible title unless the tab is
+      // icon-only, so there is nothing for a mode gate here to add.
+      expect(
+        buildFindWebViewFields(savedWebView(), findOptions(), 'simple', LOCALIZED_TITLE).tooltip,
+      ).toBe(LOCALIZED_TITLE);
+      expect(
+        buildFindWebViewFields(savedWebView(), findOptions(), 'power', LOCALIZED_TITLE).tooltip,
+      ).toBe(LOCALIZED_TITLE);
     });
 
     it('always passes the raw localize key as the title so it re-localizes on a UI language change', () => {

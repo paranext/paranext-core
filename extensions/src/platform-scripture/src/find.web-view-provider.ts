@@ -13,8 +13,19 @@ import { buildFindWebViewFields, FIND_TITLE_KEY } from './find/find-web-view-def
 export const findWebViewType = 'platformScripture.find';
 
 export interface FindWebViewOptions extends OpenWebViewOptions {
-  projectId: string | undefined;
-  editorScrollGroupId: ScrollGroupScrRef | undefined;
+  /**
+   * Project for the Find WebView to search.
+   *
+   * Optional, like every property here, because `OpenWebViewOptions` forbids an options interface
+   * from adding mandatory properties: `reloadWebView` and `openWebView` both hand their options
+   * straight to `IWebViewProvider.getWebView`, and the reload path routinely passes none of these
+   * (layout hydration reloads with `{ bringToFront: false }` alone). Declaring them required would
+   * describe a contract no caller in this extension actually meets. Mirrors the sibling
+   * `ResourceViewerOptions`.
+   */
+  projectId?: string;
+  /** Scroll group of the editor Find was invoked from, so the two stay verse-synced. */
+  editorScrollGroupId?: ScrollGroupScrRef;
   /**
    * ID of WebView that called to open this Find WebView. Should be of `webViewType`
    * `platformScriptureEditor.react`
@@ -43,6 +54,11 @@ export class FindWebViewProvider implements IWebViewProvider {
     savedWebView: SavedWebViewDefinition,
     getWebViewOptions: FindWebViewOptions,
   ): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== findWebViewType)
+      throw new Error(
+        `${findWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+
     // `all`, not `allSettled`: neither branch of a guessed interface mode is safe. Guessing 'simple'
     // yields `isClosable: false`, which routes the tab to `TAB_GROUP_RESOURCES` — a group `getGroups`
     // only registers in simple mode — so in power mode it would land in rc-dock's unregistered-name
