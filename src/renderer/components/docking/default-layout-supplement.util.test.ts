@@ -83,6 +83,40 @@ describe('mergeDefaultLayoutSupplement', () => {
       'find-tab',
     ]);
   });
+  it('inserting at the head keeps the incumbent first tab as the active one', () => {
+    // rc-dock falls back to `tabs[0].id` for a panel with no `activeId`, and no Simple-mode panel
+    // sets one — so without this, a supplement tab placed leftmost would quietly become the column's
+    // default view in addition to being first.
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [
+      { ...gridEntry, insertBeforeWebViewType: 'platformScriptureEditor.bibleTexts' },
+    ]);
+
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
+      'scripture-text-grid-tab',
+      'anchor-tab',
+    ]);
+    // Narrowing to PanelData to read the activeId the merge pinned.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const panel = ((merged.dockbox as BoxData).children[0] as BoxData).children[0] as PanelData;
+    expect(panel.activeId).toBe('anchor-tab');
+  });
+  it('leaves an explicitly chosen activeId alone when inserting at the head', () => {
+    const layout = baseLayout();
+    // Narrowing to PanelData to set an explicit activeId for this case.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const panel = ((layout.dockbox as BoxData).children[0] as BoxData).children[0] as PanelData;
+    panel.activeId = 'anchor-tab';
+
+    const merged = mergeDefaultLayoutSupplement(layout, [
+      { ...gridEntry, insertBeforeWebViewType: 'platformScriptureEditor.bibleTexts' },
+    ]);
+
+    // Narrowing to PanelData to read the activeId back.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const mergedPanel = ((merged.dockbox as BoxData).children[0] as BoxData)
+      .children[0] as PanelData;
+    expect(mergedPanel.activeId).toBe('anchor-tab');
+  });
   it('appends when insertBeforeWebViewType names a tab that is not in the panel', () => {
     const merged = mergeDefaultLayoutSupplement(baseLayout(), [
       { ...gridEntry, insertBeforeWebViewType: 'not.in.this.panel' },
