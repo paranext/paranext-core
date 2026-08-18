@@ -27,6 +27,7 @@ import {
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -352,6 +353,11 @@ export type BookGridSelectorProps = {
    * Genesis". When omitted, the inner `<button>` is given a fallback aria-label of the book id.
    */
   getRowAriaLabel?: (item: BookGridItem) => string;
+  /**
+   * Book id to scroll into view once on mount — used when Manage Books is launched targeting a
+   * specific book. Ignored when the book is not in `items`.
+   */
+  scrollToBook?: string;
 };
 
 export function BookGridSelector({
@@ -370,6 +376,7 @@ export function BookGridSelector({
   hideGroupSelectAll,
   onRangeToggle,
   getRowAriaLabel,
+  scrollToBook,
 }: BookGridSelectorProps) {
   const groups = useMemo<{ label?: string; items: BookGridItem[] }[]>(() => {
     if (groupBy === 'none') {
@@ -579,6 +586,26 @@ export function BookGridSelector({
     gridTemplateColumns: `repeat(auto-fill, minmax(${needsWiderPills ? 170 : 100}px, 1fr))`,
   };
 
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Runs in a layout effect so the scroll happens before the first paint — the user never sees the
+  // grid at the top and then jump.
+  //
+  // Hidden case: intentionally not handled. `scrollIntoView` no-ops inside a `display: none` iframe,
+  // but this grid is only ever given `scrollToBook` by the create-missing-book launch, which floats
+  // and fronts the dialog in the same interaction — so it always has layout when this runs. No
+  // visibility catch-up is warranted here; if a future caller passes `scrollToBook` to a grid that
+  // can mount hidden, it needs `useViewVisibility` (see `useBcvSyncScroll` for the reference
+  // consumer).
+  useLayoutEffect(() => {
+    if (!scrollToBook) return;
+    const target = scrollContainerRef.current?.querySelector(`[data-book="${scrollToBook}"]`);
+    target?.scrollIntoView({ block: 'center' });
+    // Mount-only by design: re-scrolling on a later `scrollToBook` change would yank the view out
+    // from under a user who has since scrolled elsewhere.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const outOfScopeText = localizedStrings?.outOfScope ?? 'Out of scope';
   const untrackedText = localizedStrings?.untracked ?? 'Untracked';
   const selectAllTemplate = localizedStrings?.selectAllInGroup ?? 'Select all in {0}';
@@ -778,6 +805,7 @@ export function BookGridSelector({
 
   return (
     <div
+      ref={scrollContainerRef}
       className={cn(
         // The prior `overflow-auto`
         // produced a permanent vertical scrollbar in Import mode because the

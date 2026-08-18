@@ -2433,6 +2433,7 @@ export function ManageBooksDialog({
                       interactive={action !== 'view'}
                       localizedStrings={bookGridStrings}
                       getRowAriaLabel={gridRowAriaLabel}
+                      scrollToBook={initialSelectedBooks?.[0]}
                       // Leave BookGridSelector's default tw:p-1 in place so the
                       // first pill checkbox horizontally aligns with the
                       // toolbar's select-all checkbox. A `tw:px-0` override would
