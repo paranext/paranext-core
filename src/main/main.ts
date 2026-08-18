@@ -646,7 +646,13 @@ async function main() {
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
       width: windowWidth,
       height: windowHeight,
-      minWidth: 800, // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
+      // 900, raised from 800 on UX direction (2026-08-18): 2025 analytics show 99.83% of 11,587
+      // users on a screen 900px or wider, so the lost range costs almost nobody anything. It buys
+      // Simple mode three ~300px columns that fit without a horizontal scrollbar — see
+      // SIMPLE_COLUMN_MIN_WIDTH_PX in simple-layout.data.ts, which is derived from this number and
+      // guarded by a test in simple-layout.data.test.ts. Change one and that test fails.
+      // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
+      minWidth: 900,
       icon: getAssetPath('icon.png'),
       // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
       ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),

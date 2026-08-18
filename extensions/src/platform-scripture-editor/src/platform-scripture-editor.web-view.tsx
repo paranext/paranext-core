@@ -51,6 +51,7 @@ import {
   PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
+  cn,
   ScrollGroupSelector,
   SelectMenuItemHandler,
   SHRINK_STEP,
@@ -180,15 +181,30 @@ function ParagraphStyleLabel({
   styleName: string;
 }) {
   const shrinkStep = useShrinkStepValue();
+  const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM;
 
   return (
     <ToolbarCompoundLabel
       // Monospace on the marker code: a USFM marker is a code, not prose, and should read as one.
       // Deliberately not colored by marker — the code inherits the row's own foreground.
-      primary={<span className="tw:font-mono">{blockMarker}</span>}
+      //
+      // Collapsed, the slot is a fixed 6 characters wide rather than sized to the marker (UX,
+      // 2026-08-18). 6 covers the longest markers in use (e.g. `periph`), and because the font is
+      // monospace `6ch` is exactly six glyphs. Fixed beats content-sized here: a content-sized
+      // trigger changes width as the cursor moves between a `p` and a `toc1`, shifting every
+      // button after it — the layout jump this whole feature exists to remove.
+      primary={
+        <span className={cn('tw:font-mono', isAtMinimum && 'tw:inline-block tw:w-[6ch]')}>
+          {blockMarker}
+        </span>
+      }
       secondary={styleName}
-      showSecondary={shrinkStep < SHRINK_STEP.MINIMUM}
+      showSecondary={!isAtMinimum}
       fullText={`${blockMarker} - ${styleName}`}
+      // Capped at 30 characters when expanded (UX, 2026-08-18) so a long style name cannot let the
+      // trigger grow without bound. The label still shrinks below this — it is a ceiling, not a
+      // width.
+      className="tw:max-w-[30ch]"
     />
   );
 }
@@ -2361,10 +2377,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                       <PopoverTrigger asChild>
                         <Button
                           // `tw:min-w-0` lets the button shrink so its label can truncate rather
-                          // than push the end-zone buttons out of the clipped toolbar;
-                          // `tw:max-w-40` is the fixed slot that keeps neighbours from shifting as
-                          // the cursor moves between styles with different name lengths.
-                          className="tw:h-8 tw:min-w-0 tw:max-w-40"
+                          // than push the end-zone buttons out of the clipped toolbar. The width
+                          // ceiling lives on the label itself (30 characters) so it is expressed in
+                          // the same units UX specified it in — see ParagraphStyleLabel.
+                          className="tw:h-8 tw:min-w-0"
                           aria-label="Paragraph Selection"
                           title={isStructureProtected ? undefined : 'Paragraph Selection'}
                           disabled={isStructureProtected}
