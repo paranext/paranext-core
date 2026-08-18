@@ -92,16 +92,46 @@ describe('simple-layout.data', () => {
       expect(allWebViewTypes).toContain('platformScripture.find');
     });
 
-    it('each column panel has panelLock.minWidth of 300 so it cannot be resized to nothing', () => {
-      columns.forEach((col) => {
-        // Narrowing column to BoxData and its first child to PanelData to read panelLock.
-        // rc-dock's Algorithm.fixPanelOrBox unconditionally resets box/panel minWidth to 0,
-        // but then respects panelLock.minWidth as an override (Algorithm.js lines 566-569).
-        // This test verifies the constraint is set on panelLock, the field that survives fixup.
+    // Narrowing column to BoxData and its first child to PanelData to read panelLock.
+    // rc-dock's Algorithm.fixPanelOrBox unconditionally resets box/panel minWidth to 0,
+    // but then respects panelLock.minWidth as an override (Algorithm.js lines 566-569).
+    // panelLock is the field that survives that fixup, so it is the one to assert on.
+    const columnMinWidths = () =>
+      columns.map((col) => {
+        // rc-dock types a box child as the union BoxData | PanelData | TabData, with no
+        // discriminant to narrow on. This layout is authored right here in simple-layout.data.ts,
+        // so the shape is known statically; asserting it is the only way to read panelLock.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         const panel = (col as BoxData).children[0] as PanelData;
-        expect(panel.panelLock?.minWidth).toBe(300);
+        return panel.panelLock?.minWidth ?? 0;
       });
+
+    it('each column panel has a panelLock.minWidth so it cannot be resized to nothing', () => {
+      columnMinWidths().forEach((minWidth) => {
+        expect(minWidth).toBeGreaterThan(0);
+      });
+    });
+
+    it('leaves the three columns collectively narrower than the smallest window the app allows, so narrowing to the minimum cannot force a horizontal scrollbar', () => {
+      // Kept in step with `minWidth` on the BrowserWindow in src/main/main.ts. If either number
+      // moves, this test is what should fail — not a user dragging the window edge and losing the
+      // third column behind a scrollbar, which is exactly what a 3 x 300 floor used to cause.
+      const WINDOW_MIN_WIDTH_PX = 800;
+
+      const totalMinWidth = columnMinWidths().reduce((sum, minWidth) => sum + minWidth, 0);
+
+      expect(totalMinWidth).toBeLessThanOrEqual(WINDOW_MIN_WIDTH_PX);
+    });
+
+    it('keeps the editor column weighted wider than the two side columns', () => {
+      // rc-dock renders each column as `flex: (size) (size * 1e6) (size)px` (DockBox.js), so `size`
+      // is a proportional weight and the columns already rescale continuously with the window —
+      // no JS resize handling involved. This 1:2:1 weighting is what gives the editor ~400px at an
+      // 800px window, comfortably clear of the ~294px its toolbar needs at full shrink. Equal
+      // thirds would give it ~266px and put the toolbar back into overflow.
+      const sizes = columns.map((col) => col.size);
+
+      expect(sizes).toEqual([1, 2, 1]);
     });
   });
 });

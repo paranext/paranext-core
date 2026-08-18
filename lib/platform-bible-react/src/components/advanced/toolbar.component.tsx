@@ -3,8 +3,10 @@ import {
   PlatformMenubar,
 } from '@/components/advanced/menus/platform-menubar.component';
 import { cn } from '@/utils/shadcn-ui/utils';
+import { ShrinkStepContext } from '@/context/shrink-step.context';
+import { useShrinkStep } from '@/hooks/use-shrink-step.hook';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
-import { PropsWithChildren, ReactNode, useRef } from 'react';
+import { PropsWithChildren, ReactNode, useCallback, useState } from 'react';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
@@ -45,7 +47,25 @@ export type ToolbarProps = PropsWithChildren<{
 
   /** Variant of the menubar */
   menubarVariant?: 'default' | 'muted';
+
+  /**
+   * Overrides the shrink step this toolbar would otherwise measure from its own width, and
+   * publishes it to descendants through `ShrinkStepContext`. Higher means narrower.
+   *
+   * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
+   * the app, leave this unset and let the toolbar measure itself.
+   */
+  shrinkStep?: number;
 }>;
+
+/**
+ * Window-width breakpoints for the application titlebar, widest first.
+ *
+ * INITIAL ESTIMATES, summed from the current control widths rather than measured against the
+ * running app. They are tuned with the `visual-verification` skill before this ships; treat a value
+ * here as provisional until that has happened.
+ */
+export const APP_TOOLBAR_SHRINK_THRESHOLDS_PX = Object.freeze([1100, 950, 850]);
 
 /**
  * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing
@@ -90,64 +110,76 @@ export function Toolbar({
   configAreaChildren,
   shouldUseAsAppDragArea,
   menubarVariant = 'default',
+  shrinkStep: shrinkStepOverride,
 }: ToolbarProps) {
-  // This ref will always be defined
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const containerRef = useRef<HTMLDivElement>(undefined!);
+  // The root node lives in state, not a ref: mutating `ref.current` does not re-run the effect
+  // inside `useShrinkStep`, so a ref would leave the observer permanently unattached.
+  const [rootNode, setRootNode] = useState<HTMLDivElement | undefined>(undefined);
+  const attachRoot = useCallback(
+    (node: HTMLDivElement | null) => setRootNode(node ?? undefined),
+    [],
+  );
+  const measuredShrinkStep = useShrinkStep(rootNode, APP_TOOLBAR_SHRINK_THRESHOLDS_PX);
+  const shrinkStep = shrinkStepOverride ?? measuredShrinkStep;
 
   return (
-    <div
-      className={cn('tw:border tw:px-4 tw:text-foreground', className)}
-      ref={containerRef}
-      style={{ position: 'relative' }}
-      id={id}
-    >
+    <ShrinkStepContext.Provider value={shrinkStep}>
       <div
-        className="tw:flex tw:h-full tw:w-full tw:justify-between tw:overflow-hidden"
-        /* @ts-ignore Electron-only property */
-        style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
+        className={cn('tw:border tw:px-4 tw:text-foreground', className)}
+        ref={attachRoot}
+        style={{ position: 'relative' }}
+        id={id}
       >
-        {/* App Menu area */}
-        <div className="tw:flex tw:grow tw:basis-0">
-          <div
-            className="tw:flex tw:items-center tw:gap-2"
-            /* @ts-ignore Electron-only property */
-            style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
-          >
-            {appMenuAreaChildren}
-
-            {menuData && (
-              <PlatformMenubar
-                menuData={menuData}
-                onOpenChange={onOpenChange}
-                onSelectMenuItem={onSelectMenuItem}
-                variant={menubarVariant}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Content area */}
         <div
-          className="tw:flex tw:items-center tw:gap-2 tw:px-2"
+          className="tw:flex tw:h-full tw:w-full tw:justify-between tw:overflow-hidden"
           /* @ts-ignore Electron-only property */
-          style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
+          style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
         >
-          {children}
-        </div>
+          {/* App Menu area — rigid. Deliberately NOT `tw:min-w-0`: letting the logo and main menubar
+            shrink would clip menu titles, which is the failure this design exists to prevent.
+            Shrinking flows to the content area instead. */}
+          <div className="tw:flex tw:shrink-0 tw:grow tw:basis-0">
+            <div
+              className="tw:flex tw:items-center tw:gap-2"
+              /* @ts-ignore Electron-only property */
+              style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
+            >
+              {appMenuAreaChildren}
 
-        {/* Configure area */}
-        <div className="tw:flex tw:min-w-0 tw:grow tw:basis-0 tw:justify-end">
+              {menuData && (
+                <PlatformMenubar
+                  menuData={menuData}
+                  onOpenChange={onOpenChange}
+                  onSelectMenuItem={onSelectMenuItem}
+                  variant={menubarVariant}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Content area — absorbing. Holds the project selector, reference-history buttons and
+            BookChapterControl, each of which has a shorter label form to fall back to. */}
           <div
-            className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:pe-1"
+            className="tw:flex tw:min-w-0 tw:shrink tw:items-center tw:gap-2 tw:px-2"
             /* @ts-ignore Electron-only property */
             style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >
-            {configAreaChildren}
+            {children}
+          </div>
+
+          {/* Configure area */}
+          <div className="tw:flex tw:min-w-0 tw:grow tw:basis-0 tw:justify-end">
+            <div
+              className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:pe-1"
+              /* @ts-ignore Electron-only property */
+              style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
+            >
+              {configAreaChildren}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </ShrinkStepContext.Provider>
   );
 }
 

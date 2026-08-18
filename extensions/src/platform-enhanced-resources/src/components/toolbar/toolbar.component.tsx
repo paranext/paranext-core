@@ -27,7 +27,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
   cn,
+  useShrinkStep,
 } from 'platform-bible-react';
+import { useCallback, useState } from 'react';
 import { BookA, LibraryBig, Image as ImageIcon, Info, MapPin, Menu, X } from 'lucide-react';
 import { formatReplacementString } from 'platform-bible-utils';
 import type { LocalizedStringValue, ScrollGroupId } from 'platform-bible-utils';
@@ -469,6 +471,12 @@ export type EnhancedResourceTabBarProps = {
  * when `searchValue` is empty. Theme 8 (responsive) — uses `@container` queries on the parent so
  * tab labels collapse to icon-only at narrow widths and the row never wraps to two lines.
  */
+/**
+ * Width below which this bar's four tab labels collapse to icon-only, leaving room for the scope
+ * select and the filter input. Matches the `@sm` breakpoint the container query used to name.
+ */
+const ENHANCED_RESOURCES_TAB_BAR_SHRINK_THRESHOLDS_PX = Object.freeze([640]);
+
 export function EnhancedResourceTabBar({
   activeTab,
   onTabChange,
@@ -480,6 +488,18 @@ export function EnhancedResourceTabBar({
   hasMatches = true,
   localizedStringsWithLoadingState = [{}, false],
 }: EnhancedResourceTabBarProps) {
+  // The node lives in state, not a ref: mutating `ref.current` does not re-run the effect inside
+  // `useShrinkStep`, so a ref would leave the observer permanently unattached.
+  const [rootNode, setRootNode] = useState<HTMLDivElement | undefined>(undefined);
+  const attachRoot = useCallback(
+    (node: HTMLDivElement | null) => setRootNode(node ?? undefined),
+    [],
+  );
+  const shrinkStep = useShrinkStep(rootNode, ENHANCED_RESOURCES_TAB_BAR_SHRINK_THRESHOLDS_PX);
+  // This bar is not inside a `TabToolbar`, so there is no `ShrinkStepContext` above it to read —
+  // it measures its own width.
+  const areTabLabelsHidden = shrinkStep > 0;
+
   const getLocalizedString = (key: ToolbarLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
 
@@ -549,18 +569,21 @@ export function EnhancedResourceTabBar({
   const filterInputTextClass = filterActive ? 'er-filter-input-on-pastel' : '';
 
   return (
-    // FN-024: `tw-@container/toolbar` establishes a named container-query context so the
-    // `@sm:` variants below resolve against this element's inline-size, not the viewport.
-    // The named form (`tw-@container/toolbar`) is necessary if other ancestors also declare
-    // containers; using a name makes the resolution deterministic.
-    <div className="tw-@container/toolbar tw:w-full">
+    // FN-024: width-driven collapse runs through `useShrinkStep`, not a CSS container query.
+    // This previously read `tw-@container/toolbar` — a dash where Tailwind v4's prefix needs
+    // `tw:` — which emits no class at all. The named container was therefore never established
+    // and every `@sm/toolbar:` variant below silently never matched, so the tab labels were
+    // hidden at EVERY width. Ported to the hook rather than just fixing the prefix, because
+    // container-query variants have not proven reliable in extension web view bundles and they
+    // fail this same silent way.
+    <div ref={attachRoot} className="tw:w-full">
       <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:overflow-hidden tw:border-b tw:px-2 tw:py-1.5">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="tw:shrink-0">
           <TabsList>
             {/* Each TabsTrigger nests the Tooltip INSIDE itself (rather than the more natural
                 `<TooltipTrigger asChild><TabsTrigger ...></TabsTrigger></TooltipTrigger>`
                 composition) so the tooltip surfaces the label on hover at narrow widths where the
-                inline text (`tw:hidden tw:@sm/toolbar:inline`) collapses to icon-only.
+                inline text is dropped (`areTabLabelsHidden`) and the trigger collapses to icon-only.
 
                 Why nested, not wrapped: Radix Tooltip sets `data-state="closed|delayed-open|
                 instant-open"` on its trigger element, and Radix Tabs sets
@@ -580,8 +603,8 @@ export function EnhancedResourceTabBar({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="tw:inline-flex tw:items-center">
-                      <BookA className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabDictLabel}</span>
+                      <BookA className={cn('tw:h-4 tw:w-4', !areTabLabelsHidden && 'tw:me-1')} />
+                      {!areTabLabelsHidden && <span>{tabDictLabel}</span>}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>{tabDictLabel}</TooltipContent>
@@ -591,8 +614,10 @@ export function EnhancedResourceTabBar({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="tw:inline-flex tw:items-center">
-                      <LibraryBig className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabEncycLabel}</span>
+                      <LibraryBig
+                        className={cn('tw:h-4 tw:w-4', !areTabLabelsHidden && 'tw:me-1')}
+                      />
+                      {!areTabLabelsHidden && <span>{tabEncycLabel}</span>}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>{tabEncycLabel}</TooltipContent>
@@ -602,8 +627,10 @@ export function EnhancedResourceTabBar({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="tw:inline-flex tw:items-center">
-                      <ImageIcon className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabMediaLabel}</span>
+                      <ImageIcon
+                        className={cn('tw:h-4 tw:w-4', !areTabLabelsHidden && 'tw:me-1')}
+                      />
+                      {!areTabLabelsHidden && <span>{tabMediaLabel}</span>}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>{tabMediaLabel}</TooltipContent>
@@ -613,8 +640,8 @@ export function EnhancedResourceTabBar({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="tw:inline-flex tw:items-center">
-                      <MapPin className="tw:h-4 tw:w-4 tw:@sm/toolbar:me-1" />
-                      <span className="tw:hidden tw:@sm/toolbar:inline">{tabMapsLabel}</span>
+                      <MapPin className={cn('tw:h-4 tw:w-4', !areTabLabelsHidden && 'tw:me-1')} />
+                      {!areTabLabelsHidden && <span>{tabMapsLabel}</span>}
                     </span>
                   </TooltipTrigger>
                   <TooltipContent>{tabMapsLabel}</TooltipContent>
@@ -626,7 +653,7 @@ export function EnhancedResourceTabBar({
 
         {/*
          * FN-024: filter input is now ALWAYS rendered with min-width: 80px so the toolbar shrinks
-         * based on available space (and the tab labels collapse to icon-only via the @sm/toolbar
+         * based on available space (and the tab labels collapse to icon-only via the shrink step
          * container query) rather than hiding the input until the user clicks a word. The X clear
          * button only appears when there's something to clear so the empty input stays clean.
          */}
@@ -662,7 +689,7 @@ export function EnhancedResourceTabBar({
         <Select value={scope} onValueChange={handleScopeChange}>
           <SelectTrigger
             aria-label={scopeLabel}
-            className="tw:w-32 tw:shrink-0 tw:@sm/toolbar:w-44"
+            className={cn('tw:shrink-0', areTabLabelsHidden ? 'tw:w-32' : 'tw:w-44')}
             role="combobox"
           >
             <SelectValue />
