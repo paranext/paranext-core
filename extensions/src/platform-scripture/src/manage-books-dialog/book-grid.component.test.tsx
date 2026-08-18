@@ -13,6 +13,8 @@ beforeAll(() => {
       unobserve: vi.fn(),
       disconnect: vi.fn(),
     }));
+    // ResizeObserver constructor as a vi.fn factory satisfies the runtime contract but not
+    // structural typing; we cast through unknown to adapt it to the required type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     globalThis.ResizeObserver = stubResizeObserver as unknown as typeof ResizeObserver;
   }
@@ -31,11 +33,14 @@ beforeAll(() => {
   ) {
     if (selectors === ':scope > li') {
       const lis = Array.from(this.children).filter((child) => child.tagName === 'LI');
-      // eslint-disable-next-line no-type-assertion/no-type-assertion -- test-only shim: NodeList
-      // isn't constructible directly, and the caller only iterates/indexes the result.
+      // Test-only shim: NodeList is not constructible directly, and every caller of this
+      // selector only iterates or indexes the result, so an array stands in faithfully.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
       return lis as unknown as NodeListOf<E>;
     }
-    // eslint-disable-next-line no-type-assertion/no-type-assertion -- generic overload requires it
+    // `Element.prototype.querySelectorAll` is a generic overload; `.call` widens the return to
+    // NodeListOf<Element>, so it needs re-narrowing to the caller's element type.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
     return origQuerySelectorAll.call(this, selectors) as NodeListOf<E>;
   };
 });

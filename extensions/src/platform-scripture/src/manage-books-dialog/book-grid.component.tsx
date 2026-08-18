@@ -586,6 +586,8 @@ export function BookGridSelector({
     gridTemplateColumns: `repeat(auto-fill, minmax(${needsWiderPills ? 170 : 100}px, 1fr))`,
   };
 
+  // Using null for React ref compatibility
+  // eslint-disable-next-line no-null/no-null
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Runs in a layout effect so the scroll happens before the first paint — the user never sees the
