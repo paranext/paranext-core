@@ -252,6 +252,16 @@ declare module 'paratext-bible-send-receive' {
 
   /** Event payload emitted by the `paratextBibleSendReceive.onSyncStateChanged` network event */
   export type SyncProgressEvent = {
+    /**
+     * Whether any sync is running as of this event.
+     *
+     * `true` does NOT mean "a sync just started". It is also emitted when one claim releases while
+     * another still holds — i.e. when the set of syncing projects SHRANK — so the projects covered
+     * can change while this stays `true` and the set never passes through "not syncing". A consumer
+     * naming what is syncing must therefore re-read {@link SyncState.syncingProjectIds} on every
+     * `true` event and must not carry the previous set forward while that read is in flight, or it
+     * will name a project that has already stopped.
+     */
     isSyncing: boolean;
   };
 
@@ -294,7 +304,18 @@ declare module 'paratext-bible-send-receive' {
     lastRequestedProjectIds: string[];
     /**
      * Project ids of the sync(s) running RIGHT NOW. Empty exactly when `isSyncing` is `false`.
-     * Overlapping syncs are unioned; order is not meaningful.
+     * Overlapping syncs are unioned.
+     *
+     * Consumer notes:
+     *
+     * - A {@link SyncProgressEvent} with `isSyncing: true` may mean the set SHRANK rather than a new
+     *   sync starting (see {@link SyncProgressEvent.isSyncing}), so re-read this on every such
+     *   event.
+     * - Order is claim order and carries no meaning. It can differ between reads of the SAME set — a
+     *   project that releases and re-claims moves to the end — so sort before rendering a list that
+     *   should stay stable.
+     * - A fresh array is built on every `getSyncState` call, so compare by value; an identity check
+     *   reports a change on every read.
      *
      * Optional in core's copy only: it was added to the Send/Receive contract after the version
      * shipping in some builds, so a Paratext 10 Studio build predating that change answers
