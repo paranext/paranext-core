@@ -5,10 +5,8 @@
  * then nulls the editor-state selection. With a null selection, `LexicalEditor.focus()` does NOT
  * restore the remembered caret — it falls back to `$getRoot().selectEnd()` (verified in lexical
  * 0.43's `focus()` source), which in this popover parks the caret in the note's closing `\f*`
- * glyph. The commit apply then runs against that bogus caret: the literal cleanup skips (glyph
- * anchor), the insert lands at the document tail, and the engine's own note-content re-tokenization
- * later converts the still-stranded literal into a SECOND marker span — a double insertion
- * (live-observed as a red `\fq` after `\f*`).
+ * glyph. The commit apply then runs against that bogus caret: historically the insert landed at the
+ * document tail (live-observed as a red `\fq` after `\f*`).
  *
  * The fix captures the last live USJ selection as focus leaves the editor (focusout fires
  * synchronously, ahead of the selection nulling) and restores it via `EditorRef.setSelection`
@@ -18,19 +16,22 @@
  * deliberately not asserted (see the engine's `getUsjMarkerAction` char-insertion path for in-note
  * carets — platform-editor-owned behavior).
  *
+ * Under the ACTIVE palette nothing of the session's ever lands in the document — the trigger and
+ * filter keystrokes are claimed — so the commit applies against a clean document with
+ * `literalPrefixLanded: false` and there is no literal-cleanup half to the contract anymore; the
+ * suite still asserts nothing strands as literal text (a regression signal for the apply itself).
+ *
  * Like footnote-editor.enter-guard.test.tsx (with which it shares footnote-editor.test-harness),
  * this suite mounts the REAL `Editorial`: the failure is an interaction between DOM focus loss,
- * Lexical's selection state, and the apply path's literal cleanup — unobservable with a mocked
- * editor. The palette itself stays a fake driver (`FootnoteEditorMarkerPalette`), exactly the seam
- * the host supplies in production.
+ * Lexical's selection state, and the apply path — unobservable with a mocked editor. The palette
+ * itself stays a fake driver (`FootnoteEditorMarkerPalette`), exactly the seam the host supplies in
+ * production.
  */
 import { act } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   $getRoot,
-  $getSelection,
   $isElementNode,
-  $isRangeSelection,
   $isTextNode,
   $setSelection,
   LexicalEditor,
@@ -92,8 +93,7 @@ function $findFtTextNode(): TextNode {
 }
 
 /**
- * Puts BOTH carets (Lexical editor state and DOM) in the `\ft` content — at its END (the spot the
- * passive `\` palette expects the typed literal to trail) or MID-text (right after "sentinel", with
+ * Puts BOTH carets (Lexical editor state and DOM) in the `\ft` content — at its END or MID-text (right after "sentinel", with
  * content following the caret — the position where a break must MOVE the tail). The DOM caret must
  * agree with the editor-state one: jsdom fires `selectionchange` for the DOM placement and Lexical
  * syncs its own selection to the DOM caret, so a mismatch would silently move the editor-state
@@ -134,31 +134,6 @@ async function placeCaretInFtText(
   selection.addRange(range);
 }
 
-/** Types one character at the current editor-state caret in its own update (one live keystroke). */
-async function typeCharacter(lexical: LexicalEditor, character: string): Promise<void> {
-  await act(async () => {
-    lexical.update(() => {
-      const selection = $getSelection();
-      if (!$isRangeSelection(selection)) throw new Error('no range selection for the literal');
-      selection.insertText(character);
-    });
-    await Promise.resolve();
-  });
-}
-
-/**
- * Types the literal `\<marker>` at the current editor-state caret the way live typing lands it: one
- * character per update, so the marker-edit engine's transforms run between keystrokes exactly as
- * they do for real input.
- */
-async function typeLiteral(lexical: LexicalEditor, marker = 'fq'): Promise<void> {
-  // Sequential on purpose (one live keystroke at a time); a promise-chain reduce keeps the
-  // ordering without a loop.
-  await ['\\', ...marker].reduce(async (previous, character) => {
-    await previous;
-    await typeCharacter(lexical, character);
-  }, Promise.resolve());
-}
 
 /**
  * Post-commit editor-state snapshot:
@@ -216,10 +191,10 @@ function readCommitOutcome(lexical: LexicalEditor, marker = 'fq') {
 }
 
 /**
- * Mounts a fresh popover, opens a passive `\` palette session with the caret at the end of the
- * `\ft` content, types the `\<marker>` literal, optionally steals focus the way a palette mouse
- * click does (focusout, then Lexical's selection nulled), commits `<marker>`, and returns the
- * settled editor-state outcome. Unmounts before returning so multiple flows can run in one test
+ * Mounts a fresh popover, opens a `\` palette session with the caret in the `\ft` content
+ * (nothing lands — the active palette claims the trigger), optionally steals focus the way a
+ * palette mouse click does (focusout, then Lexical's selection nulled), commits `<marker>`, and
+ * returns the settled editor-state outcome. Unmounts before returning so multiple flows can run in one test
  * without their document-level listeners interfering.
  */
 async function runCommitFlow({
@@ -250,10 +225,11 @@ async function runCommitFlow({
   expect(shownPassive).toBe(true);
   expect(shownItems?.some((item) => item.id === marker)).toBe(true);
 
-  await typeLiteral(lexical, marker);
-  // Let jsdom's queued selectionchange processing settle so the focusout capture below (and the
-  // live-selection apply) read the post-typing caret deterministically — without this the steal
-  // could capture a mid-flight selection state that no real browser would surface.
+  // ACTIVE palette: no literal is typed into the document — the real flow claims the trigger and
+  // filter keystrokes, so at commit time the document is clean. Let jsdom's queued
+  // selectionchange processing settle so the focusout capture below (and the live-selection
+  // apply) read the caret deterministically — without this the steal could capture a mid-flight
+  // selection state that no real browser would surface.
   await act(async () => {
     await new Promise((resolve) => {
       setTimeout(resolve, 0);
@@ -304,22 +280,21 @@ async function runCommitFlow({
 }
 
 describe('FootnoteEditor palette commit (mouse click steals focus and nulls the selection)', () => {
-  it('produces the SAME result as a commit whose selection stayed live (no double insert, literal consumed)', async () => {
+  it('produces the SAME result as a commit whose selection stayed live (no double insert, nothing strands)', async () => {
     const liveOutcome = await runCommitFlow({ stealFocus: false });
     const stolenOutcome = await runCommitFlow({ stealFocus: true });
 
     // Pre-fix the stolen flow diverged: the apply ran against the document tail (fallback
-    // selectEnd), skipped the literal cleanup, and the engine's note re-tokenization then made a
-    // SECOND `fq` span out of the stranded literal.
+    // selectEnd) instead of the caret the user last saw.
     expect(stolenOutcome.fqCharCount).toBe(1);
     expect(stolenOutcome.strandedLiteralTexts).toEqual([]);
     expect(stolenOutcome.tree).toBe(liveOutcome.tree);
   });
 
-  it('live-selection commit (keyboard path) consumes the literal and inserts exactly one fq span', async () => {
+  it('live-selection commit (keyboard path) inserts exactly one fq span, nothing strands', async () => {
     // Guard for the fix's restore probe: a live selection must be left completely alone — a
-    // wrongly-triggered restore (stale snapshot or a jump-to-note-end fallback) would miss the
-    // literal cleanup and strand `\fq` in the content.
+    // wrongly-triggered restore (stale snapshot or a jump-to-note-end fallback) would move the
+    // apply off the caret the user last saw.
     const outcome = await runCommitFlow({ stealFocus: false });
 
     expect(outcome.fqCharCount).toBe(1);
@@ -330,13 +305,13 @@ describe('FootnoteEditor palette commit (mouse click steals focus and nulls the 
 describe('FootnoteEditor palette commit of fp (the footnote-paragraph BREAK)', () => {
   // Inside the expanded note, committing `fp` from the palette must do exactly what Enter does
   // there: the unified `\fp` break — everything after the caret within the span moves into the
-  // new `\fp` — with the typed literal consumed. The generic char-insert route instead split
+  // new `\fp`. The generic char-insert route instead split
   // the `\ft` into a [head, empty `\fp`, tail] sandwich whose empty span degraded to literal
   // `\fp` text under the engine's note re-tokenization — a visual no-op with the literal left
   // in the content (live-observed: palette apply of `fp` "did nothing" for both the Enter
   // commit and the mouse-click commit). Mid-text carets are the exposed position; the tail
   // after the caret must ride the break.
-  it('Enter-shaped (live selection) commit mid-\\ft: literal consumed, exactly one \\fp span, tail rides the break', async () => {
+  it('Enter-shaped (live selection) commit mid-\\ft: exactly one \\fp span, tail rides the break', async () => {
     const outcome = await runCommitFlow({ stealFocus: false, marker: 'fp', caretAt: 'mid' });
 
     expect(outcome.paragraphCount).toBe(1);
