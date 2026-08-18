@@ -198,13 +198,19 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-find',
     purpose: 'Open the find dialog',
     category: 'Navigation',
-    context: 'Scripture editor, model text, Bible text, and commentary web views',
-    // macOS intentionally uses ⌃F (not the usual ⌘F) to match the handlers in the scripture editor
-    // and the model text / resource panels.
+    context:
+      'Scripture editor, model text, Bible text, commentary, and Text Collection web views. ' +
+      'In Text Collection it searches the resource holding the caret; in the reference panels, the ' +
+      'displayed resource. Does nothing (logged) until a scripture is resolved.',
+    // macOS intentionally uses ⌃F (not the usual ⌘F). One shared hook holds the handler; the
+    // remaining entries are the web views that mount it.
     keys: { macOS: '⌃F', windows: 'Ctrl+F', linux: 'Ctrl+F' },
     locations: [
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts',
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/model-text-panel.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/resource-text-panel.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx',
     ],
   },
   {

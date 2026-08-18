@@ -11,10 +11,11 @@ import type { FindWebViewOptions } from '../find.web-view-provider';
  * - `initialSearchText` (the selection forwarded by Ctrl+F) is written to `findSearchTerm` so the
  *   find panel pre-fills and searches it. An empty/absent value is intentionally NOT written, so an
  *   empty selection never clobbers a restored or existing search term.
- * - `editorWebViewId` uses the caller's value whenever `openFind` supplies the key (it always sets
- *   it, to a value or to `undefined`), so a panel trigger can CLEAR a stale editor id. A `??` here
- *   would resurrect an editor id from a prior open-from-editor and re-point Find at the wrong (or a
- *   closed) editor. Content reload/restore omits the key, so the saved value is preserved there.
+ * - `editorWebViewId` is taken from the caller when it supplies one, and dropped entirely when the
+ *   caller sets `clearEditorWebViewId` — the signal `openFind` sends for a non-editor trigger.
+ *   Without that clear, a `??` would resurrect the editor id from a prior open-from-editor and
+ *   re-point Find at the wrong (or a closed) editor. Content reload/restore sets neither, so the
+ *   saved value is preserved there.
  */
 export function buildFindWebViewState(
   savedWebView: SavedWebViewDefinition,
@@ -22,10 +23,9 @@ export function buildFindWebViewState(
 ): WebViewDefinition['state'] {
   return {
     ...savedWebView.state,
-    editorWebViewId:
-      'editorWebViewId' in getWebViewOptions
-        ? getWebViewOptions.editorWebViewId
-        : savedWebView.state?.editorWebViewId,
+    editorWebViewId: getWebViewOptions.clearEditorWebViewId
+      ? undefined
+      : (getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId),
     ...(getWebViewOptions.initialSearchText
       ? { findSearchTerm: getWebViewOptions.initialSearchText }
       : {}),

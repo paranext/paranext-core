@@ -1,5 +1,5 @@
 import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
-import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import { FIND_WEBVIEW_TYPE, SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { LayoutBase } from 'rc-dock';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
@@ -98,10 +98,7 @@ export const simpleLayout: LayoutBase = {
                 id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
                 tabType: TAB_TYPE_WEBVIEW,
                 data: {
-                  // Literal because the renderer cannot import the extension's `findWebViewType`.
-                  // Must equal `findWebViewType` in
-                  // extensions/src/platform-scripture/src/find.web-view-provider.ts.
-                  webViewType: 'platformScripture.find',
+                  webViewType: FIND_WEBVIEW_TYPE,
                   id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
                   contentType: 'react',
                   state: {},

@@ -203,7 +203,8 @@ export function ScriptureTextGrid({
   // already shown.
   //
   // `gridRef` is attached here so `useResourceZoomInput` has a non-null container; `data-resource-id`
-  // lets the hook identify the resource from any event target inside the cell.
+  // lets the hook identify the resource from any event target inside the cell, and
+  // `data-project-id` lets a focused element be traced back to the resource holding the caret.
   const [onlyResource] = resources;
   if (resources.length === 1 && onlyResource) {
     return (
@@ -211,6 +212,7 @@ export function ScriptureTextGrid({
         ref={gridRef}
         role="region"
         aria-label={ariaLabel}
+        data-project-id={onlyResource.projectId}
         data-resource-id={onlyResource.resourceId}
         className="tw:h-full tw:min-h-0 tw:overflow-auto"
       >
@@ -453,6 +455,7 @@ export function ScriptureTextGrid({
             role="region"
             aria-label={chapterContext.label}
             data-testid="scripture-text-grid-chapter-context"
+            data-project-id={chapterContext.projectId}
             data-resource-id={chapterContext.resourceId}
             className="tw:flex tw:h-full tw:min-h-0 tw:flex-col"
           >

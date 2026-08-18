@@ -58,6 +58,7 @@ import {
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './find/search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -269,7 +270,7 @@ global.webViewComponent = function FindWebView({
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
 
   const editorWebViewController = useWebViewController(
-    'platformScriptureEditor.react',
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     editorWebViewId,
   );
 

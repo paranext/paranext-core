@@ -327,20 +327,18 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   const [isSelecting, setIsSelecting] = useState(false);
 
-  // resourceProjectId is the search source passed to Find (the displayed resource, not this panel's
-  // projectId). Computed in a useMemo so it's a stable const for the Ctrl+F effect deps and the DBL
-  // lookup isn't repeated on every render.
-  const { resourceProjectId, dblMatch } = useMemo(() => {
-    let resolvedProjectId: string | undefined;
-    let resolvedDblMatch: (typeof dblResources)[number] | undefined;
-    if (isDblResourceReference(selectedRef)) {
-      resolvedDblMatch = findCachedDblResource(selectedRef, dblResources);
-      resolvedProjectId = resolvedDblMatch?.installed ? resolvedDblMatch.projectId : undefined;
-    } else if (isProjectReference(selectedRef)) {
-      resolvedProjectId = selectedRef.id;
-    }
-    return { resourceProjectId: resolvedProjectId, dblMatch: resolvedDblMatch };
-  }, [selectedRef, dblResources]);
+  // resourceProjectId is the search source passed to Find: the project of the resource this panel
+  // is displaying, NOT the panel's own `projectId` prop (that is the container project whose
+  // reference list is shown).
+  let resourceProjectId: string | undefined;
+  let dblMatch: (typeof dblResources)[number] | undefined;
+
+  if (isDblResourceReference(selectedRef)) {
+    dblMatch = findCachedDblResource(selectedRef, dblResources);
+    resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
+  } else if (isProjectReference(selectedRef)) {
+    resourceProjectId = selectedRef.id;
+  }
 
   // Auto-install a selected DBL resource matched in the catalog but not installed locally yet
   // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual

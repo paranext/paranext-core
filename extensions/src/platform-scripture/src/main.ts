@@ -310,6 +310,9 @@ async function openFind(
     editorScrollGroupId,
     bringToFront: true,
     editorWebViewId: editorWebViewIdForFind,
+    // A non-editor trigger has no controller to couple to, so tell the provider to drop whatever
+    // editor id the panel is holding rather than leaving a stale one in place.
+    clearEditorWebViewId: !editorWebViewIdForFind,
     initialSearchText: selectedText,
   };
 
@@ -320,10 +323,11 @@ async function openFind(
     { ...options, existingId: '?', createNewIfNotFound: false },
   );
 
-  // If found an existing web view, reload it when the project differs, when the caller supplied text
-  // to pre-fill (e.g. Ctrl+F with a selection), or when the editor coupling changed — reloading is
-  // the only way fresh options (initialSearchText, a cleared editorWebViewId) reach an already-open
-  // panel. See shouldReloadExistingFind for why the editor-coupling clause matters (stale-id hang).
+  // If found an existing web view, reload it when the project differs, when the caller supplied a
+  // new term to pre-fill (e.g. Ctrl+F with a selection the panel isn't already showing), or when the
+  // editor coupling changed — reloading is the only way fresh options (initialSearchText, a cleared
+  // editorWebViewId) reach an already-open panel. See shouldReloadExistingFind for why the
+  // editor-coupling clause matters (stale-id hang) and why an unchanged term must not reload.
   if (findWebViewId) {
     const existingFindWebViewDefinition =
       await papi.webViews.getOpenWebViewDefinition(findWebViewId);
