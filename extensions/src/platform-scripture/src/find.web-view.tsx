@@ -40,10 +40,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Find, FIND_LOCALIZED_STRING_KEYS } from './find/find.component';
 import {
   applyPreserveCase,
+  armBoundedWait,
+  classifyPollAttempt,
+  GIVE_UP_AFTER_MS,
   gateStartSearch,
   isFindQueryValid,
   isSimpleInterfaceMode,
-  nextPollMissState,
+  POLL_INTERVAL_MS,
 } from './find/find.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
@@ -66,7 +69,7 @@ const WEB_VIEW_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_replacedOneOccurrence%',
   '%webView_find_replacedNOccurrences%',
   '%webView_find_replacementReverted%',
-  '%webView_find_pollConnectionLost%',
+  '%webView_find_searchInterruptedError%',
 ];
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
@@ -428,15 +431,19 @@ global.webViewComponent = function FindWebView({
 
   // Whether the active project can be edited. Replace mutates the project, so it's disabled (with
   // an explanatory tooltip) while this is false; Find itself is read-only and stays unaffected. The
-  // `true` third argument is `useProjectSetting`'s own documented default for the *unset* case
-  // (matching platform.isEditable's platform-level default) and is returned while the setting is
-  // still loading — NOT what's used below. If the read genuinely errors, fail closed (matching this
-  // extension's other permission-adjacent read in use-checklist.ts): the safer default for a
-  // write-gating permission is to assume not-editable rather than silently allow a mutation.
-  const [isEditablePossiblyError] = useProjectSetting(projectId, 'platform.isEditable', true);
-  const isEditable: boolean = isPlatformError(isEditablePossiblyError)
-    ? false
-    : isEditablePossiblyError;
+  // `true` third argument is `useProjectSetting`'s own documented default for the platform-level
+  // *unset* case, returned once the read resolves and the project simply never overrode the
+  // setting — that value is trusted as-is below. Fails closed (matching this extension's other
+  // permission-adjacent read in use-checklist.ts) both while still loading and if the read
+  // genuinely errors: the safer default for a write-gating permission is to assume not-editable
+  // rather than silently allow a mutation before we actually know.
+  const [isEditablePossiblyError, , , isEditableLoading] = useProjectSetting(
+    projectId,
+    'platform.isEditable',
+    true,
+  );
+  const isEditable: boolean =
+    isEditableLoading || isPlatformError(isEditablePossiblyError) ? false : isEditablePossiblyError;
 
   const availableBooksIds = useMemo(() => {
     return getBookIdsFromBooksPresent(booksPresent).filter(
@@ -629,6 +636,16 @@ global.webViewComponent = function FindWebView({
   // becomes available — covering both a mount-time race and findPdp dropping later during a long
   // idle period, not just the first attempt ever.
   const pendingSearchDesiredRef = useRef(false);
+  // Bounds how long a search can sit waiting for findPdp before giving up. Without this, a valid
+  // term with findPdp never arriving would show the pending/loading skeleton forever with no
+  // error — the same silently-stuck-forever failure the poll loop's own give-up treatment exists
+  // to prevent, just one step earlier (before a search job even starts).
+  const pendingSearchWaitRef = useRef<{ clear: () => void } | undefined>(undefined);
+  const clearPendingSearchTimeout = useCallback(() => {
+    pendingSearchWaitRef.current?.clear();
+    pendingSearchWaitRef.current = undefined;
+  }, []);
+  useEffect(() => clearPendingSearchTimeout, [clearPendingSearchTimeout]);
 
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
@@ -638,7 +655,17 @@ global.webViewComponent = function FindWebView({
         isAlreadyStarting: isStartingSearchRef.current,
       });
       if (gate.action === 'skip') {
-        if (gate.shouldRetryWhenPdpReady) pendingSearchDesiredRef.current = true;
+        if (gate.shouldRetryWhenPdpReady) {
+          pendingSearchDesiredRef.current = true;
+          clearPendingSearchTimeout();
+          pendingSearchWaitRef.current = armBoundedWait(() => {
+            pendingSearchWaitRef.current = undefined;
+            if (!pendingSearchDesiredRef.current || !isMountedRef.current) return;
+            pendingSearchDesiredRef.current = false;
+            setSearchStatus('errored');
+            setSearchError(localizedStringsRef.current['%webView_find_searchInterruptedError%']);
+          }, GIVE_UP_AFTER_MS);
+        }
         return;
       }
 
@@ -700,6 +727,7 @@ global.webViewComponent = function FindWebView({
       abandonFindJob,
       addToHistory,
       beginFindJob,
+      clearPendingSearchTimeout,
       findPdp,
       findScope,
       isRegexAllowed,
@@ -779,21 +807,40 @@ global.webViewComponent = function FindWebView({
       if (!isEffectActive) return;
 
       try {
-        const update = await retrieveFindJobUpdate(0);
+        // classifyPollAttempt distinguishes "no active job right now" (most commonly because a new
+        // search's abandonFindJob() already cleared activeJobIdRef synchronously while its PDP
+        // round-trip is still in flight) from a genuine miss — collapsing that distinction
+        // previously caused a false "search interrupted" error on every ordinary new search.
+        const outcome = await classifyPollAttempt({
+          hasActiveJob: !!activeJobIdRef.current,
+          getUpdate: () => retrieveFindJobUpdate(0),
+          consecutiveMisses,
+        });
         if (!isEffectActive) return;
 
-        if (!update) {
-          const missState = nextPollMissState(consecutiveMisses);
-          consecutiveMisses = missState.consecutiveMisses;
-          if (missState.hasExceededRetryLimit) {
+        if (outcome.kind === 'noActiveJob') return;
+
+        if (outcome.kind === 'miss') {
+          consecutiveMisses = outcome.consecutiveMisses;
+          if (outcome.hasExceededRetryLimit) {
             setSearchStatus('errored');
-            setSearchError(localizedStringsRef.current['%webView_find_pollConnectionLost%']);
+            setSearchError(localizedStringsRef.current['%webView_find_searchInterruptedError%']);
+            // Best-effort: we can no longer get updates for this job, so tell the backend to stop
+            // running it rather than leaving it tracked with nothing left polling it.
+            abandonFindJob().catch((error) =>
+              logger.error(
+                `Error abandoning find job after giving up on polling: ${getErrorMessage(error)}`,
+              ),
+            );
             return;
           }
-          timeoutId = setTimeout(checkForUpdates, 100);
+          timeoutId = setTimeout(checkForUpdates, POLL_INTERVAL_MS);
           return;
         }
+
+        // outcome.kind === 'update'
         consecutiveMisses = 0;
+        const { update } = outcome;
 
         setSearchProgress(update.percentComplete);
         setTotalNumberOfResults(update.totalResultsCount);
@@ -808,13 +855,14 @@ global.webViewComponent = function FindWebView({
 
         // Continue polling if the job is still running and this effect is still active
         if (update.status === 'running' && isEffectActive)
-          timeoutId = setTimeout(checkForUpdates, 100);
+          timeoutId = setTimeout(checkForUpdates, POLL_INTERVAL_MS);
       } catch (error) {
         if (isEffectActive) {
-          const message = getErrorMessage(error);
-          logger.error(`Error checking search results: ${message}`);
+          logger.error(`Error checking search results: ${getErrorMessage(error)}`);
           setSearchStatus('errored');
-          setSearchError(message);
+          // A raw exception message isn't localized or meaningful to the user; show the same
+          // generic message the give-up path above shows, and keep the real message in the log.
+          setSearchError(localizedStringsRef.current['%webView_find_searchInterruptedError%']);
         }
       }
     };
@@ -826,7 +874,7 @@ global.webViewComponent = function FindWebView({
       isEffectActive = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [activeJobId, loadMoreResults, retrieveFindJobUpdate]);
+  }, [activeJobId, loadMoreResults, retrieveFindJobUpdate, abandonFindJob]);
 
   // #endregion
 
@@ -983,8 +1031,9 @@ global.webViewComponent = function FindWebView({
   useEffect(() => {
     if (!findPdp || !pendingSearchDesiredRef.current) return;
     pendingSearchDesiredRef.current = false;
+    clearPendingSearchTimeout();
     handleStartSearchRef.current();
-  }, [findPdp]);
+  }, [findPdp, clearPendingSearchTimeout]);
 
   // Reset isPostReplaceSearch once the search finishes so a subsequent search in replace mode
   // (e.g. triggered by an external change) is not mistakenly treated as a post-replace search.
@@ -1497,7 +1546,6 @@ global.webViewComponent = function FindWebView({
       searchTextType={searchTextType}
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
-      isSearchQueryValid={isSearchQueryValid}
       activeMode={isSimpleMode ? 'find' : activeMode}
       hideModeToggle={isSimpleMode}
       replaceTerm={replaceTerm}

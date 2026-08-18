@@ -121,11 +121,11 @@ function buildProps(overrides: Partial<FindProps>): FindProps {
     searchTextType: 'all',
     wordRestriction: 'none',
     isRegexAllowed: false,
-    isSearchQueryValid: true,
     activeMode: 'find',
     replaceTerm: '',
     preserveCase: false,
     isReplacing: false,
+    isEditable: true,
     results: [],
     resultsByBook: new Map(),
     focusedResultIndex: undefined,
@@ -171,7 +171,6 @@ describe('Find — results-area placeholder', () => {
         {...buildProps({
           searchTerm: 'God',
           searchStatus: undefined,
-          isSearchQueryValid: false,
           scope: 'selectedBooks',
           selectedBookIds: [],
         })}
@@ -195,7 +194,6 @@ describe('Find — results-area placeholder', () => {
         {...buildProps({
           searchTerm: 'God',
           searchStatus: undefined,
-          isSearchQueryValid: false,
           scope: 'selectedBooks',
           selectedBookIds: [],
         })}
@@ -210,7 +208,6 @@ describe('Find — results-area placeholder', () => {
         {...buildProps({
           searchTerm: 'God',
           searchStatus: undefined,
-          isSearchQueryValid: true,
         })}
       />,
     );
@@ -225,7 +222,6 @@ describe('Find — results-area placeholder', () => {
         {...buildProps({
           searchTerm: 'God',
           searchStatus: 'running',
-          isSearchQueryValid: true,
         })}
       />,
     );
@@ -318,6 +314,17 @@ describe('Find — permission-blocked Replace (per-result button)', () => {
   it('disables the per-result Replace button when isEditable is false', () => {
     render(<Find {...buildPerResultProps({ isEditable: false })} />);
     expect(screen.getByRole('button', { name: 'Replace card' })).toBeDisabled();
+  });
+
+  it('explains why via a tooltip, matching the toolbar buttons, instead of a silent disable', () => {
+    render(<Find {...buildPerResultProps({ isEditable: false })} />);
+    const button = screen.getByRole('button', { name: 'Replace card' });
+    expect(button).toBeDisabled();
+    // The toolbar's Replace/Replace All are also read-only-blocked in this render, so there are
+    // two matching tooltip wrappers — assert this button's own ancestor specifically.
+    expect(button.closest('[role="group"]')).toHaveAccessibleName(
+      "This project is read-only, so replacements can't be made.",
+    );
   });
 
   it('disables the per-result Replace button when structure is protected and the replacement would change it', () => {

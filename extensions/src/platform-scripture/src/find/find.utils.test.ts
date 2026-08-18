@@ -1,9 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { newPlatformError } from 'platform-bible-utils';
+import { FindJobStatusReport } from 'platform-scripture';
 import {
   applyPreserveCase,
+  armBoundedWait,
   buildSearchRegex,
   CharacterCategorizer,
+  classifyPollAttempt,
   gateStartSearch,
   isFindQueryValid,
   isSimpleInterfaceMode,
@@ -388,6 +391,87 @@ describe('nextPollMissState', () => {
     const result = nextPollMissState(MAX_CONSECUTIVE_POLL_MISSES - 1);
     expect(result.consecutiveMisses).toBe(MAX_CONSECUTIVE_POLL_MISSES);
     expect(result.hasExceededRetryLimit).toBe(true);
+  });
+});
+
+const FAKE_UPDATE: FindJobStatusReport = {
+  jobId: 'job-1',
+  status: 'running',
+  percentComplete: 50,
+  totalResultsCount: 3,
+  totalExecutionTimeMs: 100,
+};
+
+describe('classifyPollAttempt', () => {
+  it('classifies as noActiveJob without calling getUpdate, regardless of what it would return', async () => {
+    const getUpdate = vi.fn(async () => FAKE_UPDATE);
+    const outcome = await classifyPollAttempt({
+      hasActiveJob: false,
+      getUpdate,
+      consecutiveMisses: 0,
+    });
+    expect(outcome).toEqual({ kind: 'noActiveJob' });
+    expect(getUpdate).not.toHaveBeenCalled();
+  });
+
+  it('classifies as update when there is an active job and getUpdate resolves a report', async () => {
+    const outcome = await classifyPollAttempt({
+      hasActiveJob: true,
+      getUpdate: async () => FAKE_UPDATE,
+      consecutiveMisses: 3,
+    });
+    expect(outcome).toEqual({ kind: 'update', update: FAKE_UPDATE });
+  });
+
+  it('classifies as a miss — not noActiveJob — when there IS an active job but getUpdate resolves undefined', async () => {
+    // Regression: a prior version conflated "no job to poll for" with "have a job, couldn't get an
+    // update", which caused a false "search interrupted" error on every ordinary new search.
+    const outcome = await classifyPollAttempt({
+      hasActiveJob: true,
+      getUpdate: async () => undefined,
+      consecutiveMisses: 0,
+    });
+    expect(outcome).toEqual({ kind: 'miss', consecutiveMisses: 1, hasExceededRetryLimit: false });
+  });
+
+  it('reports hasExceededRetryLimit once consecutiveMisses reaches the threshold', async () => {
+    const outcome = await classifyPollAttempt({
+      hasActiveJob: true,
+      getUpdate: async () => undefined,
+      consecutiveMisses: MAX_CONSECUTIVE_POLL_MISSES - 1,
+    });
+    expect(outcome).toEqual({
+      kind: 'miss',
+      consecutiveMisses: MAX_CONSECUTIVE_POLL_MISSES,
+      hasExceededRetryLimit: true,
+    });
+  });
+});
+
+describe('armBoundedWait', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('fires the callback once the delay elapses', () => {
+    const onTimeout = vi.fn();
+    armBoundedWait(onTimeout, 5000);
+    expect(onTimeout).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(5000);
+    expect(onTimeout).toHaveBeenCalledOnce();
+  });
+
+  it('does not fire the callback if cleared before the delay elapses', () => {
+    const onTimeout = vi.fn();
+    const { clear } = armBoundedWait(onTimeout, 5000);
+    vi.advanceTimersByTime(4000);
+    clear();
+    vi.advanceTimersByTime(10_000);
+    expect(onTimeout).not.toHaveBeenCalled();
   });
 });
 

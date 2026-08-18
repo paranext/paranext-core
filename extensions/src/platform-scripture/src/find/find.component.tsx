@@ -46,6 +46,7 @@ import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import React, { useCallback, useMemo, useRef } from 'react';
 import { FindFilters } from './find-filters.component';
 import { LocalizedBookData, SearchTextType } from './find-types';
+import { isFindQueryValid } from './find.utils';
 import {
   FindLogger,
   HidableFindResult,
@@ -149,12 +150,6 @@ export type FindProps = {
   wordRestriction: WordRestriction;
   /** Whether the search string is treated as a regular expression. */
   isRegexAllowed: boolean;
-  /**
-   * Whether the current search term + scope/filters combination would actually run a search (e.g.
-   * false for the `selectedBooks` scope with no books selected). Drives which results-area
-   * placeholder shows while `searchStatus` is `undefined`.
-   */
-  isSearchQueryValid: boolean;
 
   // Mode + replace state
   /** Whether the UI is in find or replace mode. */
@@ -173,8 +168,12 @@ export type FindProps = {
   isReplacing: boolean;
   /** Whether the project's structure is currently protected (replace restrictions apply). */
   isStructureProtected?: boolean;
-  /** Whether the active project can be edited. When false, Replace / Replace All are disabled. */
-  isEditable?: boolean;
+  /**
+   * Whether the active project can be edited. When false, Replace / Replace All (and the per-result
+   * replace action) are disabled. Required (no permissive default) so a call site that forgets to
+   * pass it fails to compile rather than silently re-enabling a mutation.
+   */
+  isEditable: boolean;
   /**
    * Whether the current replacement text itself contains a paragraph/verse marker — guaranteed to
    * be rejected while protected, so Replace is proactively disabled.
@@ -266,13 +265,17 @@ export type FindProps = {
 };
 
 /**
- * Shared layout for the results-area placeholders (idle prompt, invalid-query prompt); the message
- * text itself is rendered by {@link EmptyState}, which already supplies the muted/small text styling
- * and a `role="status"` region so screen readers announce it.
+ * A centered, screen-reader-announced message shown in the results area in place of the results
+ * list (idle prompt, invalid-query prompt). {@link EmptyState} supplies the muted/small text styling
+ * and a `role="status"` region.
  */
-const RESULTS_PLACEHOLDER_WRAPPER_CLASS_NAME =
-  'tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4';
-const RESULTS_PLACEHOLDER_TEXT_CLASS_NAME = 'tw:text-center tw:font-light';
+function ResultsPlaceholder({ id, message }: { id: string; message: string }) {
+  return (
+    <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4">
+      <EmptyState id={id} className="tw:text-center tw:font-light" message={message} />
+    </div>
+  );
+}
 
 /**
  * Presentational find/replace UI. It owns the rendering and the presentational derivations (visible
@@ -295,7 +298,6 @@ export function Find({
   searchTextType,
   wordRestriction,
   isRegexAllowed,
-  isSearchQueryValid,
   activeMode,
   hideModeToggle = false,
   replaceTerm,
@@ -303,7 +305,7 @@ export function Find({
   isReplacing,
   isStructureProtected = false,
   isReplacementStructureChanging = false,
-  isEditable = true,
+  isEditable,
   results,
   resultsByBook,
   focusedResultIndex,
@@ -471,6 +473,12 @@ export function Find({
       handlePageDownResult,
     ],
   );
+
+  // Derived here (not received as a prop) so there is exactly one place that computes this rule —
+  // the container previously passed its own copy as isSearchQueryValid, which drifted from the
+  // Storybook harness's copy and let impossible prop combinations exist in tests. Find already
+  // receives every input the rule needs.
+  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
 
   // Single source of truth for which (if any) results-area placeholder shows, so the three states
   // are mutually exclusive by construction instead of by three separately-maintained boolean
@@ -853,25 +861,19 @@ export function Find({
         {/* Idle placeholder: no search has run yet (e.g. first open, or after clearing the search),
             so the results region would otherwise be blank. */}
         {resultsAreaState === 'idlePrompt' && (
-          <div className={RESULTS_PLACEHOLDER_WRAPPER_CLASS_NAME}>
-            <EmptyState
-              id="find-idle-placeholder"
-              className={RESULTS_PLACEHOLDER_TEXT_CLASS_NAME}
-              message={localizedStrings['%webView_find_searchPrompt%']}
-            />
-          </div>
+          <ResultsPlaceholder
+            id="find-idle-placeholder"
+            message={localizedStrings['%webView_find_searchPrompt%']}
+          />
         )}
         {/* Invalid-query placeholder: a term is present but won't run (e.g. `selectedBooks` scope
             with no books selected — can happen after a project switch invalidates a carried-over
             selection). Distinct from the idle prompt so the user knows why nothing is happening. */}
         {resultsAreaState === 'invalidQueryPrompt' && (
-          <div className={RESULTS_PLACEHOLDER_WRAPPER_CLASS_NAME}>
-            <EmptyState
-              id="find-invalid-query-placeholder"
-              className={RESULTS_PLACEHOLDER_TEXT_CLASS_NAME}
-              message={localizedStrings['%webView_find_selectBooksPrompt%']}
-            />
-          </div>
+          <ResultsPlaceholder
+            id="find-invalid-query-placeholder"
+            message={localizedStrings['%webView_find_selectBooksPrompt%']}
+          />
         )}
         {(() => {
           // Only the first book that has a replaced result gets the cancel handler.
@@ -919,6 +921,7 @@ export function Find({
                 isReplaceMode={activeMode === 'replace'}
                 isReplacing={isReplacing}
                 isReplaceBlocked={isReplaceActionBlocked}
+                replaceBlockedTooltipText={replaceBlockedTooltipText}
                 replaceConfig={replaceConfig}
                 previewOptions={previewOptions}
                 allowInvisibleCharacters={allowInvisibleCharacters}

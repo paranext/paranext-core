@@ -38,8 +38,8 @@ const scopeSelectorLocalizedStrings = getLocalizedStrings([...SCOPE_SELECTOR_STR
 const searchResultLocalizedStrings = getLocalizedStrings([...SEARCH_RESULT_LOCALIZED_STRING_KEYS]);
 // Owned by the webview container (WEB_VIEW_LOCALIZED_STRINGS in find.web-view.tsx), not the
 // presentational Find component, so it's resolved separately from the FIND_LOCALIZED_STRING_KEYS set.
-const pollConnectionLostString = getLocalizedStrings(['%webView_find_pollConnectionLost%'])[
-  '%webView_find_pollConnectionLost%'
+const searchInterruptedErrorString = getLocalizedStrings(['%webView_find_searchInterruptedError%'])[
+  '%webView_find_searchInterruptedError%'
 ];
 
 const DEFAULT_SEARCH_TERM = 'God';
@@ -465,7 +465,6 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       searchTextType={searchTextType}
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
-      isSearchQueryValid={isSearchQueryValid}
       activeMode={activeMode}
       hideModeToggle={config.hideModeToggle}
       previewOptions={previewOptions}
@@ -613,17 +612,17 @@ export const NoBooksSelected: Story = {
 };
 
 /**
- * The find-job poll lost its connection to the data provider (e.g. during an extended idle period)
- * and gave up after repeated retries — the status bar shows the connection-lost error instead of
- * leaving the last-seen progress bar frozen with no feedback.
+ * The find-job poll stalled (e.g. the data provider dropped during an extended idle period) and
+ * gave up after several seconds of retries — the status bar shows an error instead of leaving the
+ * last-seen progress bar frozen with no feedback.
  */
-export const ConnectionLost: Story = {
+export const SearchInterrupted: Story = {
   decorators: [
     createDecorator({
       live: false,
       results: [],
       searchStatus: 'errored',
-      searchError: pollConnectionLostString,
+      searchError: searchInterruptedErrorString,
     }),
   ],
 };

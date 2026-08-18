@@ -54,6 +54,8 @@ type SearchResultsInBookProps = {
    * / Replace All buttons enforce.
    */
   isReplaceBlocked: boolean;
+  /** Explanation shown in a tooltip while `isReplaceBlocked` is true. Forwarded to each result. */
+  replaceBlockedTooltipText: string;
   /** Configuration for the replacement preview (used in replace mode). Forwarded to each result. */
   replaceConfig?: ReplaceConfig;
   /** Options controlling how the replace preview is displayed. Forwarded to each result. */
@@ -85,6 +87,7 @@ export function SearchResultsInBook({
   isReplaceMode,
   isReplacing,
   isReplaceBlocked,
+  replaceBlockedTooltipText,
   replaceConfig,
   previewOptions,
   allowInvisibleCharacters,
@@ -157,6 +160,7 @@ export function SearchResultsInBook({
           isReplaceMode={isReplaceMode}
           isReplacing={isReplacing}
           isReplaceBlocked={isReplaceBlocked}
+          replaceBlockedTooltipText={replaceBlockedTooltipText}
           replaceConfig={replaceConfig}
           previewOptions={previewOptions}
           allowInvisibleCharacters={allowInvisibleCharacters}
