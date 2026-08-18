@@ -89,6 +89,10 @@ export {
   type MarkerPaletteSessionState,
 } from './components/advanced/marker-palette-keydown.util';
 export {
+  filterAndRankPaletteItems,
+  type PaletteFilterMode,
+} from './components/advanced/marker-palette-filter.util';
+export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,
   type FootnoteCallerType,

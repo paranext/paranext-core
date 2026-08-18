@@ -33,6 +33,7 @@
 
 import type { PaletteDriver } from 'platform-bible-utils/experimental';
 import type { MutableRefObject } from 'react';
+import { filterAndRankPaletteItems } from '@/components/advanced/marker-palette-filter.util';
 
 export type MarkerPaletteSessionKind = 'backslash' | 'enter' | 'selection';
 
@@ -44,6 +45,14 @@ export interface MarkerPaletteSessionState {
    * literal run from the document at apply time, so drift here can never corrupt an insert.
    */
   filter: string;
+  /**
+   * The entries the palette offers (marker = the bare code, which is also the palette item's
+   * label). The table needs them to detect a ZERO-MATCH filter on Enter — P9 parity: Enter over
+   * zero matches does nothing and the session stays open, so the table must count matches with the
+   * same per-mode semantics the overlay service filters with ({@link filterAndRankPaletteItems}).
+   * Both session owners already carry their offered items; this exposes them to the table.
+   */
+  items: readonly { marker: string }[];
   /**
    * When set on a `'backslash'` session and it returns true for the current filter, Space COMMITS
    * the palette selection (claimed, like Enter) instead of landing as a literal and dismissing.
@@ -146,8 +155,21 @@ export function handleMarkerPaletteSessionKeyDown(
 
   if (event.key === 'Enter') {
     // In capture, the claim keeps Lexical's KEY_ENTER (paragraph split / note `\fp`) from running
-    // BEFORE the palette commit applies — the popover double-mutation bug.
+    // BEFORE the palette commit applies — the popover double-mutation bug. Claimed even for the
+    // zero-match no-op below: an unclaimed Enter would split the paragraph under the open palette.
     claim(event);
+    const matches = filterAndRankPaletteItems(
+      session.items.map((item) => ({ label: item.marker })),
+      session.filter,
+      session.kind === 'backslash' ? 'passive' : 'active',
+    );
+    if (matches.length === 0) {
+      // P9 parity: Enter over a zero-match filter does NOTHING and the palette stays open — the
+      // user can Backspace the filter wider, Space-commit the typed marker, or Escape out. The
+      // overlay service independently drops a zero-match commit (palette left open), so ending
+      // the session here would orphan the still-mounted overlay over a dead session.
+      return 'continue';
+    }
     driver.commit();
     return 'ended';
   }

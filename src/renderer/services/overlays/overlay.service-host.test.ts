@@ -692,16 +692,18 @@ describe('overlay.service-host', () => {
     });
 
     it('commits the exact marker for a bare-marker palette filtered to "f" (the `\\f` Space/Enter flow)', async () => {
-      // The standard-view marker palette maps items with label = the bare marker (id = marker),
-      // so `startsWith('f')` keeps [f, fig, fr] in original order and index 0 must be `f` itself —
-      // committing anything else would insert the wrong marker on `\f` + Space/Enter.
+      // The standard-view marker palette maps items with label = the bare marker (id = marker).
+      // The context-ordered offer puts prefix-mates BEFORE the exact match (measured: note
+      // content offers [fk, fq, fr, ft, ..., f], and before ranking `\f` + Space committed
+      // `fk`) — the exact-first ranking must resolve `f` itself regardless of context order.
       const request: CommandPaletteRequest = {
         items: [
-          { id: 'add', label: 'add' },
-          { id: 'f', label: 'f' },
-          { id: 'fig', label: 'fig' },
+          { id: 'fk', label: 'fk' },
+          { id: 'fq', label: 'fq' },
           { id: 'fr', label: 'fr' },
-          { id: 'wj', label: 'wj' },
+          { id: 'ft', label: 'ft' },
+          { id: 'nd', label: 'nd' },
+          { id: 'f', label: 'f' },
         ],
         passive: true,
       };
@@ -709,6 +711,27 @@ describe('overlay.service-host', () => {
       await overlayService.updateCommandPalette('test-webview', { filterText: 'f' });
       await overlayService.commitCommandPaletteSelection('test-webview');
       expect(await promise).toBe('f');
+    });
+
+    it('commits the typed marker, not a context-first neighbor, for filter "nd" (the `\\nd` report)', async () => {
+      // The owner's report: typing `\nd` + Space inserted `\fq` — the palette resolved the
+      // FIRST item of an unfiltered/unranked context list instead of the typed marker. With the
+      // filter routed and ranked, the commit resolves exactly what was typed.
+      const request: CommandPaletteRequest = {
+        items: [
+          { id: 'fq', label: 'fq' },
+          { id: 'xt', label: 'xt' },
+          { id: 'addpn', label: 'addpn' },
+          { id: 'nd', label: 'nd' },
+          { id: 'ndx', label: 'ndx' },
+        ],
+        passive: true,
+      };
+      const promise = overlayService.showCommandPalette(request, 'test-webview');
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'n' });
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'nd' });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+      expect(await promise).toBe('nd');
     });
 
     it('should narrow passive palettes by case-insensitive prefix (lowercase filter finds capitalized labels)', async () => {
@@ -723,7 +746,7 @@ describe('overlay.service-host', () => {
       expect(await promise).toBe('fig');
     });
 
-    it('should commit an ACTIVE palette via case-insensitive containment over label and description', async () => {
+    it('should commit an ACTIVE palette via case-insensitive LABEL containment only (no description matching)', async () => {
       const activeRequest: CommandPaletteRequest = {
         items: [
           { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
@@ -732,13 +755,31 @@ describe('overlay.service-host', () => {
       };
       const promise = overlayService.showCommandPalette(activeRequest, 'test-webview');
 
-      // 'normal' appears only in the DESCRIPTION of 'Paragraph (p)', in different case — the
-      // forwarded-keystroke commit path must match it the same way the on-screen list does
-      await overlayService.updateCommandPalette('test-webview', { filterText: 'normal' });
+      // Label containment, different case — matches 'Paragraph (p)' only (description matching
+      // was retired, owner-directed: it buried exact marker matches under description hits).
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'paragraph (p' });
       await overlayService.commitCommandPaletteSelection('test-webview');
 
       expect(getOverlays()).toHaveLength(0);
       expect(await promise).toBe('p');
+    });
+
+    it('should drop the commit and keep the palette open when the filter only matches descriptions', async () => {
+      const activeRequest: CommandPaletteRequest = {
+        items: [
+          { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
+          { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
+        ],
+      };
+      overlayService.showCommandPalette(activeRequest, 'test-webview');
+
+      // 'normal' appears only in a DESCRIPTION — label-only matching sees zero matches, and a
+      // zero-match commit is dropped with the palette left open (P9 zero-match semantics).
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'normal' });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+
+      expect(getOverlays()).toHaveLength(1);
+      await overlayService.dismissCommandPalette('test-webview');
     });
 
     it('should skip disabled items when committing, selecting the next enabled item', async () => {
