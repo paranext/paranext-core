@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SavedWebViewDefinition } from '@papi/core';
+import { deserialize, serialize } from 'platform-bible-utils';
 import type { FindWebViewOptions } from '../find.web-view-provider';
 import { buildFindWebViewState } from './find-web-view-state.utils';
 
@@ -46,21 +47,31 @@ describe('buildFindWebViewState', () => {
       expect(state?.editorWebViewId).toBe('new-editor');
     });
 
-    it('CLEARS a stale saved editor id when openFind passes the key as undefined (panel trigger)', () => {
+    it('CLEARS a stale saved editor id when openFind sets clearEditorWebViewId (panel trigger)', () => {
       const state = buildFindWebViewState(
         savedFind({ editorWebViewId: 'old-editor' }),
-        findOptions({ editorWebViewId: undefined }),
+        findOptions({ editorWebViewId: undefined, clearEditorWebViewId: true }),
       );
       expect(state?.editorWebViewId).toBeUndefined();
     });
 
-    it('preserves the saved editor id when the key is absent (content reload/restore)', () => {
-      // findOptions omits editorWebViewId entirely, mirroring the reload/restore path.
+    it('preserves the saved editor id when neither key is set (content reload/restore)', () => {
+      // findOptions omits both keys entirely, mirroring the reload/restore path.
       const state = buildFindWebViewState(savedFind({ editorWebViewId: 'saved-editor' }), {
         projectId: undefined,
         editorScrollGroupId: undefined,
       });
       expect(state?.editorWebViewId).toBe('saved-editor');
+    });
+
+    it('still clears after the options round-trip the process boundary', () => {
+      // These options are sent to the web view provider over RPC, which serializes them. The clear
+      // signal is a positive `true` precisely so it survives that trip; an `undefined`-valued key
+      // would not be a reliable signal to depend on.
+      const sent = findOptions({ editorWebViewId: undefined, clearEditorWebViewId: true });
+      const received: FindWebViewOptions = deserialize(serialize(sent));
+      const state = buildFindWebViewState(savedFind({ editorWebViewId: 'old-editor' }), received);
+      expect(state?.editorWebViewId).toBeUndefined();
     });
   });
 });

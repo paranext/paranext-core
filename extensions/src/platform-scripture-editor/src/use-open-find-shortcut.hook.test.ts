@@ -4,28 +4,38 @@ import { renderHook } from '@testing-library/react';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 
 // Hoisted so the vi.mock factory below can reference them (the factory is hoisted above imports).
-const { sendCommand, warn } = vi.hoisted(() => ({
+const { sendCommand, warn, debug } = vi.hoisted(() => ({
   sendCommand: vi.fn().mockResolvedValue(undefined),
   warn: vi.fn(),
+  debug: vi.fn(),
 }));
 vi.mock('@papi/frontend', () => ({
   default: { commands: { sendCommand } },
-  logger: { warn },
+  logger: { warn, debug },
 }));
 
-function pressKey(key: string, ctrlKey = true) {
-  window.dispatchEvent(new KeyboardEvent('keydown', { key, ctrlKey }));
+/** Dispatch a keydown and report whether anything called `preventDefault` on it. */
+function pressKey(key: string, ctrlKey = true, extraModifiers: KeyboardEventInit = {}) {
+  const event = new KeyboardEvent('keydown', {
+    key,
+    ctrlKey,
+    cancelable: true,
+    ...extraModifiers,
+  });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
 }
 
 describe('useOpenFindShortcut', () => {
   beforeEach(() => {
     sendCommand.mockClear();
     warn.mockClear();
+    debug.mockClear();
   });
 
-  it('opens Find for the displayed resource on Ctrl+F', () => {
+  it('opens Find for the tab’s scripture on Ctrl+F', () => {
     renderHook(() => useOpenFindShortcut('wv-1', 'resource-proj'));
-    pressKey('f');
+    expect(pressKey('f')).toBe(true);
     expect(sendCommand).toHaveBeenCalledWith(
       'platformScripture.openFind',
       'wv-1',
@@ -34,16 +44,27 @@ describe('useOpenFindShortcut', () => {
     );
   });
 
-  it('is a no-op while no resource is displayed', () => {
+  it('logs and leaves the keystroke alone while no scripture is resolved', () => {
     renderHook(() => useOpenFindShortcut('wv-1', undefined));
-    pressKey('f');
+    // Not swallowed: Find never goes silent, and the reason is diagnosable in the log.
+    expect(pressKey('f')).toBe(false);
     expect(sendCommand).not.toHaveBeenCalled();
+    expect(debug).toHaveBeenCalled();
   });
 
   it('ignores keys other than Ctrl+F', () => {
     renderHook(() => useOpenFindShortcut('wv-1', 'resource-proj'));
     pressKey('g');
     pressKey('f', false);
+    expect(sendCommand).not.toHaveBeenCalled();
+  });
+
+  it('leaves Ctrl+F combined with another modifier for whoever binds it', () => {
+    // The hook runs in every scripture tab, so a loose match would swallow these app-wide.
+    renderHook(() => useOpenFindShortcut('wv-1', 'resource-proj'));
+    expect(pressKey('f', true, { shiftKey: true })).toBe(false);
+    expect(pressKey('f', true, { altKey: true })).toBe(false);
+    expect(pressKey('f', true, { metaKey: true })).toBe(false);
     expect(sendCommand).not.toHaveBeenCalled();
   });
 

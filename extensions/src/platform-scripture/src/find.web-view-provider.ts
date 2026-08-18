@@ -21,6 +21,14 @@ export interface FindWebViewOptions extends OpenWebViewOptions {
    */
   editorWebViewId?: string;
   /**
+   * Drop any editor id the Find WebView already holds instead of keeping it. Set by `openFind` when
+   * the trigger is not a Scripture editor, so a stale coupling from a prior open-from-editor cannot
+   * survive. A positive flag rather than "`editorWebViewId` present but `undefined`", because these
+   * options cross a process boundary and an explicit `true` cannot be lost the way an
+   * `undefined`-valued key can.
+   */
+  clearEditorWebViewId?: boolean;
+  /**
    * Text to pre-fill in the search field when the Find WebView opens. If provided, the find panel
    * will populate the search input with this text and immediately run a search.
    */
@@ -47,7 +55,20 @@ export class FindWebViewProvider implements IWebViewProvider {
       projectId,
       content: findWebView,
       styles: tailwindStyles,
-      scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
+      // Fall back to the saved group when the caller supplies none, so a trigger with no scroll
+      // group of its own (a read-only reference panel, or a content reload/restore, which passes no
+      // options at all) leaves an already-grouped Find panel in the group it was following.
+      //
+      // Deliberate consequence: the reference panels are intentionally in NO scroll group in simple
+      // mode (see createResourceTextPanelProvider in platform-scripture-editor/src/main.ts), so a
+      // panel-triggered Find keeps whatever group a previous editor-triggered Find left it in —
+      // usually 0. Clicking a result then moves the scripture editor to that reference. That is the
+      // better of the two available behaviors: the alternative (take the panel's own `undefined`)
+      // leaves Find in no group at all, and since a panel trigger also clears the editor-controller
+      // coupling, clicking a result would move nothing on screen. Neither option can navigate the
+      // panel itself; driving the triggering panel needs a controller the read-only panels do not
+      // register (PT-4372).
+      scrollGroupScrRef: getWebViewOptions.editorScrollGroupId ?? savedWebView.scrollGroupScrRef,
       state: buildFindWebViewState(savedWebView, getWebViewOptions),
     };
   }

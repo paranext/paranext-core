@@ -44,6 +44,7 @@ import { useChecklistService } from './hooks/use-checklist';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { computeRangeFromScope } from './components/compute-range-from-scope.utils';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -628,7 +629,7 @@ global.webViewComponent = function ChecklistWebView({
 
   // ─── Editor-tab tracking (for goto focus, Q4-C) ───────────────────────────
   const editorTabsFilter = useCallback(
-    (wv: { webViewType: string }) => wv.webViewType === 'platformScriptureEditor.react',
+    (wv: { webViewType: string }) => wv.webViewType === SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     [],
   );
   const editorTabs = useOpenProjectTabs(editorTabsFilter);

@@ -316,6 +316,13 @@ export type SavedWebViewDefinition = (
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
 
 /**
+ * The `webViewType` of the Find web view provided by the `platform-scripture` extension. Must match
+ * `findWebViewType` in `extensions/src/platform-scripture/src/find.web-view-provider.ts` — core
+ * code cannot import extension source, so the value is mirrored here as the single core-side copy.
+ */
+export const FIND_WEBVIEW_TYPE = 'platformScripture.find';
+
+/**
  * Finds the first open Scripture editor web view that has a project (first match in the given
  * order, which is dock-layout order for the open web view lists) — the shared "current project
  * editor" rule used by the project picker and by BCV navigation-target resolution so the two can
