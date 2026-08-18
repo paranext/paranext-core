@@ -354,10 +354,16 @@ export type BookGridSelectorProps = {
    */
   getRowAriaLabel?: (item: BookGridItem) => string;
   /**
-   * Book id to scroll into view once on mount — used when Manage Books is launched targeting a
-   * specific book. Ignored when the book is not in `items`.
+   * Book id to scroll into view on mount — used when Manage Books is launched targeting a specific
+   * book. Ignored when the book is not in `items`.
    */
   scrollToBook?: string;
+  /**
+   * Bump this (any new number) to scroll to `scrollToBook` again on an already-mounted grid — it
+   * carries the Manage Books launch token, so the scroll re-runs exactly once per relaunch and
+   * never on an unrelated re-render.
+   */
+  scrollToken?: number;
 };
 
 export function BookGridSelector({
@@ -377,6 +383,7 @@ export function BookGridSelector({
   onRangeToggle,
   getRowAriaLabel,
   scrollToBook,
+  scrollToken,
 }: BookGridSelectorProps) {
   const groups = useMemo<{ label?: string; items: BookGridItem[] }[]>(() => {
     if (groupBy === 'none') {
@@ -603,10 +610,13 @@ export function BookGridSelector({
     if (!scrollToBook) return;
     const target = scrollContainerRef.current?.querySelector(`[data-book="${scrollToBook}"]`);
     target?.scrollIntoView({ block: 'center' });
-    // Mount-only by design: re-scrolling on a later `scrollToBook` change would yank the view out
-    // from under a user who has since scrolled elsewhere.
+    // Deliberately keyed on `scrollToken` alone (plus mount): re-scrolling on every `scrollToBook`
+    // change would yank the view out from under a user who has since scrolled elsewhere, but a new
+    // launch token means the user just asked for this book again, so honoring it is what they
+    // expect. `scrollToBook` is read, not depended on, for exactly that reason — the exhaustive-deps
+    // rule cannot express "read this, but only re-run for that".
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [scrollToken]);
 
   const outOfScopeText = localizedStrings?.outOfScope ?? 'Out of scope';
   const untrackedText = localizedStrings?.untracked ?? 'Untracked';

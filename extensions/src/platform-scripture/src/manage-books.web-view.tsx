@@ -326,6 +326,11 @@ global.webViewComponent = function ManageBooksWebView({
     'initialSelectedBooks',
     undefined,
   );
+  // Identifies WHICH launch the two values above came from. `reloadWebView` does not remount this
+  // web view (the iframe content is unchanged), so a relaunch arrives as a plain prop change on the
+  // existing React tree; the token is what distinguishes it from an unrelated re-render, and it
+  // changes even when the launch parameters repeat verbatim.
+  const [launchToken] = useWebViewState<number | undefined>('launchToken', undefined);
 
   // The EXPLICIT open context wins over persisted state: the dialog is only
   // opened from a scripture editor's hamburger menu, so a fresh
@@ -337,6 +342,18 @@ global.webViewComponent = function ManageBooksWebView({
   const [projectId, setProjectIdLocal] = useState<string>(
     () => initialProjectId || persistedProjectId || '',
   );
+
+  // ...and on a RELAUNCH the same rule applies: the mount-only initializer above cannot see the new
+  // `initialProjectId` that `openManageBooks` just supplied, so re-seed it when the launch token
+  // changes. Guarded by a ref seeded with the mount-time token so first-mount behavior is unchanged
+  // and unrelated re-renders (including the user's own in-dialog project switches) never get
+  // clobbered.
+  const lastAppliedLaunchTokenRef = useRef(launchToken);
+  useEffect(() => {
+    if (launchToken === undefined || launchToken === lastAppliedLaunchTokenRef.current) return;
+    lastAppliedLaunchTokenRef.current = launchToken;
+    if (initialProjectId) setProjectIdLocal(initialProjectId);
+  }, [launchToken, initialProjectId]);
 
   // Pull all the localization strings the dialog + picker need in one batch. Including the
   // picker keys here ensures the inline-rendered picker reads from the same string map and
@@ -1071,6 +1088,7 @@ global.webViewComponent = function ManageBooksWebView({
         projectId={projectId}
         initialSection={initialSection}
         initialSelectedBooks={initialSelectedBooks}
+        launchToken={launchToken}
         onProjectIdChange={setProjectIdLocal}
         loadProjects={loadProjects}
         loadBooks={loadBooks}

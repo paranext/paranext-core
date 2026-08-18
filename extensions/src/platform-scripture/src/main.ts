@@ -231,6 +231,15 @@ async function openMarkersChecklistSettings(): Promise<void> {
 }
 
 /**
+ * Monotonically increasing launch token stamped onto every `openManageBooks` invocation. The
+ * already-open path below only re-renders the existing dialog (the iframe content is unchanged, so
+ * `reloadWebView` does NOT remount it) — a changed token is therefore the ONLY signal the dialog
+ * has that a NEW launch happened. Value comparison is not enough: two consecutive create-missing-
+ * book launches for the same book produce identical `initialSection`/`initialSelectedBooks`.
+ */
+let manageBooksLaunchToken = 0;
+
+/**
  * FN-008 (2026-05-01): Open the unified Manage Books dialog as a centered floating window. The
  * optional argument is either an editor's `webViewId` (from a scripture-editor menu) or a literal
  * project id — we probe with `papi.webViews.getOpenWebViewDefinition`, and if it doesn't resolve to
@@ -258,7 +267,8 @@ async function openManageBooks(
     }
   }
 
-  const options: ManageBooksWebViewOptions = { projectId };
+  manageBooksLaunchToken += 1;
+  const options: ManageBooksWebViewOptions = { projectId, launchToken: manageBooksLaunchToken };
 
   // Only the intent is passed by the caller; the target book is derived from the calling editor's
   // scroll-group reference rather than plumbed through the command signature.
@@ -297,12 +307,15 @@ async function openManageBooks(
     createNewIfNotFound: false,
   });
   if (existingId) {
-    // Bring the existing tab to the front and update it with the new project context. Reloading is
-    // also how `initialSection`/`initialSelectedBooks` reach an already-open dialog; without it a
-    // second click on the editor's Manage books button would silently do nothing. Mirrors
-    // `openFind`'s reload-when-`selectedText`-present branch. The panel is deliberately NOT resized
-    // to the intent float size here — resizing a window the user already placed is more surprising
-    // than leaving it.
+    // Bring the existing tab to the front and hand it the new launch parameters. Reloading does NOT
+    // remount the dialog — the generated web view `content` is unchanged, so the iframe is kept and
+    // only the saved state is updated — so the parameters land as fresh props on the SAME React
+    // tree. That is why they are stamped with `launchToken`: the dialog applies them in an effect
+    // keyed on the token, which is what makes a second click on the editor's Manage books button do
+    // something instead of silently keeping the previous section. Mirrors `openFind`'s
+    // reload-when-`selectedText`-present branch. The panel is deliberately NOT resized to the intent
+    // float size here — resizing a window the user already placed is more surprising than leaving
+    // it.
     await papi.webViews.reloadWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, existingId, options);
     return existingId;
   }

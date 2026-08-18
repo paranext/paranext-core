@@ -2,9 +2,12 @@
 
 import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from 'platform-bible-react';
 import { BookGridSelector, type BookGridItem } from './book-grid.component';
+
+const originalScrollIntoView = Element.prototype.scrollIntoView;
+const originalQuerySelectorAll = Element.prototype.querySelectorAll;
 
 beforeAll(() => {
   if (typeof globalThis.ResizeObserver === 'undefined') {
@@ -27,7 +30,6 @@ beforeAll(() => {
   // pseudo-class (see the same workaround in
   // semantic-domain-viewer.test.tsx's getRowButton/getLabelButton). That effect is unrelated to
   // scrollToBook, so patch the one selector here rather than touching production code.
-  const origQuerySelectorAll = Element.prototype.querySelectorAll;
   Element.prototype.querySelectorAll = function scopedQuerySelectorAll<E extends Element>(
     selectors: string,
   ) {
@@ -41,8 +43,15 @@ beforeAll(() => {
     // `Element.prototype.querySelectorAll` is a generic overload; `.call` widens the return to
     // NodeListOf<Element>, so it needs re-narrowing to the caller's element type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return origQuerySelectorAll.call(this, selectors) as NodeListOf<E>;
+    return originalQuerySelectorAll.call(this, selectors) as NodeListOf<E>;
   };
+});
+
+afterAll(() => {
+  // Both patches are on shared prototypes, so restore them rather than leaking the stubs into any
+  // other suite that happens to share this worker.
+  Element.prototype.scrollIntoView = originalScrollIntoView;
+  Element.prototype.querySelectorAll = originalQuerySelectorAll;
 });
 
 beforeEach(() => {
@@ -100,6 +109,55 @@ describe('BookGridSelector scrollToBook', () => {
     );
 
     expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('scrolls again when the scroll token changes', () => {
+    const { rerender } = render(
+      <TooltipProvider>
+        <BookGridSelector
+          items={ITEMS}
+          selected={new Set(['MRK'])}
+          onToggle={vi.fn()}
+          groupBy="none"
+          scrollToBook="MRK"
+          scrollToken={1}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+
+    // A re-render with the same token is not a new launch — the user may have scrolled since.
+    rerender(
+      <TooltipProvider>
+        <BookGridSelector
+          items={ITEMS}
+          selected={new Set(['MRK'])}
+          onToggle={vi.fn()}
+          groupBy="none"
+          scrollToBook="MRK"
+          scrollToken={1}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+
+    // A new token means Manage Books was relaunched for this book, so scroll to it again.
+    rerender(
+      <TooltipProvider>
+        <BookGridSelector
+          items={ITEMS}
+          selected={new Set(['GEN'])}
+          onToggle={vi.fn()}
+          groupBy="none"
+          scrollToBook="GEN"
+          scrollToken={2}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(2);
   });
 
   it('does not scroll when the named book is not in the grid', () => {

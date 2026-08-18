@@ -42,17 +42,19 @@ describe('ManageBooksWebViewProvider transient launch options', () => {
         projectId: 'project-1',
         initialSection: 'create',
         initialSelectedBooks: ['GEN'],
+        launchToken: 7,
       } as never,
     );
 
     expect(result?.state?.initialSection).toBe('create');
     expect(result?.state?.initialSelectedBooks).toEqual(['GEN']);
+    expect(result?.state?.launchToken).toBe(7);
   });
 
   it('scrubs stale launch options carried on the saved state when options omit them', async () => {
     const staleSavedWebView = {
       ...savedWebView,
-      state: { initialSection: 'create', initialSelectedBooks: ['GEN'] },
+      state: { initialSection: 'create', initialSelectedBooks: ['GEN'], launchToken: 7 },
     };
 
     const result = await provider.getWebView(
@@ -66,15 +68,17 @@ describe('ManageBooksWebViewProvider transient launch options', () => {
       } as never,
     );
 
-    // A restored layout must never reopen on Create with a stale preselection.
+    // A restored layout must never reopen on Create with a stale preselection, and must not carry a
+    // stale token that would make the dialog re-apply one.
     expect(result?.state?.initialSection).toBeUndefined();
     expect(result?.state?.initialSelectedBooks).toBeUndefined();
+    expect(result?.state?.launchToken).toBeUndefined();
   });
 
   it('preserves unrelated saved state while scrubbing the launch options', async () => {
     const staleSavedWebView = {
       ...savedWebView,
-      state: { initialSection: 'create', somethingElse: 'keep me' },
+      state: { initialSection: 'create', launchToken: 7, somethingElse: 'keep me' },
     };
 
     const result = await provider.getWebView(
@@ -89,6 +93,7 @@ describe('ManageBooksWebViewProvider transient launch options', () => {
     );
 
     expect(result?.state?.initialSection).toBeUndefined();
+    expect(result?.state?.launchToken).toBeUndefined();
     expect(result?.state?.somethingElse).toBe('keep me');
   });
 });

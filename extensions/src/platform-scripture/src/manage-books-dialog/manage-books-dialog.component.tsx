@@ -264,16 +264,23 @@ export type ManageBooksDialogProps = {
   projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 
   /**
-   * Section to open on first mount. Defaults to `'view'`. Applied once at mount — later changes are
-   * ignored, because the user's in-dialog navigation must not be overridden by a stale launch
-   * value.
+   * Section to open on. Defaults to `'view'`. Applied at mount, and again whenever `launchToken`
+   * changes; a change to this prop WITHOUT a new token is ignored, because the user's in-dialog
+   * navigation must not be overridden by a stale launch value.
    */
   initialSection?: ManageBooksAction;
   /**
-   * Book ids preselected for `initialSection` on first mount. Applied once at mount, same rationale
-   * as `initialSection`.
+   * Book ids preselected for `initialSection`. Applied at mount and on every `launchToken` change,
+   * same rationale as `initialSection`.
    */
   initialSelectedBooks?: string[];
+  /**
+   * Identifies the launch the two props above came from. Bump it (any new number) to re-apply them
+   * — the dialog can stay mounted across relaunches, and consecutive launches can repeat the same
+   * section and books, so the values alone cannot say "this is a new launch". Leave it undefined
+   * when the launch parameters only ever apply at mount.
+   */
+  launchToken?: number;
 };
 
 // --------------------------------------------------------------------------
@@ -543,6 +550,7 @@ export function ManageBooksDialog({
   projectSelectorLocalizedStrings,
   initialSection,
   initialSelectedBooks,
+  launchToken,
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
@@ -622,6 +630,7 @@ export function ManageBooksDialog({
       ? { [initialSection]: new Set(initialSelectedBooks) }
       : {},
   );
+
   const [filter, setFilter] = useState('');
   const [copySourceId, setCopySourceId] = useState<string | undefined>(undefined);
   // Default Create method is "Create based on" (FromTemplate): the prompt copy reads "Create based
@@ -850,8 +859,37 @@ export function ManageBooksDialog({
     [action],
   );
 
-  // Project change wipes selections; nothing carries across projects.
-  useEffect(() => setSelectionsByAction({}), [projectId]);
+  // Project change wipes selections; nothing carries across projects. Guarded by a ref rather than
+  // firing on the effect's first run: at mount there is nothing to carry across, and an unguarded
+  // wipe would immediately clear the launch preselection that `selectionsByAction`'s initializer
+  // just applied.
+  const selectionProjectIdRef = useRef(projectId);
+  useEffect(() => {
+    if (selectionProjectIdRef.current === projectId) return;
+    selectionProjectIdRef.current = projectId;
+    setSelectionsByAction({});
+  }, [projectId]);
+
+  // A relaunch (`openManageBooks` called again while the dialog is already open) re-renders this
+  // tree rather than remounting it, so the lazy initializers for `action`/`selectionsByAction` never
+  // see the new launch values. Re-apply them here, keyed strictly on the launch token: the ref is
+  // seeded with the mount-time token so first mount is a no-op (the initializers already did the
+  // work), and re-renders that do not change the token leave the user's own navigation and
+  // selections alone. Declared AFTER the project-change wipe above so that when a relaunch also
+  // switches project, this effect's selection write is the one that survives the commit.
+  const lastAppliedLaunchTokenRef = useRef(launchToken);
+  useEffect(() => {
+    if (launchToken === undefined || launchToken === lastAppliedLaunchTokenRef.current) return;
+    lastAppliedLaunchTokenRef.current = launchToken;
+    if (!initialSection) return;
+    setAction(initialSection);
+    // Only the launched section's selection is replaced; selections the user made in OTHER sections
+    // are left intact, matching how a section switch behaves the rest of the time.
+    setSelectionsByAction((prev) => ({
+      ...prev,
+      [initialSection]: new Set(initialSelectedBooks ?? []),
+    }));
+  }, [launchToken, initialSection, initialSelectedBooks]);
 
   // Changing the copy source invalidates the copy selection (we re-seed it below with defaults).
   useEffect(() => {
@@ -2434,6 +2472,7 @@ export function ManageBooksDialog({
                       localizedStrings={bookGridStrings}
                       getRowAriaLabel={gridRowAriaLabel}
                       scrollToBook={initialSelectedBooks?.[0]}
+                      scrollToken={launchToken}
                       // Leave BookGridSelector's default tw:p-1 in place so the
                       // first pill checkbox horizontally aligns with the
                       // toolbar's select-all checkbox. A `tw:px-0` override would

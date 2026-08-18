@@ -101,6 +101,7 @@ import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapte
 import {
   BookNotAvailableView,
   BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
+  type ManageBooksDisabledReason,
 } from './book-not-available-view.component';
 import {
   ShareLayoutButton,
@@ -531,6 +532,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
     [isReadOnly, isSyncBlocked, viewType],
   );
+
+  /**
+   * Why the "Manage books" action on the book-not-available zero-state cannot be taken right now,
+   * or `undefined` when it can. Derived from `isReadOnlyEffective` so the disabled state and the
+   * reason can never disagree (including the markers-view dev override), then narrowed to the
+   * specific cause so the tooltip tells the user something true.
+   */
+  const manageBooksDisabledReason = useMemo<ManageBooksDisabledReason | undefined>(() => {
+    if (!isReadOnlyEffective) return undefined;
+    if (isReadOnly) return 'readOnly';
+    if (isSyncBlocked) return 'syncInProgress';
+    return 'markersView';
+  }, [isReadOnlyEffective, isReadOnly, isSyncBlocked]);
 
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
   // paragraph/verse markers in the editor (fed into EditorOptions.structureProtectionMode below). The
@@ -1916,12 +1930,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           <BookNotAvailableView
             localizedStrings={localizedStrings}
             isPowerMode={isPowerMode}
-            // Simple never offers the button (handled inside the component); in Power it is gated on
-            // editability so Donna is not sent to a locked Create section. `isReadOnlyEffective`
-            // folds in the project's `platform.isEditable` setting and the user's Scripture-edit
-            // role once PT-4339 lands; before then it reflects the `isReadOnly` web-view state flag,
-            // which fails closed (button hidden) — correct against either base.
-            showManageBooksButton={!isReadOnlyEffective}
+            // Simple never offers the button (handled inside the component); Power always shows it,
+            // because the Power description promises the action. When the action is unavailable the
+            // button renders disabled with a reason tooltip instead of vanishing.
+            showManageBooksButton
+            manageBooksDisabledReason={manageBooksDisabledReason}
             onOpenManageBooks={() =>
               papi.commands.sendCommand(
                 'platformScripture.openManageBooks',

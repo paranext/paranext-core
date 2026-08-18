@@ -454,7 +454,9 @@ step, no automation. Just a record.
 ## ADR-0014: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
 - **Date:** 2026-08-18
-- **Status:** Accepted
+- **Status:** Accepted, except for delivery to an already-open instance — superseded in that part by
+  ADR-0015. Points (1)-(3) stand; point (4) and the "a nonce or launch token — rejected" alternative
+  rest on a premise that proved false.
 - **Context:** Opening a tool web view sometimes needs a value that applies to *this* launch only —
   text to pre-fill, a section to land on, a row to pre-select — as distinct from the durable state the
   web view persists. The pattern existed in the codebase but was never written down: `openFind` takes
@@ -493,3 +495,42 @@ step, no automation. Just a record.
   on persisted slots.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
+
+## ADR-0015: A launch token is required to deliver launch parameters to an already-open web view
+
+- **Date:** 2026-08-18
+- **Status:** Accepted (supersedes ADR-0014's delivery mechanism)
+- **Context:** ADR-0014 rejected a launch token on the stated premise that force-calling
+  `reloadWebView` re-triggers the launch. Code review traced the call and found the premise false.
+  `reloadWebView` -> `openOrReloadWebView` (`src/renderer/services/web-view.service-host.ts`) calls the
+  provider's `getWebView` and saves the new state, but the iframe is **not** reloaded: the generated
+  `content` string and per-id nonce are unchanged, so only `onDidUpdateWebView` fires
+  (`src/renderer/components/web-view.component.tsx` re-sets `srcDoc` only when `content` changes). The
+  existing React root re-renders and never unmounts. `useWebViewState` does surface the new values, but
+  ADR-0014's prescribed consumer shape — a lazy `useState` initializer — does not re-run on re-render,
+  and a mount-only `useLayoutEffect([])` does not re-fire. Net user-visible effect for PT-4111: with
+  Manage Books already open, choosing "Manage books" from the not-available view fronted the tab but
+  left it on the previous section with no preselection and no scroll — the feature's core affordance
+  silently no-opped. Implementing the fix surfaced a second latent bug: a `useEffect` resetting
+  `selectionsByAction` on `projectId` also ran on mount, wiping the lazy-initialized preselection, so
+  even the *first*-launch case never worked.
+- **Decision:** Carry a monotonically increasing **launch token** in the web view's options alongside
+  the launch parameters, bumped on every `open*` invocation, scrubbed by the same unconditional
+  assignment ADR-0014 point (3) prescribes. Consumers apply launch parameters in an **effect keyed on
+  the token**, not in a lazy `useState` initializer. A token — rather than comparing the parameter
+  values — is required because two consecutive identical launches produce identical parameters and are
+  otherwise indistinguishable.
+- **Alternatives:** **Compare parameter values and re-apply on change** — rejected: cannot distinguish
+  a repeat launch with the same parameters, which is a normal case. **Remount via a `key` derived from
+  the token** — viable and simpler to reason about, but discards all unrelated in-dialog state (scroll,
+  other sections' selections) that the user may care about; the keyed effect preserves it. **Make
+  `reloadWebView` genuinely reload the iframe** — rejected as out of scope and far more disruptive: it
+  would change behavior for every existing caller.
+- **Consequences:** ADR-0014's "no re-apply effect" consequence is reversed; the re-apply is scoped so
+  it overrides only the launched-to section's selection and leaves the user's other in-dialog state
+  intact. The same token fixes the sibling case where `projectId` was seeded by a mount-only
+  initializer, so "reload updates the existing tab with the new project context" now holds. The
+  already-open relaunch path needs a test — it is invisible in the mount-only tests that previously
+  covered this feature (see `manage-books-dialog.component.test.tsx`). More generally: `reloadWebView`
+  should not be assumed to remount anything.
+- **Source:** PT-4111 `/review-paratext` code review; corrects ADR-0014.

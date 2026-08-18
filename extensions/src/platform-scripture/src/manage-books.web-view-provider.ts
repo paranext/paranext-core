@@ -37,6 +37,13 @@ export interface ManageBooksWebViewOptions extends GetWebViewOptions {
   initialSection?: ManageBooksAction;
   /** Book ids to pre-select in `initialSection`. TRANSIENT — same scrubbing as `initialSection`. */
   initialSelectedBooks?: string[];
+  /**
+   * Monotonically increasing token identifying THIS launch. Bumped by `openManageBooks` on every
+   * invocation so an already-open dialog can tell a new launch from an unrelated re-render — the
+   * launch parameters above can repeat verbatim, so their values alone cannot signal a relaunch.
+   * TRANSIENT — same scrubbing as `initialSection`.
+   */
+  launchToken?: number;
 }
 
 /**
@@ -97,8 +104,8 @@ export class ManageBooksWebViewProvider implements IWebViewProvider {
       state: {
         ...savedWebView.state,
         webViewType: MANAGE_BOOKS_WEB_VIEW_TYPE,
-        // Always rebuild from the CURRENT options, never from saved state. These two keys are
-        // transient launch parameters owned by the `openManageBooks` create-missing-book path: they
+        // Always rebuild from the CURRENT options, never from saved state. These three keys are
+        // transient launch parameters owned by the `openManageBooks` launch path: they
         // must apply to the open/reload call that supplied them and to nothing else. Assigning
         // unconditionally (rather than spreading only when present) is what scrubs a stale value off
         // a restored layout — otherwise reopening the app with the dialog still docked would jump to
@@ -106,6 +113,7 @@ export class ManageBooksWebViewProvider implements IWebViewProvider {
         // scrub in platform-scripture-editor's main.ts and legacy-comment-manager's main.ts.
         initialSection: getWebViewOptions.initialSection,
         initialSelectedBooks: getWebViewOptions.initialSelectedBooks,
+        launchToken: getWebViewOptions.launchToken,
       },
       shouldShowToolbar: false,
     };
