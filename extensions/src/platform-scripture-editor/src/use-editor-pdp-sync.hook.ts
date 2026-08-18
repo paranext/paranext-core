@@ -3,6 +3,13 @@ import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { areUsjContentsEqualExceptWhitespace } from 'platform-bible-utils';
 import { MutableRefObject, useEffect, useRef } from 'react';
+import {
+  areUsjContentDivergencesEquivalent,
+  describeUsjContentDivergence,
+  describeUsjContentDivergenceInFull,
+  detectUsjContentDivergence,
+  type UsjContentDivergence,
+} from './usj-content-divergence.util';
 
 /**
  * How many consecutive PDP updates may be deferred to the actively-edited chapter (kept unapplied)
@@ -32,91 +39,6 @@ function areSameDocumentSelectors(
   if (!a || !b) return false;
   return (
     a.book === b.book && a.chapterNum === b.chapterNum && a.versificationStr === b.versificationStr
-  );
-}
-
-/**
- * A single top-level USJ content entry wrapped as its own one-entry document, so it can be
- * whitespace-insensitively compared with `areUsjContentsEqualExceptWhitespace`. An absent entry
- * (`undefined`, one side shorter than the other) wraps to an empty document, so it compares unequal
- * to any present entry.
- */
-function wrapSingleUsjEntry(entry: Usj['content'][number] | undefined): Usj {
-  return { type: 'USJ', version: '3.1', content: entry === undefined ? [] : [entry] };
-}
-
-/**
- * The first place two USJ documents SIGNIFICANTLY differ in their top-level `content`, or
- * `undefined` when they agree there (differing only in whitespace or in fields outside top-level
- * content). Each entry pair is compared with the SAME whitespace-insignificant equality the sync
- * itself uses (`areUsjContentsEqualExceptWhitespace`, applied to a single-entry document), so the
- * result points at the first SIGNIFICANT difference rather than a cosmetic whitespace one.
- *
- * Only top-level content is walked (not recursed into nested marker content): it is enough to
- * identify WHICH entry diverged both for a diagnostic log line and for keying the warn-once dedup,
- * and it keeps the output bounded and cheap.
- */
-function firstSignificantUsjContentDifference(
-  sent: Usj | undefined,
-  received: Usj | undefined,
-):
-  | { index: number; sentEntry?: Usj['content'][number]; receivedEntry?: Usj['content'][number] }
-  | undefined {
-  const sentContent = sent?.content ?? [];
-  const receivedContent = received?.content ?? [];
-  const length = Math.max(sentContent.length, receivedContent.length);
-  for (let index = 0; index < length; index += 1) {
-    const sentEntry = sentContent[index];
-    const receivedEntry = receivedContent[index];
-    const differs =
-      sentEntry !== undefined && receivedEntry !== undefined
-        ? !areUsjContentsEqualExceptWhitespace(
-            wrapSingleUsjEntry(sentEntry),
-            wrapSingleUsjEntry(receivedEntry),
-          )
-        : sentEntry !== receivedEntry;
-    if (differs) return { index, sentEntry, receivedEntry };
-  }
-  return undefined;
-}
-
-/**
- * Best-effort, BOUNDED description of the first significant difference between two USJ documents'
- * top-level `content` — for a diagnostic log line, never a full-document dump. Each side is
- * truncated so a large chapter cannot flood the log.
- */
-function describeFirstUsjContentDifference(
-  sent: Usj | undefined,
-  received: Usj | undefined,
-): string {
-  const MAX_SNIPPET_LENGTH = 200;
-  const truncate = (entry: Usj['content'][number] | undefined): string => {
-    if (entry === undefined) return '(absent)';
-    const text = JSON.stringify(entry);
-    return text.length > MAX_SNIPPET_LENGTH ? `${text.slice(0, MAX_SNIPPET_LENGTH)}…` : text;
-  };
-  const difference = firstSignificantUsjContentDifference(sent, received);
-  if (!difference) {
-    return 'documents differ outside top-level content (or in whitespace-insignificant fields only)';
-  }
-  return `content[${difference.index}]: sent ${truncate(difference.sentEntry)} vs received ${truncate(difference.receivedEntry)}`;
-}
-
-/**
- * The two differing entries in full, for the ONE warning a given difference ever produces. The
- * bounded summary above is what a repeated line should carry; a defect that fires once needs enough
- * bytes to attribute — the divergences this catches are single-character whitespace shifts inside a
- * span, which a 200-character truncation can hide entirely.
- */
-function describeFullUsjContentDifference(
-  sent: Usj | undefined,
-  received: Usj | undefined,
-): string {
-  const difference = firstSignificantUsjContentDifference(sent, received);
-  if (!difference) return '';
-  return (
-    `\nFull sent entry: ${JSON.stringify(difference.sentEntry)}` +
-    `\nFull received entry: ${JSON.stringify(difference.receivedEntry)}`
   );
 }
 
@@ -216,9 +138,7 @@ export function useEditorPdpSync({
   // already-warned difference stays quiet however the rest of the chapter moves, while a truly new
   // one always warns. Reset (below) wherever the round-trip converges or the editor content is
   // replaced, so a genuinely NEW lossy divergence always warns again.
-  const warnedLossyDifferences = useRef<
-    { sentEntry?: Usj['content'][number]; receivedEntry?: Usj['content'][number] }[]
-  >([]);
+  const warnedLossyDifferences = useRef<UsjContentDivergence[]>([]);
   // Identity of the document last APPLIED to the editor via setEditorUsj — i.e. what the editor is
   // showing now. Local edits never change which document the editor shows, so this only moves when
   // an update is applied. Compared against the current documentSelector to tell a same-document
@@ -374,25 +294,12 @@ export function useEditorPdpSync({
           // would re-warn). A difference not already remembered warns and is remembered (bounded
           // FIFO); a re-visited one stays quiet.
           else {
-            const difference = firstSignificantUsjContentDifference(editorUsj, usjFromPdp);
-            const alreadyWarned =
-              difference !== undefined &&
-              warnedLossyDifferences.current.some(
-                (warned) =>
-                  areUsjContentsEqualExceptWhitespace(
-                    wrapSingleUsjEntry(warned.sentEntry),
-                    wrapSingleUsjEntry(difference.sentEntry),
-                  ) &&
-                  areUsjContentsEqualExceptWhitespace(
-                    wrapSingleUsjEntry(warned.receivedEntry),
-                    wrapSingleUsjEntry(difference.receivedEntry),
-                  ),
-              );
-            if (difference !== undefined && !alreadyWarned) {
-              warnedLossyDifferences.current.push({
-                sentEntry: difference.sentEntry,
-                receivedEntry: difference.receivedEntry,
-              });
+            const divergence = detectUsjContentDivergence(editorUsj, usjFromPdp);
+            const alreadyWarned = warnedLossyDifferences.current.some((warned) =>
+              areUsjContentDivergencesEquivalent(warned, divergence),
+            );
+            if (divergence !== undefined && !alreadyWarned) {
+              warnedLossyDifferences.current.push(divergence);
               if (warnedLossyDifferences.current.length > LOSSY_WARN_MEMORY_LIMIT)
                 warnedLossyDifferences.current.shift();
               logger.warn(
@@ -401,8 +308,8 @@ export function useEditorPdpSync({
                   `something lossy (a stable non-idempotent USFM round-trip of our own push, not an ` +
                   `external edit). The editor's getUsj() is settled, so this is not a mid-edit save ` +
                   `snapshot: it is a real USJ->USFM->USJ defect. First differing content entry: ` +
-                  `${describeFirstUsjContentDifference(editorUsj, usjFromPdp)}` +
-                  `${describeFullUsjContentDifference(editorUsj, usjFromPdp)}`,
+                  `${describeUsjContentDivergence(divergence)}` +
+                  `${describeUsjContentDivergenceInFull(divergence)}`,
               );
             }
           }
