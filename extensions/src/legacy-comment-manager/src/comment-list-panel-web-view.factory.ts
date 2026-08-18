@@ -71,15 +71,35 @@ export class CommentListPanelWebViewFactory extends WebViewFactory<
 
     return {
       ...savedWebView,
+      state: {
+        ...savedWebView.state,
+        // Always rebuild un-blocked. `isSyncBlocked` is transient runtime state owned by the core
+        // auto-sync edit-block driver; forcing it false here means a crash/reload mid-sync can never
+        // restore a read-only panel from the saved layout (mirrors the scripture editor's scrub in
+        // platform-scripture-editor main.ts). The driver re-flags it if a sync is still in flight.
+        isSyncBlocked: false,
+      },
       title,
+      // Mirrors the title so the tab's name is discoverable on hover once Task 5 shrinks it to
+      // icon-only — matches Text Collection's existing tooltip convention; no PlatformTabTitle
+      // change needed. Gated on Simple mode: Power mode never had a tooltip here and must not
+      // gain one now (this panel is reachable in Power mode too).
+      tooltip: interfaceMode === 'simple' ? title : savedWebView.tooltip,
       projectId,
       content: commentListWebView,
       styles: tailwindStyles,
+      // Shown in both Power and Simple mode (product decision), matching Text Collection's
+      // existing icon convention — see comment-list.web-view.tsx for the live theme/selection-
+      // adaptive swap, likewise unconditional.
+      iconUrl: 'papi-extension://legacyCommentManager/assets/message-square.svg',
       // In simple mode, force the comments panel to scroll group 0 so it stays verse-synced with
       // the Scripture editor (which is also forced to 0 in simple mode). Power mode preserves the
       // saved value. Without this, a persisted non-zero scroll group (e.g. set while in power
       // mode) would survive into simple mode and detach the panel from the editor's navigation.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This is the fixed Column 3 Comment List panel and must always remain open in simple mode,
+      // so it's non-closable there. Power mode allows closing/rearranging freely.
+      isClosable: interfaceMode === 'power',
     };
   }
 

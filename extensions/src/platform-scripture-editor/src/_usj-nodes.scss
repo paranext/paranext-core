@@ -1,4 +1,11 @@
-/* Copied from https://github.com/eten-tech-foundation/scripture-editors/blob/ba0e846b3f11bea5720c4aa1a3486b69feb6b7e0/packages/platform/src/usj-nodes.css */
+/* Based on scripture-editors' packages/platform/src/usj-nodes.css:
+   https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
+   (originally synced from commit ba0e846b3f1:
+   https://github.com/eten-tech-foundation/scripture-editors/commit/ba0e846b3f1).
+   Local additions: li/lim --para-indent and --verse-text-start entries in
+   .psc-gutter-markers.text-spacing, mirroring scripture-editors commit 846ad99
+   (https://github.com/eten-tech-foundation/scripture-editors/commit/846ad99,
+   \li/\lim gutter overlap fix). */
 
 /* stylelint-disable */
 
@@ -1739,6 +1746,20 @@
   margin-right: 10vw;
 }
 
+/* Real-table layout. The editor renders \table / \tr / \tc* / \th* as real
+   <table>/<tr>/<td>/<th>. The paragraph rules above (e.g.
+   .text-spacing .usfm_tr { text-indent: -5vw }) model \tr as an indented block;
+   text-indent is inherited, so on a real <tr> it pulls every cell's text left and
+   collapses the columns. Reset it on the real-table structural classes. Setting
+   text-indent:0 on the cell itself overrides the value inherited from the row
+   regardless of cascade order. Applies to all resources + the project view, since
+   real tables can appear in any USJ. */
+.usfm .table-row,
+.usfm .table-cell {
+  text-indent: 0;
+  margin: 0;
+}
+
 .formatted-font .usfm_th1 {
   font-size: 100%;
   font-style: italic;
@@ -2210,22 +2231,12 @@
   color: #7777ff;
 }
 
-.usfm table {
-  border-collapse: collapse;
-}
-
-.usfm td {
-  border: 1px solid #000000;
-  page-break-inside: avoid;
-  /* FB27281 adding padding based on font size*/
-  padding-right: 0.28em;
-  padding-left: 0.28em;
-}
-
-.usfm td.markercell {
-  border-style: none;
-}
-
+/* The generic table-cell box that used to live here (border-collapse on tables +
+   `1px solid #000` on td, with a `.markercell` borderless exception) was moved to
+   marker-styles/commentary-overrides.scss (PT-3086) so it applies only in handbook
+   (HBKENG/TNN/TND) iframes. Real tables in the project view and other resources are
+   intentionally borderless; the paragraph-indent reset for real tables lives in the
+   table-marker section above (.usfm .table-row, .usfm .table-cell). */
 .usfm rt {
   cursor: pointer;
 }
@@ -2309,9 +2320,6 @@
     box-shadow: 0 2px 0 -1px var(--destructive); /* static glow underline — still signals "armed" */
   }
 }
-
-/* The destructive "press again" hint is rendered by VerseDeleteTooltipOverlay as a ShadCN Tooltip
-   (localized, theme-styled) — no bespoke tooltip CSS lives here anymore. */
 
 span.unread img {
   background-color: #ffff99;
@@ -2561,12 +2569,16 @@ span.read img {
 }
 
 /* Indent compensation — mirrors the margin-left values above.
-   Only active when .text-spacing is present (same condition as the source rules). */
+   Only active when .text-spacing is present (same condition as the source rules).
+   pi2 and pi3 use the same primary-indent value in both LTR and RTL (10vw and 15vw
+   respectively), so no direction restriction is needed here. */
 .psc-gutter-markers.text-spacing .usfm_io,
 .psc-gutter-markers.text-spacing .usfm_io1,
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
-.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi2 {
+.psc-gutter-markers.text-spacing .usfm_li,
+.psc-gutter-markers.text-spacing .usfm_li1,
+.psc-gutter-markers.text-spacing .usfm_pi2 {
   --para-indent: 10vw;
 }
 .psc-gutter-markers.text-spacing .usfm_q,
@@ -2576,16 +2588,26 @@ span.read img {
 .psc-gutter-markers.text-spacing .usfm_q4,
 .psc-gutter-markers.text-spacing .usfm_io2,
 .psc-gutter-markers.text-spacing .usfm_ili2,
-.psc-gutter-markers.text-spacing[dir='ltr'] .usfm_pi3 {
+.psc-gutter-markers.text-spacing .usfm_li2,
+.psc-gutter-markers.text-spacing .usfm_lim,
+.psc-gutter-markers.text-spacing .usfm_lim1,
+.psc-gutter-markers.text-spacing .usfm_pi3 {
   --para-indent: 15vw;
 }
 .psc-gutter-markers.text-spacing .usfm_qm,
 .psc-gutter-markers.text-spacing .usfm_qm1,
-.psc-gutter-markers.text-spacing .usfm_io3 {
+.psc-gutter-markers.text-spacing .usfm_io3,
+.psc-gutter-markers.text-spacing .usfm_li3,
+.psc-gutter-markers.text-spacing .usfm_lim2 {
   --para-indent: 20vw;
 }
-.psc-gutter-markers.text-spacing .usfm_io4 {
+.psc-gutter-markers.text-spacing .usfm_io4,
+.psc-gutter-markers.text-spacing .usfm_li4,
+.psc-gutter-markers.text-spacing .usfm_lim3 {
   --para-indent: 25vw;
+}
+.psc-gutter-markers.text-spacing .usfm_lim4 {
+  --para-indent: 30vw;
 }
 .psc-gutter-markers.text-spacing .usfm_ipi,
 .psc-gutter-markers.text-spacing .usfm_imi,
@@ -2628,7 +2650,17 @@ span.read img {
 }
 .psc-gutter-markers.text-spacing .usfm_ili,
 .psc-gutter-markers.text-spacing .usfm_ili1,
-.psc-gutter-markers.text-spacing .usfm_ili2 {
+.psc-gutter-markers.text-spacing .usfm_ili2,
+.psc-gutter-markers.text-spacing .usfm_li,
+.psc-gutter-markers.text-spacing .usfm_li1,
+.psc-gutter-markers.text-spacing .usfm_li2,
+.psc-gutter-markers.text-spacing .usfm_li3,
+.psc-gutter-markers.text-spacing .usfm_li4,
+.psc-gutter-markers.text-spacing .usfm_lim,
+.psc-gutter-markers.text-spacing .usfm_lim1,
+.psc-gutter-markers.text-spacing .usfm_lim2,
+.psc-gutter-markers.text-spacing .usfm_lim3,
+.psc-gutter-markers.text-spacing .usfm_lim4 {
   --verse-text-start: -7.5vw;
 }
 .psc-gutter-markers.text-spacing .usfm_iq,

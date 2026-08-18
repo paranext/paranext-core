@@ -44,7 +44,10 @@ internal sealed class CheckCache
             ThreadingUtils.RunTask(
                 Task.Run(async () =>
                 {
-                    var projectId = scrText.GetProjectDetails().Metadata.Id;
+                    // Read the id directly rather than building the whole (now display-enriched)
+                    // ProjectDetails just to pull one field on every Settings.xml change; this is
+                    // exactly what ProjectMetadata.Id holds (see ScrTextExtensions.GetProjectDetails).
+                    var projectId = scrText.Guid.ToString().ToUpperInvariant();
 
                     // Update all checks for this project to indicate that settings have changed
                     // This will cause them to reload settings and clear results before the next run

@@ -41,3 +41,7 @@ mark {
 }
 
 // #endregion
+
+// Simple-mode-only rules (including .scripture-editor-tab-nav-simple, used by this web view's
+// TabToolbar) live in ./_simple-mode.scss, brought in transitively via the ./editor-overrides
+// @use above.

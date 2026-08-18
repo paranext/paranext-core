@@ -3,6 +3,14 @@
 // this is required for many overwrites
 /* stylelint-disable selector-class-pattern */
 
+@use './simple-mode';
+
+// Semi-transparent amber for the Find current-result highlight, shared by the base rule and the
+// ::selection re-apply below. Deliberately a fixed amber rather than a theme token: it must read on
+// top of the ::selection primary/secondary colors and stay distinct from them in both light and
+// dark mode (see the find-result-highlight rules).
+$find-current-result-highlight-bg: rgb(255 213 0 / 40%);
+
 // Platform.Bible modifications
 
 // NOTE: `height: 100%` / `overflow-y: auto` below are currently inert. Wrapper divs between the
@@ -38,6 +46,26 @@
 ::selection {
   color: var(--secondary-foreground);
   background-color: var(--secondary);
+}
+
+// Find/Replace current-result highlight.
+// Applied to the matched text via setAnnotation(range, 'find-result-highlight',
+// 'find-current-result') from the Find web view (platform-scripture/src/find.web-view.tsx), which
+// wraps the match in a TypedMarkNode carrying this class. Semi-transparent amber so it reads on top
+// of the ::selection color above (selectRange selects the same match) and stays distinct from the
+// primary/secondary selection in both light and dark mode.
+.editor-typed-mark-external-find-result-highlight {
+  background-color: $find-current-result-highlight-bg;
+  border-radius: 2px;
+}
+
+// The Find web view also calls selectRange on the current match, so the native ::selection color
+// (--primary when focused, --secondary when not) paints on top of the semi-transparent amber above
+// and hides it — the inactive --secondary reads as grayish-blue. Re-apply the amber to the selected
+// glyphs inside the find-result mark so the current result stays amber regardless of pane focus.
+.editor-typed-mark-external-find-result-highlight::selection,
+.editor-typed-mark-external-find-result-highlight ::selection {
+  background-color: $find-current-result-highlight-bg;
 }
 
 // focus ring
@@ -266,5 +294,23 @@ button {
     -webkit-mask-size: contain;
     -webkit-mask-position: center;
     background-color: currentColor;
+  }
+}
+
+// Translator Comment annotations: editor-typed-mark-external-translator-comment comes
+// from ANNOTATION_TYPE_TRANSLATOR_COMMENT in platform-scripture-editor.web-view.tsx.
+// _editor.scss (upstream mirror) has no rule for it, so inserted comments rendered with
+// no visible marking. Styled as a dashed underline (matching Paratext 9) rather than a
+// persistent background highlight, so it stays visually distinct from whatever other
+// highlight (selection, verse markers, etc.) might be applied at the same time. On hover, a
+// background tint and solid underline give a clearer, transient affordance that it's clickable.
+.editor-typed-mark-external-translator-comment {
+  border-bottom: 1px dashed var(--muted-foreground);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+    border-bottom: 2px solid var(--foreground);
   }
 }

@@ -180,4 +180,25 @@ describe('BookChapterControl imperative handle', () => {
       );
     });
   });
+
+  test('does not render a chevron by default', () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 5, verseNum: 3 }}
+        handleSubmit={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId('book-chapter-control-chevron')).not.toBeInTheDocument();
+  });
+
+  test('renders a chevron when showTriggerChevron is true', () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 5, verseNum: 3 }}
+        handleSubmit={() => {}}
+        showTriggerChevron
+      />,
+    );
+    expect(screen.getByTestId('book-chapter-control-chevron')).toBeInTheDocument();
+  });
 });

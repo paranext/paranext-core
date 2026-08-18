@@ -16,6 +16,16 @@ export type OrderedItem = {
   order: number;
 };
 
+/**
+ * An interface mode a menu item can be hidden in.
+ *
+ * Keep in sync with `SettingTypes['platform.interfaceMode']` in
+ * `src/declarations/papi-shared-types.ts` — this package can't import that app-level type
+ * (dependency layering runs the other way), so this is an independently declared, structurally
+ * identical union rather than a shared one.
+ */
+export type InterfaceMode = 'simple' | 'power';
+
 export type OrderedExtensibleContainer = OrderedItem & {
   /** Determines whether other items can be added to this after it has been defined */
   isExtensible?: boolean;
@@ -56,6 +66,11 @@ export type MenuItemBase = OrderedItem & {
   tooltip?: LocalizeKey;
   /** Additional information provided by developers to help people who perform localization */
   localizeNotes: string;
+  /**
+   * Interface modes in which this menu item should be hidden. Omit (or use an empty array) for
+   * items that should show in every mode — most items need no value here at all.
+   */
+  hiddenInterfaceModes?: InterfaceMode[];
 };
 
 /** Menu item that hosts a submenu */
@@ -397,6 +412,13 @@ export const menuDocumentSchema = {
           description:
             'Relative order of this menu item compared to other menu items in the same group (sorted ascending)',
           type: 'number',
+        },
+        hiddenInterfaceModes: {
+          description:
+            'Interface modes in which this menu item should be hidden. Omit (or use an empty array) for items that should show in every mode.',
+          type: 'array',
+          items: { enum: ['simple', 'power'] },
+          uniqueItems: true,
         },
       },
       required: ['label', 'group', 'order'],

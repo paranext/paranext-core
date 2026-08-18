@@ -5,6 +5,8 @@ description: Vitest, NUnit, TDD, testing trophy model, AI agent test quality gua
 
 # Testing Guide for paranext-core
 
+> Verified against paranext-core origin/main `998ca09a087` — 2026-08-03.
+
 An overview of the testing infrastructure in paranext-core and guidelines for writing tests that catch real defects.
 
 ---
@@ -33,6 +35,8 @@ Test-Driven Development is the recommended default for non-trivial backend logic
 | **RED**      | Write ONE failing test          |
 | **GREEN**    | Write MINIMUM code to pass      |
 | **REFACTOR** | Clean up while tests stay green |
+
+**C# RED phase**: A C# RED commit cannot be test-only — tests won't compile without the types they reference (and on `ai/*` branches with C# changes staged, the pre-commit hook also runs `dotnet build` including the test project; elsewhere the failure surfaces in CI). Commit minimal skeleton type stubs (shape only — no constructors, validation, or constant values) alongside the failing tests so the build passes while the tests fail at runtime. Never reach for `--no-verify`.
 
 ### Verifying Tests Can Fail
 
@@ -125,6 +129,41 @@ For methods with side effects, verify the **observable effect** — not just the
 | Delete      | Verify item is no longer findable                                  |
 
 **Anti-stub guidance**: A stub that returns `{ Success = true, Guid = NewGuid() }` passes return-value-only tests. Always include at least one test that verifies persistence.
+
+##### The Restart Test (detecting stubs)
+
+For each side-effect method (create, update, delete, add), ask: **"If I call this method successfully and then restart the application, will the effect still be there?"** If no, the method is a stub, and a return-value-only test will pass against it while the world never actually changes.
+
+A **stub** is code that:
+
+- Returns hardcoded or fabricated data without calling ParatextData APIs.
+- Only stores data in memory (a `Dictionary`/`List`) instead of writing to disk.
+- Uses `Task.FromResult(...)` with a fabricated result instead of performing the real operation.
+- Generates an ID without creating the corresponding persistent artifact.
+
+If a stub is intentional (the feature is not yet available in ParatextData), document it with a comment — `// STUB: {reason} — tracked in {issue}` — rather than leaving it to masquerade as a working implementation. Otherwise, replace it with real ParatextData integration before proceeding.
+
+##### Effect-verification test pattern
+
+An effect-verification test **reloads from the real data source** (ParatextData / disk) rather than trusting in-memory state, then asserts the effect persisted:
+
+```csharp
+[Test]
+public async Task CreateMethod_WhenSuccessful_ActuallyPersistsData()
+{
+    var result = await Service.CreateAsync(CreateValidRequest());
+
+    // What return-value-only tests do:
+    Assert.That(result.Success, Is.True);
+
+    // What effect-verification adds — reload from ParatextData, NOT in-memory state:
+    var reloaded = LoadFromParatextData(result.Id);
+    Assert.That(reloaded, Is.Not.Null, "Data should be loadable after create");
+    Assert.That(reloaded.Name, Is.EqualTo(request.Name));
+}
+```
+
+The distinction: TDD tests verify "the method returns success with the right shape"; effect tests verify "after calling the method, the world has changed." For each side-effect method, add at least one test that reloads from the real source.
 
 #### TDD Variant Selection (Outside-In vs Classic)
 
@@ -268,6 +307,14 @@ AI agents should pause and ask when:
 3. Architecture decisions are needed (creating new utilities, modifying test infrastructure).
 4. Multiple interpretations of an edge case exist.
 
+### Test Scenario Coverage Mix
+
+When planning the scenarios for a feature (not just the happy path), aim for a healthy distribution rather than a wall of happy-path cases. Useful heuristics:
+
+- **At least ~15% edge cases and ~5% error scenarios.** A scenario set that is almost entirely happy-path is under-specified — the defects live in the edges.
+- **Don't blanket-assign the logic layer.** When every scenario shares one classification (all `ParatextData`, or all `UI`), it usually signals a feature-level guess rather than per-behavior analysis; cross-check each scenario against where the logic actually lives.
+- **Inputs and expected outputs must be concrete enough to implement.** An expected output that is only a boolean flag or a vague description isn't testable — pin specific values so a test can be written without re-deriving the intent.
+
 ---
 
 ## General Style Guidelines
@@ -295,7 +342,7 @@ Add tests when they speed up development or make a critical part of the code mor
 
 ## TypeScript/JavaScript Testing
 
-### Framework: Vitest (v3.2.4)
+### Framework: Vitest (3.x — see `package.json` for the exact version)
 
 Vitest is a Jest-compatible test runner optimized for Vite projects.
 
@@ -336,7 +383,7 @@ export default defineConfig(async () => {
 
 ```json
 {
-  "vitest": "^3.2.4",
+  "vitest": "^3.x",
   "@testing-library/react": "^16.2.0",
   "@testing-library/jest-dom": "^6.6.3",
   "@testing-library/dom": "^10.4.0",
@@ -401,7 +448,7 @@ npm run test:core -- --coverage
   <PackageReference Include="NUnit" Version="4.0.1" />
   <PackageReference Include="NUnit3TestAdapter" Version="4.5.0" />
   <PackageReference Include="coverlet.collector" Version="6.0.0" />
-  <PackageReference Include="ParatextData" Version="9.5.0.18" />
+  <PackageReference Include="ParatextData" Version="…" /> <!-- see c-sharp-tests/c-sharp-tests.csproj for current versions -->
 </ItemGroup>
 ```
 
@@ -415,14 +462,14 @@ c-sharp-tests/
 │   ├── InputRangeTests.cs
 │   ├── InputRangesFilterTests.cs
 │   └── UsfmLocationTests.cs
+├── FixtureSetup.cs              # Assembly-level setup (repo: c-sharp-tests root)
 ├── JsonUtils/
-│   ├── CommentConverterTests.cs
+│   ├── PlatformCommentConverterTests.cs
 │   └── InventoryOptionValueConverterTests.cs
 ├── Projects/
-│   ├── FixtureSetup.cs              # Assembly-level setup
 │   ├── LocalParatextProjectsTests.cs
 │   ├── ParatextDataProviderTests.cs
-│   ├── ParatextDataProviderCommentTests.cs
+│   ├── ParatextProjectDataProviderCommentTests.cs
 │   └── ParatextProjectDataProviderFactoryTests.cs
 ├── Services/
 │   └── SettingsServiceTests.cs
@@ -474,15 +521,15 @@ internal abstract class PapiTestBase
     [TearDown]
     public virtual void TestTearDown()
     {
-        // Clean up ScrTextCollection — pass `true` to trigger full index cleanup.
-        // Using `false` leaves stale entries in the internal project index, which
-        // causes "Sequence contains more than one matching element" errors when
-        // tests create many DummyScrText instances with unique HexIds.
+        // Clean up ScrTextCollection. The second parameter of Remove is `notify`;
+        // the codebase convention — including PapiTestBase itself — is
+        // `Remove(project, false)` in teardown (no change notifications needed
+        // while tearing tests down).
         List<ScrText> projects = ScrTextCollection
             .ScrTexts(IncludeProjects.Everything)
             .ToList();
         foreach (ScrText project in projects)
-            ScrTextCollection.Remove(project, true);
+            ScrTextCollection.Remove(project, false);
 
         _client?.Dispose();
     }
@@ -499,7 +546,7 @@ internal abstract class PapiTestBase
 
 ### Assembly-Level Setup
 
-**File:** `c-sharp-tests/Projects/FixtureSetup.cs`
+**File:** `c-sharp-tests/FixtureSetup.cs`
 
 ```csharp
 [SetUpFixture]
@@ -543,6 +590,24 @@ paranext-core uses hand-crafted test doubles rather than mocking frameworks like
 | `DummyLocalParatextProjects`       | Mock project collection             |
 
 See `c-sharp-tests/DummyPapiClient.cs` and peers for examples.
+
+### Forcing Non-Virtual ParatextData Outcomes via a Type-Name Seam
+
+Some ParatextData outcomes can't be reached from a test without a real precondition, and the API that produces them is **non-virtual** so it can't be overridden in a test double — e.g. `WriteLockManager.ObtainLock` returning null (a lock failure), `ScrText.DeleteBooks`, or `ScrText.PutText` raising. Mocking is impossible, and standing up the real failure condition is impractical.
+
+In that narrow case, gate the simulated outcome on the **runtime type name** of a purpose-built test double:
+
+```csharp
+// In the orchestrator (production code), fenced with a comment explaining the seam:
+private const string LockNotObtainedMarkerTypeName = "LockNotObtainedScrText";
+// ...
+if (scrText.GetType().Name == LockNotObtainedMarkerTypeName)
+    return /* the lock-not-obtained result the real API would produce */;
+```
+
+The test then passes a `LockNotObtainedScrText : DummyScrText` instance and gets the simulated outcome.
+
+This is a documented deviation from the "use real ParatextData — never mock it" rule, justified only because the underlying API is non-virtual and the real precondition is unreachable in a unit test. Keep the seam narrow: a private/internal `const` type-name string, with an inline comment at each call site explaining why it exists. Prefer wrapping the call behind a virtual provider interface when a feature touches that API broadly enough to warrant the larger seam.
 
 ---
 
@@ -887,16 +952,11 @@ For more thorough invariant verification with random input generation, see [Prop
 
 ## Test Categorization
 
-Test categorization enables fast feedback during development by running subsets of tests based on speed requirements.
+Test categorization enables fast feedback during development: run the subset of tests that covers what you just changed instead of the whole suite.
 
 ### Categories
 
-| Category        | Time Budget | When to Run     | Scope               |
-| --------------- | ----------- | --------------- | ------------------- |
-| **Smoke**       | < 10s       | After each edit | Core functionality  |
-| **Critical**    | < 60s       | Every 3–5 edits | Feature tests       |
-| **Full**        | < 5 min     | Before commit   | Complete suite      |
-| **Integration** | No limit    | CI only         | Cross-process tests |
+C# categories describe **what a test verifies**, not a speed tier. The ones that exist in `c-sharp-tests/` are `Contract` (API/behavior contracts — the bulk of the suite), `Acceptance`, `GoldenMaster`, `Integration`, `Critical`, `Invariant`, `Regression`, `EdgeCase`, `Infrastructure`, `ErrorPath`, and `DiskVerification`. There is no `Smoke`, `Full`, `Unit`, `Fast`, or `Slow` category — confirm a name with `git grep '\[Category(' c-sharp-tests/` before filtering on it. `.claude/skills/test-runner/categories.md` documents what each category covers and the full filter syntax; during TDD the useful order is `Contract`, then `Integration`, then `Acceptance`, then the whole suite.
 
 ### Tagging Tests
 
@@ -904,7 +964,7 @@ Test categorization enables fast feedback during development by running subsets 
 
 ```csharp
 [Test]
-[Category("Smoke")]
+[Category("Contract")]
 public void BasicOperation_Works() { }
 
 [Test]
@@ -918,18 +978,16 @@ public void ImportantFeature_HandlesEdgeCase() { }
 describe.concurrent('Smoke tests', () => {
   test('basic operation works', () => {});
 });
-
-// Or use file naming: feature.smoke.test.ts, feature.critical.test.ts
 ```
 
 ### Running by Category
 
 ```bash
-# C# — run only smoke tests
-dotnet test --filter "Category=Smoke"
+# C# — run one category (there is no root solution, so name the test project)
+dotnet test c-sharp-tests/ --filter "Category=Critical"
 
 # TypeScript — run a specific test name pattern
-npm test -- --testNamePattern="Smoke"
+npm run test:core -- --run -t "Smoke"
 ```
 
 ---
@@ -972,9 +1030,11 @@ public class VerseRefInvariantTests
 }
 ```
 
-For random input generation, use TypeScript with `fast-check` (below).
+For random input generation in TypeScript, `fast-check` is the standard library — **not currently installed in this repo** (adding it is a dependency decision that needs approval first). The hand-supplied-inputs invariant pattern above is what the repo uses today.
 
-### TypeScript with fast-check
+### TypeScript with fast-check (aspirational — not yet in this repo)
+
+If/when `fast-check` + `@fast-check/vitest` are added, property tests look like:
 
 ```typescript
 import fc from 'fast-check';
@@ -1011,32 +1071,11 @@ Mutation testing verifies **test quality** by checking whether tests detect smal
 - **Critical business logic** — merge algorithms, conflict resolution, data persistence.
 - **Threshold:** ≥70% mutation score for critical paths.
 
-### Tools
+### Tooling status (verified 2026-08-03)
 
-| Language   | Tool        | Config File                         |
-| ---------- | ----------- | ----------------------------------- |
-| TypeScript | Stryker     | `stryker.config.json`               |
-| C#         | Stryker.NET | `c-sharp-tests/stryker-config.json` |
+**No mutation-testing tooling is set up in paranext-core** — there is no Stryker/Stryker.NET config, dependency, or npm script in the repo. Treat mutation testing as a manual/aspirational practice: if the team adopts it, the standard tools are Stryker (TypeScript) and Stryker.NET (C#), and this section should then be rewritten around the real configs and scripts.
 
-### Running Mutation Tests
-
-```bash
-# TypeScript mutation tests
-npm run test:mutation
-
-# C# mutation tests
-npm run test:mutation:csharp
-```
-
-### Score Thresholds
-
-| Threshold | Score | Meaning                  |
-| --------- | ----- | ------------------------ |
-| High      | 80%   | Excellent test quality   |
-| Low       | 70%   | Minimum acceptable       |
-| Break     | 0%    | Build failure threshold  |
-
-### Interpreting Results
+### Interpreting Results (when tooling exists)
 
 - **Survived mutants** — code changes not caught by tests (bad).
 - **Killed mutants** — code changes caught by tests (good).
@@ -1139,7 +1178,9 @@ e2e-tests/
 │   ├── app.fixture.ts           # Launches fresh Electron (CI smoke tests only)
 │   ├── papi.fixture.ts          # @deprecated — CI smoke tests only
 │   ├── papi-live.fixture.ts     # Connects to already-running app's WebSocket (command-surface verification)
-│   └── helpers.ts               # waitForAppReady(), sendPapiCommand()
+│   ├── isolated.fixture.ts      # Per-test isolated Electron instance (state-mutating tests)
+│   ├── comment.fixture.ts       # Comment-testing fixture (+ comment-test-helpers.ts)
+│   └── helpers.ts               # waitForAppReady(), sendPapiCommand()  (tree non-exhaustive)
 ├── playwright-cdp.config.ts     # Config for CDP mode (no setup/teardown)
 ├── playwright.config.ts         # Config for standalone mode (with setup/teardown)
 └── tests/
@@ -1155,6 +1196,7 @@ e2e-tests/
 | `app.fixture`      | Launches fresh Electron                   | CI smoke tests, standalone testing        | `electronApp`, `mainPage` |
 | `papi.fixture`     | Extends app.fixture + WebSocket           | **Deprecated** — CI smoke tests only      | `papiClient` + app.fixture |
 | `papi-live.fixture`| Connects to already-running app (WS 8876) | Command-surface verification only (see below) | `papiLive`                |
+| `isolated.fixture` | Launches an isolated Electron per test    | Tests that mutate application state       | fresh app per test        |
 
 ### Command-Surface Verification (papi-live.fixture)
 
@@ -1194,6 +1236,8 @@ const RESERVED = new Set([-32700, -32600, -32601, -32602, -32603]);
 const res = await papiLive.requestRaw('object:myFeature.someMethod', ['__bogus_id__']);
 if (res.error) expect(RESERVED, res.error.message).not.toContain(res.error.code);
 ```
+
+**Run this against the live app early, per command — not only at the end.** Unit tests invoke service methods directly and bypass the JSON-RPC wire, so they never exercise serialization. A whole class of cross-cutting bugs surfaces only on the wire: the canonical one is a missing `JsonStringEnumConverter(JsonNamingPolicy.CamelCase)` registration in `SerializationOptions.cs`, which makes every C#↔TS enum-boundary call fail with `-32602 Invalid params` even though all unit tests are green. Verifying each command against the running app as it lands (rather than waiting for an end-of-feature smoke pass) catches these the moment they're introduced.
 
 ### E2E Test Templates
 
@@ -1250,6 +1294,13 @@ test.describe('{Feature} Render Smoke Tests', () => {
 });
 ```
 
+### Journey/E2E Assertion Quality
+
+A cross-screen journey test that only checks `toBeVisible()` proves the page rendered — not that data flowed correctly across screens. For journey/E2E tests:
+
+- **Include at least one DATA assertion** beyond visibility — `toHaveValue(...)`, `toContainText(...)`, `not.toBe('')`, or a count check. Verify the value/state that crossed the boundary, e.g. fill a field in screen A and assert its value appears in screen B, or perform an action in one panel and assert the change is reflected in another.
+- **Span 2+ work packages.** A journey test that touches only one screen/feature belongs in that feature's own functional tests; a true journey test exercises two or more pieces working together.
+
 ### E2E Test Best Practices
 
 | DO                                            | DON'T                                          |
@@ -1272,8 +1323,11 @@ npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp
 npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright-cdp.config.ts --reporter=html
 npx playwright show-report e2e-tests/playwright-report
 
-# Standalone mode (CI — launches own Electron, port 8876 must be free)
-npx playwright test e2e-tests/tests/{feature}/ --config=e2e-tests/playwright.config.ts --project=development --reporter=list
+# Standalone mode (launches its own Electron, port 8876 must be free). Each project in
+# playwright.config.ts has its own testDir, so path-filter inside it: `isolated` →
+# tests/isolated/** (most feature tests), `smoke` → tests/smoke/** (what CI runs, via
+# `npm run test:e2e:smoke`), `enhanced-resources` → tests/enhanced-resources/**.
+npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated --reporter=list
 ```
 
 ### Failure Analysis
@@ -1325,6 +1379,27 @@ When C# tests create many `DummyScrText` instances with unique HexIds:
 - With `false`, stale index entries accumulate. After ~50 tests, `ScrTextCollection.RefreshScrTextsInternal` throws `"Sequence contains more than one matching element"`.
 - Symptom: first N tests pass, then tests fail with LINQ duplicate-key errors.
 - `PapiTestBase` handles this correctly; any custom test fixtures must also use `true`.
+
+### Global Mutable Statics Must Be Restored
+
+Some ParatextData entry points are global mutable statics — `Alert.Implementation` is the recurring one. A test that assigns one (e.g. `Alert.Implementation = new DummyAlert()`) must restore the previous value in a `try/finally`:
+
+```csharp
+var previous = Alert.Implementation;
+try
+{
+    Alert.Implementation = new DummyAlert();
+    // ... exercise the code under test ...
+}
+finally
+{
+    Alert.Implementation = previous;
+}
+```
+
+- Unrestored, the assignment leaks into every later test in the same process.
+- Symptom: the test that mutated the static passes in isolation, but a **later-added** test (often one that relies on the default implementation) fails only under a full-suite run — making the failure look unrelated to the test that actually broke it.
+- This is hard to diagnose because the offending test and the failing test are different files. When a test fails only in the full suite, suspect an unrestored global static.
 
 ---
 

@@ -69,6 +69,21 @@ declare global {
   var updateWebViewDefinition: UpdateWebViewDefinition;
   /** Indicates whether test code meant just for developers to see should be run */
   var isNoisyDevModeEnabled: boolean;
+  /**
+   * Whether to emit startup timing marks (see `markStartup`). Off by default; enabled per launch
+   * via the `PT_STARTUP_MARKS=true` environment variable. Propagated to all processes the same way
+   * as `isNoisyDevModeEnabled`.
+   */
+  var startupMarks: boolean;
+  /**
+   * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
+   * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
+   * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
+   * `platform.getFocusedWindowId`). `undefined` until the renderer reads the URL parameter.
+   *
+   * @experimental
+   */
+  var windowId: string | undefined;
 }
 /* eslint-enable */
 

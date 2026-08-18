@@ -1,0 +1,121 @@
+// Simple-mode-ONLY styles for this extension's web views. Every rule here applies exclusively to
+// Simple mode. Unlike the renderer's own dock-layout-wrapper.component.scss, this extension's
+// stylesheets can't use `[data-interface-mode='simple']`: each web view is compiled into its own
+// standalone CSS string (see `?inline` imports in main.ts) and rendered inside its own sandboxed
+// iframe, which never sees the renderer's `data-interface-mode` attribute (that only exists on
+// the renderer's own document.body, a different document). So Simple-mode scoping here is done
+// via plain marker classes applied directly to each web view's own root element instead:
+// `.editor-container-simple` (unconditional in model-text-panel.component.tsx and
+// resource-text-panel.web-view.tsx — both Simple-mode-only web views; conditional on
+// `!isPowerMode` in platform-scripture-editor.web-view.tsx, which is used in both modes) and
+// `.scripture-editor-tab-nav-simple` (conditional in platform-scripture-editor.web-view.tsx only).
+//
+// This file is @used from _editor-overrides.scss, which all three web-view entry points already
+// @use — so it flows into every web view's compiled CSS without needing to touch each entry point.
+// (Sass hoists an @used module's CSS to the top of the compiled output regardless of source-order
+// position. Only ONE rule in this file has a cascade-order dependency — the RTL rule at the bottom,
+// which loses a same-specificity tie to a hoisted-below vendored rule and therefore raises its own
+// specificity deliberately; each rule notes its own situation. Contrast the renderer's
+// dock-layout-wrapper.component.scss, which needed a plain webpack import instead of @use for that
+// reason.)
+
+// Flatten .editor-container's own rounded top corners (10px, set in the vendored ./_editor.scss)
+// to match the flattened column chrome. Specificity alone wins here (two classes vs. one) — no
+// source-order dependency.
+.editor-container-simple .editor-container {
+  border-radius: 0;
+}
+
+// Match the Scripture Editor's TabToolbar height (56px via tw:h-14, from the shared
+// TabToolbarContainer component) to Column 3's dock tab-header row — see
+// docs/superpowers/specs/2026-07-20-simple-layout-styling-adjustments-design.md, Section 3.
+// `!important` is required for the same reason noted in the original (now-removed) renderer-side
+// attempt: this overrides a Tailwind utility class (`tw:h-14`) applied directly via `className` on
+// the same element, where plain specificity cannot reliably win the tie.
+//
+// The target is 42px, not 36px: Column 3's tab bar (`dock-layout-wrapper.component.scss`) is a
+// 42px-tall `.dock-bar` — the visible 36px active tab plus a 6px `--tab-header-to-content-gap`
+// above it — so matching the OUTER row height (42px), not just the tab's own 36px, is what makes
+// both rows' bottom edges land at the same Y (found via visual verification: matching only 36px
+// left this toolbar's bottom edge 6px higher than Column 3's). Padding stays uniform/zero here —
+// TabToolbarContainer's own `tw:items-center` (already correct per Task 6) centers the buttons
+// symmetrically within the full 42px box; an earlier attempt at asymmetric top-only padding, to
+// mirror Column 3's own 6-gap-then-36-content internal shape, made the icons look off-center
+// within their own row for no alignment benefit — only the row's total height needs to match.
+//
+// padding-block also needed shrinking from TabToolbarContainer's own tw:py-2 (16px total): with
+// tw:box-border and tw:overflow-clip, the original 36px-height attempt left only 20px of content
+// area, and every toolbar button here is tw:h-8 (32px) — so it was clipping the buttons entirely.
+.scripture-editor-tab-nav-simple {
+  height: 42px !important;
+  padding-block: 0 !important;
+}
+
+// Reserve the inline-end gutter the character-marker bar occupies. Reserving rather
+// than floating is what makes "the bar never overlaps project text" GUARANTEED instead of
+// usually-true: there is no right margin to float over — `.editor-input` has just 10px of inline
+// padding (./_editor.scss) and `.editor-container` sets `max-width: none`, so prose wraps to the
+// full panel width and a floating bar would sit on top of text on most wrapped lines.
+//
+// Simple-scoped on purpose. `_usj-nodes.scss` styles the editor in BOTH modes, so putting this on
+// a bare `.usfm` selector — or raising `--psc-gutter-width` — would narrow every Power user's text
+// column to make room for a control they never see. The React `!isPowerMode` gate cannot cover a
+// CSS selector, so the scoping must happen here.
+//
+// The matching condition is `.editor-container-simple` AND `.psc-gutter-markers` — TWO gates, and
+// BOTH are required. Do not broaden this to `.editor-container-simple .usfm`: this stylesheet is
+// compiled into every web view in this extension (via `_editor-overrides.scss`), and both
+// resource-text-panel.web-view.tsx and model-text-panel.component.tsx apply
+// `editor-container-simple` UNCONDITIONALLY to an editor that sets no `hasGutterParaMarkers` — so
+// the broader selector would reserve 64px of dead space in the Bible Texts / Commentaries panel and
+// the model text panel, neither of which has a character-marker bar. `.psc-gutter-markers` is what
+// keeps this rule off those two editors. (Broadening would also drop the RTL rule below from
+// specificity (0,4,0) to (0,3,0), tying `_usj-nodes.scss`'s mirror rule and losing on source order.)
+//
+// The bar is gated on the SAME two conditions in platform-scripture-editor.web-view.tsx —
+// `!isPowerMode` and `viewOptions.hasGutterParaMarkers` — so the bar and the space it occupies
+// cannot come apart. Keep them in step: a bar that renders where this rule does not match paints
+// over project text, which is the one failure this design exists to prevent.
+//
+// Reservation is unconditional within Simple mode, not tied to whether the bar is currently drawn:
+// reserving only while visible would reflow the whole text column as the caret enters and leaves
+// the editor.
+//
+// 64px fits the ICON-ONLY trigger EXACTLY, with no slack: the `Type` icon (16px) + the Button's
+// `gap-1.5` (6px) + the `ChevronDown` (16px) + the mount's `tw:px-2` padding (16px, 8px per side) +
+// the Button's border (2px) is ~56px of chrome, plus `CharacterMarkerToolbar`'s `tw:m-1` margin
+// (8px, 4px per side) = 64px. There is no room here for a trigger LABEL: the same chrome would
+// leave ~16px for it, less than `bd` needs, and `tw:overflow-hidden` would cut it off against the
+// column border — which is why the current-marker readout lives in the trigger's tooltip and the
+// menu's tri-state rows instead. Changing this one value is the whole change.
+//
+// PIXELS, deliberately, not `em`. Every term in that 64px is a FIXED pixel amount — Lucide icons are
+// 16px, and the Button's gap/padding/border are Tailwind pixel utilities — none of which scale with
+// the editor's font size. An `em` reservation is resolved against whatever font-size
+// `.editor-container-simple` inherits, so at any base below 16px it would reserve LESS than the
+// chrome needs and the trigger would spill inline-start over project text. A px reservation cannot
+// under-reserve. (The trigger also carries `tw:overflow-hidden` as the structural backstop — see
+// character-marker-bar.component.tsx.)
+//
+// The custom property is declared on `.editor-container-simple`, not on `.usfm`, because it has TWO
+// consumers that need to inherit it and only that element is an ancestor of both: the
+// `padding-inline-end` below (the reserved space) and the bar container's own `width`, set inline in
+// character-marker-bar-overlay.component.tsx (the bar is a sibling of `.usfm`, not a descendant, so
+// a declaration on `.usfm` would not reach it). One declaration, two consumers — they cannot drift.
+.editor-container-simple {
+  --psc-character-marker-bar-width: 64px;
+}
+
+.editor-container-simple .usfm.psc-gutter-markers {
+  padding-inline-end: var(--psc-character-marker-bar-width);
+}
+
+// RTL: `_usj-nodes.scss`'s mirror rule (`.usfm.psc-gutter-markers[dir='rtl']`) re-asserts
+// `padding-left: 10px` PHYSICALLY — the same side `padding-inline-end` resolves to in RTL — at
+// equal specificity (0,3,0) to the rule above. Sass hoists this @used module's CSS above it, so
+// source order would hand the tie to the mirror. Restating the inline-end side with the `[dir]`
+// attribute raises specificity to (0,4,0) and settles it deterministically. That rule's
+// `padding-right` (the start-side gutter in RTL) is untouched and still applies.
+.editor-container-simple .usfm.psc-gutter-markers[dir='rtl'] {
+  padding-left: var(--psc-character-marker-bar-width);
+}

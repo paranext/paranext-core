@@ -15,6 +15,7 @@ import {
   Card,
   CardContent,
   Checkbox,
+  DisabledActionTooltip,
   Input,
   Label,
   Popover,
@@ -50,6 +51,12 @@ import {
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './search-result.component';
 import { SearchResultsInBook } from './search-results-in-book.component';
+import {
+  REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
+  ReplacePreviewOptions,
+  ReplacePreviewOptionsStrings,
+} from './replace-preview-options.component';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
 /** Localization keys used by the {@link Find} component itself (excludes child component keys). */
 export const FIND_LOCALIZED_STRING_KEYS = [
@@ -59,6 +66,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_allowRegex%',
   '%webView_find_cancelSearch%',
   '%webView_find_capitalization%',
+  '%webView_find_clearSearch%',
   '%webView_find_errorOccurred%',
   '%webView_find_findTab%',
   '%webView_find_matchCase%',
@@ -84,12 +92,15 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_restrictions_wholeWord%',
   '%webView_find_result%',
   '%webView_find_searchPlaceholder%',
+  '%webView_find_searchPrompt%',
   '%webView_find_showing%',
   '%webView_find_showingResults%',
   '%webView_find_showingResultsOfMore%',
   '%webView_find_showRecentSearches%',
   '%webView_find_toggleFilters%',
   '%webView_find_verseTextOnly%',
+  // Preview-options keys live with their component; spread them so the two lists can't drift.
+  ...REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
 ] as const;
 
 /**
@@ -139,6 +150,12 @@ export type FindProps = {
   // Mode + replace state
   /** Whether the UI is in find or replace mode. */
   activeMode: 'find' | 'replace';
+  /**
+   * When true, hide the find/replace toggle entirely (e.g. in simple interface mode, where replace
+   * is not offered). The panel then shows only the find UI. Callers must also keep `activeMode` at
+   * `'find'` while this is set so no replace UI is rendered.
+   */
+  hideModeToggle?: boolean;
   /** The replacement term entered in replace mode. */
   replaceTerm: string;
   /** Whether to preserve the case of the matched text when replacing. */
@@ -203,6 +220,12 @@ export type FindProps = {
   onPreserveCaseChange: (value: boolean) => void;
   /** Called when the user focuses a result (by clicking or keyboard navigation). */
   onFocusedResultChange: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when a result card receives browser focus (e.g. Tab navigation), by original index. */
+  onResultFocus?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user double-clicks a result (jump to editor), by original index. */
+  onResultDoubleClick?: (searchResult: HidableFindResult, index: number) => void;
+  /** Called when the user clicks a result's scripture reference (jump to editor), by original index. */
+  onResultReferenceClick?: (searchResult: HidableFindResult, index: number) => void;
   /** Called when the user hides/dismisses a result, by its original index. */
   onHideResult: (index: number) => void;
   /** Called when the user replaces a single result, by its original index (defaults to focused). */
@@ -220,6 +243,15 @@ export type FindProps = {
    * webview supplies the PAPI logger; stories may omit it. The component stays `@papi`-free.
    */
   logger?: FindLogger;
+  /** Options controlling how the replace preview is displayed in result cards. */
+  previewOptions?: PreviewOptions;
+  /**
+   * Called when the user changes the replace preview options. When omitted, the preview-options
+   * picker is hidden (result cards still render with `previewOptions` or the default).
+   */
+  onPreviewOptionsChange?: (options: PreviewOptions) => void;
+  /** Whether the project has AllowInvisibleChars enabled. Forwarded to the result cards. */
+  allowInvisibleCharacters?: boolean;
 };
 
 /**
@@ -244,6 +276,7 @@ export function Find({
   wordRestriction,
   isRegexAllowed,
   activeMode,
+  hideModeToggle = false,
   replaceTerm,
   preserveCase,
   isReplacing,
@@ -271,6 +304,9 @@ export function Find({
   onReplaceTermChange,
   onPreserveCaseChange,
   onFocusedResultChange,
+  onResultFocus,
+  onResultDoubleClick,
+  onResultReferenceClick,
   onHideResult,
   onReplace,
   onReplaceAll,
@@ -278,6 +314,9 @@ export function Find({
   onResultsScroll,
   getBookUsj,
   logger,
+  previewOptions = DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  onPreviewOptionsChange,
+  allowInvisibleCharacters = false,
 }: FindProps) {
   // useRef requires null as the initial value when used with a DOM element ref
   // eslint-disable-next-line no-null/no-null
@@ -444,32 +483,64 @@ export function Find({
     }
   }, [scope, selectedBookIds, verseRef, localizedBookData]);
 
+  // Configuration for the per-result replace preview. Present whenever in replace mode — including
+  // an empty replacement term, so the "replace with nothing" (deletion) preview can render its
+  // deletion bar rather than silently showing no preview.
+  const replaceConfig = activeMode === 'replace' ? { term: replaceTerm, preserveCase } : undefined;
+
+  // Map the flat localized-string bag into the shape the preview-options picker expects.
+  const previewOptionsStrings: ReplacePreviewOptionsStrings = {
+    togglePreviewOptions: localizedStrings['%webView_find_previewOptions_toggle%'],
+    layout: localizedStrings['%webView_find_previewOptions_layout%'],
+    layoutArrow: localizedStrings['%webView_find_previewOptions_layout_arrow%'],
+    layoutInline: localizedStrings['%webView_find_previewOptions_layout_inline%'],
+    layoutBlock: localizedStrings['%webView_find_previewOptions_layout_block%'],
+    highlightShape: localizedStrings['%webView_find_previewOptions_shape%'],
+    highlightShapeBar: localizedStrings['%webView_find_previewOptions_shape_bar%'],
+    highlightShapeRounded: localizedStrings['%webView_find_previewOptions_shape_rounded%'],
+    highlightShapePlain: localizedStrings['%webView_find_previewOptions_shape_plain%'],
+    color: localizedStrings['%webView_find_previewOptions_color%'],
+    colorRedCyan: localizedStrings['%webView_find_previewOptions_color_redCyan%'],
+    colorRedGreen: localizedStrings['%webView_find_previewOptions_color_redGreen%'],
+    colorGreyBlue: localizedStrings['%webView_find_previewOptions_color_greyBlue%'],
+    monospace: localizedStrings['%webView_find_previewOptions_monospace%'],
+    monospaceDescription: localizedStrings['%webView_find_previewOptions_monospaceDescription%'],
+    showInvisible: localizedStrings['%webView_find_previewOptions_showInvisible%'],
+    showInvisibleDescription:
+      localizedStrings['%webView_find_previewOptions_showInvisibleDescription%'],
+    swatchOld: localizedStrings['%webView_find_previewOptions_swatchOld%'],
+    swatchNew: localizedStrings['%webView_find_previewOptions_swatchNew%'],
+  };
+
   return (
     <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
-        {/* Find/Replace mode toggle */}
-        <ToggleGroup
-          type="single"
-          value={activeMode}
-          onValueChange={(value) => {
-            if (value === 'find' || value === 'replace') onToggleMode(value);
-          }}
-          className="tw:w-fit tw:rounded-lg tw:bg-muted tw:p-1"
-        >
-          <ToggleGroupItem
-            value="find"
-            className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+        {/* Find/Replace mode toggle — hidden in simple interface mode, where replace is not offered
+            and the panel is find-only. */}
+        {!hideModeToggle && (
+          <ToggleGroup
+            type="single"
+            value={activeMode}
+            onValueChange={(value) => {
+              if (value === 'find' || value === 'replace') onToggleMode(value);
+            }}
+            className="tw:w-fit tw:rounded-lg tw:bg-muted tw:p-1"
           >
-            {localizedStrings['%webView_find_findTab%']}
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="replace"
-            className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
-          >
-            {localizedStrings['%webView_find_replaceTab%']}
-          </ToggleGroupItem>
-        </ToggleGroup>
+            <ToggleGroupItem
+              value="find"
+              className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+            >
+              {localizedStrings['%webView_find_findTab%']}
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="replace"
+              className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+            >
+              {localizedStrings['%webView_find_replaceTab%']}
+            </ToggleGroupItem>
+          </ToggleGroup>
+        )}
 
         {/* Find input row */}
         <div className="tw:flex tw:gap-2 tw:flex-wrap">
@@ -488,16 +559,26 @@ export function Find({
               className={`tw:w-full tw:min-w-16 tw:text-ellipsis tw:!pl-8 scripture-font ${searchTerm ? 'tw:!pe-8' : 'tw:!pr-4'}`}
             />
             {searchTerm && (
-              <button
-                type="button"
-                onClick={() => {
-                  onSearchTermChange('');
-                  onStopSearch(true);
-                }}
-                className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground tw:hover:text-foreground tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer"
-              >
-                <X className="tw:h-4 tw:w-4" />
-              </button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={localizedStrings['%webView_find_clearSearch%']}
+                      onClick={() => {
+                        onSearchTermChange('');
+                        onStopSearch(true);
+                      }}
+                      className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground tw:hover:text-foreground tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer"
+                    >
+                      <X className="tw:h-4 tw:w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{localizedStrings['%webView_find_clearSearch%']}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
           <RecentSearches
@@ -579,67 +660,47 @@ export function Find({
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
+                {onPreviewOptionsChange && (
+                  <ReplacePreviewOptions
+                    previewOptions={previewOptions}
+                    setPreviewOptions={onPreviewOptionsChange}
+                    localizedStrings={previewOptionsStrings}
+                  />
+                )}
               </div>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    {/* When the buttons are disabled for structure protection they are not focusable,
-                        so make the wrapper focusable and named while disabled to keep the explanatory
-                        tooltip reachable for keyboard and screen-reader users. */}
-                    <div
-                      className="tw:flex tw:gap-2"
-                      role={
-                        isStructureProtected && isReplacementStructureChanging ? 'group' : undefined
-                      }
-                      // Disabled buttons cannot host their own tooltip; the wrapper must be focusable to surface the structure-protection explanation to keyboard and screen-reader users
-                      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-                      tabIndex={
-                        isStructureProtected && isReplacementStructureChanging ? 0 : undefined
-                      }
-                      aria-label={
-                        isStructureProtected && isReplacementStructureChanging
-                          ? localizedStrings[
-                              '%webView_find_replace_structureProtectedMarkerTooltip%'
-                            ]
-                          : undefined
-                      }
-                    >
-                      <Button
-                        variant="outline"
-                        onClick={onReplaceAll}
-                        disabled={
-                          visibleResults.length === 0 ||
-                          searchStatus === 'running' ||
-                          isReplacing ||
-                          (isStructureProtected && isReplacementStructureChanging)
-                        }
-                      >
-                        <ReplaceAll className="tw:h-4 tw:w-4" />
-                        {localizedStrings['%webView_find_replaceAll%']}
-                      </Button>
-                      <Button
-                        onClick={() => onReplace()}
-                        disabled={
-                          focusedResultIndex === undefined ||
-                          searchStatus === 'running' ||
-                          isReplacing ||
-                          (isStructureProtected && isReplacementStructureChanging)
-                        }
-                      >
-                        <Replace className="tw:h-4 tw:w-4" />
-                        {localizedStrings['%webView_find_replace%']}
-                      </Button>
-                    </div>
-                  </TooltipTrigger>
-                  {isStructureProtected && isReplacementStructureChanging && (
-                    <TooltipContent>
-                      <p className="tw:max-w-xs tw:whitespace-pre-line">
-                        {localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%']}
-                      </p>
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              </TooltipProvider>
+              <DisabledActionTooltip
+                className="tw:flex tw:gap-2"
+                disabled={isStructureProtected && isReplacementStructureChanging}
+                tooltipText={
+                  localizedStrings['%webView_find_replace_structureProtectedMarkerTooltip%']
+                }
+              >
+                <Button
+                  variant="outline"
+                  onClick={onReplaceAll}
+                  disabled={
+                    visibleResults.length === 0 ||
+                    searchStatus === 'running' ||
+                    isReplacing ||
+                    (isStructureProtected && isReplacementStructureChanging)
+                  }
+                >
+                  <ReplaceAll className="tw:h-4 tw:w-4" />
+                  {localizedStrings['%webView_find_replaceAll%']}
+                </Button>
+                <Button
+                  onClick={() => onReplace()}
+                  disabled={
+                    focusedResultIndex === undefined ||
+                    searchStatus === 'running' ||
+                    isReplacing ||
+                    (isStructureProtected && isReplacementStructureChanging)
+                  }
+                >
+                  <Replace className="tw:h-4 tw:w-4" />
+                  {localizedStrings['%webView_find_replace%']}
+                </Button>
+              </DisabledActionTooltip>
             </div>
           </>
         )}
@@ -746,6 +807,13 @@ export function Find({
         onScroll={onResultsScroll}
         onKeyDown={handleResultsKeyDown}
       >
+        {/* Idle placeholder: no search has run yet (e.g. first open, or after clearing the search),
+            so the results region would otherwise be blank. */}
+        {results.length === 0 && searchStatus === undefined && (
+          <div className="tw:flex tw:min-h-48 tw:items-center tw:justify-center tw:p-4 tw:text-center tw:text-sm tw:font-light tw:text-muted-foreground">
+            {localizedStrings['%webView_find_searchPrompt%']}
+          </div>
+        )}
         {(() => {
           // Only the first book that has a replaced result gets the cancel handler.
           // All replaced rows share one pending operation, so only one Cancel button
@@ -766,8 +834,20 @@ export function Find({
                 focusedResultIndex={bookResults.findIndex(
                   ({ originalIndex }) => originalIndex === focusedResultIndex,
                 )}
-                onResultClick={(result, indexInBookResults) =>
-                  onFocusedResultChange(result, bookResults[indexInBookResults].originalIndex)
+                onResultClick={(result, indexInBookResults) => {
+                  onFocusedResultChange(result, bookResults[indexInBookResults].originalIndex);
+                  // Return focus to the scroll container so arrow-key navigation keeps working
+                  // after a single click selects/previews a result.
+                  setTimeout(() => resultsContainerRef.current?.focus(), 0);
+                }}
+                onResultFocus={(result, indexInBookResults) =>
+                  onResultFocus?.(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultDoubleClick={(result, indexInBookResults) =>
+                  onResultDoubleClick?.(result, bookResults[indexInBookResults].originalIndex)
+                }
+                onResultReferenceClick={(result, indexInBookResults) =>
+                  onResultReferenceClick?.(result, bookResults[indexInBookResults].originalIndex)
                 }
                 onHideResult={(indexInBookResults) =>
                   onHideResult(bookResults[indexInBookResults].originalIndex)
@@ -779,6 +859,9 @@ export function Find({
                 localizedStrings={searchResultLocalizedStrings}
                 isReplaceMode={activeMode === 'replace'}
                 isReplacing={isReplacing}
+                replaceConfig={replaceConfig}
+                previewOptions={previewOptions}
+                allowInvisibleCharacters={allowInvisibleCharacters}
                 logger={logger}
               />
             );

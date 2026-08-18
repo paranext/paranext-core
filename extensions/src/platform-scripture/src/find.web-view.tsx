@@ -1,17 +1,22 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
+  useData,
+  useDataProvider,
   useLocalizedStrings,
   useProjectData,
   useProjectDataProvider,
   useProjectSetting,
+  useSetting,
   useWebViewController,
 } from '@papi/frontend/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { Scope, SCOPE_SELECTOR_STRING_KEYS, sonner, useRecentSearches } from 'platform-bible-react';
+import { Scope, SCOPE_SELECTOR_STRING_KEYS, sonner } from 'platform-bible-react';
 import {
   debounce,
+  DEBOUNCE_CANCELED_ERROR_MESSAGE,
+  DebouncedFunction,
   formatReplacementString,
   getErrorMessage,
   groupBy,
@@ -33,6 +38,7 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Find, FIND_LOCALIZED_STRING_KEYS } from './find/find.component';
+import { applyPreserveCase, isSimpleInterfaceMode } from './find/find.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
@@ -42,6 +48,7 @@ import {
   HidableFindResult,
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './find/search-result.component';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -60,29 +67,12 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   ...WEB_VIEW_LOCALIZED_STRINGS,
 ];
 
-const findPdpMutex = new Mutex();
 const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
-
-/**
- * Applies preserve-case transformation to the replacement text based on the casing of the matched
- * text:
- *
- * - ALL CAPS match → ALL CAPS replacement
- * - Title Case match (first letter capital) → Title Case replacement
- * - Otherwise → replacement as-is
- */
-function applyPreserveCase(matchedText: string, replacementText: string): string {
-  if (!replacementText || !matchedText) return replacementText;
-  if (matchedText === matchedText.toUpperCase() && matchedText !== matchedText.toLowerCase()) {
-    return replacementText.toUpperCase();
-  }
-  const firstChar = matchedText[0];
-  if (firstChar === firstChar.toUpperCase() && firstChar !== firstChar.toLowerCase()) {
-    return replacementText[0].toUpperCase() + replacementText.slice(1);
-  }
-  return replacementText;
-}
+/** Delay after typing stops before the current search term is saved to history. */
+const HISTORY_DEBOUNCE_DELAY_MS = 5000;
+/** Stable empty-array reference so the History data subscription's default doesn't change identity. */
+const DEFAULT_RECENT_SEARCHES: string[] = [];
 
 /**
  * Returns a promise that resolves after `ms` milliseconds. The cancel function stored in
@@ -130,6 +120,9 @@ global.webViewComponent = function FindWebView({
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
+  // Each instance needs its own mutex — a module-level mutex would cause operations from one Find
+  // panel to block another if two panels are open for different projects simultaneously.
+  const findPdpMutex = useRef(new Mutex()).current;
   const [searchTerm, setSearchTerm] = useWebViewState<string>('findSearchTerm', '');
   const [scope, setScope] = useWebViewState<Scope>('findScope', 'book');
   // These three state variables exist solely for the change-detection feature (booksToMonitor /
@@ -140,9 +133,39 @@ global.webViewComponent = function FindWebView({
     undefined,
   );
 
-  const [recentSearches, setRecentSearches] = useWebViewState<string[]>('findRecentSearches', []);
+  const findHistoryProvider = useDataProvider('platformScripture.findHistory');
+  // Keep the resolved provider in a ref so writes from unmount cleanup effects go out immediately
+  // instead of first awaiting a provider lookup that may not complete before the WebView is destroyed.
+  const findHistoryProviderRef = useRef(findHistoryProvider);
+  findHistoryProviderRef.current = findHistoryProvider;
 
-  const addRecentSearchItem = useRecentSearches(recentSearches, setRecentSearches);
+  // Subscribe to the shared find history so every find WebView sees the same list and updates made
+  // in one WebView automatically appear in the others.
+  const [recentSearchesPossiblyError] = useData<'platformScripture.findHistory'>(
+    findHistoryProvider,
+  ).History(projectId, DEFAULT_RECENT_SEARCHES);
+  const recentSearches = isPlatformError(recentSearchesPossiblyError)
+    ? DEFAULT_RECENT_SEARCHES
+    : recentSearchesPossiblyError;
+
+  // Track the last term written to storage so repeated calls for the same term (e.g. clicking
+  // through results) don't trigger redundant writes.
+  const lastPersistedHistoryTermRef = useRef<string | undefined>(undefined);
+  const addToHistory = useCallback(
+    (term: string) => {
+      if (!term) return;
+      if (term === lastPersistedHistoryTermRef.current) return;
+      lastPersistedHistoryTermRef.current = term;
+      findHistoryProviderRef.current?.addHistoryItem(term, projectId).catch(() => {});
+    },
+    [projectId],
+  );
+
+  const [lastSearchTermPossiblyError, , isLoadingLastSearchTerm] =
+    useData<'platformScripture.findHistory'>(findHistoryProvider).LastSearchTerm(projectId, '');
+  const lastSearchTermStorage = isPlatformError(lastSearchTermPossiblyError)
+    ? ''
+    : lastSearchTermPossiblyError;
 
   const [selectedBookIds, setSelectedBookIds] = useWebViewState<string[]>(
     'findSelectedBookIds',
@@ -164,8 +187,31 @@ global.webViewComponent = function FindWebView({
   const [isRegexAllowed, setIsRegexAllowed] = useWebViewState<boolean>('findIsRegexAllowed', false);
 
   const [activeMode, setActiveMode] = useWebViewState<'find' | 'replace'>('findActiveMode', 'find');
+  // Replace is a power-mode-only capability. In simple interface mode we hide the find/replace
+  // toggle and keep the panel in find mode. Defaults to 'simple' while the setting loads, so the
+  // toggle stays hidden until we know the mode is 'power' (fail-safe — see isSimpleInterfaceMode).
+  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
+  const isSimpleMode = useMemo(
+    () => isSimpleInterfaceMode(interfaceModePossiblyError),
+    [interfaceModePossiblyError],
+  );
+  // If the user was left in replace mode (persisted from power mode) and the interface switches to
+  // simple, coerce back to find so the internal replace-gating effects below also see find mode.
+  useEffect(() => {
+    if (isSimpleMode && activeMode === 'replace') setActiveMode('find');
+  }, [isSimpleMode, activeMode, setActiveMode]);
   const [replaceTerm, setReplaceTerm] = useWebViewState<string>('findReplaceTerm', '');
   const [preserveCase, setPreserveCase] = useWebViewState<boolean>('findPreserveCase', false);
+  const [storedPreviewOptions, setStoredPreviewOptions] = useWebViewState<PreviewOptions>(
+    'findPreviewOptions',
+    DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  );
+  // Spread-merge with defaults so adding new fields in future versions doesn't break stored values
+  // that were saved before those fields existed.
+  const previewOptions = useMemo(
+    () => ({ ...DEFAULT_REPLACE_PREVIEW_OPTIONS, ...storedPreviewOptions }),
+    [storedPreviewOptions],
+  );
   /**
    * True while a replace operation is executing (including the mandatory re-find afterward). Keeps
    * replace buttons disabled during the gap between replace() completing and searchStatus becoming
@@ -257,6 +303,88 @@ global.webViewComponent = function FindWebView({
     };
   }, []);
 
+  // #region Find history persistence
+
+  // Track the current search term and the latest addToHistory callback in refs so unmount cleanups
+  // and timers read fresh values without re-subscribing.
+  const searchTermRef = useRef(searchTerm);
+  useEffect(() => {
+    searchTermRef.current = searchTerm;
+  }, [searchTerm]);
+
+  const addToHistoryRef = useRef(addToHistory);
+  addToHistoryRef.current = addToHistory;
+
+  const persistLastSearchTerm = useCallback(
+    (term: string) => {
+      findHistoryProviderRef.current?.setLastSearchTerm(projectId, term).catch(() => {});
+    },
+    [projectId],
+  );
+  const persistLastSearchTermRef = useRef(persistLastSearchTerm);
+  persistLastSearchTermRef.current = persistLastSearchTerm;
+
+  // Restore the last search term from storage when the webview first loads with an empty field.
+  const [searchTermRestored, setSearchTermRestored] = useState(false);
+  useEffect(() => {
+    if (searchTermRestored) return;
+    if (isLoadingLastSearchTerm) return;
+    setSearchTermRestored(true);
+    if (lastSearchTermStorage && !searchTerm) setSearchTerm(lastSearchTermStorage);
+  }, [
+    isLoadingLastSearchTerm,
+    lastSearchTermStorage,
+    searchTerm,
+    searchTermRestored,
+    setSearchTerm,
+  ]);
+
+  // Persist the current search term (debounced) so it survives session restarts.
+  const debouncedPersistLastSearchTerm = useRef<DebouncedFunction<(term: string) => void>>(
+    debounce((term: string) => persistLastSearchTermRef.current(term), 1000),
+  );
+  useEffect(() => {
+    if (!searchTermRestored) return undefined;
+    const debouncedPersist = debouncedPersistLastSearchTerm.current;
+    debouncedPersist(searchTerm).catch((error) => {
+      const message = getErrorMessage(error);
+      if (message !== DEBOUNCE_CANCELED_ERROR_MESSAGE)
+        logger.warn(`Error persisting last search term: ${message}`);
+    });
+    return () => debouncedPersist.cancel();
+  }, [searchTerm, searchTermRestored]);
+
+  // Save the search term to storage on unmount (closing the tab or the application).
+  useEffect(() => {
+    return () => {
+      persistLastSearchTermRef.current(searchTermRef.current);
+    };
+  }, []);
+
+  // Save the search term to history on unmount, and after a period of typing inactivity.
+  const addToHistoryTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => {
+    return () => {
+      clearTimeout(addToHistoryTimeoutRef.current);
+      if (searchTermRef.current) addToHistoryRef.current(searchTermRef.current);
+    };
+  }, []);
+  useEffect(() => {
+    clearTimeout(addToHistoryTimeoutRef.current);
+    if (searchTerm) {
+      addToHistoryTimeoutRef.current = setTimeout(() => {
+        addToHistoryRef.current(searchTerm);
+      }, HISTORY_DEBOUNCE_DELAY_MS);
+    }
+    return () => clearTimeout(addToHistoryTimeoutRef.current);
+  }, [searchTerm]);
+
+  // Skips the first render of the options-change history effect below so restoring saved options
+  // doesn't immediately push the restored term into history.
+  const isInitialOptionsRenderRef = useRef(true);
+
+  // #endregion Find history persistence
+
   // #region Get available books and their localizations
 
   const [booksPresentPossiblyError] = useProjectSetting(
@@ -272,6 +400,18 @@ global.webViewComponent = function FindWebView({
     }
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
+
+  // Whether the project preserves invisible characters literally in USFM. Forwarded to the result
+  // cards so the "Show invisible" preview renders the USFM tilde `~` as a literal tilde (true) vs. an
+  // NBSP stand-in (false). Matches the setting the finder PDPE reads for the search itself.
+  const [allowInvisibleCharactersPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.allowInvisibleCharacters',
+    false,
+  );
+  const allowInvisibleCharacters: boolean = isPlatformError(allowInvisibleCharactersPossiblyError)
+    ? false
+    : allowInvisibleCharactersPossiblyError;
 
   const availableBooksIds = useMemo(() => {
     return getBookIdsFromBooksPresent(booksPresent).filter(
@@ -334,7 +474,7 @@ global.webViewComponent = function FindWebView({
     } catch (error) {
       logger.error(`Error acquiring mutex to abandon find job: ${getErrorMessage(error)}`);
     }
-  }, [findPdp, setActiveJobId]);
+  }, [findPdp, findPdpMutex, setActiveJobId]);
 
   const beginFindJob = useCallback(
     async (findOptions: FindOptions) => {
@@ -357,7 +497,7 @@ global.webViewComponent = function FindWebView({
         logger.error(`Error acquiring mutex to begin find job: ${getErrorMessage(error)}`);
       }
     },
-    [findPdp, setActiveJobId],
+    [findPdp, findPdpMutex, setActiveJobId],
   );
 
   const stopFindJob = useCallback(async () => {
@@ -376,7 +516,7 @@ global.webViewComponent = function FindWebView({
       logger.error(`Error acquiring mutex to stop find job: ${getErrorMessage(error)}`);
       return false;
     }
-  }, [findPdp]);
+  }, [findPdp, findPdpMutex]);
 
   const retrieveFindJobUpdate = useCallback(
     async (maxResultsToInclude: number): Promise<FindJobStatusReport | undefined> => {
@@ -397,7 +537,7 @@ global.webViewComponent = function FindWebView({
         return undefined;
       }
     },
-    [findPdp],
+    [findPdp, findPdpMutex],
   );
 
   // #endregion
@@ -434,6 +574,16 @@ global.webViewComponent = function FindWebView({
     if (scope === 'book') return `book:${verseRefSetting.book}`;
     return `chapter:${verseRefSetting.book}:${verseRefSetting.chapterNum}`;
   }, [scope, selectedBookIds, verseRefSetting.book, verseRefSetting.chapterNum]);
+
+  // When search options change (not the search term itself), add the current term to history — the
+  // user is intentionally refining how to search for it.
+  useEffect(() => {
+    if (isInitialOptionsRenderRef.current) {
+      isInitialOptionsRenderRef.current = false;
+      return;
+    }
+    if (searchTermRef.current) addToHistoryRef.current(searchTermRef.current);
+  }, [shouldMatchCase, wordRestriction, isRegexAllowed, searchTextType, relevantScopeKey]);
 
   // Stores a cancel function for a pending replace/replace-all operation (the 1-second window
   // before the re-search fires). Calling it stops the timer and triggers a revert.
@@ -472,7 +622,7 @@ global.webViewComponent = function FindWebView({
       isStartingSearchRef.current = true;
 
       try {
-        if (isExplicitSearch) addRecentSearchItem(searchTerm);
+        if (isExplicitSearch) addToHistory(searchTerm);
 
         await abandonFindJob();
         if (!isMountedRef.current) return;
@@ -516,7 +666,7 @@ global.webViewComponent = function FindWebView({
     },
     [
       abandonFindJob,
-      addRecentSearchItem,
+      addToHistory,
       beginFindJob,
       findPdp,
       findScope,
@@ -543,10 +693,16 @@ global.webViewComponent = function FindWebView({
         setSearchStatus(undefined);
         setSearchError(undefined);
         setFocusedResultIndex(undefined);
+        // There is no focused result anymore, so remove the current-result highlight from the editor.
+        // The cleanup effect only removes it on controller change / unmount, so clearing (or starting
+        // a new search) would otherwise leave a stale amber highlight painted with nothing selected.
+        editorWebViewController
+          ?.runAnnotationAction('find-current-result', 'removed')
+          .catch(() => {});
         await abandonFindJob();
       } else await stopFindJob();
     },
-    [abandonFindJob, stopFindJob],
+    [abandonFindJob, stopFindJob, editorWebViewController],
   );
 
   const loadMoreResults = useCallback(async () => {
@@ -826,25 +982,74 @@ global.webViewComponent = function FindWebView({
     }
   }, [activeMode, focusedResultIndex, results, searchStatus]);
 
+  // Remove the find-result-highlight annotation when the editor changes or the find panel closes.
+  useEffect(() => {
+    const currentController = editorWebViewController;
+    return () => {
+      currentController?.runAnnotationAction('find-current-result', 'removed').catch(() => {});
+    };
+  }, [editorWebViewController]);
+
   const handleFocusedResultChange = useCallback(
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
       if (editorWebViewId && editorWebViewController) {
-        // In Find mode, focus the editor so the user can read in context.
-        // In Replace mode, keep focus in the Find WebView so replace term stays editable.
-        if (activeMode === 'find') {
-          papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        // Preview the match in the editor (select + highlight) without stealing focus, so the user
+        // can keep navigating results. Double-click / reference-click shift focus to the editor.
+        //
+        // Hidden case (see .claude/rules/cross-view-sync-hidden-views.md): if the editor tab is
+        // inactive, the preview scroll no-ops (no layout in a display:none iframe) and does NOT catch
+        // up on activation. This is a deliberate no-op, not an oversight: (1) PAPI exposes no way for
+        // this panel to observe the *editor's* visibility (useViewVisibility only sees this panel's
+        // own iframe), so a deferred catch-up isn't implementable here; (2) selection + annotation
+        // are data-driven, so they persist and render when the editor is shown — only the preview
+        // scroll is geometry; and (3) the explicit "go there" path (handleOpenAtResult) calls
+        // setFocus to activate the editor and re-runs selectRange, which scrolls correctly. A silent
+        // preview while the editor is hidden has nothing to preview, so doing nothing is correct.
+        try {
+          editorWebViewController
+            .selectRange({ start: searchResult.start, end: searchResult.end })
+            .catch(() => {});
+          editorWebViewController
+            .setAnnotation(
+              { start: searchResult.start, end: searchResult.end },
+              'find-result-highlight',
+              'find-current-result',
+            )
+            .catch(() => {});
+        } catch {
+          // Ignore any synchronous errors from the controller methods.
         }
-        editorWebViewController
-          .selectRange({
-            start: searchResult.start,
-            end: searchResult.end,
-          })
-          .catch((e) => logger.warn(`Find: selectRange failed: ${getErrorMessage(e)}`));
       }
     },
-    [activeMode, editorWebViewController, editorWebViewId, setVerseRefSetting],
+    [editorWebViewController, editorWebViewId, setVerseRefSetting],
+  );
+
+  /** Navigate to a result AND shift focus to the editor (double-click / reference-click). */
+  const handleOpenAtResult = useCallback(
+    (searchResult: HidableFindResult, index: number) => {
+      setFocusedResultIndex(index);
+      setVerseRefSetting(searchResult.start.verseRef);
+      if (editorWebViewId && editorWebViewController) {
+        papi.window.setFocus({ focusType: 'webView', id: editorWebViewId });
+        // Await selectRange before setAnnotation so the websocket is settled (avoids
+        // "Tried to send payload while not connected" races).
+        editorWebViewController
+          .selectRange({ start: searchResult.start, end: searchResult.end })
+          .then(() => {
+            if (editorWebViewId && editorWebViewController)
+              return editorWebViewController.setAnnotation(
+                { start: searchResult.start, end: searchResult.end },
+                'find-result-highlight',
+                'find-current-result',
+              );
+            return undefined;
+          })
+          .catch((e) => logger.warn(`Find: failed to update editor: ${getErrorMessage(e)}`));
+      }
+    },
+    [editorWebViewController, editorWebViewId, setVerseRefSetting],
   );
 
   const handleHideResult = useCallback((index: number) => {
@@ -1238,15 +1443,19 @@ global.webViewComponent = function FindWebView({
       scope={scope}
       verseRef={verseRefSetting}
       booksPresent={booksPresent}
+      allowInvisibleCharacters={allowInvisibleCharacters}
       selectedBookIds={selectedBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}
       searchTextType={searchTextType}
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
-      activeMode={activeMode}
+      activeMode={isSimpleMode ? 'find' : activeMode}
+      hideModeToggle={isSimpleMode}
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
+      previewOptions={previewOptions}
+      onPreviewOptionsChange={setStoredPreviewOptions}
       isReplacing={isReplacing}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
@@ -1272,6 +1481,9 @@ global.webViewComponent = function FindWebView({
       onReplaceTermChange={setReplaceTerm}
       onPreserveCaseChange={setPreserveCase}
       onFocusedResultChange={handleFocusedResultChange}
+      onResultFocus={handleFocusedResultChange}
+      onResultDoubleClick={handleOpenAtResult}
+      onResultReferenceClick={handleOpenAtResult}
       onHideResult={handleHideResult}
       onReplace={handleReplace}
       onReplaceAll={handleReplaceAll}

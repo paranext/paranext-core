@@ -981,6 +981,40 @@ declare module 'platform-scripture' {
 
   // #endregion Scripture Edit Permissions Types
 
+  // #region Find History Types
+
+  /**
+   * Data types for the find history data provider. The selector for each data type is the project
+   * id the history belongs to, or `undefined` for history not associated with a project.
+   */
+  export type FindHistoryDataTypes = {
+    /** The user's recent find search history (most recent first) */
+    History: DataProviderDataType<string | undefined, string[], string[]>;
+    /** The find search term most recently used, restored when the find WebView reopens */
+    LastSearchTerm: DataProviderDataType<string | undefined, string, string>;
+  };
+
+  /**
+   * Provides the user's find search history and last search term, backed by user data storage.
+   * Subscribing through this data provider keeps every consumer's copy of the history in sync, so
+   * multiple find WebViews do not clobber each other's changes.
+   */
+  export type IFindHistoryDataProvider = IDataProvider<FindHistoryDataTypes> & {
+    /**
+     * Adds one item to the top of the find search history for a project. If the item is already in
+     * the history, it moves to the top instead of being duplicated. The history is capped at a
+     * maximum number of items, dropping the oldest. Prefer this over `setHistory` so the data
+     * provider manages ordering and deduplication consistently for all consumers.
+     *
+     * @param item The search term to add. Empty strings are ignored.
+     * @param projectId The project whose history to add to, or `undefined` for history not
+     *   associated with a project
+     */
+    addHistoryItem(item: string, projectId?: string): Promise<void>;
+  };
+
+  // #endregion Find History Types
+
   // #region Marker Types
 
   /** Provides information about markers */
@@ -2331,6 +2365,7 @@ declare module 'papi-shared-types' {
     CheckResultsInvalidated,
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
+    IFindHistoryDataProvider,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -2370,6 +2405,8 @@ declare module 'papi-shared-types' {
      * Simple interface. See {@link IRecentlyOpenedProjectsService}.
      */
     'platformScripture.recentlyOpenedProjects': IRecentlyOpenedProjectsService;
+    /** Data provider for the user's find search history and last search term */
+    'platformScripture.findHistory': IFindHistoryDataProvider;
   }
 
   export interface CommandHandlers {
@@ -2391,39 +2428,99 @@ declare module 'papi-shared-types' {
 
     'platformScripture.invalidateCheckResults': (details: CheckResultsInvalidated) => Promise<void>;
 
+    /**
+     * Open the characters inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened characters inventory web view, or `undefined` if no web view
+     *   id was provided or the web view has no project (nothing is opened in that case).
+     */
     'platformScripture.openCharactersInventory': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
-    'platformScripture.openRepeatedWordsInventory': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
-    'platformScripture.openMarkersInventory': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
-    'platformScripture.openPunctuationInventory': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
-    'platformScripture.openChecksSidePanel': (
-      projectId?: string | undefined,
+      webViewId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
-     * Open the Find / Replace UI for a project. The single optional argument is the calling
-     * editor's `webViewId` (when invoked from an editor's menu, so the Find UI can inherit the
-     * editor's project + scroll group). Pass `undefined` to open without an editor context.
+     * Open the repeated-words inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened repeated-words inventory web view, or `undefined` if no web
+     *   view id was provided or the web view has no project (nothing is opened in that case).
      */
-    'platformScripture.openFind': (
+    'platformScripture.openRepeatedWordsInventory': (
+      webViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the markers inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened markers inventory web view, or `undefined` if no web view id
+     *   was provided or the web view has no project (nothing is opened in that case).
+     */
+    'platformScripture.openMarkersInventory': (
+      webViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the punctuation inventory web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the newly opened punctuation inventory web view, or `undefined` if no web view
+     *   id was provided or the web view has no project (nothing is opened in that case).
+     */
+    'platformScripture.openPunctuationInventory': (
+      webViewId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the checks side panel next to a scripture editor.
+     *
+     * @param editorWebViewId Id of the triggering editor's web view — not a project id. The
+     *   editor's project and scroll group are resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`, and the panel is placed relative to that editor
+     *   tab.
+     * @returns Id of the newly opened checks side panel web view, or `undefined` if no editor web
+     *   view id was provided or the web view has no project (nothing is opened in that case).
+     */
+    'platformScripture.openChecksSidePanel': (
       editorWebViewId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
-     * Open the Markers Checklist web view. Resolves the target project from the supplied
-     * `webViewId` (of an editor tab) when provided.
+     * Open the Find / Replace UI for a project. Reuses an existing find web view rather than
+     * opening a new one when possible, reloading it if the resolved project differs from the
+     * existing web view's project, and brings the web view to front.
      *
+     * @param editorWebViewId Id of the triggering editor's web view — not a project id. The project
+     *   and scroll group for the Find / Replace UI are resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @param selectedText Text to pre-fill the search box with (e.g. the editor's current selection
+     *   when invoked via Ctrl+F). Pass `undefined` to open without a pre-filled search.
+     * @returns Id of the find web view (existing or newly opened), or `undefined` if no editor web
+     *   view id was provided or the web view has no project (nothing is opened in that case).
+     */
+    'platformScripture.openFind': (
+      editorWebViewId?: string | undefined,
+      selectedText?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Open the Markers Checklist web view.
+     *
+     * @param webViewId Id of the triggering web view (e.g. the editor tab the command was invoked
+     *   from) — not a project id. The target project is resolved from it internally via
+     *   `papi.webViews.getOpenWebViewDefinition`.
+     * @returns Id of the opened markers checklist web view, or `undefined` if no web view id was
+     *   provided or the web view has no project (nothing is opened in that case), or if the
+     *   provider did not create one.
      * @experimental
      */
     'platformScripture.openMarkersChecklist': (
@@ -2439,18 +2536,20 @@ declare module 'papi-shared-types' {
     'platformScripture.openMarkersChecklistSettings': () => Promise<void>;
 
     /**
-     * Open the unified Manage Books dialog (FN-008, 2026-05-01) for the active scripture project.
-     * Opens the dialog as a tab web view; the dialog itself supports View / Create / Delete / Copy
-     * / Import action modes and an inline book-chooser grid.
+     * Open the unified Manage Books dialog (FN-008, 2026-05-01) as a centered floating window. The
+     * dialog supports View / Create / Delete / Copy / Import action modes and an inline
+     * book-chooser grid. Only one Manage Books dialog is open at a time (FN-003): if one is already
+     * open, it is reloaded with the newly resolved project and brought to front instead of opening
+     * a second window.
      *
-     * The single optional argument is either an editor's `webViewId` (when invoked from a
-     * scripture-editor menu) or a literal project id (when invoked from the main menu or from
-     * another extension). The handler probes the value with
-     * `papi.webViews.getOpenWebViewDefinition` — if it resolves, the dialog opens pre-targeted at
-     * that web view's project; otherwise the value is treated as a project id and the dialog opens
-     * for that project directly. Pass `undefined` to open the dialog with the project picker
-     * visible.
-     *
+     * @param webViewIdOrProjectId Either an editor's `webViewId` (when invoked from a
+     *   scripture-editor menu) or a literal project id (when invoked from the main menu or from
+     *   another extension). The handler probes the value with
+     *   `papi.webViews.getOpenWebViewDefinition` — if it resolves to a web view with a project, the
+     *   dialog opens pre-targeted at that project; otherwise the value itself is treated as the
+     *   project id. Omit to open the dialog with the project picker visible.
+     * @returns Id of the Manage Books web view — the existing one if reused, or a newly opened one
+     *   — or `undefined` if the provider did not create one.
      * @experimental
      */
     'platformScripture.openManageBooks': (

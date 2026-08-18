@@ -8,6 +8,17 @@ import type { MultiSourceNetworkEvents } from 'papi-shared-types';
 const PUBLIC_MULTI_SOURCE_EVENT_NAMES = [
   'object:onDidCreateNetworkObject',
   'object:onDidDisposeNetworkObject',
+  'platform.onDidChangeProjects',
+  // Scroll group and web view events are emitted by the renderers, and there is one renderer per
+  // open window. Each window navigates its own UI and opens its own web views, so each has to be
+  // able to announce what it did — under single-source semantics only the first window to start
+  // could register an emitter, and every other window's emits would be dropped.
+  'scrollGroup:onDidUpdateScrRef',
+  'scrollGroup:onDidChangeReferenceHistory',
+  'webView:onDidAddWebView',
+  'webView:onDidOpenWebView',
+  'webView:onDidUpdateWebView',
+  'webView:onDidCloseWebView',
 ] satisfies (keyof MultiSourceNetworkEvents)[];
 
 /**
@@ -17,7 +28,14 @@ const PUBLIC_MULTI_SOURCE_EVENT_NAMES = [
  * surfaced in the OpenRPC document, but kept as plain strings here so they never appear in the
  * public types.
  */
-const INTERNAL_MULTI_SOURCE_EVENT_NAMES = ['shared-store:change'];
+const INTERNAL_MULTI_SOURCE_EVENT_NAMES = [
+  'shared-store:change',
+  // Emitted by whichever renderer is tracking a project whose versification changed, so it needs
+  // the same per-window multi-source treatment as the scroll group events above. Kept internal
+  // because it is a host↔hook signal rather than part of the `@papi/*` surface — see the emitter in
+  // `scroll-group.service-host.ts`.
+  'scrollGroup:onDidChangeVersification',
+];
 
 /**
  * Source of truth for which event names use multi-source semantics at the central registry. Must
@@ -32,3 +50,21 @@ export const MULTI_SOURCE_EVENT_NAMES: ReadonlySet<string> = new Set<string>([
   ...PUBLIC_MULTI_SOURCE_EVENT_NAMES,
   ...INTERNAL_MULTI_SOURCE_EVENT_NAMES,
 ]);
+
+/**
+ * Name of the platform-internal network event the main process emits when a window closes. The
+ * payload is the closed window's Electron window id.
+ *
+ * The main process owns window-lifecycle truth, so it is the only emitter — this is a single-source
+ * event and deliberately absent from {@link MULTI_SOURCE_EVENT_NAMES}. It is a plain string rather
+ * than a `NetworkEvents` declaration because it is core plumbing between the main process and the
+ * renderer service hosts, not part of the `@papi/*` surface.
+ *
+ * Renderers need this because a closing window tears its RPC connection down without disposing the
+ * network objects it hosted: nothing emits `object:onDidDisposeNetworkObject` on a socket close, so
+ * app-global services hosted by one window (the theme engine, the scroll group service) have no
+ * other signal that their host went away.
+ *
+ * @experimental
+ */
+export const EVENT_NAME_ON_DID_CLOSE_WINDOW = 'platform:onDidCloseWindow';

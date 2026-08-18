@@ -225,3 +225,179 @@ describe('MarkerMenu — disallowed items', () => {
     expect(screen.getByRole('separator')).toBeInTheDocument();
   });
 });
+
+describe('MarkerMenu — selection state', () => {
+  const SELECTION_STRINGS = { '%markerMenu_searchPlaceholder%': 'Type a style or search.' };
+
+  it('renders no selection affordance and sets no aria-checked when an item omits selectionState', () => {
+    // The inertness guard. Both Power-mode consumers (the `\` menu and the footnote editor) pass
+    // items without this field, and they must render exactly as they did before it existed.
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', action: vi.fn() }]}
+      />,
+    );
+
+    const row = screen.getByRole('option', { name: /Bold/ });
+    expect(row).not.toHaveAttribute('aria-checked');
+    expect(row.querySelector('[data-slot="marker-selection-state"]')).toBeNull();
+  });
+
+  it('marks a fully covered item as checked', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', selectionState: 'all', action: vi.fn() }]}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: /Bold/ })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('marks a partially covered item as mixed', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[
+          { marker: 'bd', title: 'Bold', selectionState: 'partial', action: vi.fn() },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: /Bold/ })).toHaveAttribute('aria-checked', 'mixed');
+  });
+
+  it('shows a check for a partially covered item while still reporting mixed to assistive tech', () => {
+    // UX chose a binary visual (checked / not) over a three-glyph one; aria-checked keeps the
+    // distinction that the visual drops.
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[
+          { marker: 'bd', title: 'Bold', selectionState: 'partial', action: vi.fn() },
+        ]}
+      />,
+    );
+
+    const row = screen.getByRole('option', { name: /Bold/ });
+    expect(row).toHaveAttribute('aria-checked', 'mixed');
+    expect(row.querySelector('[data-slot="marker-selection-state"]')?.children).toHaveLength(1);
+  });
+
+  it('renders no glyph for an uncovered item, but keeps its slot so rows stay aligned', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[
+          { marker: 'it', title: 'Italic', selectionState: 'none', action: vi.fn() },
+        ]}
+      />,
+    );
+
+    const slot = screen
+      .getByRole('option', { name: /Italic/ })
+      .querySelector('[data-slot="marker-selection-state"]');
+    expect(slot).not.toBeNull();
+    expect(slot?.children).toHaveLength(0);
+  });
+
+  it('marks an uncovered item as unchecked while still rendering its slot', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[
+          { marker: 'it', title: 'Italic', selectionState: 'none', action: vi.fn() },
+        ]}
+      />,
+    );
+
+    const row = screen.getByRole('option', { name: /Italic/ });
+    expect(row).toHaveAttribute('aria-checked', 'false');
+    expect(row.querySelector('[data-slot="marker-selection-state"]')).not.toBeNull();
+  });
+
+  it('never sets data-checked, so the trailing check stays hidden', () => {
+    // CommandItem renders its own trailing check keyed on data-checked. The leading glyph carries
+    // all three states, so setting it would double the checkmark.
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', selectionState: 'all', action: vi.fn() }]}
+      />,
+    );
+
+    expect(screen.getByRole('option', { name: /Bold/ })).not.toHaveAttribute('data-checked');
+  });
+
+  it('still fires the action for an item that carries a selection state', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const action = vi.fn();
+    render(
+      <MarkerMenu
+        localizedStrings={SELECTION_STRINGS}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', selectionState: 'partial', action }]}
+      />,
+    );
+
+    await user.click(screen.getByRole('option', { name: /Bold/ }));
+    expect(action).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MarkerMenu — consumer-disabled rows', () => {
+  const DISABLED_STRINGS = { '%markerMenu_searchPlaceholder%': 'Type a style or search.' };
+
+  it('leaves a row selectable when isDisabled is absent', async () => {
+    // The inertness guard for the new field. Both Power-mode consumers (the `\` menu and the
+    // footnote editor) pass items without it, and those rows must stay clickable.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const action = vi.fn();
+    render(
+      <MarkerMenu
+        localizedStrings={DISABLED_STRINGS}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', action }]}
+      />,
+    );
+
+    const row = screen.getByRole('option', { name: /Bold/ });
+    expect(row).not.toHaveAttribute('aria-disabled', 'true');
+    await user.click(row);
+    expect(action).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables a row and suppresses its action when isDisabled is true', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const action = vi.fn();
+    render(
+      <MarkerMenu
+        localizedStrings={DISABLED_STRINGS}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', isDisabled: true, action }]}
+      />,
+    );
+
+    const row = screen.getByRole('option', { name: /Bold/ });
+    expect(row).toHaveAttribute('aria-disabled', 'true');
+    await user.click(row);
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('renders no trailing label for a consumer-disabled row', () => {
+    // Unlike isDisallowed/isDeprecated, this flag describes the consumer rather than the marker,
+    // so it must not borrow either of their labels.
+    render(
+      <MarkerMenu
+        localizedStrings={{
+          ...DISABLED_STRINGS,
+          '%markerMenu_disallowed_label%': 'Disallowed',
+          '%markerMenu_deprecated_label%': 'Deprecated',
+        }}
+        markerMenuItems={[{ marker: 'bd', title: 'Bold', isDisabled: true, action: vi.fn() }]}
+      />,
+    );
+
+    const row = screen.getByRole('option', { name: /Bold/ });
+    expect(row).not.toHaveTextContent('Disallowed');
+    expect(row).not.toHaveTextContent('Deprecated');
+  });
+});

@@ -12,7 +12,7 @@ import { ProcessType } from '@shared/global-this.model';
 import { app } from 'electron';
 import { getCommandLineArgument, CommandLineArgs } from '@node/utils/command-line.util';
 import { LogLevel } from 'electron-log';
-import { isNoisyDevModeEnvVariableSet } from '@node/utils/util';
+import { isNoisyDevModeEnvVariableSet, isStartupMarksEnvVariableSet } from '@node/utils/util';
 
 // #region globalThis setup
 
@@ -26,6 +26,7 @@ globalThis.logLevel =
   (getCommandLineArgument(CommandLineArgs.LogLevel) as LogLevel) ??
   (globalThis.isPackaged ? 'info' : 'debug');
 globalThis.isNoisyDevModeEnabled = isNoisyDevModeEnvVariableSet();
+globalThis.startupMarks = isStartupMarksEnvVariableSet();
 
 // #endregion
 

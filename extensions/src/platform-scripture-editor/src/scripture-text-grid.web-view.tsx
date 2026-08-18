@@ -12,6 +12,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
   usePromise,
+  useTabIconSelection,
+  type TabIconUrls,
 } from 'platform-bible-react';
 import { Settings2 } from 'lucide-react';
 import {
@@ -58,9 +60,10 @@ import {
   ZOOM_OPTIONS_KEY,
   type ZoomMenuLabels,
 } from './scripture-text-grid/resource-cell-view.component';
-import { pickTabIconUrl, type TabIconUrls } from './scripture-text-grid/tab-icon.util';
 
-// The tab is icon-only; this is the hover tooltip / accessible name for it.
+// The tab's visible title, hover tooltip, and accessible name. The title/tooltip themselves are
+// resolved and set by scriptureTextGridWebViewProvider in main.ts (not by this web view); this key
+// is still needed here for the accessible name below.
 const TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 const VIEW_OPTIONS_BUTTON_KEY = '%webView_scriptureTextGrid_viewOptions_openPanel%';
 // Notification keys are localized by the notification service, so they are NOT fetched via
@@ -284,17 +287,18 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     });
   }, [effectiveProjectId, textConnectionPdp]);
 
-  // Icon-only tab: no visible text label, with "Text Collection" as the hover tooltip / accessible
-  // name so the tab stays identifiable.
-  useEffect(() => {
-    if (isLoadingLocalizedStrings) return;
-    updateWebViewDefinition({ title: '', tooltip: localizedStrings[TITLE_KEY] });
-  }, [isLoadingLocalizedStrings, localizedStrings, updateWebViewDefinition]);
+  // "Text Collection" (icon+title when the column is roomy, hidden in favor of the icon alone once
+  // it narrows — same responsive behavior as the other Column 3 tabs) is resolved and set directly
+  // by scriptureTextGridWebViewProvider in main.ts, not here: this web view's own render/effects
+  // don't reliably run promptly while its tab is backgrounded, which previously left the header
+  // blank until the tab was activated once, even though updateWebViewDefinition had already pushed
+  // the correct value. Setting it in the provider means the tab shows the right title/tooltip from
+  // its very first render, independent of this web view's own mount timing.
 
   // Pick the tab icon variant to match the current theme and selected state. The tab icon is
   // painted by the platform as a static background-image, so a `currentColor` SVG can't follow the
-  // theme — we swap the `iconUrl` ourselves based on both the theme type from `papi.themes` and the
-  // tab's selected state (detected via offsetParent on the iframe element).
+  // theme — subscribe to the theme here (PAPI-specific) and let the shared hook handle selection
+  // detection and variant picking.
   const [isDarkTheme, setIsDarkTheme] = useState(false);
   useEffect(() => {
     let disposed = false;
@@ -315,34 +319,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     };
   }, []);
 
-  // Detect the tab's selected state by polling whether the iframe has an offsetParent. rc-dock
-  // hides an inactive tab's pane (display:none), so an unselected tab's iframe has no offsetParent.
-  // This is best-effort — any failure yields `undefined`, which falls back to the mid-slate icon.
-  const [isTabSelected, setIsTabSelected] = useState<boolean | undefined>(undefined);
+  const gridIconUrl = useTabIconSelection(isDarkTheme, TAB_ICON_URLS);
   useEffect(() => {
-    const read = (): boolean | undefined => {
-      try {
-        const { frameElement } = window;
-        if (!(frameElement instanceof HTMLElement)) return undefined;
-        return !!frameElement.offsetParent;
-      } catch {
-        return undefined;
-      }
-    };
-    const update = () =>
-      setIsTabSelected((prev) => {
-        const next = read();
-        return prev === next ? prev : next;
-      });
-    update();
-    // rc-dock fires no event we can hook from inside the iframe on tab switches, so poll cheaply.
-    const id = window.setInterval(update, 500);
-    return () => window.clearInterval(id);
-  }, []);
-
-  useEffect(() => {
-    updateWebViewDefinition({ iconUrl: pickTabIconUrl(isDarkTheme, isTabSelected, TAB_ICON_URLS) });
-  }, [isDarkTheme, isTabSelected, updateWebViewDefinition]);
+    updateWebViewDefinition({ iconUrl: gridIconUrl });
+  }, [gridIconUrl, updateWebViewDefinition]);
 
   const handleCheckedChange = useCallback(
     (resourceId: string, checked: boolean) => {

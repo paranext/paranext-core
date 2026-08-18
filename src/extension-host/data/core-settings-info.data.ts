@@ -40,6 +40,21 @@ export const platformSettings: SettingsContribution = [
         description: '%settings_platform_interfaceMode_description%',
         default: 'simple',
       },
+      'platform.firstRunComplete': {
+        label: '%settings_platform_firstRunComplete_label%',
+        default: false,
+        isHidden: true,
+      },
+      'platform.syncOnStartup': {
+        label: '%settings_platform_syncOnStartup_label%',
+        default: true,
+        isHidden: true,
+      },
+      'platform.showRegistrationReminderOnStartup': {
+        label: '%settings_platform_showRegistrationReminderOnStartup_label%',
+        description: '%settings_platform_showRegistrationReminderOnStartup_description%',
+        default: true,
+      },
     },
   },
 ];
@@ -66,9 +81,12 @@ const serializableStringDictionarySettingValidator: SettingValidator<
   return typeof newValue === 'object' && Object.values(newValue).every((value) => isString(value));
 };
 
-const booleanValidator: SettingValidator<'platform.commentsEnabled'> = async (
-  newValue: boolean,
-): Promise<boolean> => {
+const booleanValidator: SettingValidator<
+  | 'platform.commentsEnabled'
+  | 'platform.firstRunComplete'
+  | 'platform.syncOnStartup'
+  | 'platform.showRegistrationReminderOnStartup'
+> = async (newValue): Promise<boolean> => {
   return typeof newValue === 'boolean';
 };
 
@@ -121,4 +139,7 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.requestTimeout': requestTimeoutValidator,
   'platform.zoomFactor': zoomFactorValidator,
   'platform.interfaceMode': interfaceModeValidator,
+  'platform.firstRunComplete': booleanValidator,
+  'platform.syncOnStartup': booleanValidator,
+  'platform.showRegistrationReminderOnStartup': booleanValidator,
 };

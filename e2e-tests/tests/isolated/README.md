@@ -21,4 +21,10 @@ npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e
 ## Subdirectories
 
 - `comment-assignment/` — tests for assigning comments to users
+- `first-run/` — tests for the first-run wizard (PT-4175 / PT-4179)
+- `multi-window/` — tests for multi-window lifecycle (second-window startup, focus routing, app-global service hosting takeover, single shutdown-task run on quit), window layout persistence (windows, layouts, and bounds surviving relaunches; a deliberately closed window staying closed; the pre-multi-window single-window upgrade path), and per-window UI isolation (overlays, dialogs, notifications, navigation targets, and web-view placement staying in their own window; scroll groups deliberately app-global)
+- `navigation-history/` — tests for back/forward reference history navigation
 - `overlay/` — tests for the project-switch transition overlay
+- `scroll-groups/` — tests for scroll-group synchronization between scripture editors
+- `title-bar/` — tests for title bar layout, e.g. reserved space for native window controls
+- `verse-navigation/` — tests for verse navigation keyboard shortcuts

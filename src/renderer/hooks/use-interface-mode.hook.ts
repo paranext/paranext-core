@@ -14,16 +14,23 @@ type InterfaceMode = SettingTypes['platform.interfaceMode'];
  * (project picker shown, scroll-group selector hidden, etc.) until `useSetting` resolves and
  * triggers a re-render, which is visible as a flicker.
  */
-const INTERFACE_MODE_CACHE_KEY = 'platform-bible.interfaceMode';
+export const INTERFACE_MODE_CACHE_KEY = 'platform-bible.interfaceMode';
 
-function readCachedInterfaceMode(): InterfaceMode {
+/**
+ * Reads the last-known `platform.interfaceMode` from the `localStorage` cache, or `undefined` on a
+ * miss / unavailable storage. Returning `undefined` (rather than defaulting) lets each caller apply
+ * its own fallback: this hook seeds `'simple'`, while the first-run store keeps `undefined` to
+ * distinguish "no cached mode yet" from "cached as simple". Shared so the cache format/accepted
+ * values live in one place and the gate's power-vs-simple routing can't silently diverge.
+ */
+export function readCachedInterfaceMode(): InterfaceMode | undefined {
   try {
     const raw = localStorage.getItem(INTERFACE_MODE_CACHE_KEY);
     if (raw === 'power' || raw === 'simple') return raw;
   } catch {
     // localStorage may be unavailable (e.g. in some test or sandboxed environments); fall through
   }
-  return 'simple';
+  return undefined;
 }
 
 function writeCachedInterfaceMode(mode: InterfaceMode): void {
@@ -48,7 +55,7 @@ export function useInterfaceMode(): [
 ] {
   const [modePossiblyError, setMode] = useSetting(
     'platform.interfaceMode',
-    readCachedInterfaceMode(),
+    readCachedInterfaceMode() ?? 'simple',
   );
   const mode: InterfaceMode = isPlatformError(modePossiblyError) ? 'simple' : modePossiblyError;
 

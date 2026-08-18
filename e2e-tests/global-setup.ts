@@ -46,6 +46,71 @@ function waitForPort(port: number, timeout: number): Promise<void> {
   });
 }
 
+/**
+ * Newest file modification time (ms since epoch) under `dir`, recursively. Used to detect a stale
+ * dev main bundle. `node_modules` is skipped — dependency changes are reflected in package.json.
+ */
+function newestMtimeMs(dir: string): number {
+  return fs.readdirSync(dir, { withFileTypes: true }).reduce((newest, entry) => {
+    if (entry.name === 'node_modules') return newest;
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) return Math.max(newest, newestMtimeMs(entryPath));
+    if (entry.isFile()) return Math.max(newest, fs.statSync(entryPath).mtimeMs);
+    return newest;
+  }, 0);
+}
+
+/**
+ * Whether a prebuilt dev bundle is older than the main-process sources it was built from.
+ * Playwright launches Electron against these prebuilt bundles (there is no webpack watcher in an
+ * E2E run), so a bundle from before the current checkout's changes would silently test STALE code —
+ * the renderer, served fresh by the dev server, would be new while main stayed old.
+ */
+function isDevBundleStale(rootDir: string, bundlePath: string): boolean {
+  const bundleMtime = fs.statSync(bundlePath).mtimeMs;
+  // The bundles' inputs: the main-process entry tree (src/main — which is also where preload.ts
+  // lives — plus the src/shared and src/node code it imports; src/extension-host and src/renderer
+  // run from source/dev-server and cannot go stale this way), the workspace library the bundle
+  // compiles in (platform-bible-utils; the platform-bible-react import in src/shared is types-only
+  // and never reaches the bundle), the webpack configs that shape the bundles, and package.json
+  // (dependency changes).
+  const sourceDirs = [
+    'src/main',
+    'src/shared',
+    'src/node',
+    'lib/platform-bible-utils/src',
+    '.erb/configs',
+  ];
+  const newestSource = Math.max(
+    ...sourceDirs.map((dir) => newestMtimeMs(path.join(rootDir, dir))),
+    fs.statSync(path.join(rootDir, 'package.json')).mtimeMs,
+  );
+  return newestSource > bundleMtime;
+}
+
+/**
+ * The prebuilt dev bundles an E2E run launches Electron against, each paired with the npm script
+ * that emits it.
+ *
+ * The preload needs an entry of its own because `prestart` does NOT produce the preload the app
+ * loads: the main webpack config's `preload` entry emits `preload.bundle.dev.js`, which nothing
+ * reads, while the unpackaged app points `BrowserWindow`'s `preload` at `.erb/dll/preload.js` (see
+ * `createWindow` in src/main/main.ts) — the output of the separate preload config. The renderer dev
+ * server does spawn a watcher for it, but only when this setup has to start the server, and setup
+ * waits for the server's port rather than for that build, so Electron could launch against whatever
+ * preload bundle was lying around from an earlier checkout. Build it here instead, where the same
+ * staleness check that covers the main bundle covers it.
+ */
+const DEV_BUNDLES = [
+  { label: 'main bundle', relativePath: '.erb/dll/main.bundle.dev.js', buildScript: 'prestart' },
+  {
+    label: 'preload bundle',
+    relativePath: '.erb/dll/preload.js',
+    // The one-shot build; `start:preload` is the same webpack config in watch mode and never exits
+    buildScript: 'build:preload:dev',
+  },
+];
+
 // Playwright global setup requires this signature even though config is unused
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default async function globalSetup(_config: FullConfig): Promise<void> {
@@ -84,14 +149,20 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     },
   );
 
-  // Ensure the dev main bundle exists
-  const devMainPath = path.join(rootDir, '.erb/dll/main.bundle.dev.js');
-  if (!fs.existsSync(devMainPath)) {
-    console.log('Development main bundle not found. Building...');
-    execSync('npm run prestart', { cwd: rootDir, stdio: 'inherit' });
-  } else {
-    console.log('Development main bundle found.');
-  }
+  // Ensure every prebuilt dev bundle exists and is at least as new as the main-process sources — a
+  // stale bundle would run OLD code against the fresh dev-server renderer.
+  DEV_BUNDLES.forEach(({ label, relativePath, buildScript }) => {
+    const bundlePath = path.join(rootDir, relativePath);
+    if (!fs.existsSync(bundlePath)) {
+      console.log(`Development ${label} not found. Building...`);
+    } else if (isDevBundleStale(rootDir, bundlePath)) {
+      console.log(`Development ${label} is older than main-process sources. Rebuilding...`);
+    } else {
+      console.log(`Development ${label} found and up to date.`);
+      return;
+    }
+    execSync(`npm run ${buildScript}`, { cwd: rootDir, stdio: 'inherit' });
+  });
 
   // Start the webpack dev server for the renderer if not already running
   if (await isPortInUse(RENDERER_PORT)) {

@@ -1,8 +1,23 @@
-/* Small utility helpers for the platform-scripture-editor extension. */
+/*
+ * Small utility helpers for the platform-scripture-editor extension.
+ *
+ * `main.ts` imports from this module, so it loads in the extension host, where the module shim
+ * rejects any `require` other than `papi`. Keep runtime UI values out of here: importing a
+ * `lucide-react` icon or a `platform-bible-react` component as a *value* makes the whole extension
+ * fail to activate, so no scripture editor opens. Type-only imports are erased by the compiler and
+ * are fine. Helpers that need runtime UI values belong in a module the host never reaches — see
+ * `character-marker-menu.utils.ts`. Neither the build nor lint catches a violation, so
+ * `extension-host-import-boundary.test.ts` walks `main.ts`'s transitive value-import graph and fails
+ * on any module the host's `require` shim does not supply.
+ */
 
 import { LocalizationSelectors, SavedWebViewDefinition } from '@papi/core';
 import type PapiBackend from '@papi/backend';
 import type PapiFrontend from '@papi/frontend';
+// Type-only: `main.ts` reaches this module in the extension host, where the `require` shim supplies
+// only `papi`, so this package must never become a runtime import here (see the note at the top of
+// this file). `USJ_VERSION` is used solely under `typeof`, so `import type` keeps it erased.
+import type { MarkerContent, Usj, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import {
   aggregateUnsubscribers,
   formatReplacementString,
@@ -20,11 +35,11 @@ import {
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ScriptureRange } from 'platform-scripture-editor';
+import type { ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
-import { MutableRefObject } from 'react';
-import { EditorRef } from '@eten-tech-foundation/platform-editor';
-import { MarkerMenuItem } from 'platform-bible-react';
+import type { MutableRefObject } from 'react';
+import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
+import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
@@ -53,6 +68,21 @@ export function valuesAreDeeplyEqual(a: unknown, b: unknown): boolean {
 // Alias that makes the "across iframes" intent explicit for callers that prefer it.
 // Exported with this syntax to preserve the TSDocs
 export { valuesAreDeeplyEqual as deepEqualAcrossIframes };
+
+/**
+ * Corrects editor USJ version from 3.1 to 3.0. Returns a shallow clone of the object passed in.
+ *
+ * Currently, this is appropriate to do because the editor seems to work properly with 3.0, but it
+ * doesn't handle the version well right now. It always sets it to 3.1 even if it started as 3.0.
+ * When we better deal with USFM version differences and when Paratext 9 adds 3.1.2 support, we will
+ * need to change how we're handling this.
+ */
+export function correctEditorUsjVersion(editorUsj: Usj): Usj {
+  // Use version 3.0 because `ParatextData.dll` serves 3.0 but the editor isn't handling version
+  // well right now
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
+}
 
 // #region Editor Title Formatting
 
@@ -1041,3 +1071,88 @@ export async function openOrUpdateRelatedPanels(
 }
 
 // #endregion Text Connection Panels
+
+// #region Chapter Scaffold Helpers
+
+function containsChapterOrVerseNode(content: MarkerContent[]): boolean {
+  return content.some((item) => {
+    if (typeof item === 'string') return false;
+    if (item.type === 'chapter' || item.type === 'verse') return true;
+    return item.content ? containsChapterOrVerseNode(item.content) : false;
+  });
+}
+
+/**
+ * Whether the given chapter-scoped USJ is "effectively blank" — contains neither a chapter-type
+ * node nor any verse-type node anywhere in its content tree. Checking for an existing chapter node
+ * (not verses alone) matters: a chapter that already has a `\c` marker but zero verses must not be
+ * flagged blank, or inserting the scaffold would create a duplicate `\c` node.
+ *
+ * @param usj The chapter-scoped USJ to check (as returned by the `platformScripture.USJ_Chapter`
+ *   PDP's `ChapterUSJ`, i.e. already scoped to a single chapter).
+ * @returns `true` if the chapter has no chapter marker and no verses, `false` otherwise.
+ */
+export function isChapterBlank(usj: Usj): boolean {
+  return !containsChapterOrVerseNode(usj.content);
+}
+
+/**
+ * Builds the Delta operations that insert a blank `\c` + `\v 1..N` scaffold — one chapter marker
+ * followed by one verse marker per verse, each with empty text content. Intended for
+ * `EditorRef.applyUpdate` when reinstating a chapter number in an effectively-blank chapter.
+ *
+ * @param chapterNum The chapter number to insert (matching the chapter shown in the BCV control).
+ * @param lastVerseNum The last verse number for this chapter, per the project's versification.
+ * @returns The Delta operations, in insertion order.
+ */
+export function buildChapterScaffoldOps(chapterNum: number, lastVerseNum: number): DeltaOp[] {
+  const verseOps: DeltaOp[] = [];
+  for (let verseNum = 1; verseNum <= lastVerseNum; verseNum += 1) {
+    verseOps.push({ insert: { verse: { number: `${verseNum}`, style: 'v' } } });
+  }
+  return [{ insert: { chapter: { number: `${chapterNum}`, style: 'c' } } }, ...verseOps];
+}
+
+/**
+ * Whether the "Add Chapter Number" button should be enabled for a chapter with the given last verse
+ * number (as returned by `getEndVerse`). `getEndVerse` returns `0` for chapter 0 or any chapter
+ * with no versification entry — a reachable case (e.g. front-matter references use `chapterNum:
+ * 0`), not just a defensive one — and the button must not render as clickable then.
+ *
+ * @param lastVerse The chapter's last verse number, from `getEndVerse(book, chapterNum)`.
+ * @returns `true` if the button should be enabled, `false` otherwise.
+ */
+export function canAddChapterNumber(lastVerse: number): boolean {
+  return lastVerse > 0;
+}
+
+/** Outcome of {@link resolveAddChapterNumberClick} — what a click on the button should do. */
+export type AddChapterNumberClickOutcome = 'insert' | 'already-in-flight' | 'no-versification';
+
+/**
+ * Decides what a click on the "Add Chapter Number" button should do, given whether a previous
+ * click's scaffold insert is still in flight and the chapter's last verse number.
+ *
+ * - `'already-in-flight'` — a previous click's insert is still working its way through the
+ *   `applyUpdate` → save → PDP-echo round trip (~300ms measured), during which the button stays
+ *   visible and enabled. Treating this click as a no-op prevents the scaffold from being inserted a
+ *   second time (which would write duplicate `\c`/`\v` markers).
+ * - `'no-versification'` — `lastVerse <= 0`. `canAddChapterNumber` should already have hidden the
+ *   button in this case, so reaching this outcome is a rare defensive fallback, not the normal
+ *   path.
+ * - `'insert'` — proceed with the scaffold insert.
+ *
+ * @param isInsertInFlight Whether a previously-triggered insert has not yet completed (i.e. the
+ *   chapter has not yet been observed to become non-blank).
+ * @param lastVerse The chapter's last verse number, from `getEndVerse(book, chapterNum)`.
+ */
+export function resolveAddChapterNumberClick(
+  isInsertInFlight: boolean,
+  lastVerse: number,
+): AddChapterNumberClickOutcome {
+  if (isInsertInFlight) return 'already-in-flight';
+  if (!canAddChapterNumber(lastVerse)) return 'no-versification';
+  return 'insert';
+}
+
+// #endregion Chapter Scaffold Helpers

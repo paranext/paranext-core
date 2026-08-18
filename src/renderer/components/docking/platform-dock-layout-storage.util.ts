@@ -124,8 +124,8 @@ function loadSavedTabInfo(savedTabInfo: SavedTabInfo): TabInfo {
  *
  * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
  * @param shouldFlash If true, the tab info will be adjusted to start flashing when next rendered.
- *   Defaults to `false`
- * @returns Live dock layout tab ready to used
+ *   Defaults to `false`.
+ * @returns Live dock layout tab ready to use.
  */
 export function loadTab(savedTabInfo: SavedTabInfo, shouldFlash = false): RCDockTabInfo {
   if (!savedTabInfo.id) throw new LogError('loadTab: "id" is missing.');
@@ -133,7 +133,7 @@ export function loadTab(savedTabInfo: SavedTabInfo, shouldFlash = false): RCDock
   // Load the tab from the saved tab info
   const tabInfo = loadSavedTabInfo(savedTabInfo);
 
-  return createRCDockTabFromTabInfo(tabInfo, shouldFlash);
+  return createRCDockTabFromTabInfo(tabInfo, { shouldFlash });
 }
 
 /**
@@ -784,7 +784,7 @@ export function updateWebViewDefinition(
 
   const updatedTabData = createRCDockTabFromTabInfo(
     updateWebViewTab(targetTabInfo, updatedWebViewData ?? targetTabWebViewData),
-    shouldBringToFront,
+    { shouldFlash: shouldBringToFront },
   );
 
   // Update existing tab

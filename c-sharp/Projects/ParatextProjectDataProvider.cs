@@ -1705,16 +1705,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             // Paratext project setting value found, so return the value with the appropriate type
             if (ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName))
             {
-                return settingValue.ToUpperInvariant() switch
-                {
-                    "F" => false,
-                    "FALSE" => false,
-                    "T" => true,
-                    "TRUE" => true,
-                    _ => throw new InvalidDataException(
+                if (!ProjectSettingsNames.TryParseParatextBoolean(settingValue, out bool boolValue))
+                    throw new InvalidDataException(
                         $"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"
-                    ),
-                };
+                    );
+                return boolValue;
             }
             return settingValue;
         }
@@ -1875,16 +1870,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         )
                         {
                             var stringValue = value?.ToString() ?? "";
-                            value = stringValue.ToUpperInvariant() switch
-                            {
-                                "F" => "F",
-                                "FALSE" => "F",
-                                "T" => "T",
-                                "TRUE" => "T",
-                                _ => throw new InvalidDataException(
+                            if (
+                                !ProjectSettingsNames.TryParseParatextBoolean(
+                                    stringValue,
+                                    out bool boolValue
+                                )
+                            )
+                                throw new InvalidDataException(
                                     $"Failed to convert Paratext setting {settingName} to boolean. Value was \"{stringValue}\""
-                                ),
-                            };
+                                );
+                            // Normalize to the canonical single-letter form Paratext stores
+                            value = boolValue ? "T" : "F";
                         }
                         scrText.Settings.SetSetting(paratextSettingName, value!.ToString());
                         // We are notifying when we release our lock, so don't automatically
@@ -1903,6 +1899,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             throw new Exception(errorMessage);
 
         SendDataUpdateEvent(ProjectDataType.SETTING, "project setting data update event");
+
+        // If the write changed a setting that backs the project-picker / Home metadata (name,
+        // fullName, language, languageTag, isEditable), tell those list consumers the metadata is
+        // stale so they refetch it, rather than showing the old value until an unrelated refresh.
+        if (ProjectSettingsNames.IsProjectMetadataDisplaySetting(paratextSettingName))
+            _paratextProjects.NotifyProjectsChanged();
 
         // When the versification setting changes, the platformScripture.Versification
         // projectInterface's derived values change too — notify subscribers on those data types so
@@ -2574,6 +2576,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public string GetChapterUsx(VerseRef verseRef)
     {
+        // Time the first chapter served process-wide, without spamming every navigation. MarkOnce is
+        // process-wide and thread-safe, so a mid-session open of another project (or two concurrent
+        // first calls) can't inject a duplicate mark.
+        Services.StartupTiming.MarkOnce("first-get-chapter-usx");
         return GetFromScrText(
             verseRef,
             (ScrText scrText, VerseRef verseRef) => ConvertUsfmToUsx(scrText, verseRef, true)

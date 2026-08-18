@@ -158,3 +158,11 @@ export function joinUriPaths(uri: Uri, ...paths: string[]): Uri {
  */
 export const isNoisyDevModeEnvVariableSet = (): boolean =>
   !!process.env.DEV_NOISY && process.env.DEV_NOISY === 'true';
+
+/**
+ * Determines if startup timing marks are requested for this launch
+ *
+ * @returns True if the `PT_STARTUP_MARKS` environment variable requests startup timing marks, false
+ *   otherwise
+ */
+export const isStartupMarksEnvVariableSet = (): boolean => process.env.PT_STARTUP_MARKS === 'true';

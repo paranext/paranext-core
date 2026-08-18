@@ -2,8 +2,13 @@ import { vi } from 'vitest';
 import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { simpleLayout } from './simple-layout.data';
+import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
 vi.mock('../../../shared/services/logger.service');
+vi.mock('@renderer/services/theme.service-host', () => ({
+  __esModule: true,
+  localThemeService: {},
+}));
 
 describe('simple-layout.data', () => {
   describe('simpleLayout', () => {
@@ -56,6 +61,16 @@ describe('simple-layout.data', () => {
       expect(new Set(allIds).size).toBe(allIds.length);
     });
 
+    it('columns 1 and 2 use HEADLESS_GROUP; column 3 uses TAB_GROUP_RESOURCES', () => {
+      const expectedGroups = [HEADLESS_GROUP, HEADLESS_GROUP, TAB_GROUP_RESOURCES];
+      columns.forEach((col, index) => {
+        // Narrowing column to BoxData and its first child to PanelData to read its group.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const panel = (col as BoxData).children[0] as PanelData;
+        expect(panel.group).toBe(expectedGroups[index]);
+      });
+    });
+
     it('contains the five expected webViewType strings', () => {
       const allWebViewTypes: string[] = [];
       columns.forEach((col) => {
@@ -74,6 +89,18 @@ describe('simple-layout.data', () => {
       expect(allWebViewTypes).toContain('platformScriptureEditor.bibleTexts');
       expect(allWebViewTypes).toContain('platformScriptureEditor.commentaries');
       expect(allWebViewTypes).toContain('legacyCommentManager.commentListPanel');
+    });
+
+    it('each column panel has panelLock.minWidth of 300 so it cannot be resized to nothing', () => {
+      columns.forEach((col) => {
+        // Narrowing column to BoxData and its first child to PanelData to read panelLock.
+        // rc-dock's Algorithm.fixPanelOrBox unconditionally resets box/panel minWidth to 0,
+        // but then respects panelLock.minWidth as an override (Algorithm.js lines 566-569).
+        // This test verifies the constraint is set on panelLock, the field that survives fixup.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const panel = (col as BoxData).children[0] as PanelData;
+        expect(panel.panelLock?.minWidth).toBe(300);
+      });
     });
   });
 });

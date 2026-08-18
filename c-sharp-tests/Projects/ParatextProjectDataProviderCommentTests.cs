@@ -3589,7 +3589,6 @@ namespace TestParanextDataProvider.Projects
             Assert.That(after, Does.Contain("big village"));
         }
 
-
         [Test]
         public void ResolveConflict_Reject_StampsReplacedResolutionActionOnResolutionComment()
         {

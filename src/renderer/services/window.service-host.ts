@@ -44,7 +44,7 @@ const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
 });
 
 /**
- * Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.).
+ * Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.).
  *
  * This contains the exact element that is being focused. It is a helper internally for this file
  * only. It helps with determining when "other" focus subject changes
@@ -338,13 +338,21 @@ class WindowDataProviderEngine
     newSetFocusSpecifierPossiblyUndefinedSelector: SetFocusSpecifier | undefined,
     newSetFocusSpecifierPossiblyNotProvided?: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
+    // The trailing `?? undefined` collapses a `null` arriving in the specifier position. The types
+    // say that cannot happen, but arguments cross the process boundary as JSON, where an `undefined`
+    // becomes `null` — and "deselect" is recognized further down by being strictly `undefined`, so a
+    // `null` reaching there is taken for a subject to focus and has an id read off it.
     const newSetFocusSpecifier: SetFocusSpecifier | FocusSubjectElement | undefined =
-      newSetFocusSpecifierPossiblyUndefinedSelector ?? newSetFocusSpecifierPossiblyNotProvided;
+      newSetFocusSpecifierPossiblyUndefinedSelector ??
+      newSetFocusSpecifierPossiblyNotProvided ??
+      undefined;
 
     // Update the tracked focus in this service based on what is actually focused
     if (newSetFocusSpecifier === 'detect') {
-      // Need to debounce because it takes a sec for the focus to change in the DOM
-      return this.#setDetectFocusInternalDebounced();
+      // Need to debounce because it takes a sec for the focus to change in the DOM. The debounced
+      // function resolves `undefined` when a leading-edge call is superseded (coalesced) before it
+      // runs; coalesce that to `false` so this method always returns a boolean per its contract.
+      return (await this.#setDetectFocusInternalDebounced()) ?? false;
     }
 
     // Figure out what we should be focusing
@@ -516,8 +524,15 @@ export async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
+          // Register under this window's scoped name (e.g. "platform.windowServiceDataProvider-1")
+          // so multiple renderers can coexist. The main process routes the generic name to the
+          // focused window.
           dataProvider = await dataProviderService.registerEngine(
-            windowServiceProviderName,
+            // Only the name needs asserting — it is built at runtime, but registerEngine expects
+            // the literal provider name and infers the right provider type from it, the same way
+            // window.service.ts resolves it on the consuming side
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            `${windowServiceProviderName}-${globalThis.windowId}` as typeof windowServiceProviderName,
             new WindowDataProviderEngine(),
           );
           resolve();

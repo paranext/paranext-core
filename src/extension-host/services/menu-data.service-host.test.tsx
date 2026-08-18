@@ -1,5 +1,14 @@
+import { menuDocumentCombiner } from '@extension-host/services/contribution.service';
 import { testingMenuDataService } from '@extension-host/services/menu-data.service-host';
 import { PlatformMenus, ReferencedItem, WebViewMenus } from 'platform-bible-utils';
+import { vi } from 'vitest';
+
+vi.mock('@shared/services/settings.service', () => ({
+  settingsService: {
+    get: vi.fn(async () => 'power'),
+    subscribe: vi.fn(async () => async () => true),
+  },
+}));
 
 const EXTENSION_NAME: ReferencedItem = 'videoExtension.playEditWebView';
 const MOCK_MENU_DATA: PlatformMenus = {
@@ -214,4 +223,261 @@ test('Setting unlocalized main menu data throws', async () => {
   await expect(menuDataProviderEngine.setUnlocalizedMainMenu()).rejects.toThrow(
     'setUnlocalizedMainMenu disabled',
   );
+});
+
+describe('Simple-mode menu item filtering', () => {
+  const MOCK_MENU_DATA_WITH_HIDDEN_ITEM: PlatformMenus = {
+    ...MOCK_MENU_DATA,
+    mainMenu: {
+      ...MOCK_MENU_DATA.mainMenu,
+      items: [
+        ...MOCK_MENU_DATA.mainMenu.items,
+        {
+          label: '%test_hiddenMainMenuItem%',
+          localizeNotes: 'Test item hidden in simple mode',
+          group: 'paratext.sendReceive',
+          order: 99,
+          command: 'test.hiddenMainMenuCommand',
+          hiddenInterfaceModes: ['simple'],
+        },
+      ],
+    },
+    webViewMenus: (() => {
+      // Indexing MOCK_MENU_DATA.webViewMenus directly with EXTENSION_NAME doesn't type-check
+      // (same TS quirk noted in the file's existing 'Get web view menu data' test above) — go
+      // through a WebViewMenus-typed local first.
+      // eslint-disable-next-line prefer-destructuring
+      const webViewMenus: WebViewMenus = MOCK_MENU_DATA.webViewMenus;
+      return {
+        [EXTENSION_NAME]: {
+          ...webViewMenus[EXTENSION_NAME],
+          topMenu: {
+            // Spreading webViewMenus[EXTENSION_NAME].topMenu directly would make columns/groups
+            // optional in the result (it's typed MultiColumnMenu | undefined even though
+            // MOCK_MENU_DATA above always defines it), so reconstruct the required fields
+            // explicitly instead.
+            columns: webViewMenus[EXTENSION_NAME].topMenu?.columns ?? {},
+            groups: webViewMenus[EXTENSION_NAME].topMenu?.groups ?? {},
+            items: [
+              ...(webViewMenus[EXTENSION_NAME].topMenu?.items ?? []),
+              {
+                label: '%test_hiddenWebViewMenuItem%',
+                localizeNotes: 'Test item hidden in simple mode',
+                group: 'videoExtension.videoTop',
+                order: 99,
+                command: 'test.hiddenWebViewMenuCommand',
+                hiddenInterfaceModes: ['simple'],
+              },
+            ],
+          },
+          contextMenu: {
+            groups: webViewMenus[EXTENSION_NAME].contextMenu?.groups ?? {},
+            items: [
+              ...(webViewMenus[EXTENSION_NAME].contextMenu?.items ?? []),
+              {
+                label: '%test_hiddenWebViewContextMenuItem%',
+                localizeNotes: 'Test item hidden in simple mode',
+                group: 'platform.insert',
+                order: 99,
+                command: 'test.hiddenWebViewContextMenuCommand',
+                hiddenInterfaceModes: ['simple'],
+              },
+            ],
+          },
+        },
+      };
+    })(),
+  };
+
+  test('getMainMenu excludes hiddenInterfaceModes items when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    // Let the fire-and-forget settings read in the constructor resolve
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getMainMenu();
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(false);
+    // Unflagged items are unaffected
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'paratext.sendReceiveProjects',
+      ),
+    ).toBe(true);
+  });
+
+  test('getMainMenu includes hiddenInterfaceModes items when platform.interfaceMode is power', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getMainMenu();
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(true);
+  });
+
+  test('getUnlocalizedMainMenu excludes hiddenInterfaceModes items when platform.interfaceMode is simple, matching getMainMenu (macOS menubar consistency)', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getUnlocalizedMainMenu();
+    expect(
+      result.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(false);
+  });
+
+  test('getWebViewMenu excludes hiddenInterfaceModes items from topMenu when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(
+      result.topMenu?.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenWebViewMenuCommand',
+      ),
+    ).toBe(false);
+    expect(
+      result.topMenu?.items.some(
+        (item) => 'command' in item && item.command === 'videoExtension.playVideo',
+      ),
+    ).toBe(true);
+  });
+
+  test('getWebViewMenu excludes hiddenInterfaceModes items from contextMenu when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(
+      result.contextMenu?.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenWebViewContextMenuCommand',
+      ),
+    ).toBe(false);
+  });
+
+  test('getWebViewMenu includes hiddenInterfaceModes contextMenu items when platform.interfaceMode is power', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+    expect(
+      result.contextMenu?.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenWebViewContextMenuCommand',
+      ),
+    ).toBe(true);
+  });
+
+  test('menu data updates live when platform.interfaceMode changes after subscribe resolves', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    let subscribedCallback: ((newMode: string) => void) | undefined;
+    vi.mocked(settingsService.subscribe).mockImplementation(async (_key, callback) => {
+      // subscribe's generic callback type is inferred as SettingTypes[SettingName] | PlatformError;
+      // narrow it to the concrete signature this test invokes it with below.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      subscribedCallback = callback as (newMode: string) => void;
+      return async () => true;
+    });
+
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(
+      MOCK_MENU_DATA_WITH_HIDDEN_ITEM,
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const beforeChange = await engine.getMainMenu();
+    expect(
+      beforeChange.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(true);
+
+    expect(subscribedCallback).toBeDefined();
+    if (!subscribedCallback) throw new Error('subscribedCallback was not set by mock');
+    subscribedCallback('simple');
+
+    const afterChange = await engine.getMainMenu();
+    expect(
+      afterChange.items.some(
+        (item) => 'command' in item && item.command === 'test.hiddenMainMenuCommand',
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('Platform menu document interface-mode gating', () => {
+  /**
+   * The real platform menu document (`menu.data.json`), exactly as the combiner hands it to the
+   * engine at startup — so these tests pin the shipped document's mode gating, not a mock's.
+   */
+  function getRealPlatformMenus(): PlatformMenus {
+    const realMenus = menuDocumentCombiner.rawOutput;
+    if (!realMenus) throw new Error('Platform menu document failed to combine');
+    return realMenus;
+  }
+
+  test('getMainMenu hides the Open new window item when platform.interfaceMode is simple', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
+    // Let the fire-and-forget settings read in the constructor resolve
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getMainMenu();
+    expect(
+      result.items.some((item) => 'command' in item && item.command === 'platform.createWindow'),
+    ).toBe(false);
+  });
+
+  test('getMainMenu shows the Open new window item when platform.interfaceMode is power', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getMainMenu();
+    expect(
+      result.items.some((item) => 'command' in item && item.command === 'platform.createWindow'),
+    ).toBe(true);
+  });
 });

@@ -732,23 +732,55 @@ export declare class SortedSet<T> {
 	 */
 	private findInsertionIndex;
 }
-/** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
+/**
+ * Simple collection for UnsubscriberAsync objects that also provides an easy way to run them.
+ *
+ * A list is single-use: it collects unsubscribers until {@link runAllUnsubscribers} runs them, and
+ * that run seals it for good. Anything added to a sealed list is unsubscribed immediately instead
+ * of being stored, because whatever these clean up after is already gone. Registration is usually
+ * asynchronous, so an unsubscriber routinely arrives after the teardown that should have run it —
+ * without sealing it would be stored in a list nobody drains again and its subscription would leak
+ * for the rest of the session.
+ */
 export declare class UnsubscriberAsyncList {
 	private name;
 	readonly unsubscribers: Set<Unsubscriber | UnsubscriberAsync>;
+	/**
+	 * Whether {@link runAllUnsubscribers} has started. Set at the top of the run rather than at the
+	 * end: the run takes a snapshot of the set and then clears it, so an unsubscriber added partway
+	 * through would land in a list that is never drained again.
+	 */
+	private isSealed;
 	constructor(name?: string);
 	/**
 	 * Add unsubscribers to the list. Note that duplicates are not added twice.
+	 *
+	 * Once {@link runAllUnsubscribers} has started, unsubscribers are run immediately rather than
+	 * stored. Nothing can await that run, so its outcome — success included — is only reported.
 	 *
 	 * @param unsubscribers - Objects that were returned from a registration process.
 	 */
 	add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]): void;
 	/**
-	 * Run all unsubscribers added to this list and then clear the list.
+	 * Run all unsubscribers added to this list, clear the list, and seal it so anything added later
+	 * is unsubscribed on arrival.
 	 *
-	 * @returns `true` if all unsubscribers succeeded, `false` otherwise.
+	 * An unsubscriber that throws (synchronously or asynchronously) does not make this method reject:
+	 * the error is caught and logged via `console.error`, the remaining unsubscribers still run, and
+	 * the thrower counts as a failure in the return value. An unsubscriber that arrives during the
+	 * run is not part of the returned result — nothing is waiting on it by then.
+	 *
+	 * @returns `true` if all unsubscribers succeeded, `false` if any returned `false` or threw.
 	 */
 	runAllUnsubscribers(): Promise<boolean>;
+	/**
+	 * Run an unsubscriber that arrived after the list was sealed. `add` is synchronous and has no
+	 * caller to hand a result to, so the outcome is reported here rather than thrown.
+	 *
+	 * The success path is reported too: from the caller's point of view a subscription it just set up
+	 * has been undone, and without a line here that happens with no record anywhere.
+	 */
+	private unsubscribeImmediately;
 }
 /**
  * Standard platform error codes based on gRPC status codes. These provide machine-readable,
@@ -931,6 +963,30 @@ export declare function isString(o: unknown): o is string;
  */
 export declare function deepClone<T>(obj: T): T;
 /**
+ * Message of the error with which a pending debounced invocation's promise rejects when
+ * {@link DebouncedFunction.cancel} is called. Compare a caught error's message against this to
+ * distinguish cancellation from real errors.
+ */
+export declare const DEBOUNCE_CANCELED_ERROR_MESSAGE = "Debounced function invocation was canceled";
+/**
+ * A debounced function with a `cancel` method to abandon any pending invocation.
+ *
+ * @template TFunc - The type of the function being debounced.
+ */
+export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>>) & {
+	/**
+	 * Cancel any pending debounced invocation. The promise returned by the most recent call rejects
+	 * with an error whose message is {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}.
+	 *
+	 * IMPORTANT: because cancellation _rejects_ that promise, every call whose result you might later
+	 * cancel MUST handle its rejection (await in a try/catch, or attach a `.catch`, filtering on
+	 * {@link DEBOUNCE_CANCELED_ERROR_MESSAGE} to distinguish cancellation from a real error).
+	 * Fire-and-forget callers that ignore the returned promise will get an unhandled promise
+	 * rejection when `cancel()` runs.
+	 */
+	cancel: () => void;
+};
+/**
  * Get a function that reduces calls to the function passed in
  *
  * @template TFunc - A function type that takes any arguments and returns void. This is the type of
@@ -938,9 +994,12 @@ export declare function deepClone<T>(obj: T): T;
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
- * @returns Function that, when called, only calls the function passed in at maximum every delay ms
+ * @returns Function that, when called, only calls the function passed in at maximum every delay ms.
+ *   The returned function also has a `cancel` method to abandon any pending invocation; canceling
+ *   makes the pending invocation's promise reject with an error whose message is
+ *   {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}.
  */
-export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>>;
+export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): DebouncedFunction<TFunc>;
 /**
  * Groups each item in the array of items into a map according to the keySelector
  *
@@ -987,6 +1046,26 @@ export declare function wait(ms: number): Promise<void>;
  *   longer than the specified wait time
  */
 export declare function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTimeInMS: number): Promise<Awaited<TResult> | undefined>;
+/**
+ * Repeatedly runs an async attempt until its result is accepted or the attempt budget is exhausted,
+ * waiting a fixed delay between tries (never after the last). Always resolves to the last result —
+ * it never throws on exhaustion, so the caller decides what a give-up result means.
+ *
+ * This is the fixed-attempts + fixed-delay retry shape shared by flaky-startup probes (e.g.
+ * `resolveRegistrationValidity`, and the missing-handler retry in `requestWithRetry`). For
+ * deadline- or abort-driven retries with variable backoff (e.g. `requestSessionSyncWithBootRetry`
+ * in startup-tasks), use a bespoke loop instead — this helper deliberately does not cover those.
+ *
+ * @param attempt Runs one try; receives the 1-based attempt number and resolves to a result.
+ * @param isDone Returns `true` when `attempt`'s result is acceptable and retrying should stop.
+ * @param options.maxAttempts Total tries; clamped to at least 1. Defaults to 3.
+ * @param options.delayMs Delay between tries. Defaults to 0.
+ * @returns The first accepted result, or the last attempt's result if none qualified.
+ */
+export declare function retryUntil<TResult>(attempt: (attemptNumber: number) => Promise<TResult>, isDone: (result: TResult) => boolean, options?: {
+	maxAttempts?: number;
+	delayMs?: number;
+}): Promise<TResult>;
 /**
  * Get all functions on an object and its prototype chain (so we don't miss any class methods or any
  * object methods). Note that the functions on the final item in the prototype chain (i.e., Object)
@@ -1103,6 +1182,15 @@ export type OrderedItem = {
 	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
 	order: number;
 };
+/**
+ * An interface mode a menu item can be hidden in.
+ *
+ * Keep in sync with `SettingTypes['platform.interfaceMode']` in
+ * `src/declarations/papi-shared-types.ts` — this package can't import that app-level type
+ * (dependency layering runs the other way), so this is an independently declared, structurally
+ * identical union rather than a shared one.
+ */
+export type InterfaceMode = "simple" | "power";
 export type OrderedExtensibleContainer = OrderedItem & {
 	/** Determines whether other items can be added to this after it has been defined */
 	isExtensible?: boolean;
@@ -1139,6 +1227,11 @@ export type MenuItemBase = OrderedItem & {
 	tooltip?: LocalizeKey;
 	/** Additional information provided by developers to help people who perform localization */
 	localizeNotes: string;
+	/**
+	 * Interface modes in which this menu item should be hidden. Omit (or use an empty array) for
+	 * items that should show in every mode — most items need no value here at all.
+	 */
+	hiddenInterfaceModes?: InterfaceMode[];
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -1439,6 +1532,14 @@ export declare const menuDocumentSchema: {
 				order: {
 					description: string;
 					type: string;
+				};
+				hiddenInterfaceModes: {
+					description: string;
+					type: string;
+					items: {
+						enum: string[];
+					};
+					uniqueItems: boolean;
 				};
 			};
 			required: string[];
@@ -3354,6 +3455,35 @@ export declare const usfmMarkers: {
  */
 export declare function isBlockMarker(marker: string): boolean;
 /**
+ * True when a marker is a character-level marker — one that labels a span of text between an
+ * opening and a closing marker (e.g. `\nd …\nd*`) rather than beginning a block of text.
+ *
+ * Character markers are identified by their {@link MarkerType.Character} type in {@link usfmMarkers}
+ * rather than a hand-maintained list. The chapter and verse numbering markers `v`, `va`, `vp`, and
+ * `ca` are also typed {@link MarkerType.Character} even though they are structure markers, so they
+ * are excluded by their `DivisionMarks` category — they are the only `MarkerType.Character` markers
+ * in that category, and the category is the only thing that separates them, since `va`, `vp`, and
+ * `ca` each have `hasEndMarker: true` like every genuine character marker.
+ *
+ * Note that the note and cross-reference _content_ markers (e.g. `ft`, `xo`, `xt`) are genuine
+ * character markers and return `true`; only the note markers that contain them (`f`, `fe`, `x`) are
+ * {@link MarkerType.Note}. A caller that wants only body-text styling markers must filter further.
+ *
+ * @example
+ *
+ * ```typescript
+ * isCharacterMarker('nd'); // true — labels a span of text
+ * isCharacterMarker('v'); // false — verse is a structure marker typed as a character marker
+ * isCharacterMarker('p'); // false — paragraph is a block marker
+ * ```
+ *
+ * @param marker Marker code to check, without its leading backslash (e.g. `nd`, not `\nd`)
+ * @returns `true` when the marker labels a span of text. `false` for block markers, for the note
+ *   markers `f`/`fe`/`x`, for the numbering markers `v`/`va`/`vp`/`ca`, and for empty or unknown
+ *   marker codes.
+ */
+export declare function isCharacterMarker(marker: string): boolean;
+/**
  * Sanitizes HTML content to prevent security risks while preserving safe formatting.
  *
  * @param html - The HTML string to sanitize
@@ -3982,6 +4112,19 @@ export declare function formatBytes(fileSize: number, decimals?: number): string
  */
 export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
 /**
+ * Normalizes a project id to its canonical, case-insensitive form (UPPERCASE) so it can key a
+ * `Map`/`Set` or be compared for equality without a casing mismatch silently dropping a match.
+ *
+ * Paratext project ids are hex GUIDs that the .NET data provider canonicalizes to uppercase;
+ * callers that join or dedupe ids arriving from mixed sources (e.g. an open-tab's `projectId`
+ * against a project list) must fold case the same way. This is the single shared normalizer so
+ * those callers cannot drift apart.
+ *
+ * @param projectId The project id to normalize.
+ * @returns The uppercase form of the id.
+ */
+export declare function normalizeProjectId(projectId: string): string;
+/**
  * Get a localized string representation of the time between two dates
  *
  * @example
@@ -4017,6 +4160,22 @@ export declare function formatRelativeDate(date: Date, todayString: string, yest
  * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
  */
 export declare const MODIFIER_KEYS: Set<string>;
+/**
+ * Physical keys (`KeyboardEvent.key` values) that {@link getLocalizeKeyForPhysicalKey} can name. Add
+ * to this union as UI needs to display more key names.
+ *
+ * Adding a member here requires adding a matching `%physicalKey_<camelCaseName>%` entry to every
+ * locale file under `assets/localization/` (see `en.json`/`es.json`) — this union alone doesn't
+ * guarantee the translation exists.
+ */
+export type NameablePhysicalKey = "Backspace" | "Delete";
+/**
+ * Gets the localized string key naming a physical keyboard key, for UI that needs to display a
+ * translated key name (e.g. a "press {key} again to confirm" hint). The platform's core
+ * localization assets (`assets/localization/*.json`) provide the translations, so any caller can
+ * use this without an extension having to declare its own copy of the string.
+ */
+export declare function getLocalizeKeyForPhysicalKey(key: NameablePhysicalKey): LocalizeKey;
 /** Inputs to {@link computeEffectiveStructureProtection}. */
 export type EffectiveStructureProtectionInputs = {
 	/** Global `platform.interfaceMode` value; the feature applies only in `'simple'`. */

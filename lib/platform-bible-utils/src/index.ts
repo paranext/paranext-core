@@ -52,7 +52,7 @@ export {
   aggregateUnsubscriberAsyncs,
 } from './lifetime-management/unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './scripture/usj-reader-writer.model';
-export { usfmMarkers, isBlockMarker } from './markers/usfm-markers';
+export { usfmMarkers, isBlockMarker, isCharacterMarker } from './markers/usfm-markers';
 
 // Enums
 export { Section } from './scripture/scripture-util';
@@ -61,6 +61,7 @@ export { Section } from './scripture/scripture-util';
 export {
   createSyncProxyForAsyncObject,
   debounce,
+  DEBOUNCE_CANCELED_ERROR_MESSAGE,
   deepClone,
   getAllObjectFunctionNames,
   getErrorMessage,
@@ -69,6 +70,7 @@ export {
   isErrorMessageAboutRegistryAuthFailure,
   isString,
   newGuid,
+  retryUntil,
   wait,
   waitForDuration,
 } from './util';
@@ -129,13 +131,22 @@ export { serialize, deserialize, isSerializable, htmlEncode } from './serializat
 export { default as getCurrentLocale } from './intl/intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
+export { normalizeProjectId } from './project-util';
 export { formatTimeSpan, formatRelativeDate } from './date-time-format-util';
-export { MODIFIER_KEYS } from './keyboard-util';
+export { MODIFIER_KEYS, getLocalizeKeyForPhysicalKey } from './keyboard-util';
 export { computeEffectiveStructureProtection } from './structure-protection.util';
 
 // Types
 export type { EffectiveStructureProtectionInputs } from './structure-protection.util';
-export type { DeepPartial, KebabCase, Prettify, ReplaceType, UnionToIntersection } from './util';
+export type { NameablePhysicalKey } from './keyboard-util';
+export type {
+  DebouncedFunction,
+  DeepPartial,
+  KebabCase,
+  Prettify,
+  ReplaceType,
+  UnionToIntersection,
+} from './util';
 export type {
   Dispose,
   OnDidDispose,
@@ -173,6 +184,7 @@ export type {
   ReferencedItem,
   OrderedItem,
   OrderedExtensibleContainer,
+  InterfaceMode,
   MenuItemBase,
   MenuItemContainingSubmenu,
   MenuItemContainingCommand,
@@ -272,7 +284,8 @@ export type {
   LegacyComment,
   LegacyCommentThread,
 } from './comments.types';
-export type { MarkerCategoryType as CategoryType, Marker } from './markers/usfm-marker.model';
-// MarkerType is a (string) enum used as a runtime value (e.g. comparing `marker.type ===
-// MarkerType.Paragraph`), so it must be a value export, not a type-only export.
-export { MarkerType } from './markers/usfm-marker.model';
+export type { Marker } from './markers/usfm-marker.model';
+// MarkerType and CategoryType are (string) enums used as runtime values (e.g. comparing
+// `marker.type === MarkerType.Paragraph` or `marker.category === CategoryType.DivisionMarks`), so
+// they must be value exports, not type-only exports.
+export { MarkerType, MarkerCategoryType as CategoryType } from './markers/usfm-marker.model';

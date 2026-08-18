@@ -79,6 +79,18 @@ declare module 'papi-shared-types' {
     'platform.getLogFileContent': () => Promise<string>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
+    /**
+     * Create a new application window
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.createWindow': () => Promise<void>;
+    /**
+     * Get the ID of the currently focused window, or undefined if no window is focused
+     *
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'platform.getFocusedWindowId': () => Promise<number | undefined>;
     /** Increase the zoom level of the entire UI */
     'platform.zoomIn': () => Promise<void>;
     /** Decrease the zoom level of the entire UI */
@@ -273,6 +285,26 @@ declare module 'papi-shared-types' {
      * @default `simple`
      */
     'platform.interfaceMode': 'simple' | 'power';
+    /**
+     * Whether the simple-mode first-run setup wizard has been completed. Hidden; managed by the
+     * first-run state machine, not user-configurable. `false` (default) means onboarding has not
+     * finished and the wizard should gate the app on the next simple-mode startup.
+     */
+    'platform.firstRunComplete': boolean;
+    /**
+     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
+     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
+     * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
+     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     */
+    'platform.syncOnStartup': boolean;
+    /**
+     * Whether to re-show the registration reminder at startup for an already-onboarded Simple-mode
+     * user whose Paratext registration has become invalid. `true` (default) keeps showing the
+     * reminder; `false` suppresses it (set by the wizard's "Don't show this on startup again"
+     * checkbox). Only consulted for completed users; the fresh-user onboarding flow ignores it.
+     */
+    'platform.showRegistrationReminderOnStartup': boolean;
   }
 
   /**
@@ -870,6 +902,42 @@ declare module 'papi-shared-types' {
      * ID.
      */
     'object:onDidDisposeNetworkObject': string;
+    /**
+     * Emitted when the set of available projects changes (a project is added or removed) or when a
+     * project's display metadata (name/fullName/language/languageTag/isEditable) changes. Consumers
+     * refetch cheap project metadata; there is no payload. Multi-source so any project-providing
+     * process/factory may announce it (the .NET data provider emits it today). Keep the name in
+     * sync with `LocalParatextProjects.PROJECTS_CHANGED_EVENT_TYPE` (C#).
+     *
+     * @experimental Recently added; may change as we learn how it is used.
+     */
+    'platform.onDidChangeProjects': undefined;
+    /**
+     * Emitted when the Scripture reference for a scroll group changes. Multi-source because every
+     * open window navigates its own UI and announces the result — a scroll group is app-wide, so
+     * each window must be able to tell the others where it moved to.
+     */
+    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
+    /**
+     * Emitted when a scroll group's back/forward reference history changes. Multi-source for the
+     * same reason as {@link MultiSourceNetworkEvents['scrollGroup:onDidUpdateScrRef']}.
+     *
+     * @experimental
+     */
+    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
+    /**
+     * Multi-source because web views belong to the window that opened them, so every window
+     * announces its own.
+     *
+     * @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead.
+     */
+    'webView:onDidAddWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is created in any window. */
+    'webView:onDidOpenWebView': OpenWebViewEvent;
+    /** Emitted when a WebView is updated in any window. */
+    'webView:onDidUpdateWebView': UpdateWebViewEvent;
+    /** Emitted when a WebView is closed in any window. */
+    'webView:onDidCloseWebView': CloseWebViewEvent;
   };
 
   /**
@@ -893,22 +961,6 @@ declare module 'papi-shared-types' {
   export interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
-    /** Emitted when the Scripture reference for a scroll group changes. */
-    'scrollGroup:onDidUpdateScrRef': ScrollGroupUpdateInfo;
-    /**
-     * Emitted when a scroll group's back/forward reference history changes.
-     *
-     * @experimental
-     */
-    'scrollGroup:onDidChangeReferenceHistory': ReferenceHistoryUpdateInfo;
-    /** @deprecated 13 November 2024. Use the `webView:onDidOpenWebView` event instead. */
-    'webView:onDidAddWebView': OpenWebViewEvent;
-    /** Emitted when a WebView is created. */
-    'webView:onDidOpenWebView': OpenWebViewEvent;
-    /** Emitted when a WebView is updated. */
-    'webView:onDidUpdateWebView': UpdateWebViewEvent;
-    /** Emitted when a WebView is closed. */
-    'webView:onDidCloseWebView': CloseWebViewEvent;
   }
 
   /** Union of all known network event names (keys of {@link NetworkEvents}). */

@@ -10,7 +10,7 @@ import { LucideProps } from 'lucide-react';
 import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
-import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
+import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
 import * as ResizablePrimitive from 'react-resizable-panels';
 import { ToasterProps, toast as sonner } from 'sonner';
 import { Drawer as DrawerPrimitive } from 'vaul';
@@ -34,7 +34,7 @@ type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | null | undefined;
+	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | "subtle" | null | undefined;
 	size?: "default" | "icon" | "xs" | "sm" | "lg" | "icon-xs" | "icon-sm" | "icon-lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
@@ -147,6 +147,12 @@ export type BookChapterControlProps = {
 	 */
 	triggerVariant?: ButtonProps["variant"];
 	/**
+	 * Set to `true` to render an up-down chevron indicator at the end of the trigger, signaling that
+	 * it opens a picker. Defaults to `false` (no chevron) — most existing embeddings show the current
+	 * reference alone and don't need one.
+	 */
+	showTriggerChevron?: boolean;
+	/**
 	 * Optional callback fired whenever the control's popover open state changes. Useful when the
 	 * parent needs to react to the picker opening or closing — e.g. dimming a sibling control while
 	 * this one is active. Internal back-navigation within the popover (verses → chapters → books)
@@ -198,7 +204,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, showTriggerChevron, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -297,13 +303,17 @@ export interface RecentSearchesProps<T> {
 	 */
 	buttonClassName?: string;
 	/** Variant for the trigger button. Defaults to `"ghost"` */
-	buttonVariant?: "ghost" | "outline" | "default" | "destructive" | "secondary" | "link";
+	buttonVariant?: ButtonProps["variant"];
+	/** Controlled open state of the popover. If provided, the component becomes controlled. */
+	open?: boolean;
+	/** Called when the open state changes. Required when `open` is provided. */
+	onOpenChange?: (open: boolean) => void;
 }
 /**
  * Generic component that displays a button to show recent searches in a popover. Only renders if
  * there are recent searches available. Works with any data type T.
  */
-export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
+export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, open: openProp, onOpenChange, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
 /**
@@ -936,6 +946,7 @@ export declare const FOOTNOTE_EDITOR_STRING_KEYS: readonly [
 	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
+	"%markerMenu_searchPlaceholder_character%",
 	"%markerMenu_searchPlaceholder_insert%",
 	"%markerMenu_searchPlaceholder_paragraph%",
 	...`%${string}%`[],
@@ -1215,6 +1226,7 @@ export declare const MARKER_MENU_STRING_KEYS: readonly [
 	"%markerMenu_disallowed_label%",
 	"%markerMenu_noResults%",
 	"%markerMenu_searchPlaceholder%",
+	"%markerMenu_searchPlaceholder_character%",
 	"%markerMenu_searchPlaceholder_insert%",
 	"%markerMenu_searchPlaceholder_paragraph%"
 ];
@@ -1252,6 +1264,26 @@ export interface MarkerMenuItem {
 	 * selected.
 	 */
 	isDisallowed?: boolean;
+	/**
+	 * How much of the consumer's current selection this marker covers: `'all'`, `'partial'`, or
+	 * `'none'`. Optional and additive — with no value, no selection affordance renders and no
+	 * `aria-checked` is set, which is how consumers that do not track a selection behave.
+	 *
+	 * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this affects
+	 * neither visibility nor selectability. It is display only.
+	 */
+	selectionState?: "all" | "partial" | "none";
+	/**
+	 * Whether the consumer currently has no operation for this row, so it must not be selectable.
+	 * Optional and additive — with no value the row is selectable exactly as it has always been.
+	 *
+	 * Unlike {@link MarkerMenuItem.isDeprecated} and {@link MarkerMenuItem.isDisallowed}, this says
+	 * nothing about the marker itself and so renders no trailing label: those two describe a property
+	 * of the marker, while this describes the consumer's momentary inability to act on it. It also
+	 * does not affect visibility — the row stays listed, because a row that disappears reads as "this
+	 * marker does not exist here" rather than "you cannot do that to it right now."
+	 */
+	isDisabled?: boolean;
 	/** Function to be triggered when the marker or command is selected */
 	action: () => void;
 }
@@ -2028,6 +2060,42 @@ export type UiLanguageSelectorProps = {
  */
 export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, id, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Immutable array of localization keys this component uses. Pass into `useLocalizedStrings` and
+ * feed the result to the `localizedStrings` prop.
+ *
+ * @experimental
+ */
+export declare const INTERFACE_LANGUAGE_PICKER_STRING_KEYS: readonly [
+	"%firstRun_language_search_placeholder%",
+	"%firstRun_language_noResults%",
+	"%firstRun_language_selected%"
+];
+/** @experimental */
+export type InterfaceLanguagePickerLocalizedStrings = {
+	[K in (typeof INTERFACE_LANGUAGE_PICKER_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+/** @experimental */
+export type InterfaceLanguagePickerProps = {
+	/** Languages to offer, keyed by BCP-47 tag. Displayed by autonym (native script). */
+	languages: Record<string, LanguageInfo>;
+	/** Currently selected BCP-47 tag. */
+	value: string;
+	/** Called with the chosen BCP-47 tag. */
+	onChange: (tag: string) => void;
+	/** Localized strings (search placeholder, no-results, selected label). */
+	localizedStrings: InterfaceLanguagePickerLocalizedStrings;
+	className?: string;
+	id?: string;
+};
+/**
+ * Searchable, scrollable list for choosing the interface language. Each option is shown by its
+ * autonym (native script); search matches the autonym, names in other UI languages, and other known
+ * names (the latter for matching only — never displayed). Scales to hundreds of languages.
+ *
+ * @experimental
+ */
+export declare function InterfaceLanguagePicker({ languages, value, onChange, localizedStrings, className, id, }: InterfaceLanguagePickerProps): import("react/jsx-runtime").JSX.Element;
+/**
  * @deprecated 2026-06-08 Use {@link CheckboxGroupProps} instead. `ChecklistProps` is kept as the
  *   existing export for backward compatibility and will be removed in a future release.
  */
@@ -2283,6 +2351,100 @@ export type CancelAcceptButtonsProps = {
  * Tooltip text defaults to the localization key if no localized strings are provided.
  */
 export declare function CancelAcceptButtons({ onCancelClick, onAcceptClick, canAccept, localizedStrings, className, acceptLabel, }: CancelAcceptButtonsProps): import("react/jsx-runtime").JSX.Element;
+/** Props for {@link DestructiveKeyConfirmation}. */
+export type DestructiveKeyConfirmationProps = {
+	/** Whether the confirmation hint is currently showing. */
+	open: boolean;
+	/**
+	 * Position and size of the invisible anchor, in the coordinates of the nearest `position:
+	 * relative` ancestor. Typically the bounding rect of the element the hint should point at (e.g. a
+	 * verse marker), recomputed by the caller as it moves/scrolls.
+	 */
+	anchorRect: {
+		top: number;
+		left: number;
+		width: number;
+		height: number;
+	};
+	/** Localized message to display. Include a `{key}` placeholder where the confirming key belongs. */
+	message: string;
+	/**
+	 * Localized/display label for the key that confirms the action on a second press (e.g.
+	 * "Backspace").
+	 */
+	confirmingKeyLabel: string;
+	/**
+	 * Tooltip placement side. Defaults to `'bottom'`.
+	 *
+	 * Only `'top'`/`'bottom'` are supported — the bordered arrow this component renders relies on
+	 * clip-path/translate math in `tooltip.tsx` that has only been worked out for those two sides;
+	 * the equivalent math for `'left'`/`'right'` was tried and found visibly broken (see
+	 * tooltip.tsx), so those two values are omitted from this component's public API rather than
+	 * silently degrading to a borderless arrow.
+	 */
+	side?: "top" | "bottom";
+	/** Tooltip placement alignment. Defaults to `'start'`. */
+	align?: "start" | "center" | "end";
+	/** Whether to render the pointer arrow. Defaults to `true`. */
+	showArrow?: boolean;
+};
+/**
+ * A destructive-styled "press again to confirm" hint, anchored to an arbitrary point (`anchorRect`)
+ * rather than a rendered trigger element. Built for two-step destructive actions (e.g. deleting a
+ * verse marker on a second Backspace/Delete) where the caller owns detecting the "armed" state and
+ * this component only renders the hint.
+ */
+export declare function DestructiveKeyConfirmation({ open, anchorRect, message, confirmingKeyLabel, side, align, showArrow, }: DestructiveKeyConfirmationProps): import("react/jsx-runtime").JSX.Element;
+export type DisabledActionTooltipProps = {
+	/**
+	 * Whether the wrapped action(s) are currently disabled. While `true`, the wrapper becomes
+	 * focusable and labeled with `tooltipText` so the explanation stays reachable for keyboard and
+	 * screen-reader users.
+	 */
+	disabled: boolean;
+	/** Explanation shown in the tooltip, and used as the wrapper's `aria-label`, while `disabled`. */
+	tooltipText: string;
+	/** The action(s) to render — one or more buttons, a popover trigger, etc. */
+	children: React$1.ReactNode;
+	/** Optional class name for the focusable wrapper `div`. */
+	className?: string;
+};
+/**
+ * Wraps one or more actions (buttons, a popover trigger, etc.) that may be disabled, surfacing a
+ * tooltip explanation while they are, via {@link DisabledTooltipWrapper}. This is the convenience
+ * shape for the common case of a single tooltip message driving both the wrapper's accessible name
+ * and the tooltip body — use `DisabledTooltipWrapper` directly if the accessible name and the
+ * tooltip content need to differ, or the `Tooltip` needs non-default props.
+ */
+export declare function DisabledActionTooltip({ disabled, tooltipText, children, className, }: DisabledActionTooltipProps): import("react/jsx-runtime").JSX.Element;
+export type DisabledTooltipWrapperProps = Omit<React$1.ComponentPropsWithRef<"div">, "children" | "role" | "tabIndex" | "aria-label"> & {
+	/** The control to wrap — typically a button that is `disabled` for the same reason. */
+	children: React$1.ReactNode;
+	/** `true` while the wrapped control is disabled. Drives the focusability and the accessible name. */
+	isDisabled: boolean;
+	/**
+	 * The localized explanation of WHY the control is disabled. Becomes the wrapper's accessible name
+	 * while disabled, so it should be the same text the tooltip shows.
+	 */
+	disabledExplanation?: string;
+};
+/**
+ * Focusable wrapper that lets a DISABLED control still host a tooltip.
+ *
+ * A disabled button is removed from the tab order and (in most browser/AT combinations) does not
+ * fire the pointer and focus events Radix's `Tooltip` listens for — so the one moment the user most
+ * needs the explanation ("why can't I use this?") is the one moment the button cannot deliver it.
+ * Wrapping the control in a focusable, named element restores it: the wrapper takes the tooltip
+ * trigger's place in the tab order and carries the explanation as its accessible name, so keyboard
+ * and screen-reader users reach the same information pointer users get on hover. While the control
+ * is ENABLED the wrapper is inert — no role, no tab stop, no name — leaving the button itself as
+ * the single focusable, named thing.
+ *
+ * Render it as the `asChild` child of a `TooltipTrigger`; it forwards the trigger's props and ref
+ * onto its `div`. `DisabledActionTooltip` composes this with the rest of the `Tooltip` shell for
+ * the common case of one tooltip message driving both the accessible name and the tooltip body.
+ */
+export declare function DisabledTooltipWrapper({ children, isDisabled, disabledExplanation, ...props }: DisabledTooltipWrapperProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -2473,6 +2635,26 @@ export type TextFieldProps = {
  * https://ui.shadcn.com/docs/components/input#with-label
  */
 export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
+/** Props for the {@link WizardStepper} component. */
+export interface WizardStepperProps {
+	/** 1-based index of the currently active step. */
+	currentStep: number;
+	/** Total number of numbered steps. */
+	totalSteps: number;
+	/**
+	 * BCP 47 locale tag for numeral formatting in the circle labels. E.g. `'ar'` → ١٢٣٤. Defaults to
+	 * `'en'`; an empty string also falls back to `'en'` (`Intl.NumberFormat('')` throws a
+	 * `RangeError` in V8).
+	 */
+	locale?: string;
+}
+/**
+ * Displays a row of numbered step circles showing progress through a multi-step wizard. Purely
+ * presentational — owns no navigation state. All circles are `aria-hidden`; the consuming shell is
+ * responsible for a `sr-only` `aria-live` sibling that announces the current step to screen
+ * readers.
+ */
+export declare function WizardStepper({ currentStep, totalSteps, locale }: WizardStepperProps): import("react/jsx-runtime").JSX.Element;
 declare const alertVariants: (props?: ({
 	variant?: "default" | "destructive" | null | undefined;
 } & ClassProp) | undefined) => string;
@@ -3006,8 +3188,9 @@ export declare function Tooltip({ ...props }: React$1.ComponentProps<typeof Tool
 /** @inheritdoc Tooltip */
 export declare function TooltipTrigger({ className, variant, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Trigger> & ButtonProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Tooltip */
-export declare function TooltipContent({ className, sideOffset, style, showArrow, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
+export declare function TooltipContent({ className, sideOffset, style, showArrow, arrowClassName, children, ...props }: React$1.ComponentProps<typeof TooltipPrimitive.Content> & {
 	showArrow?: boolean;
+	arrowClassName?: string;
 }): import("react/jsx-runtime").JSX.Element;
 type Side = "primary" | "secondary";
 type SidebarContextProps = {
@@ -3352,6 +3535,54 @@ export declare function useExtraValidMarkers(usj: Usj | undefined): string[];
  * @returns `true` when the web view is rendered (visible), `false` while its tab is hidden
  */
 export declare const useViewVisibility: () => boolean;
+/** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
+export type TabIconUrls = {
+	/** Dark theme (any selection). */
+	dark: string;
+	/**
+	 * Light theme, tab selected (white). Unused by `pickTabIconUrl` today: every current host keeps
+	 * the active tab's header on a plain light background (never a dark/tinted one), so a white icon
+	 * would be invisible there. Kept in the type for a future host that does give the selected tab a
+	 * dark background and needs a contrasting icon.
+	 */
+	lightSelected: string;
+	/** Light theme, tab not selected (near-black). Also used for the selected state — see above. */
+	lightUnselected: string;
+	/** Light theme, selection unknown (mid-slate fallback). */
+	lightDefault: string;
+};
+/**
+ * Picks the tab icon URL. In dark theme the icon is always the dark variant. In light theme it's
+ * the near-black variant regardless of selection — every current host keeps the active tab's header
+ * on a plain light background rather than a dark/tinted one (see
+ * `dock-layout-wrapper.simple-mode.scss`'s "SIMPLE-MODE TAB SELECTION LOOK" region), so a selected
+ * tab needs the same contrast as an unselected one — a mid-slate fallback is used when the selected
+ * state is unknown (`undefined`).
+ */
+export declare function pickTabIconUrl(isDarkTheme: boolean, isTabSelected: boolean | undefined, urls: TabIconUrls): string;
+/**
+ * Resolves which tab-icon variant a web view tab should show, given the current theme and this
+ * tab's live selected state.
+ *
+ * The tab icon is painted by the platform as a static CSS `background-image`, so a `currentColor`
+ * SVG can't follow the theme or selection state — callers must swap the actual icon URL. "Selected"
+ * here means this tab is the active one in its group: rc-dock renders exactly one tab's pane at a
+ * time, hiding the rest with `display: none`, so "my pane is currently visible" and "I'm the
+ * selected tab" are the same condition — this reuses `useViewVisibility`'s event-driven
+ * `IntersectionObserver` detection rather than polling `frameElement.offsetParent` on an interval.
+ * `pickTabIconUrl`'s `undefined` ("selection unknown") case is effectively unreachable through this
+ * call site, since `useViewVisibility` resolves synchronously on first render with no unknown
+ * window, but `pickTabIconUrl` keeps accepting it as a standalone, independently-testable
+ * function.
+ *
+ * Callers own the theme subscription themselves (e.g. `papi.themes.subscribeCurrentTheme`) and pass
+ * the resulting `isDarkTheme` in — this hook has no PAPI dependency.
+ *
+ * @param isDarkTheme Whether the current theme is dark.
+ * @param tabIconUrls The four icon variant URLs for this tab.
+ * @returns The icon URL to pass to `updateWebViewDefinition({ iconUrl })`.
+ */
+export declare function useTabIconSelection(isDarkTheme: boolean, tabIconUrls: TabIconUrls): string;
 /** State and handlers for driving a controlled tooltip that only opens when its trigger is clipped. */
 export type UseTruncationTooltipResult<T extends HTMLElement> = {
 	/** Attach to the trigger element whose text may be truncated; used to measure clipping. */
@@ -3425,6 +3656,12 @@ export declare const Z_INDEX_OVERLAY = 400;
 export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
+/**
+ * Z-index for the first-run setup wizard gate. Must sit above every other layer (including the
+ * menubar at Z_INDEX_ABOVE_DOCK=600 and tooltips at 550) so the wizard fully gates the app at
+ * startup and nothing behind it remains clickable or focusable.
+ */
+export declare const Z_INDEX_FIRST_RUN = 700;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

@@ -5,7 +5,13 @@
 //
 // Derived from
 // https://github.com/paranext/paratext-bible-internal-extensions/blob/b50ebb16505f8069fd517af39dea29de7d7569bb/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
+// TODO(PT-4233): Update the SHA above to the companion PR's merged commit once it lands.
 // When the Send/Receive contract changes, re-sync the parts declared here from that file.
+// NOTE: Preserve any types that exist here but not in the upstream file (structural refinements
+// added in core before the upstream adopts them). Do not replace the module block wholesale.
+// Likewise for declarations that exist in BOTH copies: a re-sync must not downgrade a richer
+// declaration here (extra doc detail or type refinements) to a poorer upstream one — merge the
+// two, and upstream the improvement instead.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -35,10 +41,9 @@ declare module 'paratext-bible-send-receive' {
    *   administrator must upgrade it
    * - `projectVersionUpgraded` = S/R sort-of failed. The project was upgraded to a higher version of
    *   Paratext. You must update Paratext to open the project
-   * - `sentChanges` = S/R sent ≥1 non-merge revision
-   * - `receivedChanges` = S/R received ≥1 revision (RevisionsReceived.Count > 0)
-   * - `noChangesToSend` = S/R sent no non-merge revisions
-   * - `noChangesReceived` = S/R received no revisions (RevisionsReceived is empty)
+   *
+   * For granular detail about what was sent/received, see {@link ResultChangeStatus} and
+   * {@link ResultInfo.resultStatuses}.
    */
   export type ResultStatus =
     | 'succeeded'
@@ -46,7 +51,24 @@ declare module 'paratext-bible-send-receive' {
     | 'initialReceive'
     | 'failed'
     | 'notUpgraded'
-    | 'projectVersionUpgraded'
+    | 'projectVersionUpgraded';
+
+  /**
+   * Granular change-tracking status for a single S/R result. Supplements (does not replace)
+   * {@link ResultStatus} on {@link ResultInfo.resultStatus}.
+   *
+   * Exactly one send-axis value applies (`sentChanges` or `noChangesToSend`) and exactly one
+   * receive-axis value applies (`receivedChanges` or `noChangesReceived`), so two values appear in
+   * {@link ResultInfo.resultStatuses} simultaneously when both axes are present.
+   *
+   * - `sentChanges` = S/R sent ≥1 non-merge revision
+   * - `receivedChanges` = S/R received ≥1 revision (RevisionsReceived.Count > 0)
+   * - `noChangesToSend` = S/R sent no non-merge revisions
+   * - `noChangesReceived` = S/R received no revisions (RevisionsReceived is empty)
+   *
+   * @experimental The set of values in this type may change
+   */
+  export type ResultChangeStatus =
     | 'sentChanges'
     | 'receivedChanges'
     | 'noChangesToSend'
@@ -188,8 +210,13 @@ declare module 'paratext-bible-send-receive' {
     conflictsInfo: ConflictInfo[];
     /** Additional information provided in some cases when a S/R fails */
     failureMessage?: string;
-    /** Granular statuses that apply to this result (multiple can apply, e.g., sent AND received) */
-    resultStatuses?: ResultStatus[];
+    /**
+     * Granular change-tracking statuses ({@link ResultChangeStatus}); multiple can apply, e.g., sent
+     * AND received
+     *
+     * @experimental The set of possible statuses may change
+     */
+    resultStatuses?: ResultChangeStatus[];
     /** Total conflict count computed by C# */
     conflictCount?: number;
   };
@@ -243,6 +270,21 @@ declare module 'paratext-bible-send-receive' {
     /** 0–1 fraction; null/undefined ⇒ indeterminate. */
     progressValue?: number | null;
   };
+
+  /**
+   * Backend-authoritative snapshot of which projects an automatic Send/Receive is blocking edits on
+   * (the wire shape of the C# `SendReceiveBlockState`). Carried identically by both the
+   * `paratextBibleSendReceive.onSyncWriteLockChanged` network event and the
+   * `paratextBibleSendReceive.getAutoSyncBlocking` command return.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
+   */
+  export type SyncWriteLockSnapshot = {
+    /** Whether the S/R write gate is currently blocking edits on any project */
+    isBlocking: boolean;
+    /** Ids of the blocked projects. `isBlocking` false always pairs with an empty array. */
+    projectIds: string[];
+  };
 }
 
 declare module 'papi-shared-types' {
@@ -250,6 +292,7 @@ declare module 'papi-shared-types' {
     ResultsData,
     SyncProgressDetail,
     SyncProgressEvent,
+    SyncWriteLockSnapshot,
   } from 'paratext-bible-send-receive';
   import type { SharedProjectsInfo } from 'platform-scripture';
 
@@ -382,6 +425,54 @@ declare module 'papi-shared-types' {
      *   this command (e.g., Paratext 10 Studio)
      */
     'paratextBibleSendReceive.cancelSync': (notificationId?: string | number) => Promise<void>;
+
+    /**
+     * Breaks (releases) the Send/Receive server lock for each given project and reports per-project
+     * success. Recovery for a project whose lock is held by the current user THEMSELVES (this same
+     * person on another computer, or a previous interrupted sync). The server only permits breaking
+     * a lock you own, so this can never break another user's lock.
+     *
+     * This is the **server-side repository lock** held on the S/R server — unrelated to the local
+     * in-process sync write gate reported by the neighboring
+     * `paratextBibleSendReceive.onSyncWriteLockChanged` event /
+     * `paratextBibleSendReceive.getAutoSyncBlocking` command.
+     *
+     * Note: this command is served from the dotnet process.
+     *
+     * @param projectIds Ids of the projects whose server lock to break. An empty array is a no-op:
+     *   it resolves to an empty map without contacting the server. A null array is out of contract
+     *   (the type is `string[]`); implementations treat it like the empty array. Null/blank ids are
+     *   skipped and omitted from the result map. Ids are trimmed, and case-variant duplicates
+     *   collapse to a single upper-cased key (first occurrence wins)
+     * @returns Map of project id → whether that project's lock was broken. Keys are upper-cased —
+     *   index the map with upper-cased ids. `false` means "not broken", not "attempt failed": an
+     *   attempt may not have been made at all (e.g. the request was refused while a sync was in
+     *   progress), and a later retry can succeed
+     * @throws `PlatformUnimplementedException` if not running in an application that implements
+     *   this command (e.g., Paratext 10 Studio)
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.breakSyncLock': (
+      projectIds: string[],
+    ) => Promise<{ [projectId: string]: boolean }>;
+
+    /**
+     * Returns the S/R write gate's current {@link SyncWriteLockSnapshot} so subscribers can seed
+     * their blocking state on init instead of assuming unblocked (e.g. after a renderer reload
+     * during an in-flight sync).
+     *
+     * Note: this command is served from the dotnet process. Unlike most Send/Receive commands it is
+     * registered by core's own `SendReceiveBlockNotifierService` rather than the extension, so it
+     * is answered on plain Platform.Bible too (always not-blocking there — only Paratext 10 Studio
+     * arms the gate). The realistic failure mode is a cold-start race: if the dotnet process has
+     * not registered the command within main's retry budget (~9s), the request rejects — callers
+     * should keep their fail-safe not-blocking default, and there is no re-query until PT-4265
+     * lands.
+     *
+     * @returns The write gate's current snapshot
+     * @experimental This command is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.getAutoSyncBlocking': () => Promise<SyncWriteLockSnapshot>;
   }
 
   export interface NetworkEvents {
@@ -389,5 +480,15 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.onSyncStateChanged': SyncProgressEvent;
     /** Emitted repeatedly during a sync with the current project name or reconnect status */
     'paratextBibleSendReceive.onSyncProgress': SyncProgressDetail;
+    /**
+     * Emitted by the dotnet process whenever the S/R write gate arms or disarms, carrying the
+     * gate's full current {@link SyncWriteLockSnapshot}. Fires for ALL sync types (manual +
+     * scheduled + session). The gate only ever arms in Paratext 10 Studio builds — never in plain
+     * Platform.Bible, where the only emission is a single not-blocking baseline snapshot each time
+     * the backend (re)starts (every build emits that baseline).
+     *
+     * @experimental This event is unstable and may change or disappear without notice
+     */
+    'paratextBibleSendReceive.onSyncWriteLockChanged': SyncWriteLockSnapshot;
   }
 }

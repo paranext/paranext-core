@@ -9,6 +9,7 @@ import {
   useProjectData,
   useProjectDataProvider,
   useProjectSetting,
+  useSetting,
 } from '@papi/frontend/react';
 import {
   Button,
@@ -21,6 +22,8 @@ import {
   Spinner,
   usePromise,
   useExtraValidMarkers,
+  useTabIconSelection,
+  type TabIconUrls,
 } from 'platform-bible-react';
 import {
   DblResourceData,
@@ -39,14 +42,27 @@ import type {
 } from 'platform-scripture';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
-import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
+import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
+import { useInstallDblResource } from './use-install-dbl-resource.hook';
+import { useIsOnline } from './use-is-online.hook';
+import {
+  isDblResourceReference,
+  isProjectReference,
+  getRefLabel,
+} from './resource-reference.utils';
+import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
+import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_noProject%',
+  '%webView_resourcePanel_installing%',
   '%webView_resourcePanel_selecting%',
+  '%webView_resourcePanel_installFailed%',
+  '%webView_resourcePanel_installFailedOffline%',
+  '%webView_resourcePanel_retry%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
@@ -58,29 +74,26 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_commentaries_title_withResource%',
 ];
 
+const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://platformScriptureEditor/assets/book-open.svg',
+  dark: 'papi-extension://platformScriptureEditor/assets/book-open-dark.svg',
+  lightSelected: 'papi-extension://platformScriptureEditor/assets/book-open-selected.svg',
+  lightUnselected: 'papi-extension://platformScriptureEditor/assets/book-open-unselected.svg',
+};
+
+const COMMENTARIES_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://platformScriptureEditor/assets/file-text.svg',
+  dark: 'papi-extension://platformScriptureEditor/assets/file-text-dark.svg',
+  lightSelected: 'papi-extension://platformScriptureEditor/assets/file-text-selected.svg',
+  lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
+};
+
 /** Returns the `id` field for reference types that have one, or `undefined` for others. */
 function getRefId(ref: EffectiveResourceReference): string | undefined {
   if (isDblResourceReference(ref) || isProjectReference(ref)) {
     return ref.id;
   }
   return undefined;
-}
-
-/**
- * Returns the display label for a resource reference in the form `{fullName} ({displayName})` for
- * DBL resources, falling back to `ref.name` if the DblResourceData entry is not yet in the list.
- * Returns `ref.name` for project references.
- */
-function getRefLabel(ref: EffectiveResourceReference, dblResourcesList: DblResourceData[]): string {
-  if (isDblResourceReference(ref)) {
-    const dblData = dblResourcesList.find((r) => r.dblEntryUid === ref.id);
-    if (dblData) return `${dblData.fullName} (${dblData.displayName})`;
-    return ref.name;
-  }
-  if (isProjectReference(ref)) {
-    return ref.name;
-  }
-  return '';
 }
 
 type ResourceSelectorDropdownProps = {
@@ -160,6 +173,55 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #endregion
 
+  // #region Tab icon (Simple mode only — Power mode keeps this tab text-only, as today)
+
+  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
+  const isPowerMode = useMemo(() => {
+    if (isPlatformError(interfaceModePossiblyError)) {
+      logger.warn(`Error getting interface mode: ${getErrorMessage(interfaceModePossiblyError)}`);
+      return false;
+    }
+    return interfaceModePossiblyError === 'power';
+  }, [interfaceModePossiblyError]);
+
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    papi.themes
+      .subscribeCurrentTheme(undefined, (theme) => {
+        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
+      })
+      .then((unsub) => {
+        if (disposed) unsub();
+        else unsubscribe = unsub;
+        return undefined;
+      })
+      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
+
+  const tabIconUrls =
+    resourceType === 'ScriptureResource' ? BIBLE_TEXTS_ICON_URLS : COMMENTARIES_ICON_URLS;
+  const tabIconUrl = useTabIconSelection(isDarkTheme, tabIconUrls);
+  useEffect(() => {
+    // Power mode: no tab icon, exactly as today. Still clear a previously-set iconUrl explicitly
+    // (rather than skipping the call) — updateWebViewDefinition's merge only touches keys present in
+    // the update object, so a present-but-undefined iconUrl writes through and removes a value a
+    // prior Simple-mode run of this same effect may have set, while omitting the key entirely would
+    // leave it stuck showing the last Simple-mode icon after switching to Power mode at runtime.
+    if (isPowerMode) {
+      updateWebViewDefinition({ iconUrl: undefined });
+      return;
+    }
+    updateWebViewDefinition({ iconUrl: tabIconUrl });
+  }, [isPowerMode, tabIconUrl, updateWebViewDefinition]);
+
+  // #endregion
+
   // #region Data sources
 
   const [effectiveResources] = useEffectiveResourceReferenceList(
@@ -199,6 +261,17 @@ globalThis.webViewComponent = function ResourceTextPanel({
     async (resources: ResourceReferenceList) =>
       textConnectionsProvider?.setUserReferencedProjectsAndResources(resources),
     [textConnectionsProvider],
+  );
+
+  // Re-resolve the cached resource list once an install completes so the resource flips to
+  // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
+  // provider resolves — its identity change then re-fires the auto-install effect for the real
+  // install.
+  const markResourcesStale = useCallback(() => setFetchResources(true), []);
+  const installResource = useInstallDblResource(
+    dblResourcesProvider,
+    'resource text panel',
+    markResourcesStale,
   );
 
   // #endregion
@@ -255,11 +328,21 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const [isSelecting, setIsSelecting] = useState(false);
 
   if (isDblResourceReference(selectedRef)) {
-    dblMatch = dblResources.find((r) => r.dblEntryUid === selectedRef.id);
+    dblMatch = findCachedDblResource(selectedRef, dblResources);
     resourceProjectId = dblMatch?.installed ? dblMatch.projectId : undefined;
   } else if (isProjectReference(selectedRef)) {
     resourceProjectId = selectedRef.id;
   }
+
+  // Auto-install a selected DBL resource matched in the catalog but not installed locally yet
+  // (shared with the model-text panel); without it the panel spins forever. Skipped while a manual
+  // pick is in flight (it installs the resource itself).
+  const dblEntryUidToInstall = dblMatch && !dblMatch.installed ? dblMatch.dblEntryUid : undefined;
+  const { isInstalling, installFailed, retryInstall, markInstallFailed } =
+    useDblResourceAutoInstall(dblEntryUidToInstall, installResource, isSelecting);
+
+  // Only used to add a "check your connection" hint to the install-failed message when offline.
+  const isOnline = useIsOnline();
 
   // Load PT9-derived marker styles when the displayed resource is a supported commentary.
   // Keyed on the resource's project id (not the user's projectId prop) since the resource is what
@@ -290,13 +373,15 @@ globalThis.webViewComponent = function ResourceTextPanel({
     const baseTitle = localizedStrings[titleKey];
     if (!baseTitle) return;
     if (resourceShortName) {
+      const resolvedTitle = formatReplacementString(localizedStrings[titleWithResourceKey], {
+        textName: resourceShortName,
+      });
       updateWebViewDefinition({
-        title: formatReplacementString(localizedStrings[titleWithResourceKey], {
-          textName: resourceShortName,
-        }),
+        title: resolvedTitle,
+        tooltip: isPowerMode ? undefined : resolvedTitle,
       });
     } else {
-      updateWebViewDefinition({ title: baseTitle });
+      updateWebViewDefinition({ title: baseTitle, tooltip: isPowerMode ? undefined : baseTitle });
     }
   }, [
     resourceShortName,
@@ -304,6 +389,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     titleKey,
     titleWithResourceKey,
     updateWebViewDefinition,
+    isPowerMode,
   ]);
 
   // #endregion
@@ -363,35 +449,31 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const handleResourceSelect = useCallback(
     async (resource: DblResourceData) => {
       setIsSelecting(true);
+      // A user-initiated pick is a fresh attempt: clear any prior auto-install failure.
+      retryInstall();
       try {
         await selectTextConnection(
           resource,
           getUserResourceTexts,
           setUserResourceTexts,
-          dblResourcesProvider
-            ? async (dblEntryUid) => {
-                try {
-                  await dblResourcesProvider.installDblResource(dblEntryUid);
-                  setFetchResources(true);
-                } catch (e: unknown) {
-                  papi.notifications.send({
-                    message: '%webView_selectDblResource_installFailed%',
-                    severity: 'error',
-                  });
-                  logger.warn(
-                    `Error installing dbl resource for resource text panel: ${getErrorMessage(e)}`,
-                  );
-                  throw e;
-                }
-              }
-            : undefined,
+          async (dblEntryUid: string) => {
+            try {
+              await installResource(dblEntryUid);
+            } catch (e) {
+              // Record the failure so that once the pick finishes and the auto-install effect
+              // re-enables, its failed-uid guard suppresses a duplicate install attempt; this also
+              // surfaces the install-failed state immediately instead of after a second attempt.
+              markInstallFailed(dblEntryUid);
+              throw e;
+            }
+          },
           (dblEntryUid: string) => setPendingResourceId(dblEntryUid),
         );
       } finally {
         setIsSelecting(false);
       }
     },
-    [dblResourcesProvider, getUserResourceTexts, setUserResourceTexts],
+    [getUserResourceTexts, setUserResourceTexts, installResource, retryInstall, markInstallFailed],
   );
 
   const showResourcePicker = useDialogCallback(
@@ -481,13 +563,38 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Installing state: selected DblResource found but not yet installed
-  if (isSelecting) {
+  // Install failed: the selected resource is in the catalog but couldn't be installed. Offer a
+  // retry rather than spinning forever; a success drops out of this state on its own. When offline
+  // (the usual first-run cause), hint at the connection.
+  if (installFailed) {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:gap-2 tw:p-8 tw:text-center">
-        <Spinner />
-        <span>{localizedStrings['%webView_resourcePanel_selecting%']}</span>
-      </div>
+      <InstallFailedView
+        message={
+          localizedStrings[
+            isOnline
+              ? '%webView_resourcePanel_installFailed%'
+              : '%webView_resourcePanel_installFailedOffline%'
+          ]
+        }
+        retryLabel={localizedStrings['%webView_resourcePanel_retry%']}
+        onRetry={retryInstall}
+      />
+    );
+  }
+
+  // Installing state: selected DblResource found but not yet installed. Distinguish the two causes
+  // so the label is accurate: a user pick (isSelecting) reads "Selecting…", while an auto-install
+  // of a configured resource (isInstalling) — where the user picked nothing and it's just
+  // downloading — reads "Installing…".
+  if (isSelecting || isInstalling) {
+    return (
+      <InstallingView
+        label={
+          localizedStrings[
+            isSelecting ? '%webView_resourcePanel_selecting%' : '%webView_resourcePanel_installing%'
+          ]
+        }
+      />
     );
   }
 
@@ -501,8 +608,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
   }
 
   // Active state: resource is installed and USJ is available
+  // This panel (Bible Texts / Commentaries) is Simple-mode-only, so `editor-container-simple`
+  // (flattens .editor-container's rounded top corners — see _simple-mode.scss) is applied
+  // unconditionally, unlike the Scripture Editor's conditional use of the same class.
   return (
-    <div className="tw:flex tw:h-screen tw:flex-col">
+    <div className="tw:flex tw:h-screen tw:flex-col editor-container-simple">
       <ResourceSelectorDropdown
         filteredResources={filteredResources}
         selectedRef={selectedRef}

@@ -11,7 +11,9 @@ import {
   Sonner,
   sonner,
   usePromise,
+  useTabIconSelection,
   useViewVisibility,
+  type TabIconUrls,
 } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -20,7 +22,12 @@ import {
   useProjectDataProvider,
   useWebViewController,
 } from '@papi/frontend/react';
-import { isPlatformError, LegacyCommentThread, serialize } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  isPlatformError,
+  LegacyCommentThread,
+  serialize,
+} from 'platform-bible-utils';
 import { VerseRef } from '@sillsdev/scripture';
 import type { LegacyCommentThreadSelector } from 'legacy-comment-manager';
 import { CommentListWebViewMessage } from './comment-list-messages.model';
@@ -36,8 +43,17 @@ import {
 import type { CommentListScrollTarget } from './comment-list-scroll.utils';
 import { useBcvSyncScroll } from './use-bcv-sync-scroll.hook';
 import { COMMENT_LIST_PANEL_WEB_VIEW_TYPE } from './comment-list-panel.utils';
+import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
+import { gateCommentWriteCapabilities } from './comment-list-capability-gating.util';
 
 const DEFAULT_LEGACY_COMMENT_THREADS: LegacyCommentThread[] = [];
+
+const COMMENT_LIST_PANEL_ICON_URLS: TabIconUrls = {
+  lightDefault: 'papi-extension://legacyCommentManager/assets/message-square.svg',
+  dark: 'papi-extension://legacyCommentManager/assets/message-square-dark.svg',
+  lightSelected: 'papi-extension://legacyCommentManager/assets/message-square-selected.svg',
+  lightUnselected: 'papi-extension://legacyCommentManager/assets/message-square-unselected.svg',
+};
 
 /**
  * Wraps a PDP method call with a null check. If the PDP is not yet available, logs a debug message
@@ -66,6 +82,7 @@ global.webViewComponent = function CommentListWebView({
   useWebViewScrollGroupScrRef,
   useWebViewState,
   projectId,
+  updateWebViewDefinition,
   webViewType,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
@@ -79,11 +96,53 @@ global.webViewComponent = function CommentListWebView({
   );
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
+  // Set on this web view's state by the core auto-sync edit-block driver while an
+  // automatic (scheduled or session) Send/Receive is syncing this project. When true, comment
+  // writing is paused: the write affordances below are disabled and a slim notice is shown. Transient
+  // runtime state — the provider scrubs it to false on every rehydrate, and the driver re-flags it if
+  // a sync is still in flight.
+  const [isSyncBlocked] = useWebViewState<boolean>('isSyncBlocked', false);
   // The Column 3 comment-list panel follows the active project's scroll group, so it always has a
   // current chapter even though no editor is wired to it. Both comment-list web view types share
   // this component, so its own `webViewType` prop distinguishes the panel — no extra state channel
   // needed (and nothing gets serialized into persisted layouts).
   const isCommentListPanel = webViewType === COMMENT_LIST_PANEL_WEB_VIEW_TYPE;
+
+  // #region Tab icon (Comment List panel only, both Power and Simple mode — matching Text
+  // Collection's convention; per-product-decision this tab keeps its icon in Power mode too,
+  // unlike Bible Texts/Commentaries which stay Simple-mode-only. The non-panel comment-list web
+  // view type still keeps its tab/view text-only, as today.)
+
+  const [isDarkTheme, setIsDarkTheme] = useState(false);
+  useEffect(() => {
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    papi.themes
+      .subscribeCurrentTheme(undefined, (theme) => {
+        if (!isPlatformError(theme)) setIsDarkTheme(theme.type === 'dark');
+      })
+      .then((unsub) => {
+        if (disposed) unsub();
+        else unsubscribe = unsub;
+        return undefined;
+      })
+      .catch((e) => logger.warn(`Failed to subscribe to the current theme: ${getErrorMessage(e)}`));
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
+  }, []);
+
+  const commentListPanelIconUrl = useTabIconSelection(isDarkTheme, COMMENT_LIST_PANEL_ICON_URLS);
+  useEffect(() => {
+    // `isCommentListPanel` is fixed for this component instance's whole lifetime (derived from the
+    // webViewType prop), so there's no icon to clear when it's false — this instance never set one.
+    if (!isCommentListPanel) return;
+    updateWebViewDefinition({ iconUrl: commentListPanelIconUrl });
+  }, [isCommentListPanel, commentListPanelIconUrl, updateWebViewDefinition]);
+
+  // #endregion
+
   const editorWebViewController = useWebViewController(
     'platformScriptureEditor.react',
     editorWebViewId,
@@ -410,7 +469,11 @@ global.webViewComponent = function CommentListWebView({
           });
           return newCommentId;
         } catch (error) {
-          logger.error(`Failed to add comment to thread ${options.threadId}:`, error);
+          // A write-gate rejection (an automatic Send/Receive is syncing this project) is an
+          // expected paused state, not an error: show the shared "editing paused" notice instead of
+          // logging + surfacing a raw failure. Defense-in-depth behind the disabled reply affordance.
+          if (isSyncEditBlockedError(error)) notifySyncEditBlocked();
+          else logger.error(`Failed to add comment to thread ${options.threadId}:`, error);
           return undefined;
         }
       }),
@@ -424,10 +487,18 @@ global.webViewComponent = function CommentListWebView({
           await pdp.resolveConflict(threadId, resolution);
           return true;
         } catch (error) {
-          logger.error(`Failed to resolve conflict thread ${threadId}:`, error);
-          sonner.error(
-            localizedStrings['%conflict_note_resolve_failed%'] ?? 'Could not resolve the conflict.',
-          );
+          // A write-gate rejection (an automatic Send/Receive is syncing this project) gets the
+          // shared "editing paused" notice rather than the generic resolve-failed toast. Defense-in-
+          // depth behind the disabled resolve affordance.
+          if (isSyncEditBlockedError(error)) {
+            notifySyncEditBlocked();
+          } else {
+            logger.error(`Failed to resolve conflict thread ${threadId}:`, error);
+            sonner.error(
+              localizedStrings['%conflict_note_resolve_failed%'] ??
+                'Could not resolve the conflict.',
+            );
+          }
           return false;
         }
       }),
@@ -452,7 +523,11 @@ global.webViewComponent = function CommentListWebView({
             logger.warn(`Update of comment ${commentId} was rejected and not saved.`);
           return updateSucceeded;
         } catch (error) {
-          logger.error(`Failed to update comment ${commentId}:`, error);
+          // A write-gate rejection (an automatic Send/Receive is syncing this project) is an
+          // expected paused state: show the shared "editing paused" notice. Defense-in-depth behind
+          // the disabled edit affordance.
+          if (isSyncEditBlockedError(error)) notifySyncEditBlocked();
+          else logger.error(`Failed to update comment ${commentId}:`, error);
           return false;
         }
       }),
@@ -466,7 +541,11 @@ global.webViewComponent = function CommentListWebView({
           await pdp.deleteComment(commentId);
           return true;
         } catch (error) {
-          logger.error(`Failed to delete comment ${commentId}:`, error);
+          // A write-gate rejection (an automatic Send/Receive is syncing this project) is an
+          // expected paused state: show the shared "editing paused" notice. Defense-in-depth behind
+          // the disabled delete affordance.
+          if (isSyncEditBlockedError(error)) notifySyncEditBlocked();
+          else logger.error(`Failed to delete comment ${commentId}:`, error);
           return false;
         }
       }),
@@ -510,6 +589,38 @@ global.webViewComponent = function CommentListWebView({
     [setScrRef, editorWebViewId, editorWebViewController, recordSelfInitiatedNavigation],
   );
 
+  // While this project's automatic Send/Receive is blocking edits (isSyncBlocked),
+  // disable every comment write affordance by forcing its capability gate to `false`.
+  // platform-bible-react's CommentList exposes no `disabled`/`readOnly` prop; these per-capability
+  // callbacks ARE its existing mechanism for hiding/disabling the reply box, assign, edit/delete, and
+  // thread-resolve, so gating them here is the real disable path (not a cosmetic no-op). NOTE: the
+  // verse-text conflict-resolution card (the `conflictResolution` prop / `useConflictResolution`,
+  // whose Accept/Reject/Merge controls derive from an ungated `getOptions` read, not
+  // `canUserResolveThreadCallback`) is NOT gated by these callbacks — during a block those controls
+  // stay live and rely on the backend `(SR_EDIT_BLOCKED)` rejection surfaced as the shared "editing
+  // paused" notice (click-then-paused, no data harm). The write handlers above additionally catch
+  // that rejection as defense-in-depth. The
+  // deny-while-blocked / pass-through-when-not decision itself lives in
+  // gateCommentWriteCapabilities (unit tested in comment-list-capability-gating.util.test.ts); this
+  // component only memoizes the result so unrelated re-renders don't churn the props CommentList
+  // sees.
+  const gatedCapabilities = useMemo(
+    () =>
+      gateCommentWriteCapabilities(isSyncBlocked, {
+        canUserAddCommentToThread,
+        canUserAssignThreadCallback,
+        canUserResolveThreadCallback,
+        canUserEditOrDeleteCommentCallback,
+      }),
+    [
+      isSyncBlocked,
+      canUserAddCommentToThread,
+      canUserAssignThreadCallback,
+      canUserResolveThreadCallback,
+      canUserEditOrDeleteCommentCallback,
+    ],
+  );
+
   return (
     <>
       <CommentListPanel
@@ -526,15 +637,18 @@ global.webViewComponent = function CommentListWebView({
         // When false (a cross-project open with no live reference), the "current chapter" option
         // stays hidden rather than scoping to an unrelated ref.
         canScopeToCurrentChapter={canScopeToCurrentChapter}
+        // While an automatic Send/Receive is syncing this project, show a slim "editing paused"
+        // notice and disable the write affordances (via the gated capability callbacks below).
+        isSyncBlocked={isSyncBlocked}
         handleAddCommentToThread={handleAddCommentToThread}
         handleUpdateComment={handleUpdateComment}
         handleDeleteComment={handleDeleteComment}
         handleReadStatusChange={handleReadStatusChange}
         assignableUsers={assignableUsers}
-        canUserAddCommentToThread={canUserAddCommentToThread}
-        canUserAssignThreadCallback={canUserAssignThreadCallback}
-        canUserResolveThreadCallback={canUserResolveThreadCallback}
-        canUserEditOrDeleteCommentCallback={canUserEditOrDeleteCommentCallback}
+        canUserAddCommentToThread={gatedCapabilities.canUserAddCommentToThread}
+        canUserAssignThreadCallback={gatedCapabilities.canUserAssignThreadCallback}
+        canUserResolveThreadCallback={gatedCapabilities.canUserResolveThreadCallback}
+        canUserEditOrDeleteCommentCallback={gatedCapabilities.canUserEditOrDeleteCommentCallback}
         selectedThreadId={selectedThreadId}
         onSelectedThreadChange={setSelectedThreadId}
         onVerseRefClick={handleVerseRefClick}

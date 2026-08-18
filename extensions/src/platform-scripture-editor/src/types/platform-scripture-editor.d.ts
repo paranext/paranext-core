@@ -697,6 +697,9 @@ declare module 'papi-shared-types' {
      * `switchId` uniquely identifies this switch and pairs it with the matching
      * `platformScriptureEditor.onDidSwitchProject` event. Subscribe with
      * `papi.network.getNetworkEvent('platformScriptureEditor.onWillSwitchProject')`.
+     *
+     * @experimental Recently-added switch-pairing plumbing for the workspace-updating overlay; the
+     *   payload shape and event name are not yet a settled contract and may change.
      */
     'platformScriptureEditor.onWillSwitchProject': { switchId: string };
     /**
@@ -704,6 +707,9 @@ declare module 'papi-shared-types' {
      * `switchId` of the `platformScriptureEditor.onWillSwitchProject` event that started the
      * switch. Subscribe with
      * `papi.network.getNetworkEvent('platformScriptureEditor.onDidSwitchProject')`.
+     *
+     * @experimental Recently-added switch-pairing plumbing for the workspace-updating overlay; the
+     *   payload shape and event name are not yet a settled contract and may change.
      */
     'platformScriptureEditor.onDidSwitchProject': { switchId: string };
   }

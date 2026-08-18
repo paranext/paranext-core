@@ -55,6 +55,8 @@ const MODEL_TEXT_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.modelText';
 const BIBLE_TEXTS_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.bibleTexts';
 const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commentaries';
 const SCRIPTURE_TEXT_GRID_WEBVIEW_TYPE = 'platformScriptureEditor.scriptureTextGrid';
+/** Tab title/tooltip for the Text Collection (Scripture Text Grid) tab. */
+const SCRIPTURE_TEXT_GRID_TITLE_KEY = '%webView_scriptureTextGrid_title_multiple%';
 
 // #region Editor Selection Tracking
 
@@ -267,15 +269,19 @@ async function open(
     // Decide where to route this open. The dispatch helper centralizes the simple-mode invariants
     // (one editor slot, no duplicate-(project, readonly) tabs) and the empty-editor probe; see
     // resolveOpenEditorDispatch JSDoc for the priority order.
-    // getAllOpenWebViewDefinitions can time out under load; fall back to an empty list so that
-    // open still succeeds (opening a new editor tab) rather than throwing.
-    let allOpenDefs: SavedWebViewDefinition[] = [];
+    // This rejects when a window could not be asked what it has open — most often a window whose
+    // renderer is still starting or has just gone away — and it may also time out under load. Both
+    // mean the same thing here: what is open is unknown. Carrying on with an empty list would tell
+    // the dispatch helper that nothing is open, and in simple mode that opens a second editor on
+    // top of the one the user already has, unsaved changes and all. Abort instead.
+    let allOpenDefs: SavedWebViewDefinition[];
     try {
       allOpenDefs = await papi.webViews.getAllOpenWebViewDefinitions();
     } catch (e) {
-      logger.warn(
-        `open: getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); opening as new tab`,
+      logger.error(
+        `open: could not establish which editors are already open (${getErrorMessage(e)}); not opening`,
       );
+      throw e;
     }
     const allScriptureEditors = toScriptureEditorInfos(allOpenDefs);
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
@@ -309,14 +315,50 @@ async function open(
 
     if (needsOverlay) {
       // Create emitters lazily on first use, after full activation, to avoid network init races.
+      // Uses the async factory (the sync createNetworkEventEmitter is deprecated) so the events can
+      // carry `x-experimental` in the generated OpenRPC document — these are recently-added switch-
+      // pairing events whose contract isn't settled (see their @experimental TSDoc in the d.ts). The
+      // payload type is inferred from the NetworkEvents augmentation, so no explicit generic here.
+      // Awaited before emit: the enclosing handler is async, so this only adds first-use latency and
+      // the will-start event still fires before the switch below.
       if (!projectSwitchWillStartEmitter)
-        projectSwitchWillStartEmitter = papi.network.createNetworkEventEmitter<{
-          switchId: string;
-        }>(PROJECT_SWITCH_WILL_START_EVENT);
+        projectSwitchWillStartEmitter = await papi.network.createNetworkEventEmitterAsync(
+          PROJECT_SWITCH_WILL_START_EVENT,
+          {
+            notification: {
+              'x-experimental': true,
+              summary:
+                'Emitted just before a scripture editor web view is opened or replaced with a new project.',
+              params: [
+                {
+                  name: 'switchId',
+                  required: true,
+                  summary: 'Token pairing this switch with its matching onDidSwitchProject event.',
+                  schema: { type: 'string' },
+                },
+              ],
+            },
+          },
+        );
       if (!projectSwitchDidFinishEmitter)
-        projectSwitchDidFinishEmitter = papi.network.createNetworkEventEmitter<{
-          switchId: string;
-        }>(PROJECT_SWITCH_DID_FINISH_EVENT);
+        projectSwitchDidFinishEmitter = await papi.network.createNetworkEventEmitterAsync(
+          PROJECT_SWITCH_DID_FINISH_EVENT,
+          {
+            notification: {
+              'x-experimental': true,
+              summary: 'Emitted after the scripture editor web view open/replace call resolves.',
+              params: [
+                {
+                  name: 'switchId',
+                  required: true,
+                  summary:
+                    'The switchId of the onWillSwitchProject event that started this switch.',
+                  schema: { type: 'string' },
+                },
+              ],
+            },
+          },
+        );
       projectSwitchWillStartEmitter.emit({ switchId });
 
       const outgoing = allScriptureEditors.find((e) => e.id === dispatch.targetTabId);
@@ -362,8 +404,11 @@ async function open(
     // Only applies in simple mode: openOrUpdateRelatedPanels (the source of the race) only runs
     // there, and in power mode re-resolving would return the same caller-supplied
     // existingTabIdToReplace anyway, so the re-check couldn't help.
-    // getAllOpenWebViewDefinitions can time out under load; if that happens keep the original
-    // dispatch — the target tab may still be present and openWebView will proceed normally.
+    // This read rejects when a window could not be asked what it has open (the dominant cause) and
+    // can also time out under load. Either way the original dispatch stands: it was resolved from a
+    // read that did succeed moments ago, and the one thing the re-check guards against — the target
+    // tab having vanished in the meantime — still surfaces, loudly, as openWebView refusing to
+    // replace a tab that is not there.
     let finalDispatch: OpenEditorDispatch = dispatch;
     if (interfaceMode === 'simple' && dispatch.kind === 'replace-tab') {
       try {
@@ -378,8 +423,8 @@ async function open(
           );
         }
       } catch (e) {
-        logger.warn(
-          `open: re-check getAllOpenWebViewDefinitions timed out or failed (${getErrorMessage(e)}); using original dispatch`,
+        logger.error(
+          `open: could not re-check which editors are open before replacing a tab (${getErrorMessage(e)}); using the dispatch resolved earlier`,
         );
       }
     }
@@ -574,6 +619,10 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       // BCV control (which is the single navigation point in simple mode). Power mode preserves the
       // saved value.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This webview is dual-mode: in simple mode it's the fixed 3-column layout's Column 2 and
+      // must always remain open, so it's non-closable there. Power mode allows closing/rearranging
+      // freely, matching its pre-existing behavior.
+      isClosable: interfaceMode === 'power',
     };
   }
 
@@ -930,6 +979,11 @@ const modelTextPanelWebViewProvider: IWebViewProvider = {
       // with the scripture editor (which is also forced to 0 in simple mode). Power mode preserves
       // the saved value.
       scrollGroupScrRef: interfaceMode === 'simple' ? 0 : savedWebView.scrollGroupScrRef,
+      // This tab is part of the fixed 3-column simple-mode layout (Column 1) and must always
+      // remain open there, so it's non-closable in simple mode. Power mode allows closing (this
+      // webview type isn't currently opened outside the fixed layout, but this keeps it consistent
+      // with the other fixed-layout webviews rather than hardcoding `false`).
+      isClosable: interfaceMode === 'power',
     };
   },
 };
@@ -949,16 +1003,29 @@ const scriptureTextGridWebViewProvider: IWebViewProvider = {
     const projectId = openWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
     // Re-read every call so mode changes are picked up at open/replace/restore time.
     const interfaceMode = await papi.settings.get('platform.interfaceMode');
+    // Resolve here (not left to the web view's own effect): PlatformTabTitle auto-resolves a raw
+    // LocalizeKey passed as `title`, so that half needs no resolution — but `tooltip` is a plain
+    // string, never auto-resolved, so it must already be localized text by the time it's set. Doing
+    // both here means the tab shows "Text Collection" and a working tooltip from its very first
+    // render, instead of depending on this tab's own (possibly backgrounded, and therefore
+    // unreliably-timed) web view to push the resolved strings back out via updateWebViewDefinition
+    // after mount.
+    const titleLocalizedStrings = await papi.localization.getLocalizedStrings({
+      localizeKeys: [SCRIPTURE_TEXT_GRID_TITLE_KEY],
+    });
     return {
       ...savedWebView,
-      // Icon-only tab: no visible text label, just the "Text Collection" tooltip (the web view keeps
-      // this in sync). The initial empty title avoids flashing a label before the web view runs.
-      title: '',
-      tooltip: '%webView_scriptureTextGrid_title_multiple%',
-      // Part of the default Simple-mode layout and must always remain open, so the tab is
-      // non-closable. The X-button is omitted and there is no keyboard close shortcut in the app,
-      // so this covers both close paths.
-      isClosable: false,
+      title: SCRIPTURE_TEXT_GRID_TITLE_KEY,
+      tooltip: titleLocalizedStrings[SCRIPTURE_TEXT_GRID_TITLE_KEY],
+      // This webview is dual-mode: in simple mode it's part of Column 3's fixed layout and must
+      // always remain open (the X-button is omitted and there is no keyboard close shortcut, so
+      // this covers both close paths), so it's non-closable there. Power mode allows closing
+      // freely, matching the other Column 3 providers (ScriptureEditorWebViewFactory,
+      // createResourceTextPanelProvider) — this also determines its rc-dock group (getTabGroup):
+      // isClosable === false routes it to TAB_GROUP_RESOURCES, which getGroups() only registers in
+      // Simple mode, so leaving this unconditionally false left the tab pointing at a group with no
+      // registered config in Power mode.
+      isClosable: interfaceMode === 'power',
       // No top toolbar in this view; the View Options icon button lives in the web view's header.
       shouldShowToolbar: false,
       projectId,
@@ -992,6 +1059,7 @@ function createResourceTextPanelProvider(
   webViewType: string,
   title: string,
   resourceType: Extract<ResourceType, 'ScriptureResource' | 'CommentaryResource'>,
+  defaultIconUrl: string,
 ): IWebViewProvider {
   return {
     async getWebView(
@@ -1009,6 +1077,8 @@ function createResourceTextPanelProvider(
         ? currentResourceTextPanelProjectIds.get(webViewType)
         : (openWebViewOptions.projectId ?? savedWebView.projectId);
       currentResourceTextPanelProjectIds.delete(webViewType);
+      // Re-read every call so mode changes are picked up at open/replace/restore time.
+      const interfaceMode = await papi.settings.get('platform.interfaceMode');
       // Intentionally does not force scrollGroupScrRef in simple mode. Bible texts and
       // commentaries are read-only reference panels that navigate independently; they are
       // not scroll-synced with the scripture editor in simple mode.
@@ -1018,10 +1088,17 @@ function createResourceTextPanelProvider(
         projectId,
         content: resourceTextPanelWebView,
         styles: resourceTextPanelWebViewStyles,
+        // Icon-only tab in Simple mode only — Power mode keeps showing this tab with no icon,
+        // exactly as today, since it is text-labeled there (see resource-text-panel.web-view.tsx
+        // for the live theme/selection-adaptive swap, which is likewise gated on Power mode).
+        iconUrl: interfaceMode === 'simple' ? defaultIconUrl : savedWebView.iconUrl,
         state: {
           ...savedWebView.state,
           resourceType,
         },
+        // This webview only ever appears in the fixed 3-column simple-mode layout (Column 3) and
+        // must always remain open there, so it's non-closable in simple mode.
+        isClosable: interfaceMode === 'power',
       };
     },
   };
@@ -1031,12 +1108,14 @@ const bibleTextsPanelWebViewProvider: IWebViewProvider = createResourceTextPanel
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_bibleTexts_title%',
   'ScriptureResource',
+  'papi-extension://platformScriptureEditor/assets/book-open.svg',
 );
 
 const commentariesPanelWebViewProvider: IWebViewProvider = createResourceTextPanelProvider(
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
   '%webView_resourcePanel_commentaries_title%',
   'CommentaryResource',
+  'papi-extension://platformScriptureEditor/assets/file-text.svg',
 );
 
 async function openResourceText(

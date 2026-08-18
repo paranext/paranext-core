@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
+import type { ProjectMetadata } from '@papi/core';
 import type { LocalizedStringValue } from 'platform-bible-utils';
 import { formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
@@ -77,6 +78,21 @@ export type LocalProjectInfo = {
   name: string;
   language: string;
 };
+
+/**
+ * Converts project metadata (from `papi.projectLookup.getMetadataForAllProjects`) into the
+ * {@link LocalProjectInfo} shape the Home and New Tab web views render, applying the display
+ * fallbacks the metadata's optional fields require. Shared so the two web views cannot drift.
+ */
+export function metadataToLocalProjectInfo(data: ProjectMetadata): LocalProjectInfo {
+  return {
+    projectId: data.id,
+    isPublished: data.isPublished ?? false,
+    fullName: data.fullName ?? data.name ?? data.id,
+    name: data.name ?? data.id,
+    language: data.language ?? '',
+  };
+}
 
 export type MergedProjectInfo = {
   projectId: string;

@@ -1,12 +1,13 @@
 import { CommandHandlers } from 'papi-shared-types';
 import { LocalizeKey } from 'platform-bible-utils';
+import type { NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 export type Severity = 'info' | 'warning' | 'error';
 
 /**
  * The placements a notification can appear in, as a frozen array so it can be the single source of
  * truth for both the {@link NotificationPosition} type and the notification service's OpenRPC
- * `position` enum (which the service host spreads from this).
+ * `position` enum ({@link NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS} spreads from this).
  *
  * @experimental
  */
@@ -179,3 +180,67 @@ export interface INotificationService {
 }
 
 export const NotificationServiceNetworkObjectName = 'NotificationService';
+
+/**
+ * OpenRPC documentation for the notification service network object.
+ *
+ * Attached in two places: each window's renderer registers its window-scoped name (e.g.
+ * `NotificationService-1`) with these docs, and the main process attaches the same docs when it
+ * registers its routing proxy under the generic {@link NotificationServiceNetworkObjectName} — the
+ * name consumers actually call — so the public name does not show undocumented in `rpc.discover`.
+ *
+ * @experimental
+ */
+export const NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS: NetworkObjectDocumentation = {
+  summary: 'Service that sends notifications to users in the UI',
+  methods: [
+    {
+      name: 'send',
+      summary: "Send a notification to the user's UI",
+      params: [
+        {
+          name: 'notification',
+          required: true,
+          summary: 'The notification to send',
+          schema: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' },
+              severity: { type: 'string' },
+              clickCommand: { type: 'string' },
+              clickCommandLabel: { type: 'string' },
+              secondaryClickCommand: { type: 'string' },
+              secondaryClickCommandLabel: { type: 'string' },
+              dismissClickCommand: { type: 'string' },
+              position: { type: 'string', enum: [...NOTIFICATION_POSITIONS] },
+              dismissible: { type: 'boolean' },
+              notificationId: { type: ['string', 'number'] },
+              duration: { type: 'number' },
+            },
+            required: ['message', 'severity'],
+          },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: ['string', 'number'] },
+      },
+    },
+    {
+      name: 'dismiss',
+      summary: "Dismiss a notification from the user's UI",
+      params: [
+        {
+          name: 'notificationId',
+          required: true,
+          summary: 'The ID of the notification to dismiss',
+          schema: { type: ['string', 'number'] },
+        },
+      ],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  ],
+};

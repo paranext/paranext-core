@@ -49,6 +49,13 @@ describe('MULTI_SOURCE_EVENT_NAMES stays in sync with the multi-source event nam
     const publicKeys: Record<keyof MultiSourceNetworkEvents, true> = {
       'object:onDidCreateNetworkObject': true,
       'object:onDidDisposeNetworkObject': true,
+      'platform.onDidChangeProjects': true,
+      'scrollGroup:onDidUpdateScrRef': true,
+      'scrollGroup:onDidChangeReferenceHistory': true,
+      'webView:onDidAddWebView': true,
+      'webView:onDidOpenWebView': true,
+      'webView:onDidUpdateWebView': true,
+      'webView:onDidCloseWebView': true,
     };
     Object.keys(publicKeys).forEach((name) =>
       expect(MULTI_SOURCE_EVENT_NAMES.has(name)).toBe(true),
@@ -57,6 +64,7 @@ describe('MULTI_SOURCE_EVENT_NAMES stays in sync with the multi-source event nam
 
   it('contains the platform-internal multi-source events not declared in the public types', () => {
     expect(MULTI_SOURCE_EVENT_NAMES.has('shared-store:change')).toBe(true);
+    expect(MULTI_SOURCE_EVENT_NAMES.has('scrollGroup:onDidChangeVersification')).toBe(true);
   });
 
   it('contains only known multi-source names', () => {
@@ -65,7 +73,15 @@ describe('MULTI_SOURCE_EVENT_NAMES stays in sync with the multi-source event nam
     const known = [
       'object:onDidCreateNetworkObject',
       'object:onDidDisposeNetworkObject',
+      'platform.onDidChangeProjects',
+      'scrollGroup:onDidUpdateScrRef',
+      'scrollGroup:onDidChangeReferenceHistory',
+      'scrollGroup:onDidChangeVersification',
       'shared-store:change',
+      'webView:onDidAddWebView',
+      'webView:onDidOpenWebView',
+      'webView:onDidUpdateWebView',
+      'webView:onDidCloseWebView',
     ];
     Array.from(MULTI_SOURCE_EVENT_NAMES).forEach((name) => expect(known).toContain(name));
   });

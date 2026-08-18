@@ -2,20 +2,18 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
-import { useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
+import { useData, useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
+import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // Mock asset
 vi.mock('@assets/icon.png', () => ({ default: 'icon.png' }));
-
-vi.mock('@renderer/components/platform-bible-menu.data', () => ({
-  provideMenuData: vi.fn(async () => ({ columns: {}, groups: {}, items: [] })),
-}));
 
 vi.mock('@renderer/components/user-profile-popover/user-profile-popover.component', () => ({
   UserProfilePopover: () => <div data-testid="user-profile-popover-stub" />,
@@ -47,6 +45,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       { type: 'light', id: 'light', themeFamilyId: 'light', label: 'Light', cssVariables: {} },
       vi.fn(),
     ]),
+    MainMenu: vi.fn(() => [{ columns: {}, groups: {}, items: [] }, vi.fn(), false]),
   })),
   useDataProvider: vi.fn(() => undefined),
   useDialogCallback: vi.fn(() => vi.fn()),
@@ -58,6 +57,10 @@ vi.mock('@renderer/hooks/use-navigation-target-web-view.hook', () => ({
   // Typed so tests can mockReturnValue a resolved target (the factory's inferred return type
   // would otherwise be plain `undefined`)
   useNavigationTargetWebView: vi.fn((): ResolvedWebView | undefined => undefined),
+}));
+
+vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
+  useWindowControlsOverlay: vi.fn((): DOMRect | undefined => undefined),
 }));
 
 vi.mock('@renderer/services/web-view.service-host', () => ({
@@ -129,14 +132,18 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('platform-bible-react')>();
   return {
     ...actual,
+    // `className` is captured on a testid'd wrapper so tests can assert whether the static
+    // OS-reserved-space class is applied, without depending on the real Toolbar's DOM structure.
     Toolbar: ({
+      className,
       configAreaChildren,
       children,
     }: {
+      className?: string;
       configAreaChildren?: React.ReactNode;
       children?: React.ReactNode;
     }) => (
-      <div>
+      <div data-testid="toolbar-root" className={className}>
         <div data-testid="toolbar-config-area">{configAreaChildren}</div>
         <div data-testid="toolbar-main-area">{children}</div>
       </div>
@@ -144,12 +151,25 @@ vi.mock('platform-bible-react', async (importOriginal) => {
     // Mirrors the real BookChapterControl's trigger (aria-label + disabled) so tests can assert on
     // the disabled state that platform-bible-toolbar.tsx wires up, without pulling in the real
     // component's Radix Popover/Command internals.
-    BookChapterControl: ({ disabled }: { disabled?: boolean }) => (
+    BookChapterControl: ({
+      disabled,
+      className,
+      triggerVariant,
+      showTriggerChevron,
+    }: {
+      disabled?: boolean;
+      className?: string;
+      triggerVariant?: string;
+      showTriggerChevron?: boolean;
+    }) => (
       <button
         type="button"
         aria-label="book-chapter-trigger"
         disabled={disabled}
         data-testid="book-chapter-control"
+        data-classname={className}
+        data-trigger-variant={triggerVariant}
+        data-show-chevron={showTriggerChevron}
       />
     ),
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
@@ -158,7 +178,13 @@ vi.mock('platform-bible-react', async (importOriginal) => {
         {children}
       </div>
     ),
-    SelectTrigger: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+    SelectTrigger: ({
+      children,
+      className,
+    }: {
+      children?: React.ReactNode;
+      className?: string;
+    }) => <div data-select-trigger-classname={className}>{children}</div>,
     SelectContent: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     SelectItem: ({ children, value }: { children?: React.ReactNode; value?: string }) => (
       <div data-value={value}>{children}</div>
@@ -204,13 +230,16 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  it('is in the DOM but hidden and non-interactive while isSendReceiveAvailable is loading', async () => {
+  it('is visible and interactive while isSendReceiveAvailable is unresolved (fail-open)', async () => {
+    // While the availability probe hasn't resolved — e.g. the extension host is
+    // busy/hung during a startup auto-sync — the Sync button must stay visible, since send/receive
+    // is available. Only a confirmed `false` hides it.
     vi.mocked(sendCommand).mockImplementation(
       // sendCommand has a complex generic signature; cast is required for the mock implementation
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
       (async (commandName: string) => {
         if (commandName === 'platformGetResources.isSendReceiveAvailable')
-          return new Promise<never>(() => {}); // Never resolves — keeps component in loading state
+          return new Promise<never>(() => {}); // Never resolves — probe stays unknown
         if (commandName === 'platform.getOSPlatform') return 'win32';
         if (commandName === 'platform.isFullScreen') return false;
         return undefined;
@@ -219,13 +248,11 @@ describe('PlatformBibleToolbar — Sync button', () => {
       }) as any,
     );
     render(<PlatformBibleToolbar />);
-    // Not reachable via accessibility tree (aria-hidden) or keyboard (tabIndex=-1)
-    expect(screen.queryByRole('button', { name: 'Sync' })).not.toBeInTheDocument();
-    // But physically present in the DOM, reserving layout space (tw:invisible)
-    const loadingBtn = document.querySelector('button[data-testid="toolbar-sync-button"]');
-    expect(loadingBtn).toBeInTheDocument();
-    expect(loadingBtn).toHaveAttribute('aria-hidden', 'true');
-    expect(loadingBtn).toHaveAttribute('tabIndex', '-1');
+    // Reachable via the accessibility tree and keyboard, and shows the idle label
+    const btn = screen.getByRole('button', { name: 'Sync' });
+    expect(btn).toBeInTheDocument();
+    expect(btn).not.toHaveAttribute('aria-hidden');
+    expect(btn).not.toHaveAttribute('tabIndex');
   });
 
   it('is rendered with correct text when isSendReceiveAvailable returns true', async () => {
@@ -667,5 +694,186 @@ describe('PlatformBibleToolbar — scroll group write-back to the resolved targe
 
     expect(result).toBe(false);
     expect(vi.mocked(updateWebViewDefinitionSync)).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlatformBibleToolbar — Home button visibility by interface mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  it('hides the Home button when platform.interfaceMode is "simple"', async () => {
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.queryByTestId('toolbar-home-button')).not.toBeInTheDocument();
+    });
+  });
+
+  it('shows the Home button when platform.interfaceMode is "power"', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-home-button')).toBeInTheDocument();
+    });
+  });
+});
+
+describe('PlatformBibleToolbar — top BCV and project selector styling by interface mode', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand(true);
+  });
+
+  it('uses ghost variant, chevron, and fit-content width for the top BCV in simple mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).toHaveAttribute('data-trigger-variant', 'ghost');
+    expect(control).toHaveAttribute('data-show-chevron', 'true');
+    expect(control.getAttribute('data-classname')).toContain('tw:w-fit');
+  });
+
+  it('uses outline variant, no chevron, and the fixed width for the top BCV in power mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control.getAttribute('data-trigger-variant')).not.toBe('ghost');
+    expect(control).toHaveAttribute('data-show-chevron', 'false');
+    expect(control.getAttribute('data-classname')).toContain('tw:w-96');
+  });
+
+  it('applies ghost styling to the project picker Select in simple mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('project-picker-select')).toBeInTheDocument();
+    });
+    expect(
+      document
+        .querySelector('[data-select-trigger-classname]')
+        ?.getAttribute('data-select-trigger-classname'),
+    ).toContain('tw:border-0');
+  });
+});
+
+describe('PlatformBibleToolbar — main menu data stays live', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand(true);
+  });
+
+  it('subscribes to MainMenu via useData instead of a one-shot fetch, so interface-mode and localization updates reach it without reopening the menu', async () => {
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(useData).toHaveBeenCalledWith(menuDataService.dataProviderName);
+    });
+    const dataProviderHooks = vi.mocked(useData).mock.results.at(-1)?.value;
+    expect(dataProviderHooks.MainMenu).toHaveBeenCalledWith(
+      undefined,
+      expect.objectContaining({ columns: {}, groups: {}, items: [] }),
+    );
+  });
+});
+
+describe('PlatformBibleToolbar — title bar reserved space', () => {
+  const mockSendCommandForOS = (osPlatform: string) => {
+    vi.mocked(sendCommand).mockImplementation(
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      (async (commandName: string) => {
+        if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+        if (commandName === 'platform.getOSPlatform') return osPlatform;
+        if (commandName === 'platform.isFullScreen') return false;
+        return undefined;
+        // sendCommand has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // clearAllMocks() does not reset a prior test's mockReturnValue (see precedent above), so
+    // restore the default explicitly
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(undefined);
+  });
+
+  it('reserves the live-measured overlay width plus breathing room on Windows, and does not also apply the static class', async () => {
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(
+      new DOMRect(0, 0, window.innerWidth - 150, 32),
+    );
+    mockSendCommandForOS('win32');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      // OS controls area width 150px + 4px breathing room (RESERVED_SPACE_BREATHING_ROOM_PX)
+      expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
+        paddingRight: '154px',
+      });
+    });
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-[calc(138px+1rem)]');
+    // Toolbar's own container has an unconditional border and tw:px-4 (16px end padding); when the
+    // wrapper above reserves the trailing space, Toolbar's own border must be dropped entirely (not
+    // just the end side) and its own end-side padding suppressed, or the border stops short at
+    // Toolbar's narrower edge instead of enclosing the reserved strip, and the wrapper's live
+    // measurement stacks on top of the 16px, over-reserving space.
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:border-0');
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:pe-0');
+    // The wrapper carries an equivalent border itself (as a layout-neutral box-shadow, not an
+    // actual border — see the toolbarReservedSpaceStyle comment in the component), so the outline
+    // encloses the full toolbar-plus-reserved-space region on every side instead of stopping short
+    // at Toolbar's narrower edge.
+    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
+      boxShadow: 'inset 0 0 0 1px var(--border)',
+    });
+  });
+
+  it('reserves space on the left when the live-measured gap is on the left (e.g., RTL locales)', async () => {
+    // left = 150, right = window.innerWidth: the gap sits on the left instead of the right.
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(
+      new DOMRect(150, 0, window.innerWidth - 150, 32),
+    );
+    mockSendCommandForOS('win32');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      // 150px measured gap + 4px breathing room (RESERVED_SPACE_BREATHING_ROOM_PX)
+      expect(screen.getByTestId('toolbar-reserved-space-wrapper')).toHaveStyle({
+        paddingLeft: '154px',
+      });
+    });
+  });
+
+  it('applies no inline override while the overlay geometry is not yet known, falling back to the static class', async () => {
+    mockSendCommandForOS('win32');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).not.toHaveAttribute('style');
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:pe-[calc(138px+1rem)]');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:border-0');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
+  });
+
+  it('does not reserve space on macOS regardless of overlay geometry, keeping the static traffic-lights class', async () => {
+    vi.mocked(useWindowControlsOverlay).mockReturnValue(new DOMRect(0, 0, 700, 32));
+    mockSendCommandForOS('darwin');
+
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('toolbar-reserved-space-wrapper')).not.toHaveAttribute('style');
+    expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:ps-[85px]');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:border-0');
+    expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
   });
 });
