@@ -53,8 +53,11 @@ import {
   PopoverTrigger,
   ScrollGroupSelector,
   SelectMenuItemHandler,
+  SHRINK_STEP,
   Spinner,
   TabToolbar,
+  ToolbarCompoundLabel,
+  useShrinkStepValue,
   UNDO_REDO_BUTTONS_STRING_KEYS,
   UndoRedoButtons,
   isMacOs,
@@ -157,6 +160,35 @@ import {
  */
 function PortalContents({ children }: PropsWithChildren) {
   return children;
+}
+
+/**
+ * Label for the paragraph-style trigger: the marker code, then the style name.
+ *
+ * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which
+ * `TabToolbarContainer` publishes. `PlatformScriptureEditor` _renders_ the `TabToolbar`, so a hook
+ * call there would sit above the provider and read the widest step forever. This renders as the
+ * toolbar's descendant, so it sees the real value.
+ */
+function ParagraphStyleLabel({
+  blockMarker,
+  styleName,
+}: {
+  blockMarker: string;
+  styleName: string;
+}) {
+  const shrinkStep = useShrinkStepValue();
+
+  return (
+    <ToolbarCompoundLabel
+      // Monospace on the marker code: a USFM marker is a code, not prose, and should read as one.
+      // Deliberately not colored by marker — the code inherits the row's own foreground.
+      primary={<span className="tw:font-mono">{blockMarker}</span>}
+      secondary={styleName}
+      showSecondary={shrinkStep < SHRINK_STEP.MINIMUM}
+      fullText={`${blockMarker} - ${styleName}`}
+    />
+  );
 }
 
 /**
@@ -2113,6 +2145,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     />
   ) : undefined;
 
+  /** Localized name of the current paragraph style, or the generic fallback. */
+  const blockMarkerName =
+    blockMarker && blockMarkerToBlockNames[blockMarker]
+      ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
+      : localizedStrings['%paragraphMenu_misc_markerDescription%'];
+
   const scrollGroupSelector = isPowerMode ? (
     <ScrollGroupSelector
       availableScrollGroupIds={availableScrollGroupIds}
@@ -2157,20 +2195,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
-                          className="tw:h-8"
+                          // `tw:min-w-0` lets the button shrink so its label can truncate rather
+                          // than push the end-zone buttons out of the clipped toolbar;
+                          // `tw:max-w-40` is the fixed slot that keeps neighbours from shifting as
+                          // the cursor moves between styles with different name lengths.
+                          className="tw:h-8 tw:min-w-0 tw:max-w-40"
                           aria-label="Paragraph Selection"
                           title={isStructureProtected ? undefined : 'Paragraph Selection'}
                           disabled={isStructureProtected}
                           variant="outline"
                         >
-                          {blockMarker ? `${blockMarker} - ` : ''}
-                          {blockMarker &&
-                          Object.entries(blockMarkerToBlockNames).some(
-                            ([marker]) => marker === blockMarker,
-                          )
-                            ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
-                            : localizedStrings['%paragraphMenu_misc_markerDescription%']}
-                          <ChevronDown />
+                          <ParagraphStyleLabel
+                            blockMarker={blockMarker}
+                            styleName={blockMarkerName}
+                          />
+                          {/* An icon has no shorter form, so it must never be the thing squeezed. */}
+                          <ChevronDown className="tw:shrink-0" />
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="tw:p-0 tw:w-96">

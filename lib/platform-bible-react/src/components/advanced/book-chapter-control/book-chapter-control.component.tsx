@@ -32,6 +32,8 @@ import {
   useRef,
   useState,
 } from 'react';
+import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
+import { ToolbarCompoundLabel } from '@/components/advanced/toolbar-compound-label/toolbar-compound-label.component';
 import { generateCommandValue } from '@/components/shared/book-item.utils';
 import RecentSearches from '../recent-searches.component';
 import { useQuickNavButtons } from './book-chapter-control.navigation';
@@ -78,8 +80,12 @@ export function BookChapterControl({
   align = 'center',
   ref,
   disabled,
+  shrinkStep: shrinkStepOverride,
 }: BookChapterControlProps) {
   const direction: Direction = readDirection();
+
+  const contextShrinkStep = useShrinkStepValue();
+  const shrinkStep = shrinkStepOverride ?? contextShrinkStep;
 
   // Indicates if the Command popover is open or not
   const [isCommandOpen, setIsCommandOpen] = useState(false);
@@ -424,6 +430,7 @@ export function BookChapterControl({
     [topMatch],
   );
 
+  /** The complete reference. Rendered at the widest step, and carried in the tooltip at every step. */
   const currentDisplayValue = useMemo(
     () =>
       formatScrRef(
@@ -432,6 +439,22 @@ export function BookChapterControl({
       ),
     [scrRef, localizedBookNames],
   );
+
+  /**
+   * The book in whichever form the current step calls for: spelled out when there is room, the
+   * abbreviated id from step 1 on. Both helpers already handle the no-localization fallback
+   * (`Canon.bookIdToEnglishName` / the uppercase id), so this needs no new data and no new
+   * localized strings.
+   */
+  const bookLabel = useMemo(
+    () =>
+      shrinkStep >= SHRINK_STEP.TIGHT
+        ? getLocalizedBookId(scrRef.book, localizedBookNames)
+        : getLocalizedBookName(scrRef.book, localizedBookNames),
+    [scrRef.book, localizedBookNames, shrinkStep],
+  );
+
+  const chapterVerseLabel = `${scrRef.chapterNum}:${scrRef.verseNum}`;
 
   const setChapterRef = useCallback((chapter: number) => {
     return (element: HTMLDivElement | null) => {
@@ -921,7 +944,14 @@ export function BookChapterControl({
             }
           }}
         >
-          {triggerContent ?? <span className="tw:truncate">{currentDisplayValue}</span>}
+          {triggerContent ?? (
+            <ToolbarCompoundLabel
+              primary={bookLabel}
+              secondary={chapterVerseLabel}
+              showSecondary={shrinkStep < SHRINK_STEP.MINIMUM}
+              fullText={currentDisplayValue}
+            />
+          )}
           {showTriggerChevron && (
             <IconSelector
               data-testid="book-chapter-control-chevron"

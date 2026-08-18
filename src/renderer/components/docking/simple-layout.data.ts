@@ -32,7 +32,17 @@ export const simpleLayout: LayoutBase = {
         children: [
           {
             group: HEADLESS_GROUP,
-            panelLock: { minWidth: 300 },
+            // 200, not 300. rc-dock renders each column as `flex: (size) (size * 1e6) (size)px`
+            // (DockBox.js), so the `size` weights above already make the columns rescale
+            // continuously with the window — proportional layout is not something that needs
+            // building, it is what happens once nothing floors it. A 300px floor on all three
+            // meant 900px of columns inside a window allowed down to 800px (main.ts), so the dock
+            // overflowed and the third column vanished behind a horizontal scrollbar.
+            //
+            // At 800px the 1:2:1 weighting gives 200/400/200, so this floor sits exactly at the
+            // narrowest natural width and never binds during a window resize; it only stops a
+            // splitter drag from collapsing a column to nothing.
+            panelLock: { minWidth: 200 },
             tabs: [
               {
                 id: '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2',
@@ -56,7 +66,7 @@ export const simpleLayout: LayoutBase = {
         children: [
           {
             group: HEADLESS_GROUP,
-            panelLock: { minWidth: 300 },
+            panelLock: { minWidth: 200 },
             tabs: [
               {
                 id: '3cf575f0-2cc2-464b-8765-b588f216dfce',
@@ -80,7 +90,7 @@ export const simpleLayout: LayoutBase = {
         children: [
           {
             group: TAB_GROUP_RESOURCES,
-            panelLock: { minWidth: 300 },
+            panelLock: { minWidth: 200 },
             tabs: [
               {
                 id: '27616073-bf60-4f2b-9518-922d1a7d3601',
