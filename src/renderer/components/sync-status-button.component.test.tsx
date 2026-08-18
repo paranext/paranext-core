@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import path from 'path';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { sendCommand } from '@shared/services/command.service';
@@ -8,13 +8,17 @@ import { getNetworkEvent } from '@shared/services/network.service';
 import { notificationService } from '@shared/services/notification.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import type { SyncState } from 'paratext-bible-send-receive';
-import { SyncStatusButton, SYNC_UNAVAILABLE_MESSAGE_KEY } from './sync-status-button.component';
+import {
+  SyncStatusButton,
+  SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
+} from './sync-status-button.component';
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
-      '%general_cancel%': 'Test Cancel',
       '%toolbar_sync%': 'Sync',
+      '%toolbar_sync_cancel%': 'Test Cancel sync',
+      '%toolbar_sync_cancelling%': 'Test Cancelling',
       '%toolbar_sync_open_status%': 'Test Sync status',
       '%toolbar_sync_popover_idle%': 'Test no sync running',
       '%toolbar_sync_popover_synced%': 'Test last sync finished',
@@ -70,6 +74,38 @@ const mockSyncState = (state: SyncState | Error | undefined) => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
     }) as any,
   );
+};
+
+/**
+ * Answers successive `getSyncState` calls from `states` in order, so a test can drive a sync whose
+ * project set changes between reads. Passing a promise holds that read open until the test resolves
+ * it. The final entry answers every call after it.
+ */
+const mockSyncStateSequence = (states: (SyncState | Promise<SyncState>)[]) => {
+  let callCount = 0;
+  vi.mocked(sendCommand).mockImplementation(
+    // sendCommand has a complex generic signature; cast is required for the mock implementation
+    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+    (async (commandName: string) => {
+      if (commandName === 'paratextBibleSendReceive.getSyncState') {
+        const state = states[Math.min(callCount, states.length - 1)];
+        callCount += 1;
+        return state;
+      }
+      return undefined;
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+    }) as any,
+  );
+};
+
+/** A promise the test resolves by hand, for holding a `getSyncState` read open across an event. */
+const deferredSyncState = () => {
+  let resolveState: (state: SyncState) => void = () => {};
+  const promise = new Promise<SyncState>((resolve) => {
+    resolveState = resolve;
+  });
+  return { promise, resolve: (state: SyncState) => resolveState(state) };
 };
 
 /**
@@ -281,6 +317,154 @@ describe('SyncStatusButton — project names', () => {
   });
 });
 
+describe('SyncStatusButton — sync state events', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // The live path when a sync starts while the toolbar is already mounted: the event carries no
+  // ids, so the names come from a follow-up read.
+  it('names the projects of a sync that starts after it mounted', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      IDLE_STATE,
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['proj-hnf'] },
+    ]);
+    mockProjectNames({ 'proj-hnf': 'HNF' });
+    render(<SyncStatusButton />);
+    await screen.findByRole('button', { name: 'Sync' });
+
+    fireSyncStateChanged(true);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Syncing HNF' })).toBeInTheDocument();
+    });
+  });
+
+  it('stops naming any project once the sync ends', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['proj-hnf'] },
+    ]);
+    mockProjectNames({ 'proj-hnf': 'HNF' });
+    render(<SyncStatusButton />);
+    await screen.findByRole('button', { name: 'Test Syncing HNF' });
+
+    fireSyncStateChanged(false);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
+    });
+  });
+
+  // A claim releasing while another still holds reports `isSyncing: true`, so the syncing set can
+  // shrink without ever passing through "not syncing". Naming the project that just STOPPED is the
+  // untruthfulness this indicator exists to remove.
+  it('stops counting a project that drops out of a still-running sync', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    const afterRelease = deferredSyncState();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a', 'b'] },
+      afterRelease.promise,
+    ]);
+    mockProjectNames({ a: 'AAA', b: 'BBB' });
+    render(<SyncStatusButton />);
+    await screen.findByRole('button', { name: 'Test Syncing 2 projects' });
+
+    // Project A's sync finishes while B's keeps running.
+    fireSyncStateChanged(true);
+
+    // While the read naming the new set is in flight, the button must not still count A.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Syncing' })).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      afterRelease.resolve({
+        isSyncing: true,
+        lastRequestedProjectIds: [],
+        syncingProjectIds: ['b'],
+      });
+      await afterRelease.promise;
+    });
+
+    expect(screen.getByRole('button', { name: 'Test Syncing BBB' })).toBeInTheDocument();
+  });
+
+  // Guards the cross-sync leak: a read issued for one sync must never name a LATER sync's projects,
+  // however late it resolves. Commands and events share one ordered connection today, so a read can
+  // only carry a since-finished sync's ids if it was sent before the event that ended that sync —
+  // making this unreachable in production. Pinned anyway so the hook does not silently depend on
+  // that transport guarantee.
+  it('never labels a new sync with the projects of the one before it', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    const firstSyncRead = deferredSyncState();
+    const secondSyncRead = deferredSyncState();
+    mockSyncStateSequence([IDLE_STATE, firstSyncRead.promise, secondSyncRead.promise]);
+    mockProjectNames({ old: 'OLDPROJ', fresh: 'FRESH' });
+    render(<SyncStatusButton />);
+    await screen.findByRole('button', { name: 'Sync' });
+
+    // A sync of OLDPROJ starts and finishes, then a different sync starts — all while the read that
+    // would have named OLDPROJ is still in flight.
+    fireSyncStateChanged(true);
+    fireSyncStateChanged(false);
+    fireSyncStateChanged(true);
+
+    // The superseded read lands now, after the event for the sync that replaced it.
+    await act(async () => {
+      firstSyncRead.resolve({
+        isSyncing: true,
+        lastRequestedProjectIds: [],
+        syncingProjectIds: ['old'],
+      });
+      await firstSyncRead.promise;
+    });
+    expect(screen.queryByRole('button', { name: 'Test Syncing OLDPROJ' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      secondSyncRead.resolve({
+        isSyncing: true,
+        lastRequestedProjectIds: ['old'],
+        syncingProjectIds: ['fresh'],
+      });
+      await secondSyncRead.promise;
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Syncing FRESH' })).toBeInTheDocument();
+    });
+  });
+
+  it('keeps the syncing status when the follow-up read fails, losing only the names', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    let callCount = 0;
+    vi.mocked(sendCommand).mockImplementation(
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      (async (commandName: string) => {
+        if (commandName === 'paratextBibleSendReceive.getSyncState') {
+          callCount += 1;
+          if (callCount === 1) return IDLE_STATE;
+          throw new Error('send/receive stopped answering');
+        }
+        return undefined;
+        // sendCommand has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+    render(<SyncStatusButton />);
+    await screen.findByRole('button', { name: 'Sync' });
+
+    fireSyncStateChanged(true);
+
+    // The event alone already proves a sync is running, so the status stands without the names.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Syncing' })).toBeInTheDocument();
+    });
+  });
+});
+
 describe('SyncStatusButton — popover and cancel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -374,11 +558,102 @@ describe('SyncStatusButton — popover and cancel', () => {
 
     await waitFor(() => {
       expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith({
-        message: SYNC_UNAVAILABLE_MESSAGE_KEY,
+        message: SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
         severity: 'warning',
       });
     });
     expect(screen.getByTestId('toolbar-sync-cancel-button')).toBeEnabled();
+  });
+
+  // A greyed-out button reads as "unavailable", not "your click was taken". The sync keeps reporting
+  // `syncing` until send/receive reaches a stopping point, so the label has to say so meanwhile.
+  it('says Cancelling after the cancel request is accepted', async () => {
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Syncing AAA' }));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+  });
+
+  it('names the outcome rather than offering a bare Cancel', async () => {
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Syncing AAA' }));
+
+    // Inside a dismissible popover a bare "Cancel" reads as dismissing the popover.
+    expect(await screen.findByTestId('toolbar-sync-cancel-button')).toHaveTextContent(
+      'Test Cancel sync',
+    );
+  });
+
+  // A sync starting while the popover is still open must not inherit the previous sync's spent
+  // cancel, or its Cancel button is dead with no way to re-arm short of closing the popover.
+  it('re-arms Cancel when a new sync starts while the popover is open', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] },
+    ]);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Syncing AAA' }));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toBeDisabled();
+    });
+
+    // That sync ends and another begins, all with the popover still open.
+    fireSyncStateChanged(false);
+    fireSyncStateChanged(true);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toBeEnabled();
+    });
+    expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancel sync');
+  });
+
+  // The label carries a project name of any length, so the button has to be allowed to shrink and
+  // truncate: a toolbar item that grows without bound pushes its neighbours off the bar.
+  it('lets the label truncate instead of growing the toolbar item', async () => {
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'A project with a very long name indeed' });
+    render(<SyncStatusButton />);
+
+    const button = await screen.findByTestId('toolbar-sync-button');
+
+    // The button variants set `shrink-0` by default; this must override it, keep no width floor, and
+    // cap how wide a long project name can push it. (`[&_svg]:shrink-0` stays — that guards the
+    // icons, not the button.)
+    expect(button.classList.contains('tw:shrink-0')).toBe(false);
+    expect(button.classList.contains('tw:shrink')).toBe(true);
+    expect(button.classList.contains('tw:min-w-0')).toBe(true);
+    expect(button.classList.contains('tw:max-w-[180px]')).toBe(true);
+    // Scoped to the button: the live region carries the same text by design.
+    await waitFor(() => {
+      expect(
+        within(button).getByText('Test Syncing A project with a very long name indeed'),
+      ).toHaveClass('tw:truncate');
+    });
+  });
+
+  // The status changes on its own, so without a live region a screen reader user learns nothing
+  // unless they happen to focus the button.
+  it('announces the status through a live region', async () => {
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing AAA');
+    });
+    expect(screen.getByRole('status')).toHaveAttribute('aria-live', 'polite');
   });
 
   it('uses a message key that actually exists in the localization file', () => {
@@ -388,7 +663,7 @@ describe('SyncStatusButton — popover and cancel', () => {
       readFileSync(path.join(__dirname, '../../../assets/localization/en.json'), 'utf8'),
     );
 
-    expect(englishStrings).toHaveProperty(SYNC_UNAVAILABLE_MESSAGE_KEY);
+    expect(englishStrings).toHaveProperty(SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY);
   });
 
   it('declares every localized string it renders in en.json', () => {
@@ -399,8 +674,9 @@ describe('SyncStatusButton — popover and cancel', () => {
     );
 
     [
-      '%general_cancel%',
       '%toolbar_sync%',
+      '%toolbar_sync_cancel%',
+      '%toolbar_sync_cancelling%',
       '%toolbar_sync_open_status%',
       '%toolbar_sync_popover_idle%',
       '%toolbar_sync_popover_synced%',

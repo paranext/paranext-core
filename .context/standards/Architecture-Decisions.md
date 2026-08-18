@@ -512,6 +512,34 @@ step, no automation. Just a record.
   states in the NN-4 design ("Sync conflict", "Connection problem", "Unsaved changes", "Unsynced
   changes") are deferred and marked as such in `sync-status-button.component.tsx`: none is derivable
   from what Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this
-  work removes.
+  work removes. **A second sync surface exists outside core's tree, and it overlaps this one on most
+  syncs.** As of 2026-08-18, Paratext 10 Studio carries (in its unmerged `repo-patches/paranext-core.patch`)
+  a C#-side sync toast in `ParatextProjectSendReceiveService`, tracked by `_syncNotificationId` and
+  created by `RunWithSyncNotification`. Traced through that patch: `RunWithSyncNotification` defaults
+  `showNotification` to `true`; `SyncProjects` omits the argument entirely, so the `syncProjects` path
+  always toasts; and `SendReceiveProjects` derives it from a `suppressNotification` parameter that
+  defaults to `false`. Only the open S/R dialog opts out. The toast is `Duration = 0` (persistent) with
+  `ClickCommand = "paratextBibleSendReceive.cancelSync"`, i.e. the same cancel affordance this popover
+  offers. The resulting overlap in Simple mode:
+
+  | Sync | C# toast | This button | Result |
+  | --- | --- | --- | --- |
+  | Simple-mode startup (`startup-tasks.ts` → `syncProjects`) | yes | no claim | toast only |
+  | Picker `syncOnProjectSwitch` (direct dotnet) | yes | no claim | toast only |
+  | Scheduled / auto-sync engine (`runSync` → `syncProjects`) | yes | claims | **both** |
+  | Manual hamburger / background (`sendReceiveProjects`) | yes | claims | **both** |
+  | Open S/R dialog (`suppressNotification: true`) | no | claims | button only |
+
+  Two consequences worth carrying forward. First, the C# service is *broader* coverage than this
+  button, not narrower: it sits where every sync converges on the `_sendReceiveSemaphore`, so it sees
+  the direct-command syncs this button is blind to — which is the same reason a semaphore-derived
+  signal is the proper general fix. Second, each surface is individually sound; Power mode does not
+  render this button at all, so the toast is its sole truthful indicator there. The defect is
+  specifically the **Simple-mode overlap**, not the toast's existence. Note also that suppressing the
+  toast is only wired for `sendReceiveProjects`; `syncProjects` has no such parameter, so quieting the
+  scheduled path needs a C# change in Studio's patch plus a contract addition in both copies of the
+  Send/Receive declaration. NN-4's "a single, truthful notification" is therefore not achieved in the
+  shipped product by this decision alone, and the remaining work is cross-repo rather than a change to
+  this component.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` contract.

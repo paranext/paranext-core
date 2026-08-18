@@ -264,8 +264,9 @@ declare module 'paratext-bible-send-receive' {
    * `syncOpenProjects`, `runScheduledSessionSync`, and the auto-sync engine), which claim through
    * its state controller. Callers that reach the dotnet `syncProjects`/`sendReceiveProjects`
    * commands directly are invisible here — nothing in `c-sharp/` emits `onSyncStateChanged` — so
-   * treat this as best-effort rather than ground truth. A core-authoritative signal over the C#
-   * sync semaphore is tracked upstream as PT-4214.
+   * treat this as best-effort rather than ground truth. Making this authoritative would take a
+   * signal derived from the C# sync semaphore itself, which is upstream work in the Send/Receive
+   * extension; see ADR-0014 in `.context/standards/Architecture-Decisions.md`.
    *
    * Two core paths are on the invisible side today, both worth knowing before relying on this for a
    * startup status:

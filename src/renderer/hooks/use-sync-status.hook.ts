@@ -54,13 +54,16 @@ function deriveStatusFromSnapshot(state: SyncState): SyncStatus {
  * absent from `getSyncState` and fires no event, so this reports `idle` throughout it. In Simple
  * mode that currently includes the startup sync itself (`main/startup-tasks.ts` calls the dotnet
  * `syncProjects` command directly), so "correct from startup" holds for manual and scheduled syncs
- * but not yet for that one. See {@link SyncState} for the full list and PT-4214 for the fix.
+ * but not yet for that one. See {@link SyncState} for the full list, and ADR-0014 in
+ * `.context/standards/Architecture-Decisions.md` for why closing that gap is a change to sync
+ * behavior rather than to this hook.
  *
  * Project names are resolved from project metadata rather than the event, which carries no ids.
- * They are absent (empty, with `status` still `syncing`) in two cases callers must handle: a
- * Send/Receive build predating `syncingProjectIds`, and a `getSyncState` call that fails. Names for
- * ids whose metadata can't be fetched fall back to the project id, so a partial failure loses
- * precision but never a project.
+ * They are absent (empty, with `status` still `syncing`) in three cases callers must handle: a
+ * Send/Receive build predating `syncingProjectIds`; a `getSyncState` call that fails; and briefly
+ * after each sync-state event, while the read that names the new set is in flight. Names for ids
+ * whose metadata can't be fetched fall back to the project id, so a partial failure loses precision
+ * but never a project.
  *
  * @param options.enabled When false, nothing is fetched or subscribed and the status stays `idle`.
  *   Use it where no sync UI is rendered. Defaults to true.
@@ -79,6 +82,11 @@ export function useSyncStatus({ enabled = true }: { enabled?: boolean } = {}): S
    * recognised and dropped rather than setting state on an unmounted hook.
    */
   const runRef = useRef(0);
+  /**
+   * Advances on every `onSyncStateChanged`. A follow-up read is applied only if no later event has
+   * arrived since it was issued, so the ids can never describe an earlier moment than the status.
+   */
+  const eventSequenceRef = useRef(0);
 
   const readSyncState = useCallback(async (): Promise<SyncState | undefined> => {
     try {
@@ -121,6 +129,8 @@ export function useSyncStatus({ enabled = true }: { enabled?: boolean } = {}): S
   const handleSyncStateChanged = useCallback(
     ({ isSyncing }: SyncProgressEvent) => {
       hasAppliedEventRef.current = true;
+      eventSequenceRef.current += 1;
+      const sequence = eventSequenceRef.current;
       setStatus(isSyncing ? 'syncing' : 'synced');
 
       if (!isSyncing) {
@@ -128,12 +138,23 @@ export function useSyncStatus({ enabled = true }: { enabled?: boolean } = {}): S
         return;
       }
 
+      // Drop the previous project set before reading the new one. A claim releasing while another
+      // still holds reports `isSyncing: true` — the syncing set can SHRINK without ever passing
+      // through "not syncing" — so this branch is reached when a project has just STOPPED syncing.
+      // Carrying its id across the read would name it, or count it, as still syncing. Naming
+      // nothing is true of every case, so that is what the gap shows.
+      setSyncingProjectIds(NO_PROJECT_NAMES);
+
       // The event carries no ids, so which projects are syncing takes a follow-up read. The status
       // above is already correct, so a failure here costs the names only.
       const run = runRef.current;
       readSyncState()
         .then((state) => {
-          if (state && run === runRef.current) {
+          // Ignore a read that a later event has already superseded. Commands and events share one
+          // ordered connection, so today a read can only carry a since-finished sync's ids if it was
+          // sent before the event ending that sync — and would therefore have been applied first
+          // anyway. The guard costs nothing and keeps this correct without depending on that.
+          if (state && run === runRef.current && sequence === eventSequenceRef.current) {
             setSyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_NAMES);
           }
           return undefined;
