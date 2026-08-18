@@ -746,6 +746,17 @@ declare module 'papi-shared-types' {
      * web view is not registered and cannot be opened or restored.
      */
     'platformScriptureEditor.enableScriptureTextGrid': boolean;
+    /**
+     * Delay in milliseconds before the editor settles pending marker edits in place while the
+     * user is idle, in editable marker modes. `null` (the default — a JSON contribution cannot
+     * express `undefined`) lets the editor use its own default delay. `0` settles immediately
+     * after each edit; `-1` disables the editor's idle settle clock entirely, so pending edits
+     * settle only on caret departure, Enter, blur, or when the document is read.
+     *
+     * @experimental A tuning knob for the Standard view marker-settle cadence; the setting name
+     *   and value semantics are not yet a settled contract and may change.
+     */
+    'platformScriptureEditor.markerSettleDelayMs': number | null;
   }
 
   export interface CommandHandlers {
