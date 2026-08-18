@@ -164,6 +164,7 @@ npm run typecheck
 - When any code quality tool flags your code (ESLint, TypeScript, Prettier, Stylelint), fix the code first. Only suppress warnings if the fix would be significantly worse.
 - Don't add features, refactor code, or make "improvements" beyond what was asked.
 - Avoid indecipherable [initialisms and abbreviations](.context/standards/Code-Style-Guide.md#initialisms-and-abbreviations).
+- Write forward-facing comments, not backward-facing ones. Strip the PR/development context: if a comment only explains how the code reached its current state during this PR — a ticket/PR ID for in-PR work, a review-finding ID, a stage/epic tag, a dated dev note — cut it and put it in the commit message instead. See [forward-facing-comments.md](.claude/rules/code-quality/forward-facing-comments.md).
 
 ## Send/Receive Write Gate
 

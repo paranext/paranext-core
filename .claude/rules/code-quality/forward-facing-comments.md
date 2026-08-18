@@ -45,7 +45,9 @@ context that survives the merge), not the mere presence of an ID.
 AI-authored diffs over-produce backward-facing comments *systematically*: the failing test, the
 review finding, and the ticket in play are exactly what is in the model's context while the comment
 is written, so it narrates provenance instead of what a maintainer needs. `eslint` and the
-`/code-review` conventions/cleanup angles don't reliably catch these, so make it an explicit step:
+`/code-review` conventions/cleanup angles are nitpick-averse and only surface the pervasive cases
+(the strip-the-PR-context test is mirrored into the root `CLAUDE.md` so that pass can see it at
+all), so make this an explicit step of your own:
 
 **Before you treat a change as complete, re-read every comment you added or changed in the diff,
 apply the strip-the-PR-context test to each, and delete the backward-facing ones** — moving

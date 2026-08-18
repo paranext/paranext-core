@@ -27,12 +27,12 @@ Reviews a PR for readability, maintainability, and adherence to conventions. Thi
 #### Backward-Facing Comments
 - Comments that only record how the code reached its current state — ticket/PR IDs for work done *in this PR* (`PT-4214`, `PR #2561`), review-finding IDs like `(review C61-2)`, stage/epic tags (`Stage U`, `Phase 3`), dated dev notes (`found live in E2E 2026-07-16`)
 - Apply the strip-the-PR-context test from [forward-facing-comments.md](../rules/code-quality/forward-facing-comments.md): if the comment only helps someone who saw this PR, it's backward-facing
-- An open `TODO(PT-XXXX)` or a non-inlinable deep link (e.g. `PT-2196?focusedCommentId=...`) points *forward* — do NOT flag it
+- A `PT-XXXX` that points *forward* is fine — an open `TODO(PT-XXXX)`, a constraint/rationale it documents, or a non-inlinable deep link (`PT-2196?focusedCommentId=...`). The test is whether it survives the merge, not the presence of an ID — do NOT flag these
 - When backward-facing comments are pervasive across the diff, emit **one PR-level finding** (no `line`), not one per site
 - **Backward-facing comment = warning**
 
 #### Leftover TODOs/FIXMEs
-- `TODO` or `FIXME` comments that should be resolved or tracked as issues
+- Bare `TODO`/`FIXME` with no tracked issue — a `TODO(PT-XXXX)` tied to an open ticket is already tracked; leave it (see Backward-Facing Comments)
 - Placeholder implementations that weren't completed
 - **Unresolved TODO/FIXME = warning**
 
