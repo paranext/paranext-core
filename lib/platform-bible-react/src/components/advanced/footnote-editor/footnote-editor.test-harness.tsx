@@ -11,7 +11,7 @@
  * without pulling in `@testing-library/react`.)
  */
 import { act, render } from '@testing-library/react';
-import type { EditorOptions } from '@eten-tech-foundation/platform-editor';
+import type { DeltaOpInsertNoteEmbed, EditorOptions } from '@eten-tech-foundation/platform-editor';
 import { LexicalEditor } from 'lexical';
 import FootnoteEditor, { FootnoteEditorMarkerPalette } from './footnote-editor.component';
 import { buildLocalizedStrings, scrRef, sentinelNoteOp } from './footnote-editor.fixtures';
@@ -30,13 +30,21 @@ export * from './footnote-editor.fixtures';
  *
  * `markerPalette` (optional) wires up the standard-view `\` palette driver, for suites exercising
  * the palette open/commit round-trip against the real editor.
+ *
+ * `onChange` (optional) receives the popover's saved note ops (the component's auto-save and Save
+ * flows), for suites asserting on what the save path emits.
  */
 export async function renderPopoverAndWaitForInit(
   view: EditorOptions['view'],
   {
     waitMs = 50,
     markerPalette = undefined,
-  }: { waitMs?: number; markerPalette?: FootnoteEditorMarkerPalette } = {},
+    onChange = undefined,
+  }: {
+    waitMs?: number;
+    markerPalette?: FootnoteEditorMarkerPalette;
+    onChange?: (noteOps: DeltaOpInsertNoteEmbed[]) => void;
+  } = {},
 ) {
   const utils = render(
     <FootnoteEditor
@@ -48,6 +56,7 @@ export async function renderPopoverAndWaitForInit(
       defaultMarkerMenuTrigger={'\\'}
       localizedStrings={buildLocalizedStrings()}
       markerPalette={markerPalette}
+      onChange={onChange}
     />,
   );
   const editorInput = utils.container.querySelector('.editor-input');

@@ -9,8 +9,9 @@
  * asynchronously — `ClipboardPlugin` intercepts Ctrl+V on the editor root, prevents the native
  * paste, reads `navigator.clipboard`, and only then dispatches a SYNTHESIZED ClipboardEvent. In
  * that gap selection processing can park the editor-state caret OUTSIDE the note (observed here and
- * live-documented for this popover: on the wrapper paragraph's `\p` marker glyph — the Radix
- * open-autofocus parking spot) while the user still SEES the caret inside the note. The claim then
+ * live-documented for this popover: at the wrapper paragraph's start — the Radix open-autofocus
+ * parking spot; at the time of the live diagnosis the wrapper still rendered a `\p` marker glyph
+ * there, since suppressed) while the user still SEES the caret inside the note. The claim then
  * declined and RichText's paste split `\p` paragraphs through the popover document. The engine fix
  * adopts the user-visible DOM caret when it maps into expanded note content.
  *
@@ -95,22 +96,17 @@ function $findFtTextNode(): TextNode {
   return found;
 }
 
-/** Finds the wrapper paragraph's `\p` marker-glyph node (the live stray-caret parking spot). */
-function $findWrapperParaGlyph(): TextNode {
-  let found: TextNode | undefined;
-  const walk = (node: LexicalNode): void => {
-    if (
-      !found &&
-      $isTextNode(node) &&
-      node.getType() === 'marker' &&
-      node.getTextContent() === '\\p'
-    )
-      found = node;
-    if ($isElementNode(node)) node.getChildren().forEach(walk);
-  };
-  walk($getRoot());
-  if (!found) throw new Error('wrapper paragraph glyph not found');
-  return found;
+/**
+ * Parks the editor-state caret at the wrapper paragraph's start (an element point at offset 0 —
+ * BEFORE the note, outside its content): the live stray-caret parking spot. The wrapper renders no
+ * marker prefix (`showParaMarkerPrefixes: false`), so this element point is the only
+ * outside-the-note position left in the document — the equivalent divergence used to park on the
+ * wrapper's `\p` marker glyph before the prefix was suppressed.
+ */
+function $parkStateCaretAtWrapperParaStart(): void {
+  const para = $getRoot().getChildren()[0];
+  if (!$isElementNode(para)) throw new Error('wrapper para not found');
+  para.select(0, 0);
 }
 
 /** Sets the DOM caret at the end of the `\ft` content's DOM text node (inside `span.note`). */
@@ -208,19 +204,18 @@ async function settle(): Promise<void> {
 }
 
 describe('FootnoteEditor multi-line paste inside the expanded note (real Editorial)', () => {
-  it('claims the paste when the state caret STRAYED to the wrapper glyph while the DOM caret is in the note (live dispatch shape)', async () => {
+  it('claims the paste when the state caret STRAYED to the wrapper-para start while the DOM caret is in the note (live dispatch shape)', async () => {
     // The deterministic live-failure shape: the user-visible (DOM) caret is inside the note, but
-    // by async-dispatch time the editor-state caret is parked on the wrapper `\p` glyph. The
-    // paste and the divergence are set up in ONE synchronous block so jsdom's async
-    // selectionchange reconcile can't heal the divergence before the dispatch — exactly the
-    // ordering the live async ClipboardPlugin dispatch produces.
+    // by async-dispatch time the editor-state caret is parked at the wrapper para's start,
+    // outside the note. The paste and the divergence are set up in ONE synchronous block so
+    // jsdom's async selectionchange reconcile can't heal the divergence before the dispatch —
+    // exactly the ordering the live async ClipboardPlugin dispatch produces.
     const { utils, editorInput, lexical } = await renderPopoverAndWaitForInit(editableView);
 
     await act(async () => {
       editorInput.focus();
       lexical.update(() => {
-        const glyph = $findWrapperParaGlyph();
-        glyph.select(0, 0);
+        $parkStateCaretAtWrapperParaStart();
       });
       await Promise.resolve();
     });

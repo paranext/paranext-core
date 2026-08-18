@@ -187,7 +187,15 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
 // TODO: Remove this once the new marker menu is implemented with correct logic
 /**
  * This is for a temporary fix to get the markers menu to work by having the default usj include a
- * parent paragraph node
+ * parent paragraph node.
+ *
+ * The paragraph is SCAFFOLDING, not content: it exists so the editor has an element to host the
+ * note being edited, and it never reaches a save (the save path reads the note ops alone — see
+ * `saveCurrentNoteOp`). The editor would default its missing marker to `\p` and render that
+ * marker's visible prefix in front of the footnote's own text, so the options below pass
+ * `showParaMarkerPrefixes: false` — the editor then never builds the prefix bytes at all (no
+ * invisible bytes for the caret to traverse), the wrapper paragraph renders empty until the note
+ * op arrives at OT index 0, and the note is its only child.
  */
 const PARAGRAPH_USJ: Usj = {
   type: 'USJ',
@@ -198,27 +206,6 @@ const PARAGRAPH_USJ: Usj = {
     },
   ],
 };
-
-/**
- * OT ("apply" coordinate) length of `PARAGRAPH_USJ`'s wrapper-paragraph prefix in editable marker
- * mode (Standard view). `PARAGRAPH_USJ`'s lone `para` never specifies a `marker`, so the library's
- * `usj-editor.adaptor.ts` `createPara` always defaults it to the plain `\p` marker and — in
- * `markerMode: "editable"` only — always injects that marker as a visible prefix: a `MarkerNode`
- * glyph (`"\p"`, 2 characters) followed by an NBSP trailing-space `TextNode` (1 character). Both
- * are `TextNode`s, so `applyUpdate`'s insert/delete traversal counts their text length directly: 2
- * characters plus 1 character totals 3. This is therefore a fixed constant tied to
- * `PARAGRAPH_USJ`'s hardcoded default `\p` marker, not a per-marker computation.
- *
- * Retaining past this prefix before inserting the note op (see the init effect below) lands the
- * note AFTER the paragraph's own glyph prefix. Without the retain, the note lands at OT index 0 —
- * BEFORE the prefix — and the engine then re-materializes a fresh prefix ahead of the note, leaving
- * the ORIGINAL prefix as visible trailing glyph junk after it (display-only; never written on
- * Save).
- *
- * Non-editable marker modes don't get this treatment: `createPara` only pushes this two-node prefix
- * shape for `"editable"`; other modes are left at the pre-existing retain of 0.
- */
-const EDITABLE_WRAPPER_PARA_PREFIX_RETAIN = 3;
 
 /**
  * Component to edit footnotes from within the editor component
@@ -330,19 +317,16 @@ export default function FootnoteEditor({
       contextMenu: undefined,
       markerMenuTrigger: defaultMarkerMenuTrigger,
       hasExternalUI: true,
-      view: { ...(editorOptions.view ?? getDefaultViewOptions()), noteMode: 'expanded' },
+      view: {
+        ...(editorOptions.view ?? getDefaultViewOptions()),
+        noteMode: 'expanded',
+        // The wrapper paragraph is scaffolding (see PARAGRAPH_USJ above): suppress its `\p`
+        // marker prefix so the popover's text starts with the footnote's own first glyph.
+        showParaMarkerPrefixes: false,
+      },
     }),
     [editorOptions, defaultMarkerMenuTrigger],
   );
-
-  // Stable ref to the current marker mode so the note-load effect below (deps: noteOps/noteKey —
-  // a new note being loaded) doesn't also need `options` in its dependency array and
-  // re-run (re-applying the note op a second time) if the host's view options are recreated with
-  // the same markerMode while the SAME note is still being edited.
-  const markerModeRef = useRef(options.view?.markerMode);
-  useLayoutEffect(() => {
-    markerModeRef.current = options.view?.markerMode;
-  });
 
   const inlineMarkerMenuItems = useMemo(
     () =>
@@ -365,9 +349,9 @@ export default function FootnoteEditor({
 
   /**
    * True when the DOM selection's anchor sits inside this popover's note content (the `span.note`
-   * element). The popover's document is a lone wrapper `\p` paragraph hosting exactly one note, so
-   * a caret anywhere else (e.g. parked at the wrapper-para start by Radix's open-autofocus) is
-   * never where the user means to edit.
+   * element). The popover's document is a lone prefix-less wrapper paragraph hosting exactly one
+   * note, so a caret anywhere else (e.g. parked at the wrapper-para start by Radix's
+   * open-autofocus) is never where the user means to edit.
    */
   const isDomCaretInsideNote = useCallback(() => {
     const editorInput = editorParentRef.current?.querySelector('.editor-input');
@@ -402,16 +386,11 @@ export default function FootnoteEditor({
       // Assigns note type
       setNoteType(noteOp.insert.note?.style ?? 'f');
       timeout = setTimeout(() => {
-        // Inserts the note node to be edited as a delta operation. In editable marker mode the
-        // wrapper paragraph (`PARAGRAPH_USJ`) renders a visible `\p` glyph prefix; retain past it
-        // so the note lands after the prefix instead of displacing it (see
-        // `EDITABLE_WRAPPER_PARA_PREFIX_RETAIN` above). Other marker modes get no such prefix, so
-        // they keep the pre-existing insert at index 0.
-        const insertOps: DeltaOp[] =
-          markerModeRef.current === 'editable'
-            ? [{ retain: EDITABLE_WRAPPER_PARA_PREFIX_RETAIN }, noteOp]
-            : [noteOp];
-        editorRef.current?.applyUpdate(insertOps);
+        // Inserts the note node to be edited as a delta operation, at OT index 0: the wrapper
+        // paragraph renders NO marker prefix in any marker mode (`showParaMarkerPrefixes: false`
+        // in the options above), so there are no prefix bytes to retain past — index 0 IS the
+        // start of the paragraph's content.
+        editorRef.current?.applyUpdate([noteOp]);
         // Land the caret at the end of the last footnote-text char span (`\ft`/`\xt`) to match
         // PT9 behavior of being ready to type immediately. `0` is this popover's own note index —
         // it always holds exactly one note (see the other `getNoteOps(0)` call sites below).
