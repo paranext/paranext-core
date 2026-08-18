@@ -334,7 +334,9 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
     });
 
-    it('matches typed text against item descriptions, not just labels', () => {
+    it('does NOT match description text — label-only, editor-palette parity (owner-directed)', () => {
+      // Description containment is what buried exact marker matches (the "typed w, exact match
+      // ranked 9th" report): matching runs on labels only now, identical to the editor palette.
       const items: CommandPaletteItem[] = [
         { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
         { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
@@ -350,8 +352,9 @@ describe('OverlayCommandPalettePresentational', () => {
 
       fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Normal' } });
 
-      expect(screen.getByText('Paragraph (p)')).toBeInTheDocument();
+      expect(screen.queryByText('Paragraph (p)')).not.toBeInTheDocument();
       expect(screen.queryByText('Margin (m)')).not.toBeInTheDocument();
+      expect(screen.getByText('No results found')).toBeInTheDocument();
     });
 
     it('matches labels case-insensitively (lowercase input finds capitalized labels)', () => {

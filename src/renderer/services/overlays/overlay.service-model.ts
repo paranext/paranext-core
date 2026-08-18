@@ -7,6 +7,7 @@
  */
 
 import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+import { filterAndRankPaletteItems } from 'platform-bible-react';
 import type { ReactElement } from 'react';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 
@@ -151,18 +152,26 @@ export interface CommandPaletteRequest {
  *   codes (`f`, `fe`, `fig`) filtered by the marker prefix the user has typed into the document,
  *   mirroring PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in
  *   the filter text is stripped before matching, so `"+w"` matches the same items as `"w"`.
- * - `'active'` — case-insensitive CONTAINMENT match over `label`, `description`, and `badge`, so the
- *   palette's search box finds items by any visible text (e.g. typing a description word).
+ * - `'active'` — case-insensitive CONTAINMENT match, still on `label` only. Description/badge
+ *   matching was retired (owner-directed): it buried exact marker matches under description hits
+ *   (typing `w` ranked the exact `w` ninth behind items whose descriptions contained a "w").
+ *
+ * Both modes rank matches exact-first — see {@link filterPaletteItems}.
  */
 export type PaletteFilterMode = 'active' | 'passive';
 
 /**
- * Filters command palette items by matching `filterText` against each item's text, with
- * per-{@link PaletteFilterMode} semantics: passive palettes prefix-match the `label` only (with a
- * leading `+` stripped from the filter first), active palettes containment-match over `label`,
- * `description`, and `badge`. Both modes match case-insensitively (custom USFM markers may be
- * capitalized, and search-box input should never be case-picky). Returns `items` unchanged when
- * `filterText` is empty or undefined.
+ * Filters command palette items by matching `filterText` against each item's `label`, with
+ * per-{@link PaletteFilterMode} semantics (passive prefix-matches with a leading `+` stripped from
+ * the filter first, active containment-matches), and ranks the matches EXACT-FIRST: exact label
+ * match, then prefix matches, then containment matches, ties keeping their original context order.
+ * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input
+ * should never be case-picky). Returns `items` unchanged when `filterText` is empty or undefined.
+ *
+ * Delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the editor
+ * package's own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette — so the
+ * host palette and the editor palette can never disagree about ordering, and the marker-palette
+ * keydown table's zero-match detection counts with the same semantics.
  *
  * This is the single filtering implementation shared by {@link IOverlayService}'s host-side
  * `commitCommandPaletteSelection` (to resolve the highlighted item) and the command palette
@@ -177,26 +186,14 @@ export type PaletteFilterMode = 'active' | 'passive';
  * @param items The full, unfiltered list of command palette items
  * @param filterText The current filter text, or undefined/empty for no filtering
  * @param mode Which palette flavor's matching semantics to apply
- * @returns The subset of `items` matching the filter text under the given mode
+ * @returns The items matching the filter text under the given mode, ranked exact-first
  */
 export function filterPaletteItems(
   items: CommandPaletteItem[],
   filterText: string | undefined,
   mode: PaletteFilterMode,
 ): CommandPaletteItem[] {
-  if (!filterText) return items;
-
-  if (mode === 'passive') {
-    const normalizedFilter = filterText.replace(/^\+/, '').toLowerCase();
-    return items.filter((item) => item.label.toLowerCase().startsWith(normalizedFilter));
-  }
-
-  const normalizedFilter = filterText.toLowerCase();
-  return items.filter((item) =>
-    [item.label, item.description, item.badge].some(
-      (text) => text !== undefined && text.toLowerCase().includes(normalizedFilter),
-    ),
-  );
+  return filterAndRankPaletteItems(items, filterText, mode);
 }
 
 // ── Service Interface ──

@@ -20,8 +20,26 @@ function makeEvent(key: string, init: KeyboardEventInit = {}): KeyboardEvent {
   return event;
 }
 
-function session(kind: MarkerPaletteSessionState['kind'], filter = ''): MarkerPaletteSessionState {
-  return { kind, filter };
+/**
+ * Offer shaped like a real character-source context: the exact matches for the filters the tests
+ * type ('w', 'wj', 'f', 'q1', 'ts-s') are all present, so Enter commits stay commits.
+ */
+const defaultItems = [
+  { marker: 'f' },
+  { marker: 'nd' },
+  { marker: 'qt' },
+  { marker: 'q1' },
+  { marker: 'ts-s' },
+  { marker: 'w' },
+  { marker: 'wj' },
+];
+
+function session(
+  kind: MarkerPaletteSessionState['kind'],
+  filter = '',
+  items: readonly { marker: string }[] = defaultItems,
+): MarkerPaletteSessionState {
+  return { kind, filter, items };
 }
 
 describe('handleMarkerPaletteSessionKeyDown', () => {
@@ -81,6 +99,55 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(event.stopPropagation).toHaveBeenCalled();
     expect(driver.commit).toHaveBeenCalledOnce();
+  });
+
+  it('Enter with zero matches is a no-op — claimed, no driver call, session stays open (P9 parity)', () => {
+    // Paratext 9: Enter over a palette whose typed filter matches nothing does NOTHING and the
+    // palette stays open (Backspace widens the filter, Space commits the typed marker, Escape
+    // closes). Previously the table returned 'ended' unconditionally on Enter while the overlay
+    // service dropped the zero-match commit and kept the palette open — orphaning the overlay
+    // over a dead session (subsequent typing landed in the document under a floating palette).
+    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+      const driver = makeDriver();
+      const state = session(kind, 'qqqq');
+      const event = makeEvent('Enter');
+      expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('continue');
+      // Still claimed: an unclaimed Enter would split the paragraph under the open palette.
+      expect(event.defaultPrevented).toBe(true);
+      expect(event.stopPropagation).toHaveBeenCalled();
+      expect(driver.commit).not.toHaveBeenCalled();
+      expect(driver.dismiss).not.toHaveBeenCalled();
+    });
+  });
+
+  it('zero-match detection matches the palette flavor: prefix for passive, containment for focused', () => {
+    // Same items and filter, different modes: 'd' prefixes nothing (passive backslash session
+    // has zero matches -> Enter no-ops) but is CONTAINED in 'nd' (focused selection session has
+    // a match -> Enter commits). The counts must agree with the overlay service's own
+    // filterAndRankPaletteItems, which uses exactly these per-mode semantics.
+    const items = [{ marker: 'nd' }, { marker: 'add' }];
+
+    const passiveDriver = makeDriver();
+    const passiveEvent = makeEvent('Enter');
+    expect(
+      handleMarkerPaletteSessionKeyDown(
+        passiveEvent,
+        session('backslash', 'd', items),
+        passiveDriver,
+      ),
+    ).toBe('continue');
+    expect(passiveDriver.commit).not.toHaveBeenCalled();
+
+    const focusedDriver = makeDriver();
+    const focusedEvent = makeEvent('Enter');
+    expect(
+      handleMarkerPaletteSessionKeyDown(
+        focusedEvent,
+        session('selection', 'd', items),
+        focusedDriver,
+      ),
+    ).toBe('ended');
+    expect(focusedDriver.commit).toHaveBeenCalledOnce();
   });
 
   it('claims Escape and dismisses for every session kind', () => {

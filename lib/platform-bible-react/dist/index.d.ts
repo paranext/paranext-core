@@ -1015,8 +1015,9 @@ export interface FootnoteEditorProps {
 /**
  * Driver for the standard-view `\` marker palette (PT9 parity), supplied by a host that wires it to
  * its own overlay/command-palette implementation (e.g. `papi.overlays.*` keyed by `webViewId` in
- * the platform-scripture-editor web view). Extends the shared {@link PaletteDriver} contract
- * (update/commit/dismiss) with the open step.
+ * the platform-scripture-editor web view). Extends the shared `PaletteDriver` contract
+ * (update/commit/dismiss — from `platform-bible-utils/experimental`, outside this package's docs
+ * entry, so a code reference rather than a link) with the open step.
  */
 export interface FootnoteEditorMarkerPalette extends PaletteDriver {
 	/**
@@ -1060,6 +1061,16 @@ export interface MarkerPaletteSessionState {
 	 */
 	filter: string;
 	/**
+	 * The entries the palette offers (marker = the bare code, which is also the palette item's
+	 * label). The table needs them to detect a ZERO-MATCH filter on Enter — P9 parity: Enter over
+	 * zero matches does nothing and the session stays open, so the table must count matches with the
+	 * same per-mode semantics the overlay service filters with ({@link filterAndRankPaletteItems}).
+	 * Both session owners already carry their offered items; this exposes them to the table.
+	 */
+	items: readonly {
+		marker: string;
+	}[];
+	/**
 	 * When set on a `'backslash'` session and it returns true for the current filter, Space COMMITS
 	 * the palette selection (claimed, like Enter) instead of landing as a literal and dismissing.
 	 * Consumers use this for markers where the literal `\marker ` completion route would misbehave —
@@ -1101,6 +1112,48 @@ export declare function handleMarkerPaletteSessionKeyDown(event: KeyboardEvent, 
 export declare function clearPaletteSessionIfCurrent<TSession extends {
 	token: number;
 }>(sessionRef: React$1.MutableRefObject<TSession | undefined>, token: number): void;
+/**
+ * THE single filter-and-rank implementation for marker command palettes — shared by the renderer's
+ * overlay service (list rendering AND commit resolution) and the marker-palette keydown forwarding
+ * table (zero-match detection), so what is on screen, what a commit resolves, and what the session
+ * table counts can never disagree.
+ *
+ * Ranking is deliberately NOT reimplemented here: it delegates to the editor package's
+ * `filterAndRankItems`, the exact function behind the in-editor `\` palette (`NodeSelectionMenu`
+ * filters on the marker name), so the host palette ranks identically — exact match first, then
+ * prefix matches, then containment matches (nearest occurrence first), with ties keeping their
+ * original context order (stable sort). Matching is label-only in both modes (the label IS the
+ * marker for marker palettes); descriptions and badges never match, which is what buried the exact
+ * match under description hits before this existed.
+ */
+/**
+ * How {@link filterAndRankPaletteItems} matches filter text against item labels — one mode per
+ * palette flavor:
+ *
+ * - `'passive'` — case-insensitive PREFIX match, mirroring PT9's marker dropdown
+ *   (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in the filter text is stripped before
+ *   matching, so `"+w"` matches the same items as `"w"`.
+ * - `'active'` — case-insensitive CONTAINMENT match (still label-only).
+ *
+ * Both modes rank exact-first via the editor's `filterAndRankItems`.
+ */
+export type PaletteFilterMode = "active" | "passive";
+/**
+ * Filters `items` by matching `filterText` against each item's `label` and ranks the matches
+ * exact-first (exact > prefix > containment, ties keeping their original order — the editor
+ * palette's ordering). Returns `items` in their original order when `filterText` is empty or
+ * undefined: the unfiltered offer keeps the library's PT9-derived basic-first order, which ranking
+ * must not alphabetize away.
+ *
+ * @param items The full, unfiltered list of palette items (label = the bare marker code for marker
+ *   palettes)
+ * @param filterText The current filter text, or undefined/empty for no filtering
+ * @param mode Which palette flavor's matching semantics to apply
+ * @returns The matching items, ranked exact-first
+ */
+export declare function filterAndRankPaletteItems<T extends {
+	label: string;
+}>(items: readonly T[], filterText: string | undefined, mode: PaletteFilterMode): T[];
 /** `FootnoteItem` is a component that provides a read-only display of a single USFM/JSX footnote. */
 export declare function FootnoteItem({ footnote, layout, formatCaller, showMarkers, }: FootnoteItemProps): import("react/jsx-runtime").JSX.Element;
 /** `FootnoteList` is a component that provides a read-only display of a list of USFM/JSX footnote. */

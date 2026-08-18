@@ -783,6 +783,98 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(notPrevented).toBe(true);
       expect(markerPalette.dismiss).toHaveBeenCalledTimes(1);
     });
+
+    it('types `\\nd` + Space: the typed filter routes to the palette and Space defers to Tier-2 — never a commit of the highlighted item', () => {
+      // The owner's report: `\nd` + Space inserted `\fq` (the first item of an unfiltered
+      // note-context list). The typed characters must reach the palette query (filter + ranked
+      // list), and Space for a non-note marker must DISMISS and let the literal land — the
+      // editor's Tier-2 completes the typed `\nd ` — never commit whatever is highlighted.
+      mockGetMarkerMenuItems.mockReturnValue([
+        makeItem({ marker: 'fq' }),
+        makeItem({ marker: 'xt' }),
+        makeItem({ marker: 'nd' }),
+      ]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      const doc = editorInput.ownerDocument;
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'n', bubbles: true, cancelable: true }),
+      );
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'd', bubbles: true, cancelable: true }),
+      );
+      expect(markerPalette.update).toHaveBeenNthCalledWith(1, { filterText: 'n' });
+      expect(markerPalette.update).toHaveBeenNthCalledWith(2, { filterText: 'nd' });
+
+      const spaceNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }),
+      );
+
+      expect(spaceNotPrevented).toBe(true); // the literal space lands; Tier-2 completes `\nd `
+      expect(markerPalette.dismiss).toHaveBeenCalledTimes(1);
+      expect(markerPalette.commit).not.toHaveBeenCalled(); // never the highlighted item
+    });
+
+    it('Enter with zero matches is a no-op: the session survives and keeps mirroring (P9 parity)', () => {
+      mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      const doc = editorInput.ownerDocument;
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      // 'q' prefixes no offered marker (only 'nd' is offered) — a zero-match filter.
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'q', bubbles: true, cancelable: true }),
+      );
+
+      const enterNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+      );
+
+      expect(enterNotPrevented).toBe(false); // claimed: no split under the open palette
+      expect(markerPalette.commit).not.toHaveBeenCalled();
+      expect(markerPalette.dismiss).not.toHaveBeenCalled();
+
+      // The session is still alive: Backspace keeps editing the filter through the same table.
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }),
+      );
+      expect(markerPalette.update).toHaveBeenLastCalledWith({ filterText: '' });
+    });
   });
 
   describe('IME composition keys (isComposing / keyCode 229)', () => {

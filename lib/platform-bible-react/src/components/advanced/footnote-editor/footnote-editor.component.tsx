@@ -96,8 +96,9 @@ export interface FootnoteEditorProps {
 /**
  * Driver for the standard-view `\` marker palette (PT9 parity), supplied by a host that wires it to
  * its own overlay/command-palette implementation (e.g. `papi.overlays.*` keyed by `webViewId` in
- * the platform-scripture-editor web view). Extends the shared {@link PaletteDriver} contract
- * (update/commit/dismiss) with the open step.
+ * the platform-scripture-editor web view). Extends the shared `PaletteDriver` contract
+ * (update/commit/dismiss — from `platform-bible-utils/experimental`, outside this package's docs
+ * entry, so a code reference rather than a link) with the open step.
  */
 export interface FootnoteEditorMarkerPalette extends PaletteDriver {
   /**
@@ -194,8 +195,8 @@ function crossReferenceToFootnoteOp(op: DeltaOp) {
  * `saveCurrentNoteOp`). The editor would default its missing marker to `\p` and render that
  * marker's visible prefix in front of the footnote's own text, so the options below pass
  * `showParaMarkerPrefixes: false` — the editor then never builds the prefix bytes at all (no
- * invisible bytes for the caret to traverse), the wrapper paragraph renders empty until the note
- * op arrives at OT index 0, and the note is its only child.
+ * invisible bytes for the caret to traverse), the wrapper paragraph renders empty until the note op
+ * arrives at OT index 0, and the note is its only child.
  */
 const PARAGRAPH_USJ: Usj = {
   type: 'USJ',
