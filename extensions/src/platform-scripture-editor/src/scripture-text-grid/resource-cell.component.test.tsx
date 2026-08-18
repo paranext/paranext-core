@@ -402,6 +402,36 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
     expect(setScrRef).toHaveBeenCalledWith(reported);
   });
 
+  // Leaving the empty state, which two tests enter but none previously left. `ResourceCellView`
+  // swaps the editor out entirely for the ghost-text label while `isVerseEmpty`, so `Editorial`
+  // unmounts and `editorRef.current` goes null; navigating to a verse the resource HAS remounts it
+  // and the effect must refeed. That only works because React assigns refs during commit, before
+  // effects run — an ordering dependency nothing else here guards. Fall-forward makes this
+  // transition reachable at chapter boundaries more often than before.
+  it('refeeds the slice when navigating out of the empty state into a verse that exists', async () => {
+    setUsjResult(twoVerseChapterUsj, false);
+    const { rerender } = render(
+      <ResourceCell
+        {...props}
+        viewMode="verse"
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 99 }}
+      />,
+    );
+    expect(await screen.findByText(/no text for this verse/i)).toBeInTheDocument();
+    expect(setUsjSpy).not.toHaveBeenCalled(); // editor is unmounted; nothing fed
+
+    rerender(
+      <ResourceCell
+        {...props}
+        viewMode="verse"
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 2 }}
+      />,
+    );
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalled());
+    expect(lastFedUsjText()).toContain('verse two');
+    expect(screen.queryByText(/no text for this verse/i)).not.toBeInTheDocument();
+  });
+
   it('chapter mode keeps verse-0 front matter — it is exempt from fall-forward', async () => {
     renderResourceCell({
       viewMode: 'chapter',
