@@ -158,7 +158,11 @@ function setUsjResult(value: unknown, isLoading = false) {
 
 /** Serialized USJ most recently handed to the editor, or '' if it was never fed. */
 function lastFedUsjText(): string {
-  const [fedUsj] = setUsjSpy.mock.lastCall ?? [];
+  // Throws rather than returning '' when nothing was fed: an empty string silently satisfies every
+  // `.not.toContain(...)`, which is how a vacuous assertion slipped in here once. If the editor was
+  // never fed, assert `expect(setUsjSpy).not.toHaveBeenCalled()` instead of inspecting content.
+  if (!setUsjSpy.mock.lastCall) throw new Error('setUsj was never called — nothing was fed');
+  const [fedUsj] = setUsjSpy.mock.lastCall;
   return JSON.stringify(fedUsj) ?? '';
 }
 
@@ -297,8 +301,10 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
   it('falls back to the empty state when the chapter has no verse 1 either', async () => {
     renderResourceCell({ viewMode: 'verse', scrRef: verse0, chapterUsj: noVerseOneChapterUsj });
     expect(await screen.findByText(/no text for this verse/i)).toBeInTheDocument();
-    // Must not scan forward to the next available verse — verse 2 is not what 1:0 means.
-    expect(lastFedUsjText()).not.toContain('verse two');
+    // Must not scan forward to the next available verse — verse 2 is not what 1:0 means. Asserted as
+    // "never fed" rather than "fed text lacking verse two": once the empty state renders the effect
+    // has early-returned, so any content assertion would be inspecting a feed that never happened.
+    expect(setUsjSpy).not.toHaveBeenCalled();
   });
 
   it('shows only verse 1, never the intro, superscription, or heading above it', async () => {
