@@ -50,15 +50,15 @@ import {
   GreekEstherTemplatePickerLocalizedStrings,
 } from './greek-esther-template-picker.component';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
 const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
 
 // Only Scripture Editor tabs should mark a project as "open" in the ProjectSelector.
 // Other project-bound tabs (Manage Books itself, Checks side panel, etc.) carry a `projectId`
-// but are not the "is the project open" signal users expect. Mirrors the canonical webViewType
-// from `platform-scripture-editor.utils.ts` (SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react').
-const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
+// but are not the "is the project open" signal users expect.
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>([SCRIPTURE_EDITOR_WEBVIEW_TYPE]);
 
 /**
  * Wire-shape of a single import file as the C# orchestrator expects to receive it. Mirrors
