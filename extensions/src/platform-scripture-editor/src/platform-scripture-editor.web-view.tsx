@@ -1139,10 +1139,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const getSelectionBeforePointerPress = useSelectionSnapshot('.editor-input');
 
   /**
-   * The text a Find trigger in this tab should search for: the live selection, or — when a click on
-   * the tab's chrome has already collapsed it — what was selected just before that click.
+   * The text the tab menu's Find item should search for: the live selection, or — when the click
+   * that opened the menu has already collapsed it — what was selected just before that click.
+   *
+   * Only the menu path consults the snapshot, because only a pointer press destroys the selection
+   * it is about to act on. Ctrl+F reads the live selection directly and deliberately does NOT fall
+   * back here: a keystroke destroys nothing, so the live value is always the honest answer. Falling
+   * back would let a selection made much earlier pre-fill and immediately re-run a search,
+   * overwriting whatever term the user already had in an open Find panel.
    */
-  const getFindSelectionText = useCallback(
+  const getMenuFindSelectionText = useCallback(
     () =>
       resolveFindSelectionText(window.getSelection()?.toString(), getSelectionBeforePointerPress()),
     [getSelectionBeforePointerPress],
@@ -1172,7 +1178,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Find dialog trigger listener
       if (event.ctrlKey && event.key.toLowerCase() === 'f') {
         event.preventDefault();
-        const findArgs = getEditorOpenFindArgs(webViewId, getFindSelectionText());
+        // Live selection only — see getMenuFindSelectionText for why the keyboard path deliberately
+        // does not consult the pointer-press snapshot.
+        const findArgs = getEditorOpenFindArgs(webViewId, window.getSelection()?.toString());
         papi.commands.sendCommand(
           'platformScripture.openFind',
           findArgs.webViewId,
@@ -1199,14 +1207,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [
-    webViewId,
-    insertCommentAtCurrentSelection,
-    showMarkersMenu,
-    showInlineMarkersMenu,
-    isMac,
-    getFindSelectionText,
-  ]);
+  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu, isMac]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
@@ -1903,7 +1904,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // openFind brings the panel to front — so a hidden Find catches up on activation by
       // construction, with no deferred side effect to replay.
       if (projectMenuCommand.command === 'platformScripture.openFind') {
-        const findArgs = getEditorOpenFindArgs(webViewId, getFindSelectionText());
+        const findArgs = getEditorOpenFindArgs(webViewId, getMenuFindSelectionText());
         papi.commands
           .sendCommand('platformScripture.openFind', findArgs.webViewId, findArgs.selectedText)
           .catch((e) =>
@@ -1915,7 +1916,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       papi.commands.sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId);
     },
-    [getFindSelectionText, webViewId],
+    [getMenuFindSelectionText, webViewId],
   );
 
   function renderEditor() {

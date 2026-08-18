@@ -420,6 +420,8 @@ step, no automation. Just a record.
 
 - **Date:** 2026-08-16
 - **Status:** Accepted
+- **Source:** PT-3216 (pass editor text selection to Find); tab-menu half implemented on
+  `pt-3216-selection-to-find`, stacked on the Ctrl+F half in PT-4341 / PR #2677.
 - **Context:** Opening Find from a scripture editor tab's menu needed that tab's text selection. The
   work item proposed publishing the selection into the platform's shared store so a command handler
   could read it. Two facts made that unnecessary and unavailable: (a) the scripture editor sets
@@ -430,9 +432,12 @@ step, no automation. Just a record.
   (`src/shared/services/shared-store.service.ts`) is explicitly not part of the public API and is not
   reachable from extensions.
 - **Decision:** Find takes the selection of the tab it was triggered from, read in that tab's own web
-  view (`window.getSelection()`, with a capture-phase pointer-press snapshot so a click on the tab's
-  chrome cannot erase it) and passed through the existing `platformScripture.openFind` `selectedText`
-  parameter. No cross-tab selection state.
+  view via `window.getSelection()` and passed through the existing `platformScripture.openFind`
+  `selectedText` parameter. No cross-tab selection state. The two trigger paths deliberately differ:
+  the tab menu additionally consults a capture-phase pointer-press snapshot, because the click that
+  opens the dropdown is itself what collapses the selection; Ctrl+F reads only the live selection,
+  because a keystroke destroys nothing, and a fallback there would let a long-abandoned selection
+  pre-fill and immediately re-run a search over whatever term an open Find panel already held.
 - **Alternatives:** (a) Shared store — rejected: not extension-accessible, and unnecessary once the
   menu handler's location is understood. (b) A global "last selection" registry in the editor
   extension built on the existing `platformScriptureEditor.onDidSelectionChange` event — deferred:
