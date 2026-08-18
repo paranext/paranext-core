@@ -415,3 +415,81 @@ step, no automation. Just a record.
   than inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
+
+## ADR-0013: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
+
+- **Date:** 2026-08-18
+- **Status:** Accepted
+- **Context:** PT-4111 needed a zero-state carrying a title, a description, and an optional action
+  button (the scripture editor's "this book is not in this project" state, whose Power-mode variant
+  offers a Manage Books button). Three candidate shapes already existed and nothing said which to
+  reach for. `EmptyState` (`lib/platform-bible-react/src/components/basics/empty-state.component.tsx`,
+  2 consumers) renders a single `role="status"` message and has no slot for a title or an action.
+  `InstallFailedView` (`extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`,
+  2 consumers) is genuinely "full-panel message + action button" but is scoped to DBL install
+  recovery. Neither is a general primitive, and the next three tickets in the same epic (PT-4132,
+  PT-4347, PT-4349) each need a zero-state too, so an ad-hoc fourth shape would have compounded.
+- **Decision:** Vendor shadcn's `empty` into `lib/platform-bible-react/src/components/shadcn-ui/` and
+  treat it as the primitive for any zero-state that needs more than a bare sentence — title,
+  description, media, or an action. `EmptyState` keeps its existing consumers and remains the
+  message-only case; it did NOT gain `title`/`icon`/`action` props. `InstallFailedView` stays local to
+  install recovery. Feature-specific zero-states compose `Empty` inside their own extension (see
+  `book-not-available-view.component.tsx`) rather than adding variants to the shared library.
+- **Alternatives:** **Extend `EmptyState` with optional `title`/`icon`/`action`** — rejected: it
+  changes a shared design-system component for the benefit of consumers that do not need the new
+  props, and still would not be the primitive UX specified. **Follow the `InstallFailedView` idiom
+  with a new local view** — rejected: cheapest for one ticket, but it is an install-recovery view by
+  intent, and copying its shape for a fourth time is exactly the drift ADR-0012 warns about; UX also
+  specified the shadcn primitive by name. **Hand-write an equivalent component** — rejected: forfeits
+  the upstream-diffable baseline that `/add-shadcn-component` exists to preserve.
+- **Consequences:** `empty.tsx` must keep its two-commit history (raw shadcn baseline, then the
+  standard `pr-twp`/TSDoc customizations) so future shadcn upgrades can diff generated against
+  customized — its PR must not be squash-merged. One upstream quirk was kept deliberately:
+  `EmptyDescription` is typed `React.ComponentProps<'p'>` but renders a `<div>`; do not "fix" it
+  locally, since that would diverge from the baseline for no behavioral gain. Adding a shadcn
+  component is its own PR with its own branch, so any feature depending on a not-yet-vendored
+  primitive stacks on that PR rather than bundling it.
+- **Source:** PT-4111 design + implementation (`docs/superpowers/specs/2026-08-17-pt-4111-book-not-available-design.md`).
+
+## ADR-0014: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
+
+- **Date:** 2026-08-18
+- **Status:** Accepted
+- **Context:** Opening a tool web view sometimes needs a value that applies to *this* launch only —
+  text to pre-fill, a section to land on, a row to pre-select — as distinct from the durable state the
+  web view persists. The pattern existed in the codebase but was never written down: `openFind` takes
+  `selectedText` and threads it through `FindWebViewOptions.initialSearchText`, and two providers
+  force a transient key back to its inert value on every rebuild
+  (`platform-scripture-editor/src/main.ts` `isSyncBlocked: false`, and
+  `legacy-comment-manager/src/main.ts`, whose comment explicitly cites the former). Because it was
+  undocumented, PT-4111's first design independently invented a consume-once protocol plus a launch
+  token — machinery the existing pattern does not need — and only discarded it after reading the
+  precedents.
+- **Decision:** A one-shot launch parameter is (1) an **optional scalar** appended to the `open*`
+  command's signature — never a structured request object, and never a new sibling command; (2)
+  carried as a field on that web view's `*WebViewOptions`; (3) written into the web view's `state` in
+  `getWebView` by **unconditional assignment from the current options**, which is what scrubs a stale
+  value off a restored layout; and (4) delivered to an already-open instance by force-calling
+  `reloadWebView` when the value is present. Contextual inputs that can be derived — `projectId`, the
+  current reference, the current book — are resolved from the triggering web view's definition
+  (`getOpenWebViewDefinition`, `scrollGroupScrRef`), not added as parameters. Only the caller's
+  *intent* is passed, because intent is the one thing not derivable.
+- **Alternatives:** **A second command** (e.g. `openManageBooksToCreateBook`) — rejected: duplicates
+  the resolve-and-open body and grows the command surface for one flag. **A structured options object**
+  — rejected by the command-signature rule in `.claude/rules/architecture/extension-patterns.md`
+  absent a behavior the bare shape cannot express. **Consume-once in the web view** (read the value,
+  then clear the state slot) — rejected: the provider-side scrub already guarantees the value cannot
+  outlive its launch, so a second mechanism is redundant and gives two places to get it wrong.
+  **A nonce or launch token to make repeat launches re-trigger** — rejected: the force-reload already
+  does that. **Conditionally spreading the key only when present** — rejected, and this is the
+  subtle one: it reads as tidier but lets a stale value survive a layout restore, which is precisely
+  the bug the scrub prevents.
+- **Consequences:** Consumers read the value as ordinary mount-time state (a lazy `useState`
+  initializer), with no clearing logic and no re-apply effect — re-applying would override the user's
+  own in-dialog navigation. The scrub is easy to regress into a conditional spread, so it warrants a
+  test that fails when the assignment becomes conditional (see
+  `manage-books.web-view-provider.test.ts`). Note `useWebViewState` is per-`webViewId` and does not
+  survive close/reopen, which is why this pattern flows through provider options rather than relying
+  on persisted slots.
+- **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
+  transient-state scrubs.
