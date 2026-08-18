@@ -3,7 +3,7 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mockSetting = { value: null as unknown, isLoading: false };
+const mockSetting = { value: undefined as unknown, isLoading: false };
 
 vi.mock('@papi/frontend/react', () => ({
   useSetting: () => [mockSetting.value, vi.fn(), vi.fn(), mockSetting.isLoading],
@@ -21,12 +21,20 @@ import { useMarkerSettleDelay } from './use-marker-settle-delay.hook';
 
 afterEach(() => {
   vi.clearAllMocks();
-  mockSetting.value = null;
+  mockSetting.value = undefined;
   mockSetting.isLoading = false;
 });
 
 describe('useMarkerSettleDelay', () => {
-  it('reports undefined for the stored null default, leaving the editor to its own delay', () => {
+  it('reports undefined for the unset default (papi deserializes the stored JSON null to undefined)', () => {
+    mockSetting.value = undefined;
+    expect(renderHook(() => useMarkerSettleDelay()).result.current).toBeUndefined();
+  });
+
+  it('still reports undefined if a raw null leaks through the serialization boundary', () => {
+    // The JSON contribution's default IS null; papi maps it to undefined on read, but the editor
+    // option is `number | undefined` and must never see a null even if that mapping is bypassed.
+    // eslint-disable-next-line no-null/no-null
     mockSetting.value = null;
     expect(renderHook(() => useMarkerSettleDelay()).result.current).toBeUndefined();
   });
@@ -45,8 +53,8 @@ describe('useMarkerSettleDelay', () => {
   });
 
   it('reports undefined while the setting is still loading', () => {
-    // `useSetting` hands back its `defaultState` (null) while the read is in flight; either way
-    // the editor keeps its own default delay until the real value resolves.
+    // `useSetting` hands back its `defaultState` (undefined) while the read is in flight; either
+    // way the editor keeps its own default delay until the real value resolves.
     mockSetting.isLoading = true;
     mockSetting.value = 250;
 
