@@ -130,6 +130,13 @@ export function mergeDefaultLayoutSupplement(
         entry,
         `insertBeforeWebViewType '${entry.insertBeforeWebViewType}' was not found in the panel anchored by '${entry.anchorWebViewType}'; appending '${webViewTypeOf(tab)}' last instead`,
       );
+    // Inserting at the head would change which tab the column opens on, not just the order: rc-dock
+    // falls back to `tabs[0].id` for a panel with no `activeId` (Algorithm.js), and no panel in the
+    // Simple-mode layout sets one. Pin the incumbent first tab as `activeId` before it stops being
+    // first, so a supplement tab can take the leftmost position without also taking over as the
+    // column's default view — an entry that wants to be the default should say so, not acquire it as
+    // a side effect of ordering. Only the head insert can do this, so nothing else is touched.
+    if (insertAt === 0 && panel.activeId === undefined && tabs[0]?.id) panel.activeId = tabs[0].id;
     // `findIndex` returning -1 covers both "no `insertBeforeWebViewType`" and "that tab isn't in this
     // panel" — both mean append.
     panel.tabs =
