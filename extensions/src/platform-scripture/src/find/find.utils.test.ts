@@ -434,6 +434,22 @@ describe('resolveSelectedProjectScrollGroup', () => {
   it('returns undefined when no tabs are open anywhere', () => {
     expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, [], undefined)).toBeUndefined();
   });
+
+  // `openTabs` arrives in web-view-event arrival order (`[...tabsMap.values()]`), so picking
+  // `openTabs[0]` made which project Find fell back to depend on event timing — two sessions with the
+  // same tabs open could land on different projects. The fallback is ordered so it cannot drift.
+  it('picks the SAME cross-project fallback regardless of the order tabs arrived in', () => {
+    const tabs = [tab('PROJ-C', 2, 'wv-c'), tab('PROJ-B', 1, 'wv-b'), tab('PROJ-D', 1, 'wv-d')];
+    const expected = { projectId: 'PROJ-B', scrollGroupId: 1 };
+
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, tabs, undefined)).toEqual(expected);
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, [...tabs].reverse(), undefined)).toEqual(
+      expected,
+    );
+    expect(
+      resolveSelectedProjectScrollGroup('PROJ-A', 0, [tabs[2], tabs[0], tabs[1]], undefined),
+    ).toEqual(expected);
+  });
 });
 
 describe('isDifferentProjectSelection', () => {

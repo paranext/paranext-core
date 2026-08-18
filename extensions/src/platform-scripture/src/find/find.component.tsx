@@ -87,7 +87,6 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_previousResult%',
   '%webView_find_projectFilter_noOpenProjects%',
   '%webView_find_projectFilter_noProjectsFound%',
-  '%webView_find_projectFilter_projectsAndResources%',
   '%webView_find_projectSelector_label%',
   '%webView_find_projectSelector_openTabsSectionHeading%',
   '%webView_find_projectSelector_otherProjectsSectionHeading%',

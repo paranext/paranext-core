@@ -60,6 +60,7 @@ import {
 } from './find/search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -186,14 +187,19 @@ global.webViewComponent = function FindWebView({
     ? DEFAULT_RECENT_SEARCHES
     : recentSearchesPossiblyError;
 
-  // Track the last term written to storage so repeated calls for the same term (e.g. clicking
-  // through results) don't trigger redundant writes.
-  const lastPersistedHistoryTermRef = useRef<string | undefined>(undefined);
+  // Track the last (project, term) pair written to storage so repeated calls for the same term in
+  // the same project (e.g. clicking through results) don't trigger redundant writes.
+  const lastPersistedHistoryKeyRef = useRef<string | undefined>(undefined);
   const addToHistory = useCallback(
     (term: string) => {
       if (!term) return;
-      if (term === lastPersistedHistoryTermRef.current) return;
-      lastPersistedHistoryTermRef.current = term;
+      // Keyed by PROJECT + term, not term alone. History is stored per project
+      // (`addHistoryItem(item, projectId)`), so a term-only guard meant that after switching projects
+      // the term that just ran was never recorded under the new project — the guard suppressed the
+      // write because the same term had already been persisted under the OLD one.
+      const historyKey = `${normalizeProjectId(projectId ?? '')}\u0000${term}`;
+      if (historyKey === lastPersistedHistoryKeyRef.current) return;
+      lastPersistedHistoryKeyRef.current = historyKey;
       findHistoryProviderRef.current?.addHistoryItem(term, projectId).catch(() => {});
     },
     [projectId],
@@ -299,9 +305,14 @@ global.webViewComponent = function FindWebView({
   // `setVerseRefSetting` call on result activation would navigate unrelated editors in that stale
   // group. Keeping the two equal makes both correct by construction and keeps the scroll-group
   // letter in Find's tab toolbar agreeing with the one in the project selector.
-  // The returned `scrollGroupId` (index 2) is intentionally skipped: it is always
-  // `selectedScrollGroupId`, which we already hold.
-  const [verseRefSetting, setVerseRefSetting, , setFindScrollGroupId] =
+  // The returned `scrollGroupId` (index 2) IS read, because the sync is not one-way: in power mode
+  // every web view gets a `ScrollGroupSelector` in its tab toolbar
+  // (`web-view.component.tsx` -> `isPowerMode ? <ScrollGroupSelector .../>`), so the user can move
+  // Find's group from there without touching the picker. A reconciliation effect below pulls that
+  // change back into `selectedScrollGroupId`; without it the picker would show a stale group while
+  // `findScope`/`verseRefSetting` already resolved against the new one and `targetEditorWebViewId`
+  // still pointed at the old tab.
+  const [verseRefSetting, setVerseRefSetting, findScrollGroupId, setFindScrollGroupId] =
     useWebViewScrollGroupScrRef();
 
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
@@ -417,6 +428,21 @@ global.webViewComponent = function FindWebView({
   const [selectedScrollGroupId, setSelectedScrollGroupId] = useWebViewState<
     ScrollGroupId | undefined
   >('findSelectedScrollGroupId', undefined);
+
+  // Reconcile a toolbar-driven scroll-group change back into the picker's selection. In power mode the
+  // user can change Find's own scroll group from its tab toolbar's `ScrollGroupSelector`, which writes
+  // `scrollGroupScrRef` straight into the web view definition and never touches
+  // `selectedScrollGroupId`. Pulling it back keeps the picker, `findScope`/`verseRefSetting`, and
+  // `targetEditorWebViewId` describing the same tab instead of drifting apart.
+  //
+  // Skipped when `findScrollGroupId` is `undefined`, which means Find has been DETACHED from any
+  // scroll group (an independent ref). There is no group to target then, so overwriting the selection
+  // with `undefined` would throw away a still-valid target for no gain.
+  useEffect(() => {
+    if (findScrollGroupId === undefined) return;
+    if (findScrollGroupId === selectedScrollGroupId) return;
+    setSelectedScrollGroupId(findScrollGroupId);
+  }, [findScrollGroupId, selectedScrollGroupId, setSelectedScrollGroupId]);
 
   // Set by `handleSelectProjectScrollGroup` (defined below, once `abandonFindJob` exists) and
   // consumed by an effect keyed on `findPdp` once the switch takes effect — see that effect for
@@ -1257,38 +1283,22 @@ global.webViewComponent = function FindWebView({
     }, SEARCH_DEBOUNCE_DELAY_MS),
   );
 
-  // Re-run the current search term against the new project once `handleSelectProjectScrollGroup`
-  // has switched it: `findPdp` only takes on the new project's identity after this render, so the
-  // rerun can't happen inside `handleSelectProjectScrollGroup` itself. Gated by the ref that
-  // `handleSelectProjectScrollGroup` sets (rather than comparing `projectId` to its previous value)
-  // so it fires for every project switch that handler performs — and only for those, not for
-  // `findPdp` re-identifying itself for any other reason. Both switch paths are intended to
-  // re-search: the user picking a different project from the selector, AND the reassignment effect
-  // above picking one automatically when the selected project's last editor tab closes. So closing
-  // that tab does not just repoint the picker — it also runs the existing search term and scope
-  // against the newly selected project, replacing the closed project's results.
-  //
-  // Keyed on BOTH `findPdp` and `findPdpAvailability` because a project switch settles them
-  // independently, and the rerun needs both: `handleStartSearch` bails on `isSearchQueryValid`, which
-  // gates on availability being `'ready'`. `findPdpAvailability` resets to `'resolving'` on every
-  // `projectId` change (`preserveValue: false`, so a stale verdict cannot outlive the switch), and
-  // `findPdp`'s new identity usually arrives first — so this effect must WAIT for availability rather
-  // than consume the pending flag on the first wake-up. Clearing the ref before the search actually
-  // starts silently drops the rerun, since nothing re-arms it when availability later settles.
-  useEffect(() => {
-    if (!pendingProjectSwitchRerunRef.current) return;
-    // Only clear the flag for conditions that will NOT resolve on their own; an unavailable provider
-    // surfaces its own error, so there is nothing to wait for there.
-    if (!findPdp || searchTermRef.current.trim() === '' || findPdpAvailability === 'unavailable') {
-      pendingProjectSwitchRerunRef.current = false;
-      return;
-    }
-    // Still resolving — keep the flag set and let the availability change re-run this effect.
-    if (findPdpAvailability !== 'ready') return;
-    pendingProjectSwitchRerunRef.current = false;
-    explicitSearchPendingRef.current = true;
-    handleStartSearchRef.current(true);
-  }, [findPdp, findPdpAvailability]);
+  // Both no-user-input search triggers (project-switch rerun, restore-time fallback) live in this
+  // hook so they can be tested across renders — see `use-find-search-triggers.hook.ts` for why that
+  // matters and `use-find-search-triggers.hook.test.tsx` for the late-settling-availability cases.
+  useFindSearchTriggers({
+    findPdp,
+    findPdpAvailability,
+    searchStatus,
+    searchTerm,
+    searchTermRef,
+    pendingProjectSwitchRerunRef,
+    initialSearchTriggeredRef,
+    explicitSearchPendingRef,
+    startSearch: useCallback((isExplicitSearch: boolean) => {
+      handleStartSearchRef.current(isExplicitSearch);
+    }, []),
+  });
 
   // Auto-search with debounce when the search term or any filter changes
   useEffect(() => {
@@ -1308,22 +1318,6 @@ global.webViewComponent = function FindWebView({
     searchTextType,
     relevantScopeKey,
   ]);
-
-  // Fallback for startup search: if findPdp wasn't ready when the debounce fired on mount,
-  // run the search as soon as findPdp becomes available (fires at most once).
-  // Set explicitSearchPendingRef so the debounce timer (still pending when findPdp was already
-  // available at mount) skips its redundant second call.
-  useEffect(() => {
-    if (
-      !findPdp ||
-      !initialSearchTriggeredRef.current ||
-      searchStatus !== undefined ||
-      searchTerm.trim() === ''
-    )
-      return;
-    explicitSearchPendingRef.current = true;
-    handleStartSearchRef.current();
-  }, [findPdp, searchStatus, searchTerm]);
 
   // Reset isPostReplaceSearch once the search finishes so a subsequent search in replace mode
   // (e.g. triggered by an external change) is not mistakenly treated as a post-replace search.

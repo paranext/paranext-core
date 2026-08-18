@@ -268,7 +268,17 @@ export function resolveSelectedProjectScrollGroup(
     return { projectId: currentProjectId, scrollGroupId: sameProjectTab.scrollGroupId };
   }
 
-  const fallbackTab = openTabs[0];
+  // Cross-project fallback: the current project has no open tab left, so Find moves to another open
+  // project (and re-runs the search there — see the rerun hook). Which project that is must be
+  // DETERMINISTIC: `openTabs` arrives as `[...tabsMap.values()]`, i.e. in the order the web-view
+  // events happened to land, so taking `openTabs[0]` made the landing project depend on event timing
+  // and differ between otherwise identical sessions. Order by scroll group, then project id, so the
+  // same set of open tabs always resolves to the same fallback.
+  const fallbackTab = [...openTabs].sort(
+    (a, b) =>
+      a.scrollGroupId - b.scrollGroupId ||
+      normalizeProjectId(a.projectId).localeCompare(normalizeProjectId(b.projectId)),
+  )[0];
   if (!fallbackTab) return undefined;
   return { projectId: fallbackTab.projectId, scrollGroupId: fallbackTab.scrollGroupId };
 }
