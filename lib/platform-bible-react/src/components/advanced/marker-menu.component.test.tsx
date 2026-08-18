@@ -401,3 +401,81 @@ describe('MarkerMenu — consumer-disabled rows', () => {
     expect(row).not.toHaveTextContent('Deprecated');
   });
 });
+
+describe('MarkerMenu — row layout', () => {
+  const ITEMS = [
+    { marker: 'p', title: 'Paragraph', subtitle: 'Normal paragraph text', action: vi.fn() },
+  ];
+
+  it('renders the marker code as code, not prose', () => {
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    expect(screen.getByText('p').className).toMatch(/(?:^|\s)tw:font-mono(?:\s|$)/);
+  });
+
+  it('places the detail after the title so it reads as a trailing annotation rather than a second line', () => {
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    const title = screen.getByText('Paragraph');
+    const detail = screen.getByText('Normal paragraph text');
+
+    // Node.DOCUMENT_POSITION_FOLLOWING === 4
+    // eslint-disable-next-line no-bitwise
+    expect(title.compareDocumentPosition(detail) & 4).toBeTruthy();
+  });
+
+  it('renders the detail smaller and muted so it never competes with the title', () => {
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    const detail = screen.getByText('Normal paragraph text');
+    expect(detail.className).toMatch(/(?:^|\s)tw:text-xs(?:\s|$)/);
+    expect(detail.className).toMatch(/(?:^|\s)tw:text-muted-foreground(?:\s|$)/);
+    expect(detail.className).toMatch(/(?:^|\s)tw:truncate(?:\s|$)/);
+  });
+
+  it('keeps both the title and the detail able to clip, so neither wraps in a narrow popover', () => {
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    expect(screen.getByText('Paragraph').className).toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+    expect(screen.getByText('Normal paragraph text').className).toMatch(
+      /(?:^|\s)tw:min-w-0(?:\s|$)/,
+    );
+  });
+
+  it('drops the detail entirely when the toolbar reports there is no room for it', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={DEFAULT_LOCALIZED_STRINGS}
+        markerMenuItems={ITEMS}
+        shrinkStep={3}
+      />,
+    );
+
+    expect(screen.getByText('Paragraph')).toBeInTheDocument();
+    expect(screen.queryByText('Normal paragraph text')).not.toBeInTheDocument();
+  });
+
+  it('keeps the detail at the widest step', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={DEFAULT_LOCALIZED_STRINGS}
+        markerMenuItems={ITEMS}
+        shrinkStep={0}
+      />,
+    );
+
+    expect(screen.getByText('Normal paragraph text')).toBeInTheDocument();
+  });
+
+  it('renders a row with no detail without leaving an empty slot behind', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={DEFAULT_LOCALIZED_STRINGS}
+        markerMenuItems={[{ marker: 'q1', title: 'Poetry line 1', action: vi.fn() }]}
+      />,
+    );
+
+    const row = screen.getByRole('option', { name: /Poetry line 1/ });
+    expect(row).toHaveTextContent('Poetry line 1');
+  });
+});

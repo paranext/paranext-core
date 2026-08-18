@@ -164,6 +164,10 @@ export {
 export { default as Toolbar } from './components/advanced/toolbar.component';
 export type { ToolbarProps } from './components/advanced/toolbar.component';
 export {
+  ToolbarCompoundLabel,
+  type ToolbarCompoundLabelProps,
+} from './components/advanced/toolbar-compound-label/toolbar-compound-label.component';
+export {
   default as UiLanguageSelector,
   type LanguageInfo,
   type UiLanguageSelectorProps,
@@ -327,6 +331,14 @@ export {
   type UseListboxProps,
   type ListboxOption,
 } from './hooks/listbox-keyboard-navigation.hook';
+export {
+  useShrinkStep,
+  getShrinkStep,
+  SHRINK_STEP_HYSTERESIS_PX,
+} from './hooks/use-shrink-step.hook';
+
+// Contexts
+export { ShrinkStepContext, useShrinkStepValue, SHRINK_STEP } from './context/shrink-step.context';
 
 // Z-index scale
 export {

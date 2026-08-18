@@ -47,4 +47,55 @@ describe('TabToolbar', () => {
       expect(wrapper?.className).not.toMatch(/(?:^|\s)tw:flex-wrap(?:\s|$)/);
     });
   });
+
+  it('lets the start and center zones shrink below their content width (tw:min-w-0), so the flex algorithm takes space from them instead of pushing the end zone out of the clipped container', () => {
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        startAreaChildren={<span data-testid="start-child">Start</span>}
+        centerAreaChildren={<span data-testid="center-child">Center</span>}
+        endAreaChildren={<span data-testid="end-child">End</span>}
+      />,
+    );
+
+    const startWrapper = screen.getByTestId('start-child').parentElement;
+    const centerWrapper = screen.getByTestId('center-child').parentElement;
+
+    [startWrapper, centerWrapper].forEach((wrapper) => {
+      expect(wrapper).not.toBeNull();
+      expect(wrapper?.className).toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+    });
+  });
+
+  it('keeps the end zone rigid so the view-info menu and its icon buttons are never the ones squeezed out (they have no shorter form to fall back to)', () => {
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        startAreaChildren={<span data-testid="start-child">Start</span>}
+        endAreaChildren={<span data-testid="end-child">End</span>}
+      />,
+    );
+
+    const endWrapper = screen.getByTestId('end-child').parentElement;
+
+    expect(endWrapper).not.toBeNull();
+    expect(endWrapper?.className).toMatch(/(?:^|\s)tw:shrink-0(?:\s|$)/);
+    expect(endWrapper?.className).not.toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+  });
+
+  it('keeps the end zone growing so the wide-width split across the three zones is unchanged (grow and shrink are independent; dropping grow would visibly shift the center zone)', () => {
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        endAreaChildren={<span data-testid="end-child">End</span>}
+      />,
+    );
+
+    const endWrapper = screen.getByTestId('end-child').parentElement;
+
+    expect(endWrapper?.className).toMatch(/(?:^|\s)tw:grow-\[1\](?:\s|$)/);
+  });
 });

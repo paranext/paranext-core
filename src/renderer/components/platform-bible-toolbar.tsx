@@ -47,12 +47,15 @@ import {
   SelectTrigger,
   SelectValue,
   ScrollGroupSelector,
+  SHRINK_STEP,
   Toolbar,
+  ToolbarCompoundLabel,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
   usePromise,
+  useShrinkStepValue,
 } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -90,6 +93,40 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
 ];
+
+/**
+ * The project selector's trigger label.
+ *
+ * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which `Toolbar`
+ * publishes. `PlatformBibleToolbar` _renders_ `Toolbar`, so a hook call there would sit above the
+ * provider and read the widest step forever. This renders as `Toolbar`'s descendant, so it sees the
+ * real value.
+ */
+function ProjectSelectorLabel({
+  fullName,
+  shortName,
+  errorMessage,
+}: {
+  fullName: string;
+  shortName: string;
+  errorMessage?: string;
+}) {
+  const shrinkStep = useShrinkStepValue();
+  const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM;
+
+  return (
+    <ToolbarCompoundLabel
+      // The short name is the identifying part, so it is the field that must survive — but it reads
+      // second, hence `secondaryFirst`.
+      primary={isAtMinimum ? shortName : `(${shortName})`}
+      secondary={errorMessage ?? fullName}
+      secondaryFirst
+      showSecondary={!isAtMinimum}
+      fullText={`${fullName} (${shortName})`}
+      className={cn(errorMessage && 'tw:text-destructive')}
+    />
+  );
+}
 
 export function PlatformBibleToolbar() {
   const { currentProject, recentProjects, allProjects, currentProjectError } =
@@ -406,15 +443,11 @@ export function PlatformBibleToolbar() {
                 }
               >
                 {currentProject && (
-                  <span
-                    className={cn(
-                      'tw:min-w-0 tw:flex-1 tw:truncate',
-                      currentProjectError && 'tw:text-destructive',
-                    )}
-                  >
-                    {currentProjectError ??
-                      `${currentProject.fullName} (${currentProject.shortName})`}
-                  </span>
+                  <ProjectSelectorLabel
+                    fullName={currentProject.fullName}
+                    shortName={currentProject.shortName}
+                    errorMessage={currentProjectError}
+                  />
                 )}
               </SelectValue>
             </SelectTrigger>
