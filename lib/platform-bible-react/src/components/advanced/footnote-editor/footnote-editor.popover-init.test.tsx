@@ -1,24 +1,39 @@
 // @vitest-environment jsdom
 /**
- * Wrapper-para glyph artifact: the popover's init effect applies the note op into a hardcoded
- * `PARAGRAPH_USJ` wrapper doc via `applyUpdate`, inserting at OT index 0. In editable marker mode
- * the wrapper paragraph renders a visible `\p` glyph prefix (`MarkerNode` + NBSP trailing-space
- * `TextNode`, per the library's `usj-editor.adaptor.ts` `createPara`); an insert at index 0 lands
- * the note BEFORE that prefix, and the engine then re-materializes a FRESH prefix ahead of the
- * note, leaving the ORIGINAL prefix as visible trailing glyph junk after the note (confirmed
- * empirically: pre-fix, the wrapper para ends up with node types `['marker', 'text', 'note',
- * 'marker', 'text']` — a second, orphaned `\p`/NBSP pair trails the note). Display-only; never
- * written on Save (the note-ops content contract is unchanged either way — see the
- * `PARAGRAPH_USJ`-sibling `EDITABLE_WRAPPER_PARA_PREFIX_RETAIN` doc comment).
+ * Wrapper-para marker prefix: the popover's document is a hardcoded `PARAGRAPH_USJ` scaffold — one
+ * marker-less `para` that exists only so the editor has an element to host the note being edited,
+ * and that never reaches a save (the save path reads the note ops alone). The editor library used
+ * to default that paragraph to `\p` and render its marker prefix (a `MarkerNode` glyph + NBSP
+ * trailing space in editable marker mode; an immutable typed-text node in visible/gutter modes), so
+ * the popover showed a `\p ` prefix in front of the footnote's own text.
  *
- * Unlike `footnote-editor.component.test.tsx` (marker-palette wiring), this suite does NOT mock
- * `@eten-tech-foundation/platform-editor`'s `Editorial` — the artifact is a real Lexical
- * reconciliation effect of the wrapper doc's actual node shape, so it can only be observed by
- * mounting the real editor (via the shared footnote-editor.test-harness).
+ * The popover now passes `showParaMarkerPrefixes: false`, which suppresses the prefix at the
+ * editor's ADAPTOR level — the glyph bytes are never built, so there are no invisible bytes for the
+ * caret to traverse and no OT-index prefix offset for the init effect to retain past: the note op
+ * applies at index 0 and the note is the wrapper paragraph's ONLY child.
+ *
+ * Unlike footnote-editor.component.test.tsx (marker-palette wiring), this suite does NOT mock
+ * `@eten-tech-foundation/platform-editor`'s `Editorial` — the rendered node shape is a real Lexical
+ * reconciliation effect of the wrapper doc, so it can only be observed by mounting the real editor
+ * (via the shared footnote-editor.test-harness).
  */
 import { describe, expect, it } from 'vitest';
-import { $getRoot, $isElementNode, LexicalEditor } from 'lexical';
-import { renderPopoverAndWaitForInit } from './footnote-editor.test-harness';
+import { act } from '@testing-library/react';
+import {
+  $getRoot,
+  $getSelection,
+  $isElementNode,
+  $isRangeSelection,
+  $isTextNode,
+  LexicalEditor,
+  LexicalNode,
+} from 'lexical';
+import type { DeltaOpInsertNoteEmbed } from '@eten-tech-foundation/platform-editor';
+import {
+  editableView,
+  renderPopoverAndWaitForInit,
+  sentinelNoteOp,
+} from './footnote-editor.test-harness';
 
 /** The wrapper paragraph's direct child node types, document order. */
 function wrapperParaChildTypes(lexical: LexicalEditor): string[] {
@@ -29,8 +44,13 @@ function wrapperParaChildTypes(lexical: LexicalEditor): string[] {
   });
 }
 
-describe('FootnoteEditor popover init (wrapper-para glyph artifact)', () => {
-  it('editable marker mode: lands the note after the wrapper para prefix, no trailing glyph junk', async () => {
+/** The full text content the popover renders (what the user sees, marker glyphs included). */
+function renderedText(lexical: LexicalEditor): string {
+  return lexical.getEditorState().read(() => $getRoot().getTextContent());
+}
+
+describe('FootnoteEditor popover init (wrapper-para marker prefix suppressed)', () => {
+  it('editable marker mode: the note is the wrapper para’s only child — no `\\p` prefix, no glyph junk', async () => {
     // This suite only asserts on the post-`applyUpdate` node shape, so wait just for that macrotask
     // (not the later new-note selection re-assert).
     const { lexical } = await renderPopoverAndWaitForInit(
@@ -38,22 +58,62 @@ describe('FootnoteEditor popover init (wrapper-para glyph artifact)', () => {
       { waitMs: 10 },
     );
 
-    // Well-formed shape: the para's own `\p` marker glyph, its NBSP trailing space, then the
-    // note — and NOTHING else. A displaced insert leaves a second `marker`/`text` pair trailing
-    // after the note (the original prefix, now orphaned) — reproduced RED against pre-fix HEAD.
-    expect(wrapperParaChildTypes(lexical)).toEqual(['marker', 'text', 'note']);
+    expect(wrapperParaChildTypes(lexical)).toEqual(['note']);
+    // What the user reads starts with the footnote's OWN first glyph, not the scaffold's `\p`.
+    expect(renderedText(lexical).startsWith('\\f')).toBe(true);
+    expect(renderedText(lexical)).not.toContain('\\p');
   });
 
-  it('non-editable (visible) marker mode: unaffected by the editable-mode retain fix', async () => {
+  it('save path: emitted ops are the note’s own bytes plus the edit — the scaffold never leaks', async () => {
+    // The suppressed prefix is DISPLAY-only: what the popover saves must be exactly the loaded
+    // note op with the user's edit applied — no `\p`, no marker-glyph bytes, nothing from the
+    // wrapper paragraph. Driven through the auto-save path (the component saves on every content
+    // change after the init snapshot).
+    const saved: DeltaOpInsertNoteEmbed[][] = [];
+    const { lexical } = await renderPopoverAndWaitForInit(editableView, {
+      onChange: (noteOps) => saved.push(noteOps),
+    });
+
+    await act(async () => {
+      lexical.update(() => {
+        let ftText: LexicalNode | undefined;
+        const walk = (node: LexicalNode): void => {
+          if ($isTextNode(node) && node.getTextContent().includes('sentinel')) ftText = node;
+          if ($isElementNode(node)) node.getChildren().forEach(walk);
+        };
+        walk($getRoot());
+        if (!ftText || !$isTextNode(ftText)) throw new Error('ft content text node not found');
+        ftText.select(ftText.getTextContentSize(), ftText.getTextContentSize());
+        const selection = $getSelection();
+        if (!$isRangeSelection(selection)) throw new Error('expected a range selection');
+        selection.insertText('X');
+      });
+      // Let the editor's change listeners (which drive the component's auto-save) run.
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+    });
+
+    expect(saved.length).toBeGreaterThan(0);
+    const lastOps = saved[saved.length - 1];
+    expect(lastOps).toHaveLength(1);
+    // Byte-level expectation: the loaded op with 'X' appended to the \ft text — and nothing else.
+    const expected = JSON.parse(JSON.stringify(sentinelNoteOp)) as DeltaOpInsertNoteEmbed;
+    const ftOp = expected.insert.note?.contents?.ops?.[1];
+    if (!ftOp) throw new Error('fixture shape changed: ft op not found');
+    ftOp.insert = 'sentinel note textX';
+    expect(lastOps[0]).toEqual(expected);
+  });
+
+  it('non-editable (visible) marker mode: the scaffold marker is suppressed there too', async () => {
     const { lexical } = await renderPopoverAndWaitForInit(
       { markerMode: 'visible', hasSpacing: true, isFormattedFont: true },
       { waitMs: 10 },
     );
 
-    // `createPara` only injects the two-node MarkerNode+NBSP prefix for `markerMode: "editable"`;
-    // "visible" mode's single `immutable-typed-text` prefix node is a pre-existing, out-of-scope
-    // shape this fix must not touch — pin the CURRENT (unfixed-and-unchanged) ordering exactly,
-    // so a regression in the editable-mode branch's conditional would be caught here.
-    expect(wrapperParaChildTypes(lexical)).toEqual(['note', 'immutable-typed-text']);
+    // Visible mode used to render the scaffold's marker as an immutable typed-text node (which the
+    // index-0 insert then left stranded AFTER the note). With the prefix suppressed neither the
+    // glyph nor the stranding can exist.
+    expect(wrapperParaChildTypes(lexical)).toEqual(['note']);
   });
 });
