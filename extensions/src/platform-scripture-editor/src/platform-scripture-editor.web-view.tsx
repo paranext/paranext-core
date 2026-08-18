@@ -99,6 +99,10 @@ import {
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
 import {
+  BookNotAvailableView,
+  BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
+} from './book-not-available-view.component';
+import {
   ShareLayoutButton,
   SHARE_LAYOUT_BUTTON_STRING_KEYS,
 } from './share-layout-button.component';
@@ -169,6 +173,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...MARKER_MENU_STRING_KEYS,
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...EMPTY_CHAPTER_VIEW_STRING_KEYS,
+  ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
   ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
@@ -188,7 +193,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%paragraphMenu_misc_markerDescription%',
   '%versionHistoryCommit_beforeInsertFootnote%',
   '%versionHistoryCommit_beforeInsertCrossReference%',
-  '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
@@ -1896,13 +1900,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
     }
     if (!bookExists) {
+      // A resource keeps its own message: "not in this resource" is a statement of fact with no
+      // remedy, whereas a project's missing book is actionable (Manage Books) for Donna.
+      if (isReadOnly) {
+        return (
+          <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+            {workaround}
+            {localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']}
+          </div>
+        );
+      }
       return (
-        <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+        <>
           {workaround}
-          {isReadOnly
-            ? localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
-            : localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundProject%']}
-        </div>
+          <BookNotAvailableView
+            localizedStrings={localizedStrings}
+            isPowerMode={isPowerMode}
+            // Simple never offers the button (handled inside the component); in Power it is gated on
+            // editability so Donna is not sent to a locked Create section. `isReadOnlyEffective`
+            // folds in the project's `platform.isEditable` setting and the user's Scripture-edit
+            // role once PT-4339 lands; before then it reflects the `isReadOnly` web-view state flag,
+            // which fails closed (button hidden) — correct against either base.
+            showManageBooksButton={!isReadOnlyEffective}
+            onOpenManageBooks={() =>
+              papi.commands.sendCommand(
+                'platformScripture.openManageBooks',
+                webViewId,
+                'createMissingBook',
+              )
+            }
+          />
+        </>
       );
     }
     if (!usjFromPdp || usjFromPdp === defaultUsj) {
