@@ -594,9 +594,10 @@ export const StructureProtected: Story = {
 };
 
 /**
- * The active project is read-only (`platform.isEditable` is false). Replace / Replace All are
- * disabled with a tooltip explaining why, even though there's a focused result to replace; Find
- * itself stays fully live and interactive since search never mutates the project.
+ * The active project is read-only (`platform.isEditable` is false). A persistent note explains why
+ * above the replace controls (not just a hover tooltip), and Replace / Replace All are disabled
+ * with the same explanation on hover, even though there's a focused result to replace. Find itself
+ * stays fully live and interactive since search never mutates the project.
  */
 export const ReadOnly: Story = {
   decorators: [createDecorator({ activeMode: 'replace', isEditable: false })],

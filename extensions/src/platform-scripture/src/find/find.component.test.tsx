@@ -99,6 +99,8 @@ const STRINGS = {
   '%webView_find_replace_structureProtectedMarkerTooltip%':
     "This replacement adds a paragraph, verse, or chapter marker, which isn't allowed while structure is locked.",
   '%webView_find_replace_structureProtectedNote%': 'Structure is locked.',
+  '%webView_find_replace_readOnlyNote%':
+    'This project is read-only. Replacements will be rejected.',
   '%webView_find_replace_readOnlyTooltip%':
     "This project is read-only, so replacements can't be made.",
   '%webView_find_previewOptions_toggle%': 'Preview style',
@@ -289,6 +291,32 @@ describe('Find — permission-blocked Replace', () => {
         name: "This replacement adds a paragraph, verse, or chapter marker, which isn't allowed while structure is locked.",
       }),
     ).not.toBeInTheDocument();
+  });
+
+  // Regression: read-only previously surfaced only a hover tooltip, weaker feedback than
+  // structure-protection's persistent note + tooltip pair. Both reasons now show an always-visible
+  // note in the same slot, not just an on-hover explanation.
+  it('shows a persistent read-only note (not just a hover tooltip) when isEditable is false', () => {
+    render(<Find {...buildReplaceProps({ isEditable: false })} />);
+    expect(
+      screen.getByText('This project is read-only. Replacements will be rejected.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows the persistent structure-protected note when structure is locked and the project is editable', () => {
+    render(<Find {...buildReplaceProps({ isEditable: true, isStructureProtected: true })} />);
+    expect(screen.getByText('Structure is locked.')).toBeInTheDocument();
+    expect(
+      screen.queryByText('This project is read-only. Replacements will be rejected.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows only the read-only note (not the structure-protected note) when both reasons apply', () => {
+    render(<Find {...buildReplaceProps({ isEditable: false, isStructureProtected: true })} />);
+    expect(
+      screen.getByText('This project is read-only. Replacements will be rejected.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Structure is locked.')).not.toBeInTheDocument();
   });
 });
 

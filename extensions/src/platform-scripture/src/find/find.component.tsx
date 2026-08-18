@@ -84,6 +84,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_replaceAll%',
   '%webView_find_replaceTab%',
   '%webView_find_replaceTerm_placeholder%',
+  '%webView_find_replace_readOnlyNote%',
   '%webView_find_replace_readOnlyTooltip%',
   '%webView_find_replace_structureProtectedError%',
   '%webView_find_replace_structureProtectedMarkerTooltip%',
@@ -694,10 +695,19 @@ export function Find({
                 className="tw:w-full tw:min-w-16 tw:!pl-8 tw:!pr-4 scripture-font"
               />
             </div>
-            {isStructureProtected && (
+            {/* Persistent note, not just a hover tooltip — matches the two-signal feedback pattern
+                below (note + tooltip) for whichever reason currently blocks replace. Read-only
+                takes precedence when both apply, same as the tooltip precedence below. */}
+            {!isEditable ? (
               <p className="tw:text-xs tw:text-muted-foreground">
-                {localizedStrings['%webView_find_replace_structureProtectedNote%']}
+                {localizedStrings['%webView_find_replace_readOnlyNote%']}
               </p>
+            ) : (
+              isStructureProtected && (
+                <p className="tw:text-xs tw:text-muted-foreground">
+                  {localizedStrings['%webView_find_replace_structureProtectedNote%']}
+                </p>
+              )
             )}
             <div className="tw:flex tw:items-center tw:justify-between tw:gap-2 tw:flex-wrap">
               <div className="tw:flex tw:items-center tw:gap-2">
