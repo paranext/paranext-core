@@ -88,9 +88,7 @@ export function areUsjContentDivergencesEquivalent(
  * Best-effort, BOUNDED description of a divergence — for a diagnostic log line, never a full
  * document dump. Each side is truncated so a large chapter cannot flood the log.
  */
-export function describeUsjContentDivergence(
-  divergence: UsjContentDivergence | undefined,
-): string {
+export function describeUsjContentDivergence(divergence: UsjContentDivergence | undefined): string {
   const MAX_SNIPPET_LENGTH = 200;
   const truncate = (entry: Usj['content'][number] | undefined): string => {
     if (entry === undefined) return '(absent)';

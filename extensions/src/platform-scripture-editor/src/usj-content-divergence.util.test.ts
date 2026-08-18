@@ -46,7 +46,11 @@ describe('detectUsjContentDivergence', () => {
     // The walk is deliberately top-level only, so a difference nested inside the paragraph is
     // reported as the PARAGRAPH diverging — enough to say which entry to look at, and bounded.
     expect(divergence?.index).toBe(1);
-    expect(divergence?.sentEntry).toEqual({ type: 'para', marker: 'p', content: ['holy word text'] });
+    expect(divergence?.sentEntry).toEqual({
+      type: 'para',
+      marker: 'p',
+      content: ['holy word text'],
+    });
     expect(divergence?.receivedEntry).toEqual({
       type: 'para',
       marker: 'p',
