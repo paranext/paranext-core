@@ -286,6 +286,13 @@ async function openManageBooks(
 }
 
 /**
+ * Probe options that resolve an already-open Find web view without ever creating one. `existingId:
+ * '?'` is PAPI's "any web view of this type" wildcard; `createNewIfNotFound: false` makes the probe
+ * a pure lookup.
+ */
+const REUSE_EXISTING_FIND_ONLY = { existingId: '?', createNewIfNotFound: false } as const;
+
+/**
  * Re-points an already-open Find web view at `projectId`, creating nothing.
  *
  * Simple mode's Column 3 panels follow the active translation project, and the editor re-points
@@ -300,8 +307,12 @@ async function openManageBooks(
  */
 async function updateFindProject(projectId: string): Promise<string | undefined> {
   const findWebViewId = await papi.webViews.openWebView(findWebViewType, undefined, {
-    existingId: '?',
-    createNewIfNotFound: false,
+    ...REUSE_EXISTING_FIND_ONLY,
+    // Both calls here opt out explicitly, because `bringToFront` defaults to TRUE on the probe and
+    // the reload alike. A project switch must not yank Column 3 away from whichever tab the user was
+    // on — this runs as part of re-pointing the whole column, not in response to anyone asking for
+    // Find.
+    bringToFront: false,
   });
   if (!findWebViewId) return undefined;
 
@@ -314,8 +325,8 @@ async function updateFindProject(projectId: string): Promise<string | undefined>
     // `scrollGroupScrRef`, so dropping it would unbind the Find tab from the scroll group it shares
     // with the editor.
     editorScrollGroupId: existingFindWebViewDefinition?.scrollGroupScrRef,
-    // Not brought to front: a project switch should not yank Column 3 away from whichever tab the
-    // user was on.
+    // Same explicit opt-out as the probe above; see the note there.
+    bringToFront: false,
   };
   await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
   return findWebViewId;
@@ -343,10 +354,9 @@ async function openFind(
     // existing Find web view to the front without touching its project, and don't create one if
     // none exists: a Find with no project has nothing to search, so there is nothing to open.
     try {
+      // `bringToFront` is left at its `true` default, as in the sibling open* helpers.
       return await papi.webViews.openWebView(findWebViewType, undefined, {
-        existingId: '?',
-        createNewIfNotFound: false,
-        bringToFront: true,
+        ...REUSE_EXISTING_FIND_ONLY,
       });
     } catch (e) {
       // Swallowed deliberately. Passing any `existingId` routes through the main process's
@@ -362,20 +372,26 @@ async function openFind(
   const options: FindWebViewOptions = {
     projectId,
     editorScrollGroupId,
-    bringToFront: true,
     editorWebViewId: editorWebViewIdForFind,
     // A non-editor trigger has no controller to couple to, so tell the provider to drop whatever
     // editor id the panel is holding rather than leaving a stale one in place.
     clearEditorWebViewId: !editorWebViewIdForFind,
     initialSearchText: selectedText,
   };
+  // Where a newly created Find panel goes in Power mode: docked to the right of the editor that
+  // asked for it. Ignored in Simple mode, where the fixed layout already holds a Find tab for the
+  // probe below to find.
+  const findPanelLayout = {
+    type: 'panel',
+    direction: 'right',
+    targetTabId: tabIdFromWebViewId,
+  } as const;
 
   // First tries to open an existing find web view
-  let findWebViewId = await papi.webViews.openWebView(
-    findWebViewType,
-    { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
-    { ...options, existingId: '?', createNewIfNotFound: false },
-  );
+  let findWebViewId = await papi.webViews.openWebView(findWebViewType, findPanelLayout, {
+    ...options,
+    ...REUSE_EXISTING_FIND_ONLY,
+  });
 
   // If found an existing web view, reload it when the project differs, when the caller supplied a
   // new term to pre-fill (e.g. Ctrl+F with a selection the panel isn't already showing), or when the
@@ -397,11 +413,7 @@ async function openFind(
     }
   } else {
     // Otherwise, opens a new web view
-    findWebViewId = await papi.webViews.openWebView(
-      findWebViewType,
-      { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
-      options,
-    );
+    findWebViewId = await papi.webViews.openWebView(findWebViewType, findPanelLayout, options);
   }
 
   return findWebViewId;

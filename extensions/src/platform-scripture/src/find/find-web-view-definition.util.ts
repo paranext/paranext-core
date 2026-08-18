@@ -50,9 +50,15 @@ export function buildFindWebViewFields(
     title: FIND_TITLE_KEY,
     // Resolved text, unlike `title`: tooltips are never auto-resolved, so this one has to arrive
     // already localized (same split as the Text Collection provider). Mirrors the title so the tab's
-    // name is discoverable on hover once simple mode shrinks it to icon-only. Gated on simple mode:
-    // power mode never had a tooltip here.
-    tooltip: isSimpleMode ? localizedTitle : savedWebView.tooltip,
+    // name is discoverable on hover once simple mode shrinks it to icon-only.
+    //
+    // Set unconditionally rather than gated on simple mode. `PlatformTabTitle` already suppresses a
+    // tooltip that merely repeats the visible title unless the tab is collapsed to icon-only, and
+    // its comment names this exact caller pattern — so a mode gate here would only re-implement that
+    // suppression one layer further out. Gating it also produced a no-op in the power arm, since the
+    // provider spreads `savedWebView` first and is the only writer of this field, making
+    // `savedWebView.tooltip` a self-assignment.
+    tooltip: localizedTitle,
     projectId: options.projectId || savedWebView.projectId || undefined,
     // This is the fixed Column 3 Find tab and must always remain open in simple mode, so it's
     // non-closable there — closing it would leave Find with no tab to bring to the front. Power mode

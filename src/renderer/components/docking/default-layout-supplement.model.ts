@@ -3,15 +3,20 @@ import { SavedTabInfo } from '@shared/models/docking-framework.model';
 /** One tab contributed to the default layout by a product build. */
 export interface DefaultLayoutSupplementEntry {
   /**
-   * `webViewType` of an existing tab in the base layout. The supplement tab is appended to the
-   * panel that already contains a tab of this type. If no such panel exists, the entry is skipped.
+   * `webViewType` of an existing tab in the base layout. The supplement tab joins the panel that
+   * already contains a tab of this type — appended last, or at the position
+   * {@link DefaultLayoutSupplementEntry.insertBeforeWebViewType} names. If no such panel exists, the
+   * entry is skipped.
    */
   anchorWebViewType: string;
   /**
    * Optional `webViewType` of a tab in the anchor's panel that the supplement tab must be inserted
    * _before_, instead of being appended last. Lets the base layout keep a tab pinned at the end of
-   * its panel even though supplement tabs are merged in afterward. Ignored (falls back to
-   * appending) when no tab of this type is in the panel.
+   * its panel even though supplement tabs are merged in afterward.
+   *
+   * Falls back to appending when no tab of this type is in the panel, which is reported as a
+   * placement anomaly rather than applied silently — an unresolvable target is far more often a
+   * typo or a renamed `webViewType` than a deliberate "put it last".
    */
   insertBeforeWebViewType?: string;
   /** The tab to add, in the same `SavedTabInfo` shape the layout data files use. */
