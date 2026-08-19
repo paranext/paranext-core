@@ -1318,3 +1318,49 @@ step, no automation. Just a record.
   not be run in this development environment, and `test:e2e:isolated` (the only runner that reaches
   `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
   a manual pass rather than by automation.
+## ADR-0027: Panel readiness is derived from whether data sources arrived, never from a filtered result
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** The Model Text and Resource (Bible Texts / Commentaries) panels each decided "is
+  anything configured?" from a value that is only meaningful *after* its data had arrived, and each
+  did it differently. `useEffectiveResourceReferenceList` returned `[list | undefined, boolean]`
+  where the list accounted for two async sources (the project-level setting and a user-level PDP
+  subscription) but the boolean reported only the first — so the normal interleaving on essentially
+  every mount, where the project setting resolves before the user subscription delivers, was
+  reported as "not loading, nothing configured". The resource panel separately gated its spinner on
+  `filteredResources.length !== 0`, a list filtered against a DBL catalog that had not loaded yet,
+  so the guard could not fire during the exact window it existed for. Both rendered "No … selected"
+  with a Pick button for a correctly-configured resource, inviting the user to replace something
+  that was already set. A read failure compounded it: `useBufferedLayoutSetting` applied a
+  `PlatformError` to its held copy and disarmed, so a transient failure latched for the session.
+- **Decision:** Readiness is a first-class, data-derived signal evaluated before any empty or
+  not-found branch. `useEffectiveResourceReferenceList` returns a discriminated
+  `{ status: 'loading' | 'error' | 'ready' }` whose `loading` covers *both* sources and whose
+  `ready` may legitimately carry zero items — the only state in which a panel may render its empty
+  prompt. `getResourcePanelReadiness` (`resource-panel-readiness.utils.ts`) is the shared, pure
+  front of both panels' state machines, mapping list status plus catalog arrival to
+  `loading | error | empty | configured`. `useBufferedLayoutSetting` no longer latches a read error:
+  its mount arm skips a `PlatformError` and stays armed, and reports the live error on a third
+  tuple element, because at that point the held value is the placeholder and is indistinguishable
+  from a genuinely empty setting.
+- **Alternatives:** **Split the model panel's merged loading/empty conditional, as the ticket
+  proposed** — rejected as insufficient: in the failing window both `isEffectiveModelTextsLoading`
+  and `isLoadingResources` are `false`, so there is no honest signal to split on; the hook's
+  contract had to be fixed first. **Keep the tuple and widen the boolean** — rejected: it makes the
+  error state unrepresentable, and an unreadable setting would have to masquerade as either loading
+  (spins forever) or ready-and-empty (the original bug). **Treat an unreadable setting as
+  not-ready** — rejected: it trades a premature empty state for an endless spinner with no recovery.
+- **Consequences:** "Nothing configured at all" is deliberately kept catalog-independent, so a
+  genuinely unconfigured project still gets its pick prompt immediately rather than waiting on a
+  fetch; only "does a configured item belong to *this* panel?" waits for the catalog. Retry is
+  honest about its reach: it re-runs the user-layer subscription, and the project layer needs no
+  equivalent because it now self-heals when the setting becomes readable — if the setting is
+  genuinely unreadable, retry shows the error again rather than spinning. The un-latching also
+  changes `useTextCollectionSources`, the hook's other consumer, which latched errors the same way.
+  `InstallFailedView` became `ErrorRetryView` since it now serves two unrelated failures. Panels
+  that grow a third async source must extend the readiness signal rather than add another flag —
+  the bug class here is precisely one guard being unaware of one source.
+- **Source:** PT-4347 (NN 5C Resource panel shows correct loading state), whose named root cause —
+  the merged conditional in `model-text-panel.component.tsx` — proved to be the symptom site rather
+  than the defect.

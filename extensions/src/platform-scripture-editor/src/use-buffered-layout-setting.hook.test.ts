@@ -130,6 +130,28 @@ describe('useBufferedLayoutSetting', () => {
     expect(result.current[0]).toBe(error);
   });
 
+  it('stays armed through a read error so a later real value still lands', () => {
+    const error: PlatformError = newPlatformError('boom');
+    const real = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'A', id: '1' }] };
+
+    // Mount while the setting is still loading, so nothing is latched yet.
+    setRaw(DEFAULT, true);
+    const { result, rerender } = renderHook(() =>
+      useBufferedLayoutSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+    );
+
+    // The setting resolves to a read error. Applying it and disarming here is what made the
+    // failure permanent: only an unrelated `onSharedLayoutApply` could ever re-arm the hook.
+    setRaw(error);
+    rerender();
+
+    // The setting becomes readable. The real value must land on its own — no re-arm event.
+    setRaw(real);
+    rerender();
+
+    expect(result.current[0]).toEqual(real);
+  });
+
   it('warns when projectId changes in place (the unsupported no-remount case)', () => {
     setRaw(DEFAULT);
     const { rerender } = renderHook(
