@@ -13,4 +13,6 @@ export enum SaveState {
   HasSaved,
 }
 
-export const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org/';
+// No trailing slash: this is the exact string ParatextData returns for the Production environment,
+// so the fallback and a real backend response are the same value.
+export const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org';

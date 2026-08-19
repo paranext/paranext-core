@@ -230,23 +230,17 @@ internal class ParatextRegistrationService(
     }
 
     /// <summary>
-    /// Maps a registry <see cref="ServerType"/> to the Paratext Registry website URL for that
-    /// environment. Development/Test/QA get their own sites; everything else uses Production.
+    /// Returns the Paratext Registry website URL for the environment currently selected in
+    /// ParatextData internet settings.
+    /// <para>
+    /// ParatextData owns this mapping, so the link always points at the registry the rest of the
+    /// app is actually talking to. Today it resolves Production to
+    /// <c>https://registry.paratext.org</c> and Development, Test, and QualityAssurance all to
+    /// <c>https://registry-dev.paratext.org</c> — deliberately not mirrored here, because a copy
+    /// would silently drift the moment ParatextData changes it.
+    /// </para>
     /// </summary>
-    internal static string GetRegistryUrl(ServerType server) =>
-        server switch
-        {
-            ServerType.Development => "https://registry-dev.paratext.org/",
-            ServerType.Test => "https://registry-test.paratext.org/",
-            ServerType.QualityAssurance => "https://registry-qa.paratext.org/",
-            _ => "https://registry.paratext.org/",
-        };
-
-    /// <summary>
-    /// Returns the Paratext Registry website URL for the server currently selected in ParatextData
-    /// internet settings.
-    /// </summary>
-    private string GetParatextRegistryUrl() => GetRegistryUrl(InternetAccess.SelectedServers);
+    private string GetParatextRegistryUrl() => InternetAccess.RegistryServer;
 
     /// <summary>
     /// For any project with uncommitted changes on this machine, marks a point in project history in
