@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { platformSettings, coreSettingsValidators } from './core-settings-info.data';
 
 describe('platform.syncOnStartup setting', () => {
-  it('is declared as a hidden setting with a true default', () => {
+  it('is declared as a visible setting with a true default', () => {
     const group = Array.isArray(platformSettings) ? platformSettings[0] : platformSettings;
     const setting = group.properties['platform.syncOnStartup'];
     expect(setting).toBeDefined();
     expect(setting?.default).toBe(true);
-    expect(setting?.isHidden).toBe(true);
+    // Visible (not hidden) so the user has a settings-UI path to turn startup sync off and back on.
+    // The first-run wizard's "Don't sync yet" is wizard-scoped and never writes this (PT-4369).
+    expect(setting?.isHidden).toBeUndefined();
+    expect(setting?.description).toBe('%settings_platform_syncOnStartup_description%');
   });
 
   it('validates that the value is a boolean', async () => {

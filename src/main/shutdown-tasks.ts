@@ -12,6 +12,7 @@ import {
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   type SavedWebViewDefinition,
 } from '@shared/models/web-view.model';
+import { isFirstRunComplete } from '@main/first-run-consent.util';
 import {
   RUN_SCHEDULED_SESSION_SYNC_REQUEST_TYPE,
   type ScheduledSessionSyncResult,
@@ -37,6 +38,9 @@ import { AsyncVariable, getErrorMessage } from 'platform-bible-utils';
  *   was caught. Warned.
  * - `skipped`: nothing ran — nothing scheduled, not due, or already syncing (Power: `'skipped'`), or
  *   every window answered and nothing writable was open anywhere (Simple).
+ * - `skipped-consent-not-confirmed`: the Simple-mode consent gate is closed (see
+ *   {@link isFirstRunComplete}) — the wizard is unfinished, or its flag could not be read. Separate
+ *   from `skipped` so the log distinguishes "consent not confirmed" from "nothing was open".
  * - `unreachable`: the S/R call rejected before the timeout (e.g. the command isn't registered). The
  *   failure detail was already warned inside {@link runBoundedShutdownSync}.
  * - `timed-out`: neither settled within {@link AUTO_SYNC_MAX_DURATION_MS} (also already warned there).
@@ -47,6 +51,7 @@ type ShutdownSyncOutcome =
   | 'failed'
   | 'selection-failed'
   | 'skipped'
+  | 'skipped-consent-not-confirmed'
   | 'unreachable'
   | 'timed-out';
 
@@ -63,9 +68,10 @@ type BoundedSyncSettlement<T> =
 /**
  * Runs cleanup tasks (e.g., syncing projects) when the user closes the main window.
  *
- * In Simple mode: cancels any in-progress sync, then S/Rs the projects of all open writable
- * Scripture Editors across every window. All errors are swallowed — extension may not be installed,
- * or may fail — shutdown must never be permanently blocked.
+ * In Simple mode: cancels any in-progress sync, then — once the user has been asked about automatic
+ * sync (see {@link isFirstRunComplete}) — S/Rs the projects of all open writable Scripture Editors
+ * across every window. All errors are swallowed — extension may not be installed, or may fail —
+ * shutdown must never be permanently blocked.
  *
  * In Power mode: S/Rs the projects scheduled "On startup/shutdown" via the S/R extension's
  * `runScheduledSessionSync` command. Same error-swallowing contract — if the command isn't
@@ -140,6 +146,9 @@ const inFlightWindowCloseSyncs = new Set<Promise<void>>();
  * Nothing is cancelled first, unlike {@link performShutdownTasks}: the app is not going down, so a
  * sync already in progress belongs to a window that is staying.
  *
+ * Gated on first-run consent (see {@link isFirstRunComplete}) like the shutdown sync: a window
+ * closing mid-wizard must not send what it had open.
+ *
  * Same error-swallowing contract as {@link performShutdownTasks} — a window must never be left
  * un-closable because the S/R extension is missing or failing.
  *
@@ -175,6 +184,17 @@ async function performWindowCloseTasksInternal(closingWindowId: number): Promise
     return;
   }
   if (interfaceMode !== 'simple') return;
+
+  // Consent gate (see isFirstRunComplete). Unlike the shutdown path there is nothing to cancel here
+  // (the app is staying up), so the gate goes first.
+  if (!(await isFirstRunComplete())) {
+    // States only what is known: the gate is also closed when the flag could not be read, which
+    // already warned for itself.
+    logger.info(
+      `Sync for closing window ${closingWindowId} skipped: first-run sync consent not confirmed`,
+    );
+    return;
+  }
 
   let projectIds: string[];
   try {
@@ -243,6 +263,14 @@ async function performSimpleModeShutdownSync(): Promise<void> {
     );
   } catch {
     /* no sync in progress, or extension unavailable */
+  }
+
+  // Consent gate (see isFirstRunComplete), deliberately AFTER the cancel above: the consent step's
+  // own `syncProjects` runs while the flag is still false, and that user-initiated sync must stay
+  // cancellable so it cannot hold the app open. The gate only suppresses STARTING a new one.
+  if (!(await isFirstRunComplete())) {
+    logShutdownSyncOutcome('skipped-consent-not-confirmed');
+    return;
   }
 
   // S/R the project of every open writable Scripture Editor.
@@ -364,8 +392,10 @@ async function performPowerModeShutdownSync(): Promise<void> {
 
 /**
  * Logs a {@link ShutdownSyncOutcome} truthfully — "complete" only when a sync actually ran and
- * succeeded. A sync that ran but reported failure warns; a deliberate skip (nothing scheduled) is
- * debug-only; and the already-warned cases (`unreachable`, `timed-out`) add nothing here.
+ * succeeded. A sync that ran but reported failure warns; a nothing-to-do skip is debug-only, while
+ * the consent-gate skip is info — it fires before anything is selected, so it cannot say whether
+ * work went unsynced, which is exactly why it should not be buried at debug; and the already-warned
+ * cases (`unreachable`, `timed-out`) add nothing here.
  */
 function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
   switch (outcome) {
@@ -387,6 +417,11 @@ function logShutdownSyncOutcome(outcome: ShutdownSyncOutcome): void {
       logger.debug(
         'Sync on shutdown skipped (nothing writable open, nothing scheduled, not due, or already syncing)',
       );
+      break;
+    case 'skipped-consent-not-confirmed':
+      // States only what is known: the gate is also closed when the flag could not be read (that
+      // read warned for itself), so this line must not assert an unfinished wizard.
+      logger.info('Sync on shutdown skipped: first-run sync consent not confirmed');
       break;
     case 'unreachable':
     case 'timed-out':

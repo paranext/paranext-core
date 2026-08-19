@@ -127,6 +127,7 @@
   "%firstRun_button_back%": "Retour",
   "%firstRun_button_continueWithoutFinishingSetup%": "Continuer sans terminer la configuration",
   "%firstRun_button_continueWithoutSetup%": "Continuer sans configuration",
+  "%firstRun_button_dontSyncYet%": "Ne pas synchroniser pour le moment",
   "%firstRun_button_finish%": "Terminer",
   "%firstRun_button_next%": "Suivant",
   "%firstRun_button_retry%": "Réessayer",
