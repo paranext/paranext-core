@@ -47,6 +47,30 @@ export function isAppShuttingDown(): boolean {
 }
 
 /**
+ * Whether a window's `close` handler should stop the startup tasks' bounded waits.
+ *
+ * Aborting is right whenever the app is really going away: a startup sync firing after the shutdown
+ * sync has already run would sync the same projects twice, and a late one can reach a network
+ * connection `will-quit` is about to tear down.
+ *
+ * The one case where aborting is wrong is macOS closing its last window without a quit. There the
+ * app stays resident and a later dock reactivation starts a fresh session, but the startup tasks
+ * run once per PROCESS — so aborting drops that session's startup sync for the rest of the
+ * process's life. Hence the quit flag decides on macOS.
+ *
+ * Every other platform quits once its last window closes, but `window-all-closed` calls
+ * `app.quit()` only after the close handlers have already run — so the quit flag is still false
+ * throughout the very window this guard protects. Off macOS the platform alone therefore decides,
+ * rather than a flag that arrives too late to help.
+ *
+ * @param platform The OS platform, i.e. `process.platform`. A parameter rather than a direct read
+ *   so both branches stay testable without stubbing the global.
+ */
+export function shouldWindowCloseAbortStartupTasks(platform: typeof process.platform): boolean {
+  return isAppQuitRequested() || platform !== 'darwin';
+}
+
+/**
  * Run the shutdown tasks, sharing one run across every window that closes as part of the same quit.
  *
  * @param performShutdownTasks Work to run once for this session
