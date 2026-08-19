@@ -50,9 +50,9 @@ import {
  * ever renamed, update them here to match. Each of these web views reads `isSyncBlocked` from its
  * own web view state and folds it into a read-only / write-disabled mode.
  *
- * Known gap: `platformScripture.find` is absent. Its Replace / Replace All controls write scripture
- * through the replace PDP, so during an automatic Send/Receive they hit the armed
- * `SendReceiveWriteLock` and fail mid-batch with the `(SR_EDIT_BLOCKED)` sentinel and no
+ * Known gap, tracked by PT-4404: `platformScripture.find` is absent. Its Replace / Replace All
+ * controls write scripture through the replace PDP, so during an automatic Send/Receive they hit
+ * the armed `SendReceiveWriteLock` and fail mid-batch with the `(SR_EDIT_BLOCKED)` sentinel and no
  * explanation in the UI. Adding it here is only the first of four steps — the provider must scrub
  * the flag on rebuild and the web view must read it and disable its replace controls, the way the
  * comment views do. Note this is reachable in Power mode only: Simple-mode Find hides the replace

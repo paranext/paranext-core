@@ -65,6 +65,9 @@ export function buildFindWebViewFields(
     // allows closing/rearranging freely. This also picks the tab's rc-dock group: `getTabGroup`
     // routes `isClosable === false` to `TAB_GROUP_RESOURCES`, which is only registered in simple
     // mode.
+    //
+    // The sixth copy of this same per-mode computation across three extensions. PT-4405 moves it into
+    // the renderer, which already holds both halves it needs; this line goes away with that.
     isClosable: !isSimpleMode,
     // Icon-only tab in Simple mode only — Power mode keeps this tab text-labeled and un-iconed,
     // matching the resource panels. Without an icon here, Simple mode's icon-only collapse (which

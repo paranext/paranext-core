@@ -1,5 +1,5 @@
 import { WebViewProps } from '@papi/core';
-import papi, { logger } from '@papi/frontend';
+import papi, { logger, network } from '@papi/frontend';
 import {
   useData,
   useDataProvider,
@@ -16,6 +16,7 @@ import {
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
   sonner,
+  useEvent,
   usePromise,
   useRunWhenVisible,
   useViewVisibility,
@@ -48,6 +49,8 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
+import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
+import { useFocusSearchOnInvoke } from './find/use-focus-search-on-invoke.hook';
 import {
   applyPreserveCase,
   armBoundedWait,
@@ -170,6 +173,7 @@ async function revertBookSnapshots(
 }
 
 global.webViewComponent = function FindWebView({
+  id: webViewId,
   projectId: webViewProjectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
@@ -1475,6 +1479,23 @@ global.webViewComponent = function FindWebView({
     debouncedHandleStartSearch.current(),
   );
 
+  // The refs need to start out with null for them to work as element refs
+  // eslint-disable-next-line no-null/no-null
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Invoking Find must land the caret in the search box; a plain tab click must not. The hook holds
+  // both delivery routes and the hidden-tab deferral — see its docs for why there are two routes and
+  // why neither can be a bare `.focus()`.
+  const [shouldFocusSearch] = useWebViewState<boolean>('shouldFocusSearch', false);
+  const focusSearchInput = useCallback(() => searchInputRef.current?.focus(), []);
+  const handleFocusSearchEvent = useFocusSearchOnInvoke({
+    webViewId,
+    shouldFocusSearch,
+    isViewVisible,
+    focusSearchInput,
+  });
+  useEvent(network.getNetworkEvent(FIND_FOCUS_SEARCH_EVENT), handleFocusSearchEvent);
+
   // Auto-search with debounce when the search term or any filter changes
   useEffect(() => {
     if (isInitialAutoSearchRef.current) {
@@ -2024,6 +2045,7 @@ global.webViewComponent = function FindWebView({
 
   return (
     <Find
+      searchInputRef={searchInputRef}
       localizedStrings={localizedStrings}
       scopeSelectorLocalizedStrings={scopeSelectorLocalizedStrings}
       searchResultLocalizedStrings={searchResultLocalizedStrings}
