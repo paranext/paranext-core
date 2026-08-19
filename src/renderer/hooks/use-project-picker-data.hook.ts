@@ -43,6 +43,10 @@ const PDPF_REGISTRATION_DEBOUNCE_MS = 200;
  * before the layering PDPF that provides this interface registers). Published resources also carry
  * this interface via the Scripture Extender layering PDPF, so the current project and recent
  * projects (both always scripture or resource projects) resolve from the same filtered fetch.
+ *
+ * `src/main/startup-readiness.util.ts` deliberately keeps its own copy of this literal for its
+ * startup readiness gate (see that file's rationale for why it isn't shared). If you change this
+ * one, consider whether that one should change too.
  */
 const PICKER_PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
 const PICKER_METADATA_FILTER: ProjectMetadataFilterOptions = {

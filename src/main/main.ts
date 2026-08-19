@@ -72,6 +72,7 @@ import {
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
+  shouldWindowCloseAbortStartupTasks,
 } from '@main/services/shutdown-latch.service';
 import { setAppShutdownSignal } from '@main/services/rpc-server';
 import { startWebViewServiceRouter } from '@main/services/web-view.service-router';
@@ -403,10 +404,11 @@ async function main() {
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
-  // Signals for the fire-and-forget startup tasks: an abort controller so the Power-mode boot-race
-  // retry loop stops the moment the app begins quitting (wired below), and a window-interactive
-  // clock so a startup sync that only registers late isn't fired onto an editor the user is already
-  // using (see performStartupTasks / STARTUP_SYNC_FRESHNESS_WINDOW_MS).
+  // Signals for the fire-and-forget startup tasks: an abort controller so either mode's startup-sync
+  // wait — Power's boot-race retry loop or Simple's readiness gate — stops the moment a real quit
+  // begins (wired below), and a window-interactive clock so a Power-mode startup sync that only
+  // registers late isn't fired onto an editor the user is already using (see performStartupTasks /
+  // STARTUP_SYNC_FRESHNESS_WINDOW_MS).
   const startupTasksAbort = new AbortController();
   let mainWindowInteractiveAt: number | undefined;
 
@@ -1010,10 +1012,12 @@ async function main() {
         isAppGoingDown = isAppShuttingDown();
 
         if (isAppGoingDown) {
-          // The app is on its way down: stop the startup boot-race retry loop so it can't fire a
-          // startup sync after this shutdown sync, or reach a network connection that is about to
-          // be torn down.
-          startupTasksAbort.abort();
+          // Stop the startup tasks' bounded waits so they can't fire a startup sync after this
+          // shutdown sync, or reach a network connection that is about to be torn down. The one
+          // exception is a macOS last-window close, where the app stays resident and a later dock
+          // reactivation still wants its startup sync — the predicate explains why the platform,
+          // and not the quit flag alone, has to decide that.
+          if (shouldWindowCloseAbortStartupTasks(process.platform)) startupTasksAbort.abort();
 
           // Flush the window-layouts structure with every still-tracked window in it, before any
           // `closed` handler trims the list — a window that is not live at save time is not
