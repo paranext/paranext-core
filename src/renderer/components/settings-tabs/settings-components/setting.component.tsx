@@ -29,7 +29,7 @@ import {
   LocalizeKey,
   PlatformError,
 } from 'platform-bible-utils';
-import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useId, useMemo, useState } from 'react';
 import './settings.component.scss';
 
 /** Props shared between the user and project setting components */
@@ -157,6 +157,22 @@ export function Setting({
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
+  // Ties the label to the control it names. Not `settingKey`: several settings tabs can be open at
+  // once (each opens with a fresh tab id) and rc-dock keeps inactive tabs mounted, so a key-derived
+  // id would be duplicated in the DOM.
+  const controlId = useId();
+  // interfaceLanguage renders the UiLanguageSelector composite, whose `id` lands on a wrapper div
+  // that `htmlFor` cannot label.
+  const isUiLanguageSelector =
+    Array.isArray(setting) && settingKey === 'platform.interfaceLanguage';
+  // The remaining branches render an Input or a Switch, except the "no setting component" fallback,
+  // which renders a message. Pointing `htmlFor` at either would dangle.
+  const hasLabelableControl =
+    typeof setting === 'string' ||
+    typeof setting === 'number' ||
+    typeof setting === 'boolean' ||
+    (typeof setting === 'object' && !isUiLanguageSelector);
+
   // Although the full set of languages is likely to load more-or-less instantaneously, if there is
   // a delay, we want to be sure to include at least any language(s) currently selected, so the user
   // can't get into the weird state of dropping down the list and not seeing the current selection
@@ -166,7 +182,7 @@ export function Setting({
       en: { autonym: 'English', uiNames: { es: 'inglés' } },
     };
 
-    if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
+    if (isUiLanguageSelector) {
       // Add hardcoded languages
       languages.es = { autonym: 'Español', uiNames: { en: 'Spanish', fr: 'espagnol' } };
       languages.fr = { autonym: 'Français', uiNames: { en: 'French', es: 'francés' } };
@@ -180,7 +196,7 @@ export function Setting({
     }
 
     return languages;
-  }, [setting, settingKey]);
+  }, [setting, isUiLanguageSelector]);
 
   const [languages] = useData(localizationService.dataProviderName).AvailableInterfaceLanguages(
     undefined,
@@ -261,6 +277,7 @@ export function Setting({
       component = (
         <Input
           key={settingKey}
+          id={controlId}
           onChange={debouncedHandleChange}
           defaultValue={setting}
           disabled={disabled}
@@ -270,13 +287,14 @@ export function Setting({
       component = (
         <Switch
           key={settingKey}
+          id={controlId}
           onCheckedChange={debouncedHandleChange}
           defaultChecked={setting}
           disabled={disabled}
         />
       );
     else if (typeof setting === 'object')
-      if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
+      if (isUiLanguageSelector) {
         // interfaceLanguage is a user (not project) setting, so it is never subject to per-project
         // Send/Receive edit-blocking; UiLanguageSelector exposes no `disabled` prop, so none is passed.
         component = (
@@ -294,6 +312,7 @@ export function Setting({
         component = (
           <Input
             key={settingKey}
+            id={controlId}
             onChange={debouncedHandleChange}
             defaultValue={JSON.stringify(setting, undefined, 2)}
             disabled={disabled}
@@ -327,6 +346,8 @@ export function Setting({
     languages,
     defaultLanguages,
     disabled,
+    controlId,
+    isUiLanguageSelector,
   ]);
 
   return (
@@ -340,7 +361,10 @@ export function Setting({
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Label htmlFor={settingKey} className="setting-label">
+                <Label
+                  htmlFor={hasLabelableControl ? controlId : undefined}
+                  className="setting-label"
+                >
                   {label}
                 </Label>
               </TooltipTrigger>

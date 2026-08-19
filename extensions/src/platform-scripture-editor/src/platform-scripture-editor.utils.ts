@@ -1000,12 +1000,44 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * connected resources and translation partners (deep sync). Uses the shallower
  * `paratextBibleSendReceive.sendReceiveProjects` for the outgoing project because we only need to
  * flush any local edits — a full deep sync is unnecessary on the way out.
+ *
+ * Gated on `platform.firstRunComplete`: both Send/Receive commands below are skipped until the
+ * first-run wizard finishes, so neither one runs before the user reaches its sync-consent step.
+ * (Narrowly those two only — this module still reaches the network elsewhere during the wizard,
+ * e.g. `openDefaultActiveProjectIfApplicable`'s `paratextBibleSendReceive.getSharedProjects`
+ * registry lookup.)
+ *
+ * Contract: this assumes a Simple-mode caller, since the gate is applied unconditionally. A future
+ * Power-mode call site must NOT reuse this function as-is — `platform.firstRunComplete` is never
+ * set outside Simple mode, so the gate would suppress that caller's sync permanently.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
   incomingProjectId: string,
   outgoingProjectId: string | undefined,
 ): Promise<void> {
+  // First-run consent gate (PT-4369). The wizard is an overlay, not a replacement: the project
+  // picker behind it can drive a switch through here long before the sync-consent step. An
+  // unreadable flag means DON'T sync — a failed read must never be why a fresh user's projects go
+  // over the network unasked. Gating unconditionally is safe only because the sole caller — the
+  // `needsOverlay` branch of this extension's own entry point,
+  // `extensions/src/platform-scripture-editor/src/main.ts` (NOT the main process's `src/main/`) —
+  // requires Simple mode; see `src/main/first-run-consent.util.ts` for why Power mode must never be
+  // gated on this flag.
+  let firstRunComplete = false;
+  try {
+    firstRunComplete = (await papi.settings.get('platform.firstRunComplete')) === true;
+  } catch (e) {
+    papi.logger.warn(
+      `Project-switch sync: failed to read platform.firstRunComplete (${getErrorMessage(e)}); skipping sync`,
+    );
+  }
+  if (!firstRunComplete) {
+    // Says only what is known: the read may have failed rather than the wizard being unfinished.
+    papi.logger.debug('Project-switch sync skipped: first-run sync consent not confirmed');
+    return;
+  }
+
   try {
     await papi.commands.sendCommand('paratextBibleSendReceive.syncProjects', [incomingProjectId]);
   } catch (e) {

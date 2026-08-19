@@ -292,10 +292,11 @@ declare module 'papi-shared-types' {
      */
     'platform.firstRunComplete': boolean;
     /**
-     * Whether to perform automatic startup sync. Hidden; written once by the first-run store when
-     * the user chooses "Skip automatic sync" on the sync-consent step (sets it to `false`). Read by
+     * Whether to perform automatic startup sync. User-configurable from settings. Read by
      * startup-tasks on each launch; absent or `true` means sync, `false` means skip. Only the
-     * automatic startup sync is affected; manual Send/Receive is unaffected. Never reset by core.
+     * automatic startup sync is affected; manual Send/Receive is unaffected. The first-run wizard
+     * never writes it — declining there ("Don't sync yet") defers only the wizard's own sync, not
+     * later automatic ones.
      */
     'platform.syncOnStartup': boolean;
     /**
