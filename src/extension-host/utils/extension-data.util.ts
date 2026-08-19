@@ -42,6 +42,10 @@ export function getExtensionUri(
  * out or throws while activating. Discovery happens once, up front, so every caller gets the same
  * answer whenever it asks. See ADR-0013 in `.context/standards/Architecture-Decisions.md`.
  *
+ * Reports each extension name at most once. Discovery can find the same extension in more than one
+ * folder — a dev checkout passed with `--extensions` shadowing the bundled copy — and only the
+ * first of those actually activates, so the first is the one described here.
+ *
  * @param discoveredExtensions Extensions discovered for this build that have code to run
  * @param enabledExtensions Extensions installed as zips, which can be dynamically disabled
  * @returns Identifiers of the discovered extensions that are not installed as zips
@@ -50,11 +54,15 @@ export function derivePackagedExtensionIdentifiers(
   discoveredExtensions: readonly ExtensionInfo[],
   enabledExtensions: readonly ExtensionIdentifier[],
 ): ExtensionIdentifier[] {
+  const namesReported = new Set<string>();
   return discoveredExtensions
-    .filter(
-      (discovered) =>
-        !enabledExtensions.some((enabled) => enabled.extensionName === discovered.name),
-    )
+    .filter((discovered) => {
+      if (enabledExtensions.some((enabled) => enabled.extensionName === discovered.name))
+        return false;
+      if (namesReported.has(discovered.name)) return false;
+      namesReported.add(discovered.name);
+      return true;
+    })
     .map((discovered) => ({
       extensionName: discovered.name,
       extensionVersion: discovered.version,

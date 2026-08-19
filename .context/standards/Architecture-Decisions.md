@@ -460,7 +460,10 @@ step, no automation. Just a record.
   module-private (`availableExtensions` is only populated by a full reload), the invariant is guarded
   by a source check — `extension.service.packaged-extensions.test.ts` — rather than a behavioral test.
   Revisit if a caller genuinely needs activation state: that wants a new, honestly-named signal, not a
-  redefinition of this one.
+  redefinition of this one. The same "don't answer a question you can't answer" rule applies one level
+  up: `platformGetResources.isSendReceiveAvailable` returns `undefined` — not `false` — when it lacks
+  the `manageExtensions` privilege to check with, and its consumers treat `undefined` and a thrown
+  error alike as unknown, failing open.
 - **Source:** PT-3954 (Sync button on toolbar sometimes does not show), with the activation timeline
   measured from a Paratext 10 Studio `main.log`.
 

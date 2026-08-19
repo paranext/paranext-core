@@ -7855,9 +7855,11 @@ declare module 'shared/models/manage-extensions-privilege.model' {
      * Extensions that are explicitly bundled to be part of the application. They cannot be disabled.
      * At runtime no extensions can be added or removed from the set of packaged extensions.
      *
-     * Reflects what the build contains, not what is currently running: an extension appears here even
-     * if it has not finished activating or failed to activate. So this answers "did this ship with
-     * the application?", asked at any time, and never "can I call its commands right now?"
+     * Reflects the bundled extensions with code to run that were discovered for this build, not what
+     * is currently running: an extension appears here even if it has not finished activating or
+     * failed to activate. So this answers "did this ship with the application?", asked at any time,
+     * and never "can I call its commands right now?" A bundled extension that contributes no code to
+     * run (its manifest has an empty `main`) is not in this list.
      */
     packaged: ExtensionIdentifier[];
     /**

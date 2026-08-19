@@ -280,6 +280,14 @@ export function PlatformBibleToolbar() {
   // checked in simple mode, since that gate is the only thing the answer feeds.
   const isSendReceiveAvailable = useSendReceiveAvailability({ enabled: !isPowerMode });
 
+  const openHome = useCallback(async () => {
+    try {
+      await sendCommand('platformGetResources.openHome');
+    } catch (e) {
+      logger.warn(`Toolbar caught an error while trying to open Home: ${getErrorMessage(e)}`);
+    }
+  }, []);
+
   return (
     <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
       <Toolbar
@@ -341,11 +349,7 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="tw:h-8"
-                  onClick={() => {
-                    // This command comes from an extension and is not typed in CommandHandlers.
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                    (sendCommand as any)('platformGetResources.openHome');
-                  }}
+                  onClick={openHome}
                 >
                   <HomeIcon />
                 </Button>

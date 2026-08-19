@@ -133,12 +133,22 @@ globalThis.webViewComponent = function HomeWebView() {
     }, []),
   );
 
-  // Declared before the first use below: both send/receive failure paths report through the same
+  // Declared before the first use below: the send/receive failure paths all report through the same
   // notification id so a repeat failure replaces the previous toast instead of stacking.
   const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
 
   const sendReceiveProject = async (projectId: string) => {
-    if (!isSendReceiveAvailable) return;
+    if (!isSendReceiveAvailable) {
+      // Say so rather than doing nothing. Availability can still be unknown when a row's Sync
+      // button is reachable, and a click that produces no response and no message just looks
+      // broken.
+      papi.notifications.send({
+        severity: 'warning',
+        message: '%resources_syncUnavailable%',
+        notificationId: sharedProjectErrorNotificationId,
+      });
+      return;
+    }
 
     try {
       setIsSendReceiveInProgress(true);

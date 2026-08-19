@@ -46,9 +46,10 @@ export const SEND_RECEIVE_AVAILABILITY_RECHECK_WINDOW_MS = 60_000;
  * until the answer is `true` or {@link SEND_RECEIVE_AVAILABILITY_RECHECK_WINDOW_MS} passes, and
  * starts over when extensions reload so an extension installed mid-session is picked up.
  *
- * A `false` is reported as `undefined` until {@link SEND_RECEIVE_UNKNOWN_GRACE_MS} has passed; a
- * check that throws is never reported as `false` at all, since a throw means the extension host
- * couldn't answer, not that the extension is missing.
+ * A `false` is reported as `undefined` until {@link SEND_RECEIVE_UNKNOWN_GRACE_MS} has passed. Only
+ * a literal `false` — the extension answering "not in this build" — is ever reported as `false`; a
+ * check that throws, or that answers `undefined` because it couldn't determine availability, stays
+ * unknown, since neither means the extension is missing.
  *
  * @param options.enabled When false, no further checking happens; an answer already reported is
  *   retained rather than reset. Use it to avoid the network traffic where the answer can't affect
@@ -88,15 +89,21 @@ export function useSendReceiveAvailability({ enabled = true }: { enabled?: boole
     };
 
     try {
-      // This command comes from an extension and is not typed in CommandHandlers.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      const isAvailable = await (sendCommand as any)('platformGetResources.isSendReceiveAvailable');
+      const isAvailable = await sendCommand('platformGetResources.isSendReceiveAvailable');
       // A slow check can resolve after its run was abandoned (unmounted, or extensions reloaded);
       // dropping it keeps a stale answer from overwriting a newer one or reviving a stopped chain.
       if (!isCurrent()) return;
 
-      if (isAvailable) {
+      if (isAvailable === true) {
         setIsSendReceiveAvailable(true);
+        return;
+      }
+
+      // `undefined` means the command couldn't determine an answer (it has no `manageExtensions`
+      // privilege to check with), which is the same situation as a throw — keep re-checking rather
+      // than reporting it as "not in the build".
+      if (isAvailable === undefined) {
+        scheduleRecheck(false);
         return;
       }
 

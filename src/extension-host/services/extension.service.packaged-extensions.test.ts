@@ -1,5 +1,5 @@
-import { readFileSync } from 'fs';
-import path from 'path';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /*
@@ -18,6 +18,12 @@ import { describe, expect, it } from 'vitest';
  * `manageExtensions` elevated privilege. There is no seam to inject either one, so a behavioral test
  * would have to stand up the whole extension host. A source check is narrow, but it fails on exactly
  * the regression that shipped twice, which is more than the alternative of no check at all.
+ *
+ * Scope, so it isn't read as more than it is: this guards the CURRENT SHAPE of
+ * `getInstalledExtensions` — the one function whose body it scans. Move the derivation into a helper
+ * that `getInstalledExtensions` calls and both assertions still pass with the regression back, so
+ * move this guard along with it. The derivation's behavior is covered properly by
+ * `extension-data.util.test.ts`; what is only covered here is the call site.
  */
 
 const EXTENSION_SERVICE_PATH = path.join(__dirname, 'extension.service.ts');
