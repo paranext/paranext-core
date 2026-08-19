@@ -43,6 +43,7 @@ import type {
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
+import { PanelReadinessView } from './panel-readiness-view.component';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
@@ -576,36 +577,21 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Settings error: the configured list could not be read, so we cannot tell whether a resource is
-  // set. Showing the empty state here would invite the user to re-pick a resource that may already
-  // be configured, so say what went wrong and offer a way to try again instead.
-  if (readiness === 'error') {
+  // Front of the state machine: still resolving, unreadable setting, or genuinely nothing
+  // configured. Driven by one readiness value so the empty prompt can only appear once emptiness is
+  // actually known — the loading branch deliberately outlasts the catalog fetch when something is
+  // configured, which is the window the old guard let fall through to the empty state.
+  if (readiness !== 'configured') {
     return (
-      <ErrorRetryView
-        message={localizedStrings['%webView_resourcePanel_settingsUnavailable%']}
+      <PanelReadinessView
+        readiness={readiness}
+        errorMessage={localizedStrings['%webView_resourcePanel_settingsUnavailable%']}
+        emptyPrompt={localizedStrings[emptyStatePromptKey]}
+        pickLabel={localizedStrings[pickButtonKey]}
         retryLabel={localizedStrings['%webView_resourcePanel_retry%']}
         onRetry={retryEffectiveResources}
+        onPick={() => showResourcePicker()}
       />
-    );
-  }
-
-  // Still resolving either source. This deliberately outlasts the catalog fetch when something is
-  // configured: the old guard let that window fall through to the empty state below.
-  if (readiness === 'loading') {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  // Zero state: nothing is configured for this resourceType, now known rather than assumed.
-  if (readiness === 'empty') {
-    return (
-      <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        <p>{localizedStrings[emptyStatePromptKey]}</p>
-        <Button onClick={() => showResourcePicker()}>{localizedStrings[pickButtonKey]}</Button>
-      </div>
     );
   }
 
