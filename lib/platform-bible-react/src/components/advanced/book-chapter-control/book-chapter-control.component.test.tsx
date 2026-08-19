@@ -222,10 +222,10 @@ describe('BookChapterControl — Space on the empty search input', () => {
   /** Open the picker via its trigger and hand back the books-view search input. */
   async function openBooksView(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
     await user.click(screen.getByRole('combobox', { name: 'book-chapter-trigger' }));
-    let input: HTMLElement | null = null;
+    let input: HTMLElement | undefined;
     await waitFor(() => {
-      input = document.querySelector('[cmdk-input]');
-      expect(input).not.toBeNull();
+      input = document.querySelector<HTMLElement>('[cmdk-input]') ?? undefined;
+      expect(input).toBeDefined();
     });
     if (!input) throw new Error('books-view search input never rendered');
     return input;
