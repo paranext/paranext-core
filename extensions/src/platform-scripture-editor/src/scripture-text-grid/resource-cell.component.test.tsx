@@ -156,11 +156,14 @@ function setUsjResult(value: unknown, isLoading = false) {
   mockUseProjectData.mockReturnValue({ ChapterUSJ: () => [value, vi.fn(), isLoading] });
 }
 
-/** Serialized USJ most recently handed to the editor, or '' if it was never fed. */
+/**
+ * Serialized USJ most recently handed to the editor.
+ *
+ * Throws rather than returning '' when nothing was fed: an empty string silently satisfies every
+ * `.not.toContain(...)`, which is how a vacuous assertion slipped in here once. If the editor was
+ * never fed, assert `expect(setUsjSpy).not.toHaveBeenCalled()` instead of inspecting content.
+ */
 function lastFedUsjText(): string {
-  // Throws rather than returning '' when nothing was fed: an empty string silently satisfies every
-  // `.not.toContain(...)`, which is how a vacuous assertion slipped in here once. If the editor was
-  // never fed, assert `expect(setUsjSpy).not.toHaveBeenCalled()` instead of inspecting content.
   if (!setUsjSpy.mock.lastCall) throw new Error('setUsj was never called — nothing was fed');
   const [fedUsj] = setUsjSpy.mock.lastCall;
   return JSON.stringify(fedUsj) ?? '';
