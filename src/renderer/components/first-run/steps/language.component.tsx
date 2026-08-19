@@ -6,6 +6,7 @@ import { getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-ut
 import { useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
 import { FirstRunStepProps } from '../first-run-step-props.model';
+import { WizardStepHeading } from '../wizard-step-heading.component';
 
 const KEYS: LocalizeKey[] = [
   '%firstRun_language_title%',
@@ -79,7 +80,7 @@ export function LanguageStep({ setCanProceed }: FirstRunStepProps) {
   return (
     <div className="tw:flex tw:flex-col tw:gap-3">
       <div className="tw:flex tw:flex-col tw:gap-1">
-        <h2 className="tw:text-base tw:font-medium">{strings['%firstRun_language_title%']}</h2>
+        <WizardStepHeading>{strings['%firstRun_language_title%']}</WizardStepHeading>
         <p className="tw:text-xs tw:text-muted-foreground">
           {strings['%firstRun_language_instruction%']}
         </p>

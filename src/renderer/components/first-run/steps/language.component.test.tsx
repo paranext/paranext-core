@@ -98,6 +98,16 @@ describe('LanguageStep', () => {
     hookState.isLoading = false;
   });
 
+  // Guards that the step stays titled at all — it renders the shared WizardStepHeading, but this
+  // asserts the heading's role and text, not its Tailwind weight (that would mirror implementation;
+  // the weight convergence tracked by PT-4402 is a visual check, not a unit-test one).
+  test('titles the step with a level-2 heading', () => {
+    render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
+    expect(
+      screen.getByRole('heading', { name: 'Choose your language', level: 2 }),
+    ).toBeInTheDocument();
+  });
+
   test('renders the qualifying languages by autonym', () => {
     render(<LanguageStep onNext={vi.fn()} setCanProceed={vi.fn()} />);
     expect(screen.getByText('English')).toBeInTheDocument();

@@ -291,6 +291,7 @@ export { ToggleGroup, ToggleGroupItem } from './components/shadcn-ui/toggle-grou
 export {
   Tooltip,
   TooltipContent,
+  TooltipPortalContainerProvider,
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';

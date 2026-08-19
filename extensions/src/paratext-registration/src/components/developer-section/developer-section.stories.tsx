@@ -39,9 +39,18 @@ export const DevelopmentActive: Story = {
   },
 };
 
+/** Section expanded — Test is the active server. */
+export const TestActive: Story = {
+  args: { selectedServer: 'Test' },
+  play: async ({ canvasElement, userEvent }) => {
+    const header = canvasElement.querySelector('button');
+    if (header) await userEvent.click(header);
+  },
+};
+
 /**
- * `disabled={true}` — header still clickable, but the Production/Development toggle is greyed out
- * and non-interactive.
+ * `disabled={true}` — header still clickable, but the Production/Development/Test radios are greyed
+ * out and non-interactive.
  */
 export const Disabled: Story = {
   args: { disabled: true },
