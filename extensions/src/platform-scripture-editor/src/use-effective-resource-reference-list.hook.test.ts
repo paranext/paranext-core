@@ -76,7 +76,7 @@ describe('useEffectiveResourceReferenceList', () => {
     capturedApplyHandler = undefined;
   });
 
-  it('returns undefined while project setting is loading', () => {
+  it('reports loading while the project setting is loading', () => {
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
     const mockPdp = makeMockPdp(emptyList(), 'subscribeUserModelTexts');
     mockUseProjectDataProvider.mockReturnValue(mockPdp);
@@ -88,7 +88,10 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(result.current.status).toBe('loading');
   });
 
-  it('returns undefined while user setting is loading', () => {
+  it('reports loading while the user setting subscription is still pending', () => {
+    // The project setting has resolved, but the user-layer PDP has not arrived yet. This is the
+    // normal interleaving on essentially every mount: the user layer needs the PDP to resolve, then
+    // an explicit subscribe, then a first delivery — strictly more hops than the project setting.
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
     mockUseProjectDataProvider.mockReturnValue(undefined);
 
@@ -244,7 +247,7 @@ describe('useEffectiveResourceReferenceList', () => {
     });
   });
 
-  it('returns undefined when projectId is undefined', () => {
+  it('reports loading when projectId is undefined', () => {
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
     mockUseProjectDataProvider.mockReturnValue(undefined);
 
@@ -408,6 +411,38 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(mockSubscribe.mock.calls.length).toBeGreaterThan(callsBeforeRetry);
   });
 
+  it('recovers to ready once an unreadable setting becomes readable again', () => {
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
+    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+
+    const { result, rerender } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    mockUseProjectSetting.mockReturnValue([
+      // Cast through unknown to put a PlatformError where a ResourceReferenceList is expected.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      makePlatformError() as unknown as ResourceReferenceList,
+      undefined,
+      undefined,
+      false,
+    ]);
+    rerender();
+    expect(result.current.status).toBe('error');
+
+    // The setting becomes readable. Recovery must be automatic: the buffered layer stays armed
+    // through the failure, so nothing should depend on the user pressing retry.
+    const projectList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'ESV', id: 'abc' }],
+    };
+    mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
+    rerender();
+
+    expect(result.current.status).toBe('ready');
+    expect(readyList(result.current).items[0]).toMatchObject({ name: 'ESV' });
+  });
+
   it('discards name-based items that are missing a string name', () => {
     const projectList: ResourceReferenceList = {
       dataVersion: '1.0.0',
@@ -519,19 +554,5 @@ describe('useEffectiveResourceReferenceList', () => {
     // Re-arm → now the new admin layout is applied.
     act(() => capturedApplyHandler?.({ projectId: 'proj-1' }));
     expect(readyList(result.current).items[0]).toMatchObject({ name: 'Admin V2' });
-  });
-
-  it('reports loading while the user setting subscription is still pending', () => {
-    // The project setting has resolved, but the user-layer PDP has not arrived yet. This is the
-    // normal interleaving on essentially every mount: the user layer needs the PDP to resolve, then
-    // an explicit subscribe, then a first delivery — strictly more hops than the project setting.
-    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
-    mockUseProjectDataProvider.mockReturnValue(undefined);
-
-    const { result } = renderHook(() =>
-      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
-    );
-
-    expect(result.current.status).toBe('loading');
   });
 });
