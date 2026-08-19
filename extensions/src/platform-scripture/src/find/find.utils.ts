@@ -1,3 +1,4 @@
+import { Scope } from 'platform-bible-react';
 import {
   escapeStringRegexp,
   isPlatformError,
@@ -5,7 +6,7 @@ import {
   PlatformError,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
-import { FindOptions } from 'platform-scripture';
+import { FindJobStatusReport, FindOptions } from 'platform-scripture';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
@@ -97,6 +98,131 @@ export function applyPreserveCase(matchedText: string, replacementText: string):
     return replacementText[0].toUpperCase() + replacementText.slice(1);
   }
   return replacementText;
+}
+
+/**
+ * How often the find-job poll loop checks for an update. Exported so the give-up window below is
+ * computed from (and can't silently drift from) the actual poll cadence.
+ */
+export const POLL_INTERVAL_MS = 100;
+
+/**
+ * How long to tolerate a stalled find-job poll (the PDP/connection blipping and returning no
+ * update) or a search that can't start because the data provider isn't ready, before giving up and
+ * surfacing an error. Expressed as wall-clock time — not a raw retry count — so it keeps meaning
+ * the same thing if `POLL_INTERVAL_MS` ever changes, and so it's long enough to survive a slow
+ * backend call (a large project, a Send/Receive in progress) without a false failure.
+ */
+export const GIVE_UP_AFTER_MS = 5000;
+
+/** How many consecutive poll misses {@link GIVE_UP_AFTER_MS} allows before giving up. */
+export const MAX_CONSECUTIVE_POLL_MISSES = Math.ceil(GIVE_UP_AFTER_MS / POLL_INTERVAL_MS);
+
+/**
+ * Decides whether the find-job poll loop should keep retrying after a poll comes back with no
+ * update, given how many consecutive misses have already happened. A single miss is treated as a
+ * transient blip and retried; only a sustained run of misses (see {@link GIVE_UP_AFTER_MS}) is
+ * treated as a real failure.
+ *
+ * @param consecutiveMisses The number of consecutive misses before this one.
+ * @returns The updated miss count, and whether it has now reached
+ *   {@link MAX_CONSECUTIVE_POLL_MISSES}.
+ */
+export function nextPollMissState(consecutiveMisses: number): {
+  consecutiveMisses: number;
+  hasExceededRetryLimit: boolean;
+} {
+  const nextConsecutiveMisses = consecutiveMisses + 1;
+  return {
+    consecutiveMisses: nextConsecutiveMisses,
+    hasExceededRetryLimit: nextConsecutiveMisses >= MAX_CONSECUTIVE_POLL_MISSES,
+  };
+}
+
+/** What a single find-job poll attempt found, and what the poll loop should do about it. */
+export type PollAttemptOutcome =
+  | { kind: 'noActiveJob' }
+  | { kind: 'update'; update: FindJobStatusReport }
+  | { kind: 'miss'; consecutiveMisses: number; hasExceededRetryLimit: boolean };
+
+/**
+ * Classifies a single find-job poll attempt, distinguishing "there is no job to poll for right now"
+ * from "there is an active job but the poll came back empty" — the exact distinction a prior
+ * version of the poll loop collapsed, which caused a false "search interrupted" error on every
+ * ordinary new search: `abandonFindJob` clears the active-job tracking synchronously, before its
+ * own PDP round-trip resolves, so the poll loop for the _previous_ search would see "no update"
+ * during that window and (wrongly) count it as a connection miss instead of recognizing there was
+ * simply no job left to ask about.
+ *
+ * @param params.hasActiveJob Whether the caller currently believes a find job is active.
+ * @param params.getUpdate Retrieves the latest job-status update; only called when `hasActiveJob`.
+ * @param params.consecutiveMisses The number of consecutive misses before this attempt.
+ */
+export async function classifyPollAttempt(params: {
+  hasActiveJob: boolean;
+  getUpdate: () => Promise<FindJobStatusReport | undefined>;
+  consecutiveMisses: number;
+}): Promise<PollAttemptOutcome> {
+  if (!params.hasActiveJob) return { kind: 'noActiveJob' };
+  const update = await params.getUpdate();
+  if (!update) return { kind: 'miss', ...nextPollMissState(params.consecutiveMisses) };
+  return { kind: 'update', update };
+}
+
+/**
+ * Whether the current search term + scope/filters combination would actually run a search: false
+ * for an empty term, and false for the `selectedBooks` scope with no books selected. Shared between
+ * `find.web-view.tsx` (the source of truth) and `find.stories.tsx`'s harness so the two can't
+ * silently diverge — they previously each hand-rolled this rule, and the harness's copy dropped the
+ * empty-term check.
+ */
+export function isFindQueryValid(params: {
+  searchTerm: string;
+  scope: Scope;
+  selectedBookIds: string[];
+}): boolean {
+  if (params.searchTerm.trim() === '') return false;
+  if (params.scope === 'selectedBooks' && params.selectedBookIds.length === 0) return false;
+  return true;
+}
+
+/** The decision {@link gateStartSearch} makes for a given attempt to start a search. */
+export type StartSearchGate =
+  | { action: 'run' }
+  | { action: 'skip'; shouldRetryWhenPdpReady: boolean };
+
+/**
+ * Decides whether an attempt to start a find-job search should actually run, and — if not — whether
+ * it is worth automatically retrying once the data provider becomes available. Only a missing data
+ * provider is retryable: it is a temporary condition (mount-time race, or the provider dropping
+ * during a long idle period) that resolves on its own once the provider reconnects. An invalid
+ * query or a search already in flight are not retryable — retrying them would either loop forever
+ * (the query stays invalid until the user changes it) or duplicate work.
+ */
+export function gateStartSearch(params: {
+  isSearchQueryValid: boolean;
+  hasPdp: boolean;
+  isAlreadyStarting: boolean;
+}): StartSearchGate {
+  if (!params.isSearchQueryValid || params.isAlreadyStarting) {
+    return { action: 'skip', shouldRetryWhenPdpReady: false };
+  }
+  if (!params.hasPdp) {
+    return { action: 'skip', shouldRetryWhenPdpReady: true };
+  }
+  return { action: 'run' };
+}
+
+/**
+ * Arms a single bounded wait: `onTimeout` fires once after `delayMs` unless `clear()` is called
+ * first. Used to bound how long a search can sit waiting for the find data provider before giving
+ * up — without this, a valid term with the provider never arriving would leave the pending/loading
+ * state showing forever with no error, the same class of silently-stuck-forever bug the poll loop's
+ * own give-up handling (see {@link nextPollMissState}) prevents one step later.
+ */
+export function armBoundedWait(onTimeout: () => void, delayMs: number): { clear: () => void } {
+  const timeoutId = setTimeout(onTimeout, delayMs);
+  return { clear: () => clearTimeout(timeoutId) };
 }
 
 /**

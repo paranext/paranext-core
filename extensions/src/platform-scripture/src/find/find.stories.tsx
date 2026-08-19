@@ -13,6 +13,7 @@ import { getLocalizedStrings } from '../../../../../.storybook/localization.util
 import { alertCommand } from '../../../../../.storybook/story.utils';
 import { Find, FIND_LOCALIZED_STRING_KEYS, type BookResultEntry } from './find.component';
 import { replacementContainsStructuralMarker } from './structure-protection.util';
+import { isFindQueryValid } from './find.utils';
 import { LocalizedBookData, SearchTextType } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
@@ -35,6 +36,11 @@ import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-previ
 const localizedStrings = getLocalizedStrings([...FIND_LOCALIZED_STRING_KEYS]);
 const scopeSelectorLocalizedStrings = getLocalizedStrings([...SCOPE_SELECTOR_STRING_KEYS]);
 const searchResultLocalizedStrings = getLocalizedStrings([...SEARCH_RESULT_LOCALIZED_STRING_KEYS]);
+// Owned by the webview container (WEB_VIEW_LOCALIZED_STRINGS in find.web-view.tsx), not the
+// presentational Find component, so it's resolved separately from the FIND_LOCALIZED_STRING_KEYS set.
+const searchInterruptedErrorString = getLocalizedStrings(['%webView_find_searchInterruptedError%'])[
+  '%webView_find_searchInterruptedError%'
+];
 
 const DEFAULT_SEARCH_TERM = 'God';
 
@@ -215,6 +221,10 @@ type HarnessConfig = {
   searchProgress?: number;
   /** Total results the job reports (fixed-state stories only). */
   totalNumberOfResults?: number;
+  /** The find-job error message (fixed-state stories only; requires `searchStatus: 'errored'`). */
+  searchError?: string;
+  /** Whether the active project can be edited. When false, Replace / Replace All are disabled. */
+  isEditable?: boolean;
   /** Start with every result already in the replaced state (the Replaced showcase). */
   initiallyReplacedAll?: boolean;
   /** Initial replace term (defaults to a sample word). */
@@ -418,7 +428,12 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   }, []);
 
   const numberOfHiddenResults = hiddenKeys.size + committedKeys.size;
-  const liveSearchStatus: FindJobStatus | undefined = searchTerm.trim()
+  // Shares find.utils.ts's isFindQueryValid with the webview so the two can't silently diverge —
+  // this exact divergence (the harness's own copy dropped the empty-term check) shipped once
+  // already (see PT-4343 review) and made the NoBooksSelected story pass despite testing the wrong
+  // rule.
+  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+  const liveSearchStatus: FindJobStatus | undefined = isSearchQueryValid
     ? completedStatus
     : undefined;
   const searchStatus: FindJobStatus | undefined = isLive ? liveSearchStatus : config.searchStatus;
@@ -432,6 +447,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const isStructureProtected = config.isStructureProtected ?? false;
   const isReplacementStructureChanging =
     isStructureProtected && replacementContainsStructuralMarker(replaceTerm);
+  const isEditable = config.isEditable ?? true;
 
   return (
     <Find
@@ -458,11 +474,12 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       isReplacing={false}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
+      isEditable={isEditable}
       results={displayedResults}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
       searchStatus={searchStatus}
-      searchError={undefined}
+      searchError={isLive ? undefined : config.searchError}
       searchProgress={config.searchProgress ?? 0}
       totalNumberOfResults={totalNumberOfResults}
       numberOfHiddenResults={numberOfHiddenResults}
@@ -573,5 +590,40 @@ export const Replaced: Story = {
 export const StructureProtected: Story = {
   decorators: [
     createDecorator({ activeMode: 'replace', isStructureProtected: true, replaceTerm: '\\p text' }),
+  ],
+};
+
+/**
+ * The active project is read-only (`platform.isEditable` is false). A persistent note explains why
+ * above the replace controls (not just a hover tooltip), and Replace / Replace All are disabled
+ * with the same explanation on hover, even though there's a focused result to replace. Find itself
+ * stays fully live and interactive since search never mutates the project.
+ */
+export const ReadOnly: Story = {
+  decorators: [createDecorator({ activeMode: 'replace', isEditable: false })],
+};
+
+/**
+ * `selectedBooks` scope with no books chosen: the search term is non-empty but the query can't run,
+ * so the results area shows a dedicated "select a book" placeholder rather than the generic idle
+ * prompt or a stuck loading spinner. Pick a book from the scope selector to see the search resume.
+ */
+export const NoBooksSelected: Story = {
+  decorators: [createDecorator({ scope: 'selectedBooks', selectedBookIds: [] })],
+};
+
+/**
+ * The find-job poll stalled (e.g. the data provider dropped during an extended idle period) and
+ * gave up after several seconds of retries — the status bar shows an error instead of leaving the
+ * last-seen progress bar frozen with no feedback.
+ */
+export const SearchInterrupted: Story = {
+  decorators: [
+    createDecorator({
+      live: false,
+      results: [],
+      searchStatus: 'errored',
+      searchError: searchInterruptedErrorString,
+    }),
   ],
 };

@@ -81,6 +81,7 @@ import { appService } from '@shared/services/app.service';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AppInfo } from '@shared/services/app.service-model';
 import {
+  derivePackagedExtensionIdentifiers,
   EXTENSION_MANIFEST_FILE_NAME,
   getExtensionUri,
   readExtensionDataFromFolder,
@@ -949,21 +950,10 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
       !enabled.find((enabledId) => enabledId.extensionName === disabledId.extensionName),
   );
 
-  // "Packaged" extensions are all the running extensions that aren't "enabled".
-  // `undefined` items are filtered out so can assert here.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const packaged = [...activeExtensions.values()]
-    .map((active) => {
-      const packagedId: ExtensionIdentifier = {
-        extensionName: active.info.name,
-        extensionVersion: active.info.version,
-      };
-
-      return enabled.find((enabledId) => enabledId.extensionName === packagedId.extensionName)
-        ? undefined
-        : packagedId;
-    })
-    .filter((identifier) => !!identifier);
+  // "Packaged" extensions are all the extensions found in this build that aren't "enabled". Derived
+  // from the discovered extensions rather than the running ones so the answer doesn't depend on how
+  // far activation has progressed — see derivePackagedExtensionIdentifiers.
+  const packaged = derivePackagedExtensionIdentifiers(availableExtensions, enabled);
 
   return {
     enabled,
