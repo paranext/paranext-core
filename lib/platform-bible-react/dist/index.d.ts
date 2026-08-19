@@ -1096,6 +1096,14 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
 	 */
 	commitTyped(typed: string): void;
 	/**
+	 * Commit the marker the user literally TYPED as a CLOSING marker — the palette's `*` commit,
+	 * applied through the editor (`EditorRef.commitTypedCloser`). `\` + `typed` + `*` lands at the
+	 * caret with no terminating space and no opening glyph, and the marker-edit engine resolves it:
+	 * against a matching open span it becomes that span's real closer, otherwise it settles as an
+	 * unmatched closer, flagged as typed. Only invoked for a `'backslash'` session's `*`.
+	 */
+	commitTypedCloser(typed: string): void;
+	/**
 	 * Commit ONE SPECIFIC offered item, named by its bare marker code — the selection-wrap Space
 	 * commit, where the marker is whatever was literally typed (an exact match against the offered
 	 * entries), not whatever is highlighted. The session owner applies it through the editor

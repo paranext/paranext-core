@@ -191,6 +191,7 @@ function renderFootnoteEditor(
     applyMarkerMenuSelection: vi.fn(),
     splitParagraphWithMarker: vi.fn(),
     commitTypedMarker: vi.fn(),
+    commitTypedCloser: vi.fn(),
     commitPendingMarkerEdits: vi.fn(),
     insertNote: vi.fn(),
     getNoteOps: vi.fn(() => []),
@@ -854,6 +855,52 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(editorRef.commitTypedMarker).toHaveBeenCalledExactlyOnceWith('nd');
       expect(markerPalette.dismiss).toHaveBeenCalledTimes(1);
       expect(markerPalette.commit).not.toHaveBeenCalled(); // never the highlighted item
+    });
+
+    it('collapsed caret: `*` commits the typed marker as a CLOSING marker and closes the palette', () => {
+      // The popover's half of the `*` commit — the closing-marker counterpart to Space. Routed to
+      // the editor's own closer primitive, never to commitTypedMarker (which would add an opening
+      // glyph and a terminating space) and never to the overlay's highlighted-item commit.
+      mockGetMarkerMenuItems.mockReturnValue([
+        makeItem({ marker: 'fq' }),
+        makeItem({ marker: 'nd' }),
+      ]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: ['nd'],
+        hasTextSelection: false, // collapsed caret — the shape a closing marker applies to
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      const doc = editorInput.ownerDocument;
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'n', bubbles: true, cancelable: true }),
+      );
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'd', bubbles: true, cancelable: true }),
+      );
+      const starNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '*', bubbles: true, cancelable: true }),
+      );
+
+      expect(starNotPrevented).toBe(false); // claimed — no literal asterisk may land
+      expect(editorRef.commitTypedCloser).toHaveBeenCalledExactlyOnceWith('nd');
+      expect(editorRef.commitTypedMarker).not.toHaveBeenCalled();
+      expect(markerPalette.commit).not.toHaveBeenCalled();
+      expect(markerPalette.dismiss).toHaveBeenCalledTimes(1);
     });
 
     it('selection wrap: typed exact match + Space applies THAT item over the selection', () => {

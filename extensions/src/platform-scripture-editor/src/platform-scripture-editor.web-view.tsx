@@ -1837,6 +1837,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
             dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
             commitTyped: (typed) => editorRef.current?.commitTypedMarker(typed),
+            commitTypedCloser: (typed) => editorRef.current?.commitTypedCloser(typed),
             commitItem: (marker) => {
               const selected = session.items.find((item) => item.marker === marker);
               if (!selected) return;

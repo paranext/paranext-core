@@ -65,13 +65,18 @@ export type OverlayCommandPalettePresentationalProps = {
   /** Maximum height in pixels. Defaults to 400. */
   maxHeight?: number;
   /**
-   * When true, renders without a search input and without stealing focus on mount. Items are
-   * filtered via {@link filterPaletteItems} using the externally-driven `filterText` prop, and
-   * highlighted via the externally-driven `selectedIndex` prop, instead of cmdk's own input-driven
-   * filter/keyboard navigation. Item click still selects. Defaults to false.
+   * When true, renders without stealing focus on mount, and its search input is a read-only DISPLAY
+   * of the externally-driven `filterText` rather than an editable field. Items are filtered via
+   * {@link filterPaletteItems} using that same `filterText`, and highlighted via the
+   * externally-driven `selectedIndex` prop, instead of cmdk's own input-driven filter/keyboard
+   * navigation. Item click still selects. Defaults to false.
    */
   passive?: boolean;
-  /** Current filter text. Passive mode only — ignored when `passive` is false. */
+  /**
+   * Current filter text. Passive mode only — ignored when `passive` is false (the active mode's
+   * input owns its own value, seeded and overridden by this prop). Shown verbatim in the passive
+   * search input so the user can see the query they are typing into the requesting WebView.
+   */
   filterText?: string;
   /**
    * Index of the highlighted item within the filtered list. Passive mode only — ignored when
@@ -86,7 +91,8 @@ export type OverlayCommandPalettePresentationalProps = {
    * Reports filter text the user types into the ACTIVE palette's input, so the store-connected
    * owner can mirror it into the overlay store — keeping a forwarded
    * `commitCommandPaletteSelection` (which resolves from the STORE's filterText/selectedIndex) in
-   * agreement with what is displayed. Active mode only; passive mode renders no input.
+   * agreement with what is displayed. Active mode only; passive mode's input is read-only and
+   * reports nothing — its query is already owned by the session that drives `filterText`.
    */
   onFilterTextChange?: (filterText: string) => void;
   /**
@@ -100,6 +106,11 @@ export type OverlayCommandPalettePresentationalProps = {
 
 const DEFAULT_MAX_WIDTH = 500;
 const DEFAULT_MAX_HEIGHT = 400;
+/**
+ * Vertical space the search input takes out of `maxHeight` before the list gets the rest. Both
+ * modes render the input, so both reserve it.
+ */
+const SEARCH_INPUT_RESERVED_HEIGHT = 44;
 
 // ── Internal Components ──
 
@@ -401,12 +412,32 @@ export function OverlayCommandPalettePresentational({
     [passiveIdBase],
   );
 
+  // ONE search input for both modes: the palette must look and read the same however it was
+  // opened, so the user always sees the query they are typing. The modes differ only in who owns
+  // that query. Active mode: the input is focused and edited directly, and mirrors its value out.
+  // Passive mode: focus never leaves the requesting WebView — the session owner there claims the
+  // keystrokes and feeds them back through `filterText` — so the input is a read-only display of
+  // that query and is kept out of the tab order. Making it editable would break the palette: a
+  // focused input means the WebView is NOT focused, and both session owners gate their keydown
+  // tables on editor focus, so every ratified Space/Enter/Escape semantic would stop running.
+  const searchInput = (
+    <CommandInput
+      ref={passive ? undefined : inputRef}
+      placeholder={placeholder}
+      value={passive ? (filterText ?? '') : inputValue}
+      onValueChange={passive ? undefined : handleInputValueChange}
+      readOnly={passive}
+      tabIndex={passive ? -1 : undefined}
+    />
+  );
+
   const paletteContent = passive ? (
     <Command
       data-overlay-command-palette
       className="tw:rounded-lg tw:border"
       onKeyDown={handleKeyDown}
     >
+      {searchInput}
       {/* Not cmdk's CommandList: cmdk overrides a caller-supplied aria-activedescendant with its
           own (empty in passive mode, which registers no cmdk items), so passive mode renders its
           own listbox with CommandList's classes. tabIndex matches CommandList; focus stays in the
@@ -419,9 +450,7 @@ export function OverlayCommandPalettePresentational({
           highlightedItem ? getPassiveItemDomId(highlightedItem.id) : undefined
         }
         className="pr-twp tw:no-scrollbar tw:max-h-72 tw:scroll-py-1 tw:overflow-x-hidden tw:overflow-y-auto tw:outline-none"
-        // No search input is rendered in passive mode, so the full budget goes to the list (the
-        // -44 input reservation applies only to the active branch below).
-        style={{ maxHeight }}
+        style={{ maxHeight: maxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}
       >
         {filteredItems.length === 0 ? (
           <div data-slot="command-empty" className="tw:py-6 tw:text-center tw:text-sm">
@@ -455,13 +484,8 @@ export function OverlayCommandPalettePresentational({
       value={activeHighlightedId ?? ''}
       onValueChange={handleCmdkValueChange}
     >
-      <CommandInput
-        ref={inputRef}
-        placeholder={placeholder}
-        value={inputValue}
-        onValueChange={handleInputValueChange}
-      />
-      <CommandList style={{ maxHeight: maxHeight - 44 }}>
+      {searchInput}
+      <CommandList style={{ maxHeight: maxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}>
         <CommandEmpty>{noResultsText}</CommandEmpty>
         <GroupedItems
           items={filteredItems}

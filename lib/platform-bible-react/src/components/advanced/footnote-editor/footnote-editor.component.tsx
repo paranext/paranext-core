@@ -777,6 +777,7 @@ export default function FootnoteEditor({
             commit: () => markerPalette.commit(),
             dismiss: () => markerPalette.dismiss(),
             commitTyped: (typed) => editorRef.current?.commitTypedMarker(typed),
+            commitTypedCloser: (typed) => editorRef.current?.commitTypedCloser(typed),
             commitItem: (marker) => {
               const selected = session.items.find((item) => item.marker === marker);
               if (!selected) return;
