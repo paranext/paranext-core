@@ -373,6 +373,10 @@ export function PlatformBibleToolbar() {
     MAIN_MENU_DEFAULT,
   );
   const menuData = useMemo(() => {
+    // Secondary windows get identical chrome minus the top-level menu (PT-4279). `Toolbar` renders
+    // its menubar only when `menuData` is truthy, so withholding it here removes the menu and
+    // nothing else — the logo in the app-menu area and every toolbar control still render.
+    if (!globalThis.isMainWindow) return undefined;
     if (isPlatformError(menuDataPossiblyError)) {
       logger.warn(
         `Toolbar failed to get main menu data: ${getErrorMessage(menuDataPossiblyError)}`,

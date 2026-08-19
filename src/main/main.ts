@@ -120,6 +120,7 @@ import { resolveHtmlPath } from '@node/utils/util';
 import {
   DEFAULT_ZOOM_FACTOR,
   DEV_MODE_QUERY_PARAMETER,
+  IS_MAIN_WINDOW_QUERY_PARAMETER,
   LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
@@ -1119,6 +1120,9 @@ async function main() {
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
     if (globalThis.startupMarks) searchParamsObject[STARTUP_MARKS_QUERY_PARAMETER] = '';
+    // Tells the renderer which chrome to draw: the main window keeps the top-level menu, secondary
+    // windows do not (PT-4279). Sent as a presence flag like the two above rather than a value.
+    if (isFirstWindow) searchParamsObject[IS_MAIN_WINDOW_QUERY_PARAMETER] = '';
 
     // The scroll group state travels with the window rather than being asked for after it loads, so
     // the toolbar and every scroll-group-following web view render the reference the app is actually

@@ -3,6 +3,7 @@
 import { ProcessType } from '@shared/global-this.model';
 import {
   DEV_MODE_QUERY_PARAMETER,
+  IS_MAIN_WINDOW_QUERY_PARAMETER,
   LOG_LEVEL_QUERY_PARAMETER,
   STARTUP_MARKS_QUERY_PARAMETER,
   URL_PARAMETERS,
@@ -58,5 +59,10 @@ globalThis.startupMarks = searchParams.get(STARTUP_MARKS_QUERY_PARAMETER) !== nu
 
 // Window id of the Electron browser window
 globalThis.windowId = searchParams.get(WINDOW_ID) ?? undefined;
+
+// Whether this renderer is the main window. Presence-only parameter, like the two above:
+// null is used in this API meaning the param is not present
+// eslint-disable-next-line no-null/no-null
+globalThis.isMainWindow = searchParams.get(IS_MAIN_WINDOW_QUERY_PARAMETER) !== null;
 
 // #endregion
