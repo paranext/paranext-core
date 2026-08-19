@@ -47,6 +47,15 @@ type SearchResultsInBookProps = {
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
+  /**
+   * Whether replace is blocked for a reason unrelated to `isReplacing` (project is read-only, or
+   * structure is locked and the pending replacement would change it). Forwarded to each result so
+   * the per-result Replace button/keyboard shortcut can't bypass the same gate the toolbar Replace
+   * / Replace All buttons enforce.
+   */
+  isReplaceBlocked: boolean;
+  /** Explanation shown in a tooltip while `isReplaceBlocked` is true. Forwarded to each result. */
+  replaceBlockedTooltipText: string;
   /** Configuration for the replacement preview (used in replace mode). Forwarded to each result. */
   replaceConfig?: ReplaceConfig;
   /** Options controlling how the replace preview is displayed. Forwarded to each result. */
@@ -77,6 +86,8 @@ export function SearchResultsInBook({
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  isReplaceBlocked,
+  replaceBlockedTooltipText,
   replaceConfig,
   previewOptions,
   allowInvisibleCharacters,
@@ -148,6 +159,8 @@ export function SearchResultsInBook({
           localizedStrings={localizedStrings}
           isReplaceMode={isReplaceMode}
           isReplacing={isReplacing}
+          isReplaceBlocked={isReplaceBlocked}
+          replaceBlockedTooltipText={replaceBlockedTooltipText}
           replaceConfig={replaceConfig}
           previewOptions={previewOptions}
           allowInvisibleCharacters={allowInvisibleCharacters}
