@@ -1,5 +1,20 @@
 {
   "metadata": {
+    "%webView_find_projectFilter_noProjectsFound%": {
+      "fallbackKey": "%webView_checksSidePanel_projectFilter_noProjectsFound%"
+    },
+    "%webView_find_projectSelector_label%": {
+      "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
+    },
+    "%webView_find_projectSelector_searchPlaceholder%": {
+      "fallbackKey": "%manageBooks_projectSelector_searchPlaceholder%"
+    },
+    "%webView_find_projectSelector_openTabsSectionHeading%": {
+      "fallbackKey": "%manageBooks_projectSelector_openTabsSectionHeading%"
+    },
+    "%webView_find_projectSelector_otherProjectsSectionHeading%": {
+      "fallbackKey": "%manageBooks_projectSelector_otherProjectsSectionHeading%"
+    },
     "%manageBooks_copy_confirmMergeFromSource%": {
       "fallbackKey": "%manageBooks_copy_onlyNonExistingChapters%"
     },
@@ -458,6 +473,14 @@
       "%webView_find_showing%": "Showing",
       "%webView_find_findTab%": "Find",
       "%webView_find_replaceTab%": "Replace",
+      "%webView_find_projectFilter_noOpenProjects%": "No open projects",
+      "%webView_find_projectFilter_noProjectsFound%": "No projects found",
+      "%webView_find_projectSelector_label%": "Project",
+      "%webView_find_projectSelector_searchPlaceholder%": "Search projects & resources",
+      "%webView_find_projectSelector_openTabsSectionHeading%": "Opened project & resource tabs",
+      "%webView_find_projectSelector_otherProjectsSectionHeading%": "Your projects & resources",
+      "%webView_find_noOpenProjects_results%": "No projects are open. Open a project to search.",
+      "%webView_find_project_unavailableError%": "the selected project is not available to search",
       "%webView_find_replace%": "Replace",
       "%webView_find_replaceAll%": "Replace all",
       "%webView_find_preserveCase%": "Preserve case",
