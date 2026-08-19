@@ -434,8 +434,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /**
    * Session state for a standard-view marker-menu palette while it's open (single owner: the
    * keydown flow in the effect below). Every kind is ACTIVE: the trigger is claimed and never
-   * lands, and typed characters are claimed by the while-open forwarding table and routed into
-   * the palette's query — never the document.
+   * lands, and typed characters are claimed by the while-open forwarding table and routed into the
+   * palette's query — never the document.
    *
    * `'backslash'` is the collapsed-caret `\` trigger's session. Its palette keeps the overlay's
    * non-focus-stealing (`passive: true`) DISPLAY — the caret stays visible in the editor — so the
@@ -447,8 +447,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * and `'selection'` also carry the capture-phase forwarding table as a SAFETY NET: focused
    * palettes are designed to be driven by the renderer overlay's own input, but the cross-frame
    * focus handoff can lose (the editor iframe re-grabs focus on Lexical commits), and without the
-   * safety net the keystrokes then hit the document instead — typing REPLACED the wrapped
-   * selection and Escape fell through to Lexical.
+   * safety net the keystrokes then hit the document instead — typing REPLACED the wrapped selection
+   * and Escape fell through to Lexical.
    *
    * `token` (allocated from the monotonic counter below) identifies which session an async
    * show-promise settlement belongs to, so a stale promise's cleanup can only clear its own
@@ -855,7 +855,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 editingNoteKey.current = undefined;
                 editingNoteOps.current = undefined;
               }
-              if (decision.action === 'ignore-expanded' || decision.action === 'ignore-popover-open')
+              if (
+                decision.action === 'ignore-expanded' ||
+                decision.action === 'ignore-popover-open'
+              )
                 return;
 
               // Pane rendered → focus/highlight the note there (PT9 navigate-to-note) instead of

@@ -93,11 +93,11 @@ function $findFtTextNode(): TextNode {
 }
 
 /**
- * Puts BOTH carets (Lexical editor state and DOM) in the `\ft` content — at its END or MID-text (right after "sentinel", with
- * content following the caret — the position where a break must MOVE the tail). The DOM caret must
- * agree with the editor-state one: jsdom fires `selectionchange` for the DOM placement and Lexical
- * syncs its own selection to the DOM caret, so a mismatch would silently move the editor-state
- * caret.
+ * Puts BOTH carets (Lexical editor state and DOM) in the `\ft` content — at its END or MID-text
+ * (right after "sentinel", with content following the caret — the position where a break must MOVE
+ * the tail). The DOM caret must agree with the editor-state one: jsdom fires `selectionchange` for
+ * the DOM placement and Lexical syncs its own selection to the DOM caret, so a mismatch would
+ * silently move the editor-state caret.
  */
 async function placeCaretInFtText(
   lexical: LexicalEditor,
@@ -133,7 +133,6 @@ async function placeCaretInFtText(
   selection.removeAllRanges();
   selection.addRange(range);
 }
-
 
 /**
  * Post-commit editor-state snapshot:
@@ -191,10 +190,10 @@ function readCommitOutcome(lexical: LexicalEditor, marker = 'fq') {
 }
 
 /**
- * Mounts a fresh popover, opens a `\` palette session with the caret in the `\ft` content
- * (nothing lands — the active palette claims the trigger), optionally steals focus the way a
- * palette mouse click does (focusout, then Lexical's selection nulled), commits `<marker>`, and
- * returns the settled editor-state outcome. Unmounts before returning so multiple flows can run in one test
+ * Mounts a fresh popover, opens a `\` palette session with the caret in the `\ft` content (nothing
+ * lands — the active palette claims the trigger), optionally steals focus the way a palette mouse
+ * click does (focusout, then Lexical's selection nulled), commits `<marker>`, and returns the
+ * settled editor-state outcome. Unmounts before returning so multiple flows can run in one test
  * without their document-level listeners interfering.
  */
 async function runCommitFlow({
