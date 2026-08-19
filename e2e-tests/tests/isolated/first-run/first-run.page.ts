@@ -13,7 +13,7 @@ import type { Locator, Page } from '@playwright/test';
  * - Primary action: "Next" on steps 1–3, "Finish" on the last step (SyncProgress)
  * - "Back" — absent on the first step (Language) and on the SyncProgress interstitial
  * - "Sync" — the Sync consent step's own primary action (Next is hidden on that step)
- * - "Skip automatic sync" — present only on the Sync consent step (shell footer)
+ * - "Don't sync yet" — present only on the Sync consent step (shell footer)
  * - "Save and restart" — the Identify step's own primary action (Next is hidden on that step)
  */
 export class FirstRunPage {
@@ -22,6 +22,11 @@ export class FirstRunPage {
 
   constructor(page: Page) {
     this.dialog = page.getByTestId('first-run-dialog');
+  }
+
+  /** "Don't sync yet" — present only on the Sync consent step's shell footer. */
+  get dontSyncYetButton(): Locator {
+    return this.dialog.getByRole('button', { name: "Don't sync yet" });
   }
 
   /**
@@ -76,9 +81,9 @@ export class FirstRunPage {
     await this.dialog.getByRole('button', { name: /^sync$/i }).click({ timeout: 60_000 });
   }
 
-  /** Click "Skip automatic sync" (present only on the Sync consent step shell footer). */
-  async clickSkipAutomaticSync(): Promise<void> {
-    await this.dialog.getByRole('button', { name: 'Skip automatic sync' }).click();
+  /** Click "Don't sync yet" (present only on the Sync consent step shell footer). */
+  async clickDontSyncYet(): Promise<void> {
+    await this.dontSyncYetButton.click();
   }
 
   /**
