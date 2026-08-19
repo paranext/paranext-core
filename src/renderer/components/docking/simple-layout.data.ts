@@ -16,6 +16,13 @@ import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-posi
  * The columns do not need a floor to rescale: rc-dock renders each as `flex: (size) (size × 1e6)
  * (size)px` (DockBox.js), so the `size` weights already make them proportional to the window in
  * pure CSS. This floor only stops a splitter drag from collapsing a column to nothing.
+ *
+ * Shaving 2px off 300 does NOT by itself make the row fit. rc-dock sizes the one flexible column as
+ * `container - (floored columns) - 2` while Simple mode has two 2px dividers, so the row overruns
+ * by a constant 2px whenever the floors bind — at any floor value, measured in the running app.
+ * That remainder is clipped in `dock-layout-wrapper.simple-mode.scss` (SIMPLE-MODE DIVIDER
+ * ROUNDING), which carries the measurements. Keeping this at 298 rather than 300 only means 2px
+ * gets clipped there instead of 4.
  */
 export const SIMPLE_COLUMN_MIN_WIDTH_PX = 298;
 
