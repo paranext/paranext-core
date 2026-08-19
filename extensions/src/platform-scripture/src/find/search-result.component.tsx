@@ -1,5 +1,5 @@
 import { ArrowRight, Copy, Minus, Plus, X } from 'lucide-react';
-import { Button, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
+import { Button, DisabledActionTooltip, DropdownMenuItem, ResultsCard } from 'platform-bible-react';
 import { LocalizedStringValue, LocalizeKey, UsjReaderWriter } from 'platform-bible-utils';
 import { FindResult } from 'platform-scripture';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -79,6 +79,18 @@ interface SearchResultProps {
   isReplaceMode: boolean;
   /** Whether a replace operation is currently in progress */
   isReplacing: boolean;
+  /**
+   * Whether replace is blocked for a reason unrelated to `isReplacing` (project is read-only, or
+   * structure is locked and the pending replacement would change it) — mirrors the toolbar Replace
+   * / Replace All gating so this per-result action and its keyboard shortcut can't bypass it.
+   */
+  isReplaceBlocked: boolean;
+  /**
+   * Explanation shown in a tooltip while `isReplaceBlocked` is true — the same text the toolbar
+   * Replace / Replace All buttons show, so a read-only or structure-locked project explains itself
+   * consistently everywhere replace can be triggered from.
+   */
+  replaceBlockedTooltipText: string;
   /** Configuration for the replacement preview (used in replace mode) */
   replaceConfig?: ReplaceConfig;
   /** Options controlling how the replace preview is displayed */
@@ -138,6 +150,8 @@ export default function SearchResult({
   localizedStrings,
   isReplaceMode,
   isReplacing,
+  isReplaceBlocked,
+  replaceBlockedTooltipText,
   replaceConfig,
   previewOptions = DEFAULT_FIND_PREVIEW_OPTIONS,
   allowInvisibleCharacters = false,
@@ -277,25 +291,27 @@ export default function SearchResult({
   };
 
   const replaceButton = (
-    <Button
-      className="tw:m-1 tw:h-6 tw:text-foreground"
-      variant="outline"
-      size="sm"
-      disabled={isReplacing}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
+    <DisabledActionTooltip disabled={isReplaceBlocked} tooltipText={replaceBlockedTooltipText}>
+      <Button
+        className="tw:m-1 tw:h-6 tw:text-foreground"
+        variant="outline"
+        size="sm"
+        disabled={isReplacing || isReplaceBlocked}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            onReplace(globalResultsIndex);
+          }
+        }}
+        onClick={(e) => {
           e.stopPropagation();
           onReplace(globalResultsIndex);
-        }
-      }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onReplace(globalResultsIndex);
-      }}
-    >
-      {localizedStrings['%webView_find_replace%']}
-    </Button>
+        }}
+      >
+        {localizedStrings['%webView_find_replace%']}
+      </Button>
+    </DisabledActionTooltip>
   );
 
   const dropdownContent = (
@@ -521,6 +537,7 @@ export default function SearchResult({
           isReplaceMode &&
           !searchResult.isReplaced &&
           !isReplacing &&
+          !isReplaceBlocked &&
           (e.key === 'Enter' || e.key === ' ') &&
           !(e.target instanceof HTMLButtonElement)
         ) {
