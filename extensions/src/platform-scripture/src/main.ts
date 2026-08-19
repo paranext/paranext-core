@@ -1,7 +1,7 @@
 import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator, ScrollGroupScrRef } from '@papi/core';
 import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
-import { CheckResultsInvalidated } from 'platform-scripture';
+import { CheckResultsInvalidated, FindFocusSearchEvent } from 'platform-scripture';
 import {
   ChecksSidePanelWebViewOptions,
   ChecksSidePanelWebViewProvider,
@@ -13,6 +13,7 @@ import {
   markersChecklistWebViewType,
 } from './checklist.web-view-provider';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
+import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import { FindHistoryDataProviderEngine } from './find/find-history.data-provider';
 import {
@@ -224,6 +225,14 @@ async function openMarkersChecklist(webViewId: string | undefined): Promise<stri
  * activation).
  */
 let openSettingsEventEmitter: PlatformEventEmitter<undefined> | undefined;
+
+/**
+ * Network event emitter used by `openFind` to ask an already-mounted Find web view to put the caret
+ * in its search box. Registered in `activate` and disposed via `context.registrations`, for the
+ * same reasons as the emitter above. See `find.model.ts` for the event contract and for why the
+ * reload path uses `FindWebViewOptions.shouldFocusSearch` instead of this event.
+ */
+let focusFindSearchEventEmitter: PlatformEventEmitter<FindFocusSearchEvent> | undefined;
 
 async function openMarkersChecklistSettings(): Promise<void> {
   if (!openSettingsEventEmitter) {
@@ -439,6 +448,28 @@ async function updateFindProject(
   return findWebViewId;
 }
 
+/**
+ * Asks the Find web view with this id to put the caret in its search box.
+ *
+ * Only for a Find that is already mounted — bringing a tab to the front focuses the web view's
+ * iframe but lands on its `body`, so an invoke that reuses an open panel as-is would otherwise
+ * leave the user on a tab they cannot type into. The reload path does not use this: it passes
+ * `shouldFocusSearch` through the options instead, because the reload rebuilds the iframe and this
+ * event would race the new mount's own subscription.
+ *
+ * Never throws. `openFind` is sent without being awaited by the Ctrl+F handler, and failing to move
+ * the caret is not a reason to fail the invoke that did front the tab.
+ */
+function requestFindSearchFocus(findWebViewId: string): void {
+  if (!focusFindSearchEventEmitter) {
+    logger.warn(
+      'platformScripture.openFind could not ask Find to focus its search box: the event emitter was not initialized.',
+    );
+    return;
+  }
+  focusFindSearchEventEmitter.emit({ webViewId: findWebViewId });
+}
+
 async function openFind(
   editorWebViewId: string | undefined,
   selectedText?: string,
@@ -462,9 +493,14 @@ async function openFind(
     // none exists: a Find with no project has nothing to search, so there is nothing to open.
     try {
       // `bringToFront` is left at its `true` default, as in the sibling open* helpers.
-      return await papi.webViews.openWebView(findWebViewType, undefined, {
+      const frontedFindWebViewId = await papi.webViews.openWebView(findWebViewType, undefined, {
         ...REUSE_EXISTING_FIND_ONLY,
       });
+      // Nothing remounted, so the caret still needs moving. This branch has no project to search,
+      // but the user did ask for Find: landing them in the search box is what the other invoke paths
+      // do, and being unable to type is the complaint this exists to answer.
+      if (frontedFindWebViewId) requestFindSearchFocus(frontedFindWebViewId);
+      return frontedFindWebViewId;
     } catch (e) {
       // Swallowed deliberately. Passing any `existingId` routes through the main process's
       // `findOwner`, which throws when a window cannot be reached — a rejection this branch did not
@@ -485,6 +521,13 @@ async function openFind(
     clearEditorWebViewId: !editorWebViewIdForFind,
     initialSearchText: selectedText,
   };
+  // The same options plus the request that Find put the caret in its search box once it is on screen.
+  // Used by the two paths that build a fresh iframe — reload and create — because a fresh mount reads
+  // the request out of its initial state; the path that reuses an open panel as-is sends the network
+  // event instead. Typed as `FindWebViewOptions` here rather than spread at each call so the extra
+  // property is carried by the options type both calls already accept.
+  const optionsWithFocusRequest: FindWebViewOptions = { ...options, shouldFocusSearch: true };
+
   // Where a newly created Find panel goes in Power mode: docked to the right of the editor that
   // asked for it. Ignored in Simple mode, where the fixed layout already holds a Find tab for the
   // probe below to find.
@@ -516,11 +559,24 @@ async function openFind(
         selectedText,
       )
     ) {
-      await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
+      // The reload rebuilds the iframe, so the focus request rides in the options and is read out of
+      // the fresh mount's initial state. Emitting the event here instead would race that mount's own
+      // `useEvent` subscription — a network round-trip — and usually lose.
+      await papi.webViews.reloadWebView(findWebViewType, findWebViewId, optionsWithFocusRequest);
+    } else {
+      // Nothing remounted and nothing changed, so the panel is sitting there already correct. This is
+      // the common Ctrl+F: the Column 3 re-point supplies the project, editor id, and editability at
+      // project-open time, so all three checks above match and an empty selection is falsy.
+      requestFindSearchFocus(findWebViewId);
     }
   } else {
-    // Otherwise, opens a new web view
-    findWebViewId = await papi.webViews.openWebView(findWebViewType, findPanelLayout, options);
+    // Otherwise, opens a new web view. A new web view always mounts fresh, so this takes the same
+    // in-state route the reload path does.
+    findWebViewId = await papi.webViews.openWebView(
+      findWebViewType,
+      findPanelLayout,
+      optionsWithFocusRequest,
+    );
   }
 
   return findWebViewId;
@@ -544,6 +600,33 @@ export async function activate(context: ExecutionActivationContext) {
       },
     },
   );
+
+  // Registered before `openFind` is exposed, for the same reason: the web view subscribes via
+  // `useEvent`, and the emitter is disposed through `context.registrations` so re-activation gets a
+  // fresh channel.
+  // Held in a local as well as the module-level variable: `registrations` below takes disposables, not
+  // `| undefined`, and the module-level variable is readable from a closure so its narrowing does not
+  // survive to that point.
+  const focusFindSearchEmitter = await papi.network.createNetworkEventEmitterAsync(
+    FIND_FOCUS_SEARCH_EVENT,
+    {
+      notification: {
+        // Experimental: this event is not yet a stable contract.
+        'x-experimental': true,
+        summary:
+          'Asks the named Find web view to put the caret in its search box. Other Find web views ignore it.',
+        params: [
+          {
+            name: 'webViewId',
+            required: true,
+            summary: 'Id of the Find web view whose search box should take focus.',
+            schema: { type: 'string' },
+          },
+        ],
+      },
+    },
+  );
+  focusFindSearchEventEmitter = focusFindSearchEmitter;
 
   const scriptureExtenderPdpefPromise =
     papi.projectDataProviders.registerProjectDataProviderEngineFactory(
@@ -1016,6 +1099,7 @@ export async function activate(context: ExecutionActivationContext) {
     await openMarkersChecklistSettingsPromise,
     await markersChecklistWebViewProviderPromise,
     openSettingsEventEmitter,
+    focusFindSearchEmitter,
     await openFindPromise,
     await updateFindProjectPromise,
     await openFindWebViewProviderPromise,
