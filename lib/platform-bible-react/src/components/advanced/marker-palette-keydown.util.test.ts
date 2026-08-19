@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   clearPaletteSessionIfCurrent,
+  getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
   MarkerPaletteSessionDriver,
   MarkerPaletteSessionState,
@@ -11,6 +12,7 @@ function makeDriver(): MarkerPaletteSessionDriver & {
   commit: ReturnType<typeof vi.fn>;
   dismiss: ReturnType<typeof vi.fn>;
   commitTyped: ReturnType<typeof vi.fn>;
+  commitTypedAndReopen: ReturnType<typeof vi.fn>;
   commitTypedCloser: ReturnType<typeof vi.fn>;
   commitItem: ReturnType<typeof vi.fn>;
 } {
@@ -19,6 +21,7 @@ function makeDriver(): MarkerPaletteSessionDriver & {
     commit: vi.fn(),
     dismiss: vi.fn(),
     commitTyped: vi.fn(),
+    commitTypedAndReopen: vi.fn(),
     commitTypedCloser: vi.fn(),
     commitItem: vi.fn(),
   };
@@ -272,17 +275,56 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.commit).not.toHaveBeenCalled();
   });
 
-  it('selection session: `*` is STILL a filter character - there is no caret to close at', () => {
-    // A closing marker is placed AT a caret; over a selection the commit is the WRAP, so `*`
-    // keeps its filtering meaning rather than becoming a commit key that could only refuse.
+  it('selection session: `*` COMMITS the typed closer over the selection (P9 parity)', () => {
+    // Owner-directed, revising the earlier "`*` still filters here" pin: in Paratext 9, typing
+    // `\nd*` with text selected DELETES the selected content and lands the literal closer. It is
+    // a commit key in every selection shape, and a different gesture from Space's WRAP.
     const driver = makeDriver();
     const state = session('selection', 'nd');
     const event = makeEvent('*');
-    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('continue');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
     expect(event.defaultPrevented).toBe(true);
-    expect(state.filter).toBe('nd*');
-    expect(driver.update).toHaveBeenCalledWith({ filterText: 'nd*' });
-    expect(driver.commitTypedCloser).not.toHaveBeenCalled();
+    expect(driver.commitTypedCloser).toHaveBeenCalledWith('nd');
+    expect(driver.dismiss).toHaveBeenCalled();
+    // Not a filter char any more — the query is not widened by the commit key.
+    expect(driver.update).not.toHaveBeenCalled();
+  });
+
+  it('backslash session: `\\` commits the typed marker WITHOUT a space and reopens', () => {
+    // Owner-directed: `\qt-s` then `\` inserts the full `\qt-s` and opens a new palette for the
+    // backslash just pressed, so a milestone pair is one continuous flow. No terminating space —
+    // that is the whole difference from the Space commit.
+    const driver = makeDriver();
+    const state = session('backslash', 'qt');
+    const event = makeEvent('\\');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(true);
+    expect(driver.commitTypedAndReopen).toHaveBeenCalledWith('qt');
+    expect(driver.commitTyped).not.toHaveBeenCalled();
+  });
+
+  it('backslash session: `\\` on an EMPTY filter lands a literal backslash and does NOT reopen', () => {
+    // Today's behavior, explicitly preserved: with nothing typed there is nothing to commit, so
+    // the backslash is an ordinary character. NOT claimed — it must reach the document — and no
+    // replacement palette opens.
+    const driver = makeDriver();
+    const state = session('backslash', '');
+    const event = makeEvent('\\');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(false);
+    expect(driver.commitTypedAndReopen).not.toHaveBeenCalled();
+    expect(driver.commitTyped).not.toHaveBeenCalled();
+    expect(driver.dismiss).toHaveBeenCalled();
+  });
+
+  it('selection session: `\\` does NOT commit-and-reopen (the wrap consumes the selection)', () => {
+    // Scoped to the collapsed-caret palette: over a selection the opening commit is the WRAP,
+    // which consumes the selection, leaving nothing for a second marker to attach to.
+    const driver = makeDriver();
+    const state = session('selection', 'nd');
+    const event = makeEvent('\\');
+    handleMarkerPaletteSessionKeyDown(event, state, driver);
+    expect(driver.commitTypedAndReopen).not.toHaveBeenCalled();
   });
 
   it('backslash session: hyphen and uppercase are filter chars (milestones like ts-s, custom capitals)', () => {
@@ -518,5 +560,34 @@ describe('clearPaletteSessionIfCurrent', () => {
     clearPaletteSessionIfCurrent(sessionRef, 1);
 
     expect(sessionRef.current).toBeUndefined();
+  });
+});
+
+describe('getMarkerPaletteClaimedKeys', () => {
+  // The list a session hands to its palette so the palette forwards exactly these keys back
+  // instead of consuming them. It must be derived from the table below rather than hand-written,
+  // or the two drift and the forwarded half of a session behaves differently from the focused one.
+  it('claims every key the table acts on, for each session kind', () => {
+    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+      const keys = getMarkerPaletteClaimedKeys(kind);
+      // The control keys the owner named explicitly, plus the ones the table has branches for.
+      [' ', 'Enter', 'Escape', 'Tab', '*', 'Backspace', 'ArrowUp', 'ArrowDown'].forEach((key) => {
+        // The kind is in the failure output via the surrounding forEach's own key list.
+        expect({ kind, keys }).toMatchObject({ keys: expect.arrayContaining([key]) });
+      });
+      // Filter characters, or the session cannot own its own query when the palette has focus.
+      expect(keys).toContain('n');
+      expect(keys).toContain('D');
+      expect(keys).toContain('1');
+    });
+  });
+
+  it('claims the `\\` trigger so a commit-and-reopen works from a focused palette too', () => {
+    expect(getMarkerPaletteClaimedKeys('backslash')).toContain('\\');
+  });
+
+  it('does not claim pure modifiers (they are not input and the table only passes them)', () => {
+    const keys = getMarkerPaletteClaimedKeys('backslash');
+    ['Shift', 'Control', 'Alt', 'Meta'].forEach((key) => expect(keys).not.toContain(key));
   });
 });

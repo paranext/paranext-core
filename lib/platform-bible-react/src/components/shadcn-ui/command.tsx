@@ -83,13 +83,35 @@ function CommandDialog({
   );
 }
 
+// CUSTOM: props added on top of cmdk's own Input props
+type CommandInputProps = React.ComponentProps<typeof CommandPrimitive.Input> & {
+  /**
+   * When true, pressing Space while the input is EMPTY selects the currently highlighted item
+   * instead of typing a space (the Enter UX). **Opt-in — defaults to false.**
+   *
+   * This began as an unconditional patch applied to every `CommandInput` in the app, which meant
+   * any surface with its own Space semantics silently lost the key: a palette whose owner claims
+   * Space to commit what the user TYPED would instead have the HIGHLIGHTED item committed here,
+   * locally, bypassing the owner's resolution entirely. Opting in makes each consumer state that
+   * Space is a selection key for it.
+   *
+   * Enable it on pickers where the list is the whole point and a leading space is meaningless.
+   * Leave it off wherever the input's own text matters, or wherever something outside this
+   * component owns Space.
+   */
+  spaceSelectsHighlightedItem?: boolean;
+};
+
 /** @inheritdoc Command */
 function CommandInput({
   className,
   // CUSTOM: destructure `onKeyDown` from props so we can compose with our space-to-click handler below
   onKeyDown,
+  // CUSTOM: opt-in flag for the space-to-click behavior; not a DOM attribute, so keep it out of
+  // the spread below
+  spaceSelectsHighlightedItem = false,
   ...props
-}: React.ComponentProps<typeof CommandPrimitive.Input>) {
+}: CommandInputProps) {
   // CUSTOM: Added readDirection for RTL support — sets dir on the wrapper so icon placement is mirrored
   const dir: Direction = readDirection();
   /* #region CUSTOM Intercept Space-on-empty-input to click highlighted cmdk item (Enter-style UX) */
@@ -97,10 +119,12 @@ function CommandInput({
   // looking at a highlighted item and expect Space to pick it (the Enter UX). Intercept Space
   // in that state, find cmdk's current `data-selected` item, and click it. cmdk auto-highlights
   // the first non-disabled item so the target always exists when the list is non-empty.
+  // Only when the consumer opted in — see `spaceSelectsHighlightedItem`.
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       onKeyDown?.(event);
       if (event.defaultPrevented) return;
+      if (!spaceSelectsHighlightedItem) return;
       if (event.key !== ' ') return;
       if (event.currentTarget.value !== '') return;
       const commandRoot = event.currentTarget.closest('[cmdk-root]');
@@ -112,7 +136,7 @@ function CommandInput({
       event.stopPropagation();
       highlighted.click();
     },
-    [onKeyDown],
+    [onKeyDown, spaceSelectsHighlightedItem],
   );
   /* #endregion CUSTOM */
   return (
@@ -256,4 +280,4 @@ export {
   CommandShortcut,
   CommandSeparator,
 };
-export type { CommandDialogProps };
+export type { CommandDialogProps, CommandInputProps };

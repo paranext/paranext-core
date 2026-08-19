@@ -7,6 +7,7 @@
  */
 
 import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { filterAndRankPaletteItems } from 'platform-bible-react';
 import type { ReactElement } from 'react';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
@@ -143,6 +144,28 @@ export interface CommandPaletteRequest {
    * shown, so matching always runs against the same label text the palette displays.
    */
   passive?: boolean;
+  /**
+   * Keys the REQUESTING session claims while this palette is open, and where to send them.
+   *
+   * The palette and the session that opened it live in different documents, so whichever holds
+   * focus is the only one that sees a keystroke. A palette that takes focus therefore silently
+   * takes the session's keys with it: its commit semantics stop running, and a local default (e.g.
+   * cmdk's own navigation) answers instead. Declaring the claimed keys closes that — the palette
+   * forwards exactly those to {@link PaletteKeyForwarding.onKey} and acts on none of them itself.
+   *
+   * A focus-stealing (non-passive) palette is what makes this necessary; a passive one never takes
+   * focus, so its requester already receives every key and forwarding is inert there. Requesters
+   * still declare it for both, so one code path covers a palette that unexpectedly receives a key.
+   * Omit it entirely and the palette behaves exactly as it did before forwarding existed.
+   *
+   * @remarks
+   * The handler is called synchronously, in the palette's own document. This is a direct function
+   * reference rather than serialized data: the overlay service is renderer-only and a requesting
+   * WebView is a same-origin iframe sharing the renderer's `papi`, so no boundary is crossed. The
+   * forwarded value is a plain `ForwardedPaletteKeyEvent` rather than a live DOM event, which keeps
+   * it free of the requester's realm.
+   */
+  keyForwarding?: PaletteKeyForwarding;
 }
 
 /**
@@ -165,13 +188,13 @@ export type PaletteFilterMode = 'active' | 'passive';
  * per-{@link PaletteFilterMode} semantics (passive prefix-matches with a leading `+` stripped from
  * the filter first, active containment-matches), and ranks the matches EXACT-FIRST: exact label
  * match, then prefix matches, then containment matches, ties keeping their original context order.
- * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input
- * should never be case-picky). Returns `items` unchanged when `filterText` is empty or undefined.
+ * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
+ * never be case-picky). Returns `items` unchanged when `filterText` is empty or undefined.
  *
- * Delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the editor
- * package's own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette — so the
- * host palette and the editor palette can never disagree about ordering, and the marker-palette
- * keydown table's zero-match detection counts with the same semantics.
+ * Delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the editor package's
+ * own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette — so the host
+ * palette and the editor palette can never disagree about ordering, and the marker-palette keydown
+ * table's zero-match detection counts with the same semantics.
  *
  * This is the single filtering implementation shared by {@link IOverlayService}'s host-side
  * `commitCommandPaletteSelection` (to resolve the highlighted item) and the command palette

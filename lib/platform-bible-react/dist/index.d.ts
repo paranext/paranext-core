@@ -8,7 +8,7 @@ import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
 import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
-import { PaletteDriver } from 'platform-bible-utils/experimental';
+import { ForwardedPaletteKeyEvent, PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
@@ -1032,7 +1032,13 @@ export interface FootnoteEditorMarkerPalette extends PaletteDriver {
 		y: number;
 		width?: number;
 		height?: number;
-	}, passive: boolean): Promise<string | undefined>;
+	}, passive: boolean, 
+	/**
+	 * Keys the session claims while the palette is open. The palette forwards exactly these back
+	 * instead of acting on them, so the session's semantics run whichever document holds focus —
+	 * without it, a palette that takes focus silently takes the session's keys with it.
+	 */
+	keyForwarding?: PaletteKeyForwarding): Promise<string | undefined>;
 }
 /**
  * Maps a library marker-menu item to the shared palette-item shape — THE one converter for marker
@@ -1051,6 +1057,14 @@ export declare function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem):
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
 export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, markerPalette, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * What this table needs of a keydown. A DOM `KeyboardEvent` satisfies it, and so does a
+ * `ForwardedPaletteKeyEvent` (from `platform-bible-utils/experimental`, outside this package's docs
+ * entry, so a code reference rather than a link) handed back by a focused palette — so ONE handler
+ * serves a session's own capture-phase listener and the keys its palette forwards, and the two can
+ * never diverge in semantics.
+ */
+export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
 export type MarkerPaletteSessionKind = "backslash" | "enter" | "selection";
 /** The mutable per-session state the forwarding table reads and updates. */
 export interface MarkerPaletteSessionState {
@@ -1096,6 +1110,17 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
 	 */
 	commitTyped(typed: string): void;
 	/**
+	 * Commit the marker the user literally TYPED with the palette's `\` semantics — the same
+	 * materialization {@link MarkerPaletteSessionDriver.commitTyped} performs but WITHOUT the
+	 * terminating space (`EditorRef.commitTypedMarker` with `trailingSpace: false`) — and then open a
+	 * NEW palette session at the resulting caret, for the backslash the user just pressed. The
+	 * session owner performs both halves, so the reopened session goes through its normal open path
+	 * and gets the same ranking, search bar and zero-match rules as any other. Only invoked for a
+	 * `'backslash'` session's `\` with a NON-EMPTY filter; an empty one has nothing to commit and the
+	 * backslash is left to land as an ordinary character.
+	 */
+	commitTypedAndReopen(typed: string): void;
+	/**
 	 * Commit the marker the user literally TYPED as a CLOSING marker — the palette's `*` commit,
 	 * applied through the editor (`EditorRef.commitTypedCloser`). `\` + `typed` + `*` lands at the
 	 * caret with no terminating space and no opening glyph, and the marker-edit engine resolves it:
@@ -1119,10 +1144,27 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
  */
 export type MarkerPaletteKeyOutcome = "passed" | "continue" | "ended";
 /**
+ * Every `KeyboardEvent.key` this table acts on for `kind` — the list a session hands to its palette
+ * as the `keys` of its `PaletteKeyForwarding` declaration so the palette forwards exactly these
+ * back instead of consuming them.
+ *
+ * Why a session must claim the FILTER characters too, not just its commit keys: the session's
+ * filter is the only record of what the user typed, and every commit resolves from it
+ * ({@link MarkerPaletteSessionDriver.commitTyped}, `commitItem`'s exact match, `commitTypedCloser`).
+ * If typed characters went into the palette's own input while only the commit keys were forwarded,
+ * the session would commit an EMPTY query while the screen showed a full one. Forwarding the whole
+ * set makes the session the single owner of the query in both focus states — which is exactly what
+ * the passive palette already is.
+ *
+ * Derived from the table rather than hand-listed, so the two cannot drift. Pure modifiers are
+ * excluded: the table only passes them through, and claiming them would break `+` chords.
+ */
+export declare function getMarkerPaletteClaimedKeys(kind: MarkerPaletteSessionKind): string[];
+/**
  * Routes one keydown through an open marker-palette session. See the module doc for the per-kind
  * semantics. Call from a CAPTURE-phase listener; on `'ended'` clear the session ref.
  */
-export declare function handleMarkerPaletteSessionKeyDown(event: KeyboardEvent, session: MarkerPaletteSessionState, driver: MarkerPaletteSessionDriver): MarkerPaletteKeyOutcome;
+export declare function handleMarkerPaletteSessionKeyDown(event: MarkerPaletteKeyEvent, session: MarkerPaletteSessionState, driver: MarkerPaletteSessionDriver): MarkerPaletteKeyOutcome;
 /**
  * Clears a palette-session ref only when it still holds the session identified by `token`.
  *
@@ -2994,8 +3036,25 @@ export declare function DialogDescription({ className, ...props }: React$1.Compo
  * @see cmdk Documentation: {@link https://cmdk.paco.me/}
  */
 export declare function Command({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive>): import("react/jsx-runtime").JSX.Element;
+type CommandInputProps = React$1.ComponentProps<typeof CommandPrimitive.Input> & {
+	/**
+	 * When true, pressing Space while the input is EMPTY selects the currently highlighted item
+	 * instead of typing a space (the Enter UX). **Opt-in — defaults to false.**
+	 *
+	 * This began as an unconditional patch applied to every `CommandInput` in the app, which meant
+	 * any surface with its own Space semantics silently lost the key: a palette whose owner claims
+	 * Space to commit what the user TYPED would instead have the HIGHLIGHTED item committed here,
+	 * locally, bypassing the owner's resolution entirely. Opting in makes each consumer state that
+	 * Space is a selection key for it.
+	 *
+	 * Enable it on pickers where the list is the whole point and a leading space is meaningless.
+	 * Leave it off wherever the input's own text matters, or wherever something outside this
+	 * component owns Space.
+	 */
+	spaceSelectsHighlightedItem?: boolean;
+};
 /** @inheritdoc Command */
-export declare function CommandInput({ className, onKeyDown, ...props }: React$1.ComponentProps<typeof CommandPrimitive.Input>): import("react/jsx-runtime").JSX.Element;
+export declare function CommandInput({ className, onKeyDown, spaceSelectsHighlightedItem, ...props }: CommandInputProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Command */
 export declare function CommandList({ className, ...props }: React$1.ComponentProps<typeof CommandPrimitive.List>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc Command */

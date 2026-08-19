@@ -43,6 +43,7 @@ import {
   useState,
 } from 'react';
 import { isLocalizeKey, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 
 // ── Public Types ──
 
@@ -100,6 +101,12 @@ export type OverlayCommandPalettePresentationalProps = {
    * list (same store-mirroring rationale as {@link onFilterTextChange}).
    */
   onSelectedIndexChange?: (selectedIndex: number) => void;
+  /**
+   * Keys the requesting session claims, and where to send them — see
+   * {@link CommandPaletteRequest.keyForwarding}. Forwarded keys are handed over verbatim and acted
+   * on by nothing here, so the session's own semantics run whether it or this palette holds focus.
+   */
+  keyForwarding?: PaletteKeyForwarding;
 };
 
 // ── Constants ──
@@ -304,6 +311,7 @@ export function OverlayCommandPalettePresentational({
   onDismiss,
   onFilterTextChange,
   onSelectedIndexChange,
+  keyForwarding,
 }: OverlayCommandPalettePresentationalProps) {
   // React's useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
@@ -365,12 +373,30 @@ export function OverlayCommandPalettePresentational({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
+      // Keys the requesting session claimed go straight back to it, ahead of everything this
+      // palette would otherwise do with them — its own Escape below, and cmdk's navigation (cmdk
+      // calls this handler first and skips its own handling when the event is default-prevented).
+      // The session decides whether to claim; an unclaimed forwarded key still behaves normally.
+      if (keyForwarding?.keys.includes(e.key)) {
+        keyForwarding.onKey({
+          key: e.key,
+          keyCode: e.keyCode,
+          isComposing: e.nativeEvent.isComposing,
+          ctrlKey: e.ctrlKey,
+          metaKey: e.metaKey,
+          altKey: e.altKey,
+          shiftKey: e.shiftKey,
+          preventDefault: () => e.preventDefault(),
+          stopPropagation: () => e.stopPropagation(),
+        });
+        return;
+      }
       if (e.key === 'Escape') {
         e.preventDefault();
         onDismiss();
       }
     },
-    [onDismiss],
+    [keyForwarding, onDismiss],
   );
 
   // BOTH modes bypass cmdk's own fuzzy filtering: the filtered list is computed with the same
@@ -436,6 +462,16 @@ export function OverlayCommandPalettePresentational({
       data-overlay-command-palette
       className="tw:rounded-lg tw:border"
       onKeyDown={handleKeyDown}
+      // Filtering happens OUTSIDE cmdk in BOTH modes (filteredItems above). Passive mode must say
+      // so explicitly, even though it registers no cmdk items: cmdk's `Group` renders only when
+      // `shouldFilter === false`, or the search is empty, or the group appears in
+      // `filtered.groups`. The search stopped being empty once the search input was rendered here
+      // (cmdk's `Input` pushes a controlled `value` into its own `search` state), and a group with
+      // no cmdk-registered items is never in `filtered.groups` — so every group went `hidden` as
+      // soon as the user typed, emptying a list whose items the session had correctly kept. The
+      // "No results found" element sits outside the group, which is why it kept rendering
+      // correctly and made the failure look like a filter bug rather than a hiding one.
+      shouldFilter={false}
     >
       {searchInput}
       {/* Not cmdk's CommandList: cmdk overrides a caller-supplied aria-activedescendant with its
@@ -722,6 +758,7 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       onDismiss={handleDismiss}
       onFilterTextChange={handleFilterTextChange}
       onSelectedIndexChange={handleSelectedIndexChange}
+      keyForwarding={overlay.request.keyForwarding}
     />
   );
 }

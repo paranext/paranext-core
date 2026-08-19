@@ -2,6 +2,12 @@ import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
+  getMarkerPaletteClaimedKeys,
+  handleMarkerPaletteSessionKeyDown,
+  MarkerPaletteSessionDriver,
+  MarkerPaletteSessionState,
+} from 'platform-bible-react';
+import {
   addOverlay,
   clearAllOverlays,
   getOverlayById,
@@ -595,6 +601,46 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
     });
 
+    it('should keep the session-filtered items VISIBLE, not merely mounted', () => {
+      // Regression: hoisting the search input into the passive branch fed cmdk's own `search`
+      // state, and cmdk's `Group` hides itself whenever `search` is non-empty and the group has
+      // no cmdk-registered items in `filtered.groups`. Passive mode registers NO cmdk items (it
+      // renders plain divs), so every group went `hidden` the moment anything was typed — an
+      // empty-looking list whose entries were still in the DOM. `toBeInTheDocument` cannot see
+      // that; only visibility can.
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('Save File')).toBeVisible();
+    });
+
+    it('should keep GROUPED session-filtered items visible too', () => {
+      // Grouping is what puts a cmdk `Group` between the list and the items, so the grouped
+      // shape is where the hiding actually bites.
+      render(
+        <OverlayCommandPalettePresentational
+          items={[
+            { id: 'nd', label: 'nd', group: 'Character' },
+            { id: 'nb', label: 'nb', group: 'Paragraph' },
+          ]}
+          passive
+          filterText="nd"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByText('nd')).toBeVisible();
+      expect(screen.queryByText('nb')).not.toBeInTheDocument();
+    });
+
     it('should keep prefix semantics (a mid-label match hides the item)', () => {
       render(
         <OverlayCommandPalettePresentational
@@ -968,5 +1014,144 @@ describe('OverlayCommandPalette (store-connected)', () => {
     expect(successor.reject).not.toHaveBeenCalled();
     expect(getStoredPalette('palette-1')).toBeDefined();
     expect(entry.resolve).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('key forwarding — the session keeps its keys even when the palette holds focus', () => {
+  // The split brain this closes: a NON-passive palette focuses its own input, so the requesting
+  // WebView stops seeing keystrokes and none of the session's ratified semantics run. Two branches
+  // were provably wrong before forwarding existed, and both are pinned here through the REAL
+  // keydown table rather than a stand-in, so a semantics change cannot pass unnoticed.
+  const markerItems: CommandPaletteItem[] = [
+    { id: 'nd', label: 'nd' },
+    { id: 'nb', label: 'nb' },
+    { id: 'w', label: 'w' },
+  ];
+
+  function makeDriver(): MarkerPaletteSessionDriver {
+    return {
+      update: vi.fn(),
+      commit: vi.fn(),
+      dismiss: vi.fn(),
+      commitTyped: vi.fn(),
+      commitTypedAndReopen: vi.fn(),
+      commitTypedCloser: vi.fn(),
+      commitItem: vi.fn(),
+    };
+  }
+
+  function renderForwardingPalette(
+    session: MarkerPaletteSessionState,
+    driver: MarkerPaletteSessionDriver,
+    onSelect = vi.fn(),
+  ) {
+    render(
+      <OverlayCommandPalettePresentational
+        items={markerItems}
+        onSelect={onSelect}
+        onDismiss={vi.fn()}
+        keyForwarding={{
+          keys: getMarkerPaletteClaimedKeys(session.kind),
+          onKey: (event) => handleMarkerPaletteSessionKeyDown(event, session, driver),
+        }}
+      />,
+    );
+    return { input: screen.getByRole('combobox'), onSelect };
+  }
+
+  it('routes typed characters into the SESSION filter, not the palette input', () => {
+    // Without this the session would commit an empty query while the screen showed a full one.
+    const session: MarkerPaletteSessionState = {
+      kind: 'selection',
+      filter: '',
+      items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
+    };
+    const driver = makeDriver();
+    const { input } = renderForwardingPalette(session, driver);
+
+    fireEvent.keyDown(input, { key: 'n' });
+    fireEvent.keyDown(input, { key: 'd' });
+
+    expect(session.filter).toBe('nd');
+    expect(driver.update).toHaveBeenLastCalledWith({ filterText: 'nd' });
+  });
+
+  it('overlay-focused + NON-EMPTY filter + Space performs the ratified selection wrap', () => {
+    // Previously: Space was an ordinary character appended to cmdk's filter, so the wrap never
+    // happened and the query stopped matching anything.
+    const session: MarkerPaletteSessionState = {
+      kind: 'selection',
+      filter: '',
+      items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
+    };
+    const driver = makeDriver();
+    const { input, onSelect } = renderForwardingPalette(session, driver);
+
+    fireEvent.keyDown(input, { key: 'n' });
+    fireEvent.keyDown(input, { key: 'd' });
+    fireEvent.keyDown(input, { key: ' ' });
+
+    // The wrap commits the marker that was literally TYPED.
+    expect(driver.commitItem).toHaveBeenCalledWith('nd');
+    // And not through the palette's own selection path.
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('overlay-focused + EMPTY filter + Space does NOT commit the highlighted entry', () => {
+    // Previously: the app-wide CommandInput patch synthesised a click on the highlighted cmdk
+    // item, committing something the user never typed and bypassing the session entirely. With
+    // the patch now opt-in (this palette does not opt in) and Space forwarded, the session's own
+    // visible refusal runs instead.
+    const session: MarkerPaletteSessionState = {
+      kind: 'selection',
+      filter: '',
+      items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
+    };
+    const driver = makeDriver();
+    const { input, onSelect } = renderForwardingPalette(session, driver);
+
+    fireEvent.keyDown(input, { key: ' ' });
+
+    expect(driver.commitItem).not.toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
+    // Visible refusal: the palette closes and the selection is left intact.
+    expect(driver.dismiss).toHaveBeenCalled();
+  });
+
+  it('forwards Escape to the session instead of dismissing locally', () => {
+    const session: MarkerPaletteSessionState = { kind: 'backslash', filter: 'nd', items: [] };
+    const driver = makeDriver();
+    const onDismiss = vi.fn();
+    render(
+      <OverlayCommandPalettePresentational
+        items={markerItems}
+        onSelect={vi.fn()}
+        onDismiss={onDismiss}
+        keyForwarding={{
+          keys: getMarkerPaletteClaimedKeys('backslash'),
+          onKey: (event) => handleMarkerPaletteSessionKeyDown(event, session, driver),
+        }}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+
+    expect(driver.dismiss).toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it('leaves un-declared keys to the palette (local Escape still works without forwarding)', () => {
+    const onDismiss = vi.fn();
+    render(
+      <OverlayCommandPalettePresentational
+        items={markerItems}
+        onSelect={vi.fn()}
+        onDismiss={onDismiss}
+      />,
+    );
+
+    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Escape' });
+
+    expect(onDismiss).toHaveBeenCalled();
   });
 });
