@@ -2345,12 +2345,41 @@
   color: #7777ff;
 }
 
-/* The generic table-cell box that used to live here (border-collapse on tables +
-   `1px solid #000` on td, with a `.markercell` borderless exception) was moved to
-   marker-styles/commentary-overrides.scss (PT-3086) so it applies only in handbook
-   (HBKENG/TNN/TND) iframes. Real tables in the project view and other resources are
-   intentionally borderless; the paragraph-indent reset for real tables lives in the
-   table-marker section above (.usfm .table-row, .usfm .table-cell). */
+/* The table box, matching Paratext 9's ScriptureBase.css (`table`/`td`/`td.markercell`) and the
+   editor library's own sheet. It is unscoped there and here: PT9 boxes every table it renders, so
+   a project's tables need this as much as a handbook's — without it the cells lose their borders,
+   their padding and their collapsed edges, and a table reads as run-together text.
+   `th` is named alongside `td` because ImmutableTableCellNode emits a real <th> for th* markers,
+   which PT9's td-only rule predates and would otherwise leave unboxed.
+   marker-styles/commentary-overrides.scss carries an identical copy for handbook iframes; it is
+   injected later and simply re-asserts these values there. */
+.usfm table {
+  border-collapse: collapse;
+}
+
+.usfm td,
+.usfm th {
+  border: 1px solid #000000;
+  page-break-inside: avoid;
+  /* FB27281 adding padding based on font size*/
+  padding-right: 0.28em;
+  padding-left: 0.28em;
+}
+
+/* Unreachable today, and kept deliberately: PT9 wraps a row's own `\tr` glyph in a real
+   `<td class="markercell">`, which needs its border removed because `td` above gives it one. Our
+   glyph rides instead in the ANONYMOUS table cell the browser generates around the only non-cell
+   content of a `<tr>` — not a `td` element, so it matches neither rule and has no border to reset.
+   It does miss `td`'s horizontal padding, which the rule below restores directly on the glyph. */
+.usfm td.markercell {
+  border-style: none;
+}
+
+.usfm .table-row > .opening,
+.usfm .table-row > .marker {
+  padding-inline-start: 0.28em;
+}
+
 .usfm rt {
   cursor: pointer;
 }

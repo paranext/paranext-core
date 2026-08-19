@@ -98,6 +98,32 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     });
   });
 
+  describe('real-table box', () => {
+    // PT9 boxes every table it renders (ScriptureBase.css `table`/`td`/`td.markercell`), and so
+    // does the editor library. Scoping these to handbook resources alone leaves a Scripture
+    // project's tables with no borders, no cell padding and uncollapsed edges, which reads as
+    // run-together text rather than a table.
+    it('boxes tables everywhere, not only in handbook resources', () => {
+      expect(scss).toContain('.usfm table {\n  border-collapse: collapse;\n}');
+      expect(scss).toMatch(
+        /\.usfm td,\n\.usfm th \{[^}]*border: 1px solid #000000;[^}]*padding-right: 0\.28em;[^}]*\}/,
+      );
+      expect(scss).toMatch(/\.usfm td\.markercell \{\s*border-style: none;\s*\}/);
+    });
+
+    // A row's own \tr glyph rides in the anonymous cell the browser generates around the only
+    // non-cell content of a <tr>, so it matches neither the td nor the th rule and would sit flush
+    // against the table edge without this.
+    it('pads a row marker like the cells around it', () => {
+      expect(scss).toContain(
+        '.usfm .table-row > .opening,\n' +
+          '.usfm .table-row > .marker {\n' +
+          '  padding-inline-start: 0.28em;\n' +
+          '}',
+      );
+    });
+  });
+
   describe('note caller sequences', () => {
     it('gives cross-references their own caller counter so they do not consume footnote letters', () => {
       expect(scss).toMatch(/@counter-style cross-ref-callers/);
