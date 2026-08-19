@@ -10,6 +10,7 @@ import { settingsService } from '@shared/services/settings.service';
 import * as commandService from '@shared/services/command.service';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
+import { waitForScriptureWorkspaceReady } from '@main/startup-readiness.util';
 import { performStartupTasks, STARTUP_SYNC_RETRY_BUDGET_MS } from './startup-tasks';
 
 vi.mock('@shared/services/settings.service', () => ({
@@ -28,11 +29,16 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+vi.mock('@main/startup-readiness.util', () => ({
+  waitForScriptureWorkspaceReady: vi.fn(),
+}));
+
 const mockSettingsGet = vi.mocked(settingsService.get);
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
 const mockLoggerDebug = vi.mocked(logger.debug);
 const mockLoggerWarn = vi.mocked(logger.warn);
+const mockWaitForReady = vi.mocked(waitForScriptureWorkspaceReady);
 
 /**
  * Builds a rejection shaped like what `networkService`'s request plumbing actually throws for a
@@ -63,10 +69,46 @@ function stubSettings({ mode = 'simple', firstRunComplete = true, syncOnStartup 
   });
 }
 
+/** The settings snapshot a Simple-mode startup sync needs before anything else can skip it. */
+const SIMPLE_MODE_SETTINGS = { mode: 'simple', firstRunComplete: true, syncOnStartup: true };
+
+/**
+ * Drives a Simple-mode startup whose readiness gate parks, swapping the settings the gates read
+ * from `before` to `after` while it is parked.
+ *
+ * This is the only way to exercise the post-wait re-read: the gate can sit for up to the readiness
+ * budget, so what the user wanted when it started may not be what they want when it finishes.
+ */
+async function startupWithSettingsChangedDuringReadinessWait(
+  before: typeof SIMPLE_MODE_SETTINGS,
+  after: typeof SIMPLE_MODE_SETTINGS,
+): Promise<void> {
+  let current = before;
+  mockSettingsGet.mockImplementation(async (key: string) => {
+    if (key === 'platform.interfaceMode') return current.mode;
+    if (key === 'platform.firstRunComplete') return current.firstRunComplete;
+    if (key === 'platform.syncOnStartup') return current.syncOnStartup;
+    throw new Error(`Unexpected settings key in test stub: ${key}`);
+  });
+  let resolveReadiness: (result: { outcome: 'ready' }) => void = () => {};
+  mockWaitForReady.mockReturnValue(
+    new Promise((resolve) => {
+      resolveReadiness = resolve;
+    }),
+  );
+
+  const startupPromise = performStartupTasks();
+  await vi.waitFor(() => expect(mockWaitForReady).toHaveBeenCalled());
+  current = after;
+  resolveReadiness({ outcome: 'ready' });
+  await startupPromise;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockSendCommand.mockResolvedValue(undefined);
   mockRequestNoRetry.mockResolvedValue(undefined);
+  mockWaitForReady.mockResolvedValue({ outcome: 'ready' });
 });
 
 describe('performStartupTasks', () => {
@@ -339,4 +381,190 @@ describe('performStartupTasks', () => {
   });
 
   // #endregion
+
+  describe('simple-mode readiness gate', () => {
+    it('does not fire the sync until readiness resolves', async () => {
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      let resolveReadiness: (result: { outcome: 'ready' }) => void = () => {};
+      mockWaitForReady.mockReturnValue(
+        new Promise((resolve) => {
+          resolveReadiness = resolve;
+        }),
+      );
+
+      const startupPromise = performStartupTasks();
+      // Wait until we are demonstrably PARKED on the readiness gate — past all three settings
+      // gates — before asserting nothing was sent. Flushing a fixed number of microtasks instead
+      // would make this test pass even with no gate at all: `sendCommand` simply would not have
+      // been reached yet, and the assertion would be vacuously true.
+      await vi.waitFor(() => expect(mockWaitForReady).toHaveBeenCalled());
+      expect(mockSendCommand).not.toHaveBeenCalled();
+
+      resolveReadiness({ outcome: 'ready' });
+      await startupPromise;
+      expect(mockSendCommand).toHaveBeenCalledWith(
+        'paratextBibleSendReceive.syncProjects',
+        undefined,
+      );
+    });
+
+    it('fires the sync anyway (and warns) when readiness times out', async () => {
+      // The sync is delayed, never permanently suppressed.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      mockWaitForReady.mockResolvedValue({
+        outcome: 'timed-out',
+        detail:
+          'the scripture project data provider factory did not register within the readiness budget',
+      });
+
+      await performStartupTasks();
+
+      expect(mockSendCommand).toHaveBeenCalledWith(
+        'paratextBibleSendReceive.syncProjects',
+        undefined,
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(expect.stringContaining('did not become ready'));
+    });
+
+    it('includes the returned detail in the readiness warn', async () => {
+      // Packaged builds log at info; every `logger.debug` this feature emits is invisible there, so
+      // the warn itself must carry the real cause rather than pointing at a debug log the caller
+      // can't see.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      mockWaitForReady.mockResolvedValue({
+        outcome: 'timed-out',
+        detail:
+          'the scripture project data provider factory registered but never reported any projects',
+      });
+
+      await performStartupTasks();
+
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'the scripture project data provider factory registered but never reported any projects',
+        ),
+      );
+    });
+
+    it('does not fire the sync when the app is quitting during the readiness wait', async () => {
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      mockWaitForReady.mockResolvedValue({ outcome: 'aborted' });
+
+      await performStartupTasks();
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('quitting'));
+    });
+
+    it('does not fire (or warn) when readiness times out but the app is already quitting', async () => {
+      // Pins the merged, reordered abort check: without it, a 'timed-out' outcome would reach the
+      // warn below before the abort recheck ran, logging "syncing anyway" for a sync that is then
+      // skipped.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      const abort = new AbortController();
+      abort.abort();
+      mockWaitForReady.mockResolvedValue({ outcome: 'timed-out', detail: 'some cause' });
+
+      await performStartupTasks({ abortSignal: abort.signal });
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('quitting'));
+    });
+
+    it('passes the abort signal through to the readiness wait', async () => {
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      const abort = new AbortController();
+
+      await performStartupTasks({ abortSignal: abort.signal });
+
+      expect(mockWaitForReady).toHaveBeenCalledWith({ abortSignal: abort.signal });
+    });
+
+    it('never consults readiness in power mode', async () => {
+      // Pins "Power mode unchanged" against a future refactor that routes both modes through the
+      // gate — which would charge readiness time against Power's freshness window and silently
+      // drop legitimate startup syncs.
+      mockSettingsGet.mockResolvedValue('power');
+
+      await performStartupTasks();
+
+      expect(mockWaitForReady).not.toHaveBeenCalled();
+    });
+
+    it('does not wait for readiness when a settings gate already skipped the sync', async () => {
+      // Ordering guard: a session that will not sync must not pay the readiness wait.
+      stubSettings({ mode: 'simple', firstRunComplete: true, syncOnStartup: false });
+
+      await performStartupTasks();
+
+      expect(mockWaitForReady).not.toHaveBeenCalled();
+      expect(mockSendCommand).not.toHaveBeenCalled();
+    });
+
+    it('does not wait for readiness when first run is not complete', async () => {
+      stubSettings({ mode: 'simple', firstRunComplete: false });
+
+      await performStartupTasks();
+
+      expect(mockWaitForReady).not.toHaveBeenCalled();
+    });
+
+    it('does not fire the sync when readiness resolves "ready" but the app began quitting while waiting', async () => {
+      // Defense-in-depth guard at the call site: readiness settling with a non-'aborted' outcome
+      // does not guarantee the app wasn't already quitting by the time it resolved — e.g. a quit
+      // landing while the readiness gate's own probe was in flight.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      const abort = new AbortController();
+      abort.abort();
+      mockWaitForReady.mockResolvedValue({ outcome: 'ready' });
+
+      await performStartupTasks({ abortSignal: abort.signal });
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('quitting'));
+    });
+
+    // One case per gate. The gates share an implementation, but only the post-wait CALL is under
+    // test here, and an early return that skipped just one of them would still pass the other two.
+    it('does not fire the sync when the interface mode changes to power during the readiness wait', async () => {
+      await startupWithSettingsChangedDuringReadinessWait(SIMPLE_MODE_SETTINGS, {
+        ...SIMPLE_MODE_SETTINGS,
+        mode: 'power',
+      });
+
+      // Neither mode's sync: not Simple's (the user is no longer in Simple) and not Power's either,
+      // since this session already committed to the Simple path before the mode changed.
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockRequestNoRetry).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('Startup sync skipped after the readiness wait'),
+      );
+    });
+
+    it('does not fire the sync when automatic sync is turned off during the readiness wait', async () => {
+      await startupWithSettingsChangedDuringReadinessWait(SIMPLE_MODE_SETTINGS, {
+        ...SIMPLE_MODE_SETTINGS,
+        syncOnStartup: false,
+      });
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('Startup sync skipped after the readiness wait'),
+      );
+    });
+
+    it('does not fire the sync when first run becomes incomplete during the readiness wait', async () => {
+      await startupWithSettingsChangedDuringReadinessWait(SIMPLE_MODE_SETTINGS, {
+        ...SIMPLE_MODE_SETTINGS,
+        firstRunComplete: false,
+      });
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(
+        expect.stringContaining('Startup sync skipped after the readiness wait'),
+      );
+    });
+  });
 });

@@ -6,6 +6,7 @@ import {
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
+  shouldWindowCloseAbortStartupTasks,
 } from '@main/services/shutdown-latch.service';
 import {
   addWindow,
@@ -39,6 +40,27 @@ describe('shutdown latches', () => {
     markQuitRequested();
 
     expect(isAppQuitRequested()).toBe(true);
+  });
+
+  test('leaves the startup tasks running when macOS closes its last window without quitting', () => {
+    // The app stays resident and a dock reactivation starts a fresh session, but the startup tasks
+    // run once per process — so aborting here would drop that session's startup sync permanently.
+    expect(shouldWindowCloseAbortStartupTasks('darwin')).toBe(false);
+
+    markQuitRequested();
+
+    // A real quit on macOS still has to stop them.
+    expect(shouldWindowCloseAbortStartupTasks('darwin')).toBe(true);
+  });
+
+  test('stops the startup tasks off macOS even before a quit is flagged', () => {
+    // Off macOS the last window closing always ends in a quit, but `window-all-closed` calls
+    // `app.quit()` only after the close handlers have run — so the quit flag is still false while
+    // the shutdown tasks this guard protects are already running. The platform has to decide.
+    expect(isAppQuitRequested()).toBe(false);
+
+    expect(shouldWindowCloseAbortStartupTasks('win32')).toBe(true);
+    expect(shouldWindowCloseAbortStartupTasks('linux')).toBe(true);
   });
 
   test('shares one run across every window closing as part of the same quit', async () => {
