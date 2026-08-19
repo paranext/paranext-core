@@ -41,12 +41,16 @@ export const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 export const VALIDATION_DEBOUNCE_MS = 1000;
 export const INVALID_CODE_DISPLAY_DEBOUNCE_MS = 1000;
 
-const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org/';
+// No trailing slash: this is the exact string ParatextData returns for the Production environment,
+// so the fallback and a real backend response are the same value.
+const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org';
 
 /**
- * Fetches the registry site URL for the selected server, falling back to production so the link is
- * never blank or broken (and skips the lookup entirely in demo mode). Module-scope so it is a
- * stable `usePromise` callback.
+ * Fetches the registry site URL for the selected server environment, falling back to production so
+ * the link always has a target rather than going blank (and skips the lookup entirely in demo
+ * mode). That is all the fallback guarantees — whether the target is reachable is a separate matter
+ * (a retired host, or access blocked from the user's network or country, still reads as a broken
+ * link). Module-scope so it is a stable `usePromise` callback.
  */
 async function fetchRegistryUrl() {
   if (isDemoMode()) return PRODUCTION_REGISTRY_URL;

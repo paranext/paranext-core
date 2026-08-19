@@ -44,8 +44,11 @@ export function DeveloperSection({
   disabled,
 }: DeveloperSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  // QA (and any unknown value) is not surfaced in this UI; it displays as Production.
-  // Development and Test are shown directly.
+  // `selectedServer` mirrors ParatextData's persisted `InternetSettings.xml`, whose enum also
+  // includes 'QualityAssurance'. No Platform.Bible UI writes that value — this toggle only offers
+  // the other three — but it can still arrive from the internet-settings API (which accepts the
+  // full enum) or from a pre-existing settings file. Render any value this toggle cannot represent
+  // as Production so it is never blank; the deselect branch below is the escape hatch back out.
   const displayValue =
     selectedServer === 'Development' || selectedServer === 'Test' ? selectedServer : 'Production';
 

@@ -53,8 +53,9 @@ export const TestActive: Story = {
 };
 
 /**
- * A hidden QualityAssurance (or unknown) server is persisted (e.g., from a prior session). The UI
- * displays it as Production; clicking Production switches the user to actual Production.
+ * A QualityAssurance server is persisted even though this toggle never offers it — it can arrive
+ * from the internet-settings API or a pre-existing settings file. The UI displays it as Production;
+ * clicking Production switches the user to actual Production.
  */
 export const QualityAssuranceActive: Story = {
   args: { selectedServer: 'QualityAssurance' },

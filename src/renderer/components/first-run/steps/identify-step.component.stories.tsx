@@ -5,9 +5,10 @@ import { IdentifyStep } from './identify-step.component';
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
 const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
-// Registry site for the Test server (see ParatextRegistrationService.GetRegistryUrl); used to show
-// the "Visit Paratext Registry" link following the selected server rather than always Production.
-const TEST_REGISTRY_URL = 'https://registry-test.paratext.org/';
+// The registry site a non-production environment resolves to. ParatextData maps Development, Test,
+// and QualityAssurance all to this one host; only Production differs. Used here to show the "Visit
+// Paratext Registry" link following the selected environment rather than always Production.
+const NON_PRODUCTION_REGISTRY_URL = 'https://registry-dev.paratext.org';
 
 const meta: Meta<typeof IdentifyStep> = {
   title: 'First run/IdentifyStep',
@@ -26,18 +27,18 @@ type Story = StoryObj<typeof IdentifyStep>;
 export const Default: Story = {};
 
 /**
- * The "Visit Paratext Registry" link points at whichever registry server the user selected on the
- * preceding Internet Settings step (resolved via `paratextRegistration.getParatextRegistryUrl`),
- * not a hardcoded production URL. Here the selected server is Test, so the link targets the Test
- * registry site.
+ * The "Visit Paratext Registry" link points at whichever registry the selected server environment
+ * uses (resolved via `paratextRegistration.getParatextRegistryUrl`), not a hardcoded production
+ * URL. Here a non-production environment is selected, so the link targets the development registry
+ * site.
  */
 export const RegistryLinkFollowsSelectedServer: Story = {
   beforeEach: () => {
-    // Route by command name so the mount-time URL lookup returns the Test server's site while
+    // Route by command name so the mount-time URL lookup returns the non-production site while
     // any other command (none are triggered here) resolves harmlessly.
     const spy = spyOn(commandService, 'sendCommand').mockImplementation((command: string) =>
       command === 'paratextRegistration.getParatextRegistryUrl'
-        ? Promise.resolve(TEST_REGISTRY_URL)
+        ? Promise.resolve(NON_PRODUCTION_REGISTRY_URL)
         : Promise.resolve(undefined),
     );
     return () => spy.mockRestore();
@@ -45,7 +46,7 @@ export const RegistryLinkFollowsSelectedServer: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole('link', { name: /visit paratext registry/i });
-    await waitFor(() => expect(link).toHaveAttribute('href', TEST_REGISTRY_URL));
+    await waitFor(() => expect(link).toHaveAttribute('href', NON_PRODUCTION_REGISTRY_URL));
   },
 };
 

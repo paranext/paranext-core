@@ -15,8 +15,11 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 ];
 
 /**
- * Fetches the registry site URL for the selected server, falling back to production so the link is
- * never blank or broken. Module-scope so it is a stable `usePromise` callback.
+ * Fetches the registry site URL for the selected server environment, falling back to production so
+ * the link always has a target rather than going blank. That is all the fallback guarantees —
+ * whether the target is reachable is a separate matter (a retired host, or access blocked from the
+ * user's network or country, still reads as a broken link). Module-scope so it is a stable
+ * `usePromise` callback.
  */
 async function fetchRegistryUrl() {
   try {
