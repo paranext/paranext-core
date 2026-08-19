@@ -42,6 +42,14 @@ export interface FindWebViewOptions extends OpenWebViewOptions {
    * available; Replace and Replace All are withheld because the project rejects every write.
    */
   isReadOnly?: boolean;
+  /**
+   * Whether the Find web view should put the caret in its search box once it is on screen. Set by
+   * `platformScripture.openFind` on the path that reloads the web view; the path that reuses an
+   * already-mounted one sends the `FIND_FOCUS_SEARCH_EVENT` network event instead. Absent means "no
+   * request" and is scrubbed rather than carried over, so a value persisted into a saved layout
+   * cannot steal focus on the next hydration.
+   */
+  shouldFocusSearch?: boolean;
 }
 
 export class FindWebViewProvider implements IWebViewProvider {

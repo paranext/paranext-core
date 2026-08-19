@@ -165,6 +165,32 @@ describe('buildFindWebViewFields', () => {
       expect(fields.state.isReadOnly).toBe(true);
     });
 
+    it('sets the focus-search request from the caller', () => {
+      const fields = buildFindWebViewFields(
+        savedWebView(),
+        { shouldFocusSearch: true },
+        'simple',
+        LOCALIZED_TITLE,
+      );
+
+      expect(fields.state.shouldFocusSearch).toBe(true);
+    });
+
+    it('scrubs the focus-search request when the caller supplies none', () => {
+      // A one-shot request, unlike `isReadOnly`, so it is scrubbed unconditionally rather than
+      // falling back to the saved value: it is persisted into the saved layout along with the rest of
+      // `state`, and every hydration reloads with no options at all. Carrying it over would steal
+      // focus into the search box on app start, for an invoke that happened in an earlier session.
+      const fields = buildFindWebViewFields(
+        savedWebView({ state: { shouldFocusSearch: true } }),
+        {},
+        'simple',
+        LOCALIZED_TITLE,
+      );
+
+      expect(fields.state.shouldFocusSearch).toBe(false);
+    });
+
     it('keeps the saved editor web view id when the caller supplies none', () => {
       const fields = buildFindWebViewFields(
         savedWebView({ state: { editorWebViewId: 'editor-1' } }),

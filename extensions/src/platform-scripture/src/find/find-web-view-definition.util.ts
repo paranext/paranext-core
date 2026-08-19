@@ -13,6 +13,7 @@ export type FindDefinitionOptions = {
   editorWebViewId?: string;
   initialSearchText?: string;
   isReadOnly?: boolean;
+  shouldFocusSearch?: boolean;
 };
 
 /** The fields the Find web view provider computes, minus the bundled `content` and `styles`. */
@@ -71,6 +72,9 @@ export function buildFindWebViewFields(
     // allows closing/rearranging freely. This also picks the tab's rc-dock group: `getTabGroup`
     // routes `isClosable === false` to `TAB_GROUP_RESOURCES`, which is only registered in simple
     // mode.
+    //
+    // The sixth copy of this same per-mode computation across three extensions. PT-4405 moves it into
+    // the renderer, which already holds both halves it needs; this line goes away with that.
     isClosable: !isSimpleMode,
     // Icon-only tab in Simple mode only — Power mode keeps this tab text-labeled and un-iconed,
     // matching the resource panels. Without an icon here, Simple mode's icon-only collapse (which
@@ -98,6 +102,11 @@ export function buildFindWebViewFields(
       // a published resource with Replace enabled on text the project rejects.
       isReadOnly:
         options.isReadOnly ?? (options.projectId ? false : !!savedWebView.state?.isReadOnly),
+      // Scrubbed unconditionally when the caller says nothing, unlike `isReadOnly` above. This is a
+      // one-shot request rather than durable state, and it rides along in the persisted `state`, so
+      // carrying a saved `true` over would put the caret in the search box on app start for an invoke
+      // that happened in a previous session. Only a caller asking right now may set it.
+      shouldFocusSearch: options.shouldFocusSearch ?? false,
       ...(options.initialSearchText ? { findSearchTerm: options.initialSearchText } : {}),
     },
   };

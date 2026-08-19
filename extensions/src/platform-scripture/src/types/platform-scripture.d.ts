@@ -1588,6 +1588,19 @@ declare module 'platform-scripture' {
   };
 
   /**
+   * Payload for the `platformScripture.focusFindSearch` network event, which asks one already-open
+   * Find web view to put the caret in its search box.
+   *
+   * Addressed rather than broadcast: more than one Find web view can be open at once in Power mode,
+   * and taking the caret away from the user's current position is only correct for the panel the
+   * invoke actually resolved. Every other Find web view ignores the event.
+   */
+  export type FindFocusSearchEvent = {
+    /** Id of the Find web view whose search box should take focus. */
+    webViewId: string;
+  };
+
+  /**
    * Service that aggregates all available {@link ICheckRunner} data providers and provides a single
    * point of interaction for managing checks across all processes. This service itself is also an
    * {@link ICheckRunner} so that consumers only need to interact with one data provider to manage
@@ -2363,6 +2376,7 @@ declare module 'papi-shared-types' {
     CheckDetails,
     CheckCreatorFunction,
     CheckResultsInvalidated,
+    FindFocusSearchEvent,
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
     IFindHistoryDataProvider,
@@ -2504,6 +2518,11 @@ declare module 'papi-shared-types' {
      * no project — this opens nothing and creates nothing, but still brings an already-open find
      * web view to the front unchanged, so that in Simple mode (where Find is a permanent tab)
      * invoking Find always lands on that tab rather than appearing to do nothing.
+     *
+     * Every path that fronts a find web view also puts the caret in its search box, so an invoke
+     * leaves the user able to type immediately. Bringing a tab to the front focuses the web view's
+     * iframe but lands on its `body`, which is why this is done explicitly rather than left to the
+     * docking framework.
      *
      * @param editorWebViewId Id of the triggering editor's web view — not a project id. The
      *   project, scroll group, and editability for the Find / Replace UI are resolved from it
@@ -2760,5 +2779,16 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platformScripture.openMarkersChecklistSettings': undefined;
+    /**
+     * Emitted by `platformScripture.openFind` to ask one already-open Find web view to put the
+     * caret in its search box, so that invoking Find lands the user somewhere they can type. Only
+     * the Find web view whose id the payload names reacts.
+     *
+     * Not emitted when the invoke rebuilds the Find web view; that path carries the request in the
+     * web view's own state instead, because an event would race the new web view's subscription.
+     *
+     * @experimental
+     */
+    'platformScripture.focusFindSearch': FindFocusSearchEvent;
   }
 }

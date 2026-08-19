@@ -128,6 +128,12 @@ export type FindProps = {
   };
 
   // Search/replace input + filter state
+  /**
+   * Ref attached to the search box, so the web view can put the caret there when Find is invoked.
+   * Owned by the caller rather than exposed as an imperative handle, matching how the scripture
+   * editor hands `MarkerMenu` its `searchRef`.
+   */
+  searchInputRef?: React.Ref<HTMLInputElement>;
   /** The current search term. */
   searchTerm: string;
   /** Recent search terms shown in the recent-searches dropdown. */
@@ -280,6 +286,7 @@ export function Find({
   localizedStrings,
   scopeSelectorLocalizedStrings,
   searchResultLocalizedStrings,
+  searchInputRef,
   searchTerm,
   recentSearches,
   scope,
@@ -579,6 +586,7 @@ export function Find({
             <TextSearch className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:text-muted-foreground" />
             <Input
               id="search-term"
+              ref={searchInputRef}
               value={searchTerm}
               onChange={(e) => onSearchTermChange(e.target.value)}
               onKeyDown={(e) => {

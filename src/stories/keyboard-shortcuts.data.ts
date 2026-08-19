@@ -197,7 +197,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'scripture-find',
     purpose:
-      'Bring Find to the front — a permanent tab in Simple mode, a panel beside the editor in Power mode',
+      'Bring Find to the front and put the caret in its search box — a permanent tab in Simple mode, a panel beside the editor in Power mode. Pre-fills the search box with the editor selection, if any',
     category: 'Navigation',
     context: 'Scripture editor web view',
     // macOS intentionally uses ⌃F (not the usual ⌘F) to match the handler in
@@ -206,6 +206,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
       'extensions/src/platform-scripture/src/main.ts',
+      'extensions/src/platform-scripture/src/find/use-focus-search-on-invoke.hook.ts',
     ],
   },
   {
