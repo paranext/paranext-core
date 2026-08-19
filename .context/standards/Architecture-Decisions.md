@@ -415,3 +415,54 @@ step, no automation. Just a record.
   than inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
+
+## ADR-0013: `InstalledExtensions.packaged` reports discovered extensions, not activated ones
+
+- **Date:** 2026-08-13
+- **Status:** Accepted
+- **Context:** `getInstalledExtensions` in `extension.service.ts` built its `packaged` list from the
+  live `activeExtensions` map, so the answer moved as startup progressed. Extensions activate
+  sequentially in a deterministic order that places every `platform*` extension before every
+  `paratext*` one, which means `platformGetResources` — the extension that answers
+  `platformGetResources.isSendReceiveAvailable` — is always running while `paratextBibleSendReceive`
+  is still queued. A Paratext 10 Studio log measured that gap at ~1.5s, widened by whatever the
+  extensions in between (notably the network-bound marketplace extension) take. Callers asking inside
+  the gap got a truthful `false` to "is send/receive installed?" and had no way to know it was
+  temporary; the toolbar's Sync button therefore stayed hidden for the session (PT-3954), since
+  `platform.onDidReloadExtensions` does not fire on a cold start.
+- **Decision:** `packaged` is derived from the extensions **discovered** for this build
+  (`availableExtensions`, assigned in `reloadExtensions` before any activation begins) via
+  `derivePackagedExtensionIdentifiers` in `extension-host/utils/extension-data.util.ts`. The list now
+  answers "did this ship with the application?" — a question whose answer does not change during
+  startup — and its TSDoc in `manage-extensions-privilege.model.ts` says so explicitly, including that
+  it is *not* an answer to "can I call this extension's commands right now?".
+- **Alternatives:** **Add a separate `available` field and leave `packaged` on activation state** —
+  rejected: `packaged` is already documented as "explicitly bundled to be part of the application …
+  at runtime no extensions can be added or removed from this set", which describes the build, not the
+  activation queue; two near-identical lists would invite callers to pick the wrong one. **Fix only
+  the toolbar with a retry** — rejected as the sole fix: it leaves every other caller of this list
+  with the same trap. To be clear about which change does what: this decision is the fix. The
+  renderer's re-checks and the Home web view's retries are fallbacks for a different failure — the
+  extension answering the check not having activated yet, which no change to this list can address.
+  **Emit `platform.onDidReloadExtensions` on cold start** — rejected: it would trigger refetch
+  storms across all consumers at startup, and a renderer that subscribes late would still miss it;
+  making the query stable beats making the event more frequent.
+- **Consequences:** An extension that fails or times out during activation (5s cap, see
+  `getExtensionActivationTimeoutMs`) is now reported as packaged, so callers may show affordances for
+  an extension that cannot answer — the toolbar accepts this trade deliberately, as the user already
+  receives an `%extension_failed_to_start%` notification in that case. Consumers that need "is it
+  usable right now?" must ask that question directly rather than inferring it from this list.
+  This also inherits `availableExtensions`' staleness, which `packaged` did not have before: during a
+  reload the previous list stands until `reloadExtensions` reassigns it, so an extension mid-disable
+  can briefly be reported as packaged (i.e. bundled and undisableable), and a failed `getExtensions()`
+  leaves the list stale for the session. Both windows are short and only observable by a caller
+  polling during a reload, but they are new here, not pre-existing. Because the inputs are
+  module-private (`availableExtensions` is only populated by a full reload), the invariant is guarded
+  by a source check — `extension.service.packaged-extensions.test.ts` — rather than a behavioral test.
+  Revisit if a caller genuinely needs activation state: that wants a new, honestly-named signal, not a
+  redefinition of this one. The same "don't answer a question you can't answer" rule applies one level
+  up: `platformGetResources.isSendReceiveAvailable` returns `undefined` — not `false` — when it lacks
+  the `manageExtensions` privilege to check with, and its consumers treat `undefined` and a thrown
+  error alike as unknown, failing open.
+- **Source:** PT-3954 (Sync button on toolbar sometimes does not show), with the activation timeline
+  measured from a Paratext 10 Studio `main.log`.
