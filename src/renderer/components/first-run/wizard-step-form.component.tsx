@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from 'platform-bible-react';
 import { AlertCircle } from 'lucide-react';
 import { ReactNode } from 'react';
+import { WizardStepHeading } from './wizard-step-heading.component';
 
 interface WizardStepFormProps {
   /** Step heading rendered as an `<h2>`. */
@@ -40,7 +41,7 @@ export function WizardStepForm({
 }: WizardStepFormProps) {
   return (
     <div className="tw:flex tw:flex-col tw:gap-3">
-      <h2 className="tw:text-base tw:font-semibold">{heading}</h2>
+      <WizardStepHeading>{heading}</WizardStepHeading>
       <div>{children}</div>
       {error && (
         <Alert variant="destructive">
