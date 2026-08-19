@@ -442,32 +442,30 @@ describe('MarkerMenu — row layout', () => {
     );
   });
 
-  it('drops the detail entirely when the toolbar reports there is no room for it', () => {
-    render(
-      <MarkerMenu
-        localizedStrings={DEFAULT_LOCALIZED_STRINGS}
-        markerMenuItems={ITEMS}
-        shrinkStep={3}
-      />,
-    );
+  it('weights the detail to give up its space first, so the title keeps as much of the row as it can', () => {
+    // The title identifies the row; the detail restates it. Both truncate, but a shrink factor
+    // this lopsided means the detail is down to an ellipsis before the title loses a character.
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
 
-    expect(screen.getByText('Paragraph')).toBeInTheDocument();
-    expect(screen.queryByText('Normal paragraph text')).not.toBeInTheDocument();
+    expect(screen.getByText('Normal paragraph text').className).toMatch(
+      /(?:^|\s)tw:shrink-\[9999\](?:\s|$)/,
+    );
+    expect(screen.getByText('Paragraph').className).toMatch(/(?:^|\s)tw:shrink(?:\s|$)/);
   });
 
-  it('keeps the detail at the widest step', () => {
-    render(
-      <MarkerMenu
-        localizedStrings={DEFAULT_LOCALIZED_STRINGS}
-        markerMenuItems={ITEMS}
-        shrinkStep={0}
-      />,
-    );
+  it('keeps the detail reachable at every width, since the popover has its own fixed width', () => {
+    // The menu portals out of the toolbar, so the toolbar's width says nothing about how much room
+    // the popover has. CSS truncation handles narrow popovers; the `title` attribute keeps the full
+    // text available either way.
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
 
-    expect(screen.getByText('Normal paragraph text')).toBeInTheDocument();
+    expect(screen.getByText('Normal paragraph text')).toHaveAttribute(
+      'title',
+      'Normal paragraph text',
+    );
   });
 
-  it('renders a row with no detail without leaving an empty slot behind', () => {
+  it('renders a row with no detail as title only', () => {
     render(
       <MarkerMenu
         localizedStrings={DEFAULT_LOCALIZED_STRINGS}
@@ -475,7 +473,11 @@ describe('MarkerMenu — row layout', () => {
       />,
     );
 
+    // Two children — the marker slot and the title — with no empty third element where the detail
+    // would sit. The previous version of this only asserted text the row query already guaranteed.
     const row = screen.getByRole('option', { name: /Poetry line 1/ });
-    expect(row).toHaveTextContent('Poetry line 1');
+    const titleRow = screen.getByText('Poetry line 1').parentElement;
+    expect(titleRow?.children).toHaveLength(1);
+    expect(row).toHaveTextContent('q1');
   });
 });

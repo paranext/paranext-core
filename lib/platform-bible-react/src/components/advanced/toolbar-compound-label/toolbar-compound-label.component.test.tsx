@@ -76,24 +76,70 @@ describe('ToolbarCompoundLabel', () => {
     );
 
     expect(screen.getByText('Translation Project 1').parentElement?.textContent).toBe(
-      'Translation Project 1(TP1)',
+      'Translation Project 1 (TP1)',
     );
   });
 
   test('renders the primary field first by default', () => {
     render(<ToolbarCompoundLabel primary="GEN" secondary="1:1" fullText="Genesis 1:1" />);
 
-    expect(screen.getByText('GEN').parentElement?.textContent).toBe('GEN1:1');
+    expect(screen.getByText('GEN').parentElement?.textContent).toBe('GEN 1:1');
   });
 
-  test('lets only the secondary field shrink and clip', () => {
+  test('keeps the separator in textContent, so callers that read the label as text still see one reference', () => {
+    // A CSS `gap` would space the fields visually and leave `textContent` reading `GEN1:1`. Several
+    // Playwright suites assert on this element's text (`toContainText('Mark 4:2')`), and a screen
+    // reader would run the two fields together the same way.
     render(<ToolbarCompoundLabel primary="GEN" secondary="1:1" fullText="Genesis 1:1" />);
 
-    // The primary field must survive at any width; the secondary is the designated truncation
-    // target, so it is the one allowed to shrink below its content width and clip.
-    expect(screen.getByText('GEN').className).toMatch(/(?:^|\s)tw:shrink-0(?:\s|$)/);
-    expect(screen.getByText('1:1').className).toMatch(/(?:^|\s)tw:truncate(?:\s|$)/);
-    expect(screen.getByText('1:1').className).toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+    expect(screen.getByText('GEN').parentElement).toHaveTextContent('GEN 1:1');
+  });
+
+  test('uses a caller-supplied separator, so a label that reads `p - Paragraph` keeps its dash', () => {
+    render(
+      <ToolbarCompoundLabel
+        primary="p"
+        secondary="Paragraph"
+        separator=" - "
+        fullText="p - Paragraph"
+      />,
+    );
+
+    expect(screen.getByText('p').parentElement?.textContent).toBe('p - Paragraph');
+  });
+
+  test('shows the full text on hover when the primary field is an abbreviation, even though nothing is clipped', async () => {
+    // `GEN` for `Genesis` is a substitution, not an overflow, so clip detection cannot see it and
+    // the full book name would otherwise be unreachable.
+    render(<ToolbarCompoundLabel primary="GEN" secondary="1:1" isPartial fullText="Genesis 1:1" />);
+    const secondary = screen.getByText('1:1');
+    setClipping(secondary, { scrollWidth: 40, clientWidth: 40 });
+
+    await userEvent.hover(secondary);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+  });
+
+  test('lets the primary field keep an ellipsis rather than being cut mid-glyph', () => {
+    // The trigger around this label is `overflow-hidden` with no ellipsis of its own, so a long
+    // localized book name has to truncate here or it is sliced through a character.
+    render(<ToolbarCompoundLabel primary="1 Chronicles" secondary="29:30" fullText="x" />);
+
+    expect(screen.getByText('1 Chronicles').className).toMatch(/(?:^|\s)tw:truncate(?:\s|$)/);
+  });
+
+  test('weights the secondary field to absorb the shrinking, so the primary clips only as a last resort', () => {
+    render(<ToolbarCompoundLabel primary="GEN" secondary="1:1" fullText="Genesis 1:1" />);
+
+    // Both can shrink — the primary needs to, or a long book name is cut mid-glyph by the
+    // trigger's overflow-hidden — but the secondary's far larger shrink factor means it clips to
+    // nothing before the primary loses a character.
+    expect(screen.getByText('1:1').className).toMatch(/(?:^|\s)tw:shrink-\[9999\](?:\s|$)/);
+    expect(screen.getByText('GEN').className).toMatch(/(?:^|\s)tw:shrink(?:\s|$)/);
+    ['GEN', '1:1'].forEach((text) => {
+      expect(screen.getByText(text).className).toMatch(/(?:^|\s)tw:truncate(?:\s|$)/);
+      expect(screen.getByText(text).className).toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+    });
   });
 
   test('shows no tooltip on hover while the full text already fits', async () => {

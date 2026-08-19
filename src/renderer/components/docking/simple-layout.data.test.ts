@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
-import { simpleLayout } from './simple-layout.data';
+import { RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX, simpleLayout } from './simple-layout.data';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
 vi.mock('../../../shared/services/logger.service');
@@ -134,20 +134,19 @@ describe('simple-layout.data', () => {
     });
 
     it('leaves the three columns plus their dividers narrower than the smallest window the app allows, so narrowing to the minimum cannot force a horizontal scrollbar', () => {
-      // Kept in step with `minWidth` on the BrowserWindow in src/main/main.ts. If either number
-      // moves, this test is what should fail — not a user dragging the window edge and losing the
-      // third column behind a scrollbar, which is exactly what the old 3 x 300 floor caused inside
-      // an 800px window.
+      // Mirrors `minWidth` on the BrowserWindow in src/main/main.ts. It cannot be imported —
+      // main.ts pulls in Electron — so lowering that number will NOT fail this test. Change both.
       const WINDOW_MIN_WIDTH_PX = 900;
-      // rc-dock's dividers are real layout width, not decoration: `flex: 0 0 2px` per divider in
-      // Simple mode (dock-layout-wrapper.simple-mode.scss). Leaving them out of this sum is how
-      // "3 x 300 fits in 900" looks right on paper and still overflows by 4px in the app.
-      const DIVIDER_WIDTH_PX = 2;
 
+      // The reserve rc-dock actually budgets per divider, which is what decides whether the dock
+      // overflows. Deliberately NOT the 2px the Simple-mode stylesheet paints: rc-dock hard-codes 4
+      // in its own arithmetic, so using the visual width here makes 3 x 300 look like it fits (898)
+      // while rc-dock demands 902 and the app grows a scrollbar.
       const minWidths = columnMinWidths();
       const dividerCount = minWidths.length - 1;
       const totalMinWidth =
-        minWidths.reduce((sum, minWidth) => sum + minWidth, 0) + dividerCount * DIVIDER_WIDTH_PX;
+        minWidths.reduce((sum, minWidth) => sum + minWidth, 0) +
+        dividerCount * RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX;
 
       expect(totalMinWidth).toBeLessThanOrEqual(WINDOW_MIN_WIDTH_PX);
     });
@@ -163,9 +162,9 @@ describe('simple-layout.data', () => {
     it('keeps the editor column weighted wider than the two side columns', () => {
       // rc-dock renders each column as `flex: (size) (size * 1e6) (size)px` (DockBox.js), so `size`
       // is a proportional weight and the columns already rescale continuously with the window —
-      // no JS resize handling involved. This 1:2:1 weighting is what gives the editor ~400px at an
-      // 800px window, comfortably clear of the ~294px its toolbar needs at full shrink. Equal
-      // thirds would give it ~266px and put the toolbar back into overflow.
+      // no JS resize handling involved. The weighting only stops mattering at the narrowest window,
+      // where all three floors bind and the columns come out equal; above that the editor grows
+      // twice as fast as its neighbours.
       const sizes = columns.map((col) => col.size);
 
       expect(sizes).toEqual([1, 2, 1]);

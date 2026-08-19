@@ -949,6 +949,9 @@ export function BookChapterControl({
               primary={bookLabel}
               secondary={chapterVerseLabel}
               showSecondary={shrinkStep < SHRINK_STEP.MINIMUM}
+              // From TIGHT on, `bookLabel` is the abbreviated id rather than the book name. Nothing
+              // is visibly clipped, so only this tells the tooltip the label is incomplete.
+              isPartial={shrinkStep >= SHRINK_STEP.TIGHT}
               fullText={currentDisplayValue}
             />
           )}

@@ -4,27 +4,25 @@ import { LayoutBase } from 'rc-dock';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
 /**
- * Minimum width of each Simple-mode column, derived from the smallest window the app allows so the
- * three columns can never total more than the window that holds them.
- *
- * UX asked for "roughly 300 each inside a 900px window" (2026-08-18). 298 rather than a literal 300
- * because rc-dock's two dividers are real layout width — `flex: 0 0 2px` each in Simple mode
- * (dock-layout-wrapper.simple-mode.scss), and the dock spans the full window with no horizontal
- * inset (getDockLayoutOuterInset returns left/right 0 in Simple). A literal 300 would need 904px
- * inside 900 and reintroduce the very scrollbar this removes.
- *
- * The columns do not need a floor to rescale: rc-dock renders each as `flex: (size) (size × 1e6)
- * (size)px` (DockBox.js), so the `size` weights already make them proportional to the window in
- * pure CSS. This floor only stops a splitter drag from collapsing a column to nothing.
- *
- * Shaving 2px off 300 does NOT by itself make the row fit. rc-dock sizes the one flexible column as
- * `container - (floored columns) - 2` while Simple mode has two 2px dividers, so the row overruns
- * by a constant 2px whenever the floors bind — at any floor value, measured in the running app.
- * That remainder is clipped in `dock-layout-wrapper.simple-mode.scss` (SIMPLE-MODE DIVIDER
- * ROUNDING), which carries the measurements. Keeping this at 298 rather than 300 only means 2px
- * gets clipped there instead of 4.
+ * Width rc-dock adds per divider when it computes a box's minimum width (`box.minWidth +=
+ * (children.length - 1) * 4` in its `Algorithm`). Hard-coded in its JS and unrelated to the 2px the
+ * Simple-mode stylesheet paints, so it has to be budgeted for separately — leave it out and three
+ * "300px" columns silently demand 902px inside a 900px window.
  */
-export const SIMPLE_COLUMN_MIN_WIDTH_PX = 298;
+export const RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX = 4;
+
+/**
+ * Minimum width of each Simple-mode column. UX asked for roughly 300 inside a 900px window; 297 is
+ * the largest value that actually fits once rc-dock's per-divider reserve is counted: `3 × 297 + 2
+ * × 4 = 899`. At 300 the total is 902 and the dock overflows into a horizontal scrollbar.
+ *
+ * This floor is not what makes the columns responsive — rc-dock renders each as `flex: (size) (size
+ * × 1e6) (size)px`, so the `size` weights already scale them with the window in pure CSS. It only
+ * stops a splitter drag from collapsing a column to nothing.
+ *
+ * `simple-layout.data.test.ts` pins the arithmetic against the window minimum in `main.ts`.
+ */
+export const SIMPLE_COLUMN_MIN_WIDTH_PX = 297;
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */

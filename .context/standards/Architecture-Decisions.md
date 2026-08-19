@@ -989,3 +989,66 @@ step, no automation. Just a record.
   anchor/insert-before cannot express.
 - **Source:** Review of the `pt-4342-dock-find-in-simple` branch — findings on the supplement's silent
   append fallback and the untested shipped column order; open question raised in the PR body.
+
+## ADR-0022: Responsive toolbars measure their own width in JS, not with CSS container queries
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** Toolbar items were disappearing at narrow widths — most seriously the
+  structure-protection lock, a safety indicator, which vanished entirely in Simple mode at the
+  smallest window. Making items shrink in steps instead needs a width signal. Tailwind container
+  queries are the obvious mechanism and were already used in two places, but both were broken:
+  `platform-enhanced-resources`' tab bar had written `tw-@container/toolbar` with a dash where
+  Tailwind v4's prefix needs `tw:`, so the class emitted nothing, the container was never
+  established, and its four tab labels were hidden at every width — silently, for as long as that
+  code had shipped. `manage-books-dialog.component.tsx` records the same conclusion reached
+  independently (its `@md/…:` variants never reached the web view bundle), and
+  `platform-tab-title.component.tsx` records a third failure, where `container-type: inline-size`
+  corrupted rc-dock's content-driven ancestor sizing.
+- **Decision:** Width-driven collapse goes through `useShrinkStep` — a `ResizeObserver` on the
+  toolbar root that maps width to a discrete step, published to descendants via
+  `ShrinkStepContext`. Items read the step and pick a label form. `ToolbarCompoundLabel` encodes the
+  shared rule that a two-field label always sacrifices its second field first.
+- **Alternatives:** **Fix the prefix and keep container queries** — rejected: it repairs one
+  instance of a mechanism that has now failed three times in this repo, and its failure mode is
+  silent (no class, no error, no visible difference until someone resizes). **A hook per component**
+  — rejected: three toolbars would each grow their own observer and thresholds. **Measure in the
+  consumer and pass a prop** — rejected: every consumer would re-derive the same ladder.
+- **Consequences:** One observer per toolbar rather than per item. Steps are testable under
+  jsdom, which CSS queries are not. The cost is that thresholds are pixel constants that must be
+  tuned by eye, and that a consumer reading the step must render *inside* the toolbar — a component
+  that renders the provider sits above it and silently reads the default. Two existing hand-rolled
+  `ResizeObserver` width thresholds (`platform-tab-title`, `manage-books-dialog`) were left alone
+  and could migrate later.
+- **Source:** PT-4344.
+
+## ADR-0023: Simple-mode column minimums are derived from the window minimum, dividers included
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** Simple mode's three columns each carried `panelLock.minWidth: 300`, totalling 900px
+  inside a window that could be dragged to 800px. The dock overflowed and the third column was
+  reachable only by scrolling. UX then confirmed a 900px window minimum is safe (2025 analytics:
+  99.83% of 11,587 users on screens 900px or wider), which appears to make three 300px columns fit
+  exactly — but it does not. rc-dock adds `(children - 1) * 4` to a box's minimum width in its own
+  arithmetic, a hard-coded 4px per divider unrelated to the 2px Simple mode paints, so three 300px
+  columns demand 902px.
+- **Decision:** Raise the window minimum to 900 and derive the column floor from it, budgeting
+  rc-dock's reserve: `SIMPLE_COLUMN_MIN_WIDTH_PX = 297`, since `3 × 297 + 2 × 4 = 899`. Both numbers
+  are named constants, and `simple-layout.data.test.ts` asserts the arithmetic including the divider
+  reserve.
+- **Alternatives:** **Clip the 2px overrun** (`min-width: 0 !important` + `overflow-x: clip` on the
+  dock box) — implemented first, then reverted: it treated a 2px arithmetic error as a layout
+  problem, and clipping the dock box also clips rc-dock's float and max boxes, cutting off dialogs
+  wider than the window. **Patch rc-dock's divider constant** via the existing `patches/` mechanism —
+  viable, and it would also fix Power mode, where 8px dividers are under-reserved by the same
+  hard-coded 4; deferred as a larger change than this ticket warranted. **Equal-thirds column
+  weights** — rejected: it would give the editor 266px at the minimum window, below what its own
+  toolbar needs, and would narrow the editor at every width, not just the smallest.
+- **Consequences:** No horizontal scrollbar at any supported window size, verified in the app. The
+  1:2:1 weighting is retained and pinned by a test, so the editor grows twice as fast as its
+  neighbours above the floor. Columns are proportional with no JS: rc-dock renders each as
+  `flex: (size) (size × 1e6) (size)px`, so removing the floor is all that "proportional resize"
+  required. The window minimum and the column floor are two constants in different files that must
+  move together; the test cannot import the Electron-side value, so its comment says to change both.
+- **Source:** PT-4344.

@@ -38,8 +38,12 @@ describe('Toolbar', () => {
     const appMenuArea = screen.getByTestId('app-menu-child').parentElement?.parentElement;
 
     expect(appMenuArea).not.toBeNull();
-    expect(appMenuArea?.className).toMatch(/(?:^|\s)tw:shrink-0(?:\s|$)/);
+    // The absence of `tw:min-w-0` is what actually protects this area — it leaves `min-width: auto`
+    // in place, pinning the area at its content's width. `tw:shrink-0` is belt-and-braces (with
+    // `tw:basis-0` its shrink factor already resolves to zero), so asserting only that would pass
+    // even if the real protection were removed.
     expect(appMenuArea?.className).not.toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+    expect(appMenuArea?.className).toMatch(/(?:^|\s)tw:shrink-0(?:\s|$)/);
   });
 
   it('publishes the widest shrink step to its children by default', () => {

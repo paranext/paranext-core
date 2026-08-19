@@ -51,7 +51,6 @@ import {
   PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
-  cn,
   ScrollGroupSelector,
   SelectMenuItemHandler,
   SHRINK_STEP,
@@ -176,32 +175,35 @@ function ParagraphStyleLabel({
   styleName,
 }: {
   blockMarker: string;
-  styleName: string;
+  /** Undefined until the localized strings resolve, and for any marker without a description. */
+  styleName: string | undefined;
 }) {
   const shrinkStep = useShrinkStepValue();
-  const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM;
+  // With no style name there is nothing to put beside the marker, so the label is already at its
+  // shortest form — and `fullText` must not advertise a name it cannot show.
+  const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM || !styleName;
 
   return (
     <ToolbarCompoundLabel
-      // Monospace on the marker code: a USFM marker is a code, not prose, and should read as one.
-      // Deliberately not colored by marker — the code inherits the row's own foreground.
+      // A USFM marker is a code, so it reads as one — monospace, inheriting the row's foreground
+      // rather than taking a marker colour.
       //
-      // Collapsed, the slot is a fixed 6 characters wide rather than sized to the marker (UX,
-      // 2026-08-18). 6 covers the longest markers in use (e.g. `periph`), and because the font is
-      // monospace `6ch` is exactly six glyphs. Fixed beats content-sized here: a content-sized
-      // trigger changes width as the cursor moves between a `p` and a `toc1`, shifting every
-      // button after it — the layout jump this whole feature exists to remove.
+      // The slot is a fixed 6 characters at every step, not sized to the marker: monospace makes
+      // `6ch` exactly six glyphs, which covers the longest markers in use, and a content-sized slot
+      // would resize the trigger as the cursor moved between a `p` and a `toc1`, shifting every
+      // button after it. `overflow-hidden` keeps a longer-than-expected marker inside the slot
+      // instead of pushing the chevron out.
       primary={
-        <span className={cn('tw:font-mono', isAtMinimum && 'tw:inline-block tw:w-[6ch]')}>
+        <span className="tw:inline-block tw:w-[6ch] tw:overflow-hidden tw:font-mono">
           {blockMarker}
         </span>
       }
       secondary={styleName}
+      separator=" - "
       showSecondary={!isAtMinimum}
-      fullText={`${blockMarker} - ${styleName}`}
-      // Capped at 30 characters when expanded (UX, 2026-08-18) so a long style name cannot let the
-      // trigger grow without bound. The label still shrinks below this — it is a ceiling, not a
-      // width.
+      fullText={styleName ? `${blockMarker} - ${styleName}` : blockMarker}
+      // A ceiling, not a width: long style names stop the trigger growing without bound, but the
+      // label still shrinks below this.
       className="tw:max-w-[30ch]"
     />
   );
@@ -2161,9 +2163,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     />
   ) : undefined;
 
-  /** Localized name of the current paragraph style, or the generic fallback. */
+  /**
+   * Localized name of the current paragraph style, or the generic fallback. Undefined until the
+   * localized strings resolve — `ParagraphStyleLabel` renders the marker code alone until then.
+   *
+   * `Object.hasOwn`, not a bare lookup: a marker named `constructor` or `toString` would otherwise
+   * find an inherited `Object.prototype` member and take the wrong branch.
+   */
   const blockMarkerName =
-    blockMarker && blockMarkerToBlockNames[blockMarker]
+    blockMarker && Object.hasOwn(blockMarkerToBlockNames, blockMarker)
       ? localizedStrings[blockMarkerToBlockNames[blockMarker]]
       : localizedStrings['%paragraphMenu_misc_markerDescription%'];
 

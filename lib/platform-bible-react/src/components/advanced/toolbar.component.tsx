@@ -59,13 +59,16 @@ export type ToolbarProps = PropsWithChildren<{
 }>;
 
 /**
- * Window-width breakpoints for the application titlebar, widest first.
+ * Breakpoints for the application titlebar, widest first, measured against the toolbar's OWN width
+ * — not the window's. On Windows and Linux the toolbar sits inside a wrapper whose padding reserves
+ * the caption-button strip, so it is roughly 150px narrower than the window; on macOS it is not.
+ * Thresholds picked from window width would therefore fire a step early, and differently per
+ * platform.
  *
- * INITIAL ESTIMATES, summed from the current control widths rather than measured against the
- * running app. They are tuned with the `visual-verification` skill before this ships; treat a value
- * here as provisional until that has happened.
+ * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
+ * adjust them the first time this is watched in a running app.
  */
-export const APP_TOOLBAR_SHRINK_THRESHOLDS_PX = Object.freeze([1100, 950, 850]);
+export const APP_TOOLBAR_SHRINK_THRESHOLDS_PX = Object.freeze([950, 800, 700]);
 
 /**
  * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing

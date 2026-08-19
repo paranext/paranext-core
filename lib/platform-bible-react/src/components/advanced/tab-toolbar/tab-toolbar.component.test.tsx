@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { TabToolbar } from '@/components/advanced/tab-toolbar/tab-toolbar.component';
+import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
 
 describe('TabToolbar', () => {
   it('does not force tw:h-full on the start/center/end area wrappers (breaks vertical centering)', () => {
@@ -83,6 +84,42 @@ describe('TabToolbar', () => {
     expect(endWrapper).not.toBeNull();
     expect(endWrapper?.className).toMatch(/(?:^|\s)tw:shrink-0(?:\s|$)/);
     expect(endWrapper?.className).not.toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+  });
+
+  it('publishes its shrink step down to the items inside it, so a laddered label sees the real value', () => {
+    // Guards the wiring end to end: `TabToolbar` forwards the prop, `TabToolbarContainer` puts it
+    // on the context, and a descendant reads it. Each piece is exercised elsewhere; only this
+    // catches them being connected wrongly.
+    function StepProbe() {
+      return <span data-testid="step">{useShrinkStepValue()}</span>;
+    }
+
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        shrinkStep={SHRINK_STEP.MINIMUM}
+        startAreaChildren={<StepProbe />}
+      />,
+    );
+
+    expect(screen.getByTestId('step')).toHaveTextContent(String(SHRINK_STEP.MINIMUM));
+  });
+
+  it('reports the widest step to its items by default', () => {
+    function StepProbe() {
+      return <span data-testid="step">{useShrinkStepValue()}</span>;
+    }
+
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        startAreaChildren={<StepProbe />}
+      />,
+    );
+
+    expect(screen.getByTestId('step')).toHaveTextContent(String(SHRINK_STEP.WIDE));
   });
 
   it('keeps the end zone growing so the wide-width split across the three zones is unchanged (grow and shrink are independent; dropping grow would visibly shift the center zone)', () => {
