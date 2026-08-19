@@ -284,6 +284,42 @@ export function resolveSelectedProjectScrollGroup(
 }
 
 /**
+ * Resolve which open tab Find should target when the user picks a project from a picker that does
+ * not surface scroll groups (simple interface mode, where `ScrollGroupSelector` is hidden from both
+ * toolbars and the picker reports a project id alone).
+ *
+ * Wraps {@link resolveSelectedProjectScrollGroup} and rejects its cross-project fallback. That
+ * fallback is correct for the reassignment effect that runs when tabs close, but wrong for a click:
+ * it would retarget Find at a project the user did not pick — reachable if the picked project's
+ * last tab closes between render and click. Returning `undefined` leaves the choice to the
+ * reassignment effect.
+ *
+ * Pass the CURRENT selection through rather than `undefined`, which is what makes re-picking the
+ * already-selected project keep the tab Find is already on instead of snapping to that project's
+ * first tab — and keeps the result independent of the order `openTabs` happened to arrive in.
+ *
+ * @returns The project and scroll group to select, or `undefined` if the picked project has no open
+ *   tab and the selection should be ignored.
+ */
+export function resolveScrollGroupForPickedProject(
+  pickedProjectId: string,
+  currentScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenScrollGroupTab[],
+  preferredWebViewId: string | undefined,
+): SelectedProjectScrollGroup | undefined {
+  const resolved = resolveSelectedProjectScrollGroup(
+    pickedProjectId,
+    currentScrollGroupId,
+    openTabs,
+    preferredWebViewId,
+  );
+  if (!resolved) return undefined;
+  if (normalizeProjectId(resolved.projectId) !== normalizeProjectId(pickedProjectId))
+    return undefined;
+  return resolved;
+}
+
+/**
  * Character categorizer settings fetched from the project's `platformScripture.*` settings, used to
  * build project-specific find/replace regex patterns.
  */

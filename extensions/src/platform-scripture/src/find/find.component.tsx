@@ -65,6 +65,14 @@ import {
 } from './replace-preview-options.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
+/**
+ * The `openTabs` value handed to the project picker in simple interface mode. Module-level rather
+ * than an inline `[]` so its identity is stable: `ProjectSelector` memoizes its row list on
+ * `openTabs`, and a fresh array each render would recompute the rows on every keystroke and every
+ * streamed result batch.
+ */
+const NO_OPEN_TABS: ProjectSelectorOpenTab[] = [];
+
 /** Localization keys used by the {@link Find} component itself (excludes child component keys). */
 export const FIND_LOCALIZED_STRING_KEYS = [
   '%general_countOfTotal%',
@@ -174,11 +182,29 @@ export type FindProps = {
    * area both show a "no open projects" placeholder instead of their normal content.
    */
   noOpenProjects: boolean;
-  /** Called when the user selects a different open project/tab for Find to operate on. */
+  /**
+   * When true, the project picker presents projects as a flat list with no scroll-group letters —
+   * neither in the trigger nor on any row (simple interface mode). Simple mode hides
+   * `ScrollGroupSelector` from both the app toolbar and the web view toolbar, so a group letter
+   * would name something the user can neither see nor change. `onSelectProject` handles selection
+   * instead of `onSelectProjectScrollGroup` while this is set.
+   */
+  hideScrollGroups?: boolean;
+  /**
+   * Called when the user selects a different open project/tab for Find to operate on. Not used
+   * while `hideScrollGroups` is set — see `onSelectProject`.
+   */
   onSelectProjectScrollGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
   /**
+   * Called when the user selects a different open project while `hideScrollGroups` is set. Carries
+   * no scroll group: the picker does not surface groups in that mode, so which of the project's
+   * open tabs Find targets is the caller's decision.
+   */
+  onSelectProject: (projectId: string) => void;
+  /**
    * Required by the underlying project picker but expected never to fire: the picker only ever
-   * lists open projects, so there is nothing for it to open.
+   * lists open projects, so there is nothing for it to open. Not passed while `hideScrollGroups` is
+   * set — `mode="project"` has no "open in group" affordance at all.
    */
   onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
 
@@ -329,7 +355,9 @@ export function Find({
   openTabs,
   isLoadingProjects,
   noOpenProjects,
+  hideScrollGroups = false,
   onSelectProjectScrollGroup,
+  onSelectProject,
   onOpenProjectInGroup,
   searchTerm,
   recentSearches,
@@ -600,15 +628,21 @@ export function Find({
   // the reason each cannot appear here:
   // - `filterAriaLabel` / `groupSectionLabel` / `filterSectionLabel` / `filterGroupByOpenTabs` —
   //   the funnel menu is not mounted at all (`hideFilterMenu` below).
-  // - `selectAll` / `clearAll` / `filterShowSelectedOnly` — multi-select only; Find is single-select
-  //   (`mode="projectScrollGroup"`).
+  // - `selectAll` / `clearAll` / `filterShowSelectedOnly` — multi-select only; both of Find's
+  //   configurations are single-select (`mode="projectScrollGroup"` / `mode="project"`).
   // - `versificationUnknownSectionHeading` — requires versification grouping.
   // - `boundButClosedTooltip` / `openButtonLabel` — render only on bound-but-closed rows, which Find
-  //   cannot produce (see `onOpenProjectInGroup`'s defensive no-op).
+  //   cannot produce (see `onOpenProjectInGroup`'s defensive no-op) and which `mode="project"` has no
+  //   code path for at all.
   //
   // `otherProjectsSectionHeading` is kept even though today's list is all open tabs (so that section
   // is empty and its heading does not render): unlike the above, its reachability depends on what
   // ends up in `projects` rather than on a setting here, so it is the one worth holding.
+  //
+  // `openTabsSectionHeading` is only reachable in the power-mode configuration: `defaultGroupByOpenTabs`
+  // defaults to `true`, and there every row carries a `scrollGroupId` so all of them land in the
+  // "open tabs" section. The simple-mode configuration passes `openTabs={[]}`, which leaves no row
+  // eligible for that section and collapses the list to a single unheaded group.
   const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
     () => ({
       searchPlaceholder: localizedStrings['%webView_find_projectSelector_searchPlaceholder%'],
@@ -619,6 +653,22 @@ export function Find({
     }),
     [localizedStrings],
   );
+
+  // Presentation and localization shared by both project-picker configurations, so the
+  // `hideScrollGroups` branch below differs only in the parts that actually vary: the mode, the
+  // selection shape, and the change/open callbacks.
+  const sharedProjectSelectorProps = {
+    localizedStrings: projectSelectorLocalizedStrings,
+    isLoading: isLoadingProjects,
+    hideFilterMenu: true,
+    buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjects%'],
+    commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
+    ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
+    buttonVariant: 'outline' as const,
+    buttonClassName: 'tw:w-full tw:font-normal',
+    popoverContentClassName: 'tw:w-[300px]',
+    alignDropDown: 'start' as const,
+  };
 
   return (
     <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
@@ -632,26 +682,34 @@ export function Find({
           {/* Always visible; lets the user see and change which project Find operates on (and, by
               extension, which open tab a result click will scroll). */}
           <div className="tw:min-w-[8rem] tw:flex-1" data-testid="find-project-trigger">
-            <ProjectSelector
-              mode="projectScrollGroup"
-              projects={sortedProjects}
-              openTabs={openTabs}
-              selection={{ projectId: selectedProjectId, scrollGroupId: selectedScrollGroupId }}
-              onChangeSelection={({ projectId: nextId, scrollGroupId: nextScrollGroupId }) =>
-                onSelectProjectScrollGroup(nextId, nextScrollGroupId)
-              }
-              onOpenProjectInGroup={onOpenProjectInGroup}
-              localizedStrings={projectSelectorLocalizedStrings}
-              isLoading={isLoadingProjects}
-              hideFilterMenu
-              buttonPlaceholder={localizedStrings['%webView_find_projectFilter_noOpenProjects%']}
-              commandEmptyMessage={localizedStrings['%webView_find_projectFilter_noProjectsFound%']}
-              ariaLabel={localizedStrings['%webView_find_projectSelector_label%']}
-              buttonVariant="outline"
-              buttonClassName="tw:w-full tw:font-normal"
-              popoverContentClassName="tw:w-[300px]"
-              alignDropDown="start"
-            />
+            {hideScrollGroups ? (
+              /* Simple interface mode: a flat project list with no scroll-group letters anywhere.
+                 `openTabs={[]}` is what suppresses them — `mode="project"` derives each row's
+                 group badges from `openTabs`, so passing Find's real tabs here would still badge
+                 every open project with its group letter. It also leaves no row eligible for the
+                 "open tabs" section, collapsing the list into one unheaded group. Matches the
+                 `ProjectSelector` "Simple Flat List" story. */
+              <ProjectSelector
+                mode="project"
+                projects={sortedProjects}
+                openTabs={NO_OPEN_TABS}
+                selection={{ projectId: selectedProjectId }}
+                onChangeSelection={({ projectId: nextId }) => onSelectProject(nextId)}
+                {...sharedProjectSelectorProps}
+              />
+            ) : (
+              <ProjectSelector
+                mode="projectScrollGroup"
+                projects={sortedProjects}
+                openTabs={openTabs}
+                selection={{ projectId: selectedProjectId, scrollGroupId: selectedScrollGroupId }}
+                onChangeSelection={({ projectId: nextId, scrollGroupId: nextScrollGroupId }) =>
+                  onSelectProjectScrollGroup(nextId, nextScrollGroupId)
+                }
+                onOpenProjectInGroup={onOpenProjectInGroup}
+                {...sharedProjectSelectorProps}
+              />
+            )}
           </div>
 
           {/* Find/Replace mode toggle — hidden in simple interface mode, where replace is not

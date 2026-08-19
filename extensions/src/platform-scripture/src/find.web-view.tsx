@@ -47,6 +47,7 @@ import {
   isDifferentProjectSelection,
   isSimpleInterfaceMode,
   prunePresentBookIds,
+  resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
 } from './find/find.utils';
 import {
@@ -819,6 +820,30 @@ global.webViewComponent = function FindWebView({
     isLoadingProjects,
     handleSelectProjectScrollGroup,
   ]);
+
+  // Simple interface mode's picker reports only a project id (it shows no scroll groups, because
+  // simple mode hides `ScrollGroupSelector` from both toolbars). Resolving which of that project's
+  // open tabs to target happens here rather than in the component because `allOpenProjectTabs`
+  // carries the `webViewId`s. See `resolveScrollGroupForPickedProject` for why the current
+  // selection and the triggering editor are passed through rather than `undefined`.
+  const handleSelectProject = useCallback(
+    (newProjectId: string) => {
+      const resolved = resolveScrollGroupForPickedProject(
+        newProjectId,
+        selectedScrollGroupId,
+        allOpenProjectTabs,
+        editorWebViewId,
+      );
+      if (!resolved) {
+        logger.warn(
+          `Find: ignoring project selection for ${newProjectId} — it has no open editor tab.`,
+        );
+        return;
+      }
+      handleSelectProjectScrollGroup(newProjectId, resolved.scrollGroupId);
+    },
+    [allOpenProjectTabs, selectedScrollGroupId, editorWebViewId, handleSelectProjectScrollGroup],
+  );
 
   // Required by `ProjectSelector`'s `projectScrollGroup` mode, but unreachable in practice: the
   // picker only ever lists open projects (no "not open" rows) and the reassignment effect above
@@ -1839,6 +1864,7 @@ global.webViewComponent = function FindWebView({
       isLoadingProjects={isLoadingProjects}
       noOpenProjects={noOpenProjects}
       onSelectProjectScrollGroup={handleSelectProjectScrollGroup}
+      onSelectProject={handleSelectProject}
       onOpenProjectInGroup={handleOpenProjectInGroup}
       searchTerm={searchTerm}
       recentSearches={recentSearches}
@@ -1854,6 +1880,7 @@ global.webViewComponent = function FindWebView({
       isRegexAllowed={isRegexAllowed}
       activeMode={isSimpleMode ? 'find' : activeMode}
       hideModeToggle={isSimpleMode}
+      hideScrollGroups={isSimpleMode}
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
       previewOptions={previewOptions}

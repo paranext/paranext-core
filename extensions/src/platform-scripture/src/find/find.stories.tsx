@@ -225,6 +225,8 @@ type HarnessConfig = {
   activeMode?: 'find' | 'replace';
   /** Hide the find/replace toggle entirely (simple interface mode — find-only). */
   hideModeToggle?: boolean;
+  /** Present the project picker as a flat list with no scroll-group letters (simple interface mode). */
+  hideScrollGroups?: boolean;
   /** Initial replace-preview options (layout/shape/color/etc.); defaults to the standard defaults. */
   previewOptions?: PreviewOptions;
   /** Initial scope. */
@@ -476,6 +478,13 @@ function FindHarness({ config }: { config: HarnessConfig }) {
         setSelectedProjectId(newProjectId);
         setSelectedScrollGroupId(newScrollGroupId);
       }}
+      onSelectProject={(newProjectId) => {
+        setSelectedProjectId(newProjectId);
+        // Stands in for the web view's `resolveSelectedProjectScrollGroup` call: the simple-mode
+        // picker reports no group, so the story targets the project's first open tab.
+        const tab = STORY_OPEN_TABS.find((openTab) => openTab.projectId === newProjectId);
+        if (tab) setSelectedScrollGroupId(tab.scrollGroupId);
+      }}
       onOpenProjectInGroup={() => {}}
       searchTerm={searchTerm}
       recentSearches={recentSearches}
@@ -490,6 +499,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       isRegexAllowed={isRegexAllowed}
       activeMode={activeMode}
       hideModeToggle={config.hideModeToggle}
+      hideScrollGroups={config.hideScrollGroups}
       previewOptions={previewOptions}
       onPreviewOptionsChange={setPreviewOptions}
       replaceTerm={replaceTerm}
@@ -563,11 +573,14 @@ export const ReplaceMode: Story = {
 };
 
 /**
- * Simple interface mode: the find/replace toggle is hidden and the panel is find-only. Replace is a
- * power-mode-only capability, so it is not offered here.
+ * Simple interface mode. Replace is not offered, so the find/replace toggle is gone, and the
+ * project picker is a flat list with no scroll-group letters — simple mode hides
+ * `ScrollGroupSelector` from both toolbars, so a group letter would name something the user cannot
+ * see or change. Compare with the other stories, where `web` appears twice (groups A and B) and
+ * every row carries its group badge.
  */
 export const SimpleMode: Story = {
-  decorators: [createDecorator({ hideModeToggle: true })],
+  decorators: [createDecorator({ hideModeToggle: true, hideScrollGroups: true })],
 };
 
 /** An in-progress search — the progress bar and Cancel button show while results stream in. */

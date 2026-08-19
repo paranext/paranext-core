@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
 import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
@@ -49,6 +50,9 @@ beforeAll(() => {
   );
 
   if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = vi.fn();
+  // Radix's PopoverContent calls scrollTo when it focuses children, which the project
+  // selector tests below reach by opening the picker.
+  if (!Element.prototype.scrollTo) Element.prototype.scrollTo = vi.fn();
 });
 
 /**
@@ -103,6 +107,7 @@ function buildProps(overrides: Partial<FindProps> = {}): FindProps {
     isLoadingProjects: false,
     noOpenProjects: false,
     onSelectProjectScrollGroup: vi.fn(),
+    onSelectProject: vi.fn(),
     onOpenProjectInGroup: vi.fn(),
 
     searchTerm: 'God',
@@ -238,5 +243,105 @@ describe('Find results area — no-open-projects placeholder', () => {
     );
 
     expect(screen.queryByText(STATUS_MESSAGE_KEY)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Two tabs of the SAME project in different scroll groups. In power mode this is what produces two
+ * separate rows badged "A" and "B" — precisely the surface simple mode must not show, since simple
+ * mode hides `ScrollGroupSelector` from both toolbars and the letters would name something the user
+ * cannot see or change.
+ */
+const OPEN_TABS_TWO_GROUPS: ProjectSelectorOpenTab[] = [
+  { projectId: 'WEB', scrollGroupId: 0 },
+  { projectId: 'WEB', scrollGroupId: 1 },
+];
+
+const OTHER_PROJECT: FindProject = { id: 'OTH', shortName: 'OTH', fullName: 'Other Bible' };
+
+const PROJECT_SELECTOR_LABEL_KEY = '%webView_find_projectSelector_label%';
+
+/**
+ * Radix Popover and cmdk rely on PointerEvent sequences `fireEvent.click` does not synthesize;
+ * `pointerEventsCheck: 0` is the standard jsdom workaround (mirrors the ProjectSelector's own
+ * tests).
+ */
+function setupUser() {
+  return userEvent.setup({ pointerEventsCheck: 0 });
+}
+
+function openProjectSelector(user: ReturnType<typeof setupUser>) {
+  return user.click(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL_KEY }));
+}
+
+describe('Find project selector — simple interface mode', () => {
+  it('appends the scroll group letter to the trigger in power mode', () => {
+    render(<Find {...buildProps()} />);
+
+    expect(screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL_KEY })).toHaveTextContent(
+      'WEB · A',
+    );
+  });
+
+  it('shows the bare project short name in the trigger when scroll groups are hidden', () => {
+    render(<Find {...buildProps({ hideScrollGroups: true })} />);
+
+    const trigger = screen.getByRole('combobox', { name: PROJECT_SELECTOR_LABEL_KEY });
+    expect(trigger).toHaveTextContent('WEB');
+    // The separator is what carries the group letter in power mode; its absence is the assertion.
+    expect(trigger).not.toHaveTextContent('·');
+  });
+
+  it('renders one unbadged row per project when scroll groups are hidden', async () => {
+    const user = setupUser();
+    render(<Find {...buildProps({ openTabs: OPEN_TABS_TWO_GROUPS, hideScrollGroups: true })} />);
+
+    await openProjectSelector(user);
+    const rows = await screen.findAllByRole('option');
+
+    // One row for the project, not one per open tab.
+    expect(rows).toHaveLength(1);
+    // Badges render the letters 'A'/'B' as their own text nodes, and neither 'WEB' nor 'World
+    // English Bible' contains a bare 'A' or 'B', so their absence pins down that no badge rendered.
+    expect(within(rows[0]).queryByText('A', { exact: true })).toBeNull();
+    expect(within(rows[0]).queryByText('B', { exact: true })).toBeNull();
+  });
+
+  // Falsifies the test above: the same inputs WITHOUT `hideScrollGroups` do render both rows and
+  // both letters, so that test is detecting the flag rather than a query that never matches.
+  it('renders a badged row per open tab in power mode', async () => {
+    const user = setupUser();
+    render(<Find {...buildProps({ openTabs: OPEN_TABS_TWO_GROUPS })} />);
+
+    await openProjectSelector(user);
+    const rows = await screen.findAllByRole('option');
+
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText('A', { exact: true })).toBeInTheDocument();
+    expect(within(rows[1]).getByText('B', { exact: true })).toBeInTheDocument();
+  });
+
+  it('reports only the project id when a row is picked with scroll groups hidden', async () => {
+    const user = setupUser();
+    const onSelectProject = vi.fn();
+    const onSelectProjectScrollGroup = vi.fn();
+    render(
+      <Find
+        {...buildProps({
+          projects: [...PROJECTS, OTHER_PROJECT],
+          openTabs: [...OPEN_TABS, { projectId: 'OTH', scrollGroupId: 0 }],
+          hideScrollGroups: true,
+          onSelectProject,
+          onSelectProjectScrollGroup,
+        })}
+      />,
+    );
+
+    await openProjectSelector(user);
+    await user.click(await screen.findByText('Other Bible'));
+
+    expect(onSelectProject).toHaveBeenCalledWith('OTH');
+    // The scroll group is resolved by the web view, not reported from the picker, in this mode.
+    expect(onSelectProjectScrollGroup).not.toHaveBeenCalled();
   });
 });

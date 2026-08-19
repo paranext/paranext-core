@@ -9,6 +9,7 @@ import {
   isSimpleInterfaceMode,
   OpenScrollGroupTab,
   prunePresentBookIds,
+  resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
 } from './find.utils';
 
@@ -570,5 +571,82 @@ describe('callControllerSafely', () => {
     const onError = vi.fn();
     expect(() => callControllerSafely(() => undefined, onError)).not.toThrow();
     expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveScrollGroupForPickedProject', () => {
+  const tab = (
+    projectId: string,
+    scrollGroupId: number,
+    webViewId: string,
+  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId });
+
+  // The regression this pins: the simple-mode picker reports only a project id, so re-picking the
+  // project Find is ALREADY on must not move which of its tabs Find targets. Resolving with an
+  // undefined current group skipped straight to "the project's first tab" and silently moved
+  // Find from group 1 to group 0.
+  it('keeps the tab Find already targets when the same project is picked again', () => {
+    const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-A', 1, 'wv-2')];
+    expect(resolveScrollGroupForPickedProject('PROJ-A', 1, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 1,
+    });
+  });
+
+  // `openTabs` arrives as `[...tabsMap.values()]` — web-view-event arrival order. Two sessions with
+  // the same tabs open must resolve identically, so the result cannot depend on that order.
+  it('resolves identically no matter what order the open tabs arrive in', () => {
+    const tabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-A', 1, 'wv-2'), tab('PROJ-B', 2, 'wv-3')];
+    const expected = { projectId: 'PROJ-A', scrollGroupId: 1 };
+    expect(resolveScrollGroupForPickedProject('PROJ-A', 1, tabs, undefined)).toEqual(expected);
+    expect(resolveScrollGroupForPickedProject('PROJ-A', 1, [...tabs].reverse(), undefined)).toEqual(
+      expected,
+    );
+  });
+
+  // Matches what `projectScrollGroup` mode does for a not-open-project row: the newly picked
+  // project lands in the group the user was already reading in.
+  it('inherits the current scroll group when the newly picked project has a tab there', () => {
+    const openTabs = [tab('PROJ-A', 2, 'wv-1'), tab('PROJ-B', 2, 'wv-2'), tab('PROJ-B', 5, 'wv-3')];
+    expect(resolveScrollGroupForPickedProject('PROJ-B', 2, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-B',
+      scrollGroupId: 2,
+    });
+  });
+
+  it('prefers the tab shown in the triggering editor when the current group has none', () => {
+    const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 4, 'wv-2'), tab('PROJ-B', 7, 'wv-3')];
+    expect(resolveScrollGroupForPickedProject('PROJ-B', 0, openTabs, 'wv-3')).toEqual({
+      projectId: 'PROJ-B',
+      scrollGroupId: 7,
+    });
+  });
+
+  it('falls back to the picked project’s own tab when neither the group nor the editor matches', () => {
+    const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 4, 'wv-2')];
+    expect(resolveScrollGroupForPickedProject('PROJ-B', 0, openTabs, 'wv-1')).toEqual({
+      projectId: 'PROJ-B',
+      scrollGroupId: 4,
+    });
+  });
+
+  it('matches the picked project case-insensitively', () => {
+    const openTabs = [tab('proj-a', 3, 'wv-1')];
+    expect(resolveScrollGroupForPickedProject('PROJ-A', undefined, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 3,
+    });
+  });
+
+  // The wrapped resolver falls back to ANOTHER open project when the picked one has no tab left.
+  // That is right for the reassignment effect but wrong for a click: it would retarget Find at a
+  // project the user did not pick. Rejecting it here leaves the reassignment effect to choose.
+  it('returns undefined rather than retargeting a project the user did not pick', () => {
+    const openTabs = [tab('PROJ-B', 3, 'wv-9')];
+    expect(resolveScrollGroupForPickedProject('PROJ-A', 0, openTabs, undefined)).toBeUndefined();
+  });
+
+  it('returns undefined when no tabs are open anywhere', () => {
+    expect(resolveScrollGroupForPickedProject('PROJ-A', 0, [], undefined)).toBeUndefined();
   });
 });
