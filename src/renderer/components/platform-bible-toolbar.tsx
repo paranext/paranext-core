@@ -93,8 +93,28 @@ const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 // never from the content these rules hide, so hiding something can't widen the container and
 // re-show it.
 //
-// The thresholds stage the degradation cheapest-loss-first. Every one is applied only when
-// `!isPowerMode`, so Power mode's title bar is untouched.
+// The thresholds are set from the container width each platform actually leaves at the app's
+// enforced 800px minimum window width, measured in the running app rather than calculated:
+//
+// | Platform                   | Caption-button reservation | Container content box |
+// | -------------------------- | -------------------------- | --------------------- |
+// | Windows (static class)     | `pe-[calc(138px+1rem)]`    | 628px                 |
+// | Windows (live measurement) | ~142px on the wrapper      | 642px                 |
+// | macOS                      | `ps-[85px]`                | 697px                 |
+// | Linux                      | none                       | 766px                 |
+//
+// Note the two Windows rows: which one applies depends on whether the live overlay measurement has
+// arrived yet, so a threshold falling between them would make the same window on the same machine
+// look different from run to run.
+//
+// A tier that must hold at the minimum window width therefore needs a threshold above the WIDEST
+// number in that column (Linux, 766px), not the narrowest — one tuned to Windows alone silently
+// does nothing on the platform with the roomiest bar, and CI runs on Linux.
+//
+// The order the tiers fire in is a judgement about what the user can most afford to lose: the
+// version badge is pure decoration, the project's full name still leaves the short name that
+// actually identifies the project, and the sync label goes last because an icon-only sync button
+// is the least self-explanatory of the three.
 
 /** Tier 1 — drop the marketing version badge. It is decoration, and costs up to 150px. */
 const HIDE_VERSION_BADGE_BELOW_52REM = 'tw:@max-[52rem]/toolbar:hidden';
@@ -112,10 +132,20 @@ const SHOW_IDLE_SYNC_ICON_BELOW_46REM = 'tw:hidden tw:@max-[46rem]/toolbar:block
  * Tier 3 — show the project's short name alone instead of `Full Name (SHORT)`. The short name is
  * the identifying part, so swapping to it degrades better than ellipsizing the full string down to
  * a meaningless prefix.
+ *
+ * 50rem (800px) is chosen to clear every row of the table above, Linux's 766px included, so the
+ * swap is guaranteed at the app's minimum window width on every platform. Two narrower values were
+ * measured and rejected: 40rem/640px falls _between_ the two Windows numbers, so the same window
+ * would keep the full name or swap depending only on whether the live overlay measurement had
+ * landed; 45rem/720px covers Windows and macOS but not Linux, leaving the swap untestable on CI.
+ *
+ * Measured effect: with the version badge and sync button present, a tight bar squeezes the trigger
+ * to ~129px, which renders `English Standard Version 2016 (ESVUS16)` as `English Sta…` — the short
+ * name it swaps in needs only ~97px and stays whole.
  */
-const HIDE_LONG_PROJECT_NAME_BELOW_40REM = 'tw:@max-[40rem]/toolbar:hidden';
+const HIDE_LONG_PROJECT_NAME_BELOW_50REM = 'tw:@max-[50rem]/toolbar:hidden';
 /** `inline`, not `block` — these two swap inside a `truncate` span, which is an inline context. */
-const SHOW_SHORT_PROJECT_NAME_BELOW_40REM = 'tw:hidden tw:@max-[40rem]/toolbar:inline';
+const SHOW_SHORT_PROJECT_NAME_BELOW_50REM = 'tw:hidden tw:@max-[50rem]/toolbar:inline';
 // #endregion
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
@@ -420,12 +450,12 @@ export function PlatformBibleToolbar() {
                       {syncState === 'synced' && (
                         <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
                       )}
-                      {syncState === 'idle' && !isPowerMode && (
+                      {syncState === 'idle' && (
                         <RefreshCw
                           className={cn('tw:h-4 tw:w-4', SHOW_IDLE_SYNC_ICON_BELOW_46REM)}
                         />
                       )}
-                      <span className={cn(!isPowerMode && HIDE_SYNC_LABEL_BELOW_46REM)}>
+                      <span className={HIDE_SYNC_LABEL_BELOW_46REM}>
                         {
                           {
                             idle: localizedStrings['%toolbar_sync%'],
@@ -510,7 +540,10 @@ export function PlatformBibleToolbar() {
                 collapse to just its chevron and swallow the short name that tier 3 above swaps in.
                 `min-w-20` (80px) keeps a short name legible and still fits the budget. The
                 `max-w-64` cap continues to govern the roomy case. */}
-            <SelectTrigger className="tw:max-w-64 tw:min-w-20 tw:border-0 tw:bg-transparent">
+            <SelectTrigger
+              data-testid="toolbar-project-selector"
+              className="tw:max-w-64 tw:min-w-20 tw:border-0 tw:bg-transparent"
+            >
               <SelectValue
                 placeholder={
                   hasProjectPickerItems
@@ -527,13 +560,13 @@ export function PlatformBibleToolbar() {
                   >
                     {currentProjectError ?? (
                       <>
-                        <span className={HIDE_LONG_PROJECT_NAME_BELOW_40REM}>
+                        <span className={HIDE_LONG_PROJECT_NAME_BELOW_50REM}>
                           {currentProject.fullName} ({currentProject.shortName})
                         </span>
                         {/* The short name alone once the full string no longer fits. Not a
                             `truncate` of the full string: `World English Bible (WEB)` clipped to
                             `World Eng…` loses the very part that identifies the project. */}
-                        <span className={SHOW_SHORT_PROJECT_NAME_BELOW_40REM}>
+                        <span className={SHOW_SHORT_PROJECT_NAME_BELOW_50REM}>
                           {currentProject.shortName}
                         </span>
                       </>

@@ -13,7 +13,18 @@
  */
 import { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { preConfigureSettings, waitForAppReady } from '../../../fixtures/helpers';
+import {
+  preConfigureSettings,
+  waitForAppReady,
+  waitForPapiMethodRegistered,
+} from '../../../fixtures/helpers';
+
+/**
+ * The Paratext project data provider factory. The project selector stays disabled until the C#
+ * backend has finished enumerating projects, which happens well after `waitForAppReady` resolves —
+ * without waiting for this, the selector is still showing its disabled placeholder.
+ */
+const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProviderId';
 
 /**
  * A width no window can honor, so Electron clamps to the `minWidth` enforced in `main.ts`. Asking
@@ -43,14 +54,62 @@ test.afterEach(() => {
   restoreSettings?.();
 });
 
-async function setWindowWidth(electronApp: ElectronApplication, width: number): Promise<void> {
-  await electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
+/**
+ * Resizes the window and waits until the renderer has actually laid out at the new width.
+ *
+ * Returns nothing useful to assert on by design — the point is the wait. Electron clamps the
+ * request to `minWidth`, so the settled width is read back from the window rather than assumed, and
+ * the poll compares against THAT. An earlier version polled for "content row narrower than the
+ * roomy width", which was already true before the resize and so waited for nothing: the test then
+ * sampled the row's box and the controls' boxes from two different layout passes and reported
+ * phantom clipping.
+ */
+/**
+ * Closes the docked DevTools the dev-mode launch opens.
+ *
+ * Not cosmetic — this test is entirely geometric. Docked DevTools takes its width out of the
+ * renderer's layout viewport (measured: a constant 555px), so an 800px window lays the title bar
+ * out in 245px. Every control then genuinely overflows, and the test reports "clipped" for a bar
+ * that is fine at the width a user would actually see.
+ */
+async function closeDevTools(electronApp: ElectronApplication): Promise<void> {
+  await electronApp.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
+    });
+  });
+}
+
+async function setWindowWidth(
+  electronApp: ElectronApplication,
+  mainPage: Page,
+  width: number,
+): Promise<void> {
+  await closeDevTools(electronApp);
+
+  const settledWidth = await electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
     const win = BrowserWindow.getAllWindows()[0];
-    if (!win) return;
+    if (!win) return 0;
     if (win.isMaximized()) win.unmaximize();
-    const [, height] = win.getSize();
+
+    const [outerWidth, height] = win.getSize();
+    // Everything the target depends on is read BEFORE `setSize`, because `setSize` is asynchronous:
+    // reading the size back immediately after it returns the width the window still has, not the
+    // one it is moving to. The target is derived instead — the request clamped by the window's own
+    // `minWidth` (main.ts), converted from outer to content width by the frame delta, since the
+    // renderer's `innerWidth` measures the content box.
+    const frameDelta = outerWidth - win.getContentSize()[0];
+    const target = Math.max(requestedWidth, win.getMinimumSize()[0]) - frameDelta;
+
     win.setSize(requestedWidth, height);
+    return target;
   }, width);
+
+  await expect
+    .poll(async () => Math.abs((await mainPage.evaluate(() => window.innerWidth)) - settledWidth), {
+      timeout: 20_000,
+    })
+    .toBeLessThanOrEqual(ROUNDING_TOLERANCE_PX);
 }
 
 /**
@@ -79,21 +138,42 @@ async function expectControlWithinRow(
   );
 }
 
+/**
+ * Opens the first project in the title bar's project selector, if none is open yet.
+ *
+ * The tier-3 short-name swap can only be observed with a project open — otherwise the trigger shows
+ * the "select a project" placeholder and there is no name to swap. No fixture seeds a current
+ * project, so the test drives the same selector a user would.
+ */
+async function ensureProjectOpen(mainPage: Page): Promise<void> {
+  await waitForPapiMethodRegistered(PARATEXT_PDPF_METHOD);
+
+  const trigger = mainPage.locator('[data-testid="toolbar-project-selector"]');
+  await expect(trigger).toBeEnabled({ timeout: 60_000 });
+
+  // Radix marks the trigger with `data-placeholder` while no value is selected. Testing the
+  // rendered text instead would be wrong: the placeholder ("Select project") is itself non-empty,
+  // so a text check reports "a project is open" when none is.
+  const isPlaceholder = async () => trigger.evaluate((el) => el.hasAttribute('data-placeholder'));
+  if (!(await isPlaceholder())) return;
+
+  await trigger.click();
+  const firstProject = mainPage.locator('[role="option"]').first();
+  await expect(firstProject).toBeVisible({ timeout: 15_000 });
+  await firstProject.click();
+  await expect.poll(isPlaceholder, { timeout: 60_000 }).toBe(false);
+}
+
 test.describe('Title bar at narrow window widths', () => {
   test('Simple-mode controls fit without clipping at the minimum window width', async ({
     electronApp,
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await setWindowWidth(electronApp, IMPOSSIBLY_NARROW_PX);
+    await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
 
     const contentRow = mainPage.locator('[data-testid="toolbar-content-row"]');
     await expect(contentRow).toBeVisible();
-
-    // Wait for the resize to settle rather than asserting against a mid-resize layout.
-    await expect
-      .poll(async () => (await contentRow.boundingBox())?.width ?? 0)
-      .toBeLessThan(ROOMY_WIDTH_PX);
 
     const overflow = await contentRow.evaluate((el) => ({
       scrollWidth: el.scrollWidth,
@@ -104,6 +184,36 @@ test.describe('Title bar at narrow window widths', () => {
       overflow.scrollWidth,
       `Title bar overflows by ${overflow.scrollWidth - overflow.clientWidth}px at the minimum window width — controls are being clipped`,
     ).toBeLessThanOrEqual(overflow.clientWidth + ROUNDING_TOLERANCE_PX);
+
+    // The overflow assertion above cannot fail in a core build, and it is worth being explicit
+    // about why rather than leaving a green test that proves less than it looks like it does.
+    // Reproducing the reported clipping needs a CROWDED bar, and two of the controls that crowd it
+    // — the marketing version badge and the sync button — do not render here: the badge is driven
+    // by `marketingVersion`, which is empty in paranext-core (it is set in Paratext 10 Studio,
+    // where this was reported), and send/receive is unavailable in the test environment. Without
+    // them the content area is never squeezed at any width the window can actually reach, and at
+    // widths narrow enough to squeeze it the bar overflows with or without the fix.
+    //
+    // So the root cause gets a direct assertion. `min-width: auto` is the flex default that floored
+    // this area at its intrinsic width and made the row clip instead of shrink (PT-4218); computed
+    // `0px` is the fix, and this fails the moment the class is dropped.
+    const contentArea = mainPage.locator('[data-testid="toolbar-content-area"]');
+    await expect(contentArea).toBeAttached();
+    const contentAreaMinWidth = await contentArea.evaluate((el) => getComputedStyle(el).minWidth);
+    expect(
+      contentAreaMinWidth,
+      'The toolbar content area must be able to shrink below its intrinsic width, or narrow windows clip the trailing controls',
+    ).toBe('0px');
+
+    // NOT asserted here: that the DOCUMENT does not scroll horizontally. The reporter's follow-up
+    // on PT-4218 mentions "the scrollbar that appears because of the overflow", which reads like
+    // the same bug — it is not. Measured at the 800px minimum, the document still overflows by
+    // ~108px, and the source is the dock layout, not the title bar: `simple-layout.data.ts` locks
+    // each of Simple mode's three columns to `panelLock: { minWidth: 300 }`, so rc-dock's
+    // `dock-hbox` computes a 908px minimum width that no window narrow enough to hit `minWidth`
+    // can satisfy. Nothing in the toolbar can fix that, and what Simple mode should do below 908px
+    // (drop a column, or let the columns go under 300px) is the open design question in PT-2480.
+    // Asserting it here would just wire this spec to a failure it does not own.
   });
 
   test('essential Simple-mode controls stay visible and in-bounds when narrow', async ({
@@ -111,13 +221,10 @@ test.describe('Title bar at narrow window widths', () => {
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
-    await setWindowWidth(electronApp, IMPOSSIBLY_NARROW_PX);
+    await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
 
     const contentRow = mainPage.locator('[data-testid="toolbar-content-row"]');
     await expect(contentRow).toBeVisible();
-    await expect
-      .poll(async () => (await contentRow.boundingBox())?.width ?? 0)
-      .toBeLessThan(ROOMY_WIDTH_PX);
 
     const rowBox = await contentRow.boundingBox();
     expect(rowBox).not.toBeNull();
@@ -139,20 +246,33 @@ test.describe('Title bar at narrow window widths', () => {
     );
   });
 
-  test('a roomy window still shows the full project name', async ({ electronApp, mainPage }) => {
+  test('the project name swaps to the short name only when the bar is narrow', async ({
+    electronApp,
+    mainPage,
+  }) => {
     await waitForAppReady(mainPage);
-    await setWindowWidth(electronApp, ROOMY_WIDTH_PX);
 
-    // Falsifiability guard for the degradation ladder: if the short-name swap were stuck on (a
-    // broken container query, or a threshold set too high), this would fail. Paired with the
-    // narrow tests above, it proves the swap is genuinely width-driven.
-    const projectSelector = mainPage
-      .locator('[data-testid="toolbar-content-row"] [role="combobox"]')
-      .first();
+    // Its own test id, not `[role="combobox"]`: the BCV control is a combobox inside the same row,
+    // so that selector matches two elements and picking this one would depend on DOM order.
+    const projectSelector = mainPage.locator('[data-testid="toolbar-project-selector"]');
     await expect(projectSelector).toBeVisible();
 
-    await expect
-      .poll(async () => (await projectSelector.textContent())?.trim() ?? '')
-      .toMatch(/\(.+\)/);
+    // `innerText`, never `textContent`: both the full-name and short-name spans are always in the
+    // DOM and the ladder swaps them with `display: none`. `textContent` reports hidden text too, so
+    // asserting on it would pass in BOTH states and quietly test nothing.
+    const renderedName = async () => (await projectSelector.innerText()).trim();
+
+    // A project has to be open for either span to render.
+    await setWindowWidth(electronApp, mainPage, ROOMY_WIDTH_PX);
+    await ensureProjectOpen(mainPage);
+
+    // Roomy: the full `Full Name (SHORT)` form, which is the only one carrying parentheses.
+    await expect.poll(renderedName).toMatch(/\(.+\)/);
+
+    // Narrow: the short name alone. Asserting the parentheses are GONE is what makes this pair
+    // falsifiable — if the container query never fired, or fired always, one of these two fails.
+    await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
+    await expect.poll(renderedName).not.toMatch(/\(.+\)/);
+    await expect.poll(renderedName).not.toBe('');
   });
 });

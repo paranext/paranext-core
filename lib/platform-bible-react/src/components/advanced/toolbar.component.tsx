@@ -149,6 +149,7 @@ export function Toolbar({
              are silently clipped rather than shrunk (PT-4218). The app menu area intentionally does
              NOT get the same treatment: it holds the menubar, which has nowhere to shrink to, and
              its `basis-0` already keeps it from claiming space it does not need. */
+          data-testid="toolbar-content-area"
           className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:px-2"
           /* @ts-ignore Electron-only property */
           style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
