@@ -39,6 +39,7 @@ import {
   openCommentListAndSelectThread,
   type OpenEditorDispatch,
   openOrUpdateRelatedPanels,
+  updateRelatedFindPanel,
   resolveOpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectProjectIdsForOpenMode,
@@ -438,6 +439,14 @@ async function open(
         openWebViewOptions,
       )
       .finally(emitDidFinish);
+
+    // The rest of Column 3 was re-pointed above, before the editor tab was replaced; Find waits
+    // until here because it is the one panel that needs the id of the editor this call just created.
+    // Same guard as `openOrUpdateRelatedPanels`, for the same reason: the Column 3 panels follow the
+    // active translation project, so a read-only resource opened in the editor column must not drag
+    // them along.
+    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable)
+      await updateRelatedFindPanel(papi, projectForWebView.projectId, openedWebViewId);
 
     return openedWebViewId;
   }

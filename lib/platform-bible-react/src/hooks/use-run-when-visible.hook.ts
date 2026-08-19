@@ -6,14 +6,19 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *
  * Rc-dock keeps an inactive tab's pane mounted under `display: none`: the iframe keeps running, so
  * React effects, subscriptions, and reactions to shared state all continue firing at full rate for
- * a view nobody can see. For cheap, data-driven work that is fine. For expensive work it is not —
- * in Simple mode Find is a permanent tab that spends most of the session inactive while still
- * following the editor's scroll group, so a reaction to every reference change would keep launching
- * full searches into a hidden pane.
+ * a view nobody can see. For cheap, data-driven work that is fine, and this hook would only add
+ * latency. It is for the two cases where it is not fine: work whose result depends on layout, which
+ * a `display: none` pane does not have, and work expensive enough that spending it on a hidden view
+ * is a waste — a per-reference search or fetch that a permanently-mounted panel would otherwise
+ * launch on every reference change through the whole session.
  *
- * Requests made while hidden collapse into a single pending catch-up rather than queueing, because
- * the work here is "search for the current state", where only the last request's result would have
- * survived anyway.
+ * Requests made while hidden collapse into a single pending catch-up rather than queueing, which
+ * suits the shape of work this is for: "bring the view up to date with the current state", where
+ * only the last request's result would have survived anyway. Work whose every invocation matters
+ * (appending to a log, counting events) needs a queue, not this hook.
+ *
+ * Pair it with `useViewVisibility`, which reports whether the calling view is rendered. See
+ * `.claude/rules/cross-view-sync-hidden-views.md` for the wider rule this implements.
  *
  * @param isViewVisible Whether the web view is currently rendered — pass `useViewVisibility()`.
  * @param run The work to perform. Always invoked at its latest identity, so callers need not
