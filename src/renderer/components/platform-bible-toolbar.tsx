@@ -91,7 +91,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 ];
 
 export function PlatformBibleToolbar() {
-  const { currentProject, recentProjects, allProjects, currentProjectError } =
+  const { currentSimpleProject, recentProjects, allProjects, currentSimpleProjectError } =
     useProjectPickerData();
 
   const isPowerMode = useIsPowerMode();
@@ -441,7 +441,7 @@ export function PlatformBibleToolbar() {
         )}
         {!isPowerMode && (
           <Select
-            value={currentProject?.id ?? ''}
+            value={currentSimpleProject?.id ?? ''}
             onValueChange={async (projectId: string) => {
               try {
                 await openProject(projectId);
@@ -461,15 +461,15 @@ export function PlatformBibleToolbar() {
                     : localizedStrings['%projectPicker_toolbar_no_projects%']
                 }
               >
-                {currentProject && (
+                {currentSimpleProject && (
                   <span
                     className={cn(
                       'tw:min-w-0 tw:flex-1 tw:truncate',
-                      currentProjectError && 'tw:text-destructive',
+                      currentSimpleProjectError && 'tw:text-destructive',
                     )}
                   >
-                    {currentProjectError ??
-                      `${currentProject.fullName} (${currentProject.shortName})`}
+                    {currentSimpleProjectError ??
+                      `${currentSimpleProject.fullName} (${currentSimpleProject.shortName})`}
                   </span>
                 )}
               </SelectValue>

@@ -8,6 +8,7 @@ import { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
+  finalizeProjectSwitch,
   generateParagraphMenuListItems,
   generateInlineMarkerMenuListItems,
   openDefaultActiveProjectIfApplicable,
@@ -2416,6 +2417,118 @@ describe('syncOnProjectSwitch', () => {
 });
 
 // #endregion syncOnProjectSwitch
+
+// #region finalizeProjectSwitch
+
+function createFinalizeMockPapi() {
+  const mockSendCommand = vi.fn().mockResolvedValue(undefined);
+  const mockWarn = vi.fn();
+  const mockRecordProjectOpened = vi.fn().mockResolvedValue(undefined);
+  const mockDataProvidersGet = vi.fn().mockImplementation(async (name: string) => {
+    if (name === 'platformScripture.recentlyOpenedProjects') {
+      return { recordProjectOpened: mockRecordProjectOpened };
+    }
+    return undefined;
+  });
+  // Defaults to 'simple' - matches the common case (the switch this replays side effects for only
+  // ever originates from a Power -> Simple mode change), so most tests don't need to set it.
+  const mockSettingsGet = vi.fn().mockResolvedValue('simple');
+  // Must cast since the mock only includes the papi properties finalizeProjectSwitch uses.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const papi = {
+    commands: { sendCommand: mockSendCommand },
+    dataProviders: { get: mockDataProvidersGet },
+    settings: { get: mockSettingsGet },
+    logger: { warn: mockWarn },
+  } as unknown as typeof PapiBackend;
+  return {
+    papi,
+    mockSendCommand,
+    mockWarn,
+    mockRecordProjectOpened,
+    mockDataProvidersGet,
+    mockSettingsGet,
+  };
+}
+
+describe('finalizeProjectSwitch', () => {
+  it('syncs the incoming project only via syncProjects (finalizeProjectSwitch has no outgoing project by design)', async () => {
+    const { papi, mockSendCommand } = createFinalizeMockPapi();
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockSendCommand).toHaveBeenCalledWith('paratextBibleSendReceive.syncProjects', [
+      'proj-1',
+    ]);
+    expect(mockSendCommand.mock.calls.map(([cmd]) => cmd)).not.toContain(
+      'paratextBibleSendReceive.sendReceiveProjects',
+    );
+  });
+
+  it('does not await the sync before returning - a hung sync must not block applyForProject or recordProjectOpened', async () => {
+    const { papi, mockSendCommand, mockRecordProjectOpened } = createFinalizeMockPapi();
+    // Never resolves - simulates a slow/hung Send/Receive.
+    mockSendCommand.mockImplementation(() => new Promise(() => {}));
+    const applyForProject = vi.fn().mockResolvedValue(undefined);
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(applyForProject).toHaveBeenCalledWith('proj-1');
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('calls applyForProject when still in Simple mode', async () => {
+    const { papi } = createFinalizeMockPapi();
+    const applyForProject = vi.fn().mockResolvedValue(undefined);
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(applyForProject).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('does not call applyForProject when the user has since switched back to Power mode', async () => {
+    const { papi, mockSettingsGet } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+    const applyForProject = vi.fn().mockResolvedValue(undefined);
+
+    await finalizeProjectSwitch(papi, 'proj-1', applyForProject);
+
+    expect(applyForProject).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when applyForProject is undefined', async () => {
+    const { papi } = createFinalizeMockPapi();
+
+    await expect(finalizeProjectSwitch(papi, 'proj-1', undefined)).resolves.toBeUndefined();
+  });
+
+  it('records the project as recently opened', async () => {
+    const { papi, mockRecordProjectOpened } = createFinalizeMockPapi();
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('records the project as recently opened even when no longer in Simple mode', async () => {
+    const { papi, mockSettingsGet, mockRecordProjectOpened } = createFinalizeMockPapi();
+    mockSettingsGet.mockResolvedValue('power');
+
+    await finalizeProjectSwitch(papi, 'proj-1', undefined);
+
+    expect(mockRecordProjectOpened).toHaveBeenCalledWith('proj-1');
+  });
+
+  it('logs a warning and does not throw when recordProjectOpened rejects', async () => {
+    const { papi, mockWarn, mockRecordProjectOpened } = createFinalizeMockPapi();
+    mockRecordProjectOpened.mockRejectedValue(new Error('storage write failed'));
+
+    await expect(finalizeProjectSwitch(papi, 'proj-1', undefined)).resolves.toBeUndefined();
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-1'));
+  });
+});
+
+// #endregion finalizeProjectSwitch
 
 // isBlockMarker moved to platform-bible-utils (src/markers/usfm-markers.ts); its tests live in
 // lib/platform-bible-utils/src/markers/usfm-markers.test.ts.

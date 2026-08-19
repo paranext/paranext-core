@@ -35,6 +35,7 @@ import scriptureTextGridWebView from './scripture-text-grid.web-view?inline';
 import scriptureTextGridWebViewStyles from './scripture-text-grid.web-view.scss?inline';
 import {
   convertScriptureRangeToEditorRange,
+  finalizeProjectSwitch,
   formatEditorTitle,
   openCommentListAndSelectThread,
   type OpenEditorDispatch,
@@ -385,15 +386,13 @@ async function open(
       options,
     };
 
-    // If in simple interface mode and opening an editable project, open/update the related panels
-    // (model text, bible texts, commentaries, comments). Gated on isEditable: the related panels
-    // follow the active translation project, so opening a read-only published resource in the
-    // editor column must not switch them over to the resource.
-    if (interfaceMode === 'simple' && projectForWebView.projectId && projectForWebView.isEditable) {
+    // If in Simple interface mode, open/update the related panels (model text, Bible texts,
+    // commentaries, comments) and auto-apply the admin's shared layout for the project being
+    // opened (re-arm the buffered panels, focus the desired col-3 tab). Note: A manual/later
+    // sync's held change is applied via the notification's "Apply now" rather than automatically
+    // here.
+    if (interfaceMode === 'simple' && projectForWebView.projectId) {
       await openOrUpdateRelatedPanels(papi, projectForWebView.projectId);
-      // Auto-apply the admin's shared layout for the project being opened/switched to: re-arm the
-      // buffered panels and focus the col-3 tab. A manual sync's held change is applied via the
-      // notification's "Apply now" instead.
       await sharedLayoutReceiver?.applyForProject(projectForWebView.projectId);
     }
 
@@ -1476,6 +1475,30 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
+  const finalizeProjectSwitchPromise = papi.commands.registerCommand(
+    'platformScriptureEditor.finalizeProjectSwitch',
+    (projectId) =>
+      finalizeProjectSwitch(papi, projectId, (id) =>
+        sharedLayoutReceiver ? sharedLayoutReceiver.applyForProject(id) : Promise.resolve(),
+      ),
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          "Replay the project-switch side effects (S/R sync, shared-layout auto-apply, recently-opened) for a project whose Scripture Editor tab is already showing correctly, bypassing openScriptureEditor's focus-existing short-circuit",
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The project now showing in the Scripture Editor',
+            schema: { type: 'string' },
+          },
+        ],
+        result: { name: 'return value', schema: { type: 'null' } },
+      },
+    },
+  );
+
   // Await the registration promises at the end so we don't hold everything else up
   const markerNotifier = new MarkersViewNotifier(papi, context.executionToken);
   const markerNotifierUnsubscribers = await markerNotifier.start();
@@ -1520,6 +1543,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     unsubFromDefaultProjectPicker,
     ...markerNotifierUnsubscribers,
     await applySharedLayoutPromise,
+    await finalizeProjectSwitchPromise,
     sharedLayoutReArmEmitter,
     {
       dispose: async () => {

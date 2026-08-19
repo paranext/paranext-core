@@ -139,7 +139,7 @@ vi.mock('@shared/services/notification.service', () => ({
 
 vi.mock('@renderer/hooks/use-project-picker-data.hook', () => ({
   useProjectPickerData: vi.fn(() => ({
-    currentProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+    currentSimpleProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
     recentProjects: [{ id: 'proj-1', fullName: 'Test Project', shortName: 'TP' }],
     allProjects: [],
     isLoading: false,
