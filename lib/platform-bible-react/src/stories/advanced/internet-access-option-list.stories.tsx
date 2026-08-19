@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, waitFor } from 'storybook/test';
 import {
   InternetAccessOptionList,
   type InternetAccessOptionListProps,
@@ -27,7 +28,6 @@ const localizedStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%':
     'Routes Paratext internet traffic through a configured proxy server.',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
-  '%paratextRegistration_internetUse_footer%': 'Disabled options are planned for future updates.',
 };
 
 function Controlled(
@@ -38,6 +38,14 @@ function Controlled(
   return <InternetAccessOptionList {...rest} value={value} onChange={setValue} />;
 }
 
+/**
+ * Each option's description is revealed by hovering (or keyboard-focusing) anywhere on its row —
+ * the radio button, the label, or the info icon — rather than sitting under the label as body copy,
+ * which kept the list from becoming five stacked paragraphs of small grey text. The info icon is
+ * the visible signal that a description exists; it is decorative, so it adds no tab stop. A
+ * visually-hidden copy of the same description stays wired to each radio via `aria-describedby`, so
+ * screen readers still get it on every row including the disabled coming-soon ones.
+ */
 const meta: Meta<typeof InternetAccessOptionList> = {
   title: 'Advanced/InternetAccessOptionList',
   component: InternetAccessOptionList,
@@ -51,9 +59,49 @@ export default meta;
 
 type Story = StoryObj<typeof InternetAccessOptionList>;
 
-/** Option 1 (Unrestricted) selected — active row, description text visible. */
+/** Option 1 (Unrestricted) selected — active row, no description shown until hover. */
 export const Unrestricted: Story = {
   render: (args) => <Controlled {...args} initialValue="Enabled" />,
+};
+
+/**
+ * Waits for the visible tooltip content and asserts it carries the expected description. Targets
+ * `[data-slot="tooltip-content"]` rather than `role="tooltip"`, which Radix puts on a
+ * visually-hidden copy that is present even when nothing is on screen.
+ */
+async function expectVisibleTooltip(text: string) {
+  await waitFor(() => {
+    const content = document.querySelector('[data-slot="tooltip-content"]');
+    expect(content).toBeInTheDocument();
+    expect(content).toHaveTextContent(text);
+  });
+}
+
+/** Hovering a row opens its description tooltip; the whole row is the hover target. */
+export const DescriptionTooltipOnHover: Story = {
+  render: (args) => <Controlled {...args} initialValue="Enabled" />,
+  play: async ({ canvasElement, userEvent }) => {
+    const row = canvasElement.querySelector<HTMLElement>('[data-slot="tooltip-trigger"]');
+    if (!row) throw new Error('expected the first option row to be the tooltip trigger');
+    await userEvent.hover(row);
+    await expectVisibleTooltip('Allows Paratext to use the internet for all services');
+  },
+};
+
+/**
+ * The same description is reachable without a mouse: tabbing into the group lands on the checked
+ * radio and opens its row's tooltip. Screen-reader users get it from the visually-hidden copy
+ * instead, which also covers the disabled coming-soon rows that focus can never reach.
+ *
+ * This story is the only coverage for the keyboard path — it needs a real browser, because the
+ * component gates tooltip-on-focus behind `:focus-visible`, which jsdom always reports as false.
+ */
+export const DescriptionTooltipOnKeyboardFocus: Story = {
+  render: (args) => <Controlled {...args} initialValue="Enabled" />,
+  play: async ({ userEvent }) => {
+    await userEvent.tab();
+    await expectVisibleTooltip('Allows Paratext to use the internet for all services');
+  },
 };
 
 /** Option 2 selected — "Disable access to some Bible translation services". */

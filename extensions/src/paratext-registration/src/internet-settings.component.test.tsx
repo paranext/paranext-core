@@ -53,7 +53,6 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_description_internetUse_option_ProxyOnly%': 'Proxy sentinel',
   '%paratextRegistration_description_internetUse_option_ProxyOnly_details%': '',
   '%paratextRegistration_internetUse_comingSoon%': 'Coming soon',
-  '%paratextRegistration_internetUse_footer%': 'Footer sentinel',
   '%paratextRegistration_developer_section_label%': 'Developer only',
   '%paratextRegistration_label_serverType_option_Production%': 'Production',
   '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance',
