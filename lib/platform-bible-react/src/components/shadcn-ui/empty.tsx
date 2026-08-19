@@ -1,9 +1,5 @@
-// CUSTOM: Added missing `import React from 'react';` — upstream shadcn's generated empty.tsx has
-// no React import at all (it only references `React.ComponentProps` as a type), so the standard
-// "replace `import * as React from 'react'` with `import React from 'react'`" file transform had
-// nothing to replace and left the file without React in scope, causing `no-undef` lint errors on
-// every `React.ComponentProps` reference. Added to match every sibling file in this folder
-// (e.g. card.tsx, input.tsx), which all import React the same way.
+// CUSTOM: Added the React import that upstream's generated empty.tsx omits; `ensureReactImport` in
+// scripts/shadcn-transform-utils.ts now inserts it during `shadcn apply`.
 import React from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
@@ -17,15 +13,17 @@ import { cn } from '@/utils/shadcn-ui/utils';
  * Use this composition when the zero-state needs media, a heading, or an action. For a plain
  * one-line "nothing to show" message inside a list, grid, or panel, use {@link EmptyState} instead —
  * it takes a single localized `message` and renders it in a `role="status"` region. These
- * primitives set no ARIA role, so pass `role="status"` yourself when the zero-state replaces
- * content that just changed.
+ * primitives set no ARIA role, so pass `role="status"` yourself before the zero-state appears.
+ *
+ * Two things the caller controls: the root sets `border-dashed` but no border width —
+ * Platform.Bible's scoped Tailwind Preflight zeroes borders, so pass `className="tw:border"` to
+ * draw the dashed outline — and {@link EmptyTitle} renders a `<div>`, not a heading, so nest your
+ * own heading element inside it when the zero-state is a region's entire content.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
  */
-// CUSTOM: Added TSDoc comment with link to upstream shadcn/ui documentation, plus guidance on
-// choosing between this composition and Platform.Bible's own EmptyState component (the two
-// overlap in purpose), and a note that these primitives provide no ARIA live region. Added so
-// consumers do not have to guess which empty-state API to reach for.
+// CUSTOM: Added TSDoc comment with link to upstream shadcn/ui documentation, plus the
+// EmptyState-vs-Empty, ARIA-role and border-width guidance consumers would otherwise have to guess.
 function Empty({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
@@ -68,8 +66,7 @@ function EmptyHeader({ className, ...props }: React.ComponentProps<'div'>) {
  */
 // CUSTOM: Added TSDoc comment with link to upstream shadcn/ui documentation.
 const emptyMediaVariants = cva(
-  // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
-  'pr-twp tw:mb-2 tw:flex tw:shrink-0 tw:items-center tw:justify-center tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0',
+  'tw:mb-2 tw:flex tw:shrink-0 tw:items-center tw:justify-center tw:[&_svg]:pointer-events-none tw:[&_svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -97,12 +94,17 @@ function EmptyMedia({
 }: React.ComponentProps<'div'> & VariantProps<typeof emptyMediaVariants>) {
   return (
     <div
-      // CUSTOM: Renamed data-slot from upstream's 'empty-icon' to 'empty-media' so the attribute
-      // matches the component name (EmptyMedia holds any media, not just icons). No other file
-      // targets this slot, so nothing keys off the old value.
-      data-slot="empty-media"
+      // Upstream's data-slot value is kept even though the component is named EmptyMedia: data-slot
+      // is shadcn's cross-component styling contract, so snippets from the shadcn docs that select
+      // [data-slot=empty-icon] keep working. input-group.tsx does the same for its control slots.
+      data-slot="empty-icon"
       data-variant={variant}
-      className={cn(emptyMediaVariants({ variant, className }))}
+      className={cn(
+        // CUSTOM: Added 'pr-twp' to apply Platform.Bible's Tailwind CSS scope isolation.
+        'pr-twp',
+        emptyMediaVariants({ variant }),
+        className,
+      )}
       {...props}
     />
   );

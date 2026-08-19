@@ -3040,8 +3040,12 @@ export declare function DropdownMenuSubContent({ className, children, ...props }
  * Use this composition when the zero-state needs media, a heading, or an action. For a plain
  * one-line "nothing to show" message inside a list, grid, or panel, use {@link EmptyState} instead —
  * it takes a single localized `message` and renders it in a `role="status"` region. These
- * primitives set no ARIA role, so pass `role="status"` yourself when the zero-state replaces
- * content that just changed.
+ * primitives set no ARIA role, so pass `role="status"` yourself before the zero-state appears.
+ *
+ * Two things the caller controls: the root sets `border-dashed` but no border width —
+ * Platform.Bible's scoped Tailwind Preflight zeroes borders, so pass `className="tw:border"` to
+ * draw the dashed outline — and {@link EmptyTitle} renders a `<div>`, not a heading, so nest your
+ * own heading element inside it when the zero-state is a region's entire content.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
  */

@@ -18,8 +18,18 @@ const meta: Meta<typeof Empty> = {
   parameters: {
     docs: {
       description: {
-        component:
-          'A centered zero-state composition for when there is no content to show. Use it when the zero-state needs media, a heading, or an action; for a plain one-line message inside a list, grid, or panel, use `EmptyState` (Basics) instead.',
+        component: `
+A centered zero-state composition for when there is no content to show.
+
+**Choosing between this and \`EmptyState\`:**
+- Use \`Empty\` when the zero-state needs media, a heading, or an action.
+- Use [\`EmptyState\`](?path=/docs/basics-emptystate--docs) for a plain one-line message inside a list, grid, or panel — it takes a single localized \`message\` and renders it in a \`role="status"\` region.
+
+**Two things the caller controls:**
+- These primitives set no ARIA role. Pass \`role="status"\` yourself, and mount it before the content changes — see the \`LiveRegion\` story.
+- The root sets \`border-dashed\` but no border width, so pass \`className="tw:border"\` to draw the dashed outline.
+- \`EmptyTitle\` renders a \`<div>\`, not a heading. Nest your own heading element inside it when the zero-state is a region's entire content.
+        `,
       },
     },
   },
@@ -88,8 +98,7 @@ export const WithDefaultMedia: Story = {
         </EmptyMedia>
         <EmptyTitle>Nothing to show</EmptyTitle>
         <EmptyDescription>
-          The `default` variant of `EmptyMedia` adds no background, so it suits larger
-          illustrations.
+          The default media variant adds no background, so it suits larger illustrations.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
@@ -139,8 +148,8 @@ export const DashedBorder: Story = {
         </EmptyMedia>
         <EmptyTitle>No projects</EmptyTitle>
         <EmptyDescription>
-          `Empty` sets `border-dashed` but no border width, so add `tw:border` to draw the dashed
-          outline.
+          Empty sets a dashed border style but no border width, so the caller adds a border width to
+          draw the outline.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
@@ -155,14 +164,43 @@ export const DashedBorder: Story = {
   },
 };
 
+export const NarrowWidth: Story = {
+  render: (args) => (
+    <div className="tw:w-[300px] tw:border tw:border-border">
+      <Empty {...args}>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Search />
+          </EmptyMedia>
+          <EmptyTitle>No results found</EmptyTitle>
+          <EmptyDescription>
+            No projects match your search. Try a different term or clear the filters.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button onClick={fn()}>Clear filters</Button>
+        </EmptyContent>
+      </Empty>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The same content at the 300px minimum width that `Guidelines/Responsiveness` mandates for web views. The outer border marks the 300px boundary; `tw:p-6` on the root spends 48px of it, and `EmptyContent` stacks its actions in a column.',
+      },
+    },
+  },
+};
+
 export const LiveRegion: Story = {
   render: (args) => (
     <Empty {...args} role="status">
       <EmptyHeader>
         <EmptyTitle>No comments</EmptyTitle>
         <EmptyDescription>
-          Add a status role when the zero-state replaces content that changed, so screen readers
-          announce it.
+          Keep the status region mounted across the change so screen readers announce the new
+          message.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
@@ -170,8 +208,13 @@ export const LiveRegion: Story = {
   parameters: {
     docs: {
       description: {
-        story:
-          'The `Empty` primitives set no ARIA role. For dynamic empty states, pass `role="status"` so the message is announced.',
+        story: `
+The \`Empty\` primitives set no ARIA role, so pass \`role="status"\` yourself for a zero-state that replaces content the user was reading.
+
+Placement matters more than the role: assistive tech announces *mutations* to a live region that is already in the accessibility tree. Mounting the region and its text in one commit — the shape this static story shows — typically announces nothing in NVDA or JAWS. Keep the \`role="status"\` element mounted across the transition and swap only its text.
+
+Scope it too: \`role="status"\` on the \`Empty\` root makes every button label inside \`EmptyContent\` announced content, so prefer the role on \`EmptyHeader\` or on the description when the zero-state has actions.
+        `,
       },
     },
   },
