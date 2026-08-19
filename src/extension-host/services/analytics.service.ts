@@ -12,7 +12,7 @@ import { ConsoleAnalyticsProvider } from '@extension-host/services/analytics-pro
 import { createCachedInitializer } from '@shared/utils/cached-initializer';
 
 /**
- * Env var that forces analytics to target the test environment regardless of build/S-R target, for
+ * Env var that forces analytics to target the test environment regardless of build/S/R target, for
  * developers/testers who don't want their activity landing in production analytics. Set to exactly
  * `'true'` (matching `PT_STARTUP_MARKS`'s convention) to activate; any other value, including other
  * truthy-looking strings, is ignored. Documented in README.md.
