@@ -468,13 +468,13 @@ step, no automation. Just a record.
     where the slice is unaddressable and no click reports anything. That predates this decision —
     `sliceUsjToVerse` has dropped chapter chrome since #2509 — and is not a lost capability, since a
     verse cell holds only the verse you are already on and so has nowhere to sync TO. Deliberately
-    not filed.) `isReadonly` is therefore the wrong
-    predicate: a read-only editor reporting its caret position is correct behavior, not the bug.
-    The bug is narrower and entirely host-made — *we* hand the editor verse 1's USJ while telling it
-    verse 0, so the only component that knows the reference is a deliberate lie is the one that told
-    it. Whoever creates the mismatch owns swallowing it. The generalizable fix, if a third surface
-    ever wants one, is not an `isReadonly` gate but for the promoted helper to carry the guard with
-    it (see Consequences) — the rule and its guard are one unit.
+    not filed.) `isReadonly` is therefore the wrong predicate: a read-only editor reporting its
+    caret position is correct behavior, not the bug. The bug is narrower and entirely host-made —
+    *we* hand the editor verse 1's USJ while telling it verse 0, so the only component that knows
+    the reference is a deliberate lie is the one that told it. Whoever creates the mismatch owns
+    swallowing it. The generalizable fix, if a third surface ever wants one, is not an `isReadonly`
+    gate but for the promoted helper to carry the guard with it (see Consequences) — the rule and
+    its guard are one unit.
   - **Chapter surfaces are exempt.** Anything rendering a whole chapter shows verse-0 front matter
     directly: the Text Collection's chapter mode, its chapter-context split, its single-resource
     path (`ScriptureTextGrid` renders one shown resource as `viewMode="chapter"`, so verse-0
