@@ -121,6 +121,12 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
  * Everything else — floating tabs/dialogs, and these same webViewTypes when `isClosable` is `true`
  * (e.g. opened freely in Power mode, where they aren't confined to a fixed column) — gets the
  * default `TAB_GROUP`, matching pre-existing behavior.
+ *
+ * Reading `isClosable` here is what makes six providers across three extensions each compute
+ * `isClosable: interfaceMode === 'power'` for themselves. PT-4405 centralizes it: the two halves
+ * needed to decide pinning already live in this module and `readCachedInterfaceMode()`, so the
+ * renderer can derive it for any webViewType in {@link FIXED_LAYOUT_WEBVIEW_GROUPS} and the per-
+ * provider copies can go away.
  */
 export function getTabGroup(tabInfo: TabInfo): string {
   if (tabInfo.isClosable !== false || tabInfo.tabType !== TAB_TYPE_WEBVIEW || !tabInfo.data)

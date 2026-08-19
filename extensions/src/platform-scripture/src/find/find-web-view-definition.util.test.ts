@@ -125,6 +125,32 @@ describe('buildFindWebViewFields', () => {
   });
 
   describe('composed state', () => {
+    it('sets the focus-search request from the caller', () => {
+      const fields = buildFindWebViewFields(
+        savedWebView(),
+        findOptions({ shouldFocusSearch: true }),
+        'simple',
+        LOCALIZED_TITLE,
+      );
+
+      expect(fields.state?.shouldFocusSearch).toBe(true);
+    });
+
+    it('scrubs the focus-search request when the caller supplies none', () => {
+      // A one-shot request rather than durable state, and it rides along in the persisted `state`,
+      // so it is scrubbed unconditionally rather than falling back to the saved value: every
+      // hydration reloads with no options at all, and carrying it over would steal focus into the
+      // search box on app start, for an invoke that happened in an earlier session.
+      const fields = buildFindWebViewFields(
+        savedWebView({ state: { shouldFocusSearch: true } }),
+        findOptions(),
+        'simple',
+        LOCALIZED_TITLE,
+      );
+
+      expect(fields.state?.shouldFocusSearch).toBe(false);
+    });
+
     it('keeps the saved editor web view id when the caller supplies none', () => {
       const fields = buildFindWebViewFields(
         savedWebView({ state: { editorWebViewId: 'editor-1' } }),
