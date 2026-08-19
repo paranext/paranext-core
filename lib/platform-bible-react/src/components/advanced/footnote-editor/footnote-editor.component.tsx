@@ -276,18 +276,18 @@ export default function FootnoteEditor({
    * Session state for a `\`-triggered marker palette open inside this popover's own editor (single
    * owner: the keydown flow below). Mirrors the main editor's `paletteSession` in
    * `platform-scripture-editor.web-view.tsx` — see there for the full session-shape rationale —
-   * scoped to this popover's own `.editor-input` and driven by its own `editorRef`. The
-   * collapsed-caret trigger opens a PASSIVE palette (`kind: 'backslash'`, literal keeps landing);
-   * the selection-wrap trigger opens a FOCUSED palette tracked as `kind: 'selection'` — its keys
-   * are forwarded through the shared capture-phase table (`handleMarkerPaletteSessionKeyDown`)
-   * because the cross-frame focus handoff can lose, and an unclaimed keystroke would replace the
-   * wrapped selection.
+   * scoped to this popover's own `.editor-input` and driven by its own `editorRef`. Both kinds are
+   * ACTIVE: the trigger is claimed and never lands, and typed characters filter the palette through
+   * the shared capture-phase table (`handleMarkerPaletteSessionKeyDown`) — never the document. The
+   * collapsed-caret trigger opens a non-focus-stealing palette (`kind: 'backslash'`); the
+   * selection-wrap trigger opens a FOCUSED palette tracked as `kind: 'selection'`, whose keys the
+   * table claims wholesale because the cross-frame focus handoff can lose, and an unclaimed
+   * keystroke would replace the wrapped selection.
    */
   const paletteSession = useRef<
     | {
         kind: 'backslash' | 'selection';
         token: number;
-        literalPrefixLanded: boolean;
         filter: string;
         items: EditorMarkerMenuItem[];
       }
@@ -633,17 +633,16 @@ export default function FootnoteEditor({
     (
       ctx: { anchorRect?: { x: number; y: number; width: number; height: number } },
       items: EditorMarkerMenuItem[],
-      openOptions: { passive: boolean; literalPrefixLanded: boolean },
+      openOptions: { passive: boolean },
     ) => {
       const { anchorRect } = ctx;
       if (!markerPalette || !anchorRect) return;
-      const { passive, literalPrefixLanded } = openOptions;
+      const { passive } = openOptions;
       paletteSessionCounter.current += 1;
       const token = paletteSessionCounter.current;
       paletteSession.current = {
         kind: passive ? 'backslash' : 'selection',
         token,
-        literalPrefixLanded,
         filter: '',
         items,
       };
@@ -673,7 +672,9 @@ export default function FootnoteEditor({
             if (selected) {
               editorRef.current?.applyMarkerMenuSelection(selected, {
                 trigger: 'backslash',
-                literalPrefixLanded,
+                // ACTIVE palette: the trigger was claimed and never landed, so there is never a
+                // literal prefix for the apply to clean up.
+                literalPrefixLanded: false,
               });
             }
           } else if (!passive) {
@@ -767,8 +768,25 @@ export default function FootnoteEditor({
         const session = paletteSession.current;
 
         if (session && markerPalette) {
-          if (handleMarkerPaletteSessionKeyDown(event, session, markerPalette) === 'ended')
-            paletteSession.current = undefined;
+          const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
+            // Overlay ops delegate to the host-supplied driver; the two commit ops are
+            // EDITOR-side applies this popover owns (it holds the editor ref). The table calls
+            // `dismiss()` right after each, resolving the show promise `undefined` — which the
+            // openMarkerPalette `.then` treats as a dismissal, so nothing double-applies.
+            update: (update) => markerPalette.update(update),
+            commit: () => markerPalette.commit(),
+            dismiss: () => markerPalette.dismiss(),
+            commitTyped: (typed) => editorRef.current?.commitTypedMarker(typed),
+            commitItem: (marker) => {
+              const selected = session.items.find((item) => item.marker === marker);
+              if (!selected) return;
+              editorRef.current?.applyMarkerMenuSelection(selected, {
+                trigger: 'backslash',
+                literalPrefixLanded: false,
+              });
+            },
+          });
+          if (outcome === 'ended') paletteSession.current = undefined;
           return;
         }
 
@@ -805,15 +823,13 @@ export default function FootnoteEditor({
         const items = getMarkerMenuItems(options.styleInfo ?? defaultStyleInfo, ctx);
         if (items.length === 0) return;
         const passive = !ctx.hasTextSelection;
-        // Collapsed caret: don't prevent default — the `\` lands as literal text and the passive
-        // palette tracks it. Selection: prevent default AND stop propagation (focused palette;
-        // nothing should land in place of the wrapped text — in capture, this actually keeps
-        // Lexical from typing the `\` over the selection).
-        if (!passive) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        openMarkerPalette(ctx, items, { passive, literalPrefixLanded: passive });
+        // ACTIVE palette: the trigger never lands, whatever the selection shape — typing filters
+        // the palette, not the document. In capture, the claim keeps Lexical from ever seeing
+        // the `\`. (`passive` still selects the overlay's non-focus-stealing display for the
+        // collapsed caret.)
+        event.preventDefault();
+        event.stopPropagation();
+        openMarkerPalette(ctx, items, { passive });
       };
 
       // Paste with the DOM caret OUTSIDE the note content is the same stray-caret class as the

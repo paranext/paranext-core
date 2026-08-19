@@ -13,16 +13,23 @@
  * clear their session ref. Claimed keys are `preventDefault`ed AND `stopPropagation`ed so, in
  * capture, Lexical's own root-element listener never sees them.
  *
- * Session kinds:
+ * Session kinds (ALL ACTIVE — typed characters filter the palette and never land in the document,
+ * identical to the editor package's own palettes; the trigger `\` is claimed by the session owner
+ * before opening, so nothing of the palette's is ever in the document):
  *
- * - `'backslash'` — PASSIVE palette after a collapsed-caret `\`: the literal keeps landing in the
- *   document, so filter characters are only MIRRORED (never claimed); Space/`*` land and end the
- *   session (the engine's own Tier-2 completion takes over).
- * - `'enter'` — FOCUSED Enter-split menu (collapsed caret): control keys and filter characters are
- *   claimed (a typed char must narrow the palette, not land), any other key means the user resumed
- *   editing (dismiss, let it land).
+ * - `'backslash'` — collapsed-caret `\` palette: filter characters are claimed and routed to the
+ *   query; Space commits the marker the user literally TYPED
+ *   ({@link MarkerPaletteSessionDriver.commitTyped} — the session owner materializes the literal
+ *   through the editor and the engine resolves it), except where
+ *   {@link MarkerPaletteSessionState.shouldSpaceCommit} routes note markers through the overlay
+ *   commit (like Enter) instead.
+ * - `'enter'` — FOCUSED Enter-split menu (collapsed caret): control keys and filter characters
+ *   (including Space — the menu's only commit is the highlighted item) are claimed, any other key
+ *   means the user resumed editing (dismiss, let it land).
  * - `'selection'` — FOCUSED selection-wrap palette: EVERY non-chord key is claimed — nothing may land
- *   while it is open, because typing would replace the wrapped selection.
+ *   while it is open, because typing would replace the wrapped selection. Space commits the item
+ *   the typed filter names EXACTLY ({@link MarkerPaletteSessionDriver.commitItem} — the wrap), or
+ *   refuses visibly when the typed marker is not offered (claimed dismiss, selection intact).
  *
  * Modifier-only keydowns (the Shift half of a `+` chord) pass through untouched so chords like
  * `\+w` keep filtering. Real chords (Ctrl/Cmd/Alt + key) are never ingested into the filter and
@@ -55,20 +62,39 @@ export interface MarkerPaletteSessionState {
   items: readonly { marker: string }[];
   /**
    * When set on a `'backslash'` session and it returns true for the current filter, Space COMMITS
-   * the palette selection (claimed, like Enter) instead of landing as a literal and dismissing.
-   * Consumers use this for markers where the literal `\marker ` completion route would misbehave —
-   * e.g. typing `\f ` in Standard view: the Tier-2 tokenizer would absorb the rest of the paragraph
-   * into the new footnote as its caller/content, whereas committing the palette inserts an empty
+   * the palette selection through the overlay (claimed, like Enter) instead of committing the typed
+   * literal. Consumers use this for markers where the materialized `\marker ` literal would
+   * misbehave — e.g. `\f ` in Standard view: mid-text the Tier-2 tokenizer absorbs the following
+   * word into the new footnote as its caller, whereas committing the palette item inserts an empty
    * footnote exactly like `\f` + Enter.
    */
   shouldSpaceCommit?: (filter: string) => boolean;
 }
 
 /**
- * The palette operations the forwarding table drives (overlay service or host-supplied) — the
- * shared `PaletteDriver` contract from `platform-bible-utils/experimental`.
+ * The palette operations the forwarding table drives. `update`/`commit`/`dismiss` are the shared
+ * `PaletteDriver` overlay contract from `platform-bible-utils/experimental`; the two commit ops
+ * below are EDITOR-side applies the session owner implements against its own editor ref (the
+ * overlay knows nothing of them — the table calls `dismiss()` right after each, so implementations
+ * only perform the apply).
  */
-export type MarkerPaletteSessionDriver = PaletteDriver;
+export interface MarkerPaletteSessionDriver extends PaletteDriver {
+  /**
+   * Commit the marker the user literally TYPED (the session filter), with the palette's Space
+   * semantics: materialize the literal through the editor (`EditorRef.commitTypedMarker`) and let
+   * the marker-edit engine resolve it — open span `closed="false"` for an inline marker, unknown
+   * settles as typed. Only invoked for a `'backslash'` session's Space.
+   */
+  commitTyped(typed: string): void;
+  /**
+   * Commit ONE SPECIFIC offered item, named by its bare marker code — the selection-wrap Space
+   * commit, where the marker is whatever was literally typed (an exact match against the offered
+   * entries), not whatever is highlighted. The session owner applies it through the editor
+   * (`EditorRef.applyMarkerMenuSelection`, `trigger: "backslash"`). Only invoked for a
+   * `'selection'` session's Space.
+   */
+  commitItem(marker: string): void;
+}
 
 /**
  * - `'passed'` — modifier-only or IME-composition keydown; nothing happened, the session stays open.
@@ -97,12 +123,11 @@ export function isImeCompositionKeyEvent(event: KeyboardEvent): boolean {
 const FILTER_CHAR_REGEX: Record<MarkerPaletteSessionKind, RegExp> = {
   // USFM marker characters that filter the palette. Hyphens (milestones `ts-s`/`ts-e`, `qt-s`,
   // `zpa-xb`) and letter case (custom markers may be capitalized; marker search is
-  // case-insensitive) are valid wherever markers are filtered. `*` is deliberately kept OUT of
-  // `backslash`: in the passive palette `*` is a close/commit trigger handled earlier at keydown
-  // time (the Space/`*` branch in `handleMarkerPaletteSessionKeyDown`), not a filter character —
-  // whereas a focused `selection` palette filters close-tag endmarkers like `nd*`, so it keeps `*`.
-  backslash: /^[a-z0-9+-]$/i,
-  // Focused menus: claimed filter characters (digits for q1/s2 etc.).
+  // case-insensitive) are valid wherever markers are filtered. `*` filters close-tag endmarkers
+  // like `nd*` in the marker palettes (under the active palette nothing lands, so the passive
+  // `*`-closes-the-span route is gone; Space then commits the typed `nd*` literal).
+  backslash: /^[a-z0-9+*-]$/i,
+  // Focused Enter-split menu: paragraph markers only (digits for q1/s2 etc.).
   enter: /^[a-z0-9]$/i,
   selection: /^[a-z0-9+*-]$/i,
 };
@@ -180,32 +205,53 @@ export function handleMarkerPaletteSessionKeyDown(
     return 'ended';
   }
 
-  if (session.kind === 'backslash' && (event.key === ' ' || event.key === '*')) {
-    if (event.key === ' ' && session.shouldSpaceCommit?.(session.filter)) {
-      // Space commits like Enter for markers where the literal completion route would misbehave
-      // (see MarkerPaletteSessionState.shouldSpaceCommit). Claimed so no literal space lands.
+  if (event.key === ' ') {
+    if (session.kind === 'backslash') {
+      // The active palette's Space commit ("commit what was typed"). Claimed: nothing may land.
       claim(event);
-      driver.commit();
+      if (session.shouldSpaceCommit?.(session.filter)) {
+        // Note markers commit like Enter through the overlay (exact-first resolution) — see
+        // MarkerPaletteSessionState.shouldSpaceCommit for why the typed-literal route misbehaves.
+        driver.commit();
+        return 'ended';
+      }
+      driver.commitTyped(session.filter);
+      driver.dismiss();
       return 'ended';
     }
-    // PT9 Space-commit / `*`-close: the key lands as literal text and is picked up by the
-    // engine's own Tier-2 marker-completion trigger, so the palette is no longer relevant.
-    driver.dismiss();
-    return 'ended';
+    if (session.kind === 'selection') {
+      // Wrap commit: the marker is whatever was literally TYPED — an exact match against the
+      // offered entries. A marker not offered (unknown, or not valid here) has nothing to
+      // commit: the palette closes and the selection stays intact rather than wrapped in a
+      // guess (visible refusal). Claimed either way — nothing may replace the selection.
+      claim(event);
+      const match = session.items.find((item) => item.marker === session.filter);
+      if (match) driver.commitItem(match.marker);
+      driver.dismiss();
+      return 'ended';
+    }
+    // 'enter': Space keeps filtering, matching the editor package's Enter-triggered menu (its
+    // only commit is the highlighted item). Falls through to the filter branch below via the
+    // explicit append — ' ' is not in FILTER_CHAR_REGEX.
+    claim(event);
+    session.filter += ' ';
+    driver.update({ filterText: session.filter });
+    return 'continue';
   }
 
-  if (session.kind === 'backslash' && event.key === 'Backspace' && session.filter === '') {
-    // Passive palette with an empty filter: the only thing behind the palette is the trigger `\`,
-    // which this (unclaimed) Backspace is about to delete from the document. End the session so the
-    // overlay isn't left orphaned behind a deleted `\`.
+  if (event.key === 'Backspace' && session.filter === '') {
+    // Editor-palette parity: with nothing typed there is nothing to widen — Backspace closes the
+    // menu. Claimed: nothing of the palette's ever landed, so an unclaimed Backspace would eat a
+    // real document character.
+    claim(event);
     driver.dismiss();
     return 'ended';
   }
 
   if (event.key === 'Backspace' || FILTER_CHAR_REGEX[session.kind].test(event.key)) {
-    // Focused sessions claim the character (it must not land in the document); the passive
-    // backslash session lets it land and only mirrors it.
-    if (session.kind !== 'backslash') claim(event);
+    // ACTIVE palettes: the character narrows the query (or Backspace widens it) and must never
+    // land in the document.
+    claim(event);
     session.filter =
       event.key === 'Backspace' ? session.filter.slice(0, -1) : session.filter + event.key;
     driver.update({ filterText: session.filter });

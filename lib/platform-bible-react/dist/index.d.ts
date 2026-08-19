@@ -1072,19 +1072,38 @@ export interface MarkerPaletteSessionState {
 	}[];
 	/**
 	 * When set on a `'backslash'` session and it returns true for the current filter, Space COMMITS
-	 * the palette selection (claimed, like Enter) instead of landing as a literal and dismissing.
-	 * Consumers use this for markers where the literal `\marker ` completion route would misbehave —
-	 * e.g. typing `\f ` in Standard view: the Tier-2 tokenizer would absorb the rest of the paragraph
-	 * into the new footnote as its caller/content, whereas committing the palette inserts an empty
+	 * the palette selection through the overlay (claimed, like Enter) instead of committing the typed
+	 * literal. Consumers use this for markers where the materialized `\marker ` literal would
+	 * misbehave — e.g. `\f ` in Standard view: mid-text the Tier-2 tokenizer absorbs the following
+	 * word into the new footnote as its caller, whereas committing the palette item inserts an empty
 	 * footnote exactly like `\f` + Enter.
 	 */
 	shouldSpaceCommit?: (filter: string) => boolean;
 }
 /**
- * The palette operations the forwarding table drives (overlay service or host-supplied) — the
- * shared `PaletteDriver` contract from `platform-bible-utils/experimental`.
+ * The palette operations the forwarding table drives. `update`/`commit`/`dismiss` are the shared
+ * `PaletteDriver` overlay contract from `platform-bible-utils/experimental`; the two commit ops
+ * below are EDITOR-side applies the session owner implements against its own editor ref (the
+ * overlay knows nothing of them — the table calls `dismiss()` right after each, so implementations
+ * only perform the apply).
  */
-export type MarkerPaletteSessionDriver = PaletteDriver;
+export interface MarkerPaletteSessionDriver extends PaletteDriver {
+	/**
+	 * Commit the marker the user literally TYPED (the session filter), with the palette's Space
+	 * semantics: materialize the literal through the editor (`EditorRef.commitTypedMarker`) and let
+	 * the marker-edit engine resolve it — open span `closed="false"` for an inline marker, unknown
+	 * settles as typed. Only invoked for a `'backslash'` session's Space.
+	 */
+	commitTyped(typed: string): void;
+	/**
+	 * Commit ONE SPECIFIC offered item, named by its bare marker code — the selection-wrap Space
+	 * commit, where the marker is whatever was literally typed (an exact match against the offered
+	 * entries), not whatever is highlighted. The session owner applies it through the editor
+	 * (`EditorRef.applyMarkerMenuSelection`, `trigger: "backslash"`). Only invoked for a
+	 * `'selection'` session's Space.
+	 */
+	commitItem(marker: string): void;
+}
 /**
  * - `'passed'` — modifier-only or IME-composition keydown; nothing happened, the session stays open.
  * - `'continue'` — the key drove the palette (filter/arrows); the session stays open.

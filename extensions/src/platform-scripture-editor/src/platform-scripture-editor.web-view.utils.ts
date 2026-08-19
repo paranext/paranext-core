@@ -24,7 +24,6 @@ import {
   type EditorRef,
   type SelectionRange,
   type StyleInfo,
-  type TransientInput,
 } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
@@ -150,21 +149,4 @@ export function restoreSelectionIfLost(
 ): void {
   if (!editor || editor.getSelection()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
-}
-
-/**
- * What the editor should be told is in flight for `session`, or `undefined` when nothing is.
- *
- * Only a PASSIVE backslash session leaves bytes in the document: the `\` trigger lands as literal
- * text (that is what makes it passive) and every filter character lands after it, so the document
- * carries exactly `\` + filter immediately before the caret. Focused sessions — Enter-triggered and
- * selection-triggered — claim their keystrokes, so nothing of theirs is ever in the document and
- * they declare nothing.
- */
-export function transientInputForPaletteSession(
-  session: { kind: string; filter: string } | undefined,
-): TransientInput | undefined {
-  return session?.kind === 'backslash'
-    ? { kind: 'marker-literal', run: `\\${session.filter}` }
-    : undefined;
 }

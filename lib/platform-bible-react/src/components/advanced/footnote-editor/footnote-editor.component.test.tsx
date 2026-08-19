@@ -190,6 +190,7 @@ function renderFootnoteEditor(
     getMarkerMenuContext: vi.fn(),
     applyMarkerMenuSelection: vi.fn(),
     splitParagraphWithMarker: vi.fn(),
+    commitTypedMarker: vi.fn(),
     commitPendingMarkerEdits: vi.fn(),
     insertNote: vi.fn(),
     getNoteOps: vi.fn(() => []),
@@ -266,8 +267,12 @@ describe('FootnoteEditor marker palette wiring', () => {
     });
   });
 
-  describe('editable marker mode with markerPalette, collapsed caret (passive palette)', () => {
-    it('opens a passive palette without preventing default and does not steal focus', () => {
+  describe('editable marker mode with markerPalette, collapsed caret (non-focus-stealing palette)', () => {
+    it('claims the trigger (never lands) and opens the palette in its non-focus-stealing display', () => {
+      // ACTIVE palette: the trigger `\` is claimed in every selection shape — nothing of the
+      // palette's ever reaches the document. The collapsed-caret palette still requests the
+      // `passive: true` DISPLAY (no focus steal; filter and highlight driven via the session
+      // table), which is now purely an overlay display mode, not a typing mode.
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const show = vi.fn(() => new Promise<string | undefined>(() => {}));
       const markerPalette = makeMarkerPalette(show);
@@ -289,7 +294,7 @@ describe('FootnoteEditor marker palette wiring', () => {
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
 
-      expect(notPrevented).toBe(true);
+      expect(notPrevented).toBe(false); // claimed — the trigger never lands
       expect(show).toHaveBeenCalledWith(
         [markerMenuItemToPaletteItem(makeItem())],
         { x: 1, y: 2, width: 3, height: 4 },
@@ -366,7 +371,9 @@ describe('FootnoteEditor marker palette wiring', () => {
 
       expect(editorRef.applyMarkerMenuSelection).toHaveBeenCalledWith(makeItem({ marker: 'nd' }), {
         trigger: 'backslash',
-        literalPrefixLanded: true,
+        // ACTIVE palette: the trigger is claimed and never lands, so an item commit never has a
+        // literal prefix to clean up.
+        literalPrefixLanded: false,
       });
       expect(editorRef.focus).toHaveBeenCalled();
     });
@@ -613,7 +620,10 @@ describe('FootnoteEditor marker palette wiring', () => {
   });
 
   describe('editable marker mode with markerPalette, an open session forwarding table', () => {
-    it('mirrors typed marker characters into the palette filter instead of dismissing', () => {
+    it('claims the trigger and typed characters — they filter the palette, never the document', () => {
+      // ACTIVE palette: under the passive palette the `\` and the typed characters landed as
+      // literals and were only mirrored; now the trigger and every filter character are claimed,
+      // so typing reaches the query and NOT the document.
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const markerPalette = makeMarkerPalette(
         vi.fn(() => new Promise<string | undefined>(() => {})),
@@ -632,14 +642,15 @@ describe('FootnoteEditor marker palette wiring', () => {
       });
 
       placeDomCaretInsideNote(editorInput);
-      editorInput.ownerDocument.dispatchEvent(
+      const triggerNotPrevented = editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
-      const notPrevented = editorInput.ownerDocument.dispatchEvent(
+      const typedNotPrevented = editorInput.ownerDocument.dispatchEvent(
         new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
       );
 
-      expect(notPrevented).toBe(true);
+      expect(triggerNotPrevented).toBe(false); // claimed — the trigger never lands
+      expect(typedNotPrevented).toBe(false); // claimed — filters the palette, not the document
       expect(markerPalette.update).toHaveBeenCalledWith({ filterText: 'w' });
       expect(markerPalette.dismiss).not.toHaveBeenCalled();
     });
@@ -754,7 +765,9 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(markerPalette.dismiss).toHaveBeenCalledOnce();
     });
 
-    it('lets Space land and dismisses the palette (PT9 Tier-2 commit takes over)', () => {
+    it('Escape closes the palette with the document untouched — nothing typed ever landed', () => {
+      // Ratified Escape row under the active palette: the trigger and the typed filter were
+      // claimed, so Escape has nothing to leave behind — no editor apply of any kind runs.
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const markerPalette = makeMarkerPalette(
         vi.fn(() => new Promise<string | undefined>(() => {})),
@@ -773,22 +786,31 @@ describe('FootnoteEditor marker palette wiring', () => {
       });
 
       placeDomCaretInsideNote(editorInput);
-      editorInput.ownerDocument.dispatchEvent(
+      const doc = editorInput.ownerDocument;
+      doc.dispatchEvent(
         new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
       );
-      const notPrevented = editorInput.ownerDocument.dispatchEvent(
-        new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }),
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'w', bubbles: true, cancelable: true }),
+      );
+      const escapeNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
       );
 
-      expect(notPrevented).toBe(true);
+      expect(escapeNotPrevented).toBe(false); // claimed
       expect(markerPalette.dismiss).toHaveBeenCalledTimes(1);
+      expect(editorRef.commitTypedMarker).not.toHaveBeenCalled();
+      expect(editorRef.applyMarkerMenuSelection).not.toHaveBeenCalled();
+      expect(editorRef.insertMarker).not.toHaveBeenCalled();
     });
 
-    it('types `\\nd` + Space: the typed filter routes to the palette and Space defers to Tier-2 — never a commit of the highlighted item', () => {
+    it('types `\\nd` + Space: the typed filter routes to the palette and Space commits the TYPED marker', () => {
       // The owner's report: `\nd` + Space inserted `\fq` (the first item of an unfiltered
       // note-context list). The typed characters must reach the palette query (filter + ranked
-      // list), and Space for a non-note marker must DISMISS and let the literal land — the
-      // editor's Tier-2 completes the typed `\nd ` — never commit whatever is highlighted.
+      // list), and Space for a non-note marker commits what was TYPED — under the active palette
+      // nothing landed, so the commit materializes the literal through the editor
+      // (commitTypedMarker) instead of letting the space land for Tier-2 — never a commit of
+      // whatever is highlighted.
       mockGetMarkerMenuItems.mockReturnValue([
         makeItem({ marker: 'fq' }),
         makeItem({ marker: 'xt' }),
@@ -828,9 +850,100 @@ describe('FootnoteEditor marker palette wiring', () => {
         new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }),
       );
 
-      expect(spaceNotPrevented).toBe(true); // the literal space lands; Tier-2 completes `\nd `
+      expect(spaceNotPrevented).toBe(false); // claimed — no literal space lands
+      expect(editorRef.commitTypedMarker).toHaveBeenCalledExactlyOnceWith('nd');
       expect(markerPalette.dismiss).toHaveBeenCalledTimes(1);
       expect(markerPalette.commit).not.toHaveBeenCalled(); // never the highlighted item
+    });
+
+    it('selection wrap: typed exact match + Space applies THAT item over the selection', () => {
+      // Ratified: Space over a non-collapsed selection wraps the selection in the TYPED marker's
+      // closed span — an exact match against the offered entries, applied through
+      // applyMarkerMenuSelection, never commitTypedMarker (materializing would replace the
+      // selected text) and never the highlighted item.
+      mockGetMarkerMenuItems.mockReturnValue([
+        makeItem({ marker: 'fq' }),
+        makeItem({ marker: 'nd' }),
+      ]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: true, // selection-wrap session
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      const doc = editorInput.ownerDocument;
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'n', bubbles: true, cancelable: true }),
+      );
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'd', bubbles: true, cancelable: true }),
+      );
+      const spaceNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }),
+      );
+
+      expect(spaceNotPrevented).toBe(false); // nothing may replace the wrapped selection
+      expect(editorRef.applyMarkerMenuSelection).toHaveBeenCalledExactlyOnceWith(
+        makeItem({ marker: 'nd' }),
+        { trigger: 'backslash', literalPrefixLanded: false },
+      );
+      expect(editorRef.commitTypedMarker).not.toHaveBeenCalled();
+      expect(markerPalette.commit).not.toHaveBeenCalled();
+      expect(markerPalette.dismiss).toHaveBeenCalledTimes(1);
+    });
+
+    it('selection wrap: Space with no exact typed match refuses visibly — selection intact, nothing applied', () => {
+      mockGetMarkerMenuItems.mockReturnValue([
+        makeItem({ marker: 'fq' }),
+        makeItem({ marker: 'nd' }),
+      ]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: true,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      const doc = editorInput.ownerDocument;
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      // 'n' prefixes 'nd' but is not itself offered — the exact match must refuse, not wrap.
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'n', bubbles: true, cancelable: true }),
+      );
+      const spaceNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }),
+      );
+
+      expect(spaceNotPrevented).toBe(false); // still claimed — nothing may replace the selection
+      expect(editorRef.applyMarkerMenuSelection).not.toHaveBeenCalled();
+      expect(editorRef.commitTypedMarker).not.toHaveBeenCalled();
+      expect(markerPalette.dismiss).toHaveBeenCalledTimes(1); // visible refusal: palette closes
     });
 
     it('Enter with zero matches is a no-op: the session survives and keeps mirroring (P9 parity)', () => {
