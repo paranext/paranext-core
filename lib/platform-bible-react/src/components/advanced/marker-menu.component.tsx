@@ -1,6 +1,5 @@
 import { FC, LegacyRef, useMemo, useState } from 'react';
 import { Ban, Check } from 'lucide-react';
-import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
 import {
   Command,
   CommandEmpty,
@@ -107,16 +106,6 @@ export interface MarkerMenuProps {
    * `%markerMenu_searchPlaceholder%` localized string.
    */
   searchPlaceholder?: string;
-  /**
-   * Overrides the shrink step this menu would otherwise inherit from the toolbar that opened it.
-   * Higher means narrower; from `SHRINK_STEP.TIGHTER` on, each row's trailing detail is dropped.
-   *
-   * The menu has no observer of its own. Its popover is portalled out of the toolbar's DOM, but
-   * React context follows the component tree rather than the DOM, so the toolbar's step still
-   * reaches it — and the popover's width is bounded by the same panel the toolbar sits in, so the
-   * two track each other. Intended for stories and tests.
-   */
-  shrinkStep?: number;
 }
 
 /** Function to format the marker menu icon and size it accordingly */
@@ -155,12 +144,9 @@ function MarkerSelectionStateIndicator({ state }: { state: 'all' | 'partial' | '
 function MarkerMenuCommandItem({
   item,
   localizedStrings,
-  isDetailHidden,
 }: {
   item: MarkerMenuItem;
   localizedStrings: MarkerMenuLocalizedStrings;
-  /** Whether the popover is too narrow to carry a trailing detail alongside the title. */
-  isDetailHidden: boolean;
 }) {
   return (
     <CommandItem
@@ -193,22 +179,20 @@ function MarkerMenuCommandItem({
           </div>
         )}
       </div>
-      {/* Title and detail sit side by side, detail trailing and subordinate. Both carry
-          `tw:min-w-0` so each can shrink below its content width and clip rather than wrap, per the
-          Responsiveness guideline's rule that menu entries truncate at small widths (consumers pin
-          this popover as narrow as 200px).
+      {/* Title and detail sit side by side, detail trailing and subordinate. Both truncate rather
+          than wrap — consumers pin this popover as narrow as 200px — and the detail's much larger
+          shrink factor means it gives up its space first, so the title, which identifies the row,
+          keeps as much as it can.
 
-          The native `title` attributes, not the Tooltip component, keep the full text reachable on
-          hover: a Radix tooltip inside a cmdk list fights the list's own hover and focus
-          management. The toolbar items above use the real Tooltip; menu rows keep the native
-          affordance. */}
+          Native `title` attributes rather than the Tooltip component: a Radix tooltip inside a cmdk
+          list fights the list's own hover and focus handling. */}
       <div className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2">
-        <p className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm" title={item.title}>
+        <p className="tw:min-w-0 tw:shrink tw:truncate tw:text-sm" title={item.title}>
           {item.title}
         </p>
-        {item.subtitle && !isDetailHidden && (
+        {item.subtitle && (
           <p
-            className="tw:min-w-0 tw:max-w-1/2 tw:truncate tw:text-end tw:text-xs tw:text-muted-foreground"
+            className="tw:min-w-0 tw:shrink-[9999] tw:truncate tw:text-end tw:text-xs tw:text-muted-foreground"
             title={item.subtitle}
           >
             {item.subtitle}
@@ -232,15 +216,8 @@ export function MarkerMenu({
   markerMenuItems,
   searchRef,
   searchPlaceholder,
-  shrinkStep: shrinkStepOverride,
 }: MarkerMenuProps) {
   const [commandSearch, setCommandSearch] = useState<string>('');
-
-  const contextShrinkStep = useShrinkStepValue();
-  const shrinkStep = shrinkStepOverride ?? contextShrinkStep;
-  // The title is what identifies a row, so the detail is what gives way — the same
-  // "second field is the truncation target" rule the toolbar labels follow.
-  const isDetailHidden = shrinkStep >= SHRINK_STEP.TIGHTER;
 
   const [codeMatchItems, titleMatchItems] = useMemo(() => {
     const query = commandSearch.trim().toLowerCase();
@@ -287,7 +264,6 @@ export function MarkerMenu({
             <MarkerMenuCommandItem
               item={item}
               localizedStrings={localizedStrings}
-              isDetailHidden={isDetailHidden}
               key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
             />
           ))}
@@ -300,7 +276,6 @@ export function MarkerMenu({
                 <MarkerMenuCommandItem
                   item={item}
                   localizedStrings={localizedStrings}
-                  isDetailHidden={isDetailHidden}
                   key={`item-${item.marker ?? item.icon?.displayName}-${item.title.replaceAll(' ', '')}`}
                 />
               ))}

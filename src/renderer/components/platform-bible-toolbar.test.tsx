@@ -14,6 +14,7 @@ import {
   SEND_RECEIVE_UNKNOWN_GRACE_MS,
   useSendReceiveAvailability,
 } from '@renderer/hooks/use-send-receive-availability.hook';
+import { SHRINK_STEP, ShrinkStepContext } from 'platform-bible-react';
 import { PlatformBibleToolbar } from './platform-bible-toolbar';
 
 // Mock asset
@@ -207,7 +208,16 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       <div data-value={value}>{children}</div>
     ),
     SelectSeparator: () => <hr />,
-    SelectValue: ({ placeholder }: { placeholder?: string }) => <span>{placeholder}</span>,
+    // Renders children when there are any, mirroring Radix: the real `SelectValue` shows the
+    // placeholder only while nothing is selected. Dropping them would hide the project label
+    // entirely and make every assertion about it vacuous.
+    SelectValue: ({
+      placeholder,
+      children,
+    }: {
+      placeholder?: string;
+      children?: React.ReactNode;
+    }) => <span data-testid="project-picker-value">{children ?? placeholder}</span>,
   };
 });
 
@@ -894,5 +904,73 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     expect(screen.getByTestId('toolbar-root')).toHaveClass('tw:ps-[85px]');
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:border-0');
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
+  });
+});
+
+describe('PlatformBibleToolbar project selector label', () => {
+  /** Renders the toolbar with the project selector's shrink step forced, since jsdom cannot measure. */
+  function renderAtStep(shrinkStep: number) {
+    return render(
+      <ShrinkStepContext.Provider value={shrinkStep}>
+        <PlatformBibleToolbar />
+      </ShrinkStepContext.Provider>,
+    );
+  }
+
+  it('shows the full project name and short name when there is room', () => {
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('Test Project');
+    expect(trigger).toHaveTextContent('TP');
+  });
+
+  it('drops the full name at the narrowest step, keeping the identifying short name', () => {
+    renderAtStep(SHRINK_STEP.MINIMUM);
+
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('TP');
+    expect(trigger).not.toHaveTextContent('Test Project');
+  });
+
+  it('keeps the project name and short name readable as one string', () => {
+    // Split across two spans, so without a real separator this reads "Test Project(TP)".
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Test Project (TP)');
+  });
+
+  it('shows an error in place of the label, not alongside it', async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+      currentProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentProjectError: 'Project failed to load',
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    const trigger = screen.getByTestId('project-picker-value');
+    expect(trigger).toHaveTextContent('Project failed to load');
+    expect(trigger).not.toHaveTextContent('Test Project');
+  });
+
+  it('keeps an error visible at the narrowest step, where the project name would be dropped', async () => {
+    // Routing the error through the label's droppable field would leave the user with a red short
+    // name and no statement of what went wrong.
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+      currentProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentProjectError: 'Project failed to load',
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.MINIMUM);
+
+    expect(screen.getByTestId('project-picker-value')).toHaveTextContent('Project failed to load');
   });
 });

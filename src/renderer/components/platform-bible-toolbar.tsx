@@ -114,16 +114,26 @@ function ProjectSelectorLabel({
   const shrinkStep = useShrinkStepValue();
   const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM;
 
+  // An error replaces the label rather than sharing it. Putting it in the compound label's
+  // secondary slot would clip it mid-sentence and then drop it entirely at the narrowest step,
+  // leaving red text as the only signal that anything is wrong.
+  if (errorMessage) {
+    return (
+      <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-destructive" title={errorMessage}>
+        {errorMessage}
+      </span>
+    );
+  }
+
   return (
     <ToolbarCompoundLabel
       // The short name is the identifying part, so it is the field that must survive — but it reads
       // second, hence `secondaryFirst`.
       primary={isAtMinimum ? shortName : `(${shortName})`}
-      secondary={errorMessage ?? fullName}
+      secondary={fullName}
       secondaryFirst
       showSecondary={!isAtMinimum}
       fullText={`${fullName} (${shortName})`}
-      className={cn(errorMessage && 'tw:text-destructive')}
     />
   );
 }

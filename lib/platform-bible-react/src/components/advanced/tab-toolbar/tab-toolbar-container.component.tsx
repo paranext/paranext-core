@@ -62,11 +62,10 @@ export type TabToolbarContainerProps = PropsWithChildren<{
 }>;
 
 /**
- * Container inline-size breakpoints for the tab toolbar, widest first.
+ * Breakpoints for the tab toolbar, widest first, measured against its own width.
  *
- * INITIAL ESTIMATES, summed from the current control widths rather than measured against the
- * running app. They are tuned with the `visual-verification` skill before this ships; treat a value
- * here as provisional until that has happened.
+ * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
+ * adjust them the first time this is watched in a running app.
  */
 export const TAB_TOOLBAR_SHRINK_THRESHOLDS_PX = Object.freeze([520, 420, 340]);
 

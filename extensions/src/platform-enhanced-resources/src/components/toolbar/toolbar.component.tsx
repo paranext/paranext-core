@@ -463,20 +463,24 @@ export type EnhancedResourceTabBarProps = {
 };
 
 /**
+ * Width below which this bar's four tab labels collapse to icon-only, leaving room for the scope
+ * select and the filter input.
+ *
+ * 384px is Tailwind's `@sm` CONTAINER breakpoint (`--container-sm: 24rem`), which is what the
+ * container query this replaced was asking for — not the 640px `sm` viewport breakpoint of the same
+ * name.
+ */
+const ENHANCED_RESOURCES_TAB_BAR_SHRINK_THRESHOLDS_PX = Object.freeze([384]);
+
+/**
  * Lower-split header row: tab selector, filter input (only shown when filtered), scope selector.
  *
  * [Revised: 2026-04-29] Theme 8 — split out from the original monolithic Toolbar; mounts as the
  * FIRST child inside the lower ResizablePanel so it sits directly above the tab content. Theme 9 —
  * filter is now a plain `Input` + ghost X button, no SearchBar, no placeholder, `readOnly`, hidden
- * when `searchValue` is empty. Theme 8 (responsive) — uses `@container` queries on the parent so
- * tab labels collapse to icon-only at narrow widths and the row never wraps to two lines.
+ * when `searchValue` is empty. Theme 8 (responsive) — tab labels collapse to icon-only at narrow
+ * widths and the row never wraps to two lines.
  */
-/**
- * Width below which this bar's four tab labels collapse to icon-only, leaving room for the scope
- * select and the filter input. Matches the `@sm` breakpoint the container query used to name.
- */
-const ENHANCED_RESOURCES_TAB_BAR_SHRINK_THRESHOLDS_PX = Object.freeze([640]);
-
 export function EnhancedResourceTabBar({
   activeTab,
   onTabChange,
@@ -569,13 +573,9 @@ export function EnhancedResourceTabBar({
   const filterInputTextClass = filterActive ? 'er-filter-input-on-pastel' : '';
 
   return (
-    // FN-024: width-driven collapse runs through `useShrinkStep`, not a CSS container query.
-    // This previously read `tw-@container/toolbar` — a dash where Tailwind v4's prefix needs
-    // `tw:` — which emits no class at all. The named container was therefore never established
-    // and every `@sm/toolbar:` variant below silently never matched, so the tab labels were
-    // hidden at EVERY width. Ported to the hook rather than just fixing the prefix, because
-    // container-query variants have not proven reliable in extension web view bundles and they
-    // fail this same silent way.
+    // Width-driven collapse runs through `useShrinkStep` rather than a CSS container query:
+    // container-query variants have not proven reliable in extension web view bundles, and when
+    // they fail they emit nothing, leaving labels stuck in one state at every width.
     <div ref={attachRoot} className="tw:w-full">
       <div className="tw:flex tw:flex-nowrap tw:items-center tw:gap-2 tw:overflow-hidden tw:border-b tw:px-2 tw:py-1.5">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="tw:shrink-0">
