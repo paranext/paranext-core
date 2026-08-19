@@ -57,8 +57,8 @@ export const platformSettings: SettingsContribution = [
       },
       'platform.syncOnStartup': {
         label: '%settings_platform_syncOnStartup_label%',
+        description: '%settings_platform_syncOnStartup_description%',
         default: true,
-        isHidden: true,
       },
     },
   },
