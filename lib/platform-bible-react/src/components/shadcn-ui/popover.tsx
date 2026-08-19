@@ -4,6 +4,8 @@ import React from 'react';
 import { Popover as PopoverPrimitive } from 'radix-ui';
 
 import { cn } from '@/utils/shadcn-ui/utils';
+// CUSTOM: Shared portal-container factory (also used by tooltip.tsx) so this workaround is defined once
+import { createPortalContainerContext } from '@/components/portal-container.context';
 // CUSTOM: Import direction helper for RTL support
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 // CUSTOM: Import shared z-index constant to ensure popovers stack above the dock
@@ -25,88 +27,42 @@ function PopoverTrigger({ ...props }: React.ComponentProps<typeof PopoverPrimiti
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
 }
 
-// CUSTOM: expand JSDoc — explain focus-trap rationale and add usage examples
-/* #region CUSTOM PopoverPortalContainerContext + Provider — let descendant PopoverContent portal into a custom container instead of document.body */
-// Backing context for `PopoverPortalContainerProvider`. See the provider's JSDoc for rationale.
-// eslint-disable-next-line no-null/no-null
-const PopoverPortalContainerContext = React.createContext<HTMLElement | null>(null);
+/* #region CUSTOM PopoverPortalContainerProvider — let descendant PopoverContent portal into a custom container instead of document.body */
+const { PortalContainerProvider, usePortalContainer: usePopoverPortalContainer } =
+  createPortalContainerContext();
 
 /**
- * Overrides the container that descendant {@link PopoverContent} components portal into. Use it to
- * keep popovers inside a Radix `DialogContent`, `DropdownMenuContent`, or any other ancestor that
- * owns a focus trap or dismiss-on-outside-click layer.
+ * Keeps descendant {@link PopoverContent} inside `container` instead of `document.body`. Use it
+ * whenever a popover's trigger sits inside an ancestor that owns a focus trap or a
+ * dismiss-on-outside-click layer (`DialogContent`, `DropdownMenuContent`, …), which would otherwise
+ * pull focus out of the popover or treat a click inside it as an outside click.
  *
- * @remarks
- * Radix `Popover` portals its content to `document.body` by default, which works fine for top-level
- * UI. The default breaks down whenever a popover trigger lives inside an ancestor that:
+ * Contract:
  *
- * - Runs a focus trap (`Dialog`, `AlertDialog`, modal `DropdownMenu`) — the trap yanks focus back out
- *   of the popover the instant it opens because the portal'd content is outside the trap's DOM
- *   subtree.
- * - Listens for outside-clicks (Radix `DismissableLayer`, used by every `*Menu`/`Dialog`) — a click
- *   inside the popover reads as "outside the menu" and dismisses the parent immediately.
+ * - Pass `null` for `container` until the ancestor element exists (the initial state of a
+ *   ref-callback `useState`) to keep Radix's `document.body` default; once it exists, later opens
+ *   portal into it.
+ * - The ancestor must wrap this provider, not the other way round, so only its own descendants are
+ *   redirected.
+ * - Only affects popovers mounted as React descendants; already-open popovers are not re-portalled.
  *
- * Wrapping the children of the trapping ancestor in this provider, with that ancestor's element as
- * `container`, makes nested `PopoverContent` portal as a DOM descendant of the trap so both focus
- * and dismiss-layer logic accept it.
- *
- * Single descendant scope: a `PopoverPortalContainerProvider` only affects `PopoverContent` mounts
- * rendered as React children. It does not retroactively re-portal already-mounted popovers, and it
- * does not affect popovers in sibling subtrees.
- *
- * Initial-mount behavior: pass `null` for `container` (the initial value of a `useState<HTMLElement
- *
- * | null>(null)` paired with a ref callback on the ancestor) to keep Radix's default
- *
- * `document.body` behavior until the ancestor mounts. Once the element exists, future popover opens
- * portal into it. The triggering ancestor (the trap owner) must wrap, not be wrapped by, this
- * provider.
- * @example
- *
- * ```tsx
- * function ScopeMenu() {
- *   const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
- *
- *   return (
- *     <Dialog open={isOpen} onOpenChange={setIsOpen}>
- *       <DialogContent ref={setDialogEl}>
- *         <PopoverPortalContainerProvider container={dialogEl}>
- *           <BookChapterControl ... />
- *         </PopoverPortalContainerProvider>
- *       </DialogContent>
- *     </Dialog>
- *   );
- * }
- * ```
+ * `TooltipPortalContainerProvider` in `tooltip.tsx` does the same for tooltips.
  *
  * @example
  *
  * ```tsx
- * // Dropdown variant: same pattern, container is the DropdownMenuContent.
- * const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
- * <DropdownMenu>
- *   <DropdownMenuTrigger>...</DropdownMenuTrigger>
- *   <DropdownMenuContent ref={setContentEl}>
- *     <PopoverPortalContainerProvider container={contentEl}>
+ * const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+ *
+ * <Dialog open={isOpen} onOpenChange={setIsOpen}>
+ *   <DialogContent ref={setDialogEl}>
+ *     <PopoverPortalContainerProvider container={dialogEl}>
  *       <BookChapterControl ... />
  *     </PopoverPortalContainerProvider>
- *   </DropdownMenuContent>
- * </DropdownMenu>
+ *   </DialogContent>
+ * </Dialog>;
  * ```
  */
-function PopoverPortalContainerProvider({
-  container,
-  children,
-}: {
-  container: HTMLElement | null;
-  children: React.ReactNode;
-}) {
-  return (
-    <PopoverPortalContainerContext.Provider value={container}>
-      {children}
-    </PopoverPortalContainerContext.Provider>
-  );
-}
+const PopoverPortalContainerProvider = PortalContainerProvider;
 /* #endregion CUSTOM */
 
 /** @inheritdoc Popover */
@@ -120,12 +76,12 @@ function PopoverContent({
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   // CUSTOM: Read document direction to support RTL layouts
   const dir: Direction = readDirection();
-  // CUSTOM: Read portal container override (see PopoverPortalContainerContext above) so nested popovers stay inside modal dialogs.
-  const portalContainer = React.useContext(PopoverPortalContainerContext);
+  // CUSTOM: Read portal container override (see PopoverPortalContainerProvider above) so nested popovers stay inside modal dialogs.
+  const portalContainer = usePopoverPortalContainer();
   return (
     // CUSTOM: When a PopoverPortalContainerProvider is in scope, portal into its container
     // instead of the default document.body so nested popovers stay inside modal dialogs.
-    <PopoverPrimitive.Portal container={portalContainer ?? undefined}>
+    <PopoverPrimitive.Portal container={portalContainer}>
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}

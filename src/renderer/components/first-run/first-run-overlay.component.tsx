@@ -13,6 +13,7 @@ import {
   DialogDescription,
   DialogTitle,
   Spinner,
+  TooltipPortalContainerProvider,
   Z_INDEX_FIRST_RUN,
 } from 'platform-bible-react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
@@ -95,6 +96,13 @@ export function FirstRunGate({
 }) {
   const [strings] = useLocalizedStrings(KEYS);
 
+  // This gate is opaque and stacks at Z_INDEX_FIRST_RUN (700), above the tooltip layer (550), so a
+  // tooltip in any wizard step would portal to document.body and paint behind the gate. Handing the
+  // dialog element to the provider portals them inside it instead. Wired here, not in one step, so
+  // every step gets working tooltips.
+  // eslint-disable-next-line no-null/no-null -- ref-callback state must init to null, per the provider's contract
+  const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+
   // Reveal the escape hatch once loading has run long enough (see REGISTRATION_SLOW_REVEAL_MS).
   // Re-armed per loading entry and torn down on unmount / when loading ends, so it never fires late
   // against a stale state.
@@ -139,6 +147,7 @@ export function FirstRunGate({
   return (
     <Dialog open onOpenChange={() => {}}>
       <DialogContent
+        ref={setDialogEl}
         data-testid="first-run-dialog"
         showCloseButton={false}
         className={FULL_SCREEN_CONTENT}
@@ -147,89 +156,93 @@ export function FirstRunGate({
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
       >
-        <VisuallyHidden.Root asChild>
-          <DialogTitle>{formatReplacementString(strings['%firstRun_title%'], strings)}</DialogTitle>
-        </VisuallyHidden.Root>
-        <VisuallyHidden.Root asChild>
-          <DialogDescription>
-            {formatReplacementString(strings['%firstRun_description%'], strings)}
-          </DialogDescription>
-        </VisuallyHidden.Root>
+        <TooltipPortalContainerProvider container={dialogEl}>
+          <VisuallyHidden.Root asChild>
+            <DialogTitle>
+              {formatReplacementString(strings['%firstRun_title%'], strings)}
+            </DialogTitle>
+          </VisuallyHidden.Root>
+          <VisuallyHidden.Root asChild>
+            <DialogDescription>
+              {formatReplacementString(strings['%firstRun_description%'], strings)}
+            </DialogDescription>
+          </VisuallyHidden.Root>
 
-        {status.kind === 'loading' && (
-          // `relative` + a centered spinner group and a bottom-anchored escape region: revealing the
-          // escape hatch changes nothing in the centered flow, so the spinner never jumps upward
-          // when it appears. `p-8` matches the error screen so neither the copy nor the escape block
-          // presses against the edges in a narrow window (longer in es/fr).
-          <div className="tw:relative tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:p-8">
-            <div role="status" className="tw:flex tw:flex-col tw:items-center tw:gap-3">
-              <Spinner />
-              <p className="tw:text-sm tw:font-medium">{strings['%firstRun_loading%']}</p>
-              <p className="tw:text-xs tw:text-muted-foreground">
-                {strings['%firstRun_loading_detail%']}
-              </p>
-            </div>
-            {/* Escape hatch once probing runs long (see REGISTRATION_SLOW_REVEAL_MS).
+          {status.kind === 'loading' && (
+            // `relative` + a centered spinner group and a bottom-anchored escape region: revealing the
+            // escape hatch changes nothing in the centered flow, so the spinner never jumps upward
+            // when it appears. `p-8` matches the error screen so neither the copy nor the escape block
+            // presses against the edges in a narrow window (longer in es/fr).
+            <div className="tw:relative tw:flex tw:h-full tw:flex-col tw:items-center tw:justify-center tw:p-8">
+              <div role="status" className="tw:flex tw:flex-col tw:items-center tw:gap-3">
+                <Spinner />
+                <p className="tw:text-sm tw:font-medium">{strings['%firstRun_loading%']}</p>
+                <p className="tw:text-xs tw:text-muted-foreground">
+                  {strings['%firstRun_loading_detail%']}
+                </p>
+              </div>
+              {/* Escape hatch once probing runs long (see REGISTRATION_SLOW_REVEAL_MS).
                 continueWithoutRegistration supersedes the in-flight resolution so its late result
                 can't reopen the gate. Anchored to the bottom (out of the centered flow) so its
                 reveal doesn't shove the spinner, and wrapped in its own aria-live="polite" region —
                 separate from the spinner's role="status" — so a screen reader announces the escape
                 once when it appears without re-reading the spinner copy above. */}
-            <div
-              aria-live="polite"
-              className="tw:absolute tw:inset-x-0 tw:bottom-8 tw:flex tw:flex-col tw:items-center tw:gap-2 tw:px-8 tw:text-center"
-            >
-              {loadingIsSlow && (
-                <>
-                  <p className="tw:max-w-md tw:text-xs tw:text-muted-foreground">
-                    {strings['%firstRun_loading_slow%']}
-                  </p>
-                  <ContinueWithoutSetupButton
-                    ref={slowContinueButtonRef}
-                    variant="outline"
-                    label={strings['%firstRun_button_continueWithoutFinishingSetup%']}
-                  />
-                </>
-              )}
+              <div
+                aria-live="polite"
+                className="tw:absolute tw:inset-x-0 tw:bottom-8 tw:flex tw:flex-col tw:items-center tw:gap-2 tw:px-8 tw:text-center"
+              >
+                {loadingIsSlow && (
+                  <>
+                    <p className="tw:max-w-md tw:text-xs tw:text-muted-foreground">
+                      {strings['%firstRun_loading_slow%']}
+                    </p>
+                    <ContinueWithoutSetupButton
+                      ref={slowContinueButtonRef}
+                      variant="outline"
+                      label={strings['%firstRun_button_continueWithoutFinishingSetup%']}
+                    />
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {status.kind === 'error' && (
-          <div
-            role="alert"
-            className="tw:mx-auto tw:flex tw:max-w-md tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center"
-          >
-            <h1 className="tw:text-lg tw:font-medium">{strings['%firstRun_error_title%']}</h1>
-            <p className="tw:text-sm tw:text-muted-foreground">
-              {formatReplacementString(
-                strings['%firstRun_error_body_providerStartingUp%'],
-                strings,
-              )}
-            </p>
-            <div className="tw:flex tw:flex-wrap tw:justify-center tw:gap-2">
-              <Button ref={retryButtonRef} onClick={() => retryFirstRunResolution()}>
-                {strings['%firstRun_button_retry%']}
-              </Button>
-              {/* Escape hatch: enter the app without registration so a down backend can't fully lock
+          {status.kind === 'error' && (
+            <div
+              role="alert"
+              className="tw:mx-auto tw:flex tw:max-w-md tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center"
+            >
+              <h1 className="tw:text-lg tw:font-medium">{strings['%firstRun_error_title%']}</h1>
+              <p className="tw:text-sm tw:text-muted-foreground">
+                {formatReplacementString(
+                  strings['%firstRun_error_body_providerStartingUp%'],
+                  strings,
+                )}
+              </p>
+              <div className="tw:flex tw:flex-wrap tw:justify-center tw:gap-2">
+                <Button ref={retryButtonRef} onClick={() => retryFirstRunResolution()}>
+                  {strings['%firstRun_button_retry%']}
+                </Button>
+                {/* Escape hatch: enter the app without registration so a down backend can't fully lock
                   the user out. Persists no completion, so the wizard returns next launch. `ghost`
                   here (not the loading screen's `outline`) since it's the lesser option beside the
                   filled Retry. */}
-              <ContinueWithoutSetupButton
-                variant="ghost"
-                label={strings['%firstRun_button_continueWithoutFinishingSetup%']}
-              />
+                <ContinueWithoutSetupButton
+                  variant="ghost"
+                  label={strings['%firstRun_button_continueWithoutFinishingSetup%']}
+                />
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {status.kind === 'wizard' && (
-          <FirstRunShell
-            entryStep={status.step}
-            stepComponents={stepComponents}
-            allowContinueWithoutRegistration={status.allowContinueWithoutRegistration}
-          />
-        )}
+          {status.kind === 'wizard' && (
+            <FirstRunShell
+              entryStep={status.step}
+              stepComponents={stepComponents}
+              allowContinueWithoutRegistration={status.allowContinueWithoutRegistration}
+            />
+          )}
+        </TooltipPortalContainerProvider>
       </DialogContent>
     </Dialog>
   );

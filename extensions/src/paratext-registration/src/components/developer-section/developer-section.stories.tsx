@@ -62,7 +62,7 @@ export const QualityAssuranceActive: Story = {
 };
 
 /**
- * `disabled={true}` — header still clickable, but the server toggle is greyed out and
+ * `disabled={true}` — header still clickable, but the server radios are greyed out and
  * non-interactive.
  */
 export const Disabled: Story = {

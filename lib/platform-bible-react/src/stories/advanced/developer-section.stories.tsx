@@ -24,10 +24,10 @@ export default meta;
 
 type Story = StoryObj<typeof DeveloperSection>;
 
-/** Collapsed by default — the server toggle is not visible. */
+/** Collapsed by default — the server radio buttons are not visible. */
 export const Collapsed: Story = {};
 
-/** Section expanded — Production is the active server. */
+/** Section expanded — Production is the selected server. */
 export const Expanded: Story = {
   play: async ({ canvasElement, userEvent }) => {
     const header = canvasElement.querySelector('button');
@@ -35,7 +35,7 @@ export const Expanded: Story = {
   },
 };
 
-/** Section expanded — Development is the active server. */
+/** Section expanded — Development is the selected server. */
 export const DevelopmentActive: Story = {
   args: { selectedServer: 'Development' },
   play: async ({ canvasElement, userEvent }) => {
@@ -44,7 +44,7 @@ export const DevelopmentActive: Story = {
   },
 };
 
-/** Section expanded — Test is the active server. */
+/** Section expanded — Test is the selected server. */
 export const TestActive: Story = {
   args: { selectedServer: 'Test' },
   play: async ({ canvasElement, userEvent }) => {
@@ -67,7 +67,7 @@ export const QualityAssuranceActive: Story = {
 };
 
 /**
- * `disabled={true}` — header still clickable, but the server toggle is greyed out and
+ * `disabled={true}` — header still clickable, but the server radios are greyed out and
  * non-interactive.
  */
 export const Disabled: Story = {

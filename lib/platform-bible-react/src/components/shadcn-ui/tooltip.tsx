@@ -10,6 +10,8 @@ import { ButtonProps, buttonVariants } from '@/components/shadcn-ui/button';
 // inside a modal dialog (e.g. help icons in form fields) render above the modal instead
 // of behind it. The prior Z_INDEX_ABOVE_DOCK=250 was below the modal layer.
 import { Z_INDEX_TOOLTIP } from '@/components/z-index';
+// CUSTOM: Shared portal-container factory (also used by popover.tsx) so this workaround is defined once
+import { createPortalContainerContext } from '@/components/portal-container.context';
 
 // CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
 /** @inheritdoc Tooltip */
@@ -57,6 +59,45 @@ function TooltipTrigger({
   );
 }
 
+/* #region CUSTOM TooltipPortalContainerProvider — let descendant TooltipContent portal into a custom container instead of document.body */
+const { PortalContainerProvider, usePortalContainer: useTooltipPortalContainer } =
+  createPortalContainerContext();
+
+/**
+ * Keeps descendant {@link TooltipContent} inside `container` instead of `document.body`. Use it when
+ * a tooltip sits inside an ancestor that stacks _above_ the tooltip layer: content portalled to the
+ * body becomes a positioned sibling of that ancestor in the root stacking context, so the opaque
+ * first-run wizard gate at `Z_INDEX_FIRST_RUN` (700) hides tooltips at `Z_INDEX_TOOLTIP` (550)
+ * entirely.
+ *
+ * Contract:
+ *
+ * - Pass `null` for `container` until the ancestor element exists (the initial state of a
+ *   ref-callback `useState`) to keep Radix's `document.body` default; once it exists, later opens
+ *   portal into it.
+ * - The ancestor must wrap this provider, not the other way round, so only its own descendants are
+ *   redirected.
+ * - Only affects tooltips mounted as React descendants; already-open tooltips are not re-portalled.
+ *
+ * `PopoverPortalContainerProvider` in `popover.tsx` does the same for popovers.
+ *
+ * @example
+ *
+ * ```tsx
+ * const [dialogEl, setDialogEl] = useState<HTMLDivElement | null>(null);
+ *
+ * <Dialog open>
+ *   <DialogContent ref={setDialogEl} style={{ zIndex: Z_INDEX_FIRST_RUN }}>
+ *     <TooltipPortalContainerProvider container={dialogEl}>
+ *       <FirstRunShell ... />
+ *     </TooltipPortalContainerProvider>
+ *   </DialogContent>
+ * </Dialog>;
+ * ```
+ */
+const TooltipPortalContainerProvider = PortalContainerProvider;
+/* #endregion CUSTOM */
+
 // CUSTOM: Added @inheritdoc TSDoc pointing to Tooltip for documentation inheritance
 /** @inheritdoc Tooltip */
 function TooltipContent({
@@ -82,8 +123,13 @@ function TooltipContent({
   // CUSTOM: arrowClassName prop — see comment above for full semantics
   arrowClassName?: string;
 }) {
+  // CUSTOM: Read portal container override (see TooltipPortalContainerProvider above) so tooltips
+  // stay inside ancestors that stack above the tooltip layer (e.g. the first-run wizard gate).
+  const portalContainer = useTooltipPortalContainer();
   return (
-    <TooltipPrimitive.Portal>
+    // CUSTOM: When a TooltipPortalContainerProvider is in scope, portal into its container instead
+    // of the default document.body.
+    <TooltipPrimitive.Portal container={portalContainer}>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}
@@ -139,4 +185,5 @@ function TooltipContent({
   );
 }
 
-export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger };
+// CUSTOM: Export TooltipPortalContainerProvider alongside the stock exports
+export { Tooltip, TooltipContent, TooltipPortalContainerProvider, TooltipProvider, TooltipTrigger };

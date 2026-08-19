@@ -18,6 +18,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FirstRunStepProps } from '../first-run-step-props.model';
 import { StepLoading } from '../step-loading.component';
+import { WizardStepHeading } from '../wizard-step-heading.component';
 
 const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDataProvider';
 
@@ -25,9 +26,12 @@ const INTERNET_SETTINGS_DATA_PROVIDER = 'paratextRegistration.internetSettingsDa
 // (assets/localization). Both merge in the combiner, so the extension keys need no en.json entry.
 const STRING_KEYS: LocalizeKey[] = [
   '%internetSettings_button_retry%',
-  '%firstRun_step_internetSettings_body%',
+  // Same headline the standalone Internet & Connectivity web view shows, so the two surfaces match.
+  '%internetSettings_webView_title_2%',
+  // The dialog's subtitle clipped to its first sentence: the wizard has a footer to keep in view, so
+  // it drops the app-scope/Paratext-9 caveats the roomier dialog spells out.
+  '%internetSettings_subtitle_short%',
   '%firstRun_step_internetSettings_connecting%',
-  '%firstRun_step_internetSettings_heading%',
   '%firstRun_step_internetSettings_loadError%',
   ...INTERNET_ACCESS_OPTION_LIST_STRING_KEYS,
   ...DEVELOPER_SECTION_STRING_KEYS,
@@ -67,16 +71,19 @@ export function InternetSettingsStep(props: FirstRunStepProps) {
     if (provider === undefined) setCanProceed?.(false);
   }, [provider, setCanProceed]);
 
-  // The heading sits outside the provider/loading branches so it is stable across every state of
-  // the step — the step's identity shouldn't appear only once the settings finish loading.
   return (
+    // The heading wraps every state so it holds its place instead of popping in once the provider
+    // resolves. This step keeps its own layout rather than using WizardStepForm because it relies on
+    // the shell's footer, not a primary button — so it renders the shared heading directly.
     <div className="tw:flex tw:flex-col tw:gap-3">
-      <div className="tw:flex tw:flex-col tw:gap-1">
-        <h2 className="tw:text-base tw:font-medium">
-          {localizedStrings['%firstRun_step_internetSettings_heading%']}
-        </h2>
+      {/* Heading and lead-in share one wrapper so the outer gap-3 doesn't split them apart —
+          same pairing the standalone dialog uses. */}
+      <div>
+        <WizardStepHeading>
+          {localizedStrings['%internetSettings_webView_title_2%']}
+        </WizardStepHeading>
         <p className="tw:text-sm tw:text-muted-foreground">
-          {localizedStrings['%firstRun_step_internetSettings_body%']}
+          {localizedStrings['%internetSettings_subtitle_short%']}
         </p>
       </div>
       {provider === undefined ? (
