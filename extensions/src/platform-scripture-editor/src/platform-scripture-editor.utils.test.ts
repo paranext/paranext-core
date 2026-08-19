@@ -2323,13 +2323,44 @@ describe('startDefaultProjectPicker', () => {
 function createSyncMockPapi() {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
+  const mockDebug = vi.fn();
+  // `syncOnProjectSwitch` reads exactly one setting. Default is the consented path so the other
+  // assertions still exercise the syncing behavior; a test sets `false` to close the gate, or an
+  // `Error` to make the read reject.
+  let firstRunComplete: unknown = true;
+  const setFirstRunComplete = (value: unknown) => {
+    firstRunComplete = value;
+  };
+  const mockGetSetting = vi.fn(async () => {
+    if (firstRunComplete instanceof Error) throw firstRunComplete;
+    return firstRunComplete;
+  });
   // Must cast since the mock only includes the papi properties used by syncOnProjectSwitch.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: mockSendCommand },
-    logger: { warn: mockWarn },
+    logger: { warn: mockWarn, debug: mockDebug },
+    settings: { get: mockGetSetting },
   } as unknown as typeof PapiBackend;
-  return { papi, mockSendCommand, mockWarn };
+  return { papi, mockSendCommand, mockWarn, mockDebug, mockGetSetting, setFirstRunComplete };
+}
+
+/**
+ * The sync commands `syncOnProjectSwitch` dispatches, in dispatch order: a deep sync of the
+ * incoming project, then a shallower send/receive of the outgoing one. Serves as both the expected
+ * happy-path call list and the set of commands the first-run gate must suppress.
+ */
+const PROJECT_SWITCH_SYNC_COMMANDS = [
+  'paratextBibleSendReceive.syncProjects',
+  'paratextBibleSendReceive.sendReceiveProjects',
+];
+
+/** Assert neither sync command was dispatched, whatever else the function may have done. */
+function expectNoSyncCommands(mockSendCommand: ReturnType<typeof vi.fn>) {
+  const dispatched = mockSendCommand.mock.calls.map(([commandName]) => commandName);
+  PROJECT_SWITCH_SYNC_COMMANDS.forEach((commandName) =>
+    expect(dispatched).not.toContain(commandName),
+  );
 }
 
 describe('syncOnProjectSwitch', () => {
@@ -2421,6 +2452,41 @@ describe('syncOnProjectSwitch', () => {
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
 
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('proj-outgoing'));
+  });
+
+  it('sends both sync commands when first run is complete', async () => {
+    const { papi, mockSendCommand, mockGetSetting } = createSyncMockPapi();
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockGetSetting).toHaveBeenCalledWith('platform.firstRunComplete');
+    expect(mockSendCommand.mock.calls.map(([commandName]) => commandName)).toEqual(
+      PROJECT_SWITCH_SYNC_COMMANDS,
+    );
+  });
+
+  it('syncs nothing while the first-run wizard is incomplete', async () => {
+    const { papi, mockSendCommand, mockDebug, setFirstRunComplete } = createSyncMockPapi();
+    setFirstRunComplete(false);
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expectNoSyncCommands(mockSendCommand);
+    // A silent skip is indistinguishable from a switch that never reached the sync, so the gate
+    // must say it closed.
+    expect(mockDebug).toHaveBeenCalledWith(
+      expect.stringContaining('Project-switch sync skipped: first-run sync consent not confirmed'),
+    );
+  });
+
+  it('syncs nothing when the first-run setting read rejects (consent-safe default)', async () => {
+    const { papi, mockSendCommand, mockWarn, setFirstRunComplete } = createSyncMockPapi();
+    setFirstRunComplete(new Error('settings service unavailable'));
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expectNoSyncCommands(mockSendCommand);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platform.firstRunComplete'));
   });
 });
 
