@@ -21,6 +21,19 @@ export const WINDOW_ID = 'windowId';
 export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
 
 /**
+ * Query parameter passed to the renderer. Present only on the main window, absent on every
+ * secondary window, so the renderer can tell which chrome to draw — the main window keeps the
+ * top-level menu and secondary windows do not (PT-4279).
+ *
+ * Fixed at window creation, which is a deliberate limitation: it cannot describe a window becoming
+ * the main one later. PT-4278's window-manager service is the durable answer; replace this when it
+ * lands.
+ *
+ * @experimental
+ */
+export const IS_MAIN_WINDOW_QUERY_PARAMETER = 'isMainWindow';
+
+/**
  * Prefix that identifies a startup timing mark in the logs (see
  * `@shared/utils/startup-timing.util`'s `markStartup`). Lives in this import-free data module so
  * the startup-waterfall CLI parser (`.erb/scripts/startup-waterfall.util.ts`) can import it without

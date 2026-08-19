@@ -84,6 +84,18 @@ declare global {
    * @experimental
    */
   var windowId: string | undefined;
+  /**
+   * Whether this renderer is the main window — the one that draws the top-level menu. Secondary
+   * windows get identical chrome minus that menu (PT-4279). Set from the URL search params in the
+   * renderer process; `false` in every other process.
+   *
+   * Fixed at window creation and never updated, so it cannot describe a window becoming the main
+   * one later (for instance after the main window closes). PT-4278's window-manager service is the
+   * durable answer; replace this when it lands.
+   *
+   * @experimental
+   */
+  var isMainWindow: boolean;
 }
 /* eslint-enable */
 
