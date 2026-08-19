@@ -2,7 +2,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
-import { beforeAll, describe, expect, test } from 'vitest';
+import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import { BookChapterControl } from './book-chapter-control.component';
 import { BookChapterControlHandle } from './book-chapter-control.types';
@@ -200,5 +200,106 @@ describe('BookChapterControl imperative handle', () => {
       />,
     );
     expect(screen.getByTestId('book-chapter-control-chevron')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Space on the EMPTY book-search input picks the highlighted book — the Enter UX for a picker whose
+ * list is the whole point. `CommandInput` supplies it, and this control opts in.
+ *
+ * The control's own `handleInputKeyDown` cannot supply it: that handler claims a key only when
+ * `submitKeys` is provided AND contains the key AND the typed text resolves to a FULLY-qualified
+ * reference (book and chapter and verse). An empty input has no top match at all, so it declines —
+ * and `submitKeys` is undefined for every embedding except the range picker's start field anyway.
+ * Its other Space handler, the `[cmdk-item][data-selected]` grid pick, is gated on the chapters and
+ * verses views, and the search input only exists in the BOOKS view, so it never sees this key
+ * either. Both of the control's own mechanisms are therefore inert exactly here.
+ *
+ * No test asserted the behavior while it was an unconditional patch on every `CommandInput`, which
+ * is how it was lost when the patch became opt-in and this control was left out.
+ */
+describe('BookChapterControl — Space on the empty search input', () => {
+  /** Open the picker via its trigger and hand back the books-view search input. */
+  async function openBooksView(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+    await user.click(screen.getByRole('combobox', { name: 'book-chapter-trigger' }));
+    let input: HTMLElement | undefined;
+    await waitFor(() => {
+      input = document.querySelector<HTMLElement>('[cmdk-input]') ?? undefined;
+      expect(input).toBeDefined();
+    });
+    if (!input) throw new Error('books-view search input never rendered');
+    return input;
+  }
+
+  test('picks the highlighted book instead of typing a space', async () => {
+    // Radix popovers rely on PointerEvent sequences that jsdom lays out poorly;
+    // `pointerEventsCheck: 0` is the established workaround (see scope-selector tests).
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    const input = await openBooksView(user);
+    expect(input).toHaveValue('');
+    // Genesis is the highlighted entry for this reference, and it has chapters to drill into.
+    expect(await screen.findByText('Genesis')).toBeVisible();
+
+    await user.keyboard(' ');
+
+    // The book was picked, exactly as clicking it does: chapters view replaces books view. The
+    // search input renders only in books view, so its absence is the view change.
+    await waitFor(() => {
+      expect(document.querySelector('[cmdk-input]')).toBeNull();
+    });
+    // And the chapters really are on screen — not merely mounted inside a hidden ancestor.
+    expect(await screen.findByText('1')).toBeVisible();
+  });
+
+  test('leaves Space alone once a query is typed, so book names with spaces are searchable', async () => {
+    // The opt-in only claims Space on an EMPTY input. Multi-word book names ("1 Samuel") would be
+    // unreachable otherwise, which is the risk of turning this on for a control with a real search.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+      />,
+    );
+
+    const input = await openBooksView(user);
+    await user.keyboard('1 sam');
+
+    expect(input).toHaveValue('1 sam');
+    // Still in books view, with the search resolving.
+    expect(document.querySelector('[cmdk-input]')).not.toBeNull();
+    expect(await screen.findByText('1 Samuel')).toBeVisible();
+  });
+
+  test("the control's own submitKeys still win over the patch", async () => {
+    // `CommandInput` runs the caller's `onKeyDown` first and bails on `defaultPrevented`, so the
+    // range picker's `submitKeys` contract keeps Space when the typed text resolves fully. Opting
+    // in must not double-handle the key: one submit, with the typed reference, not the highlighted
+    // item's.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const handleSubmit = vi.fn();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        submitKeys={[' ', '-']}
+      />,
+    );
+
+    await openBooksView(user);
+    await user.keyboard('MAT 5:3');
+    await user.keyboard(' ');
+
+    await waitFor(() => {
+      expect(handleSubmit).toHaveBeenCalledTimes(1);
+    });
+    expect(handleSubmit).toHaveBeenCalledWith({ book: 'MAT', chapterNum: 5, verseNum: 3 });
   });
 });
