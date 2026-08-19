@@ -300,6 +300,12 @@ describe('FootnoteEditor marker palette wiring', () => {
         [markerMenuItemToPaletteItem(makeItem())],
         { x: 1, y: 2, width: 3, height: 4 },
         true,
+        // The session declares the keys it owns so a palette that takes focus forwards them back
+        // instead of consuming them.
+        expect.objectContaining({
+          keys: expect.arrayContaining([' ', 'Enter', 'Escape', 'Tab', '*', '\\']),
+          onKey: expect.any(Function),
+        }),
       );
     });
 
@@ -903,6 +909,114 @@ describe('FootnoteEditor marker palette wiring', () => {
       expect(markerPalette.dismiss).toHaveBeenCalledTimes(1);
     });
 
+    it('`*` over a NON-COLLAPSED selection still commits the typed closer (P9 parity)', () => {
+      // Owner-directed: typing `\nd*` with text selected DELETES the selected content and lands
+      // the literal closer. It is a commit key in every selection shape — a different gesture
+      // from Space's WRAP, which is why the two are not interchangeable here.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
+      const markerPalette = makeMarkerPalette(
+        vi.fn(() => new Promise<string | undefined>(() => {})),
+      );
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: ['nd'],
+        hasTextSelection: true, // the shape that used to keep `*` a filter character
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      const doc = editorInput.ownerDocument;
+      ['\\', 'n', 'd'].forEach((key) => {
+        doc.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      });
+      const starNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '*', bubbles: true, cancelable: true }),
+      );
+
+      expect(starNotPrevented).toBe(false); // claimed — no literal asterisk may land
+      expect(editorRef.commitTypedCloser).toHaveBeenCalledExactlyOnceWith('nd');
+      // Not the WRAP: that is Space's commit, and it would keep the selected text.
+      expect(editorRef.applyMarkerMenuSelection).not.toHaveBeenCalled();
+    });
+
+    it('`\\` commits the typed marker with NO trailing space and reopens the palette', () => {
+      // Owner-directed: `\qt-s` then `\` inserts the full `\qt-s` and opens a fresh palette for
+      // the backslash just pressed, so a milestone pair is one continuous flow.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
+      const show = vi.fn(() => new Promise<string | undefined>(() => {}));
+      const markerPalette = makeMarkerPalette(show);
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      const doc = editorInput.ownerDocument;
+      ['\\', 'n', 'd'].forEach((key) => {
+        doc.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+      });
+      const showCallsBefore = show.mock.calls.length;
+      const secondTriggerNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+
+      expect(secondTriggerNotPrevented).toBe(false); // claimed — the trigger never lands
+      expect(editorRef.commitTypedMarker).toHaveBeenCalledExactlyOnceWith('nd', {
+        trailingSpace: false,
+      });
+      // A REPLACEMENT palette opened for the backslash just pressed.
+      expect(show.mock.calls.length).toBe(showCallsBefore + 1);
+    });
+
+    it('`\\` on an EMPTY filter lands a literal backslash and opens NO new palette', () => {
+      // Preserved behavior, owner-confirmed: with nothing typed there is nothing to commit, so
+      // the backslash is an ordinary character and must reach the document unclaimed.
+      mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
+      const show = vi.fn(() => new Promise<string | undefined>(() => {}));
+      const markerPalette = makeMarkerPalette(show);
+      const { editorInput, editorRef } = renderFootnoteEditor(
+        { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+        markerPalette,
+      );
+      mockMarkerMenuContext(editorRef, {
+        source: 'character',
+        previousParaMarkers: [],
+        openCharMarkers: [],
+        hasTextSelection: false,
+        inMarkerText: false,
+        anchorRect: { x: 1, y: 2, width: 3, height: 4 },
+      });
+
+      placeDomCaretInsideNote(editorInput);
+      const doc = editorInput.ownerDocument;
+      doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+      const showCallsBefore = show.mock.calls.length;
+      const secondTriggerNotPrevented = doc.dispatchEvent(
+        new KeyboardEvent('keydown', { key: '\\', bubbles: true, cancelable: true }),
+      );
+
+      expect(secondTriggerNotPrevented).toBe(true); // NOT claimed — the backslash lands
+      expect(editorRef.commitTypedMarker).not.toHaveBeenCalled();
+      expect(show.mock.calls.length).toBe(showCallsBefore);
+      expect(markerPalette.dismiss).toHaveBeenCalled();
+    });
+
     it('selection wrap: typed exact match + Space applies THAT item over the selection', () => {
       // Ratified: Space over a non-collapsed selection wraps the selection in the TYPED marker's
       // closed span — an exact match against the offered entries, applied through
@@ -995,9 +1109,8 @@ describe('FootnoteEditor marker palette wiring', () => {
 
     it('Enter with zero matches is a no-op: the session survives and keeps mirroring (P9 parity)', () => {
       mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
-      const markerPalette = makeMarkerPalette(
-        vi.fn(() => new Promise<string | undefined>(() => {})),
-      );
+      const show = vi.fn(() => new Promise<string | undefined>(() => {}));
+      const markerPalette = makeMarkerPalette(show);
       const { editorInput, editorRef } = renderFootnoteEditor(
         { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
         markerPalette,

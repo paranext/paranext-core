@@ -55,7 +55,9 @@ import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   type FootnoteEditorMarkerPalette,
+  getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
+  type MarkerPaletteKeyEvent,
   markerMenuItemToPaletteItem,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
@@ -1647,6 +1649,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * display. Both flavors are ACTIVE — the caller claims the trigger and the table claims every
    * filter character, so nothing of the palette's ever lands in the document.
    */
+  /**
+   * Always-current {@link runPaletteSessionKey} (assigned below, once it exists). The palette
+   * captures its forwarded-key callback ONCE, when shown, while the handler it must run is rebuilt
+   * whenever the session or its dependencies change — the ref is what keeps a long-lived callback
+   * pointing at the current one.
+   */
+  const runPaletteSessionKeyRef = useRef<(event: MarkerPaletteKeyEvent) => void>(() => {});
+
   const openMarkerPalette = useCallback(
     (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[], openOptions: { passive: boolean }) => {
       const { passive } = openOptions;
@@ -1669,7 +1679,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       papi.overlays
         .showCommandPalette(
-          { items: items.map(markerMenuItemToPaletteItem), anchor: ctx.anchorRect, passive },
+          {
+            items: items.map(markerMenuItemToPaletteItem),
+            anchor: ctx.anchorRect,
+            passive,
+            // The session owns these keys wherever focus ends up — without this, a palette that
+            // wins the focus race takes the session's keys with it and none of the ratified
+            // commit semantics run. Declared for the passive palette too: it never takes focus,
+            // so this is inert there, but one code path means a palette that unexpectedly
+            // receives a key routes it to the session rather than acting on it. The callback goes
+            // through a ref so it always runs the CURRENT handler — it is captured once, here,
+            // and the session it drives is replaced on every reopen.
+            keyForwarding: {
+              keys: getMarkerPaletteClaimedKeys(passive ? 'backslash' : 'selection'),
+              onKey: (event) => runPaletteSessionKeyRef.current(event),
+            },
+          },
           webViewId,
         )
         .then((id) => {
@@ -1712,6 +1737,70 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     },
     [webViewId],
   );
+
+  /**
+   * Opens the marker palette at the CURRENT caret, exactly as the `\` trigger does — the reopen
+   * path for the `\` commit key, so the new session gets identical items, ranking, search bar and
+   * zero-match rules rather than a second, subtly different open.
+   */
+  const openMarkerPaletteAtCaret = useCallback((): boolean => {
+    const ctx = editorRef.current?.getMarkerMenuContext();
+    if (!ctx) return false;
+    const items = getMarkerMenuItems(styleInfo ?? defaultStyleInfo, ctx);
+    if (items.length === 0) return false;
+    openMarkerPalette(ctx, items, { passive: !ctx.hasTextSelection });
+    return true;
+  }, [openMarkerPalette, styleInfo]);
+
+  /**
+   * Routes ONE key through the open session — the single implementation behind both entry points:
+   * this web view's capture-phase listener (used while the editor holds focus) and the keys the
+   * palette forwards back (used while the palette holds focus). Two entry points, one semantics.
+   *
+   * Shared while-open forwarding table (platform-bible-react), the single source of the session key
+   * semantics for BOTH this web view and the FootnoteEditor popover — the per-consumer copies
+   * drifted once already. Overlay ops wrap the overlay service for this web view; the commit ops
+   * are EDITOR-side applies this web view owns (it holds the editor ref). The table calls
+   * `dismiss()` right after each, resolving the show promise `undefined` — which
+   * openMarkerPalette's `.then` treats as a dismissal, so nothing double-applies.
+   */
+  const runPaletteSessionKey = useCallback(
+    (event: MarkerPaletteKeyEvent) => {
+      const session = paletteSession.current;
+      if (!session) return;
+      const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
+        update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
+        commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
+        dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
+        commitTyped: (typed) => editorRef.current?.commitTypedMarker(typed),
+        commitTypedAndReopen: (typed) => {
+          // The `\` commit: same materialization as Space with NO terminating space, then a
+          // fresh palette for the backslash just pressed. Showing a new palette replaces the
+          // current overlay (the old show promise rejects ABORTED, already handled), so there is
+          // no explicit dismiss to sequence against the commit.
+          editorRef.current?.commitTypedMarker(typed, { trailingSpace: false });
+          openMarkerPaletteAtCaret();
+        },
+        commitTypedCloser: (typed) => editorRef.current?.commitTypedCloser(typed),
+        commitItem: (marker) => {
+          const selected = session.items.find((item) => item.marker === marker);
+          if (!selected) return;
+          editorRef.current?.applyMarkerMenuSelection(selected, {
+            trigger: 'backslash',
+            literalPrefixLanded: false,
+          });
+        },
+      });
+      // Clear only if this session is still the current one: a `\` commit opens a REPLACEMENT
+      // session synchronously inside the table call, and an unconditional clear would kill it.
+      if (outcome === 'ended') clearPaletteSessionIfCurrent(paletteSession, session.token);
+    },
+    [webViewId, openMarkerPaletteAtCaret],
+  );
+
+  useEffect(() => {
+    runPaletteSessionKeyRef.current = runPaletteSessionKey;
+  }, [runPaletteSessionKey]);
 
   /**
    * Opens the Enter-triggered paragraph-split palette (`getEnterMenuItems` /
@@ -1825,46 +1914,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         const session = paletteSession.current;
 
         if (session) {
-          // Shared while-open forwarding table (platform-bible-react), the single source of the
-          // session key semantics for BOTH this web view and the FootnoteEditor popover — the
-          // per-consumer copies drifted once already. Overlay ops wrap the overlay service for
-          // this web view; the two commit ops are EDITOR-side applies this web view owns (it
-          // holds the editor ref). The table calls `dismiss()` right after each, resolving the
-          // show promise `undefined` — which openMarkerPalette's `.then` treats as a dismissal,
-          // so nothing double-applies.
-          const outcome = handleMarkerPaletteSessionKeyDown(event, session, {
-            update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
-            commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
-            dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
-            commitTyped: (typed) => editorRef.current?.commitTypedMarker(typed),
-            commitTypedCloser: (typed) => editorRef.current?.commitTypedCloser(typed),
-            commitItem: (marker) => {
-              const selected = session.items.find((item) => item.marker === marker);
-              if (!selected) return;
-              editorRef.current?.applyMarkerMenuSelection(selected, {
-                trigger: 'backslash',
-                literalPrefixLanded: false,
-              });
-            },
-          });
-          if (outcome === 'ended') paletteSession.current = undefined;
+          // Through the ref so this listener and the palette's forwarded keys provably run the
+          // same handler (and so this effect needs no dependency on it).
+          runPaletteSessionKeyRef.current(event);
           return;
         }
 
         if (!session && event.key === defaultMarkersMenuTrigger) {
-          const ctx = editorRef.current?.getMarkerMenuContext();
-          if (ctx) {
-            const items = getMarkerMenuItems(styleInfo ?? defaultStyleInfo, ctx);
-            if (items.length > 0) {
-              const passive = !ctx.hasTextSelection;
-              // ACTIVE palette: the trigger never lands, whatever the selection shape — typing
-              // filters the palette, not the document. In capture phase the claim keeps Lexical
-              // from ever seeing the `\`. (`passive` still selects the overlay's
-              // non-focus-stealing display for the collapsed caret.)
-              event.preventDefault();
-              event.stopPropagation();
-              openMarkerPalette(ctx, items, { passive });
-            }
+          // ACTIVE palette: the trigger never lands, whatever the selection shape — typing
+          // filters the palette, not the document. In capture phase the claim keeps Lexical
+          // from ever seeing the `\`. (`passive` still selects the overlay's
+          // non-focus-stealing display for the collapsed caret.)
+          // Claimed only when a palette actually opens: with nothing to offer, the `\` is an
+          // ordinary character and must still reach the document.
+          if (openMarkerPaletteAtCaret()) {
+            event.preventDefault();
+            event.stopPropagation();
           }
           return;
         }
@@ -1962,7 +2027,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     isReadOnlyEffective,
     viewType,
     styleInfo,
-    openMarkerPalette,
+    openMarkerPaletteAtCaret,
     openEnterPalette,
   ]);
 

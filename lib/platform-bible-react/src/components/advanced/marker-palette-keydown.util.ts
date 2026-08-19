@@ -24,8 +24,12 @@
  *   {@link MarkerPaletteSessionState.shouldSpaceCommit} routes note markers through the overlay
  *   commit (like Enter) instead. `*` is a SECOND commit key here, for closing markers
  *   ({@link MarkerPaletteSessionDriver.commitTypedCloser}): `\` + query + `*` at the caret, no
- *   terminating space and no opening glyph. Because it commits, `*` is not a filter character in
- *   this kind — a close-tag entry can no longer be narrowed to by typing its trailing `*`, since
+ *   terminating space and no opening glyph. `\` is a THIRD commit key: it commits what was typed
+ *   with no terminating space and then REOPENS the palette for the backslash just pressed
+ *   ({@link MarkerPaletteSessionDriver.commitTypedAndReopen}), so `\qt-s\qt-e` is one flow — but
+ *   only with a non-empty filter; an empty one has nothing to commit, so the backslash lands as an
+ *   ordinary character and no palette reopens. Because they commit, neither `*` nor `\` is a filter
+ *   character — a close-tag entry can no longer be narrowed to by typing its trailing `*`, since
  *   pressing `*` commits the end state that entry would have applied.
  * - `'enter'` — FOCUSED Enter-split menu (collapsed caret): control keys and filter characters
  *   (including Space — the menu's only commit is the highlighted item) are claimed, any other key
@@ -34,8 +38,14 @@
  *   while it is open, because typing would replace the wrapped selection. Space commits the item
  *   the typed filter names EXACTLY ({@link MarkerPaletteSessionDriver.commitItem} — the wrap), or
  *   refuses visibly when the typed marker is not offered (claimed dismiss, selection intact). `*`
- *   stays a FILTER character here: a closing marker is placed at a caret, and a selection has
- *   none.
+ *   commits here too, deleting the selection and landing the typed closer in its place (Paratext 9
+ *   parity) — a different gesture from Space's wrap. `\` is NOT a commit key here: the wrap
+ *   consumes the selection, leaving nothing for a second marker to attach to.
+ *
+ * A session that opens a HOST-rendered palette also declares the keys it claims
+ * ({@link getMarkerPaletteClaimedKeys}) so the palette forwards exactly those back instead of
+ * consuming them — without that, whichever document holds focus is the only one that sees a
+ * keystroke, and none of the semantics above run when the palette's own input wins that race.
  *
  * Modifier-only keydowns (the Shift half of a `+` chord) pass through untouched so chords like
  * `\+w` keep filtering. Real chords (Ctrl/Cmd/Alt + key) are never ingested into the filter and
@@ -44,9 +54,18 @@
  * palette was open).
  */
 
-import type { PaletteDriver } from 'platform-bible-utils/experimental';
+import type { ForwardedPaletteKeyEvent, PaletteDriver } from 'platform-bible-utils/experimental';
 import type { MutableRefObject } from 'react';
 import { filterAndRankPaletteItems } from '@/components/advanced/marker-palette-filter.util';
+
+/**
+ * What this table needs of a keydown. A DOM `KeyboardEvent` satisfies it, and so does a
+ * `ForwardedPaletteKeyEvent` (from `platform-bible-utils/experimental`, outside this package's docs
+ * entry, so a code reference rather than a link) handed back by a focused palette — so ONE handler
+ * serves a session's own capture-phase listener and the keys its palette forwards, and the two can
+ * never diverge in semantics.
+ */
+export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
 
 export type MarkerPaletteSessionKind = 'backslash' | 'enter' | 'selection';
 
@@ -93,6 +112,17 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
    */
   commitTyped(typed: string): void;
   /**
+   * Commit the marker the user literally TYPED with the palette's `\` semantics — the same
+   * materialization {@link MarkerPaletteSessionDriver.commitTyped} performs but WITHOUT the
+   * terminating space (`EditorRef.commitTypedMarker` with `trailingSpace: false`) — and then open a
+   * NEW palette session at the resulting caret, for the backslash the user just pressed. The
+   * session owner performs both halves, so the reopened session goes through its normal open path
+   * and gets the same ranking, search bar and zero-match rules as any other. Only invoked for a
+   * `'backslash'` session's `\` with a NON-EMPTY filter; an empty one has nothing to commit and the
+   * backslash is left to land as an ordinary character.
+   */
+  commitTypedAndReopen(typed: string): void;
+  /**
    * Commit the marker the user literally TYPED as a CLOSING marker — the palette's `*` commit,
    * applied through the editor (`EditorRef.commitTypedCloser`). `\` + `typed` + `*` lands at the
    * caret with no terminating space and no opening glyph, and the marker-edit engine resolves it:
@@ -130,7 +160,7 @@ export type MarkerPaletteKeyOutcome = 'passed' | 'continue' | 'ended';
  * the `\`/Enter guards in `footnote-editor.component.tsx` and
  * `platform-scripture-editor.web-view.tsx`).
  */
-export function isImeCompositionKeyEvent(event: KeyboardEvent): boolean {
+export function isImeCompositionKeyEvent(event: MarkerPaletteKeyEvent): boolean {
   return event.isComposing || event.keyCode === 229;
 }
 
@@ -143,12 +173,55 @@ const FILTER_CHAR_REGEX: Record<MarkerPaletteSessionKind, RegExp> = {
   backslash: /^[a-z0-9+-]$/i,
   // Focused Enter-split menu: paragraph markers only (digits for q1/s2 etc.).
   enter: /^[a-z0-9]$/i,
-  // A selection has no caret to place a closing marker at, so `*` keeps filtering here — it can
-  // still narrow to a close-tag endmarker entry like `nd*`.
-  selection: /^[a-z0-9+*-]$/i,
+  selection: /^[a-z0-9+-]$/i,
 };
 
-function claim(event: KeyboardEvent): void {
+/** Control keys the table has a branch for, in every session kind. */
+const CONTROL_KEYS: readonly string[] = [
+  ' ',
+  'Enter',
+  'Escape',
+  'Tab',
+  'Backspace',
+  'ArrowUp',
+  'ArrowDown',
+  '*',
+  '\\',
+];
+
+/** Every character `FILTER_CHAR_REGEX` can accept, in both cases. */
+const FILTER_CHAR_ALPHABET: readonly string[] = [
+  ...'abcdefghijklmnopqrstuvwxyz',
+  ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+  ...'0123456789',
+  '+',
+  '-',
+];
+
+/**
+ * Every `KeyboardEvent.key` this table acts on for `kind` — the list a session hands to its palette
+ * as the `keys` of its `PaletteKeyForwarding` declaration so the palette forwards exactly these
+ * back instead of consuming them.
+ *
+ * Why a session must claim the FILTER characters too, not just its commit keys: the session's
+ * filter is the only record of what the user typed, and every commit resolves from it
+ * ({@link MarkerPaletteSessionDriver.commitTyped}, `commitItem`'s exact match, `commitTypedCloser`).
+ * If typed characters went into the palette's own input while only the commit keys were forwarded,
+ * the session would commit an EMPTY query while the screen showed a full one. Forwarding the whole
+ * set makes the session the single owner of the query in both focus states — which is exactly what
+ * the passive palette already is.
+ *
+ * Derived from the table rather than hand-listed, so the two cannot drift. Pure modifiers are
+ * excluded: the table only passes them through, and claiming them would break `+` chords.
+ */
+export function getMarkerPaletteClaimedKeys(kind: MarkerPaletteSessionKind): string[] {
+  return [
+    ...CONTROL_KEYS,
+    ...FILTER_CHAR_ALPHABET.filter((char) => FILTER_CHAR_REGEX[kind].test(char)),
+  ];
+}
+
+function claim(event: MarkerPaletteKeyEvent): void {
   event.preventDefault();
   event.stopPropagation();
 }
@@ -158,7 +231,7 @@ function claim(event: KeyboardEvent): void {
  * semantics. Call from a CAPTURE-phase listener; on `'ended'` clear the session ref.
  */
 export function handleMarkerPaletteSessionKeyDown(
-  event: KeyboardEvent,
+  event: MarkerPaletteKeyEvent,
   session: MarkerPaletteSessionState,
   driver: MarkerPaletteSessionDriver,
 ): MarkerPaletteKeyOutcome {
@@ -255,10 +328,16 @@ export function handleMarkerPaletteSessionKeyDown(
     return 'continue';
   }
 
-  if (event.key === '*' && session.kind === 'backslash') {
+  if (event.key === '*' && session.kind !== 'enter') {
     // The palette's CLOSING-marker commit, the counterpart to Space's opening one: commit
-    // `\` + filter + `*` at the caret, with no terminating space and no opening glyph, and close.
+    // `\` + filter + `*`, with no terminating space and no opening glyph, and close.
     // Claimed: nothing may land on top of the commit.
+    //
+    // Commits in EVERY selection shape (owner-directed, Paratext 9 parity). At a collapsed caret
+    // the closer lands at the caret; over a NON-COLLAPSED selection the selected content is
+    // DELETED and the closer lands in its place, which is what typing `\nd*` with text selected
+    // has always done. That is a different gesture from Space's selection WRAP, so the two keys
+    // are not interchangeable there.
     //
     // No `shouldSpaceCommit` exception here, unlike Space. That exception exists because a
     // materialized `\f ` OPENING literal absorbs the text after the caret as the note's caller; a
@@ -268,6 +347,23 @@ export function handleMarkerPaletteSessionKeyDown(
     claim(event);
     driver.commitTypedCloser(session.filter);
     driver.dismiss();
+    return 'ended';
+  }
+
+  if (event.key === '\\' && session.kind === 'backslash') {
+    // The palette's THIRD commit key (owner-directed): `\` commits what was typed exactly as
+    // Space does but with NO terminating space byte, then opens a FRESH palette for the backslash
+    // just pressed — so `\qt-s\qt-e` is one continuous flow instead of losing the first marker.
+    // The separator is unnecessary: a marker-name scan terminates at `\`, and the reopened
+    // session's own commit supplies it.
+    if (session.filter === '') {
+      // Nothing typed, so there is nothing to commit and `\` is just a character: it must LAND
+      // (not claimed) and no replacement palette opens. Preserved behavior, owner-confirmed.
+      driver.dismiss();
+      return 'ended';
+    }
+    claim(event);
+    driver.commitTypedAndReopen(session.filter);
     return 'ended';
   }
 

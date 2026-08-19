@@ -4370,8 +4370,8 @@ export declare const localizedStringsDocumentSchema: {
  *
  * Note for passive palettes (driven by forwarded keystrokes rather than their own input): filter
  * matching runs on the RAW `label`, so passive-palette items must use plain-string labels — a
- * `LocalizeKey` label would make the on-screen (localized) filtering diverge from the host's
- * commit resolution.
+ * `LocalizeKey` label would make the on-screen (localized) filtering diverge from the host's commit
+ * resolution.
  */
 export interface PaletteItem {
 	/** Unique identifier returned when this item is selected */
@@ -4386,8 +4386,8 @@ export interface PaletteItem {
 	disabled?: boolean;
 	/**
 	 * Whether the item's text is rendered de-emphasized (reduced opacity) while remaining fully
-	 * selectable — e.g. PT9's grey cue for non-basic markers. Unlike {@link PaletteItem.disabled},
-	 * a muted item can still be highlighted and selected. Defaults to false.
+	 * selectable — e.g. PT9's grey cue for non-basic markers. Unlike {@link PaletteItem.disabled}, a
+	 * muted item can still be highlighted and selected. Defaults to false.
 	 */
 	muted?: boolean;
 }

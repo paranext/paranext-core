@@ -207,6 +207,9 @@ export function SelectBooksPicker({
             placeholder={searchBooksText}
             value={inputValue}
             onValueChange={setInputValue}
+            // Picker semantics: with nothing typed, Space picks the highlighted book (the Enter
+            // UX). Opted in explicitly now that `CommandInput` no longer applies this app-wide.
+            spaceSelectsHighlightedItem
           />
           <div className="tw:flex tw:justify-between tw:border-b tw:p-2">
             <Button variant="ghost" size="sm" onClick={handleSelectAll}>

@@ -82,7 +82,9 @@ export {
 } from './components/advanced/footnote-editor/footnote-editor.component';
 export {
   clearPaletteSessionIfCurrent,
+  getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
+  type MarkerPaletteKeyEvent,
   type MarkerPaletteKeyOutcome,
   type MarkerPaletteSessionDriver,
   type MarkerPaletteSessionKind,
