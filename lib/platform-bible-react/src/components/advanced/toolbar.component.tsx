@@ -97,12 +97,26 @@ export function Toolbar({
 
   return (
     <div
-      className={cn('tw:border tw:px-4 tw:text-foreground', className)}
+      /* `@container/toolbar` is the container context consumers use to shrink/hide title bar
+         controls at narrow widths (see PlatformBibleToolbar). Deliberately on this element rather
+         than the inner flex: a container query measures the container's CONTENT box, and this
+         div's padding is where every OS caption-button reservation lands — the static
+         `ps-[85px]`/`pe-[calc(138px+1rem)]` from getToolbarOSReservedSpaceClassName arrives via
+         `className`, and the live-measured Windows variant is padding on an ancestor. So this
+         content box is the genuinely usable bar width in all three cases. It is also already
+         `position: relative`, so the `contain: layout` implied by `container-type: inline-size`
+         does not change which element is the containing block for absolutely positioned
+         descendants — putting the context on the inner flex would. */
+      className={cn('tw:@container/toolbar tw:border tw:px-4 tw:text-foreground', className)}
       ref={containerRef}
       style={{ position: 'relative' }}
       id={id}
     >
       <div
+        /* The element that clips when the bar's contents do not fit, so it is also the one whose
+           `scrollWidth > clientWidth` proves an overflow regression (see the narrow-title-bar e2e
+           test). */
+        data-testid="toolbar-content-row"
         className="tw:flex tw:h-full tw:w-full tw:justify-between tw:overflow-hidden"
         /* @ts-ignore Electron-only property */
         style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
@@ -129,7 +143,13 @@ export function Toolbar({
 
         {/* Content area */}
         <div
-          className="tw:flex tw:items-center tw:gap-2 tw:px-2"
+          /* `min-w-0` defeats the `min-width: auto` a flex item gets by default, which floors this
+             area at its content's intrinsic width. Without it the area cannot shrink at all, so a
+             narrow window pushes the trailing controls under the `overflow-hidden` above and they
+             are silently clipped rather than shrunk (PT-4218). The app menu area intentionally does
+             NOT get the same treatment: it holds the menubar, which has nowhere to shrink to, and
+             its `basis-0` already keeps it from claiming space it does not need. */
+          className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:px-2"
           /* @ts-ignore Electron-only property */
           style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
         >

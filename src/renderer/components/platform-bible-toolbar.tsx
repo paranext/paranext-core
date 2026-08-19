@@ -33,7 +33,7 @@ import { logger } from '@shared/services/logger.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { notificationService } from '@shared/services/notification.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { CircleCheck, HomeIcon } from 'lucide-react';
+import { CircleCheck, HomeIcon, RefreshCw } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -76,6 +76,47 @@ const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 // width. Tuned by eye — smaller than the static reserved-space guess's 1rem (see
 // getToolbarOSReservedSpaceClassName) because the live measurement is exact, unlike that guess.
 const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
+
+// #region Narrow-title-bar degradation ladder (PT-4218)
+//
+// Simple mode packs a project selector, the reference-history buttons and the BCV control into the
+// title bar. Together they need more room than the app's 800px minimum window width leaves once the
+// OS caption buttons are reserved, so at that width the trailing controls used to be clipped
+// outright by the Toolbar's `overflow-hidden`.
+//
+// These are container queries against `@container/toolbar`, declared by the Toolbar component on
+// the element whose CONTENT box is the usable bar width (window width minus the OS caption-button
+// reservation minus the bar's own padding) — so they respond to the space actually available rather
+// than to the raw viewport, and they stay correct across macOS/Windows/Linux and in RTL.
+//
+// A container query cannot oscillate here: the container's width comes from its `w-full` ancestors,
+// never from the content these rules hide, so hiding something can't widen the container and
+// re-show it.
+//
+// The thresholds stage the degradation cheapest-loss-first. Every one is applied only when
+// `!isPowerMode`, so Power mode's title bar is untouched.
+
+/** Tier 1 — drop the marketing version badge. It is decoration, and costs up to 150px. */
+const HIDE_VERSION_BADGE_BELOW_52REM = 'tw:@max-[52rem]/toolbar:hidden';
+
+/**
+ * Tier 2 — collapse the sync button to icon-only; its tooltip still names the action. `idle` is the
+ * one sync state with no icon of its own, so the collapsed button would render empty; the paired
+ * class reveals a stand-in icon exactly when the label goes away. Both are needed: revealing the
+ * icon unconditionally would add an icon to the wide layout, which is not this ticket's business.
+ */
+const HIDE_SYNC_LABEL_BELOW_46REM = 'tw:@max-[46rem]/toolbar:hidden';
+const SHOW_IDLE_SYNC_ICON_BELOW_46REM = 'tw:hidden tw:@max-[46rem]/toolbar:block';
+
+/**
+ * Tier 3 — show the project's short name alone instead of `Full Name (SHORT)`. The short name is
+ * the identifying part, so swapping to it degrades better than ellipsizing the full string down to
+ * a meaningless prefix.
+ */
+const HIDE_LONG_PROJECT_NAME_BELOW_40REM = 'tw:@max-[40rem]/toolbar:hidden';
+/** `inline`, not `block` — these two swap inside a `truncate` span, which is an inline context. */
+const SHOW_SHORT_PROJECT_NAME_BELOW_40REM = 'tw:hidden tw:@max-[40rem]/toolbar:inline';
+// #endregion
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
@@ -379,13 +420,20 @@ export function PlatformBibleToolbar() {
                       {syncState === 'synced' && (
                         <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
                       )}
-                      {
+                      {syncState === 'idle' && !isPowerMode && (
+                        <RefreshCw
+                          className={cn('tw:h-4 tw:w-4', SHOW_IDLE_SYNC_ICON_BELOW_46REM)}
+                        />
+                      )}
+                      <span className={cn(!isPowerMode && HIDE_SYNC_LABEL_BELOW_46REM)}>
                         {
-                          idle: localizedStrings['%toolbar_sync%'],
-                          syncing: localizedStrings['%toolbar_sync_status_syncing%'],
-                          synced: localizedStrings['%toolbar_sync_status_synced%'],
-                        }[syncState]
-                      }
+                          {
+                            idle: localizedStrings['%toolbar_sync%'],
+                            syncing: localizedStrings['%toolbar_sync_status_syncing%'],
+                            synced: localizedStrings['%toolbar_sync_status_synced%'],
+                          }[syncState]
+                        }
+                      </span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -402,7 +450,10 @@ export function PlatformBibleToolbar() {
                   <TooltipTrigger asChild>
                     <Badge
                       variant="ghost"
-                      className="tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:font-normal tw:text-ellipsis tw:whitespace-nowrap"
+                      className={cn(
+                        'tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:font-normal tw:text-ellipsis tw:whitespace-nowrap',
+                        !isPowerMode && HIDE_VERSION_BADGE_BELOW_52REM,
+                      )}
                     >
                       {marketingVersion}
                     </Badge>
@@ -453,7 +504,13 @@ export function PlatformBibleToolbar() {
             }}
             disabled={!hasProjectPickerItems}
           >
-            <SelectTrigger className="tw:max-w-64 tw:min-w-48 tw:border-0 tw:bg-transparent">
+            {/* Replaces a `min-w-48` (192px) floor that alone was a quarter of the usable bar at
+                the app's minimum window width and could not be shrunk past (PT-4218). Not dropped
+                to `min-w-0`: with everything else in the row shrinkable too, the trigger could
+                collapse to just its chevron and swallow the short name that tier 3 above swaps in.
+                `min-w-20` (80px) keeps a short name legible and still fits the budget. The
+                `max-w-64` cap continues to govern the roomy case. */}
+            <SelectTrigger className="tw:max-w-64 tw:min-w-20 tw:border-0 tw:bg-transparent">
               <SelectValue
                 placeholder={
                   hasProjectPickerItems
@@ -468,8 +525,19 @@ export function PlatformBibleToolbar() {
                       currentProjectError && 'tw:text-destructive',
                     )}
                   >
-                    {currentProjectError ??
-                      `${currentProject.fullName} (${currentProject.shortName})`}
+                    {currentProjectError ?? (
+                      <>
+                        <span className={HIDE_LONG_PROJECT_NAME_BELOW_40REM}>
+                          {currentProject.fullName} ({currentProject.shortName})
+                        </span>
+                        {/* The short name alone once the full string no longer fits. Not a
+                            `truncate` of the full string: `World English Bible (WEB)` clipped to
+                            `World Eng…` loses the very part that identifies the project. */}
+                        <span className={SHOW_SHORT_PROJECT_NAME_BELOW_40REM}>
+                          {currentProject.shortName}
+                        </span>
+                      </>
+                    )}
                   </span>
                 )}
               </SelectValue>
