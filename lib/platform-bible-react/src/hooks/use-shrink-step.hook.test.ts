@@ -30,6 +30,15 @@ describe('getShrinkStep', () => {
     expect(getShrinkStep(520 + SHRINK_STEP_HYSTERESIS_PX, THRESHOLDS, 1)).toBe(0);
   });
 
+  test('relaxes to the widest step actually cleared, not just the next one, so a narrow start cannot get stuck', () => {
+    // 525 is inside step 0's band (520 + 8) but well clear of step 1's (420 + 8). Coming from the
+    // narrowest step — where every hidden tab starts, since `display: none` reports width 0 —
+    // holding 3 would leave the toolbar at its shortest form indefinitely.
+    expect(getShrinkStep(525, THRESHOLDS, 3)).toBe(1);
+    // Inside every band: nothing to relax to, so hold.
+    expect(getShrinkStep(345, THRESHOLDS, 3)).toBe(3);
+  });
+
   test('holds the current step when nothing has changed', () => {
     expect(getShrinkStep(600, THRESHOLDS, 0)).toBe(0);
     expect(getShrinkStep(380, THRESHOLDS, 2)).toBe(2);
@@ -67,14 +76,32 @@ class FakeResizeObserver implements ResizeObserver {
     this.isDisconnected = true;
   }
 
-  emitWidth(width: number) {
-    // A full ResizeObserverEntry carries ~8 read-only geometry fields the hook never reads;
-    // constructing one would test the fake rather than the hook. Asserting just the shape the hook
-    // consumes keeps the fake honest about what the contract actually is.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const entry = { contentRect: { width } } as ResizeObserverEntry;
-    this.callback([entry], this);
+  /**
+   * The hook re-measures the element rather than reading the observer entry, so a resize is
+   * simulated by changing what the element reports and then firing the callback with no entries.
+   */
+  emitResize() {
+    this.callback([], this);
   }
+}
+
+/**
+ * Jsdom gives every element a zero bounding box, so widths have to be stated. Returns a full
+ * `DOMRect` rather than asserting a partial one — the hook reads `width`, but a real rect has every
+ * edge, and a stub that lies about its shape would hide a future read of `right` or `x`.
+ */
+function setWidth(element: HTMLElement, width: number) {
+  element.getBoundingClientRect = () => ({
+    width,
+    height: 0,
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: width,
+    x: 0,
+    y: 0,
+    toJSON: () => '',
+  });
 }
 
 describe('useShrinkStep', () => {
@@ -96,31 +123,44 @@ describe('useShrinkStep', () => {
     expect(FakeResizeObserver.instances).toHaveLength(0);
   });
 
-  test('updates the step when the observed element resizes', () => {
+  test('measures the element on mount, before anything resizes', () => {
+    // A layout effect, so the first paint already carries the right step — a passive effect would
+    // paint the widest form first and snap.
     const element = document.createElement('div');
+    setWidth(element, 300);
+
     const { result } = renderHook(() => useShrinkStep(element, THRESHOLDS));
 
-    act(() => FakeResizeObserver.instances[0].emitWidth(300));
     expect(result.current).toBe(3);
+  });
 
-    act(() => FakeResizeObserver.instances[0].emitWidth(600));
+  test('updates the step when the observed element resizes', () => {
+    const element = document.createElement('div');
+    setWidth(element, 300);
+    const { result } = renderHook(() => useShrinkStep(element, THRESHOLDS));
+
+    setWidth(element, 600);
+    act(() => FakeResizeObserver.instances[0].emitResize());
     expect(result.current).toBe(0);
   });
 
   test('recovers the correct step after the view was hidden (width 0) and shown again', () => {
     const element = document.createElement('div');
+    setWidth(element, 600);
     const { result } = renderHook(() => useShrinkStep(element, THRESHOLDS));
-
-    act(() => FakeResizeObserver.instances[0].emitWidth(600));
     expect(result.current).toBe(0);
 
     // rc-dock hides an inactive tab's web view with display:none, where geometry reads 0.
-    act(() => FakeResizeObserver.instances[0].emitWidth(0));
+    setWidth(element, 0);
+    act(() => FakeResizeObserver.instances[0].emitResize());
     expect(result.current).toBe(3);
 
-    // Tab activated again: the observer fires with the real width and the step must come back.
-    act(() => FakeResizeObserver.instances[0].emitWidth(600));
-    expect(result.current).toBe(0);
+    // Shown again at 425: inside step 1's hysteresis band (420 + 8) but clear of step 2's
+    // (340 + 8). Refusing to relax at all would strand the toolbar at its narrowest form, so it
+    // relaxes as far as it safely can — to 2, not all the way to 1.
+    setWidth(element, 425);
+    act(() => FakeResizeObserver.instances[0].emitResize());
+    expect(result.current).toBe(2);
   });
 
   test('observes the element it was given', () => {

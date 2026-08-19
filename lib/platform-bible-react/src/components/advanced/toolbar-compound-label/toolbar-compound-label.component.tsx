@@ -9,52 +9,58 @@ import {
 import { useTruncationTooltip } from '@/hooks/use-truncation-tooltip.hook';
 
 export type ToolbarCompoundLabelProps = {
-  /**
-   * The field that must survive at every width — a book abbreviation, a project short name, a
-   * marker code. Never truncates and is never dropped.
-   */
+  /** The field that identifies the item — a book abbreviation, project short name, marker code. */
   primary: ReactNode;
-  /**
-   * The field that gives way when space runs short: clipped with an ellipsis first, then dropped
-   * entirely once {@link ToolbarCompoundLabelProps.showSecondary} goes false.
-   */
+  /** The field that gives way first: clipped with an ellipsis, then dropped entirely. */
   secondary?: ReactNode;
   /**
-   * Render `secondary` before `primary`. Needed where the flexible field reads first — a project
-   * selector shows `Translation Project 1 (TP1)`, so the full name precedes the short name it
-   * degrades to.
+   * Text placed between the two fields. Rendered as a real text node, so it survives into
+   * `textContent` where a CSS `gap` would not — assertions and screen readers both read it.
+   */
+  separator?: string;
+  /**
+   * Render `secondary` before `primary`, for labels that read that way round — a project selector
+   * shows `Translation Project 1 (TP1)`, full name first, short name last.
    */
   secondaryFirst?: boolean;
-  /** Whether the secondary field is shown at all. Defaults to `true`. */
+  /** Whether the secondary field is rendered at all. Defaults to `true`. */
   showSecondary?: boolean;
-  /** The complete, untruncated label. Shown in the tooltip whenever the rendered form is partial. */
+  /**
+   * Whether what is rendered is only part of {@link ToolbarCompoundLabelProps.fullText}, so the
+   * tooltip should open on hover even though nothing is visibly clipped. Set this when the primary
+   * field is an abbreviation — `GEN` for `Genesis` — which CSS cannot detect.
+   *
+   * Defaults to true whenever the secondary field has been dropped.
+   */
+  isPartial?: boolean;
+  /** The complete label. Shown in the tooltip whenever the rendered form is not the whole thing. */
   fullText: string;
-  /** Additional classes for the label's flex row. */
+  /** Additional classes for the label row. */
   className?: string;
 };
 
 /**
  * A two-field toolbar label that degrades predictably as its slot narrows: the secondary field
  * clips with an ellipsis, then disappears, leaving the primary field alone. A tooltip carries the
- * complete text whenever what is rendered is not the whole thing.
+ * complete text whenever what is rendered is not all of it.
  *
- * This encodes the rule that the second field is always the truncation target, so the toolbar items
- * that follow it — scripture reference, project selector, paragraph style — cannot drift apart.
- *
- * The ellipsis step needs no JavaScript: `primary` is `shrink-0` and `secondary` is `min-w-0
- * truncate`, so the flex algorithm clips the secondary field and nothing else as the slot narrows.
- * Only the _dropped_ step needs a caller-supplied flag.
+ * The ellipsis step needs no JavaScript. Both fields can shrink, but the secondary is weighted to
+ * absorb ~all of it, so it clips to nothing before the primary gives up a character — and the
+ * primary keeps an ellipsis of its own rather than being cut mid-glyph by the trigger's
+ * `overflow-hidden`. Only the abbreviation and dropped steps need the caller to say so.
  */
 export function ToolbarCompoundLabel({
   primary,
   secondary,
+  separator = ' ',
   secondaryFirst = false,
   showSecondary = true,
+  isPartial,
   fullText,
   className,
 }: ToolbarCompoundLabelProps) {
-  // Clip-driven tooltip: opens only when the secondary field's text actually overflows its box, so
-  // a label that already fits gets no redundant tooltip.
+  // Opens only when the secondary field's text actually overflows its box, so a label that fits
+  // gets no redundant tooltip.
   const {
     ref: secondaryRef,
     open: isClippedHovered,
@@ -62,45 +68,51 @@ export function ToolbarCompoundLabel({
     onPointerLeave: onClipPointerLeave,
   } = useTruncationTooltip<HTMLSpanElement>();
 
-  // Dropped-field tooltip: with the secondary field removed from the DOM there is nothing to
-  // measure, yet the label is definitively incomplete — so hover alone opens it. Same two-source
-  // pattern `project-selector.component.tsx` uses for rows carrying non-visible information.
+  // An abbreviated or dropped field is incomplete without being measurably clipped, so hover alone
+  // has to open the tooltip. Same two-source pattern `project-selector.component.tsx` uses.
   const [isIncompleteHovered, setIsIncompleteHovered] = useState(false);
 
   const isSecondaryRendered = showSecondary && secondary !== undefined;
+  const isShowingPartialLabel = isPartial ?? (secondary !== undefined && !showSecondary);
 
   const handlePointerEnter = useCallback(() => {
+    if (isShowingPartialLabel) setIsIncompleteHovered(true);
     if (isSecondaryRendered) onClipPointerEnter();
-    else setIsIncompleteHovered(true);
-  }, [isSecondaryRendered, onClipPointerEnter]);
+  }, [isShowingPartialLabel, isSecondaryRendered, onClipPointerEnter]);
 
   const handlePointerLeave = useCallback(() => {
     setIsIncompleteHovered(false);
     onClipPointerLeave();
   }, [onClipPointerLeave]);
 
-  // These labels sit inside popover and select triggers. Without this, clicking the trigger leaves
-  // the tooltip open on top of the popover that just opened, because the pointer never "leaves".
+  // These labels sit inside popover and select triggers. Without this the tooltip stays open on top
+  // of the popover the click just opened, because the pointer never "leaves".
   const handlePointerDown = useCallback(() => {
     setIsIncompleteHovered(false);
     onClipPointerLeave();
   }, [onClipPointerLeave]);
 
   const primaryNode = (
-    <span key="primary" className="tw:shrink-0 tw:whitespace-nowrap">
+    <span key="primary" className="tw:min-w-0 tw:shrink tw:truncate">
       {primary}
     </span>
   );
 
   const secondaryNode = isSecondaryRendered ? (
-    <span key="secondary" ref={secondaryRef} className="tw:min-w-0 tw:truncate">
+    // Weighted to absorb essentially all of the shrinking, so the primary field only starts losing
+    // characters once this one has none left.
+    <span key="secondary" ref={secondaryRef} className="tw:min-w-0 tw:shrink-[9999] tw:truncate">
       {secondary}
     </span>
   ) : undefined;
 
+  const [first, second] = secondaryFirst
+    ? [secondaryNode, primaryNode]
+    : [primaryNode, secondaryNode];
+
   return (
-    // Carrying our own TooltipProvider means this works in any host, including toolbars that never
-    // set one up. Nested providers are harmless in Radix.
+    // Nested TooltipProviders are harmless in Radix, so carrying our own means this works in any
+    // host, including toolbars that never set one up.
     <TooltipProvider>
       <Tooltip open={isClippedHovered || isIncompleteHovered}>
         <TooltipTrigger asChild>
@@ -108,9 +120,17 @@ export function ToolbarCompoundLabel({
             onPointerEnter={handlePointerEnter}
             onPointerLeave={handlePointerLeave}
             onPointerDown={handlePointerDown}
-            className={cn('tw:flex tw:min-w-0 tw:items-baseline tw:gap-1', className)}
+            className={cn('tw:flex tw:min-w-0 tw:items-baseline', className)}
           >
-            {secondaryFirst ? [secondaryNode, primaryNode] : [primaryNode, secondaryNode]}
+            {first}
+            {/* Only between two rendered fields — never leading or trailing, which is what a
+                naive "is there a second slot" check produces once one field is dropped. */}
+            {first && second && (
+              <span key="separator" className="tw:shrink-0 tw:whitespace-pre">
+                {separator}
+              </span>
+            )}
+            {second}
           </span>
         </TooltipTrigger>
         <TooltipContent>{fullText}</TooltipContent>

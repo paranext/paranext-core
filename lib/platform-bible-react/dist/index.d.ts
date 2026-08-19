@@ -1312,19 +1312,9 @@ export interface MarkerMenuProps {
 	 * `%markerMenu_searchPlaceholder%` localized string.
 	 */
 	searchPlaceholder?: string;
-	/**
-	 * Overrides the shrink step this menu would otherwise inherit from the toolbar that opened it.
-	 * Higher means narrower; from `SHRINK_STEP.TIGHTER` on, each row's trailing detail is dropped.
-	 *
-	 * The menu has no observer of its own. Its popover is portalled out of the toolbar's DOM, but
-	 * React context follows the component tree rather than the DOM, so the toolbar's step still
-	 * reaches it — and the popover's width is bounded by the same panel the toolbar sits in, so the
-	 * two track each other. Intended for stories and tests.
-	 */
-	shrinkStep?: number;
 }
 /** Marker menu component to render the list of markers and a few commands in the scripture editor */
-export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, shrinkStep: shrinkStepOverride, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
+export declare function MarkerMenu({ localizedStrings, markerMenuItems, searchRef, searchPlaceholder, }: MarkerMenuProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Callback function that is invoked when a user selects a menu item. Receives the full
  * `MenuItemContainingCommand` object as an argument.
@@ -1874,6 +1864,30 @@ type TabToolbarCommonProps = {
 	/** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
 	menuButtonIcon?: React$1.ReactNode;
 };
+/**
+ * Breakpoints for the tab toolbar, widest first, measured against its own width.
+ *
+ * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
+ * adjust them the first time this is watched in a running app.
+ */
+export declare const TAB_TOOLBAR_SHRINK_THRESHOLDS_PX: readonly number[];
+/** Wrapper that allows consistent styling for both TabToolbar and TabFloatingMenu. */
+export declare const TabToolbarContainer: React$1.ForwardRefExoticComponent<{
+	/** Optional unique identifier */
+	id?: string;
+	/** Additional css classes to help with unique styling of the extensible toolbar */
+	className?: string;
+	/**
+	 * Overrides the shrink step this toolbar would otherwise measure from its own width, and
+	 * publishes it to descendants through `ShrinkStepContext`. Higher means narrower.
+	 *
+	 * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
+	 * the app, leave this unset and let the toolbar measure itself.
+	 */
+	shrinkStep?: number;
+} & {
+	children?: React$1.ReactNode | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
 export type TabToolbarProps = TabToolbarCommonProps & {
 	/**
 	 * The handler to use for toolbar item commands related to the tab view menu. Here is a basic
@@ -1912,13 +1926,21 @@ export type TabToolbarProps = TabToolbarCommonProps & {
 	 * side in ltr, left side in rtl). Recommended for secondary tools and view options.
 	 */
 	endAreaChildren?: React$1.ReactNode;
+	/**
+	 * Overrides the shrink step this toolbar would otherwise measure from its own width, and
+	 * publishes it to descendants. Higher means narrower.
+	 *
+	 * For stories and tests: measuring needs a layout engine, which jsdom does not have. In the app,
+	 * leave it unset and let the toolbar measure itself.
+	 */
+	shrinkStep?: number;
 };
 /**
  * Toolbar that holds the project menu icon on one side followed by three different areas/categories
  * for toolbar icons followed by an optional view info menu icon. See the Tab Floating Menu Button
  * component for a menu component that takes up less screen real estate yet is always visible.
  */
-export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, shrinkStep, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Renders a TabDropdownMenu with a trigger button that looks like the menuButtonIcon or like the
  * default of three stacked horizontal lines (aka the hamburger). The menu "floats" over the content
@@ -2005,6 +2027,17 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	shrinkStep?: number;
 }>;
 /**
+ * Breakpoints for the application titlebar, widest first, measured against the toolbar's OWN width
+ * — not the window's. On Windows and Linux the toolbar sits inside a wrapper whose padding reserves
+ * the caption-button strip, so it is roughly 150px narrower than the window; on macOS it is not.
+ * Thresholds picked from window width would therefore fire a step early, and differently per
+ * platform.
+ *
+ * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
+ * adjust them the first time this is watched in a running app.
+ */
+export declare const APP_TOOLBAR_SHRINK_THRESHOLDS_PX: readonly number[];
+/**
  * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing
  * 'darwin' will reserve the necessary space for macos traffic lights at the start, otherwise a
  * different amount of space at the end for the window controls.
@@ -2026,42 +2059,46 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  */
 export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, shrinkStep: shrinkStepOverride, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 export type ToolbarCompoundLabelProps = {
-	/**
-	 * The field that must survive at every width — a book abbreviation, a project short name, a
-	 * marker code. Never truncates and is never dropped.
-	 */
+	/** The field that identifies the item — a book abbreviation, project short name, marker code. */
 	primary: React$1.ReactNode;
-	/**
-	 * The field that gives way when space runs short: clipped with an ellipsis first, then dropped
-	 * entirely once {@link ToolbarCompoundLabelProps.showSecondary} goes false.
-	 */
+	/** The field that gives way first: clipped with an ellipsis, then dropped entirely. */
 	secondary?: React$1.ReactNode;
 	/**
-	 * Render `secondary` before `primary`. Needed where the flexible field reads first — a project
-	 * selector shows `Translation Project 1 (TP1)`, so the full name precedes the short name it
-	 * degrades to.
+	 * Text placed between the two fields. Rendered as a real text node, so it survives into
+	 * `textContent` where a CSS `gap` would not — assertions and screen readers both read it.
+	 */
+	separator?: string;
+	/**
+	 * Render `secondary` before `primary`, for labels that read that way round — a project selector
+	 * shows `Translation Project 1 (TP1)`, full name first, short name last.
 	 */
 	secondaryFirst?: boolean;
-	/** Whether the secondary field is shown at all. Defaults to `true`. */
+	/** Whether the secondary field is rendered at all. Defaults to `true`. */
 	showSecondary?: boolean;
-	/** The complete, untruncated label. Shown in the tooltip whenever the rendered form is partial. */
+	/**
+	 * Whether what is rendered is only part of {@link ToolbarCompoundLabelProps.fullText}, so the
+	 * tooltip should open on hover even though nothing is visibly clipped. Set this when the primary
+	 * field is an abbreviation — `GEN` for `Genesis` — which CSS cannot detect.
+	 *
+	 * Defaults to true whenever the secondary field has been dropped.
+	 */
+	isPartial?: boolean;
+	/** The complete label. Shown in the tooltip whenever the rendered form is not the whole thing. */
 	fullText: string;
-	/** Additional classes for the label's flex row. */
+	/** Additional classes for the label row. */
 	className?: string;
 };
 /**
  * A two-field toolbar label that degrades predictably as its slot narrows: the secondary field
  * clips with an ellipsis, then disappears, leaving the primary field alone. A tooltip carries the
- * complete text whenever what is rendered is not the whole thing.
+ * complete text whenever what is rendered is not all of it.
  *
- * This encodes the rule that the second field is always the truncation target, so the toolbar items
- * that follow it — scripture reference, project selector, paragraph style — cannot drift apart.
- *
- * The ellipsis step needs no JavaScript: `primary` is `shrink-0` and `secondary` is `min-w-0
- * truncate`, so the flex algorithm clips the secondary field and nothing else as the slot narrows.
- * Only the _dropped_ step needs a caller-supplied flag.
+ * The ellipsis step needs no JavaScript. Both fields can shrink, but the secondary is weighted to
+ * absorb ~all of it, so it clips to nothing before the primary gives up a character — and the
+ * primary keeps an ellipsis of its own rather than being cut mid-glyph by the trigger's
+ * `overflow-hidden`. Only the abbreviation and dropped steps need the caller to say so.
  */
-export declare function ToolbarCompoundLabel({ primary, secondary, secondaryFirst, showSecondary, fullText, className, }: ToolbarCompoundLabelProps): import("react/jsx-runtime").JSX.Element;
+export declare function ToolbarCompoundLabel({ primary, secondary, separator, secondaryFirst, showSecondary, isPartial, fullText, className, }: ToolbarCompoundLabelProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_fallbackLanguages%"
 ];
@@ -3798,10 +3835,10 @@ export declare function getShrinkStep(width: number, thresholds: readonly number
  * would tear down and rebuild the observer on every render.
  *
  * Hidden views: rc-dock keeps an inactive tab's web view mounted with `display: none`, where the
- * observed width reads 0 and the step pins to the narrowest value. That is harmless and
- * self-correcting — `ResizeObserver` fires again with the real width when the tab is shown, before
- * paint, so the correct step is applied without any catch-up mechanism. This is a deliberate
- * decision rather than an unexamined default; see `.claude/rules/cross-view-sync-hidden-views.md`.
+ * width reads 0 and the step pins to the narrowest value. `ResizeObserver` fires again with the
+ * real width when the tab is shown, so no catch-up mechanism is needed — but note this is only
+ * self-correcting because {@link getShrinkStep} relaxes across bands when widening. See
+ * `.claude/rules/cross-view-sync-hidden-views.md`.
  *
  * @param element The container to observe, or `undefined` before it mounts.
  * @param thresholds Widest-first list of pixel breakpoints.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
 /**
  * Extra width, in pixels, a container must regain before a shrink step is relaxed. Sub-pixel
@@ -32,8 +32,15 @@ export function getShrinkStep(
   // narrow step would leave text visibly clipped for the duration of the drag.
   if (nextStep >= previousStep) return nextStep;
 
-  const thresholdToClear = thresholds[nextStep];
-  return width >= thresholdToClear + SHRINK_STEP_HYSTERESIS_PX ? nextStep : previousStep;
+  // Widening: relax to the widest step whose band this width actually clears, rather than to
+  // `nextStep` or not at all. Holding `previousStep` on a near miss would strand a toolbar that
+  // starts at the narrowest step — which is every hidden tab, since `display: none` reports width
+  // 0 — at that step after it is shown at a width sitting just inside any one band.
+  const relaxedStep = thresholds.findIndex(
+    (threshold) => width >= threshold + SHRINK_STEP_HYSTERESIS_PX,
+  );
+  if (relaxedStep === -1) return previousStep;
+  return Math.min(previousStep, Math.max(relaxedStep, nextStep));
 }
 
 /**
@@ -47,10 +54,10 @@ export function getShrinkStep(
  * would tear down and rebuild the observer on every render.
  *
  * Hidden views: rc-dock keeps an inactive tab's web view mounted with `display: none`, where the
- * observed width reads 0 and the step pins to the narrowest value. That is harmless and
- * self-correcting — `ResizeObserver` fires again with the real width when the tab is shown, before
- * paint, so the correct step is applied without any catch-up mechanism. This is a deliberate
- * decision rather than an unexamined default; see `.claude/rules/cross-view-sync-hidden-views.md`.
+ * width reads 0 and the step pins to the narrowest value. `ResizeObserver` fires again with the
+ * real width when the tab is shown, so no catch-up mechanism is needed — but note this is only
+ * self-correcting because {@link getShrinkStep} relaxes across bands when widening. See
+ * `.claude/rules/cross-view-sync-hidden-views.md`.
  *
  * @param element The container to observe, or `undefined` before it mounts.
  * @param thresholds Widest-first list of pixel breakpoints.
@@ -62,21 +69,26 @@ export function useShrinkStep(
 ): number {
   const [step, setStep] = useState(0);
 
-  useEffect(() => {
+  // Layout effect, not a passive one: a passive effect runs after paint, so a toolbar mounted into
+  // a narrow panel would paint its full-width form for a frame and then snap — the layout jump this
+  // whole mechanism exists to remove.
+  useLayoutEffect(() => {
     // The `typeof` guard keeps this a no-op in jsdom, which ships no `ResizeObserver`: consumers'
     // render tests then simply stay at the widest step instead of throwing.
     if (!element || typeof ResizeObserver === 'undefined') return undefined;
 
-    const applyWidth = (width: number) => {
+    // Always re-measure the element rather than reading the observer entry: `contentRect` is the
+    // content box while this seed reads the border box, and every toolbar root has horizontal
+    // padding — mixing the two shifts the thresholds by that padding between mount and first
+    // resize.
+    const measure = () => {
+      const { width } = element.getBoundingClientRect();
       setStep((previousStep) => getShrinkStep(width, thresholds, previousStep));
     };
 
-    applyWidth(element.getBoundingClientRect().width);
+    measure();
 
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[entries.length - 1];
-      if (entry) applyWidth(entry.contentRect.width);
-    });
+    const observer = new ResizeObserver(measure);
     observer.observe(element);
 
     return () => observer.disconnect();

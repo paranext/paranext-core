@@ -156,6 +156,10 @@ export {
 export { default as TabDropdownMenu } from './components/advanced/menus/tab-dropdown-menu.component';
 export { default as TabToolbar } from './components/advanced/tab-toolbar/tab-toolbar.component';
 export type { TabToolbarProps } from './components/advanced/tab-toolbar/tab-toolbar.component';
+export {
+  default as TabToolbarContainer,
+  TAB_TOOLBAR_SHRINK_THRESHOLDS_PX,
+} from './components/advanced/tab-toolbar/tab-toolbar-container.component';
 export { default as TabFloatingMenu } from './components/advanced/tab-toolbar/tab-floating-menu.component';
 export {
   default as NavigationContentSearch,
@@ -163,6 +167,7 @@ export {
 } from './components/advanced/tab-navigation-content-search.component';
 export { default as Toolbar } from './components/advanced/toolbar.component';
 export type { ToolbarProps } from './components/advanced/toolbar.component';
+export { APP_TOOLBAR_SHRINK_THRESHOLDS_PX } from './components/advanced/toolbar.component';
 export {
   ToolbarCompoundLabel,
   type ToolbarCompoundLabelProps,
