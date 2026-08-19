@@ -57,6 +57,19 @@ describe('derivePackagedExtensionIdentifiers', () => {
     ]);
   });
 
+  it('reports a name once when the same extension is discovered in two folders', () => {
+    // A dev checkout passed with `--extensions` shadows the bundled copy, so both are discovered.
+    // Only the first activates, so only the first belongs in a list describing what is in the build.
+    const discovered = [
+      createExtensionInfo('helloWorld', '2.0.0'),
+      createExtensionInfo('helloWorld', '1.0.0'),
+    ];
+
+    expect(derivePackagedExtensionIdentifiers(discovered, [])).toEqual([
+      { extensionName: 'helloWorld', extensionVersion: '2.0.0' },
+    ]);
+  });
+
   it('returns an empty list when nothing was discovered', () => {
     expect(
       derivePackagedExtensionIdentifiers(

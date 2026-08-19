@@ -67,6 +67,9 @@ import { CSSProperties, useCallback, useMemo, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
+/** Shared by every "sync isn't available" toast so repeat clicks replace it rather than stack. */
+const SYNC_UNAVAILABLE_NOTIFICATION_ID = 'toolbar-sync-unavailable';
+
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
 // Visual breathing room between content and the native buttons on top of the live-measured overlay
@@ -322,6 +325,8 @@ export function PlatformBibleToolbar() {
         await notificationService.send({
           message: '%toolbar_sync_unavailable%',
           severity: 'warning',
+          // Reuse one id so clicking Sync repeatedly replaces the toast instead of stacking copies.
+          notificationId: SYNC_UNAVAILABLE_NOTIFICATION_ID,
         });
       } catch (notificationError) {
         logger.warn(

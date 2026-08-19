@@ -480,14 +480,25 @@ describe('PlatformBibleToolbar — Sync button', () => {
     const btn = await screen.findByRole('button', { name: 'Sync' });
     fireEvent.click(btn);
     await waitFor(() => {
-      expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith({
-        message: '%toolbar_sync_unavailable%',
-        severity: 'warning',
-      });
+      expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%toolbar_sync_unavailable%',
+          severity: 'warning',
+        }),
+      );
     });
     expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
       expect.stringContaining('Toolbar caught an error while trying to open sync status:'),
     );
+
+    // A second click replaces that toast rather than stacking another copy of it
+    fireEvent.click(btn);
+    await waitFor(() => {
+      expect(vi.mocked(notificationService.send)).toHaveBeenCalledTimes(2);
+    });
+    const [[first], [second]] = vi.mocked(notificationService.send).mock.calls;
+    expect(first.notificationId).toBeDefined();
+    expect(second.notificationId).toBe(first.notificationId);
   });
 });
 
