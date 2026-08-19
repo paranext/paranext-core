@@ -2623,15 +2623,4 @@ describe('formatEditorTitle', () => {
     );
     expect(title).toBe('My Project (Read-only)');
   });
-
-  it('renders a blank editable placeholder while isReadOnly is still resolving (undefined)', async () => {
-    const title = await formatEditorTitle(
-      TITLE_FORMAT_KEY,
-      'project-1',
-      undefined,
-      mockGetProjectName,
-      mockGetLocalizedStrings,
-    );
-    expect(title).toBe('My Project ');
-  });
 });

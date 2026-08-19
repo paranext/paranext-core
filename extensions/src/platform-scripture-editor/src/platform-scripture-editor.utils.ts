@@ -95,27 +95,13 @@ const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no
 export async function formatEditorTitle(
   unformattedTitle: string | undefined,
   projectId: string | undefined,
-  /**
-   * Whether the editor is read-only. `undefined` means the caller's read-only signals are still
-   * resolving: the `{editable}` placeholder renders blank rather than committing to either label,
-   * so a slow-loading permission check can never flash an incorrect state. Callers that always have
-   * an already-resolved value (e.g. `main.ts`'s webview-state-driven open) pass a plain `boolean`.
-   */
-  isReadOnly: boolean | undefined,
+  isReadOnly: boolean,
   getProjectName: (projectId: string) => Promise<string>,
   getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LanguageStrings>,
 ): Promise<string> {
   let title = unformattedTitle;
   if (!title) {
     if (projectId) title = PROJECT_ID_TITLE_FORMAT_STRING_KEY;
-    // This branch only runs when there is no `projectId` (no-project empty pane). Unlike the
-    // `{editable}` placeholder below, this ternary treats `isReadOnly === undefined` the same as
-    // `false` (falls through to `SCRIPTURE_EDITOR_KEY`), not as a distinct neutral state. That's
-    // acceptable because no current caller can reach this branch with `isReadOnly === undefined`:
-    // `main.ts` always passes an already-resolved `boolean`, and the webview's title effect only
-    // calls this function once a project is loaded, i.e. with a defined `projectId` — which never
-    // reaches this branch. If a future caller can hit this branch with
-    // `isReadOnly === undefined`, revisit this ternary for tri-state handling too.
     else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
   }
   if (isLocalizeKey(title)) {
@@ -129,12 +115,9 @@ export async function formatEditorTitle(
     let projectName = projectId;
     if (projectId) projectName = await getProjectName(projectId);
 
-    let editable = '';
-    if (isReadOnly !== undefined) editable = isReadOnly ? localizedReadonly : localizedEditable;
-
     title = formatReplacementString(localizedTitleFormatStr, {
       projectId: projectName,
-      editable,
+      editable: isReadOnly ? localizedReadonly : localizedEditable,
     });
   }
 
