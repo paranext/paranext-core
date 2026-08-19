@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import papi, { logger } from '@papi/frontend';
 import { useProjectSetting } from '@papi/frontend/react';
 import { useEvent } from 'platform-bible-react';
-import type { PlatformError } from 'platform-bible-utils';
+import { isPlatformError, type PlatformError } from 'platform-bible-utils';
 import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
 
 /**
@@ -35,14 +35,20 @@ import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types
  * Only the admin/project layer should be buffered; callers that need the live value (e.g. an
  * admin's own edit control) should use `useProjectSetting` directly.
  *
- * @returns `[heldSetting, isLoading]`. `heldSetting` may be a {@link PlatformError} (same as
- *   `useProjectSetting`); check with `isPlatformError`.
+ * A read error is never latched. The mount arm skips a {@link PlatformError} and stays armed, so a
+ * setting that becomes readable later still lands without waiting for an `onSharedLayoutApply`. The
+ * error itself is reported separately rather than as the held value, because the held value at that
+ * point is the placeholder — indistinguishable from a genuinely empty setting.
+ *
+ * @returns `[heldSetting, isLoading, settingError]`. `settingError` is set while the raw setting
+ *   cannot be read. `heldSetting` may itself be a {@link PlatformError} when the very first read
+ *   already failed; check with `isPlatformError`.
  */
 export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSettingNames>(
   projectId: string | undefined,
   key: ProjectSettingName,
   defaultValue: ProjectSettingTypes[ProjectSettingName],
-): [ProjectSettingTypes[ProjectSettingName] | PlatformError, boolean] {
+): [ProjectSettingTypes[ProjectSettingName] | PlatformError, boolean, PlatformError | undefined] {
   const [rawSetting, , , isLoading] = useProjectSetting(projectId, key, defaultValue);
 
   const [shouldApply, setShouldApply] = useState(true);
@@ -77,15 +83,16 @@ export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSetti
   );
 
   // Apply the raw value into the held copy while armed and once it has finished loading, then
-  // disarm. Waiting for `!isLoading` avoids capturing the loading placeholder (see hook doc).
+  // disarm. Waiting for `!isLoading` avoids capturing the loading placeholder (see hook doc), and
+  // skipping a PlatformError keeps the hook armed so a transient read failure cannot latch.
   useEffect(() => {
-    if (shouldApply && !isLoading) {
+    if (shouldApply && !isLoading && !isPlatformError(rawSetting)) {
       setHeldSetting(rawSetting);
       setShouldApply(false);
     }
   }, [shouldApply, isLoading, rawSetting]);
 
-  return [heldSetting, isLoading];
+  return [heldSetting, isLoading, isPlatformError(rawSetting) ? rawSetting : undefined];
 }
 
 export default useBufferedLayoutSetting;

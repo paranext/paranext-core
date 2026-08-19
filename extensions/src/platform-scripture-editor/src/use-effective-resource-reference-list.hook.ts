@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { isPlatformError } from 'platform-bible-utils';
 import type {
   EffectiveResourceReference,
@@ -61,29 +61,45 @@ function mergeResourceReferenceLists(
 }
 
 /**
+ * Readiness of the effective resource reference list.
+ *
+ * `ready` may carry zero items — that is the genuine "nothing is configured" state, and it is the
+ * only state in which a panel may render its empty prompt. Any other status means the answer is not
+ * known yet, so callers must branch on the status _before_ asking how many items there are.
+ */
+export type EffectiveResourceReferenceListState =
+  | { status: 'loading' }
+  | { status: 'error'; retry: () => void }
+  | { status: 'ready'; list: EffectiveResourceReferenceList };
+
+/**
  * Returns the effective resource reference list for a setting: the set-union of project-level
  * (admin) and user-specific items, deduplicated by `id` (for ProjectReference and
  * DblResourceReference) or `name` (for all other reference types). Each item carries a runtime
  * `source` tag (`'admin'` or `'user'`); admin items are listed first.
  *
- * Returns `undefined` while either setting is loading. If the user setting cannot be retrieved, the
- * project-level items are returned tagged as `'admin'`.
+ * Reports `loading` until _both_ the project-level setting and the user-level subscription have
+ * delivered. If the user setting cannot be retrieved, the project-level items are returned tagged
+ * as `'admin'`.
  */
 export function useEffectiveResourceReferenceList(
   projectId: string | undefined,
   settingName: 'platformScripture.modelTexts' | 'platformScripture.referencedProjectsAndResources',
-): [EffectiveResourceReferenceList | undefined, boolean] {
-  const [projectResourceReferenceList, isProjectSettingLoading] = useBufferedLayoutSetting(
-    projectId,
-    settingName,
-    DEFAULT_LIST,
-  );
+): EffectiveResourceReferenceListState {
+  const [projectResourceReferenceList, isProjectSettingLoading, projectSettingError] =
+    useBufferedLayoutSetting(projectId, settingName, DEFAULT_LIST);
 
   const userPdp = useProjectDataProvider('platformScripture.textConnectionSettings', projectId);
 
   const [userResourceReferenceList, setUserResourceReferenceList] = useState<
     ResourceReferenceList | undefined
   >(undefined);
+
+  // Bumping this re-runs the subscription effect below. The project layer needs no equivalent: it
+  // stays armed through a read error (see `useBufferedLayoutSetting`), so it self-heals as soon as
+  // the setting becomes readable.
+  const [retryEpoch, setRetryEpoch] = useState(0);
+  const retry = useCallback(() => setRetryEpoch((epoch) => epoch + 1), []);
 
   useEffect(() => {
     if (!userPdp) {
@@ -120,18 +136,33 @@ export function useEffectiveResourceReferenceList(
       disposed = true;
       unsubscribe?.();
     };
-  }, [userPdp, settingName]);
+  }, [userPdp, settingName, retryEpoch]);
 
-  return [
-    useMemo(() => {
-      if (isProjectSettingLoading) return undefined;
-      if (isPlatformError(projectResourceReferenceList)) return undefined;
-      if (userResourceReferenceList === undefined) return undefined;
+  return useMemo(() => {
+    // Readiness must account for BOTH sources. The user layer needs `useProjectDataProvider` to
+    // resolve, then an explicit subscribe, then a first delivery — strictly more hops than the
+    // project setting — so "project setting resolved, user list still undefined" is the normal
+    // window on essentially every mount, not a narrow race. Reporting that window as anything other
+    // than `loading` is what let panels render a premature empty state.
+    if (isProjectSettingLoading) return { status: 'loading' };
+    // `projectSettingError` is the live read failure; `projectResourceReferenceList` is only itself
+    // an error when the very first read failed. Both mean the same thing to a panel: the answer is
+    // unknown, so it must not render either a spinner or an empty prompt.
+    if (projectSettingError || isPlatformError(projectResourceReferenceList))
+      return { status: 'error', retry };
+    if (userResourceReferenceList === undefined) return { status: 'loading' };
 
-      return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
-    }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]),
+    return {
+      status: 'ready',
+      list: mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList),
+    };
+  }, [
     isProjectSettingLoading,
-  ];
+    projectSettingError,
+    projectResourceReferenceList,
+    retry,
+    userResourceReferenceList,
+  ]);
 }
 
 export default useEffectiveResourceReferenceList;
