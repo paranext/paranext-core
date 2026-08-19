@@ -22,14 +22,20 @@
  *   ({@link MarkerPaletteSessionDriver.commitTyped} — the session owner materializes the literal
  *   through the editor and the engine resolves it), except where
  *   {@link MarkerPaletteSessionState.shouldSpaceCommit} routes note markers through the overlay
- *   commit (like Enter) instead.
+ *   commit (like Enter) instead. `*` is a SECOND commit key here, for closing markers
+ *   ({@link MarkerPaletteSessionDriver.commitTypedCloser}): `\` + query + `*` at the caret, no
+ *   terminating space and no opening glyph. Because it commits, `*` is not a filter character in
+ *   this kind — a close-tag entry can no longer be narrowed to by typing its trailing `*`, since
+ *   pressing `*` commits the end state that entry would have applied.
  * - `'enter'` — FOCUSED Enter-split menu (collapsed caret): control keys and filter characters
  *   (including Space — the menu's only commit is the highlighted item) are claimed, any other key
  *   means the user resumed editing (dismiss, let it land).
  * - `'selection'` — FOCUSED selection-wrap palette: EVERY non-chord key is claimed — nothing may land
  *   while it is open, because typing would replace the wrapped selection. Space commits the item
  *   the typed filter names EXACTLY ({@link MarkerPaletteSessionDriver.commitItem} — the wrap), or
- *   refuses visibly when the typed marker is not offered (claimed dismiss, selection intact).
+ *   refuses visibly when the typed marker is not offered (claimed dismiss, selection intact). `*`
+ *   stays a FILTER character here: a closing marker is placed at a caret, and a selection has
+ *   none.
  *
  * Modifier-only keydowns (the Shift half of a `+` chord) pass through untouched so chords like
  * `\+w` keep filtering. Real chords (Ctrl/Cmd/Alt + key) are never ingested into the filter and
@@ -87,6 +93,14 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
    */
   commitTyped(typed: string): void;
   /**
+   * Commit the marker the user literally TYPED as a CLOSING marker — the palette's `*` commit,
+   * applied through the editor (`EditorRef.commitTypedCloser`). `\` + `typed` + `*` lands at the
+   * caret with no terminating space and no opening glyph, and the marker-edit engine resolves it:
+   * against a matching open span it becomes that span's real closer, otherwise it settles as an
+   * unmatched closer, flagged as typed. Only invoked for a `'backslash'` session's `*`.
+   */
+  commitTypedCloser(typed: string): void;
+  /**
    * Commit ONE SPECIFIC offered item, named by its bare marker code — the selection-wrap Space
    * commit, where the marker is whatever was literally typed (an exact match against the offered
    * entries), not whatever is highlighted. The session owner applies it through the editor
@@ -123,12 +137,14 @@ export function isImeCompositionKeyEvent(event: KeyboardEvent): boolean {
 const FILTER_CHAR_REGEX: Record<MarkerPaletteSessionKind, RegExp> = {
   // USFM marker characters that filter the palette. Hyphens (milestones `ts-s`/`ts-e`, `qt-s`,
   // `zpa-xb`) and letter case (custom markers may be capitalized; marker search is
-  // case-insensitive) are valid wherever markers are filtered. `*` filters close-tag endmarkers
-  // like `nd*` in the marker palettes (under the active palette nothing lands, so the passive
-  // `*`-closes-the-span route is gone; Space then commits the typed `nd*` literal).
-  backslash: /^[a-z0-9+*-]$/i,
+  // case-insensitive) are valid wherever markers are filtered. `*` is NOT here: at a collapsed
+  // caret it is the CLOSING-marker commit key (see the `*` branch below), so it can never reach
+  // the filter.
+  backslash: /^[a-z0-9+-]$/i,
   // Focused Enter-split menu: paragraph markers only (digits for q1/s2 etc.).
   enter: /^[a-z0-9]$/i,
+  // A selection has no caret to place a closing marker at, so `*` keeps filtering here — it can
+  // still narrow to a close-tag endmarker entry like `nd*`.
   selection: /^[a-z0-9+*-]$/i,
 };
 
@@ -237,6 +253,22 @@ export function handleMarkerPaletteSessionKeyDown(
     session.filter += ' ';
     driver.update({ filterText: session.filter });
     return 'continue';
+  }
+
+  if (event.key === '*' && session.kind === 'backslash') {
+    // The palette's CLOSING-marker commit, the counterpart to Space's opening one: commit
+    // `\` + filter + `*` at the caret, with no terminating space and no opening glyph, and close.
+    // Claimed: nothing may land on top of the commit.
+    //
+    // No `shouldSpaceCommit` exception here, unlike Space. That exception exists because a
+    // materialized `\f ` OPENING literal absorbs the text after the caret as the note's caller; a
+    // closing marker materializes no note and absorbs nothing, so every marker takes this route.
+    // Zero matches take it too — what the user typed is what commits, and an unmatched closer
+    // lands literally for the engine to flag rather than silently doing nothing.
+    claim(event);
+    driver.commitTypedCloser(session.filter);
+    driver.dismiss();
+    return 'ended';
   }
 
   if (event.key === 'Backspace' && session.filter === '') {

@@ -434,7 +434,7 @@ describe('OverlayCommandPalettePresentational', () => {
   });
 
   describe('passive mode', () => {
-    it('should not render a search input', () => {
+    it('should render the same search input the active mode renders', () => {
       render(
         <OverlayCommandPalettePresentational
           items={sampleItems}
@@ -444,8 +444,83 @@ describe('OverlayCommandPalettePresentational', () => {
         />,
       );
 
-      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
-      expect(screen.queryByPlaceholderText('Search...')).not.toBeInTheDocument();
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
+    });
+
+    it('should display the externally-driven filterText as the input value', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('combobox')).toHaveValue('Sa');
+    });
+
+    it('should update the displayed input value live as filterText grows', () => {
+      const { rerender } = render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="S"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('combobox')).toHaveValue('S');
+
+      rerender(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('combobox')).toHaveValue('Sa');
+    });
+
+    it('should render the input as read-only and out of the tab order (the session owner types, not the input)', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      const input = screen.getByRole('combobox');
+      expect(input).toHaveAttribute('readonly');
+      expect(input).toHaveAttribute('tabindex', '-1');
+    });
+
+    it('should not report filter text changes from the passive input', () => {
+      const onFilterTextChange = vi.fn();
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Sa"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          onFilterTextChange={onFilterTextChange}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Sav' } });
+
+      expect(onFilterTextChange).not.toHaveBeenCalled();
     });
 
     it('should never steal focus on mount', () => {

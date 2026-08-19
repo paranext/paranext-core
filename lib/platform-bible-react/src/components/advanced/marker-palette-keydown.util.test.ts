@@ -11,6 +11,7 @@ function makeDriver(): MarkerPaletteSessionDriver & {
   commit: ReturnType<typeof vi.fn>;
   dismiss: ReturnType<typeof vi.fn>;
   commitTyped: ReturnType<typeof vi.fn>;
+  commitTypedCloser: ReturnType<typeof vi.fn>;
   commitItem: ReturnType<typeof vi.fn>;
 } {
   return {
@@ -18,6 +19,7 @@ function makeDriver(): MarkerPaletteSessionDriver & {
     commit: vi.fn(),
     dismiss: vi.fn(),
     commitTyped: vi.fn(),
+    commitTypedCloser: vi.fn(),
     commitItem: vi.fn(),
   };
 }
@@ -219,17 +221,68 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.commit).not.toHaveBeenCalled();
   });
 
-  it('backslash session: `*` is a filter character (close-tag endmarkers like nd*)', () => {
-    // Under the passive palette `*` landed and Tier-2 closed the span; under the active palette
-    // nothing lands, so `*` filters (close-tag entries) exactly as in a selection session, and
-    // Space then commits the typed `nd*` literal.
+  it('backslash session: `*` COMMITS the typed marker as a closing marker and ends the session', () => {
+    // `*` is the palette's second commit key, the closing-marker counterpart to Space: it commits
+    // `\nd*` at the caret with no terminating space and no opening glyph. It is therefore no
+    // longer a filter character in this kind — pressing it commits the same end state a `closeTag`
+    // entry would have applied, so there is nothing left to narrow to.
     const driver = makeDriver();
     const state = session('backslash', 'nd');
+    const event = makeEvent('*');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(true); // claimed — no literal asterisk may land
+    expect(driver.commitTypedCloser).toHaveBeenCalledExactlyOnceWith('nd');
+    expect(driver.dismiss).toHaveBeenCalled();
+    expect(driver.commitTyped).not.toHaveBeenCalled();
+    expect(driver.commit).not.toHaveBeenCalled();
+    expect(state.filter).toBe('nd'); // not ingested into the query
+  });
+
+  it('backslash session: `*` commits even with zero matches (the closer settles as typed)', () => {
+    // Same rule as Space's zero-match row: what the user typed is what commits. An unmatched
+    // closer lands literally and the engine flags it — never a silent no-op.
+    const driver = makeDriver();
+    const state = session('backslash', 'zz');
+    const event = makeEvent('*');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(driver.commitTypedCloser).toHaveBeenCalledExactlyOnceWith('zz');
+  });
+
+  it('backslash session: `*` on an empty filter commits a bare closer', () => {
+    // Byte-fidelity, matching Space's bare-trigger row: `\*` is what the user typed.
+    const driver = makeDriver();
+    const state = session('backslash', '');
+    const event = makeEvent('*');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(driver.commitTypedCloser).toHaveBeenCalledExactlyOnceWith('');
+  });
+
+  it('backslash session: a note marker does NOT reroute `*` through the overlay commit', () => {
+    // `shouldSpaceCommit` exists because a materialized `\f ` OPENING literal absorbs the text
+    // after the caret as the note's caller. A closing marker materializes no note and absorbs
+    // nothing, so that exception does not apply to `*`.
+    const driver = makeDriver();
+    const state: MarkerPaletteSessionState = {
+      ...session('backslash', 'f'),
+      shouldSpaceCommit: (filter) => filter === 'f',
+    };
+    const event = makeEvent('*');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(driver.commitTypedCloser).toHaveBeenCalledExactlyOnceWith('f');
+    expect(driver.commit).not.toHaveBeenCalled();
+  });
+
+  it('selection session: `*` is STILL a filter character - there is no caret to close at', () => {
+    // A closing marker is placed AT a caret; over a selection the commit is the WRAP, so `*`
+    // keeps its filtering meaning rather than becoming a commit key that could only refuse.
+    const driver = makeDriver();
+    const state = session('selection', 'nd');
     const event = makeEvent('*');
     expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('continue');
     expect(event.defaultPrevented).toBe(true);
     expect(state.filter).toBe('nd*');
     expect(driver.update).toHaveBeenCalledWith({ filterText: 'nd*' });
+    expect(driver.commitTypedCloser).not.toHaveBeenCalled();
   });
 
   it('backslash session: hyphen and uppercase are filter chars (milestones like ts-s, custom capitals)', () => {
@@ -360,6 +413,43 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
     expect(driver.commitItem).not.toHaveBeenCalled();
     expect(driver.dismiss).toHaveBeenCalledOnce();
+  });
+
+  // The selection-wrap matrix, pinned as a whole so the "Space refuses instead of wrapping"
+  // regression cannot come back through any one cell. Space commits what was TYPED (exact match
+  // only); Enter commits what is HIGHLIGHTED. Neither ever refuses when an exact typed match
+  // exists, and neither ever guesses when it does not.
+  it('selection session: Enter with an exact typed match commits through the overlay (the highlighted item)', () => {
+    const driver = makeDriver();
+    const state = session('selection', 'nd');
+    const event = makeEvent('Enter');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(true);
+    expect(driver.commit).toHaveBeenCalledOnce();
+    // Enter's marker choice is the overlay's, not the typed exact match — that is Space's rule.
+    expect(driver.commitItem).not.toHaveBeenCalled();
+  });
+
+  it('selection session: Enter with a NEAR-MISS prefix still commits (the highlighted item)', () => {
+    // 'n' is not offered itself, but it ranks 'nd' — unlike Space, Enter has something to commit.
+    const driver = makeDriver();
+    const state = session('selection', 'n');
+    const event = makeEvent('Enter');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(driver.commit).toHaveBeenCalledOnce();
+  });
+
+  it('selection session: Enter with zero matches is a no-op and the palette stays open', () => {
+    // P9 parity, same as every other kind: nothing to commit means nothing happens, and the
+    // session must NOT end or the still-mounted overlay is orphaned over a dead session.
+    const driver = makeDriver();
+    const state = session('selection', 'zz');
+    const event = makeEvent('Enter');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('continue');
+    expect(event.defaultPrevented).toBe(true);
+    expect(driver.commit).not.toHaveBeenCalled();
+    expect(driver.commitItem).not.toHaveBeenCalled();
+    expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
   it('selection session: every non-chord key is claimed — nothing may replace the wrapped selection', () => {
