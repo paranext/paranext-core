@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { fn } from 'storybook/test';
-import { FileQuestion, FolderOpen, Inbox, Plus, Search } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Empty,
@@ -10,11 +9,30 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from '@/components/shadcn-ui/empty';
+import { FileQuestion, FolderOpen, Search } from 'lucide-react';
 
 const meta: Meta<typeof Empty> = {
   title: 'Shadcn/Empty',
   component: Empty,
   tags: ['autodocs', 'test'],
+  parameters: {
+    docs: {
+      description: {
+        component: `
+A centered zero-state composition for when there is no content to show.
+
+**Choosing between this and \`EmptyState\`:**
+- Use \`Empty\` when the zero-state needs media, a heading, or an action.
+- Use [\`EmptyState\`](?path=/docs/basics-emptystate--docs) for a plain one-line message inside a list, grid, or panel — it takes a single localized \`message\` and renders it in a \`role="status"\` region.
+
+**Two things the caller controls:**
+- These primitives set no ARIA role. Pass \`role="status"\` yourself, and mount it before the content changes — see the \`LiveRegion\` story.
+- The root sets \`border-dashed\` but no border width, so pass \`className="tw:border"\` to draw the dashed outline.
+- \`EmptyTitle\` renders a \`<div>\`, not a heading. Nest your own heading element inside it when the zero-state is a region's entire content.
+        `,
+      },
+    },
+  },
   argTypes: {
     className: { control: 'text' },
   },
@@ -31,16 +49,56 @@ export default meta;
 
 type Story = StoryObj<typeof Empty>;
 
-export const Default: Story = {
+export const Simple: Story = {
+  render: (args) => (
+    <Empty {...args}>
+      <EmptyHeader>
+        <EmptyTitle>No projects</EmptyTitle>
+        <EmptyDescription>Projects you open will appear here.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'A zero-state with just a title and description.',
+      },
+    },
+  },
+};
+
+export const WithIconMedia: Story = {
   render: (args) => (
     <Empty {...args}>
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <Inbox />
+          <FolderOpen />
         </EmptyMedia>
-        <EmptyTitle>Nothing here yet</EmptyTitle>
+        <EmptyTitle>No projects</EmptyTitle>
+        <EmptyDescription>Projects you open will appear here.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The `icon` variant of `EmptyMedia` renders the icon in a small muted rounded container.',
+      },
+    },
+  },
+};
+
+export const WithDefaultMedia: Story = {
+  render: (args) => (
+    <Empty {...args}>
+      <EmptyHeader>
+        <EmptyMedia>
+          <FileQuestion className="tw:size-10 tw:text-muted-foreground" />
+        </EmptyMedia>
+        <EmptyTitle>Nothing to show</EmptyTitle>
         <EmptyDescription>
-          Items you add will show up in this list once they are available.
+          The default media variant adds no background, so it suits larger illustrations.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
@@ -48,7 +106,8 @@ export const Default: Story = {
   parameters: {
     docs: {
       description: {
-        story: 'The default zero-state: an icon, a title, and a short explanation.',
+        story:
+          'The `default` variant of `EmptyMedia` is a transparent container for a larger icon or illustration.',
       },
     },
   },
@@ -59,149 +118,89 @@ export const WithAction: Story = {
     <Empty {...args}>
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <FolderOpen />
+          <Search />
         </EmptyMedia>
-        <EmptyTitle>No items</EmptyTitle>
-        <EmptyDescription>Create your first item to get started.</EmptyDescription>
+        <EmptyTitle>No results found</EmptyTitle>
+        <EmptyDescription>
+          No projects match your search. Try a different term or clear the filters.
+        </EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
-        <Button onClick={fn()}>
-          <Plus className="tw:mr-2 tw:h-4 tw:w-4" />
-          Create item
-        </Button>
+        <Button onClick={fn()}>Clear filters</Button>
       </EmptyContent>
+    </Empty>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story: 'A zero-state with a call to action in `EmptyContent`.',
+      },
+    },
+  },
+};
+
+export const DashedBorder: Story = {
+  render: (args) => (
+    <Empty {...args} className="tw:border">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <FolderOpen />
+        </EmptyMedia>
+        <EmptyTitle>No projects</EmptyTitle>
+        <EmptyDescription>
+          Empty sets a dashed border style but no border width, so the caller adds a border width to
+          draw the outline.
+        </EmptyDescription>
+      </EmptyHeader>
     </Empty>
   ),
   parameters: {
     docs: {
       description: {
         story:
-          'A zero-state with a recovery action. Actions belong in `EmptyContent`, below the header.',
+          'The dashed outline only renders when the caller supplies a border width via `className`.',
       },
     },
   },
 };
 
-export const WithMultipleActions: Story = {
+export const NarrowWidth: Story = {
   render: (args) => (
-    <Empty {...args}>
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Search />
-        </EmptyMedia>
-        <EmptyTitle>No results found</EmptyTitle>
-        <EmptyDescription>
-          Try a different search term, or clear the filters to see everything.
-        </EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
-        <div className="tw:flex tw:gap-2">
-          <Button variant="outline" onClick={fn()}>
-            Clear filters
-          </Button>
-          <Button onClick={fn()}>New search</Button>
-        </div>
-      </EmptyContent>
-    </Empty>
-  ),
-  parameters: {
-    docs: {
-      description: {
-        story: 'Two actions side by side inside `EmptyContent`.',
-      },
-    },
-  },
-};
-
-export const WithoutMedia: Story = {
-  render: (args) => (
-    <Empty {...args}>
-      <EmptyHeader>
-        <EmptyTitle>No items</EmptyTitle>
-        <EmptyDescription>
-          `EmptyMedia` is optional — omit it when an icon adds nothing.
-        </EmptyDescription>
-      </EmptyHeader>
-    </Empty>
-  ),
-  parameters: {
-    docs: {
-      description: {
-        story: 'A text-only zero-state with no media slot.',
-      },
-    },
-  },
-};
-
-export const TitleOnly: Story = {
-  render: (args) => (
-    <Empty {...args}>
-      <EmptyHeader>
-        <EmptyTitle>No items</EmptyTitle>
-      </EmptyHeader>
-    </Empty>
-  ),
-  parameters: {
-    docs: {
-      description: {
-        story: 'The minimal composition — a title and nothing else.',
-      },
-    },
-  },
-};
-
-export const MediaVariants: Story = {
-  render: () => (
-    <div className="tw:flex tw:flex-col tw:gap-6">
-      <div>
-        <p className="tw:mb-1 tw:text-xs tw:text-muted-foreground">default</p>
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="default">
-              <FileQuestion className="tw:size-10 tw:text-muted-foreground" />
-            </EmptyMedia>
-            <EmptyTitle>Default media</EmptyTitle>
-            <EmptyDescription>
-              The media renders unstyled, so larger illustrations fit as-is.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </div>
-      <div>
-        <p className="tw:mb-1 tw:text-xs tw:text-muted-foreground">icon</p>
-        <Empty>
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FileQuestion />
-            </EmptyMedia>
-            <EmptyTitle>Icon media</EmptyTitle>
-            <EmptyDescription>
-              The icon variant draws a muted rounded tile around a small icon.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </div>
+    <div className="tw:w-[300px] tw:border tw:border-border">
+      <Empty {...args}>
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Search />
+          </EmptyMedia>
+          <EmptyTitle>No results found</EmptyTitle>
+          <EmptyDescription>
+            No projects match your search. Try a different term or clear the filters.
+          </EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button onClick={fn()}>Clear filters</Button>
+        </EmptyContent>
+      </Empty>
     </div>
   ),
   parameters: {
     docs: {
       description: {
-        story: 'Both `EmptyMedia` variants side by side.',
+        story:
+          'The same content at the 300px minimum width that `Guidelines/Responsiveness` mandates for web views. The outer border marks the 300px boundary; `tw:p-6` on the root spends 48px of it, and `EmptyContent` stacks its actions in a column.',
       },
     },
   },
 };
 
-export const InsideBorderedContainer: Story = {
+export const LiveRegion: Story = {
   render: (args) => (
-    <Empty {...args} className="tw:border">
+    <Empty {...args} role="status">
       <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Inbox />
-        </EmptyMedia>
-        <EmptyTitle>Nothing to show</EmptyTitle>
+        <EmptyTitle>No comments</EmptyTitle>
         <EmptyDescription>
-          The component sets `border-dashed` but no border width; add `tw:border` to draw it.
+          Keep the status region mounted across the change so screen readers announce the new
+          message.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
@@ -209,8 +208,13 @@ export const InsideBorderedContainer: Story = {
   parameters: {
     docs: {
       description: {
-        story:
-          'Adding a border width turns on the dashed outline the component already styles for.',
+        story: `
+The \`Empty\` primitives set no ARIA role, so pass \`role="status"\` yourself for a zero-state that replaces content the user was reading.
+
+Placement matters more than the role: assistive tech announces *mutations* to a live region that is already in the accessibility tree. Mounting the region and its text in one commit — the shape this static story shows — typically announces nothing in NVDA or JAWS. Keep the \`role="status"\` element mounted across the transition and swap only its text.
+
+Scope it too: \`role="status"\` on the \`Empty\` root makes every button label inside \`EmptyContent\` announced content, so prefer the role on \`EmptyHeader\` or on the description when the zero-state has actions.
+        `,
       },
     },
   },
