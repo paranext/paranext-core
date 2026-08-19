@@ -318,4 +318,20 @@ describe('ModelTextPanel', () => {
       screen.queryByText('The selected model text could not be found.'),
     ).not.toBeInTheDocument();
   });
+
+  it('does not show the empty prompt while the configured list is still resolving', () => {
+    // The defect this guards: the loading and empty states shared one branch, so any gap in the
+    // nested ternary that re-decided between them fell through to the empty prompt.
+    render(
+      <ModelTextPanel
+        {...makeProps({
+          effectiveModelTexts: undefined,
+          isEffectiveModelTextsLoading: true,
+        })}
+      />,
+    );
+
+    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
+  });
 });
