@@ -42,6 +42,7 @@ import type {
 } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
@@ -52,7 +53,7 @@ import {
   getRefLabel,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
-import { InstallFailedView, InstallingView } from './install-state-views.component';
+import { ErrorRetryView, InstallingView } from './install-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -64,6 +65,7 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_installFailed%',
   '%webView_resourcePanel_installFailedOffline%',
   '%webView_resourcePanel_retry%',
+  '%webView_resourcePanel_settingsUnavailable%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
@@ -226,10 +228,15 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Data sources
 
-  const [effectiveResources] = useEffectiveResourceReferenceList(
+  const effectiveResourcesState = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.referencedProjectsAndResources',
   );
+  const effectiveResources =
+    effectiveResourcesState.status === 'ready' ? effectiveResourcesState.list : undefined;
+  const retryEffectiveResources = useCallback(() => {
+    if (effectiveResourcesState.status === 'error') effectiveResourcesState.retry();
+  }, [effectiveResourcesState]);
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -293,6 +300,19 @@ globalThis.webViewComponent = function ResourceTextPanel({
       return false;
     });
   }, [effectiveResources, dblResources, resourceType]);
+
+  // The catalog is only "ready" once the fetch has settled AND delivered; `dblResources` coerces
+  // `undefined` to `[]`, which is indistinguishable from a genuinely empty catalog.
+  const areResourcesReady = !isLoadingResources && resourcesPossiblyUndefined !== undefined;
+
+  // Readiness is decided from whether the sources have ARRIVED, never from whether the filtered
+  // result came out empty — see `getResourcePanelReadiness`.
+  const readiness = getResourcePanelReadiness(
+    effectiveResourcesState.status,
+    areResourcesReady,
+    effectiveResources?.items.length ?? 0,
+    filteredResources.length,
+  );
 
   // #endregion
 
@@ -556,9 +576,22 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Also shows spinner for if loading resources, except if there is no resources then it should
-  // directly show the button to pick a resource bellow
-  if (!effectiveResources || (isLoadingResources && filteredResources.length !== 0)) {
+  // Settings error: the configured list could not be read, so we cannot tell whether a resource is
+  // set. Showing the empty state here would invite the user to re-pick a resource that may already
+  // be configured, so say what went wrong and offer a way to try again instead.
+  if (readiness === 'error') {
+    return (
+      <ErrorRetryView
+        message={localizedStrings['%webView_resourcePanel_settingsUnavailable%']}
+        retryLabel={localizedStrings['%webView_resourcePanel_retry%']}
+        onRetry={retryEffectiveResources}
+      />
+    );
+  }
+
+  // Still resolving either source. This deliberately outlasts the catalog fetch when something is
+  // configured: the old guard let that window fall through to the empty state below.
+  if (readiness === 'loading') {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />
@@ -566,8 +599,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Zero state: the filtered list is empty (nothing configured for this resourceType)
-  if (filteredResources.length === 0) {
+  // Zero state: nothing is configured for this resourceType, now known rather than assumed.
+  if (readiness === 'empty') {
     return (
       <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
         <p>{localizedStrings[emptyStatePromptKey]}</p>
@@ -581,7 +614,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // (the usual first-run cause), hint at the connection.
   if (installFailed) {
     return (
-      <InstallFailedView
+      <ErrorRetryView
         message={
           localizedStrings[
             isOnline

@@ -20,16 +20,17 @@ export function InstallingView({ label }: { label: ReactNode }) {
 }
 
 /**
- * Full-panel "install failed" recovery state with a retry action. Shared by the Model Text and
- * Resource panels, which render an identical block and differ only in the localized strings they
- * resolve. The inline message is the single user-facing channel for an install failure (no
- * accompanying toast), so callers own the recovery affordance here rather than duplicating it.
+ * Full-panel error state with a retry action. Shared by the Model Text and Resource panels for any
+ * recoverable failure — a failed install, or a configured-resource setting that cannot be read —
+ * which render an identical block and differ only in the localized strings they resolve. The inline
+ * message is the single user-facing channel for these failures (no accompanying toast), so callers
+ * own the recovery affordance here rather than duplicating it.
  *
- * @param message Already-localized failure message (callers vary it for the offline case).
+ * @param message Already-localized failure message (callers vary it per failure and for offline).
  * @param retryLabel Already-localized label for the retry button.
- * @param onRetry Re-attempts the install for the same resource.
+ * @param onRetry Re-attempts whatever failed for the same resource.
  */
-export function InstallFailedView({
+export function ErrorRetryView({
   message,
   retryLabel,
   onRetry,

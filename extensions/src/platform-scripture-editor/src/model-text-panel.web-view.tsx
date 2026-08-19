@@ -53,10 +53,17 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // --- Raw data sources ---
 
-  const [effectiveModelTexts, isEffectiveModelTextsLoading] = useEffectiveResourceReferenceList(
+  const effectiveModelTextsState = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.modelTexts',
   );
+  const effectiveModelTexts =
+    effectiveModelTextsState.status === 'ready' ? effectiveModelTextsState.list : undefined;
+  const isEffectiveModelTextsLoading = effectiveModelTextsState.status === 'loading';
+  const hasModelTextsError = effectiveModelTextsState.status === 'error';
+  const retryModelTexts = useCallback(() => {
+    if (effectiveModelTextsState.status === 'error') effectiveModelTextsState.retry();
+  }, [effectiveModelTextsState]);
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
@@ -203,8 +210,11 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       hasProject={projectId !== undefined}
       effectiveModelTexts={effectiveModelTexts}
       isEffectiveModelTextsLoading={isEffectiveModelTextsLoading}
+      hasModelTextsError={hasModelTextsError}
+      retryModelTexts={retryModelTexts}
       dblResources={dblResources}
       isLoadingResources={isLoadingResources}
+      areResourcesReady={!isLoadingResources && resourcesPossiblyUndefined !== undefined}
       getUserModelTexts={getUserModelTexts}
       scrRef={scrRef}
       onScrRefChange={setScrRef}

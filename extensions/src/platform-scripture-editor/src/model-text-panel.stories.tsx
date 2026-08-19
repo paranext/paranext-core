@@ -111,6 +111,12 @@ type DecoratorConfig = {
   disableInstall?: boolean;
   /** Make install reject so the recoverable install-failed state is observable. */
   failInstall?: boolean;
+  /** Hold the configured list in its loading state so the resolving spinner is observable. */
+  isListLoading?: boolean;
+  /** Make the configured-list read fail so the recoverable settings-error state is observable. */
+  hasSettingsError?: boolean;
+  /** Hold the DBL catalog as not-yet-arrived so the pre-catalog spinner is observable. */
+  areResourcesReady?: boolean;
 };
 
 /**
@@ -170,9 +176,16 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         localizedStrings={localizedStrings}
         hasProject={config.hasProject ?? true}
         effectiveModelTexts={effectiveModelTexts}
-        isEffectiveModelTextsLoading={false}
+        isEffectiveModelTextsLoading={config.isListLoading ?? false}
+        hasModelTextsError={config.hasSettingsError ?? false}
+        retryModelTexts={() => {
+          // Settings re-read — log it; these stories pin the state so retry stays observable.
+          // eslint-disable-next-line no-console
+          console.log('retryModelTexts');
+        }}
         dblResources={resources}
         isLoadingResources={false}
+        areResourcesReady={config.areResourcesReady ?? true}
         getUserModelTexts={async () => undefined}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
@@ -272,4 +285,26 @@ export const NoProject: Story = {
 /** A non-admin user picks a model text — it persists at the user level (logged to console). */
 export const NonAdminPick: Story = {
   decorators: [createDecorator({ canWriteProjectSettings: false })],
+};
+
+/** The configured list is still resolving — the panel must not guess at an empty state. */
+export const Loading: Story = {
+  decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[0])], isListLoading: true })],
+};
+
+/** The configured-model-text setting can't be read: a distinct, recoverable error state. */
+export const SettingsError: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[0])], hasSettingsError: true }),
+  ],
+};
+
+/**
+ * A model text is configured but the DBL catalog hasn't arrived. It must spin rather than claim the
+ * resource could not be found.
+ */
+export const ResolvingCatalog: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[0])], areResourcesReady: false }),
+  ],
 };

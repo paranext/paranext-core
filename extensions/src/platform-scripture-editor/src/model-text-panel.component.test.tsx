@@ -36,6 +36,7 @@ const STRINGS = {
     "The model text couldn't be installed. Check your connection and try again.",
   '%webView_modelTextPanel_retry%': 'Try again',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
+  '%webView_modelTextPanel_settingsUnavailable%': 'The model text settings could not be read.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -68,6 +69,9 @@ function makeProps(overrides: Partial<ModelTextPanelProps> = {}): ModelTextPanel
     hasProject: true,
     effectiveModelTexts: { dataVersion: '1.0.0', items: [] },
     isEffectiveModelTextsLoading: false,
+    hasModelTextsError: false,
+    retryModelTexts: vi.fn(),
+    areResourcesReady: true,
     dblResources: [],
     isLoadingResources: false,
     getUserModelTexts: async () => undefined,
@@ -276,5 +280,42 @@ describe('ModelTextPanel', () => {
         "The model text couldn't be installed. Check your connection and try again.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it('shows the settings-unavailable error instead of the empty prompt when the setting cannot be read', () => {
+    // An unreadable setting is not "nothing configured": offering only the picker would invite the
+    // user to reconfigure a model text that may already be set.
+    render(<ModelTextPanel {...makeProps({ hasModelTextsError: true })} />);
+
+    expect(screen.getByText('The model text settings could not be read.')).toBeInTheDocument();
+    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+  });
+
+  it('re-reads the setting when the error state retry is clicked', () => {
+    const retryModelTexts = vi.fn();
+    render(<ModelTextPanel {...makeProps({ hasModelTextsError: true, retryModelTexts })} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+
+    expect(retryModelTexts).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not claim the model text is missing while the resource catalog has not arrived', () => {
+    // A configured DBL resource matches nothing until the catalog lands, so answering "could not be
+    // found" here is a guess dressed as a fact — and it renders a Pick button that invites the user
+    // to replace a model text that is configured and fine.
+    render(
+      <ModelTextPanel
+        {...makeProps({
+          effectiveModelTexts: configuredModelText('uid-web'),
+          dblResources: [],
+          areResourcesReady: false,
+        })}
+      />,
+    );
+
+    expect(
+      screen.queryByText('The selected model text could not be found.'),
+    ).not.toBeInTheDocument();
   });
 });
