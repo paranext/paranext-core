@@ -464,7 +464,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // check whether the project actually supports the interface so "still resolving" can be told apart
   // from "will never resolve", instead of treating the latter as a permanent loading state.
   const checkScriptureEditPermissionsSupported = useCallback(async () => {
-    if (!projectId) return true;
+    // No `projectId` means no project to check support for — and, like the catch below,
+    // `canUserEditScriptureLoading` can be permanently stuck in this case too (no `projectId` means
+    // no PDP source, so no subscription ever fires). Don't feed that back into "still resolving".
+    if (!projectId) return false;
     try {
       const matchingMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectIds: projectId,
@@ -473,9 +476,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return matchingMetadata.length > 0;
     } catch (e) {
       logger.warn(`Error checking Scripture edit permissions support: ${getErrorMessage(e)}`);
-      // Fail open: assume supported so `canUserEditScriptureLoading` is trusted normally; if this is
-      // wrong, `canUserEditScripture`'s own fail-open default still applies once loading gives up.
-      return true;
+      // Stop waiting rather than assume supported: returning `true` here would fall back to
+      // trusting `canUserEditScriptureLoading` directly — the exact signal this check exists to
+      // work around, which can be the same permanently-stuck state. This promise never rejects
+      // (we catch our own errors), so `usePromise` always resolves it promptly either way;
+      // returning `false` falls through to `canUserEditScripture`'s own fail-open default and
+      // self-corrects if the underlying subscription later resolves on its own.
+      return false;
     }
   }, [projectId]);
   const [isScriptureEditPermissionsSupported] = usePromise(
