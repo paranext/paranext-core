@@ -220,3 +220,46 @@ body > .dragging-layer.dock-style-resources {
   }
 }
 // #endregion SIMPLE-MODE CHROME //////////////////////////////////////
+
+// #region SIMPLE-MODE DIVIDER ROUNDING ////////////////////////////////
+// rc-dock sizes the one flexible column as `container - (floored columns) - 2`, but Simple mode
+// has TWO 2px dividers. It accounts for one and not the other, so whenever the column floors bind
+// the row comes out exactly 2px wider than its container and the whole app grows a horizontal
+// scrollbar — the failure PT-4344 exists to remove.
+//
+// Measured in the running app at a 900px window (2026-08-18), floors overridden live to prove the
+// shape of it:
+//   floor 298 -> 298 / 302 / 298 = 898 columns + 4px dividers = 902 inside 900
+//   floor 294 -> 294 / 310 / 294 = 898 columns + 4px dividers = 902 inside 900
+// Constant 2px: lowering the floor just hands the slack to the editor, and raising the window
+// minimum moves both sides of the equation. The floors have to bind — the natural 1:2:1 width of a
+// side column at 900px is 224px, well under the ~300px minimum UX asked for — so this cannot be
+// dodged by choosing better numbers.
+//
+// Clipped rather than fixed at the divider: its 2px flex-basis is exactly what the `scaleX(8)`
+// above multiplies into a 16px grab area, and the notes in that region record that padding is not
+// a workable substitute. A 1px divider would halve the splitter hit area to fix 2px of rounding.
+// What gets clipped is the outer edge of the last column's own padding; no control lives there,
+// and it only happens at all while the floors bind.
+//
+// Scoped to the column box, NOT `.dock-layout`: floating panels (`.dock-fbox`) are siblings of
+// this box, and clipping their container would cut off a dialog dragged near the window edge.
+// `clip` rather than `hidden` so this never becomes a scroll container and the vertical axis stays
+// `visible` (`hidden` on one axis forces the other to `auto`).
+// The box is not a 900px frame holding 902px of content — the box ELEMENT is 902px wide, wider
+// than the `.dock-layout` containing it (measured: boxClient 902, dockClient 900). rc-dock renders
+// it with an INLINE `min-width` computed from its children (`style={{ minWidth, ... }}` in
+// DockBox.js), and that inline min-width is what holds it open: min-width beats max-width in CSS,
+// so capping it with `max-width: 100%` is silently ignored, and `!important` is required to beat an
+// inline declaration at all.
+//
+// Zeroing it here only affects rendering. rc-dock keeps its own copy of the value in JS for the
+// layout algorithm, and splitter drag limits come from each panel's `panelLock.minWidth` rather
+// than this element — so the columns still hold their own floors; only the box stops being propped
+// open past its parent.
+[data-interface-mode='simple'] .dock-layout > .dock-box {
+  // stylelint-disable-next-line declaration-no-important -- beats rc-dock's inline min-width; see above
+  min-width: 0 !important;
+  overflow-x: clip;
+}
+// #endregion SIMPLE-MODE DIVIDER ROUNDING /////////////////////////////
