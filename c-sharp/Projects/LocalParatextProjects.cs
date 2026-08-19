@@ -579,12 +579,30 @@ internal class LocalParatextProjects : IDisposable
     /// </summary>
     public IEnumerable<ProjectDetails> GetAvailablePublishedProjectDetails()
     {
-        // IsResourceProject is true for ResourceScrText and JoinedScrText (PT9's read-only
-        // resource-backed project shapes).
-        return GetVisibleScrTexts()
-            .Where(scrText => scrText.IsResourceProject)
-            .Select(TryGetProjectDetails)
-            .OfType<ProjectDetails>();
+        // Use AllAccessible (not ScriptureOnly) so that resources installed as .p8z bundles
+        // outside the DBL download flow — e.g. VULGP83 — are also enumerated.
+        // IsResourceProject filters out all editable projects; the registration guard returns
+        // nothing when Paratext is not registered, matching PT9 behavior.
+        return GetAllResourceScrTexts().Select(TryGetProjectDetails).OfType<ProjectDetails>();
+    }
+
+    /// <summary>
+    /// Returns all resource <see cref="ScrText"/>s visible to the current user. Uses
+    /// <c>IncludeProjects.AllAccessible</c> rather than <c>ScriptureOnly</c> so that resources
+    /// installed as .p8z bundles outside the DBL flow (e.g. VULGP83) are included. Returns an
+    /// empty sequence when the user has no valid Paratext registration.
+    /// </summary>
+    private static IEnumerable<ScrText> GetAllResourceScrTexts()
+    {
+        if (!RegistrationInfo.DefaultUser.IsValid)
+            return [];
+        // Snapshot under the ScrTextArbitrator lock and materialize before returning — same
+        // pattern as GetScrTexts() to avoid racing the background watcher's RefreshScrTexts.
+        using (ScrTextArbitrator.GetLock())
+            return ScrTextCollection
+                .ScrTexts(IncludeProjects.AllAccessible)
+                .Where(scrText => scrText.IsResourceProject)
+                .ToList();
     }
 
     /// <summary>

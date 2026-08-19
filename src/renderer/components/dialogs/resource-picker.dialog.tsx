@@ -10,7 +10,7 @@ import {
   DialogTypes,
   RESOURCE_PICKER_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { sendCommand } from '@shared/services/command.service';
 
 const STRING_KEYS = [...RESOURCE_PICKER_DIALOG_STRING_KEYS];
@@ -26,16 +26,36 @@ function ResourcePickerDialogWrapper({
 }: DialogTypes[typeof RESOURCE_PICKER_DIALOG_TYPE]['props']) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
-  // Fetches all resources to pass into the resource picker
-  const [resources, isResourcesLoading] = usePromise(
+  // Fetches DBL catalog resources
+  const [dblResources, isDblLoading] = usePromise(
     useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
     undefined,
   );
 
+  // Fetches locally-installed non-DBL resources (e.g. VULGP83, TNN, TND, HBK) that are not in
+  // the DBL catalog. Each entry uses dblEntryUid === projectId as a synthetic marker.
+  // Catch errors (e.g. command not yet registered) so usePromise always resolves — the hook has
+  // no try/catch, so an unhandled rejection leaves isLoading=true forever.
+  const [localNonDblResources, isLocalLoading] = usePromise(
+    useCallback(async () => {
+      try {
+        return await sendCommand('platformGetResources.getLocalNonDblResources');
+      } catch {
+        return [];
+      }
+    }, []),
+    [],
+  );
+
+  const allResources = useMemo(
+    () => [...(dblResources ?? []), ...(localNonDblResources ?? [])],
+    [dblResources, localNonDblResources],
+  );
+
   return (
     <ResourcePickerDialog
-      allResources={resources ?? []}
-      isResourcesLoading={isResourcesLoading}
+      allResources={allResources}
+      isResourcesLoading={isDblLoading || isLocalLoading}
       resourceType={resourceType}
       selectedResourceIds={selectedResourceIds}
       localizedStrings={localizedStrings}

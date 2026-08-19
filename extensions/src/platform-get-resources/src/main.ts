@@ -7,7 +7,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import type { DblResourceData } from 'platform-bible-utils';
+import type { DblResourceData, ResourceType } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
@@ -70,52 +70,90 @@ async function startBackgroundFetchResources(): Promise<void> {
   });
 }
 
+/**
+ * Syncs installed flags on `cachedResources` against live project metadata from C#. Runs in the
+ * background so it never blocks a dialog open. Updates `cachedResources` and writes to storage when
+ * flags change.
+ *
+ * Waits for the C# Paratext PDPF to register resource projects before syncing — without this retry,
+ * a call that resolves before the factory finishes would see no isEditable=false projects and
+ * incorrectly mark installed resources as not-installed.
+ */
+async function syncInstalledFlags(): Promise<void> {
+  if (cachedResources === undefined) return;
+  try {
+    let localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platform.base'],
+    });
+    const MAX_RETRIES = 5;
+    for (
+      let attempt = 0;
+      attempt < MAX_RETRIES && !localProjectMetadata.some((m) => m.isEditable === false);
+      attempt++
+    ) {
+      // eslint-disable-next-line no-await-in-loop
+      await wait(500);
+      // eslint-disable-next-line no-await-in-loop
+      localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectInterfaces: ['platform.base'],
+      });
+    }
+    // If the retry loop exhausted without finding any isEditable=false project, C# hasn't
+    // registered yet. Skip the sync entirely — syncing against an empty project list would
+    // incorrectly mark all installed resources as not-installed and corrupt the cache.
+    if (!localProjectMetadata.some((m) => m.isEditable === false)) return;
+
+    // Re-check cachedResources after the await — fetchAndCacheResources may have updated it
+    if (cachedResources === undefined) return;
+
+    let isChanged = false;
+    const newCachedResources = cachedResources.map((resource) => {
+      const matchingLocalProject = localProjectMetadata.find((localProject) =>
+        // If the `projectId` is defined then tries to use that
+        resource.projectId
+          ? resource.projectId === localProject.id
+          : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
+            // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
+            resource.dblEntryUid !== '' &&
+            localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
+      );
+
+      const isInstalled = matchingLocalProject !== undefined;
+      if (isInstalled !== resource.installed) {
+        isChanged = true;
+        return {
+          ...resource,
+          installed: isInstalled,
+          updateAvailable: false,
+          projectId: matchingLocalProject?.id ?? '',
+        };
+      }
+
+      return resource;
+    });
+
+    if (isChanged) {
+      cachedResources = newCachedResources;
+      if (executionToken)
+        await papi.storage.writeUserData(
+          executionToken,
+          RESOURCES_CACHE_KEY,
+          JSON.stringify(cachedResources),
+        );
+    }
+  } catch (error: unknown) {
+    logger.warn(`Error syncing installed flags: ${getErrorMessage(error)}`);
+  }
+}
+
 async function getCachedResources(): Promise<DblResourceData[] | undefined> {
   if (cachedResources !== undefined) {
-    try {
-      // Checks to make sure all the `installed` flags are accurate
-      let isChanged = false;
-      const localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-      });
-      const newCachedResources = cachedResources.map((resource) => {
-        const matchingLocalProject = localProjectMetadata.find((localProject) =>
-          // If the `projectId` is defined then tries to use that
-          resource.projectId
-            ? resource.projectId === localProject.id
-            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id
-              localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
-        );
-
-        const isInstalled = matchingLocalProject !== undefined;
-        if (isInstalled !== resource.installed) {
-          isChanged = true;
-          return {
-            ...resource,
-            installed: isInstalled,
-            updateAvailable: false,
-            projectId: matchingLocalProject?.id ?? '',
-          };
-        }
-
-        return resource;
-      });
-
-      // If a change was detected updates the cache
-      if (isChanged) {
-        cachedResources = newCachedResources;
-        // Writes the updated cached resources to user data
-        if (executionToken)
-          await papi.storage.writeUserData(
-            executionToken,
-            RESOURCES_CACHE_KEY,
-            JSON.stringify(cachedResources),
-          );
-      }
-    } catch (error: unknown) {
-      logger.warn(`Error getting cached resources: ${getErrorMessage(error)}`);
-    }
-
+    // Run the installed-flag sync in the background so the dialog open is never blocked by
+    // getMetadataForAllProjects retries (which can exceed the 30-second JSON-RPC timeout when
+    // the C# PDPF is still initializing). The next dialog open picks up the updated flags.
+    syncInstalledFlags().catch((e) =>
+      logger.warn(`Background installed-flag sync failed: ${getErrorMessage(e)}`),
+    );
     return cachedResources;
   }
 
@@ -128,6 +166,89 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
       return undefined;
     }
   });
+}
+
+/**
+ * Returns locally-installed, read-only resources that are NOT in the DBL catalog — e.g. VULGP83,
+ * TNN, TND, HBK. Useful for populating the Resource Picker's INSTALLED section with resources that
+ * were installed outside the DBL download flow.
+ *
+ * Convention: each synthetic entry uses `dblEntryUid === projectId` to mark it as non-DBL so that
+ * callers (e.g. `selectTextConnection`) can create a `ProjectReference` instead of a
+ * `DblResourceReference` when the user selects one.
+ */
+async function getLocalNonDblResources(): Promise<DblResourceData[]> {
+  try {
+    // Retry until at least one isEditable=false project appears — mirrors the reasoning in
+    // fetchDownloadedResources (frontend): a call that resolves before the C# Paratext factory has
+    // registered returns only TypeScript-only PDPFs and misses all C# resource projects. Capped at
+    // 2 attempts (1 s total) to stay well under the 30-second JSON-RPC timeout; if C# still hasn't
+    // registered after 1 s, return an empty list rather than risk a timeout.
+    let allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platform.base'],
+    });
+    const MAX_RETRIES = 2;
+    for (
+      let attempt = 0;
+      attempt < MAX_RETRIES && !allMetadata.some((m) => m.isEditable === false);
+      attempt++
+    ) {
+      // eslint-disable-next-line no-await-in-loop
+      await wait(500);
+      // eslint-disable-next-line no-await-in-loop
+      allMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectInterfaces: ['platform.base'],
+      });
+    }
+
+    // Exclude any resource whose project ID matches a DBL catalog entry (by exact projectId or by
+    // the startsWith(dblEntryUid) convention Paratext uses when naming project directories).
+    // The startsWith match is guarded by r.installed: a DBL entry whose UID is only a prefix of
+    // the local project ID but is NOT itself installed is likely a stale or reassigned UID (e.g.
+    // DBL republished a resource under a new UID — the old UID is now in the catalog for a
+    // different resource, so a local project installed under the old UID would be falsely excluded).
+    const dblEntries = cachedResources ?? [];
+    const nonDblMetadata = allMetadata.filter((m) => {
+      if (m.isEditable !== false) return false;
+      const matchingDblEntry = dblEntries.find(
+        (r) =>
+          (r.projectId !== '' && r.projectId === m.id) ||
+          // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
+          // Guard against reassigned UIDs: only exclude via startsWith when the matched
+          // DBL entry is actually installed (r.installed), so a local project whose ID
+          // starts with a UID that now belongs to a DIFFERENT uninstalled resource is not
+          // incorrectly treated as a DBL duplicate and hidden from the picker.
+          (r.dblEntryUid !== '' &&
+            r.installed &&
+            m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
+      );
+      if (matchingDblEntry) return false;
+      return true;
+    });
+
+    // Use name/fullName/language from the project metadata directly — the C# factory populates
+    // these at enumeration time (same values as the platform.name/fullName/language settings),
+    // so no per-project PDP call is needed.
+    return nonDblMetadata.map(
+      (m): DblResourceData => ({
+        // Convention: dblEntryUid === projectId marks this as a non-DBL synthetic entry.
+        // selectTextConnection detects this and creates a ProjectReference instead of a
+        // DblResourceReference so the resource is resolvable without a catalog entry.
+        dblEntryUid: m.id,
+        displayName: m.name ?? m.id,
+        fullName: m.fullName ?? m.name ?? m.id,
+        bestLanguageName: m.language ?? '',
+        type: 'ScriptureResource' as ResourceType,
+        size: 0,
+        installed: true,
+        updateAvailable: false,
+        projectId: m.id,
+      }),
+    );
+  } catch (error: unknown) {
+    logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
+    return [];
+  }
 }
 
 let manageExtensions: ManageExtensions;
@@ -293,6 +414,11 @@ export async function activate(context: ExecutionActivationContext) {
     getCachedResources,
   );
 
+  const getLocalNonDblResourcesCommandPromise = papi.commands.registerCommand(
+    'platformGetResources.getLocalNonDblResources',
+    getLocalNonDblResources,
+  );
+
   const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(
     'platformGetResources.isSendReceiveAvailable',
     async () => {
@@ -324,6 +450,7 @@ export async function activate(context: ExecutionActivationContext) {
     await openHomeWebViewCommandPromise,
     await openNewTabWebViewCommandPromise,
     await getCachedResourcesCommandPromise,
+    await getLocalNonDblResourcesCommandPromise,
     await isSendReceiveAvailableCommandPromise,
   );
 

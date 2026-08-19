@@ -38,9 +38,9 @@ namespace Paranext.DataProvider.Projects;
 ///     <see cref="ParatextProjectDataProvider"/>.<c>VerifyUserCanCreateComments</c> remains
 ///     load-bearing for creation.</item>
 ///   <item><strong>Note-only project types</strong> (<c>ConsultantNotes</c>,
-///     <c>GlobalConsultantNotes</c>, <c>GlobalAnthropologyNotes</c>): filtered out before any
-///     factory sees them by <c>ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly)</c>.
-///     Not served by any factory today; out of scope for this PR.</item>
+///     <c>GlobalConsultantNotes</c>, <c>GlobalAnthropologyNotes</c>): filtered out by the
+///     <c>IsResourceProject</c> guard in <c>GetAllResourceScrTexts</c> (these project types
+///     are not resource projects). Not served by any factory today; out of scope for this PR.</item>
 /// </list>
 ///
 /// <para>

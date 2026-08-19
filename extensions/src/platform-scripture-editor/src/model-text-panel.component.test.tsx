@@ -243,14 +243,13 @@ describe('ModelTextPanel', () => {
   });
 
   it('offers the picker (not a dead end) when a configured reference cannot be resolved', async () => {
-    // A configured model text that is not a resolvable DBL resource (here a project reference) must
-    // not spin forever, and must not be a dead end — it shows a not-found state with a way to
-    // recover by picking another.
+    // A configured model text whose DBL uid is not in the catalog must not spin forever, and must
+    // not be a dead end — it shows a not-found state with a way to recover by picking another.
     const showResourcePicker = vi.fn(async () => undefined);
     renderPanel({
       effectiveModelTexts: {
         dataVersion: '1.0.0',
-        items: [{ type: 'project', id: 'p1', name: 'Some Project', source: 'admin' }],
+        items: [{ type: 'dblResource', id: 'unknown-uid', name: 'Unknown', source: 'admin' }],
       },
       dblResources: [],
       showResourcePicker,
@@ -259,6 +258,24 @@ describe('ModelTextPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Pick model text…' }));
     await waitFor(() => expect(showResourcePicker).toHaveBeenCalled());
+  });
+
+  it('loads a configured ProjectReference model text directly by project ID', async () => {
+    // Locally-installed non-DBL resources (added via selectTextConnection as ProjectReferences)
+    // are resolvable directly by project ID — no catalog entry required.
+    const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
+    renderPanel({
+      effectiveModelTexts: {
+        dataVersion: '1.0.0',
+        items: [{ type: 'project', id: 'proj-local', name: 'LocalRes', source: 'admin' }],
+      },
+      dblResources: [],
+      getResourceChapter,
+    });
+    await waitFor(() =>
+      expect(getResourceChapter).toHaveBeenCalledWith('proj-local', expect.anything()),
+    );
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
   });
 
   it('hints at the connection in the install-failed state when offline', async () => {

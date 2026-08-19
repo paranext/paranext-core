@@ -6,7 +6,11 @@ public static class DblResourceWhiteList
 {
     public static bool IsValidResource(InstallableResource resource)
     {
-        return s_validResourceIds.Contains(resource.DBLEntryUid.ToString().ToUpperInvariant());
+        // Use .Id (the raw lowercase hex string) rather than .ToString() — ToString() on
+        // DBLEntryUid returns a different representation that does not match the 16-char hex
+        // entries in s_validResourceIds, causing valid resources like TNN to be incorrectly
+        // excluded from the catalog fetch result.
+        return s_validResourceIds.Contains(resource.DBLEntryUid.Id.ToUpperInvariant());
     }
 
     private static readonly HashSet<string> s_validResourceIds =
@@ -71,7 +75,6 @@ public static class DblResourceWhiteList
         "085DEFAC6E17B9EB",
         "08C66B989FA5FA17",
         "08EBDAC929584A89",
-        "090F7CBF7924B245",
         "091988FDE60272D7",
         "0A0927A2E4C58318",
         "0A19B175A7F803A4",
@@ -842,6 +845,7 @@ public static class DblResourceWhiteList
         "728722451FD29659",
         "72B5C125A759A2B1",
         "72BB7D6157FB36D7",
+        "72DD0B9B0F2B4024",
         "72F4E6DC683324DF",
         "734DED0B4CD9214C",
         "736B4AEBA7AF8A5F",

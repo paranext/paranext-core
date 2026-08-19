@@ -16,9 +16,11 @@ internal class DblResourcesDataProvider(
     LocalParatextProjects paratextProjects
 ) : NetworkObjects.DataProvider("platformGetResources.dblResourcesProvider", papiClient)
 {
-    // These UIDs are also used by the TypeScript `useCommentaryMarkerStyles` hook to load
-    // per-commentary marker stylesheets (extensions/src/platform-scripture-editor/src/
-    // use-commentary-marker-styles.hook.ts). Keep these two lists in sync.
+    // These UIDs determine which DBL catalog entries are classified as CommentaryResource.
+    // The TypeScript `useCommentaryMarkerStyles` hook (extensions/src/platform-scripture-editor/src/
+    // use-commentary-marker-styles.hook.ts) keeps a parallel map and may include additional legacy
+    // UIDs for locally-installed resources predating a DBL UID reassignment — those extra entries
+    // are intentionally absent here since we no longer serve those UIDs from the catalog.
     private static readonly HashSet<string> CommentariesWhiteList =
     [
         // UBS Translator's Handbook
@@ -29,7 +31,7 @@ internal class DblResourcesDataProvider(
         "24daa5f24f0020b3", // HBKPT — Portuguese
         "1ff24938918bd69e", // HBKESP — Spanish
         // UBS Translator's Notes
-        "090f7cbf7924b245", // TNN — English
+        "72dd0b9b0f2b4024", // TNN — English (UID reassigned in DBL; old UID 090f7cbf7924b245 now belongs to a different resource)
         "0617c397f003127c", // TNNESP — Spanish
         "233345361843ce8b", // TNNPTG — Portuguese
         "d95fde28b4346e61", // TNNFR — French
@@ -149,11 +151,6 @@ internal class DblResourcesDataProvider(
             new DblResourcePasswordProvider()
         );
         _resources = allResources.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
-        var excludedResources = allResources.Except(_resources).Select(r => r.Name).ToList();
-        excludedResources.Sort();
-        Console.WriteLine(
-            $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources)}\n"
-        );
     }
 
     /// <summary>
