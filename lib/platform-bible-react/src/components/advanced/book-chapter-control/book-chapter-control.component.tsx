@@ -999,6 +999,14 @@ export function BookChapterControl({
                   onKeyDown={handleInputKeyDown}
                   onFocus={() => setIsCommandListHidden(false)}
                   className={recentSearches && recentSearches.length > 0 ? 'tw:!pr-10' : ''}
+                  // Picker semantics: with nothing typed, Space picks the highlighted book (the
+                  // Enter UX). Neither of this control's own Space handlers covers that state —
+                  // `handleInputKeyDown` claims a key only for a FULLY-qualified `submitKeys`
+                  // match (an empty input has no top match at all), and the `data-selected` grid
+                  // pick in `handleCommandKeyDown` is gated on the chapters and verses views,
+                  // while this input exists only in the books view. Space is still an ordinary
+                  // character once anything is typed, so "1 Samuel" stays searchable.
+                  spaceSelectsHighlightedItem
                 />
                 {recentSearches && recentSearches.length > 0 && (
                   <RecentSearches
