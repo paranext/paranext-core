@@ -17,6 +17,7 @@ import {
   SCOPE_SELECTOR_STRING_KEYS,
   sonner,
   usePromise,
+  useRunWhenVisible,
   useViewVisibility,
 } from 'platform-bible-react';
 import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
@@ -75,7 +76,6 @@ import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
-import { useRunWhenVisible } from './find/use-run-when-visible.hook';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -1466,10 +1466,10 @@ global.webViewComponent = function FindWebView({
   // unguarded, each of those launches a full find job into a `display: none` pane: uninterruptible
   // once past its scope boundary, polled at ~10 Hz over JSON-RPC, and pulling a whole book's USJ
   // into an iframe whose result cards then decline to render it (they gate on an
-  // `IntersectionObserver` that reports nothing intersecting while hidden). Before this tab was
-  // permanent the user could stop that by closing the panel; now they cannot. Requests made while
-  // hidden collapse into one catch-up that runs when the tab is activated, so the tab still opens
-  // showing results for where the user actually is.
+  // `IntersectionObserver` that reports nothing intersecting while hidden). A permanent tab offers no
+  // way to opt out of that, either — there is nothing to close. Requests made while hidden collapse
+  // into one catch-up that runs when the tab is activated, so the tab still opens showing results for
+  // where the user actually is.
   const isViewVisible = useViewVisibility();
   const requestAutoSearch = useRunWhenVisible(isViewVisible, () =>
     debouncedHandleStartSearch.current(),
