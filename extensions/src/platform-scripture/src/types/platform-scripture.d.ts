@@ -2531,10 +2531,23 @@ declare module 'papi-shared-types' {
      * Creates nothing: when no Find web view is open this does nothing and returns `undefined`. Use
      * `platformScripture.openFind` to open one.
      *
+     * Editability is not a parameter here: the Find web view reads `platform.isEditable` for
+     * whichever project it is bound to and withholds Replace / Replace All on its own. Re-pointing
+     * at a published resource therefore leaves the text searchable with the replace controls
+     * withheld, rather than offering replacements the project would reject.
+     *
      * @param projectId Id of the project the Find / Replace UI should search from now on.
+     * @param editorWebViewId Id of the editor web view Find should act on: the one it focuses, and
+     *   whose text it selects and highlights when a result is clicked. Pass this whenever the
+     *   re-point accompanies a new or replaced editor, since a replaced editor tab mints a new id
+     *   and Find silently skips those actions once the id it holds no longer resolves. Omit to
+     *   leave the id Find already holds untouched.
      * @returns Id of the re-pointed find web view, or `undefined` if no find web view was open.
      */
-    'platformScripture.updateFindProject': (projectId: string) => Promise<string | undefined>;
+    'platformScripture.updateFindProject': (
+      projectId: string,
+      editorWebViewId?: string | undefined,
+    ) => Promise<string | undefined>;
 
     /**
      * Open the Markers Checklist web view.

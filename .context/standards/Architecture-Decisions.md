@@ -646,6 +646,17 @@ step, no automation. Just a record.
   does not resolve is now reported as a placement anomaly, and the shipped order is pinned by tests
   that use the real layout data and the real supplement JSON together
   (`shipped-simple-layout-order.test.ts`) rather than synthetic fixtures.
+
+  A **supplement entry is therefore scoped to Simple mode** in two of its properties, and the merge
+  takes the interface mode as a required argument rather than inferring it. The merge runs against
+  both modes' layouts — Simple mode's build-baked one and Power mode's persisted one — while
+  ordering and pinning only describe Simple mode's fixed columns. Applying an entry's
+  `insertBeforeWebViewType` in Power mode means logging a placement anomaly on every load of a
+  correct layout, because the target is a fixed-layout tab that mode does not have; applying its
+  `isClosable: false` means handing `getTabGroup` a pinned tab and getting back a column group
+  `getGroups` registers only in Simple mode, so the tab lands in rc-dock's unknown-group fallback
+  with no close button until the provider's async answer replaces it. Making the mode an argument is
+  what keeps a mode-agnostic mechanism from silently carrying mode-specific data across.
 - **Alternatives:** **An explicit `isPinnedLast` / sort-order field on the static tab** — rejected:
   it splits ordering across two files, so reading either one alone tells you the wrong answer, and
   two tabs both claiming last has no defined resolution. **Move Find into the supplement too, so all
@@ -659,7 +670,10 @@ step, no automation. Just a record.
   before. The static layout stays a plain ordered list. The ordering is only as good as the
   `webViewType` strings on both sides, which core cannot type-check against the extensions that own
   them — so a drift guard reads the extension sources and fails if a pinned `webViewType` stops being
-  declared in production code. **Revisit** if supplement entries start needing to order against each
-  other, which anchor/insert-before cannot express.
+  declared in production code. Every future supplement property has to be classified as
+  mode-independent or Simple-mode-only, and a Simple-mode-only one needs a Power-mode test case —
+  both modes' behavior for the shipped entry is asserted, so a property that leaks across fails.
+  **Revisit** if supplement entries start needing to order against each other, which
+  anchor/insert-before cannot express.
 - **Source:** Review of the `pt-4342-dock-find-in-simple` branch — findings on the supplement's silent
   append fallback and the untested shipped column order; open question raised in the PR body.

@@ -55,9 +55,9 @@ export function buildFindWebViewFields(
     // Set unconditionally rather than gated on simple mode. `PlatformTabTitle` already suppresses a
     // tooltip that merely repeats the visible title unless the tab is collapsed to icon-only, and
     // its comment names this exact caller pattern — so a mode gate here would only re-implement that
-    // suppression one layer further out. Gating it also produced a no-op in the power arm, since the
-    // provider spreads `savedWebView` first and is the only writer of this field, making
-    // `savedWebView.tooltip` a self-assignment.
+    // suppression one layer further out. A power-mode arm would have nothing to put there anyway:
+    // the provider spreads `savedWebView` first and is the only writer of this field, so falling back
+    // to `savedWebView.tooltip` is a self-assignment.
     tooltip: localizedTitle,
     projectId: options.projectId || savedWebView.projectId || undefined,
     // This is the fixed Column 3 Find tab and must always remain open in simple mode, so it's

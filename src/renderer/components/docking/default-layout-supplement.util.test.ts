@@ -59,7 +59,7 @@ function tabsInFirstPanel(layout: LayoutBase): SavedTabInfo[] {
 
 describe('mergeDefaultLayoutSupplement', () => {
   it('appends the supplement tab to the panel containing the anchor', () => {
-    const merged = mergeDefaultLayoutSupplement(baseLayout(), [gridEntry]);
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [gridEntry], 'simple');
     expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
       'anchor-tab',
       'scripture-text-grid-tab',
@@ -74,9 +74,11 @@ describe('mergeDefaultLayoutSupplement', () => {
       tabType: 'webView',
       data: { webViewType: 'platformScripture.find', id: 'find-tab' },
     });
-    const merged = mergeDefaultLayoutSupplement(layout, [
-      { ...gridEntry, insertBeforeWebViewType: 'platformScripture.find' },
-    ]);
+    const merged = mergeDefaultLayoutSupplement(
+      layout,
+      [{ ...gridEntry, insertBeforeWebViewType: 'platformScripture.find' }],
+      'simple',
+    );
     expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
       'anchor-tab',
       'scripture-text-grid-tab',
@@ -87,9 +89,11 @@ describe('mergeDefaultLayoutSupplement', () => {
     // rc-dock falls back to `tabs[0].id` for a panel with no `activeId`, and no Simple-mode panel
     // sets one — so without this, a supplement tab placed leftmost would quietly become the column's
     // default view in addition to being first.
-    const merged = mergeDefaultLayoutSupplement(baseLayout(), [
-      { ...gridEntry, insertBeforeWebViewType: 'platformScriptureEditor.bibleTexts' },
-    ]);
+    const merged = mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [{ ...gridEntry, insertBeforeWebViewType: 'platformScriptureEditor.bibleTexts' }],
+      'simple',
+    );
 
     expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
       'scripture-text-grid-tab',
@@ -107,9 +111,11 @@ describe('mergeDefaultLayoutSupplement', () => {
     const panel = ((layout.dockbox as BoxData).children[0] as BoxData).children[0] as PanelData;
     panel.activeId = 'anchor-tab';
 
-    const merged = mergeDefaultLayoutSupplement(layout, [
-      { ...gridEntry, insertBeforeWebViewType: 'platformScriptureEditor.bibleTexts' },
-    ]);
+    const merged = mergeDefaultLayoutSupplement(
+      layout,
+      [{ ...gridEntry, insertBeforeWebViewType: 'platformScriptureEditor.bibleTexts' }],
+      'simple',
+    );
 
     // Narrowing to PanelData to read the activeId back.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -118,9 +124,11 @@ describe('mergeDefaultLayoutSupplement', () => {
     expect(mergedPanel.activeId).toBe('anchor-tab');
   });
   it('appends when insertBeforeWebViewType names a tab that is not in the panel', () => {
-    const merged = mergeDefaultLayoutSupplement(baseLayout(), [
-      { ...gridEntry, insertBeforeWebViewType: 'not.in.this.panel' },
-    ]);
+    const merged = mergeDefaultLayoutSupplement(
+      baseLayout(),
+      [{ ...gridEntry, insertBeforeWebViewType: 'not.in.this.panel' }],
+      'simple',
+    );
     expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
       'anchor-tab',
       'scripture-text-grid-tab',
@@ -128,12 +136,12 @@ describe('mergeDefaultLayoutSupplement', () => {
   });
   it('does not mutate the input layout', () => {
     const input = baseLayout();
-    mergeDefaultLayoutSupplement(input, [gridEntry]);
+    mergeDefaultLayoutSupplement(input, [gridEntry], 'simple');
     expect(tabsInFirstPanel(input).map((t) => t.id)).toEqual(['anchor-tab']);
   });
   it('is idempotent: does not add a tab whose id already exists', () => {
-    const once = mergeDefaultLayoutSupplement(baseLayout(), [gridEntry]);
-    const twice = mergeDefaultLayoutSupplement(once, [gridEntry]);
+    const once = mergeDefaultLayoutSupplement(baseLayout(), [gridEntry], 'simple');
+    const twice = mergeDefaultLayoutSupplement(once, [gridEntry], 'simple');
     expect(tabsInFirstPanel(twice).map((t) => t.id)).toEqual([
       'anchor-tab',
       'scripture-text-grid-tab',
@@ -166,7 +174,7 @@ describe('mergeDefaultLayoutSupplement', () => {
     } as unknown as BoxData;
     /* eslint-enable no-type-assertion/no-type-assertion */
 
-    const merged = mergeDefaultLayoutSupplement(layout, [gridEntry]);
+    const merged = mergeDefaultLayoutSupplement(layout, [gridEntry], 'simple');
     expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab']);
   });
   it('skips an entry whose anchor webViewType is not present', () => {
@@ -174,12 +182,113 @@ describe('mergeDefaultLayoutSupplement', () => {
       ...gridEntry,
       anchorWebViewType: 'does.not.exist',
     };
-    const merged = mergeDefaultLayoutSupplement(baseLayout(), [orphan]);
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [orphan], 'simple');
     expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab']);
   });
   it('returns the layout unchanged for an empty supplement', () => {
-    const merged = mergeDefaultLayoutSupplement(baseLayout(), []);
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [], 'simple');
     expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual(['anchor-tab']);
+  });
+});
+
+/** Reads the `isClosable` a merged tab carries, which lives inside the tab's web view data. */
+function isClosableOf(tab: SavedTabInfo | undefined): boolean | undefined {
+  // Tab data is `unknown` in the shared model; supplement tabs store a WebViewDefinition there.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return (tab?.data as { isClosable?: boolean } | undefined)?.isClosable;
+}
+
+/**
+ * The merged supplement tab, asserted present. Every pinning case below reads `isClosable` off it,
+ * and an absent tab reads as `undefined` — indistinguishable from "declared no pin" — so the
+ * presence check has to happen before the value is read or the cases could pass vacuously.
+ */
+function mergedGridTab(merged: LayoutBase): SavedTabInfo | undefined {
+  const gridTab = tabsInFirstPanel(merged).find((t) => t.id === 'scripture-text-grid-tab');
+  expect(gridTab).toBeDefined();
+  return gridTab;
+}
+
+/** The shipped entry's shape: pinned non-closable, and ordered before Simple mode's Find tab. */
+const pinnedGridEntry: DefaultLayoutSupplementEntry = {
+  ...gridEntry,
+  insertBeforeWebViewType: 'platformScripture.find',
+  tab: {
+    ...gridEntry.tab,
+    // Spreading the base entry's data so this differs from it only in the pin under test.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    data: { ...(gridEntry.tab.data as Record<string, unknown>), isClosable: false },
+  },
+};
+
+describe('mergeDefaultLayoutSupplement across interface modes', () => {
+  // The same entries are merged into both modes' layouts — simple mode's build-baked layout and
+  // power mode's persisted one — but an entry's ordering and pinning describe simple mode's fixed
+  // columns. Every case below is the power-mode half of a rule the simple-mode cases above assert.
+  it('keeps the entry pinning in simple mode', () => {
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [pinnedGridEntry], 'simple');
+    expect(isClosableOf(mergedGridTab(merged))).toBe(false);
+  });
+
+  it('drops the entry pinning in power mode', () => {
+    // A non-closable tab whose webViewType is in FIXED_LAYOUT_WEBVIEW_GROUPS is routed by
+    // getTabGroup to a column group that getGroups only registers in simple mode, so carrying the
+    // pin into a power-mode layout lands the tab in rc-dock's unknown-group fallback with no close
+    // button, until the provider's async response replaces it.
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [pinnedGridEntry], 'power');
+    expect(isClosableOf(mergedGridTab(merged))).toBe(true);
+  });
+
+  it('leaves an entry that declares no isClosable untouched in power mode', () => {
+    const merged = mergeDefaultLayoutSupplement(baseLayout(), [gridEntry], 'power');
+    expect(isClosableOf(mergedGridTab(merged))).toBeUndefined();
+  });
+
+  it('does not mutate the entry it rewrote the pinning on', () => {
+    // The rewrite has to clone: `entries` comes from a module-level JSON import that every
+    // subsequent load reuses, so mutating it would leak the first load's mode into all the others.
+    mergeDefaultLayoutSupplement(baseLayout(), [pinnedGridEntry], 'power');
+    expect(isClosableOf(pinnedGridEntry.tab)).toBe(false);
+  });
+
+  it('ignores insertBeforeWebViewType in power mode, appending instead', () => {
+    const layout = baseLayout();
+    tabsInFirstPanel(layout).push({
+      id: 'find-tab',
+      tabType: 'webView',
+      data: { webViewType: 'platformScripture.find', id: 'find-tab' },
+    });
+
+    const merged = mergeDefaultLayoutSupplement(layout, [pinnedGridEntry], 'power');
+
+    // The simple-mode case asserts the opposite order; power mode has no fixed column order for the
+    // tab to be placed relative to.
+    expect(tabsInFirstPanel(merged).map((t) => t.id)).toEqual([
+      'anchor-tab',
+      'find-tab',
+      'scripture-text-grid-tab',
+    ]);
+  });
+
+  it('reports no placement anomaly in power mode when the target is absent', () => {
+    // The warning exists to surface a typo or a renamed webViewType. Its target here is a simple-mode
+    // fixed-layout tab that cannot resolve in a power-mode panel, so firing would mean a warning on
+    // every power-mode load of a perfectly correct layout — noise in the one channel that is
+    // supposed to stay quiet.
+    const anomalies: string[] = [];
+    mergeDefaultLayoutSupplement(baseLayout(), [pinnedGridEntry], 'power', (_entry, message) =>
+      anomalies.push(message),
+    );
+    expect(anomalies).toEqual([]);
+  });
+
+  it('still reports a placement anomaly in simple mode when the target is absent', () => {
+    const anomalies: string[] = [];
+    mergeDefaultLayoutSupplement(baseLayout(), [pinnedGridEntry], 'simple', (_entry, message) =>
+      anomalies.push(message),
+    );
+    expect(anomalies).toHaveLength(1);
+    expect(anomalies[0]).toContain('platformScripture.find');
   });
 });
 
