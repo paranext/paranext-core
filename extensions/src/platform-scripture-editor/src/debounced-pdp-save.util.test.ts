@@ -165,3 +165,88 @@ describe('resolveUsjToSaveToPdp', () => {
     );
   });
 });
+
+// An UNDO must reach the file exactly the way typing does.
+//
+// Reported: a milestone marker was renamed (`\qt-s` -> `\qt1-s`), the rename saved, and then Ctrl+Z
+// restored the original name on screen while the FILE kept the renamed one. The cause was on the
+// editor side — an undo step that changed only engine-owned display bytes produced no delta ops, so
+// `onUsjChange` never fired and nothing here was ever asked to save (the editor now notifies off the
+// settled document on historic commits).
+//
+// This module is the save path that notification lands in, and it has no notion of where a change
+// came from — which is precisely the property worth pinning: an undone document must flow through
+// these two decision points identically to a typed one. If either the equality guard or the
+// fire-time branch ever grew a notion of "user edit" that an undo failed to satisfy, the editor-side
+// fix would be silently undone from this end.
+describe('an undone document reaches the PDP the same way a typed one does', () => {
+  const milestoneUsj = (marker: string): Usj => ({
+    type: 'USJ',
+    version: '3.1',
+    content: [
+      { type: 'para', marker: 'p', content: ['before ', { type: 'ms', marker }, ' after'] },
+    ],
+  });
+
+  const renamed = milestoneUsj('qt1-s'); // what the last save wrote to the file
+  const undone = milestoneUsj('qt-s'); // what the editor shows after Ctrl+Z
+
+  // The guard that decides whether to write at all. A marker rename is a real content difference,
+  // not whitespace, so undoing one must NOT be swallowed as "same as what's on disk".
+  it('does not suppress the write when an undo restored a different marker than the PDP holds', () => {
+    expect(resolveUsjToSaveToPdp(undone, renamed)).toEqual(undone);
+  });
+
+  // And the symmetric direction, so the pin above cannot pass by the guard simply never suppressing.
+  it('still suppresses the write when the undo left the document the PDP already holds', () => {
+    expect(resolveUsjToSaveToPdp(undone, undone)).toBeUndefined();
+  });
+
+  // The fire-time branch. An undo commonly lands AFTER the keystroke that scheduled the debounce,
+  // so the scheduled snapshot is the pre-undo document; reading the live editor is what lets the
+  // undone bytes overtake it. Pins that the undone document — not the stale renamed snapshot — is
+  // what gets saved.
+  it('saves the live undone editor content, not the pre-undo snapshot captured at schedule time', () => {
+    const latestSave = vi.fn();
+
+    performDebouncedPdpSave({
+      usj: renamed,
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|1',
+      capturedSave: vi.fn(),
+      latestSave,
+      getEditorUsj: vi.fn(() => undone),
+    });
+
+    expect(latestSave).toHaveBeenCalledWith(undone);
+    expect(JSON.stringify(latestSave.mock.calls[0][0])).not.toContain('qt1-s');
+  });
+
+  // The equivalence the defect report asks for, stated directly: hand the save path a document that
+  // arrived from an undo and one that arrived from typing, and the outcome is byte-identical.
+  it('treats an undo-sourced document and a typed document identically', () => {
+    const fromUndo = vi.fn();
+    const fromTyping = vi.fn();
+    const args = {
+      scheduledChapterKey: 'GEN|1',
+      currentChapterKey: 'GEN|1',
+      capturedSave: vi.fn(),
+    };
+
+    performDebouncedPdpSave({
+      ...args,
+      usj: renamed,
+      latestSave: fromUndo,
+      getEditorUsj: vi.fn(() => undone),
+    });
+    performDebouncedPdpSave({
+      ...args,
+      usj: renamed,
+      latestSave: fromTyping,
+      getEditorUsj: vi.fn(() => undone),
+    });
+
+    expect(fromUndo.mock.calls).toEqual(fromTyping.mock.calls);
+    expect(resolveUsjToSaveToPdp(fromUndo.mock.calls[0][0], renamed)).toEqual(undone);
+  });
+});
