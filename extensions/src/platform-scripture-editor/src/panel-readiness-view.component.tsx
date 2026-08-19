@@ -1,7 +1,7 @@
-import { Button, Spinner } from 'platform-bible-react';
+import { Button } from 'platform-bible-react';
 import { ReactNode } from 'react';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
-import { ErrorRetryView } from './install-state-views.component';
+import { InstallFailedView, LoadingView } from './panel-state-views.component';
 
 /**
  * Renders the front of a resource panel's state machine — everything before it has something to
@@ -20,42 +20,62 @@ import { ErrorRetryView } from './install-state-views.component';
  * @param readiness Which front state to show; `configured` renders nothing so the caller continues
  *   to its own downstream branches.
  * @param errorMessage Already-localized message for an unreadable configured-resource setting.
+ *   Carries the recovery expectation itself, because this state offers no control: nothing here can
+ *   re-drive the project-setting read, so a retry button would be inert. The setting stays watched
+ *   and the panel recovers on its own once it becomes readable.
+ * @param catalogErrorMessage Already-localized message for a failed resource-catalog fetch. Unlike
+ *   the settings error this one IS recoverable, so it is paired with a working retry.
+ * @param loadingLabel Already-localized status text shown beside the loading spinner.
  * @param emptyPrompt Already-localized prompt shown when nothing is configured.
  * @param pickLabel Already-localized label for the resource picker button.
- * @param retryLabel Already-localized label for the retry button.
- * @param onRetry Re-attempts reading the configured-resource setting.
+ * @param retryLabel Already-localized label for the catalog retry button.
  * @param onPick Opens the resource picker.
+ * @param onRetryCatalog Re-runs the resource-catalog fetch.
  */
 export function PanelReadinessView({
   readiness,
   errorMessage,
+  catalogErrorMessage,
+  loadingLabel,
   emptyPrompt,
   pickLabel,
   retryLabel,
-  onRetry,
   onPick,
+  onRetryCatalog,
 }: {
   readiness: ResourcePanelReadiness;
   errorMessage: ReactNode;
+  catalogErrorMessage: ReactNode;
+  loadingLabel: ReactNode;
   emptyPrompt: ReactNode;
   pickLabel: ReactNode;
   retryLabel: ReactNode;
-  onRetry: () => void;
   onPick: () => void;
+  onRetryCatalog: () => void;
 }): ReactNode {
   // An unreadable setting is its own answer — never the empty prompt, which would invite the user
   // to replace a resource that may already be configured.
   if (readiness === 'error') {
-    return <ErrorRetryView message={errorMessage} retryLabel={retryLabel} onRetry={onRetry} />;
-  }
-
-  if (readiness === 'loading') {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
+        <p>{errorMessage}</p>
       </div>
     );
   }
+
+  // A failed catalog fetch, unlike an unreadable setting, can genuinely be re-driven — so this
+  // state gets a control and the settings error does not.
+  if (readiness === 'catalogError') {
+    return (
+      <InstallFailedView
+        message={catalogErrorMessage}
+        retryLabel={retryLabel}
+        onRetry={onRetryCatalog}
+      />
+    );
+  }
+
+  if (readiness === 'loading') return <LoadingView label={loadingLabel} />;
 
   if (readiness === 'empty') {
     return (

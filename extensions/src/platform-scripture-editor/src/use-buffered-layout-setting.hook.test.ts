@@ -152,6 +152,46 @@ describe('useBufferedLayoutSetting', () => {
     expect(result.current[0]).toEqual(real);
   });
 
+  it('reports the error while the setting is unreadable and nothing has been applied yet', () => {
+    const error: PlatformError = newPlatformError('boom');
+
+    setRaw(DEFAULT, true);
+    const { result, rerender } = renderHook(() =>
+      useBufferedLayoutSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+    );
+
+    setRaw(error);
+    rerender();
+
+    // The held copy is still the placeholder here, so this channel is the ONLY way a consumer can
+    // tell "unreadable" from "configured with nothing" — `useTextCollectionSources` and
+    // `useEffectiveResourceReferenceList` both depend on it.
+    expect(result.current[2]).toBe(error);
+  });
+
+  it('keeps an applied value and reports no error when a later read fails', () => {
+    const real = { dataVersion: '1.0.0', items: [{ type: 'project', name: 'A', id: '1' }] };
+    const error: PlatformError = newPlatformError('boom');
+
+    setRaw(DEFAULT, true);
+    const { result, rerender } = renderHook(() =>
+      useBufferedLayoutSetting('proj-1', 'platformScripture.modelTexts', DEFAULT),
+    );
+
+    setRaw(real);
+    rerender();
+    expect(result.current[0]).toEqual(real);
+
+    // A read fails AFTER a real value was applied. Holding a good value across a failed re-read is
+    // the whole point of the buffer, so the panel must keep showing it rather than swap working
+    // content for an error message.
+    setRaw(error);
+    rerender();
+
+    expect(result.current[0]).toEqual(real);
+    expect(result.current[2]).toBeUndefined();
+  });
+
   it('warns when projectId changes in place (the unsupported no-remount case)', () => {
     setRaw(DEFAULT);
     const { rerender } = renderHook(
