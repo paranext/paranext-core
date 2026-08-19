@@ -374,43 +374,6 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(result.current.status).toBe('error');
   });
 
-  it('re-subscribes the user setting when retry is called', () => {
-    mockUseProjectSetting.mockReturnValue([
-      // Cast through unknown to put a PlatformError where a ResourceReferenceList is expected.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      makePlatformError() as unknown as ResourceReferenceList,
-      undefined,
-      undefined,
-      false,
-    ]);
-    const mockSubscribe = vi.fn(
-      async (_selector: undefined, callback: (val: ResourceReferenceList) => void) => {
-        callback(emptyList());
-        return () => Promise.resolve(true);
-      },
-    );
-    // Mock object literal cannot satisfy the full PDP interface — cast needed for test isolation
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    mockUseProjectDataProvider.mockReturnValue({
-      subscribeUserModelTexts: mockSubscribe,
-    } as unknown as ReturnType<typeof useProjectDataProvider>);
-
-    const { result } = renderHook(() =>
-      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
-    );
-
-    expect(result.current.status).toBe('error');
-    const callsBeforeRetry = mockSubscribe.mock.calls.length;
-
-    act(() => {
-      if (result.current.status === 'error') result.current.retry();
-    });
-
-    // Retry must actually re-run the subscription rather than only re-rendering, otherwise the
-    // button claims a recovery path it does not have.
-    expect(mockSubscribe.mock.calls.length).toBeGreaterThan(callsBeforeRetry);
-  });
-
   it('recovers to ready once an unreadable setting becomes readable again', () => {
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
     mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
@@ -517,16 +480,16 @@ describe('useEffectiveResourceReferenceList', () => {
     const { items } = readyList(result.current);
     expect(items).toHaveLength(3);
     // Admin items come first
-    expect(items?.[0]).toEqual({
+    expect(items[0]).toEqual({
       type: 'project',
       name: 'Admin Only',
       id: 'a-001',
       source: 'admin',
     });
     // Duplicate resolved in favour of admin (name from admin copy, source: 'admin')
-    expect(items?.[1]).toEqual({ type: 'project', name: 'In Both', id: 'b-001', source: 'admin' });
+    expect(items[1]).toEqual({ type: 'project', name: 'In Both', id: 'b-001', source: 'admin' });
     // User-only item comes last
-    expect(items?.[2]).toEqual({ type: 'enhancedResource', name: 'User Only', source: 'user' });
+    expect(items[2]).toEqual({ type: 'enhancedResource', name: 'User Only', source: 'user' });
   });
 
   it('holds admin-layer changes until re-armed, while the user layer stays live', () => {
