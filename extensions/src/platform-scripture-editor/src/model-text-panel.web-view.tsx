@@ -8,15 +8,15 @@ import {
   useScrollGroupScrRef,
 } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { usePromise } from 'platform-bible-react';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { isDblResourceReference } from './resource-reference.utils';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
@@ -51,35 +51,20 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // --- Raw data sources ---
 
-  const [effectiveModelTexts, isEffectiveModelTextsLoading] = useEffectiveResourceReferenceList(
+  const effectiveModelTextsState = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.modelTexts',
   );
+  const effectiveModelTexts =
+    effectiveModelTextsState.status === 'ready' ? effectiveModelTextsState.list : undefined;
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
     projectId,
   );
 
-  const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
-    useCallback(async () => {
-      if (fetchResources) {
-        // Sets the `fetchResources` flag to false which will trigger the promise again next render
-        // to fetch the resources
-        setFetchResources(false);
-        return Promise.resolve(undefined);
-      }
-
-      return papi.commands.sendCommand('platformGetResources.getCachedResources');
-    }, [fetchResources]),
-    undefined,
-  );
-  const dblResources = useMemo(
-    () => resourcesPossiblyUndefined ?? [],
-    [resourcesPossiblyUndefined],
-  );
+  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
 
   // --- Dynamic title: "Model text: {displayName}" when a resource is loaded ---
   // Computed inline (rather than in the presentational component) because updateWebViewDefinition
@@ -135,11 +120,10 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
   // provider resolves — its identity change then re-fires the panel's auto-install effect for the
   // real install.
-  const markResourcesStale = useCallback(() => setFetchResources(true), []);
   const installResource = useInstallDblResource(
     dblResourcesProvider,
     'model text panel',
-    markResourcesStale,
+    refetchCatalog,
   );
 
   const setUserModelTexts = useCallback(
@@ -197,9 +181,11 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       localizedStrings={localizedStrings}
       hasProject={projectId !== undefined}
       effectiveModelTexts={effectiveModelTexts}
-      isEffectiveModelTextsLoading={isEffectiveModelTextsLoading}
+      modelTextsStatus={effectiveModelTextsState.status}
       dblResources={dblResources}
-      isLoadingResources={isLoadingResources}
+      isCatalogReady={isCatalogReady}
+      hasCatalogError={hasCatalogError}
+      onRetryCatalog={refetchCatalog}
       getUserModelTexts={getUserModelTexts}
       scrRef={scrRef}
       onScrRefChange={setScrRef}

@@ -36,6 +36,10 @@ const STRINGS = {
     "The model text couldn't be installed. Check your connection and try again.",
   '%webView_modelTextPanel_retry%': 'Try again',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
+  '%webView_modelTextPanel_catalogUnavailable%': "Couldn't load the list of available resources.",
+  '%webView_modelTextPanel_loading%': 'Loading…',
+  '%webView_modelTextPanel_settingsUnavailable%':
+    "Couldn't load your model text. It will appear once it's available.",
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -67,9 +71,11 @@ function makeProps(overrides: Partial<ModelTextPanelProps> = {}): ModelTextPanel
     localizedStrings: STRINGS,
     hasProject: true,
     effectiveModelTexts: { dataVersion: '1.0.0', items: [] },
-    isEffectiveModelTextsLoading: false,
+    modelTextsStatus: 'ready',
+    isCatalogReady: true,
+    hasCatalogError: false,
+    onRetryCatalog: vi.fn(),
     dblResources: [],
-    isLoadingResources: false,
     getUserModelTexts: async () => undefined,
     installResource: vi.fn(async () => {}),
     setUserModelTexts: vi.fn(async () => {}),
@@ -276,5 +282,60 @@ describe('ModelTextPanel', () => {
         "The model text couldn't be installed. Check your connection and try again.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it('shows the settings-unavailable error instead of the empty prompt when the setting cannot be read', () => {
+    // An unreadable setting is not "nothing configured": offering only the picker would invite the
+    // user to reconfigure a model text that may already be set.
+    render(<ModelTextPanel {...makeProps({ modelTextsStatus: 'error' })} />);
+
+    expect(
+      screen.getByText("Couldn't load your model text. It will appear once it's available."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+  });
+
+  it('offers no controls in the settings-error state', () => {
+    render(<ModelTextPanel {...makeProps({ modelTextsStatus: 'error' })} />);
+
+    // Nothing in this panel can re-drive the project-setting read, so any button here would be
+    // inert. The message carries the recovery expectation instead; the setting stays watched and
+    // the panel recovers on its own.
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('does not claim the model text is missing while the resource catalog has not arrived', () => {
+    // A configured DBL resource matches nothing until the catalog lands, so answering "could not be
+    // found" here is a guess dressed as a fact — and it renders a Pick button that invites the user
+    // to replace a model text that is configured and fine.
+    render(
+      <ModelTextPanel
+        {...makeProps({
+          effectiveModelTexts: configuredModelText('uid-web'),
+          dblResources: [],
+          isCatalogReady: false,
+        })}
+      />,
+    );
+
+    expect(
+      screen.queryByText('The selected model text could not be found.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not show the empty prompt while the configured list is still resolving', () => {
+    // The defect this guards: the loading and empty states shared one branch, so any gap in the
+    // nested ternary that re-decided between them fell through to the empty prompt.
+    render(
+      <ModelTextPanel
+        {...makeProps({
+          effectiveModelTexts: undefined,
+          modelTextsStatus: 'loading',
+        })}
+      />,
+    );
+
+    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
   });
 });

@@ -466,3 +466,65 @@ step, no automation. Just a record.
   error alike as unknown, failing open.
 - **Source:** PT-3954 (Sync button on toolbar sometimes does not show), with the activation timeline
   measured from a Paratext 10 Studio `main.log`.
+
+## ADR-0014: Panel readiness is derived from whether data sources arrived, never from a filtered result
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** The Model Text and Resource (Bible Texts / Commentaries) panels each decided "is
+  anything configured?" from a value that is only meaningful *after* its data had arrived, and each
+  did it differently. `useEffectiveResourceReferenceList` returned `[list | undefined, boolean]`
+  where the list accounted for two async sources (the project-level setting and a user-level PDP
+  subscription) but the boolean reported only the first — so the normal interleaving on essentially
+  every mount, where the project setting resolves before the user subscription delivers, was
+  reported as "not loading, nothing configured". The resource panel separately gated its spinner on
+  `filteredResources.length !== 0`, a list filtered against a DBL catalog that had not loaded yet,
+  so the guard could not fire during the exact window it existed for. Both rendered "No … selected"
+  with a Pick button for a correctly-configured resource, inviting the user to replace something
+  that was already set. A read failure compounded it: `useBufferedLayoutSetting` applied a
+  `PlatformError` to its held copy and disarmed, so a transient failure latched for the session.
+- **Decision:** Readiness is a first-class, data-derived signal evaluated before any empty or
+  not-found branch. `useEffectiveResourceReferenceList` returns a discriminated
+  `{ status: 'loading' | 'error' | 'ready' }` whose `loading` covers *both* sources and whose
+  `ready` may legitimately carry zero items — the only state in which a panel may render its empty
+  prompt. `getResourcePanelReadiness` (`resource-panel-readiness.utils.ts`) maps list status
+  plus catalog arrival to `loading | error | catalogError | empty | configured`, and
+  `PanelReadinessView` renders those states. **Both** panels route through them: the Model Text
+  panel takes the list status as one prop rather than separate loading/error booleans, so neither
+  panel can drift from the other on the question that caused this bug. The catalog itself is fetched
+  by one hook, `useDblResourceCatalog`, which owns the "has it arrived?" distinction the whole fix
+  hinges on and catches a rejected fetch — `usePromise` has no rejection path, so an uncaught
+  rejection never clears its loading flag and would strand the panel on a spinner forever. `useBufferedLayoutSetting` no longer latches a read error:
+  its mount arm skips a `PlatformError` and stays armed, and reports the live error on a third
+  tuple element, because at that point the held value is the placeholder and is indistinguishable
+  from a genuinely empty setting.
+- **Alternatives:** **Split the model panel's merged loading/empty conditional, as the ticket
+  proposed** — rejected as insufficient: in the failing window both `isEffectiveModelTextsLoading`
+  and `isLoadingResources` are `false`, so there is no honest signal to split on; the hook's
+  contract had to be fixed first. **Keep the tuple and widen the boolean** — rejected: it makes the
+  error state unrepresentable, and an unreadable setting would have to masquerade as either loading
+  (spins forever) or ready-and-empty (the original bug). **Treat an unreadable setting as
+  not-ready** — rejected: it trades a premature empty state for an endless spinner with no recovery.
+- **Consequences:** "Nothing configured at all" is deliberately kept catalog-independent, so a
+  genuinely unconfigured project still gets its pick prompt immediately rather than waiting on a
+  fetch; only "does a configured item belong to *this* panel?" waits for the catalog. The two failure
+  states differ in whether they offer a control, and that difference is the point. A catalog fetch
+  can genuinely be re-driven, so `catalogError` carries a working retry. A project-setting read
+  cannot be — nothing in either panel can force one, and user-layer errors are swallowed to the
+  default list — so `error` shows a message alone. An inert control in a state that withholds every
+  other affordance is worse than no control, so that message carries the recovery expectation
+  instead: the setting stays watched and the panel recovers on its own. The error is also reported only while no
+  readable value has ever been applied; once one has, holding it across a failed re-read is the job
+  the buffer exists to do, so a later failure must not replace working content. Un-latching is not a free
+  improvement for existing consumers: because the held value is now the placeholder rather than the
+  error, any consumer that detected failure via `isPlatformError(heldValue)` alone silently starts
+  reading an unreadable setting as an empty one. `useTextCollectionSources`, the hook's other
+  consumer, had to be updated to read the error channel for exactly this reason — a new consumer of
+  `useBufferedLayoutSetting` must check the third tuple element, not just the held value.
+  `InstallFailedView` keeps its name and its scope: it is for failures a retry can act on, which the
+  settings-read failure is not. Panels that grow a third async source must extend the readiness
+  signal rather than add another flag — the bug class here is precisely one guard being unaware of
+  one source.
+- **Source:** PT-4347 (NN 5C Resource panel shows correct loading state), whose named root cause —
+  the merged conditional in `model-text-panel.component.tsx` — proved to be the symptom site rather
+  than the defect.
