@@ -37,30 +37,3 @@ export const InsideWizardStepForm: Story = {
     </WizardStepForm>
   ),
 };
-
-/**
- * The weights the wizard actually ships today. Four of the five steps use this component
- * (`font-semibold`) — identify, sync consent and internet settings via `WizardStepForm` or
- * directly, plus language. Only `SyncProgressStep` still hand-rolls `font-medium`, in two places,
- * one per render branch. Those two sit inside progress/complete states that deserve their own
- * visual pass rather than a drive-by weight change, so they are left to PT-4402; this story exists
- * so the remaining mismatch is visible rather than buried in a TSDoc note.
- */
-export const WeightMismatchToday: Story = {
-  render: () => (
-    <div className="tw:flex tw:flex-col tw:gap-4">
-      <div>
-        <p className="tw:text-xs tw:text-muted-foreground">
-          WizardStepHeading — identify, sync consent, internet settings, language
-        </p>
-        <WizardStepHeading>Internet &amp; connectivity</WizardStepHeading>
-      </div>
-      <div>
-        <p className="tw:text-xs tw:text-muted-foreground">
-          Hand-rolled font-medium — sync progress only
-        </p>
-        <h2 className="tw:text-base tw:font-medium">Syncing your projects</h2>
-      </div>
-    </div>
-  ),
-};
