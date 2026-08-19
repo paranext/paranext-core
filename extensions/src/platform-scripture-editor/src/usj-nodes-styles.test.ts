@@ -65,6 +65,24 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       );
     });
 
+    // A \va/\vp value and its glyphs live inside one AttributeRunNode wrapper that already
+    // carries `font-size: 66%`. Without this reset the 0.7em glyph rule above compounds against
+    // that wrapper (0.7 x 0.66 ~= 46% of the paragraph), so the glyphs read visibly smaller than
+    // the value they belong to. The four-class selector outranks the three-class glyph rule, so
+    // the reset wins on specificity rather than declaration order.
+    it('keeps \\va/\\vp glyphs the same size as their value instead of compounding', () => {
+      expect(scss).toContain(
+        '.formatted-font.marker-editable .usfm_va .opening,\n' +
+          '.formatted-font.marker-editable .usfm_va .closing,\n' +
+          '.formatted-font.marker-editable .usfm_va .selfClosing,\n' +
+          '.formatted-font.marker-editable .usfm_vp .opening,\n' +
+          '.formatted-font.marker-editable .usfm_vp .closing,\n' +
+          '.formatted-font.marker-editable .usfm_vp .selfClosing {\n' +
+          '  font-size: 100%;\n' +
+          '}',
+      );
+    });
+
     it('drops the verse badge background in Standard view (PT9 has no verse badge)', () => {
       expect(scss).toMatch(
         /\.formatted-font\.marker-editable \.verse \{[^}]*background-color: transparent;[^}]*\}/,
