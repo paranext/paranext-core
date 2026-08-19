@@ -37,7 +37,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%firstRun_step_syncConsent_body%':
         'When working on shared projects, syncing updates your local copy and shares your changes with others.',
       '%firstRun_button_sync%': 'Sync',
-      '%firstRun_button_skipSync%': 'Skip automatic sync',
+      '%firstRun_button_dontSyncYet%': "Don't sync yet",
       '%firstRun_step_syncProgress_heading%': 'Syncing your projects.',
       '%firstRun_step_syncProgress_body%': 'Setting up your projects.',
       '%firstRun_step_syncProgress_complete_heading%': 'Sync complete',
