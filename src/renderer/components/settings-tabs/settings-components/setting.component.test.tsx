@@ -102,3 +102,46 @@ describe('Setting disabled forwarding', () => {
     expect(screen.getByRole('textbox')).not.toBeDisabled();
   });
 });
+
+// The setting's label must name its control, or a screen reader announces an unnamed switch/textbox
+// and clicking the label does nothing.
+describe('Setting label association', () => {
+  it('names the Switch for a boolean setting', () => {
+    render(<Setting {...baseProps} settingKey="platform.isEditable" setting label="Editable" />);
+    expect(screen.getByRole('switch')).toHaveAccessibleName('Editable');
+  });
+
+  it('names the Input for a string setting', () => {
+    render(
+      <Setting {...baseProps} settingKey="platform.language" setting="English" label="Language" />,
+    );
+    expect(screen.getByRole('textbox')).toHaveAccessibleName('Language');
+  });
+
+  it('names the JSON-editor Input for an object setting', () => {
+    render(
+      <Setting
+        {...baseProps}
+        settingKey="platformScripture.modelTexts"
+        setting={{ dataVersion: '1.1.0', items: [] }}
+        label="Model texts"
+      />,
+    );
+    expect(screen.getByRole('textbox')).toHaveAccessibleName('Model texts');
+  });
+  it('leaves the label unassociated for the interface-language composite', () => {
+    // UiLanguageSelector puts its `id` on a wrapper div, which `htmlFor` cannot label — so the
+    // opt-out is deliberate. Pointing the label at `controlId` here would dangle instead.
+    // interfaceLanguage is a user setting, and the props union forbids the project validator there.
+    const userSettingProps = { setSetting: baseProps.setSetting, isLoading: baseProps.isLoading };
+    render(
+      <Setting
+        {...userSettingProps}
+        settingKey="platform.interfaceLanguage"
+        setting={['en']}
+        label="Interface language"
+      />,
+    );
+    expect(screen.getByText('Interface language')).not.toHaveAttribute('for');
+  });
+});
