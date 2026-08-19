@@ -123,16 +123,38 @@ describe('buildFindWebViewFields', () => {
   });
 
   describe('state', () => {
-    it('scrubs a stale read-only flag rather than carrying it over', () => {
+    it('scrubs a stale read-only flag when the caller re-points the project', () => {
       // Without this, a Find left read-only from following the editor onto a published resource
       // would come back read-only after being re-pointed at a writable project, and Replace would
       // stay disabled with nothing on screen explaining why.
       const fields = buildFindWebViewFields(
-        savedWebView({ state: { isReadOnly: true } }),
-        {},
+        savedWebView({ projectId: 'resource', state: { isReadOnly: true } }),
+        { projectId: 'writable-project' },
         'simple',
         LOCALIZED_TITLE,
       );
+
+      expect(fields.state.isReadOnly).toBe(false);
+    });
+
+    it('keeps a saved read-only flag when the caller re-points nothing', () => {
+      // Layout hydration reloads with `{ bringToFront: false }` alone, so `projectId` falls back to
+      // the saved value. Scrubbing here too would restore a Find still bound to a published resource
+      // with Replace enabled on text the project rejects — the flag has to follow the project it
+      // describes.
+      const fields = buildFindWebViewFields(
+        savedWebView({ projectId: 'resource', state: { isReadOnly: true } }),
+        {},
+        'power',
+        LOCALIZED_TITLE,
+      );
+
+      expect(fields.projectId).toBe('resource');
+      expect(fields.state.isReadOnly).toBe(true);
+    });
+
+    it('defaults to writable when neither the caller nor the saved state says otherwise', () => {
+      const fields = buildFindWebViewFields(savedWebView(), {}, 'simple', LOCALIZED_TITLE);
 
       expect(fields.state.isReadOnly).toBe(false);
     });

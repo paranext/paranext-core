@@ -945,9 +945,10 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   }
   // KNOWN POWER-MODE LIMITATION (safe today — simple mode is the default and is immune): power mode
   // persists the merged layout, so a supplement tab saved while its flag was on lingers after a
-  // flag-off run — provider-less and, if `isClosable: false`, uncloseable. (Changing a tab's id
-  // across versions likewise leaves a duplicate, since we dedup by exact id.) Fix when power mode
-  // lands: drop persisted supplement tabs whose provider is no longer registered.
+  // flag-off run — provider-less, though closable, since the merge drops an entry's Simple-mode
+  // `isClosable: false` pin outside simple mode. (Changing a tab's id across versions likewise
+  // leaves a duplicate, since we dedup by exact id.) Fix when power mode lands: drop persisted
+  // supplement tabs whose provider is no longer registered.
   // LayoutInfo is intentionally opaque in the shared model; cross to the concrete rc-dock shape here,
   // mirroring platform-dock-layout.component.tsx
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -955,6 +956,10 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   const supplementedLayout = mergeDefaultLayoutSupplement(
     layoutToLoadAsBase,
     enabledEntries,
+    // The mode this layout belongs to. Each entry describes a tab's place in simple mode's fixed
+    // columns, and this merge also runs against power mode's persisted layout, so the merge needs to
+    // be told which one it is looking at rather than assuming the entries' home mode.
+    interfaceMode,
     (entry, message) =>
       logger.warn(`mergeDefaultLayoutSupplement: supplement tab '${entry.tab.id}': ${message}`),
   );

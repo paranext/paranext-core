@@ -299,8 +299,18 @@ const REUSE_EXISTING_FIND_ONLY = { existingId: '?', createNewIfNotFound: false }
  * Deliberately does not create a Find web view when none is open: outside the fixed Simple-mode
  * layout, Find is a panel the user opens explicitly, and a project switch is not a request to open
  * it.
+ *
+ * `editorWebViewId` matters because a project switch that replaces the editor tab mints a _new_
+ * editor web view id. Find caches the id it was given and uses it for `papi.window.setFocus` and
+ * for the `selectRange` / `setAnnotation` calls that jump to and highlight a clicked result, all of
+ * which it skips silently once the id no longer resolves — leaving result clicks degraded to
+ * scroll-group navigation with no selection and no highlight. The caller must therefore pass the id
+ * of the editor the switch produced, which is only knowable after that editor's web view exists.
  */
-async function updateFindProject(projectId: string): Promise<string | undefined> {
+async function updateFindProject(
+  projectId: string,
+  editorWebViewId?: string,
+): Promise<string | undefined> {
   const findWebViewId = await papi.webViews.openWebView(findWebViewType, undefined, {
     ...REUSE_EXISTING_FIND_ONLY,
     // Both calls here opt out explicitly, because `bringToFront` defaults to TRUE on the probe and
@@ -312,7 +322,15 @@ async function updateFindProject(projectId: string): Promise<string | undefined>
   if (!findWebViewId) return undefined;
 
   const existingFindWebViewDefinition = await papi.webViews.getOpenWebViewDefinition(findWebViewId);
-  if (existingFindWebViewDefinition?.projectId === projectId) return findWebViewId;
+  // Both halves have to match to skip the reload. Checking the project alone would skip it for a
+  // switch that replaced the editor without changing the project (re-opening the same project, or
+  // toggling read-only), which is exactly the case that leaves Find holding a dead editor id.
+  if (
+    existingFindWebViewDefinition?.projectId === projectId &&
+    (editorWebViewId === undefined ||
+      existingFindWebViewDefinition?.state?.editorWebViewId === editorWebViewId)
+  )
+    return findWebViewId;
 
   const options: FindWebViewOptions = {
     projectId,
@@ -320,9 +338,11 @@ async function updateFindProject(projectId: string): Promise<string | undefined>
     // `scrollGroupScrRef`, so dropping it would unbind the Find tab from the scroll group it shares
     // with the editor.
     editorScrollGroupId: existingFindWebViewDefinition?.scrollGroupScrRef,
-    // Only ever called for the active translation project, which is editable by definition — this
-    // also clears a read-only flag left behind by a Find that had followed the editor onto a
-    // published resource.
+    editorWebViewId,
+    // Callers re-point Find at the project the editor column just moved to, and the editor column
+    // only ever moves to an editable project — the one place that opens a read-only resource there
+    // deliberately leaves the Column 3 panels where they are. Passing `false` explicitly also clears
+    // a read-only flag left behind by a Find that had followed an editor onto a published resource.
     isReadOnly: false,
     bringToFront: false,
   };

@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import { BoxData, LayoutBase, PanelData } from 'rc-dock';
 import { readdirSync, readFileSync } from 'fs';
 import { resolve } from 'path';
-import { SavedTabInfo, TabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
+import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { simpleLayout } from './simple-layout.data';
 import defaultLayoutSupplement from './default-layout-supplement.json';
 import { mergeDefaultLayoutSupplement } from './default-layout-supplement.util';
@@ -10,6 +10,7 @@ import { DefaultLayoutSupplementEntry } from './default-layout-supplement.model'
 import {
   getTabGroup,
   HEADLESS_GROUP,
+  TAB_GROUP,
   TAB_GROUP_RESOURCES,
 } from './platform-dock-layout-positioning.util';
 
@@ -38,14 +39,38 @@ function webViewTypeOf(tab: unknown): string | undefined {
   return data?.webViewType;
 }
 
-/** Returns the webViewTypes of a column's single panel, in the order they appear. */
-function columnWebViewTypes(layout: LayoutBase, columnIndex: number): (string | undefined)[] {
+/** Returns the saved tabs of a column's single panel, in the order they appear. */
+function columnTabs(layout: LayoutBase, columnIndex: number): SavedTabInfo[] {
   // Narrowing rc-dock's generic union to the concrete shape this layout uses.
   /* eslint-disable no-type-assertion/no-type-assertion */
   const column = (layout.dockbox as BoxData).children[columnIndex] as BoxData;
   const panel = column.children[0] as PanelData;
+  return panel.tabs as unknown as SavedTabInfo[];
   /* eslint-enable no-type-assertion/no-type-assertion */
-  return panel.tabs.map(webViewTypeOf);
+}
+
+/** Returns the webViewTypes of a column's single panel, in the order they appear. */
+function columnWebViewTypes(layout: LayoutBase, columnIndex: number): (string | undefined)[] {
+  return columnTabs(layout, columnIndex).map(webViewTypeOf);
+}
+
+/**
+ * The `TabInfo` the dock layout would build for a saved layout tab, as far as `getTabGroup` reads
+ * it: the group is decided by `isClosable` plus the web view type, so those are the two fields that
+ * have to survive from the saved data.
+ */
+function toTabInfo(tab: SavedTabInfo): TabInfo {
+  // Tab data is `unknown` in the shared model; layout and supplement tabs store a WebViewDefinition.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const data = tab.data as { webViewType?: string; isClosable?: boolean } | undefined;
+  return {
+    id: tab.id,
+    tabType: tab.tabType,
+    tabTitle: 'Test',
+    content: undefined,
+    isClosable: data?.isClosable,
+    data: { id: tab.id, webViewType: data?.webViewType },
+  };
 }
 
 /** Every webViewType anywhere in the static layout. */
@@ -119,21 +144,14 @@ describe('shipped Simple-mode Column 3 order', () => {
     // the map falls back to TAB_GROUP, which IS registered in simple mode, so no error surfaces —
     // the tab just becomes draggable across columns, defeating the confinement the map exists to
     // provide.
-    const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries);
+    const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
     const expectedGroups = [HEADLESS_GROUP, HEADLESS_GROUP, TAB_GROUP_RESOURCES];
 
     [0, 1, 2].forEach((columnIndex) => {
-      columnWebViewTypes(merged, columnIndex).forEach((webViewType) => {
-        const tabInfo: TabInfo = {
-          id: `${webViewType}-tab`,
-          tabType: TAB_TYPE_WEBVIEW,
-          tabTitle: 'Test',
-          content: undefined,
-          // Pinned tabs are exactly the non-closable ones; that is what routes them to a column group.
-          isClosable: false,
-          data: { id: `${webViewType}-tab`, webViewType },
-        };
-        expect(getTabGroup(tabInfo)).toBe(expectedGroups[columnIndex]);
+      columnTabs(merged, columnIndex).forEach((tab) => {
+        // Read from the merged layout rather than forced: pinned tabs are exactly the non-closable
+        // ones, so a tab that lost its pin would land in TAB_GROUP here and fail, which is the point.
+        expect(getTabGroup(toTabInfo(tab))).toBe(expectedGroups[columnIndex]);
       });
     });
   });
@@ -168,7 +186,7 @@ describe('shipped Simple-mode Column 3 order', () => {
       });
     }
 
-    const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries);
+    const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
     const pinnedTypes = [0, 1, 2].flatMap((index) => columnWebViewTypes(merged, index));
     expect(pinnedTypes.length).toBeGreaterThan(0);
 
@@ -190,7 +208,7 @@ describe('shipped Simple-mode Column 3 order', () => {
   });
 
   it('merging the real supplement puts Text Collection before Find', () => {
-    const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries);
+    const merged = mergeDefaultLayoutSupplement(simpleLayout, supplementEntries, 'simple');
 
     expect(columnWebViewTypes(merged, 2)).toEqual([
       'platformScriptureEditor.bibleTexts',
@@ -201,6 +219,28 @@ describe('shipped Simple-mode Column 3 order', () => {
     ]);
   });
 
+  it('the real supplement leaves nothing Simple-mode-only behind in a power-mode merge', () => {
+    // The shipped entry's two Simple-mode-only properties are what this asserts, so the layout it is
+    // merged into only has to contain the anchor — there is no power-mode layout fixture to use
+    // instead, because a power-mode layout is whatever the user arranged. `isClosable: false` would
+    // route the tab to TAB_GROUP_RESOURCES, a group `getGroups(true)` never registers, and the
+    // ordering request names a tab that only Simple mode's fixed layout has.
+    const anomalies: string[] = [];
+    const merged = mergeDefaultLayoutSupplement(
+      simpleLayout,
+      supplementEntries,
+      'power',
+      (_entry, message) => anomalies.push(message),
+    );
+
+    expect(anomalies).toEqual([]);
+    const pinnedInPowerMode = [0, 1, 2]
+      .flatMap((index) => columnTabs(merged, index))
+      .filter((tab) => supplementEntries.some((entry) => entry.tab.id === tab.id))
+      .filter((tab) => getTabGroup(toTabInfo(tab)) !== TAB_GROUP);
+    expect(pinnedInPowerMode).toEqual([]);
+  });
+
   it('reports a placement anomaly instead of silently appending when the target is missing', () => {
     const anomalies: string[] = [];
     const brokenEntries = supplementEntries.map((entry) => ({
@@ -208,8 +248,11 @@ describe('shipped Simple-mode Column 3 order', () => {
       insertBeforeWebViewType: 'platformScripture.findTypo',
     }));
 
-    const merged = mergeDefaultLayoutSupplement(simpleLayout, brokenEntries, (_entry, message) =>
-      anomalies.push(message),
+    const merged = mergeDefaultLayoutSupplement(
+      simpleLayout,
+      brokenEntries,
+      'simple',
+      (_entry, message) => anomalies.push(message),
     );
 
     expect(anomalies).toHaveLength(brokenEntries.length);

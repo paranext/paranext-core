@@ -509,11 +509,11 @@ export function Find({
   // Why Replace/Replace All are withheld this render, if they are. Both buttons and the explanatory
   // note read from this single resolution so they can never disagree about whether replace is
   // possible or about which reason to name.
-  const replaceUnavailableReason = getReplaceUnavailableReason(
+  const replaceUnavailableReason = getReplaceUnavailableReason({
     isReadOnly,
     isStructureProtected,
     isReplacementStructureChanging,
-  );
+  });
   const replaceUnavailableTooltip =
     replaceUnavailableReason === 'readOnly'
       ? localizedStrings['%webView_find_replace_readOnlyTooltip%']

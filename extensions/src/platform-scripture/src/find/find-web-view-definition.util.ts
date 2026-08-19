@@ -61,9 +61,9 @@ export function buildFindWebViewFields(
     // Set unconditionally rather than gated on simple mode. `PlatformTabTitle` already suppresses a
     // tooltip that merely repeats the visible title unless the tab is collapsed to icon-only, and
     // its comment names this exact caller pattern — so a mode gate here would only re-implement that
-    // suppression one layer further out. Gating it also produced a no-op in the power arm, since the
-    // provider spreads `savedWebView` first and is the only writer of this field, making
-    // `savedWebView.tooltip` a self-assignment.
+    // suppression one layer further out. A power-mode arm would have nothing to put there anyway:
+    // the provider spreads `savedWebView` first and is the only writer of this field, so falling back
+    // to `savedWebView.tooltip` is a self-assignment.
     tooltip: localizedTitle,
     projectId: options.projectId || savedWebView.projectId || undefined,
     // This is the fixed Column 3 Find tab and must always remain open in simple mode, so it's
@@ -88,12 +88,16 @@ export function buildFindWebViewFields(
     state: {
       ...savedWebView.state,
       editorWebViewId: options.editorWebViewId ?? savedWebView.state?.editorWebViewId,
-      // Always recomputed from the incoming options rather than carried over from the saved state,
-      // and defaulted to writable when the caller says nothing. Every path that re-points Find at a
-      // project goes through here and supplies this, so a stale `true` left over from a session
-      // spent on a resource can never outlive the switch back to a translation project and leave
-      // Replace mysteriously disabled.
-      isReadOnly: options.isReadOnly ?? false,
+      // Recomputed whenever the caller re-points the project, and carried over otherwise — the same
+      // asymmetry `projectId` above has, and for the same reason. A caller that names a project is
+      // stating what Find is now bound to, so an omitted `isReadOnly` there means writable, and a
+      // stale `true` from a session spent on a resource cannot outlive the switch back to a
+      // translation project and leave Replace mysteriously disabled. A caller that names no project
+      // is not re-pointing anything: layout hydration reloads with `{ bringToFront: false }` alone,
+      // keeping the saved `projectId`, so defaulting to writable there would restore a Find bound to
+      // a published resource with Replace enabled on text the project rejects.
+      isReadOnly:
+        options.isReadOnly ?? (options.projectId ? false : !!savedWebView.state?.isReadOnly),
       ...(options.initialSearchText ? { findSearchTerm: options.initialSearchText } : {}),
     },
   };
