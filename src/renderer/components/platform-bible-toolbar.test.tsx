@@ -217,7 +217,14 @@ beforeEach(() => {
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
 });
 
-const mockSendCommand = (isSendReceiveAvailable: boolean) => {
+const mockSendCommand = (
+  isSendReceiveAvailable: boolean,
+  /**
+   * What `getSyncState` answers. The sync status refuses to report success without evidence of it,
+   * so a test driving a sync to completion has to supply the results that say it succeeded.
+   */
+  syncState?: unknown,
+) => {
   vi.mocked(sendCommand).mockImplementation(
     // sendCommand has a complex generic signature; cast is required for the mock implementation
     // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
@@ -226,6 +233,7 @@ const mockSendCommand = (isSendReceiveAvailable: boolean) => {
         return isSendReceiveAvailable;
       if (commandName === 'platform.getOSPlatform') return 'win32';
       if (commandName === 'platform.isFullScreen') return false;
+      if (commandName === 'paratextBibleSendReceive.getSyncState') return syncState;
       return undefined;
       // sendCommand has a complex generic signature; cast is required for the mock implementation
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
@@ -361,9 +369,11 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  // What the button reports and does once rendered — status labels, the popover, Cancel — is
-  // covered by sync-status-button.component.test.tsx. This suite stays on the toolbar's own
-  // question: whether the button is rendered at all.
+  // The button's own behavior — the popover, Cancel, project names, failure reporting — is covered
+  // by sync-status-button.component.test.tsx, which drives the real component. What stays here is
+  // the toolbar's question: whether the button appears at all, and whether the status the toolbar
+  // renders it with tracks the sync-state event, since the toolbar is what mounts it (and mounts it
+  // before send/receive availability has settled).
 
   it('shows Syncing label when onSyncStateChanged fires with isSyncing: true', async () => {
     let capturedSyncStateCallback: ((arg: { isSyncing: boolean }) => void) | undefined;
@@ -420,11 +430,20 @@ describe('PlatformBibleToolbar — Sync button', () => {
       }) as any,
     );
 
-    mockSendCommand(true);
+    // A sync that ENDED is only "Synced" if it succeeded, which the results are what establish.
+    mockSendCommand(true, {
+      isSyncing: false,
+      lastRequestedProjectIds: ['proj1'],
+      syncingProjectIds: [],
+      lastResults: {
+        sendReceiveDate: '2026-08-19T00:00:00Z',
+        resultsInfo: { proj1: { id: 'proj1', resultStatus: 'succeeded' } },
+      },
+    });
     render(<PlatformBibleToolbar />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
     });
 
     expect(capturedSyncStateCallback).toBeDefined();

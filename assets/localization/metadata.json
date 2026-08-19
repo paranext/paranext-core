@@ -157,6 +157,12 @@
       "message": "This exists to test deprecating localized strings. Do not remove or use."
     }
   },
+  "%toolbar_sync_unavailable%": {
+    "deprecationInfo": {
+      "date": "2026-08-19",
+      "message": "The toolbar sync button no longer opens the sync status web view on click, so it no longer has a click that can fail with \"sync isn't available\". A cancel that can't be delivered now uses %toolbar_sync_cancel_unavailable%, and an unreadable status is shown in the popover with %toolbar_sync_popover_unknown%."
+    }
+  },
   "%toolbar_theme_change_to_dark%": {
     "deprecationInfo": {
       "date": "2026-06-10",

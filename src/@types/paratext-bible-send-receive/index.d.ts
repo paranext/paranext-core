@@ -12,6 +12,11 @@
 // Likewise for declarations that exist in BOTH copies: a re-sync must not downgrade a richer
 // declaration here (extra doc detail or type refinements) to a poorer upstream one — merge the
 // two, and upstream the improvement instead.
+// DELIBERATE DIVERGENCE — do not "restore" these to match upstream on a re-sync. Each is optional
+// here and required upstream because a shipped Paratext 10 Studio build answers without it; making
+// it required again turns each consumer's `?? fallback` into a lint-flagged unnecessary coalesce,
+// and removing that coalesce crashes an older Studio build on the missing value:
+//   * `SyncState.syncingProjectIds`
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -424,7 +429,15 @@ declare module 'papi-shared-types' {
      *
      * An in-memory read in the extension host; cheap enough to call on mount and on each state
      * change. Rejects if the Send/Receive extension has not registered its commands yet (a cold
-     * start), so callers should keep their existing state on failure rather than assuming idle.
+     * start), so callers should keep their existing state on failure rather than assuming idle. A
+     * cold-start rejection is not fast — the RPC layer retries a missing handler ten times a second
+     * apart before rejecting — so a caller seeding on mount should retry rather than treat one
+     * rejection as the final answer.
+     *
+     * @returns The current {@link SyncState}. Its `syncingProjectIds` may be ABSENT: a Paratext 10
+     *   Studio build predating that field answers without it, so treat missing as "the syncing
+     *   projects are unknown" rather than as "nothing is syncing" — `isSyncing` is what answers the
+     *   latter.
      */
     'paratextBibleSendReceive.getSyncState': () => Promise<SyncState>;
 
@@ -502,7 +515,10 @@ declare module 'papi-shared-types' {
      *
      * @param notificationId ID of the notification that triggered this cancel, if any.
      *   Implementations may use this to validate that the cancel is for the expected sync
-     *   operation.
+     *   operation. ABSENT means "cancel whatever sync is in progress" and implementations must
+     *   honour it as such: a caller that raised no notification has no id to give, and an
+     *   implementation that silently ignored an id-less cancel would leave that caller's UI
+     *   reporting a cancel it never performed. Core's toolbar sync popover is such a caller.
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)
      */

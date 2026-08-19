@@ -23,6 +23,12 @@ step, no automation. Just a record.
 - **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-NNNN` instead of deleting
   it; add the new decision as a new entry.
 - **Append at the end**, newest last. Number entries `ADR-NNNN`.
+- **Numbers are claimed at merge, not at write.** Several branches in flight at once each append the
+  next free number as of the day they branched, so two unmerged branches routinely carry the SAME
+  number for different decisions — and because the file is append-only, nothing catches it: the
+  second merge simply leaves `main` with two identical headings. Before merging a PR that adds an
+  entry, re-read the last heading on `main` and renumber yours to follow it, updating any
+  cross-references. Whoever merges second does the renumbering.
 
 ### Entry template
 
@@ -511,11 +517,17 @@ step, no automation. Just a record.
   correct from app startup" is met for manual and scheduled syncs, but the Simple-mode startup sync
   still shows no status. Closing that needs either PT-4214 or routing those two call sites through a
   claiming wrapper (e.g. `runManualSync`); this decision deliberately does neither, since both are
-  changes to sync behavior rather than to how status is reported. The four richer UX
-  states in the NN-4 design ("Sync conflict", "Connection problem", "Unsaved changes", "Unsynced
-  changes") are deferred and marked as such in `sync-status-button.component.tsx`: none is derivable
-  from what Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this
-  work removes. **A second sync surface exists outside core's tree, and it overlaps this one on most
+  changes to sync behavior rather than to how status is reported. Of the four richer UX
+  states in the NN-4 design, three ("Connection problem", "Unsaved changes", "Unsynced changes") are
+  deferred and marked as such in `sync-status-button.component.tsx`: none is derivable from what
+  Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this work
+  removes. Sync FAILURE is the exception and IS reported, because it is derivable: the snapshot's
+  `lastResults.resultsInfo` carries a per-project `resultStatus`, so a completed sync that did not
+  succeed everywhere shows a failure state rather than a green check. A user-cancelled sync lands
+  there too, which is the case that most obviously must not read as "Synced". The detail behind a
+  failure (per-project conflicts, `failureMessage`, warnings) lives only in the sync status web view,
+  so the popover keeps a link to it via `paratextBibleSendReceive.openSyncStatus` — this decision
+  removes that command from the button's CLICK, not from the product. **A second sync surface exists outside core's tree, and it overlaps this one on most
   syncs.** As of 2026-08-18, Paratext 10 Studio carries (in its unmerged `repo-patches/paranext-core.patch`)
   a C#-side sync toast in `ParatextProjectSendReceiveService`, tracked by `_syncNotificationId` and
   created by `RunWithSyncNotification`. Traced through that patch: `RunWithSyncNotification` defaults
@@ -533,6 +545,19 @@ step, no automation. Just a record.
   | Manual hamburger / background (`sendReceiveProjects`) | yes | claims | **both** |
   | Open S/R dialog (`suppressNotification: true`) | no | claims | button only |
 
+  **A second cancel surface also exists INSIDE core.**
+  `extensions/src/platform-scripture-editor/src/sync-blocked-banner.component.tsx` renders its own
+  `role="status"` region with a single-shot Cancel wired to the same
+  `paratextBibleSendReceive.cancelSync`, shown while a sync is blocking the editor. During a blocking
+  scheduled sync in Simple mode both it and this popover can be on screen at once: two live regions,
+  two differently-labelled Cancel buttons, and neither aware the other was clicked, so cancelling in
+  one leaves the other reading as armed. They are not merged here because they answer different
+  questions — the banner explains why the editor is unavailable *right now* and is modal to that
+  editor, while the popover is an ambient whole-app indicator the user opens deliberately — and
+  because a shared cancel state would have to live in a service neither currently uses. The concrete
+  defect (a spent cancel still reading as armed in the other surface) is what a follow-up should fix,
+  by having both read one piece of cancel-requested state.
+
   Two consequences worth carrying forward. First, the C# service is *broader* coverage than this
   button, not narrower: it sits where every sync converges on the `_sendReceiveSemaphore`, so it sees
   the direct-command syncs this button is blind to — which is the same reason a semaphore-derived
@@ -544,5 +569,15 @@ step, no automation. Just a record.
   Send/Receive declaration. NN-4's "a single, truthful notification" is therefore not achieved in the
   shipped product by this decision alone, and the remaining work is cross-repo rather than a change to
   this component.
+- **Follow-up (needs tickets under PT-4336, none filed as of this entry):** three items above are
+  deliberately out of this decision's scope and will not happen on their own.
+  1. *Close the Simple-mode startup-sync blind spot* — route `main/startup-tasks.ts` and the picker's
+     `syncOnProjectSwitch` through a claiming wrapper, or land upstream PT-4214. Owner: core.
+  2. *Achieve NN-4's "single, truthful notification"* — suppress the C# toast on the paths this
+     button covers. Needs a `suppressNotification` parameter on `syncProjects` in Studio's
+     `repo-patches/paranext-core.patch`, plus the matching contract addition in BOTH copies of the
+     Send/Receive declaration. Owner: whoever owns Studio's patch — this cannot be done from core.
+  3. *Reconcile the two in-core cancel surfaces* — share one piece of cancel-requested state between
+     this popover and `sync-blocked-banner.component.tsx`. Owner: core.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` contract.

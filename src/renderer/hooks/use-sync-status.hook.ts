@@ -4,40 +4,133 @@ import { getNetworkEvent } from '@shared/services/network.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useEvent, usePromise } from 'platform-bible-react';
-import type { SyncProgressEvent, SyncState } from 'paratext-bible-send-receive';
+import type { ResultStatus, SyncProgressEvent, SyncState } from 'paratext-bible-send-receive';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * What the sync indicator is reporting.
  *
- * - `idle` — nothing has synced yet this session
+ * - `idle` — no sync has run this session and none is running
  * - `syncing` — a sync is running now
- * - `synced` — a sync finished this session and none is running
+ * - `synced` — a sync finished this session and every project in it succeeded
+ * - `failed` — a sync finished this session and at least one project did not succeed. Covers a user
+ *   cancelling a sync, which send/receive reports as a non-success result rather than as a distinct
+ *   outcome
+ * - `unknown` — the status could not be read. Distinct from `idle` because "nothing has synced" is a
+ *   positive claim, and a consumer must not make it on the strength of a failed read
  */
-export type SyncStatus = 'idle' | 'syncing' | 'synced';
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'failed' | 'unknown';
+
+/** A project taking part in the sync that is running right now. */
+export type SyncingProject = {
+  /** The project's id. Unique, and stable across reads — use it to key a rendered list. */
+  projectId: string;
+  /**
+   * Display name, falling back to {@link SyncingProject.projectId} when metadata can't be fetched
+   * for it. Not unique: two projects can share a name, so this must not be used as a list key.
+   */
+  name: string;
+};
 
 export type SyncStatusInfo = {
   status: SyncStatus;
   /**
-   * Display names of the projects syncing right now, for naming them in the UI. Empty whenever
-   * nothing is syncing — and also while a sync IS running if the names aren't knowable (see
-   * {@link useSyncStatus}), so callers must fall back to a status that names no projects rather than
-   * reading empty as "nothing is syncing". Use {@link SyncStatusInfo.status} for that.
+   * The projects syncing right now, sorted by name so the order is stable across reads. Empty
+   * whenever nothing is syncing — and also while a sync IS running if the projects aren't knowable
+   * (see {@link useSyncStatus}), so callers must fall back to a status that names no projects rather
+   * than reading empty as "nothing is syncing". Use {@link SyncStatusInfo.status} for that.
    */
-  syncingProjectNames: string[];
+  syncingProjects: readonly SyncingProject[];
 };
 
-/** Stable identity so `usePromise`'s default doesn't change between renders. */
-const NO_PROJECT_NAMES: string[] = [];
+/**
+ * Stable identity so `usePromise`'s default doesn't change between renders. Frozen because it is
+ * handed to callers, who would otherwise be able to corrupt the shared singleton for the process
+ * lifetime by sorting or pushing to it — and only in the empty case, which no test with projects
+ * would reproduce.
+ */
+const NO_SYNCING_PROJECTS: readonly SyncingProject[] = Object.freeze([]);
+/** Same reasoning as {@link NO_SYNCING_PROJECTS}, for the ids held in state. */
+const NO_PROJECT_IDS: readonly string[] = Object.freeze([]);
 
 /**
- * Maps a startup snapshot to the status to show. Unlike an event — where `isSyncing: false` always
- * means a sync just finished — a snapshot's `isSyncing: false` only means one is not running, which
- * is also true before anything has synced. `lastResults` is what separates the two.
+ * How long to keep re-seeding while the snapshot read is still unanswerable, and how long to wait
+ * between attempts.
+ *
+ * A read is not cheap to fail: an unregistered command rejects only after `requestWithRetry` has
+ * retried it `MAX_REQUEST_ATTEMPTS` times at `REQUEST_ATTEMPT_WAIT_TIME_MS` apart (~9s), so each
+ * attempt already spans most of the activation race on its own. The interval here spaces the
+ * attempts that follow that; the window is sized to match
+ * `SEND_RECEIVE_AVAILABILITY_RECHECK_WINDOW_MS`, since both bound the same thing — how long
+ * send/receive may take to register its commands on a contended cold start.
+ */
+export const SYNC_STATE_SEED_RETRY_INTERVAL_MS = 2000;
+/** See {@link SYNC_STATE_SEED_RETRY_INTERVAL_MS}. */
+export const SYNC_STATE_SEED_RETRY_WINDOW_MS = 60_000;
+
+/**
+ * Whether two id sets are equal by value. The contract states `getSyncState` builds a fresh array
+ * on every call and that claim order carries no meaning, so an identity check reports a change on
+ * every read — which would re-run the whole metadata lookup, and re-render, for a set that never
+ * changed.
+ */
+function isSameProjectIdSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sortedA = [...a].sort();
+  const sortedB = [...b].sort();
+  return sortedA.every((id, index) => id === sortedB[index]);
+}
+
+/** Result statuses that mean the project did NOT sync successfully. */
+const FAILED_RESULT_STATUSES: ReadonlySet<ResultStatus> = new Set<ResultStatus>([
+  'failed',
+  'notUpgraded',
+  'projectVersionUpgraded',
+]);
+
+/**
+ * Whether a completed sync's results describe a success for every project it covered. A cancelled
+ * sync lands here too: send/receive reports the projects it did not finish with a non-success
+ * `resultStatus` rather than reporting the cancellation itself.
+ */
+function didLastSyncSucceed(state: SyncState): boolean {
+  const resultsInfo = state.lastResults?.resultsInfo;
+  if (!resultsInfo) return false;
+  return Object.values(resultsInfo).every(
+    (result) => !FAILED_RESULT_STATUSES.has(result.resultStatus),
+  );
+}
+
+/**
+ * Maps a snapshot to the status to show. Unlike an event — where `isSyncing: false` always means a
+ * sync just finished — a snapshot's `isSyncing: false` only means one is not running, which is also
+ * true before anything has synced. `lastResults` is what separates the two, and what its
+ * per-project `resultStatus` values say is what separates a success from a failure. Claiming
+ * success requires evidence of success; anything less reports `failed` or `idle`.
  */
 function deriveStatusFromSnapshot(state: SyncState): SyncStatus {
   if (state.isSyncing) return 'syncing';
-  return state.lastResults ? 'synced' : 'idle';
+  if (!state.lastResults) return 'idle';
+  return didLastSyncSucceed(state) ? 'synced' : 'failed';
+}
+
+/**
+ * Narrows a `getSyncState` response to the parts this hook reads. Typed by the seam declaration in
+ * `src/@types/paratext-bible-send-receive`, but it is untrusted wire data from another process, so
+ * the shape is checked rather than assumed — the same treatment
+ * `src/renderer/services/auto-sync-blocking-service.ts` gives the sibling `getAutoSyncBlocking`
+ * payload.
+ */
+function isValidSyncState(state: unknown): state is SyncState {
+  if (typeof state !== 'object' || !state) return false;
+  if (!('isSyncing' in state) || typeof state.isSyncing !== 'boolean') return false;
+  // Absent is valid: a Send/Receive build predating `syncingProjectIds` answers without it.
+  if ('syncingProjectIds' in state && state.syncingProjectIds !== undefined) {
+    const { syncingProjectIds } = state;
+    if (!Array.isArray(syncingProjectIds)) return false;
+    if (syncingProjectIds.some((id: unknown) => typeof id !== 'string')) return false;
+  }
+  return true;
 }
 
 /**
@@ -46,9 +139,16 @@ function deriveStatusFromSnapshot(state: SyncState): SyncStatus {
  *
  * The seed is the point. `paratextBibleSendReceive.onSyncStateChanged` fires on transitions only,
  * so a consumer that mounts during a sync — a scheduled sync, or a renderer reload mid-sync — would
- * otherwise show `idle` until that sync ENDS. This reads `paratextBibleSendReceive.getSyncState`
- * once on mount to cover exactly that gap. An event that lands while the seed is still in flight
- * wins: it describes a later moment than the snapshot does.
+ * otherwise show `idle` until that sync ENDS. This reads `paratextBibleSendReceive.getSyncState` on
+ * mount to cover exactly that gap. An event that lands while the seed is still in flight wins: it
+ * describes a later moment than the snapshot does.
+ *
+ * The seed RETRIES, because the case it exists for is the case where one attempt cannot succeed.
+ * Consumers mount this while send/receive may still be activating, and an unregistered command
+ * rejects rather than answering; a single attempt would give up permanently during exactly the cold
+ * start it was written to fix. Attempts continue until one answers or
+ * {@link SYNC_STATE_SEED_RETRY_WINDOW_MS} passes, matching how `useSendReceiveAvailability` handles
+ * the same activation race.
  *
  * What the seed CANNOT cover: a sync that never reached the Send/Receive extension's wrappers is
  * absent from `getSyncState` and fires no event, so this reports `idle` throughout it. In Simple
@@ -58,23 +158,19 @@ function deriveStatusFromSnapshot(state: SyncState): SyncStatus {
  * `.context/standards/Architecture-Decisions.md` for why closing that gap is a change to sync
  * behavior rather than to this hook.
  *
- * Project names are resolved from project metadata rather than the event, which carries no ids.
- * They are absent (empty, with `status` still `syncing`) in three cases callers must handle: a
- * Send/Receive build predating `syncingProjectIds`; a `getSyncState` call that fails; and briefly
- * after each sync-state event, while the read that names the new set is in flight. Names for ids
- * whose metadata can't be fetched fall back to the project id, so a partial failure loses precision
- * but never a project.
- *
- * @param options.enabled When false, nothing is fetched or subscribed and the status stays `idle`.
- *   Use it where no sync UI is rendered. Defaults to true.
+ * Projects are resolved from project metadata rather than the event, which carries no ids. They are
+ * absent (empty, with `status` still `syncing`) in three cases callers must handle: a Send/Receive
+ * build predating `syncingProjectIds`; a `getSyncState` call that fails; and briefly after each
+ * sync-state event, while the read that names the new set is in flight. A project whose metadata
+ * can't be fetched falls back to its id, so a partial failure loses precision but never a project.
  */
-export function useSyncStatus({ enabled = true }: { enabled?: boolean } = {}): SyncStatusInfo {
+export function useSyncStatus(): SyncStatusInfo {
   const [status, setStatus] = useState<SyncStatus>('idle');
-  const [syncingProjectIds, setSyncingProjectIds] = useState<string[]>(NO_PROJECT_NAMES);
+  const [syncingProjectIds, setSyncingProjectIds] = useState<readonly string[]>(NO_PROJECT_IDS);
 
   /**
    * Whether an `onSyncStateChanged` event has been applied. Once one has, the mount snapshot is
-   * stale by definition and must not overwrite it.
+   * stale by definition and must not overwrite it — and the seed has nothing left to retry for.
    */
   const hasAppliedEventRef = useRef(false);
   /**
@@ -88,9 +184,23 @@ export function useSyncStatus({ enabled = true }: { enabled?: boolean } = {}): S
    */
   const eventSequenceRef = useRef(0);
 
+  /**
+   * Replaces the id set only when it differs BY VALUE, so a read that returns the same projects in
+   * a fresh array (or a different claim order) doesn't re-fire the metadata lookup keyed on it
+   * below.
+   */
+  const applySyncingProjectIds = useCallback((nextIds: readonly string[]) => {
+    setSyncingProjectIds((prevIds) => (isSameProjectIdSet(prevIds, nextIds) ? prevIds : nextIds));
+  }, []);
+
   const readSyncState = useCallback(async (): Promise<SyncState | undefined> => {
     try {
-      return await sendCommand('paratextBibleSendReceive.getSyncState');
+      const state = await sendCommand('paratextBibleSendReceive.getSyncState');
+      if (!isValidSyncState(state)) {
+        logger.warn('Send/receive returned a sync state in an unexpected shape; ignoring it');
+        return undefined;
+      }
+      return state;
     } catch (e) {
       // Send/Receive may not have registered its commands yet (cold start), or may be absent from
       // this build. Either way the caller keeps whatever state it already has.
@@ -101,21 +211,41 @@ export function useSyncStatus({ enabled = true }: { enabled?: boolean } = {}): S
 
   // Seed from a snapshot on mount so a sync already in progress is reflected immediately.
   useEffect(() => {
-    if (!enabled) return undefined;
     runRef.current += 1;
     const run = runRef.current;
+    let retryTimeout: ReturnType<typeof setTimeout> | undefined;
 
-    const seed = async () => {
+    const seed = async (deadline: number) => {
+      // Checked before the read as well as after it: a retry scheduled before an event arrived would
+      // otherwise spend a whole RPC round trip on an answer that is already known to be discarded.
+      if (hasAppliedEventRef.current) return;
       const state = await readSyncState();
-      if (!state || run !== runRef.current) return;
+      if (run !== runRef.current) return;
       // An event beat the snapshot here. It describes a later moment, so the snapshot is discarded
       // rather than merged — applying only its ids would pair this sync's status with the ids from
-      // before the transition.
+      // before the transition. No point retrying either: the live stream has taken over.
       if (hasAppliedEventRef.current) return;
+
+      if (!state) {
+        if (Date.now() >= deadline) {
+          // Out of budget with no answer. Say so rather than leaving the initial `idle` standing,
+          // which would claim nothing has synced on the strength of a read that never succeeded.
+          setStatus('unknown');
+          return;
+        }
+        retryTimeout = setTimeout(() => {
+          seed(deadline).catch((e: unknown) => {
+            logger.warn(`Unexpected failure re-seeding sync status: ${getErrorMessage(e)}`);
+          });
+        }, SYNC_STATE_SEED_RETRY_INTERVAL_MS);
+        return;
+      }
+
       setStatus(deriveStatusFromSnapshot(state));
-      setSyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_NAMES);
+      applySyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_IDS);
     };
-    seed().catch((e: unknown) => {
+
+    seed(Date.now() + SYNC_STATE_SEED_RETRY_WINDOW_MS).catch((e: unknown) => {
       // readSyncState swallows its own failures, so reaching here means a bug in the code above
       // rather than an unavailable command — worth a log that says so.
       logger.warn(`Unexpected failure seeding sync status: ${getErrorMessage(e)}`);
@@ -123,30 +253,29 @@ export function useSyncStatus({ enabled = true }: { enabled?: boolean } = {}): S
 
     return () => {
       runRef.current += 1;
+      if (retryTimeout) clearTimeout(retryTimeout);
     };
-  }, [enabled, readSyncState]);
+  }, [readSyncState, applySyncingProjectIds]);
 
   const handleSyncStateChanged = useCallback(
     ({ isSyncing }: SyncProgressEvent) => {
       hasAppliedEventRef.current = true;
       eventSequenceRef.current += 1;
       const sequence = eventSequenceRef.current;
-      setStatus(isSyncing ? 'syncing' : 'synced');
-
-      if (!isSyncing) {
-        setSyncingProjectIds(NO_PROJECT_NAMES);
-        return;
-      }
 
       // Drop the previous project set before reading the new one. A claim releasing while another
       // still holds reports `isSyncing: true` — the syncing set can SHRINK without ever passing
       // through "not syncing" — so this branch is reached when a project has just STOPPED syncing.
       // Carrying its id across the read would name it, or count it, as still syncing. Naming
       // nothing is true of every case, so that is what the gap shows.
-      setSyncingProjectIds(NO_PROJECT_NAMES);
+      applySyncingProjectIds(NO_PROJECT_IDS);
 
-      // The event carries no ids, so which projects are syncing takes a follow-up read. The status
-      // above is already correct, so a failure here costs the names only.
+      // A sync STARTING is knowable from the event alone, so show it without waiting for a read.
+      // A sync ENDING is not: whether it succeeded, failed, or was cancelled lives in `lastResults`,
+      // which only the snapshot carries. Claiming `synced` here would put a green check on a failed
+      // or cancelled sync, so the status stays as it is until the read below says what happened.
+      if (isSyncing) setStatus('syncing');
+
       const run = runRef.current;
       readSyncState()
         .then((state) => {
@@ -154,49 +283,70 @@ export function useSyncStatus({ enabled = true }: { enabled?: boolean } = {}): S
           // ordered connection, so today a read can only carry a since-finished sync's ids if it was
           // sent before the event ending that sync — and would therefore have been applied first
           // anyway. The guard costs nothing and keeps this correct without depending on that.
-          if (state && run === runRef.current && sequence === eventSequenceRef.current) {
-            setSyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_NAMES);
+          if (run !== runRef.current || sequence !== eventSequenceRef.current) return undefined;
+          if (!state) {
+            // The event said a sync ended but the outcome is unreadable. `unknown` is the honest
+            // answer; `synced` would be a success claim with nothing behind it.
+            if (!isSyncing) setStatus('unknown');
+            return undefined;
           }
+          setStatus(deriveStatusFromSnapshot(state));
+          applySyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_IDS);
           return undefined;
         })
         .catch((e: unknown) => {
           logger.warn(`Unexpected failure reading syncing projects: ${getErrorMessage(e)}`);
         });
     },
-    [readSyncState],
+    [readSyncState, applySyncingProjectIds],
   );
 
   const onSyncStateChanged = useMemo(
     () => getNetworkEvent<SyncProgressEvent>('paratextBibleSendReceive.onSyncStateChanged'),
     [],
   );
-  // Gate on the event, not the handler: `useEvent` treats an undefined EVENT as "don't subscribe".
-  useEvent(enabled ? onSyncStateChanged : undefined, handleSyncStateChanged);
+  useEvent(onSyncStateChanged, handleSyncStateChanged);
 
-  const [syncingProjectNames] = usePromise(
+  const [syncingProjects] = usePromise(
     useCallback(async () => {
-      if (syncingProjectIds.length === 0) return NO_PROJECT_NAMES;
-      // Per-id rather than one fan-out with a shared catch: one unresolvable project must not blank
-      // the names of the others. Short name ("HNF") over full name — this labels a compact toolbar
-      // control, and it is the name Paratext users identify a project by.
-      return Promise.all(
-        syncingProjectIds.map(async (projectId) => {
-          try {
-            const metadata = await projectLookupService.getMetadataForProject(projectId);
-            return metadata.name ?? metadata.fullName ?? projectId;
-          } catch (e) {
-            logger.warn(
-              `Could not resolve name of syncing project ${projectId}: ${getErrorMessage(e)}`,
-            );
-            return projectId;
-          }
-        }),
+      const projectIds = syncingProjectIds;
+      if (projectIds.length === 0) return NO_SYNCING_PROJECTS;
+
+      // One filtered lookup rather than a call per id: `getMetadataForProject` fans out across every
+      // PDP factory each time, and gathering the results with `Promise.all` would let one project
+      // whose factory hasn't registered withhold the names of all the others until it times out.
+      let metadataById = new Map<string, { name?: string }>();
+      try {
+        const metadata = await projectLookupService.getMetadataForAllProjects({
+          includeProjectIds: [...projectIds],
+        });
+        metadataById = new Map(metadata.map((m) => [m.id, m]));
+      } catch (e) {
+        // Every project falls back to its id below, so the popover still names the right number of
+        // projects — it just names them less precisely.
+        logger.warn(`Could not resolve names of syncing projects: ${getErrorMessage(e)}`);
+      }
+
+      return (
+        projectIds
+          .map((projectId) => ({
+            projectId,
+            // Short name ("HNF") over full name — this labels a compact toolbar control, and it is
+            // the name Paratext users identify a project by. `??` rather than `||` so a
+            // present-but-empty name passes through: `use-project-picker-data.hook.ts` documents an
+            // empty name as a real, deliberately-supported Paratext case, and this must label the
+            // same project the same way the picker does.
+            name: metadataById.get(projectId)?.name ?? projectId,
+          }))
+          // The contract says claim order carries no meaning and can differ between reads of the
+          // same set, so sorting is what keeps an open popover from reshuffling under the user.
+          .sort((a, b) => a.name.localeCompare(b.name))
       );
     }, [syncingProjectIds]),
-    NO_PROJECT_NAMES,
+    NO_SYNCING_PROJECTS,
   );
 
-  return { status, syncingProjectNames };
+  return useMemo(() => ({ status, syncingProjects }), [status, syncingProjects]);
 }
 
 export default useSyncStatus;
