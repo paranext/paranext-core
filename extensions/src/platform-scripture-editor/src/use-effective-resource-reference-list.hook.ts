@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { isPlatformError } from 'platform-bible-utils';
 import type {
   EffectiveResourceReference,
@@ -69,7 +69,7 @@ function mergeResourceReferenceLists(
  */
 export type EffectiveResourceReferenceListState =
   | { status: 'loading' }
-  | { status: 'error'; retry: () => void }
+  | { status: 'error' }
   | { status: 'ready'; list: EffectiveResourceReferenceList };
 
 /**
@@ -94,12 +94,6 @@ export function useEffectiveResourceReferenceList(
   const [userResourceReferenceList, setUserResourceReferenceList] = useState<
     ResourceReferenceList | undefined
   >(undefined);
-
-  // Bumping this re-runs the subscription effect below. The project layer needs no equivalent: it
-  // stays armed through a read error (see `useBufferedLayoutSetting`), so it self-heals as soon as
-  // the setting becomes readable.
-  const [retryEpoch, setRetryEpoch] = useState(0);
-  const retry = useCallback(() => setRetryEpoch((epoch) => epoch + 1), []);
 
   useEffect(() => {
     if (!userPdp) {
@@ -136,7 +130,7 @@ export function useEffectiveResourceReferenceList(
       disposed = true;
       unsubscribe?.();
     };
-  }, [userPdp, settingName, retryEpoch]);
+  }, [userPdp, settingName]);
 
   return useMemo(() => {
     // Readiness must account for BOTH sources. The user layer needs `useProjectDataProvider` to
@@ -145,11 +139,13 @@ export function useEffectiveResourceReferenceList(
     // window on essentially every mount, not a narrow race. Reporting that window as anything other
     // than `loading` is what let panels render a premature empty state.
     if (isProjectSettingLoading) return { status: 'loading' };
+
     // `projectSettingError` is the live read failure; `projectResourceReferenceList` is only itself
     // an error when the very first read failed. Both mean the same thing to a panel: the answer is
     // unknown, so it must not render either a spinner or an empty prompt.
     if (projectSettingError || isPlatformError(projectResourceReferenceList))
-      return { status: 'error', retry };
+      return { status: 'error' };
+
     if (userResourceReferenceList === undefined) return { status: 'loading' };
 
     return {
@@ -160,7 +156,6 @@ export function useEffectiveResourceReferenceList(
     isProjectSettingLoading,
     projectSettingError,
     projectResourceReferenceList,
-    retry,
     userResourceReferenceList,
   ]);
 }

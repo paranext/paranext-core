@@ -8,7 +8,6 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
-  Spinner,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -25,13 +24,15 @@ import type {
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
-import { isDblResourceReference } from './resource-reference.utils';
+import { isDblResourceReference, getRefLabel } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
-import { ErrorRetryView, InstallingView } from './install-state-views.component';
+import { InstallFailedView, LoadingView } from './panel-state-views.component';
+import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
+import { PanelReadinessView } from './panel-readiness-view.component';
+import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { scrollToVerse } from './editor-dom.util';
-import { getRefLabel } from './resource-reference.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -62,6 +63,8 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
   '%webView_modelTextPanel_settingsUnavailable%',
+  '%webView_modelTextPanel_loading%',
+  '%webView_modelTextPanel_catalogUnavailable%',
 ] as const);
 
 type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];
@@ -81,25 +84,24 @@ export type ModelTextPanelProps = {
    * resolving. The first item is the configured model text.
    */
   effectiveModelTexts: EffectiveResourceReferenceList | undefined;
-  /** Whether the effective model texts are still loading. */
-  isEffectiveModelTextsLoading: boolean;
   /**
-   * Whether the configured model-text setting could not be read. Distinct from an empty list: the
-   * answer is unknown rather than "nothing is configured".
+   * Readiness of the configured model-text list. One status rather than separate loading/error
+   * booleans so this panel and the Resource panel derive their front states the same way — see
+   * `getResourcePanelReadiness`.
    */
-  hasModelTextsError: boolean;
-  /** Re-attempts reading the configured model-text setting. */
-  retryModelTexts: () => void;
+  modelTextsStatus: EffectiveResourceReferenceListState['status'];
   /** All DBL resources — used to match the configured model text and to feed the resource picker. */
   dblResources: DblResourceData[];
-  /** Whether the DBL resources are still loading. */
-  isLoadingResources: boolean;
   /**
    * Whether the DBL resource catalog has finished loading AND delivered. Distinct from
    * `!isLoadingResources`: `dblResources` coerces a missing catalog to `[]`, which is
    * indistinguishable from a genuinely empty one.
    */
-  areResourcesReady: boolean;
+  isCatalogReady: boolean;
+  /** Whether the DBL resource catalog fetch failed. Recoverable by re-fetching. */
+  hasCatalogError: boolean;
+  /** Re-runs the DBL resource catalog fetch. */
+  onRetryCatalog: () => void;
   /** The function to get the user-level model-text setting (used when writing a user choice). */
   getUserModelTexts: () => Promise<ResourceReferenceList | undefined>;
   /** Current Scripture reference for the editor. */
@@ -142,12 +144,11 @@ export function ModelTextPanel({
   localizedStrings,
   hasProject,
   effectiveModelTexts,
-  isEffectiveModelTextsLoading,
-  hasModelTextsError,
-  retryModelTexts,
+  modelTextsStatus,
   dblResources,
-  isLoadingResources,
-  areResourcesReady,
+  isCatalogReady,
+  hasCatalogError,
+  onRetryCatalog,
   getUserModelTexts,
   scrRef = DEFAULT_SCR_REF,
   onScrRefChange = () => {},
@@ -386,63 +387,33 @@ export function ModelTextPanel({
     );
   }
 
-  // Settings error: the configured list could not be read, so we cannot tell whether a model text
-  // is set. Showing the empty state here would invite the user to re-pick a model text that may
-  // already be configured, so say what went wrong and offer a way to try again instead.
-  if (hasModelTextsError) {
+  // Front of the state machine: still resolving, an unreadable setting, a catalog that failed, or
+  // genuinely nothing configured. Derived from one readiness value and rendered by the same view
+  // the Resource panel uses, so the two panels cannot drift apart on the question that caused this
+  // bug in the first place.
+  const readiness = getResourcePanelReadiness({
+    listStatus: modelTextsStatus,
+    isCatalogReady,
+    hasCatalogError,
+    configuredCount: effectiveModelTexts?.items.length ?? 0,
+    // This panel shows the first configured model text whatever its type, so every configured item
+    // "matches" it — unlike the Resource panel, which filters by resource type.
+    matchingCount: effectiveModelTexts?.items.length ?? 0,
+  });
+
+  if (readiness !== 'configured') {
     return (
-      <ErrorRetryView
-        message={localizedStrings['%webView_modelTextPanel_settingsUnavailable%']}
+      <PanelReadinessView
+        readiness={readiness}
+        errorMessage={localizedStrings['%webView_modelTextPanel_settingsUnavailable%']}
+        catalogErrorMessage={localizedStrings['%webView_modelTextPanel_catalogUnavailable%']}
+        loadingLabel={localizedStrings['%webView_modelTextPanel_loading%']}
+        emptyPrompt={localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}
+        pickLabel={localizedStrings['%webView_modelTextPanel_pickModelText%']}
         retryLabel={localizedStrings['%webView_modelTextPanel_retry%']}
-        onRetry={retryModelTexts}
+        onPick={() => handlePickModelText()}
+        onRetryCatalog={onRetryCatalog}
       />
-    );
-  }
-
-  // Loading: the configured list has not resolved yet. This is a separate guard from the zero state
-  // below on purpose. The two used to share one branch that re-decided between them with a nested
-  // ternary, and any gap in that ternary rendered the empty prompt — which is how a configured
-  // model text came to display "No model text selected" while it was still resolving.
-  if (isEffectiveModelTextsLoading) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  // Zero state: no model text configured. Reached only once the list has resolved, so this is a
-  // fact about the setting rather than a side effect of asking too early.
-  if (!effectiveModelTexts || effectiveModelTexts.items.length === 0) {
-    return (
-      <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}</p>
-        <Button onClick={() => handlePickModelText()}>
-          {localizedStrings['%webView_modelTextPanel_pickModelText%']}
-        </Button>
-      </div>
-    );
-  }
-
-  // Loading: a model text IS configured but the DBL catalog is still arriving, so it cannot be
-  // resolved yet.
-  if (isLoadingResources) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  // Still resolving: a configured DBL model text matches nothing until the catalog arrives, so
-  // neither "not found" below nor the empty state above can be answered yet. Without this the panel
-  // asserted the model text was missing and offered a Pick button that would replace a perfectly
-  // good configured resource.
-  if (dblRef && !areResourcesReady) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
     );
   }
 
@@ -458,7 +429,7 @@ export function ModelTextPanel({
   // (the usual first-run cause), hint at the connection.
   if (installFailed) {
     return (
-      <ErrorRetryView
+      <InstallFailedView
         message={
           localizedStrings[
             isOnline
@@ -478,7 +449,7 @@ export function ModelTextPanel({
   // "Installing…".
   if (isSelecting || isInstalling) {
     return (
-      <InstallingView
+      <LoadingView
         label={
           localizedStrings[
             isSelecting
@@ -500,11 +471,7 @@ export function ModelTextPanel({
 
   // Loading: USJ not yet fetched for the resolved resource.
   if (usj === undefined && isUsjLoading) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
-    );
+    return <LoadingView label={localizedStrings['%webView_modelTextPanel_loading%']} />;
   }
 
   // Active: read-only editor showing the model text.

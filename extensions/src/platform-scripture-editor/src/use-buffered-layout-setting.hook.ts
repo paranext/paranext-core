@@ -40,9 +40,13 @@ import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types
  * error itself is reported separately rather than as the held value, because the held value at that
  * point is the placeholder — indistinguishable from a genuinely empty setting.
  *
- * @returns `[heldSetting, isLoading, settingError]`. `settingError` is set while the raw setting
- *   cannot be read. `heldSetting` may itself be a {@link PlatformError} when the very first read
- *   already failed; check with `isPlatformError`.
+ * `settingError` is reported only while no real value has ever been applied. Once one has, holding
+ * it across a failed re-read is exactly the job this buffer exists to do, so a later failure is
+ * swallowed rather than replacing working content with an error message.
+ *
+ * @returns `[heldSetting, isLoading, settingError]`. `settingError` is set while the setting cannot
+ *   be read AND nothing readable has arrived yet. `heldSetting` may itself be a
+ *   {@link PlatformError} if a first-render raw value were ever one; check with `isPlatformError`.
  */
 export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSettingNames>(
   projectId: string | undefined,
@@ -52,6 +56,9 @@ export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSetti
   const [rawSetting, , , isLoading] = useProjectSetting(projectId, key, defaultValue);
 
   const [shouldApply, setShouldApply] = useState(true);
+  // Whether anything readable has ever landed in the held copy. Gates error reporting: before the
+  // first real value there is nothing to show but the error; after it, the held value wins.
+  const [hasAppliedRealValue, setHasAppliedRealValue] = useState(false);
   const [heldSetting, setHeldSetting] = useState<
     ProjectSettingTypes[ProjectSettingName] | PlatformError
   >(rawSetting);
@@ -88,11 +95,16 @@ export function useBufferedLayoutSetting<ProjectSettingName extends ProjectSetti
   useEffect(() => {
     if (shouldApply && !isLoading && !isPlatformError(rawSetting)) {
       setHeldSetting(rawSetting);
+      setHasAppliedRealValue(true);
       setShouldApply(false);
     }
   }, [shouldApply, isLoading, rawSetting]);
 
-  return [heldSetting, isLoading, isPlatformError(rawSetting) ? rawSetting : undefined];
+  return [
+    heldSetting,
+    isLoading,
+    isPlatformError(rawSetting) && !hasAppliedRealValue ? rawSetting : undefined,
+  ];
 }
 
 export default useBufferedLayoutSetting;

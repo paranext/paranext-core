@@ -36,7 +36,10 @@ const STRINGS = {
     "The model text couldn't be installed. Check your connection and try again.",
   '%webView_modelTextPanel_retry%': 'Try again',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
-  '%webView_modelTextPanel_settingsUnavailable%': 'The model text settings could not be read.',
+  '%webView_modelTextPanel_catalogUnavailable%': "Couldn't load the list of available resources.",
+  '%webView_modelTextPanel_loading%': 'Loading…',
+  '%webView_modelTextPanel_settingsUnavailable%':
+    "Couldn't load your model text. It will appear once it's available.",
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -68,12 +71,11 @@ function makeProps(overrides: Partial<ModelTextPanelProps> = {}): ModelTextPanel
     localizedStrings: STRINGS,
     hasProject: true,
     effectiveModelTexts: { dataVersion: '1.0.0', items: [] },
-    isEffectiveModelTextsLoading: false,
-    hasModelTextsError: false,
-    retryModelTexts: vi.fn(),
-    areResourcesReady: true,
+    modelTextsStatus: 'ready',
+    isCatalogReady: true,
+    hasCatalogError: false,
+    onRetryCatalog: vi.fn(),
     dblResources: [],
-    isLoadingResources: false,
     getUserModelTexts: async () => undefined,
     installResource: vi.fn(async () => {}),
     setUserModelTexts: vi.fn(async () => {}),
@@ -285,19 +287,21 @@ describe('ModelTextPanel', () => {
   it('shows the settings-unavailable error instead of the empty prompt when the setting cannot be read', () => {
     // An unreadable setting is not "nothing configured": offering only the picker would invite the
     // user to reconfigure a model text that may already be set.
-    render(<ModelTextPanel {...makeProps({ hasModelTextsError: true })} />);
+    render(<ModelTextPanel {...makeProps({ modelTextsStatus: 'error' })} />);
 
-    expect(screen.getByText('The model text settings could not be read.')).toBeInTheDocument();
+    expect(
+      screen.getByText("Couldn't load your model text. It will appear once it's available."),
+    ).toBeInTheDocument();
     expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
   });
 
-  it('re-reads the setting when the error state retry is clicked', () => {
-    const retryModelTexts = vi.fn();
-    render(<ModelTextPanel {...makeProps({ hasModelTextsError: true, retryModelTexts })} />);
+  it('offers no controls in the settings-error state', () => {
+    render(<ModelTextPanel {...makeProps({ modelTextsStatus: 'error' })} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
-
-    expect(retryModelTexts).toHaveBeenCalledTimes(1);
+    // Nothing in this panel can re-drive the project-setting read, so any button here would be
+    // inert. The message carries the recovery expectation instead; the setting stays watched and
+    // the panel recovers on its own.
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('does not claim the model text is missing while the resource catalog has not arrived', () => {
@@ -309,7 +313,7 @@ describe('ModelTextPanel', () => {
         {...makeProps({
           effectiveModelTexts: configuredModelText('uid-web'),
           dblResources: [],
-          areResourcesReady: false,
+          isCatalogReady: false,
         })}
       />,
     );
@@ -326,7 +330,7 @@ describe('ModelTextPanel', () => {
       <ModelTextPanel
         {...makeProps({
           effectiveModelTexts: undefined,
-          isEffectiveModelTextsLoading: true,
+          modelTextsStatus: 'loading',
         })}
       />,
     );

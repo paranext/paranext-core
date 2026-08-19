@@ -116,8 +116,17 @@ type DecoratorConfig = {
   /** Make the configured-list read fail so the recoverable settings-error state is observable. */
   hasSettingsError?: boolean;
   /** Hold the DBL catalog as not-yet-arrived so the pre-catalog spinner is observable. */
-  areResourcesReady?: boolean;
+  isCatalogReady?: boolean;
+  /** Fail the DBL catalog fetch so the recoverable catalog-error state is observable. */
+  hasCatalogError?: boolean;
 };
+
+/** Maps the story's flags to the list status the panel consumes. */
+function modelTextsStatusFor(config: DecoratorConfig): 'loading' | 'error' | 'ready' {
+  if (config.hasSettingsError) return 'error';
+  if (config.isListLoading) return 'loading';
+  return 'ready';
+}
 
 /**
  * Thin in-memory service container: holds the resources + the admin/user model-text lists, derives
@@ -176,16 +185,15 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
         localizedStrings={localizedStrings}
         hasProject={config.hasProject ?? true}
         effectiveModelTexts={effectiveModelTexts}
-        isEffectiveModelTextsLoading={config.isListLoading ?? false}
-        hasModelTextsError={config.hasSettingsError ?? false}
-        retryModelTexts={() => {
-          // Settings re-read — log it; these stories pin the state so retry stays observable.
-          // eslint-disable-next-line no-console
-          console.log('retryModelTexts');
-        }}
+        modelTextsStatus={modelTextsStatusFor(config)}
         dblResources={resources}
-        isLoadingResources={false}
-        areResourcesReady={config.areResourcesReady ?? true}
+        isCatalogReady={config.isCatalogReady ?? true}
+        hasCatalogError={config.hasCatalogError ?? false}
+        onRetryCatalog={() => {
+          // Catalog re-fetch — logged; these stories pin the state so the control stays observable.
+          // eslint-disable-next-line no-console
+          console.log('onRetryCatalog');
+        }}
         getUserModelTexts={async () => undefined}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
@@ -305,6 +313,16 @@ export const SettingsError: Story = {
  */
 export const ResolvingCatalog: Story = {
   decorators: [
-    createDecorator({ initialAdmin: [dblRef(seedResources[0])], areResourcesReady: false }),
+    createDecorator({ initialAdmin: [dblRef(seedResources[0])], isCatalogReady: false }),
+  ],
+};
+
+/**
+ * The DBL resource catalog failed to load, so a configured model text can't be resolved. Unlike the
+ * settings error this is recoverable, so it offers a retry that re-runs the fetch.
+ */
+export const CatalogError: Story = {
+  decorators: [
+    createDecorator({ initialAdmin: [dblRef(seedResources[0])], hasCatalogError: true }),
   ],
 };
