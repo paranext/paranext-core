@@ -909,3 +909,58 @@ describe('PlatformBibleToolbar — title bar reserved space', () => {
     expect(screen.getByTestId('toolbar-root')).not.toHaveClass('tw:pe-0');
   });
 });
+
+describe('PlatformBibleToolbar — narrow-width degradation ladder', () => {
+  // jsdom loads no CSS and does not evaluate container queries, so these assert the WIRING — that
+  // each tier's variant is attached to the element it is supposed to shrink, and (for the version
+  // badge) only in Simple mode. That is the part a refactor silently breaks; the thresholds
+  // themselves are verified against the running app by the narrow-title-bar e2e spec.
+  //
+  // Matched by shape (`@max-[<any>rem]/toolbar:…`) rather than by the exact rem value on purpose:
+  // retuning a threshold is a deliberate act that should not break these, but dropping the variant
+  // or moving it to the wrong element should.
+  const HIDE_WHEN_NARROW = /@max-\[\d+rem\]\/toolbar:hidden/;
+  const SHOW_WHEN_NARROW = /@max-\[\d+rem\]\/toolbar:block/;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    mockSendCommand(true);
+  });
+
+  it('tier 1 — hides the marketing version badge when the bar is narrow', async () => {
+    render(<PlatformBibleToolbar />);
+    const badge = await screen.findByText('1.0.0');
+    expect(badge.className).toMatch(HIDE_WHEN_NARROW);
+  });
+
+  it('tier 1 — leaves the version badge alone in Power mode', async () => {
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    // Power mode's title bar is deliberately untouched by the ladder, so the badge keeps its full
+    // width at every size. Without this the `!isPowerMode` gate could be dropped unnoticed.
+    const badge = await screen.findByText('1.0.0');
+    expect(badge.className).not.toMatch(HIDE_WHEN_NARROW);
+  });
+
+  it('tier 3 — hides the sync label and reveals a stand-in icon when the bar is narrow', async () => {
+    render(<PlatformBibleToolbar />);
+    const label = await screen.findByText('Sync');
+    expect(label.className).toMatch(HIDE_WHEN_NARROW);
+
+    // `idle` is the one sync state with no icon of its own, so collapsing to icon-only would leave
+    // an empty button unless this stand-in is revealed exactly when the label goes away.
+    const icon = label.parentElement?.querySelector('svg.tw\\:hidden');
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute('class')).toMatch(SHOW_WHEN_NARROW);
+  });
+
+  it('tier 3 — keeps the sync button named once its label is hidden', async () => {
+    render(<PlatformBibleToolbar />);
+    // The label is removed with `display: none`, which takes it out of the accessibility tree, so
+    // the button carries an explicit `aria-label`. Without it the collapsed button is announced as
+    // an unnamed "button" at exactly the widths this ticket targets.
+    const button = await screen.findByTestId('toolbar-sync-button');
+    expect(button).toHaveAttribute('aria-label', 'Sync');
+  });
+});

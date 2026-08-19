@@ -111,6 +111,10 @@ const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 // number in that column (Linux, 766px), not the narrowest — one tuned to Windows alone silently
 // does nothing on the platform with the roomiest bar, and CI runs on Linux.
 //
+// Tiers are numbered in the order they FIRE as the bar narrows (52rem -> 50rem -> 46rem), which is
+// deliberately not the order they are declared in below — the declarations group the two sync
+// constants together. Renumber if you retune a threshold past its neighbour.
+//
 // The order the tiers fire in is a judgement about what the user can most afford to lose: the
 // version badge is pure decoration, the project's full name still leaves the short name that
 // actually identifies the project, and the sync label goes last because an icon-only sync button
@@ -120,7 +124,7 @@ const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 const HIDE_VERSION_BADGE_BELOW_52REM = 'tw:@max-[52rem]/toolbar:hidden';
 
 /**
- * Tier 2 — collapse the sync button to icon-only; its tooltip still names the action. `idle` is the
+ * Tier 3 — collapse the sync button to icon-only; its tooltip still names the action. `idle` is the
  * one sync state with no icon of its own, so the collapsed button would render empty; the paired
  * class reveals a stand-in icon exactly when the label goes away. Both are needed: revealing the
  * icon unconditionally would add an icon to the wide layout, which is not this ticket's business.
@@ -129,7 +133,7 @@ const HIDE_SYNC_LABEL_BELOW_46REM = 'tw:@max-[46rem]/toolbar:hidden';
 const SHOW_IDLE_SYNC_ICON_BELOW_46REM = 'tw:hidden tw:@max-[46rem]/toolbar:block';
 
 /**
- * Tier 3 — show the project's short name alone instead of `Full Name (SHORT)`. The short name is
+ * Tier 2 — show the project's short name alone instead of `Full Name (SHORT)`. The short name is
  * the identifying part, so swapping to it degrades better than ellipsizing the full string down to
  * a meaningless prefix.
  *
@@ -407,6 +411,16 @@ export function PlatformBibleToolbar() {
     }
   }, []);
 
+  // Hoisted so the visible label and the button's accessible name are the SAME value. Tier 3 hides
+  // the label with `display: none`, which drops it out of the accessibility tree — without an
+  // explicit `aria-label` the collapsed button is announced as an unnamed "button" at exactly the
+  // widths this ticket targets. Mirrors how PlatformTabTitle names a tab collapsed to icon-only.
+  const syncButtonLabel = {
+    idle: localizedStrings['%toolbar_sync%'],
+    syncing: localizedStrings['%toolbar_sync_status_syncing%'],
+    synced: localizedStrings['%toolbar_sync_status_synced%'],
+  }[syncState];
+
   return (
     <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
       <Toolbar
@@ -444,6 +458,7 @@ export function PlatformBibleToolbar() {
                       variant="ghost"
                       size="sm"
                       className="pr-twp tw:h-8 tw:shrink-0"
+                      aria-label={syncButtonLabel}
                       onClick={openSyncStatus}
                     >
                       {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
@@ -455,15 +470,7 @@ export function PlatformBibleToolbar() {
                           className={cn('tw:h-4 tw:w-4', SHOW_IDLE_SYNC_ICON_BELOW_46REM)}
                         />
                       )}
-                      <span className={HIDE_SYNC_LABEL_BELOW_46REM}>
-                        {
-                          {
-                            idle: localizedStrings['%toolbar_sync%'],
-                            syncing: localizedStrings['%toolbar_sync_status_syncing%'],
-                            synced: localizedStrings['%toolbar_sync_status_synced%'],
-                          }[syncState]
-                        }
-                      </span>
+                      <span className={HIDE_SYNC_LABEL_BELOW_46REM}>{syncButtonLabel}</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -537,12 +544,14 @@ export function PlatformBibleToolbar() {
             {/* Replaces a `min-w-48` (192px) floor that alone was a quarter of the usable bar at
                 the app's minimum window width and could not be shrunk past (PT-4218). Not dropped
                 to `min-w-0`: with everything else in the row shrinkable too, the trigger could
-                collapse to just its chevron and swallow the short name that tier 3 above swaps in.
-                `min-w-20` (80px) keeps a short name legible and still fits the budget. The
+                collapse to just its chevron and swallow the short name that tier 2 above swaps in.
+                `min-w-24` (96px) is the measured width the short name needs (~97px for `ESVUS16`,
+                including the trigger's padding and chevron) — an 80px floor was below that, so the
+                very name tier 2 swaps in could itself ellipsize with nothing to recover it. The
                 `max-w-64` cap continues to govern the roomy case. */}
             <SelectTrigger
               data-testid="toolbar-project-selector"
-              className="tw:max-w-64 tw:min-w-20 tw:border-0 tw:bg-transparent"
+              className="tw:max-w-64 tw:min-w-24 tw:border-0 tw:bg-transparent"
             >
               <SelectValue
                 placeholder={

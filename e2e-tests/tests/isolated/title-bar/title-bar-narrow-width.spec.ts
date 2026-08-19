@@ -55,16 +55,6 @@ test.afterEach(() => {
 });
 
 /**
- * Resizes the window and waits until the renderer has actually laid out at the new width.
- *
- * Returns nothing useful to assert on by design — the point is the wait. Electron clamps the
- * request to `minWidth`, so the settled width is read back from the window rather than assumed, and
- * the poll compares against THAT. An earlier version polled for "content row narrower than the
- * roomy width", which was already true before the resize and so waited for nothing: the test then
- * sampled the row's box and the controls' boxes from two different layout passes and reported
- * phantom clipping.
- */
-/**
  * Closes the docked DevTools the dev-mode launch opens.
  *
  * Not cosmetic — this test is entirely geometric. Docked DevTools takes its width out of the
@@ -80,6 +70,16 @@ async function closeDevTools(electronApp: ElectronApplication): Promise<void> {
   });
 }
 
+/**
+ * Resizes the window and waits until the renderer has actually laid out at the new width.
+ *
+ * Returns nothing useful to assert on by design — the point is the wait. Electron clamps the
+ * request to `minWidth`, so the settled width is read back from the window rather than assumed, and
+ * the poll compares against THAT. An earlier version polled for "content row narrower than the
+ * roomy width", which was already true before the resize and so waited for nothing: the test then
+ * sampled the row's box and the controls' boxes from two different layout passes and reported
+ * phantom clipping.
+ */
 async function setWindowWidth(
   electronApp: ElectronApplication,
   mainPage: Page,
@@ -89,7 +89,9 @@ async function setWindowWidth(
 
   const settledWidth = await electronApp.evaluate(({ BrowserWindow }, requestedWidth) => {
     const win = BrowserWindow.getAllWindows()[0];
-    if (!win) return 0;
+    // Throw rather than returning a sentinel: a 0 here would send the poll below into its full
+    // 20-second timeout and then fail with a width mismatch, hiding the actual cause.
+    if (!win) throw new Error('No Electron window to resize');
     if (win.isMaximized()) win.unmaximize();
 
     const [outerWidth, height] = win.getSize();
@@ -141,7 +143,7 @@ async function expectControlWithinRow(
 /**
  * Opens the first project in the title bar's project selector, if none is open yet.
  *
- * The tier-3 short-name swap can only be observed with a project open — otherwise the trigger shows
+ * The tier-2 short-name swap can only be observed with a project open — otherwise the trigger shows
  * the "select a project" placeholder and there is no name to swap. No fixture seeds a current
  * project, so the test drives the same selector a user would.
  */
