@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { newPlatformError } from 'platform-bible-utils';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
-import { OverlayEntry, PopoverContent } from './overlay.service-model';
+import { CommandPaletteItem, OverlayEntry, PopoverContent } from './overlay.service-model';
 import {
   addOverlay,
   getOverlays,
@@ -12,6 +12,7 @@ import {
   resolveAndRemoveOverlay,
   rejectAndRemoveOverlay,
   updateOverlayContent,
+  updateCommandPaletteState,
 } from './overlay-store';
 
 function createContextMenuEntry(
@@ -27,6 +28,25 @@ function createContextMenuEntry(
     position: { x: 100, y: 200 },
     resolve: vi.fn<(result: string | undefined) => void>(),
     reject: vi.fn(),
+  };
+}
+
+function createCommandPaletteEntry(
+  id: string,
+  webViewId: string,
+  items?: CommandPaletteItem[],
+  overrides?: Partial<Extract<OverlayEntry, { type: 'commandPalette' }>>,
+): OverlayEntry {
+  return {
+    type: 'commandPalette',
+    id,
+    webViewId,
+    request: { items: items ?? [{ id: 'ft', label: 'Footnote' }] },
+    items: items ?? [{ id: 'ft', label: 'Footnote' }],
+    selectedIndex: 0,
+    resolve: vi.fn<(result: string | undefined) => void>(),
+    reject: vi.fn(),
+    ...overrides,
   };
 }
 
@@ -231,6 +251,160 @@ describe('overlay-store', () => {
       subscribe(listener);
 
       updateOverlayContent('popover-1', { type: 'text', body: 'Updated' });
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('updateCommandPaletteState', () => {
+    it('should update filterText and clamp selectedIndex to the new itemCount', () => {
+      const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
+        selectedIndex: 3,
+      });
+      addOverlay(entry);
+
+      const result = updateCommandPaletteState('palette-1', { filterText: 'fo', itemCount: 1 });
+      expect(result).toBe(true);
+
+      const overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const paletteOverlay = overlay as Extract<OverlayEntry, { type: 'commandPalette' }>;
+      expect(paletteOverlay.filterText).toBe('fo');
+      // itemCount 1 -> max index 0, so the pre-existing selectedIndex of 3 clamps down to 0
+      expect(paletteOverlay.selectedIndex).toBe(0);
+    });
+
+    it('should set an absolute selectedIndex and clamp to bounds', () => {
+      // The active palette mirrors cmdk's arrow-key highlight back to the store as an ABSOLUTE
+      // index (it knows the index, not a delta) so a forwarded commit picks what is displayed.
+      const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
+        selectedIndex: 0,
+      });
+      addOverlay(entry);
+
+      updateCommandPaletteState('palette-1', { selectedIndex: 2, itemCount: 3 });
+      let overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(2);
+
+      // Out-of-range absolute indexes clamp like deltas do
+      updateCommandPaletteState('palette-1', { selectedIndex: 99, itemCount: 3 });
+      overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(2);
+    });
+
+    it('should let an absolute selectedIndex win when selectedIndexDelta is also provided', () => {
+      // From base index 0 with { selectedIndex: 2, selectedIndexDelta: 1 }: absolute-wins gives 2,
+      // delta-wins would give 1, and applying both would give 3 — so only the documented
+      // absolute-wins contract produces 2.
+      const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
+        selectedIndex: 0,
+      });
+      addOverlay(entry);
+
+      updateCommandPaletteState('palette-1', {
+        selectedIndex: 2,
+        selectedIndexDelta: 1,
+        itemCount: 5,
+      });
+      const overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(2);
+    });
+
+    it('should move selectedIndex by selectedIndexDelta and clamp to bounds', () => {
+      const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
+        selectedIndex: 1,
+      });
+      addOverlay(entry);
+
+      updateCommandPaletteState('palette-1', { selectedIndexDelta: 1, itemCount: 3 });
+      let overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(2);
+
+      // Moving past the end clamps to the last index (itemCount - 1)
+      updateCommandPaletteState('palette-1', { selectedIndexDelta: 5, itemCount: 3 });
+      overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(2);
+
+      // Moving before the start clamps to 0
+      updateCommandPaletteState('palette-1', { selectedIndexDelta: -10, itemCount: 3 });
+      overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(0);
+    });
+
+    it('should clamp selectedIndex to 0 when itemCount is 0', () => {
+      const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
+        selectedIndex: 2,
+      });
+      addOverlay(entry);
+
+      updateCommandPaletteState('palette-1', { filterText: 'zzz', itemCount: 0 });
+      const overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(0);
+    });
+
+    it('should normalize empty-string filterText to undefined (cleared, never stored as "")', () => {
+      const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
+        filterText: 'existing',
+      });
+      addOverlay(entry);
+
+      updateCommandPaletteState('palette-1', { filterText: '', itemCount: 1 });
+      const overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const palette = overlay as Extract<OverlayEntry, { type: 'commandPalette' }>;
+      expect(palette.filterText).toBeUndefined();
+    });
+
+    it('should leave filterText unchanged when not provided in the patch', () => {
+      const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
+        filterText: 'existing',
+      });
+      addOverlay(entry);
+
+      updateCommandPaletteState('palette-1', { selectedIndexDelta: 0, itemCount: 1 });
+      const overlay = getOverlayById('palette-1');
+      // overlay is a union type and we know it's a commandPalette from setup
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).filterText).toBe(
+        'existing',
+      );
+    });
+
+    it('should return false when overlay is not found', () => {
+      const result = updateCommandPaletteState('nonexistent', { itemCount: 1 });
+      expect(result).toBe(false);
+    });
+
+    it('should return false when overlay is not a commandPalette', () => {
+      const entry = createContextMenuEntry('overlay-1', 'webview-1');
+      addOverlay(entry);
+      const result = updateCommandPaletteState('overlay-1', { itemCount: 1 });
+      expect(result).toBe(false);
+    });
+
+    it('should notify listeners when state is updated', () => {
+      const entry = createCommandPaletteEntry('palette-1', 'webview-1');
+      addOverlay(entry);
+
+      const listener = vi.fn();
+      subscribe(listener);
+
+      updateCommandPaletteState('palette-1', { selectedIndexDelta: 1, itemCount: 1 });
       expect(listener).toHaveBeenCalledTimes(1);
     });
   });

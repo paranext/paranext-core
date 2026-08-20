@@ -128,3 +128,46 @@ export function updateOverlayContent(id: string, content: PopoverContent): boole
   notifyListeners();
   return true;
 }
+
+/**
+ * Updates the mutable `filterText`/`selectedIndex` state of a command palette overlay and notifies
+ * subscribers. `selectedIndex` is always clamped to `[0, itemCount - 1]` (or `0` when `itemCount`
+ * is `0`) — both when moved by `selectedIndexDelta` and when left alone, since a `filterText`
+ * change can shrink the filtered list out from under the previous index.
+ *
+ * @param id The overlay id to update
+ * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged; the empty
+ *   string is normalized to undefined so the entry never stores `''`); `selectedIndex` sets the
+ *   highlighted index ABSOLUTELY (the active palette mirrors cmdk's arrow-key highlight this way —
+ *   it knows the resulting index, not a delta) and wins over `selectedIndexDelta`, which moves the
+ *   current index by this many items; both clamp; `itemCount` is the length of the filtered item
+ *   list used to clamp `selectedIndex`
+ * @returns True if the overlay was found and updated, false otherwise
+ */
+export function updateCommandPaletteState(
+  id: string,
+  patch: {
+    filterText?: string;
+    selectedIndex?: number;
+    selectedIndexDelta?: number;
+    itemCount: number;
+  },
+): boolean {
+  const entry = overlays.get(id);
+  if (!entry || entry.type !== 'commandPalette') return false;
+
+  const maxIndex = Math.max(0, patch.itemCount - 1);
+  let rawIndex = entry.selectedIndex;
+  if (patch.selectedIndex !== undefined) rawIndex = patch.selectedIndex;
+  else if (patch.selectedIndexDelta !== undefined) rawIndex += patch.selectedIndexDelta;
+  const selectedIndex = Math.min(Math.max(rawIndex, 0), maxIndex);
+
+  overlays.set(id, {
+    ...entry,
+    // Normalize '' to undefined so the entry's filterText is never the empty string
+    filterText: patch.filterText !== undefined ? patch.filterText || undefined : entry.filterText,
+    selectedIndex,
+  });
+  notifyListeners();
+  return true;
+}

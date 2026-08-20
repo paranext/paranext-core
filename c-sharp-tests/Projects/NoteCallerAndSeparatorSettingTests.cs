@@ -1,0 +1,228 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Services;
+
+namespace TestParanextDataProvider.Projects;
+
+/// <summary>
+/// Integration tests for the <c>GetProjectSetting</c> logic that handles these four Paratext
+/// note-caller/separator settings:
+///
+/// <list type="bullet">
+/// <item>
+/// <c>platformScripture.chapterVerseSeparator</c> ↔ Settings.xml <c>ChapterVerseSeparator</c>
+/// (registered default <c>.</c>)
+/// </item>
+/// <item>
+/// <c>platformScripture.verseRangeSeparator</c> ↔ Settings.xml <c>RangeIndicator</c> (registered
+/// default <c>-</c>)
+/// </item>
+/// <item>
+/// <c>platformScripture.defaultFootnoteCaller</c> ↔ Settings.xml <c>DefaultFootnoteCaller</c>
+/// (registered default <c>+</c>)
+/// </item>
+/// <item>
+/// <c>platformScripture.defaultCrossRefCaller</c> ↔ Settings.xml <c>DefaultCrossRefCaller</c>
+/// (registered default <c>-</c>)
+/// </item>
+/// </list>
+///
+/// "Registered default" above means the Platform.Bible default registered via the
+/// platform-scripture extension's projectSettings.json. For the two separators those values do
+/// match ParatextData's own source-level fallbacks (ProjectSettings.ChapterVerseSeparator "." and
+/// VerseRangeSeparator "-"). For the two callers, however, ParatextData's own GetSetting fallback
+/// is the empty string — the registered "+"/"-" defaults were chosen to match conventional
+/// Paratext usage and the editor's prior hard-coded fallbacks, not taken from ParatextData source.
+///
+/// All four are plain strings read through the generic <c>ParametersDictionary</c> fall-through in
+/// <c>ParatextProjectDataProvider.GetProjectSetting</c> — no dedicated per-setting branch was added
+/// for them, so these tests exercise the shared fall-through/registered-default plumbing rather than
+/// any new production code path.
+/// </summary>
+[ExcludeFromCodeCoverage]
+[TestFixture]
+internal class NoteCallerAndSeparatorSettingTests : PapiTestBase
+{
+    private const string PdpName = "noteCallerAndSeparatorSettingTestProject";
+
+    private DummyScrText _scrText = null!;
+    private ProjectDetails _projectDetails = null!;
+    private DummyParatextProjectDataProvider _provider = null!;
+
+    [SetUp]
+    public override async Task TestSetupAsync()
+    {
+        await base.TestSetupAsync();
+
+        // Register a stub for ProjectSettingsService.getDefault that returns the platform's
+        // registered default (from projectSettings.json) for each of the four settings under
+        // test, keyed by Platform.Bible setting name (GetProjectSetting's fall-through calls
+        // ProjectSettingsService.GetDefault(PapiClient, settingName) using the PB name, not the
+        // Paratext name). Note the "+"/"-" caller defaults are the platform's choice (conventional
+        // Paratext usage / prior editor fallbacks) — ParatextData's own fallback for them is "".
+        await Client.RegisterRequestHandlerAsync(
+            "object:ProjectSettingsService.getDefault",
+            new Func<string, object?>(
+                (settingName) =>
+                    settingName switch
+                    {
+                        ProjectSettingsNames.PB_CHAPTER_VERSE_SEPARATOR => ".",
+                        ProjectSettingsNames.PB_VERSE_RANGE_SEPARATOR => "-",
+                        ProjectSettingsNames.PB_DEFAULT_FOOTNOTE_CALLER => "+",
+                        ProjectSettingsNames.PB_DEFAULT_CROSS_REF_CALLER => "-",
+                        _ => throw new InvalidOperationException(
+                            $"Unexpected getDefault request for '{settingName}' in this test"
+                        ),
+                    }
+            ),
+            null
+        );
+
+        _scrText = CreateDummyProject();
+        _projectDetails = CreateProjectDetails(_scrText);
+        ParatextProjects.FakeAddProject(_projectDetails, _scrText);
+
+        _provider = new DummyParatextProjectDataProvider(
+            PdpName,
+            Client,
+            _projectDetails,
+            ParatextProjects
+        );
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _scrText?.Dispose();
+    }
+
+    /// <summary>
+    /// Directly writes a raw string value into the project's ParametersDictionary so that
+    /// GetProjectSetting reads whatever we put there, without going through SetProjectSetting.
+    /// </summary>
+    private void SetRawSetting(string ptSettingName, string rawValue)
+    {
+        _scrText.Settings.ParametersDictionary[ptSettingName] = rawValue;
+    }
+
+    #region GetProjectSetting — value present in Settings.xml
+
+    [TestCase(ProjectSettingsNames.PB_CHAPTER_VERSE_SEPARATOR, "!")]
+    [TestCase(ProjectSettingsNames.PB_VERSE_RANGE_SEPARATOR, "–")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_FOOTNOTE_CALLER, "*")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_CROSS_REF_CALLER, "#")]
+    public void GetProjectSetting_ValuePresentInSettingsXml_ReturnsStoredValue(
+        string pbSettingName,
+        string storedValue
+    )
+    {
+        string ptSettingName =
+            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(pbSettingName)!;
+        SetRawSetting(ptSettingName, storedValue);
+
+        var result = _provider.GetProjectSetting(pbSettingName);
+
+        Assert.That(result, Is.EqualTo(storedValue));
+    }
+
+    #endregion
+
+    #region GetProjectSetting — setting absent, falls through to ProjectSettingsService.GetDefault
+
+    [TestCase(ProjectSettingsNames.PB_CHAPTER_VERSE_SEPARATOR, ".")]
+    [TestCase(ProjectSettingsNames.PB_VERSE_RANGE_SEPARATOR, "-")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_FOOTNOTE_CALLER, "+")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_CROSS_REF_CALLER, "-")]
+    public void GetProjectSetting_SettingAbsentFromSettingsXml_FallsThroughToGetDefaultStub(
+        string pbSettingName,
+        string stubbedDefault
+    )
+    {
+        // Nothing written into ParametersDictionary for this setting, so GetProjectSetting must
+        // fall through to ProjectSettingsService.GetDefault (stubbed in setup). This verifies the
+        // fall-through wiring only — the expected values are the stub's return values, so this
+        // says nothing about what defaults are actually registered. The contribution test below
+        // pins the stubbed values to the real projectSettings.json registration.
+        var result = _provider.GetProjectSetting(pbSettingName);
+
+        Assert.That(result, Is.EqualTo(stubbedDefault));
+    }
+
+    #endregion
+
+    #region Registered defaults in the platform-scripture contribution
+
+    /// <summary>
+    /// Path of the platform-scripture projectSettings.json contribution — the file the real
+    /// (non-stubbed) ProjectSettingsService.GetDefault serves defaults from — resolved by
+    /// walking up from the test assembly's directory (tests always run from a bin folder
+    /// inside the repo, so some ancestor is the repo root).
+    /// </summary>
+    private static string GetPlatformScriptureProjectSettingsPath()
+    {
+        string relativePath = Path.Combine(
+            "extensions",
+            "src",
+            "platform-scripture",
+            "contributions",
+            "projectSettings.json"
+        );
+        for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+        {
+            string candidate = Path.Combine(dir.FullName, relativePath);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+        throw new FileNotFoundException(
+            $"Could not find {relativePath} in any ancestor of {AppContext.BaseDirectory}"
+        );
+    }
+
+    [TestCase(ProjectSettingsNames.PB_CHAPTER_VERSE_SEPARATOR, ".")]
+    [TestCase(ProjectSettingsNames.PB_VERSE_RANGE_SEPARATOR, "-")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_FOOTNOTE_CALLER, "+")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_CROSS_REF_CALLER, "-")]
+    public void PlatformScriptureContribution_RegisteredDefault_IsExpectedLiteral(
+        string pbSettingName,
+        string expectedDefault
+    )
+    {
+        using var json = JsonDocument.Parse(
+            File.ReadAllText(GetPlatformScriptureProjectSettingsPath())
+        );
+
+        string? registeredDefault = json
+            .RootElement.EnumerateArray()
+            .Select(group =>
+                group.TryGetProperty("properties", out var properties)
+                && properties.TryGetProperty(pbSettingName, out var setting)
+                    ? setting.GetProperty("default").GetString()
+                    : null
+            )
+            .SingleOrDefault(value => value != null);
+
+        Assert.That(registeredDefault, Is.EqualTo(expectedDefault));
+    }
+
+    #endregion
+
+    #region Name mapping sanity
+
+    [TestCase(ProjectSettingsNames.PB_CHAPTER_VERSE_SEPARATOR, "ChapterVerseSeparator")]
+    [TestCase(ProjectSettingsNames.PB_VERSE_RANGE_SEPARATOR, "RangeIndicator")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_FOOTNOTE_CALLER, "DefaultFootnoteCaller")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_CROSS_REF_CALLER, "DefaultCrossRefCaller")]
+    public void GetParatextSettingNameFromPlatformBibleSettingName_MapsToExpectedParatextTag(
+        string pbSettingName,
+        string expectedParatextSettingName
+    )
+    {
+        string? ptSettingName =
+            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(pbSettingName);
+
+        Assert.That(ptSettingName, Is.EqualTo(expectedParatextSettingName));
+    }
+
+    #endregion
+}

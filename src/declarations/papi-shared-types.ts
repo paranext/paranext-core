@@ -30,6 +30,7 @@ declare module 'papi-shared-types' {
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from '@shared/services/web-view.service-model';
+  import type { AppWindowInputEvent } from '@shared/services/window.service-model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
@@ -961,6 +962,14 @@ declare module 'papi-shared-types' {
   export interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
+    /**
+     * Emitted by the main process for every mouse-down and every Escape key-down anywhere in the
+     * app window, including inside WebView iframes. Transient overlays (context menus, command
+     * palettes, dismissable popovers) dismiss on it.
+     *
+     * @experimental
+     */
+    'platform.onDidAppWindowInput': AppWindowInputEvent;
   }
 
   /** Union of all known network event names (keys of {@link NetworkEvents}). */

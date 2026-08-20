@@ -4,14 +4,16 @@ import type PapiBackend from '@papi/backend';
 import { UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
-import { EditorRef } from '@eten-tech-foundation/platform-editor';
+import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
+  decideNoteCallerClickAction,
   generateParagraphMenuListItems,
-  generateInlineMarkerMenuListItems,
+  getNextViewTypeInCycle,
   openDefaultActiveProjectIfApplicable,
   resolveOpenEditorDispatch,
+  resolveViewTypeForInterfaceMode,
   syncOnProjectSwitch,
   type OpenEditorDispatch,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -2447,61 +2449,6 @@ describe('generateParagraphMenuListItems', () => {
   });
 });
 
-describe('generateInlineMarkerMenuListItems', () => {
-  // The 'p' parent's children include block markers (e.g. 'q' poetry, 's1' section heading) and
-  // inline markers (e.g. 'f' footnote, 'x' cross-reference) against the real usfmMarkers data.
-  const PARENT = 'p';
-  const noop = () => {};
-
-  it('when protected: block-marker item is disallowed and its action notifies without inserting', () => {
-    const { ref, insertMarker } = makeMockEditorRef();
-    const notify = vi.fn();
-    const close = vi.fn();
-    const items = generateInlineMarkerMenuListItems(ref, close, {}, true, notify, PARENT);
-
-    const blockItem = items.find((i) => i.marker === 'q');
-    expect(blockItem?.isDisallowed).toBe(true);
-
-    blockItem?.action?.();
-    expect(notify).toHaveBeenCalledTimes(1);
-    expect(close).toHaveBeenCalledTimes(1);
-    expect(insertMarker).not.toHaveBeenCalled();
-  });
-
-  it('when protected: inline-marker item is allowed and its action inserts', () => {
-    const { ref, insertMarker } = makeMockEditorRef();
-    const notify = vi.fn();
-    const close = vi.fn();
-    const items = generateInlineMarkerMenuListItems(ref, close, {}, true, notify, PARENT);
-
-    const inlineItem = items.find((i) => i.marker === 'f');
-    expect(inlineItem?.isDisallowed).toBeFalsy();
-
-    inlineItem?.action?.();
-    expect(insertMarker).toHaveBeenCalledWith('f');
-    expect(notify).not.toHaveBeenCalled();
-    expect(close).toHaveBeenCalledTimes(1);
-  });
-
-  it('when not protected: no item is disallowed and all actions insert', () => {
-    const { ref, insertMarker } = makeMockEditorRef();
-    const notify = vi.fn();
-    const close = vi.fn();
-    const items = generateInlineMarkerMenuListItems(ref, close, {}, false, notify, PARENT);
-
-    expect(items.length).toBeGreaterThan(0);
-    expect(items.every((i) => !i.isDisallowed)).toBe(true);
-
-    items[0].action?.();
-    expect(insertMarker).toHaveBeenCalledWith(items[0].marker);
-    expect(notify).not.toHaveBeenCalled();
-  });
-
-  it('returns [] when there is no parent marker', () => {
-    const { ref } = makeMockEditorRef();
-    expect(generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn())).toEqual([]);
-  });
-});
 
 describe('isChapterBlank', () => {
   const emptyUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
@@ -2589,5 +2536,103 @@ describe('resolveAddChapterNumberClick', () => {
 
   it('returns "insert" when not in flight and lastVerse is positive', () => {
     expect(resolveAddChapterNumberClick(false, 3)).toBe('insert');
+  });
+});
+
+describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
+  const base = {
+    isCollapsed: true,
+    editingNoteKey: undefined,
+    popoverShown: false,
+    paneRendered: false,
+  };
+
+  it('opens the popover for a plain collapsed-caller click (pane hidden, no session)', () => {
+    expect(decideNoteCallerClickAction(base)).toEqual({
+      clearStaleEditingSession: false,
+      action: 'open-popover',
+    });
+  });
+
+  it('ignores clicks on expanded notes', () => {
+    expect(decideNoteCallerClickAction({ ...base, isCollapsed: false })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'ignore-expanded',
+    });
+  });
+
+  it('ignores clicks while a popover session is really shown (one at a time)', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: true }),
+    ).toEqual({ clearStaleEditingSession: false, action: 'ignore-popover-open' });
+  });
+
+  it('self-heals a stale session key (no popover shown) instead of dead-ending the click', () => {
+    // Pre-fix, a leftover editingNoteKey silently swallowed every future caller click.
+    expect(
+      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', popoverShown: false }),
+    ).toEqual({ clearStaleEditingSession: true, action: 'open-popover' });
+  });
+
+  it('routes to the pane only when the pane is actually rendered', () => {
+    expect(decideNoteCallerClickAction({ ...base, paneRendered: true })).toEqual({
+      clearStaleEditingSession: false,
+      action: 'focus-pane',
+    });
+  });
+
+  it('clears a stale session even when routing to the pane', () => {
+    expect(
+      decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', paneRendered: true }),
+    ).toEqual({ clearStaleEditingSession: true, action: 'focus-pane' });
+  });
+});
+
+describe('resolveViewTypeForInterfaceMode (standard view is power-mode-only)', () => {
+  it('coerces standard to formatted in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', false)).toBe('formatted');
+  });
+
+  it('keeps standard in power mode', () => {
+    expect(resolveViewTypeForInterfaceMode('standard', true)).toBe('standard');
+  });
+
+  it('leaves formatted unchanged in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('formatted', false)).toBe('formatted');
+  });
+
+  it('leaves markers unchanged in simple mode', () => {
+    expect(resolveViewTypeForInterfaceMode('markers', false)).toBe('markers');
+  });
+
+  it('leaves formatted and markers unchanged in power mode', () => {
+    expect(resolveViewTypeForInterfaceMode('formatted', true)).toBe('formatted');
+    expect(resolveViewTypeForInterfaceMode('markers', true)).toBe('markers');
+  });
+});
+
+describe('getNextViewTypeInCycle', () => {
+  it('cycles formatted -> standard -> markers -> formatted in power mode', () => {
+    expect(getNextViewTypeInCycle('formatted', true)).toBe('standard');
+    expect(getNextViewTypeInCycle('standard', true)).toBe('markers');
+    expect(getNextViewTypeInCycle('markers', true)).toBe('formatted');
+  });
+
+  it('skips standard in simple mode: formatted -> markers -> formatted', () => {
+    expect(getNextViewTypeInCycle('formatted', false)).toBe('markers');
+    expect(getNextViewTypeInCycle('markers', false)).toBe('formatted');
+  });
+
+  it('moves a lingering standard view forward to markers in simple mode', () => {
+    // A persisted 'standard' can still be the current state for a moment before the web view's
+    // coercion effect runs; cycling from it must behave as if it were already coerced.
+    expect(getNextViewTypeInCycle('standard', false)).toBe('markers');
+  });
+
+  it('never yields standard in simple mode for any current view type', () => {
+    const allViewTypes = ['formatted', 'markers', 'standard'] as const;
+    allViewTypes.forEach((current) => {
+      expect(getNextViewTypeInCycle(current, false)).not.toBe('standard');
+    });
   });
 });

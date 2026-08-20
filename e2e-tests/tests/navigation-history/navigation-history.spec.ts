@@ -1,6 +1,10 @@
+// Lives with the per-feature cdp suites (NOT under tests/isolated/): the cdp fixture connects to
+// an already-running dev app (./.erb/scripts/refresh.sh), which the isolated runner never starts —
+// and the runner's global setup fails fast when one IS running (PAPI port in use), so this spec
+// can never pass from `npm run test:e2e:isolated`.
 import { Page } from '@playwright/test';
-import { test, expect } from '../../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../../fixtures/helpers';
+import { test, expect } from '../../fixtures/cdp.fixture';
+import { waitForAppReady } from '../../fixtures/helpers';
 
 const isMac = process.platform === 'darwin';
 const BACK_KEY = isMac ? 'Meta+BracketLeft' : 'Alt+ArrowLeft';

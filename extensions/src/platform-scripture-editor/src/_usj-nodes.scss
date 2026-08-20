@@ -115,6 +115,26 @@
   vertical-align: text-top;
 }
 
+/* A verse's \va/\vp opening/closing glyphs ride INSIDE the AttributeRunNode wrapper now (they were
+   loose paragraph siblings before the flip), so their own `font-size: 0.7em`
+   (`.formatted-font.marker-editable .opening`/`.closing`/`.selfClosing` below) would otherwise
+   compound with the wrapper's OWN `font-size: 66%` above (0.7 × 0.66 ≈ 46% of the paragraph's
+   size — noticeably smaller than the pre-flip 70%, since `em` is always relative to the immediate
+   parent's computed size, not the paragraph). Reset to 100% of the wrapper's own already-reduced
+   size, matching the value's size exactly, so the glyphs and the value read as one uniformly-sized
+   green/blue-superscript run instead of two visibly different sizes glued together. Selector
+   specificity (four classes) beats the general glyph rule's three, so this wins regardless of
+   declaration order. Ported from the library's packages/platform/src/usj-nodes.css (added during
+   the display-run consolidation's AttributeRunNode wrapper migration). */
+.formatted-font.marker-editable .usfm_va .opening,
+.formatted-font.marker-editable .usfm_va .closing,
+.formatted-font.marker-editable .usfm_va .selfClosing,
+.formatted-font.marker-editable .usfm_vp .opening,
+.formatted-font.marker-editable .usfm_vp .closing,
+.formatted-font.marker-editable .usfm_vp .selfClosing {
+  font-size: 100%;
+}
+
 /* ParaNode */
 
 .formatted-font .usfm_usfm {
@@ -2087,6 +2107,43 @@
   font-size: 0.7em;
 }
 
+/* Standard view: editable markers within formatted text get the PT9 marker look.
+   MarkerNode carries its marker-syntax class (opening/closing/selfClosing), not
+   `marker` (dropped in #359); ImmutableTypedTextNode (book id) carries `marker`.
+   Verse/chapter tokens are deliberately excluded: PT9 styles them via their own
+   usfm_v/usfm_c stylesheet classes, not the grey marker look.
+   Scoped to .formatted-font so the Unformatted view keeps full-size plain markers. */
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker {
+  color: rgba(140, 140, 140, 1);
+}
+
+.formatted-font.marker-editable .opening,
+.formatted-font.marker-editable .closing,
+.formatted-font.marker-editable .selfClosing,
+.formatted-font.marker-editable .marker:not(.chapter) {
+  font-size: 0.7em;
+}
+
+/* Marker validation states (PT9 ScriptureBase.css .status_unknown/.status_invalid):
+   flag markers the project stylesheet reports as unknown or invalid. Applied to
+   marker GLYPH spans only — body text stays normal (PT9 Standard.xslt stamps status
+   on the marker span, not the element). Same error red as the unmatched-closer
+   `.invalid` rule below. */
+.marker-editable .status_unknown,
+.formatted-font.marker-editable .status_unknown {
+  color: rgba(204, 30, 20, 1);
+  font-weight: bold;
+}
+
+.marker-editable .status_invalid,
+.formatted-font.marker-editable .status_invalid {
+  color: rgba(204, 30, 20, 1);
+  border-bottom: 1px solid rgba(204, 30, 20, 1);
+}
+
 .notetext {
   unicode-bidi: embed;
 }
@@ -2096,6 +2153,23 @@
 }
 
 .attribute:hover {
+  color: rgba(25, 25, 25, 1);
+}
+
+/* AttributeRunNode: the ONE wrapper span holding a verse's \va/\vp display triplet or a
+   milestone's attribute run (AttributeRunNode.ts) — dim like a char span's `.attribute` run by
+   default, since `color` inherits down to the glyphs and value riding inside it. A verse's
+   wrapper additionally carries `usfm_va`/`usfm_vp` (added only for those two runKinds), whose
+   higher-specificity `.formatted-font .usfm_va`/`.usfm_vp` rules above override this dim color
+   with PT9's green/blue superscript — the same styling a standalone `char va`/`vp` span already
+   gets. A milestone's wrapper carries no such class, so it keeps the dim styling as its own.
+   Ported from the library's packages/platform/src/usj-nodes.css (added during the display-run
+   consolidation's AttributeRunNode wrapper migration). */
+.attribute-run {
+  color: rgba(170, 170, 170, 1);
+}
+
+.attribute-run:hover {
   color: rgba(25, 25, 25, 1);
 }
 
@@ -2141,6 +2215,21 @@
   border-radius: 10px;
 }
 
+/* \fp (footnote paragraph) displays like a paragraph start — a line break before its span —
+   while the note stays one inline run in the data (no newline ever enters USJ or USFM). A
+   ::before generated line break is used instead of `display: block` because it keeps the span
+   inline (the trailing \f* closer glyph stays on the last content line instead of dropping to
+   its own line, and the expanded-note pill background doesn't fragment around a block box) and
+   the pseudo-element is not in the DOM, so the caret can never land in it and the editor's
+   selection/serialization are untouched. Scoped to .note.expanded so it applies wherever an
+   expanded note's content is visible (inline-expanded notes in any view and the footnote
+   popover, which renders in this same web view document) and never affects collapsed notes,
+   whose content is hidden. */
+.note.expanded .usfm_fp::before {
+  content: '\A';
+  white-space: pre;
+}
+
 /* NoteNode > ImmutableNoteCallerNode */
 
 .immutable-note-caller > button,
@@ -2181,20 +2270,45 @@
     'w' 'x' 'y' 'z';
 }
 
+/* Cross-reference (x, ex) auto-generated callers use their own sequence, so they don't also
+   increment the footnote counter above. */
+@counter-style cross-ref-callers {
+  system: cyclic;
+  /* These symbols are updated in TS by the `NoteNodePlugin`. */
+  symbols: '\2020';
+  suffix: '';
+}
+
 .editor-input {
-  counter-reset: caller;
+  counter-reset: caller crossref;
 }
 
 .editor-input.reset-counters {
   counter-reset: none;
 }
 
-.immutable-note-caller[data-caller='+'] {
+.note.usfm_f .immutable-note-caller[data-caller='+'],
+.note.usfm_fe .immutable-note-caller[data-caller='+'],
+.note.usfm_ef .immutable-note-caller[data-caller='+'],
+.note.usfm_efe .immutable-note-caller[data-caller='+'] {
   counter-increment: caller;
 }
 
-.note.collapsed .immutable-note-caller[data-caller='+'] > button::before {
+.note.collapsed.usfm_f .immutable-note-caller[data-caller='+'] > button::before,
+.note.collapsed.usfm_fe .immutable-note-caller[data-caller='+'] > button::before,
+.note.collapsed.usfm_ef .immutable-note-caller[data-caller='+'] > button::before,
+.note.collapsed.usfm_efe .immutable-note-caller[data-caller='+'] > button::before {
   content: counter(caller, note-callers);
+}
+
+.note.usfm_x .immutable-note-caller[data-caller='+'],
+.note.usfm_ex .immutable-note-caller[data-caller='+'] {
+  counter-increment: crossref;
+}
+
+.note.collapsed.usfm_x .immutable-note-caller[data-caller='+'] > button::before,
+.note.collapsed.usfm_ex .immutable-note-caller[data-caller='+'] > button::before {
+  content: counter(crossref, cross-ref-callers);
 }
 
 .formatted-font.text-spacing[contenteditable='false']
@@ -2231,25 +2345,86 @@
   color: #7777ff;
 }
 
-/* The generic table-cell box that used to live here (border-collapse on tables +
-   `1px solid #000` on td, with a `.markercell` borderless exception) was moved to
-   marker-styles/commentary-overrides.scss (PT-3086) so it applies only in handbook
-   (HBKENG/TNN/TND) iframes. Real tables in the project view and other resources are
-   intentionally borderless; the paragraph-indent reset for real tables lives in the
-   table-marker section above (.usfm .table-row, .usfm .table-cell). */
+/* The table box, matching Paratext 9's ScriptureBase.css (`table`/`td`/`td.markercell`) and the
+   editor library's own sheet. It is unscoped there and here: PT9 boxes every table it renders, so
+   a project's tables need this as much as a handbook's — without it the cells lose their borders,
+   their padding and their collapsed edges, and a table reads as run-together text.
+   `th` is named alongside `td` because ImmutableTableCellNode emits a real <th> for th* markers,
+   which PT9's td-only rule predates and would otherwise leave unboxed.
+   marker-styles/commentary-overrides.scss carries an identical copy for handbook iframes; it is
+   injected later and simply re-asserts these values there. */
+.usfm table {
+  border-collapse: collapse;
+}
+
+.usfm td,
+.usfm th {
+  border: 1px solid #000000;
+  page-break-inside: avoid;
+  /* FB27281 adding padding based on font size*/
+  padding-right: 0.28em;
+  padding-left: 0.28em;
+}
+
+/* Unreachable today, and kept deliberately: PT9 wraps a row's own `\tr` glyph in a real
+   `<td class="markercell">`, which needs its border removed because `td` above gives it one. Our
+   glyph rides instead in the ANONYMOUS table cell the browser generates around the only non-cell
+   content of a `<tr>` — not a `td` element, so it matches neither rule and has no border to reset.
+   It does miss `td`'s horizontal padding, which the rule below restores directly on the glyph. */
+.usfm td.markercell {
+  border-style: none;
+}
+
+.usfm .table-row > .opening,
+.usfm .table-row > .marker {
+  padding-inline-start: 0.28em;
+}
+
 .usfm rt {
   cursor: pointer;
 }
 
-/* Style statues */
-.status_unknown {
-  color: rgba(204, 30, 20, 1);
-  font-weight: bold;
+/* UnknownNode: lossless carrier for content this editor doesn't model directly — tables,
+   figures, sidebars (\esb), \periph, \ref, \optbreak, etc. Hidden by default in every view
+   (preserves formatted/markers behavior); standard view (.marker-editable) reveals it as a subdued
+   read-only container so the content is visible/inert instead of silently invisible. The node's own
+   USFM bytes (opening marker, attribute run, closing marker) render as ordinary `.marker`/
+   `.attribute` ImmutableTypedTextNode children, already styled by the `.marker`/`.attribute` rules —
+   so NO CSS-generated `::before` label is used here; a generated label would DUPLICATE that real
+   text (a bare `\fig` would show twice; \optbreak's `//` would render as `////`). Ported from the
+   library's packages/platform/src/usj-nodes.css. The source colors it via
+   hsl(var(--muted-foreground, 215 16% 65%) / alpha), but this fork already uses --muted-foreground
+   with a DIFFERENT contract (a full color + hex fallback, lines below), so the subdued grays are
+   written as literal rgba(140, 140, 140, ...) here — matching the fork's own subdued-marker
+   convention (see `.marker-editable .book .marker` above) and avoiding the invalid hsl(var()) that
+   the contract mismatch would produce. Two corpus-proven mid-paragraph constructs get inline
+   treatment instead of a block box: \optbreak (whose `//` token is a real child text node) and \ref
+   (its own inline child text). */
+.unknown-block,
+.unknown-inline {
+  display: none;
 }
 
-.status_invalid {
-  border-bottom: 1px solid rgba(204, 30, 20, 1);
-  color: rgba(204, 30, 20, 1);
+.marker-editable .unknown-block {
+  display: block;
+  margin: 0.25em 0;
+  padding: 0.25em 0.5em;
+  /* An EMPTY opaque block (e.g. a bare \fig) must stay visible/selectable: without content the
+     box collapses to 0 height. One line-height of room keeps the dashed frame renderable. */
+  min-height: 1.5em;
+  border: 1px dashed rgba(140, 140, 140, 0.5);
+  background-color: rgba(140, 140, 140, 0.08);
+  color: rgba(140, 140, 140, 0.85);
+  /* Whole-block selection/deletion only: a selection can be made within the container but is
+     contained by it rather than merging with the surrounding text. */
+  user-select: contain;
+}
+
+.marker-editable .unknown-inline {
+  display: inline;
+  color: rgba(140, 140, 140, 0.85);
+  /* Same containment as the block variant. */
+  user-select: contain;
 }
 
 .caption {
@@ -2279,6 +2454,34 @@
   padding: 0px 1px 0px 1px;
   text-indent: 0in;
   white-space: nowrap;
+}
+
+/* Standard view only. Ported from the library's packages/platform/src/usj-nodes.css, where it had
+   been missed in this vendored copy — the app therefore painted the badge in a view the library
+   does not, which is a real app-vs-demo difference at the one element the caret rests in here.
+   In standard view (`marker-editable`) a verse is a VerseNode, i.e. editable text whose content is
+   literally `\v 4 `, so the caret can and does come to rest INSIDE this span; the grey badge from
+   `.formatted-font .verse` above then sits directly behind that caret. PT9's Standard view has no
+   background badge on verse tokens (the formatted, non-editable views keep theirs). */
+.formatted-font.marker-editable .verse {
+  white-space: nowrap;
+  unicode-bidi: embed;
+  background-color: transparent;
+}
+
+/* `.text-spacing .verse` above gives the verse token 2px of margin and 1px of padding on each side.
+   That is the separation the NON-editable views need: there a verse is a decorator rendering a bare
+   number, with no space of its own on either side of it.
+
+   In editable-marker mode the verse is a VerseNode — a TextNode whose text is literally `\v 9 `, so
+   the USFM separator space is real, selectable, caret-addressable content. The box spacing then
+   lands on top of a space the user can already see, and the view reads as TWO spaces after the
+   verse number. Only one of them is a character: the box space has no caret position of its own and
+   no selection highlight, which is exactly how it was reported. The marker's own text does all the
+   separating in this mode, so the box adds none. */
+.text-spacing.marker-editable .verse {
+  margin: 0;
+  padding: 0;
 }
 
 /* Verse marker armed for the two-step intentional delete (first Backspace/Delete selects it).

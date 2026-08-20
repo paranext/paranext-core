@@ -2,7 +2,12 @@
 // Disabling no-irregular-whitespace: test data includes irregular whitespace that we test on purpose.
 // Disabling camelcase and naming-convention: test data uses 3_1 to indicate USFM 3.1.
 /* eslint-disable no-useless-escape, no-irregular-whitespace, camelcase, @typescript-eslint/naming-convention */
-import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
+import {
+  MarkerObject,
+  Usj,
+  USJ_TYPE,
+  USJ_VERSION,
+} from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import fs from 'fs';
 import path from 'path';
@@ -32,6 +37,19 @@ import {
   UsjVerseRefBookLocation,
   UsjVerseRefChapterLocation,
 } from './usj-reader-writer.model';
+
+/**
+ * `closed` is a USX/USJ attribute ParatextData records on closer-less char spans (`\fr`, `\ft`,
+ * ...). It is not declared on `MarkerObject`, so build such spans through a widened local type —
+ * scripture-editors models it the same way with its own `ClosableMarkerObject`.
+ */
+type ClosableMarkerObject = MarkerObject & { closed?: string };
+
+/** A char marker span carrying `closed="false"`, i.e. one the source USFM never closed. */
+function closedFalseChar(marker: string, content: string[]): MarkerObject {
+  const char: ClosableMarkerObject = { type: 'char', marker, closed: 'false', content };
+  return char;
+}
 
 // #region set up file path variables
 
@@ -1874,6 +1892,86 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
 
     const resultingUsfm = usjDoc.toUsfm();
     expect(resultingUsfm).toBe(testUSFM2SACh3Usfm);
+  });
+
+  // Pins closing-marker suppression for implicitly closed char markers. ParatextData emits
+  // `closed="false"` on char markers whose closing marker is absent in the source USFM (common for
+  // footnote/cross-reference content like \fr and \ft), and editors that skip rendering those
+  // closing glyphs record the same attribute. Emitting explicit closing markers for such spans
+  // would fabricate closers the original text never had. The `closed` attribute itself must not
+  // leak into the USFM output either. The contrast span without `closed` proves the suppression
+  // comes from `closed="false"` (this markers map sets `shouldOptionalClosingMarkersBePresent`, so
+  // optional closing markers are otherwise emitted).
+  test('omits explicit closing markers for closed="false" char markers but keeps them otherwise', () => {
+    const usjWithImplicitlyClosedChars: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            closedFalseChar('bd', ['implicitly closed']),
+            ' then ',
+            { type: 'char', marker: 'bd', content: ['explicitly closed'] },
+            {
+              type: 'note',
+              marker: 'f',
+              caller: '+',
+              content: [closedFalseChar('fr', ['1.1 ']), closedFalseChar('ft', ['note text'])],
+            },
+            ' after.',
+          ],
+        },
+      ],
+    };
+    const usjDoc = new UsjReaderWriter(
+      usjWithImplicitlyClosedChars,
+      usjReaderWriterOptionsParatext3_0,
+    );
+
+    const resultingUsfm = usjDoc.toUsfm();
+    expect(resultingUsfm).toBe(
+      '\\p \\bd implicitly closed then \\bd explicitly closed\\bd*\\f + \\fr 1.1 \\ft note text\\f* after.\n',
+    );
+  });
+
+  // Pins that a note holding consecutive \fp (footnote-paragraph) spans stays a single inline
+  // run: the editor renders each \fp as a paragraph start via a CSS-generated line break only,
+  // so the USFM must keep the whole note on one line with no newline characters anywhere inside
+  // it. \fp spans carry closed="false" (they never have their own closing markers), matching
+  // what ParatextData and the editor record for footnote content.
+  test('keeps a note with \\fp footnote paragraphs on one line with no newline characters', () => {
+    const usjWithFpNote: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            {
+              type: 'note',
+              marker: 'f',
+              caller: '+',
+              content: [
+                closedFalseChar('fr', ['1:1 ']),
+                closedFalseChar('ft', ['a ']),
+                closedFalseChar('fp', ['b ']),
+                closedFalseChar('fp', ['c']),
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    const usjDoc = new UsjReaderWriter(usjWithFpNote, usjReaderWriterOptionsParatext3_0);
+
+    const resultingUsfm = usjDoc.toUsfm();
+
+    expect(resultingUsfm).toBe('\\p \\f + \\fr 1:1 \\ft a \\fp b \\fp c\\f*\n');
+    // The only newline is the paragraph terminator — nothing inside the note.
+    expect(resultingUsfm.slice(0, -1)).not.toContain('\n');
   });
 });
 

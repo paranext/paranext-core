@@ -117,6 +117,30 @@
         "isHidden": true,
         "default": "",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.chapterVerseSeparator": {
+        "label": "%project_settings_platformScripture_chapterVerseSeparator_label%",
+        "description": "%project_settings_platformScripture_chapterVerseSeparator_description%",
+        "default": ".",
+        "includeProjectInterfaces": ["Paratext"]
+      },
+      "platformScripture.verseRangeSeparator": {
+        "label": "%project_settings_platformScripture_verseRangeSeparator_label%",
+        "description": "%project_settings_platformScripture_verseRangeSeparator_description%",
+        "default": "-",
+        "includeProjectInterfaces": ["Paratext"]
+      },
+      "platformScripture.defaultFootnoteCaller": {
+        "label": "%project_settings_platformScripture_defaultFootnoteCaller_label%",
+        "description": "%project_settings_platformScripture_defaultFootnoteCaller_description%",
+        "default": "+",
+        "includeProjectInterfaces": ["Paratext"]
+      },
+      "platformScripture.defaultCrossRefCaller": {
+        "label": "%project_settings_platformScripture_defaultCrossRefCaller_label%",
+        "description": "%project_settings_platformScripture_defaultCrossRefCaller_description%",
+        "default": "-",
+        "includeProjectInterfaces": ["Paratext"]
       }
     }
   }

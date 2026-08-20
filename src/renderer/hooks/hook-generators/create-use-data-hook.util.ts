@@ -7,7 +7,7 @@ import {
 } from '@shared/models/data-provider.model';
 import { IDataProvider } from '@shared/models/data-provider.interface';
 import { useEventAsync } from 'platform-bible-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   EventRollingTimeCounter,
   isString,
@@ -149,6 +149,15 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
       // Indicates if the data with the selector is awaiting retrieval from the data provider
       const [isLoading, setIsLoading] = useState<boolean>(true);
 
+      // Mark that we are loading again whenever we are about to (re)subscribe — synchronously with
+      // the data provider/selector change rather than from the outgoing subscription's async
+      // teardown. Rapid selector changes tear down multiple subscriptions whose completions settle
+      // in unpredictable order, so a teardown-driven `setIsLoading(true)` could land AFTER the
+      // current subscription already delivered and wedge the flag at the wrong value.
+      useEffect(() => {
+        setIsLoading(true);
+      }, [dataProvider, selector]);
+
       // Wrap subscribe so we can call it as a normal PapiEvent in useEvent
       const wrappedSubscribeEvent:
         | PlatformEventAsync<TDataTypes[TDataType]['getData'] | PlatformError>
@@ -171,26 +180,30 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
                   )(
                     /* eslint-enable */
                     selector,
-                    (subscriptionData: TDataTypes[TDataType]['getData'] | PlatformError) => {
-                      eventCallback(subscriptionData);
-                      // When we receive updated data, mark that we are not loading
-                      setIsLoading(false);
-                    },
+                    eventCallback,
                     subscriberOptionsRef.current,
                   );
 
-                return async () => {
-                  // When we change data type or selector, mark that we are loading
-                  setIsLoading(true);
-                  return unsub();
-                };
+                return async () => unsub();
               }
             : undefined,
         [dataProvider, selector],
       );
 
+      // Both state writes ride useEventAsync's per-subscription delivery guard: a superseded
+      // subscription's late emission (e.g. one already in flight when the selector changed) can
+      // neither overwrite `data` nor clear `isLoading` for the current selector.
+      const handleSubscriptionData = useCallback(
+        (subscriptionData: TDataTypes[TDataType]['getData'] | PlatformError) => {
+          setDataInternal(subscriptionData);
+          // When we receive updated data, mark that we are not loading
+          setIsLoading(false);
+        },
+        [],
+      );
+
       // Subscribe to the data provider
-      useEventAsync(wrappedSubscribeEvent, setDataInternal);
+      useEventAsync(wrappedSubscribeEvent, handleSubscriptionData);
 
       // TODO: cache latest setStateAction and fire until we have dataProvider instead of having setData be undefined until we have dataProvider?
       /**

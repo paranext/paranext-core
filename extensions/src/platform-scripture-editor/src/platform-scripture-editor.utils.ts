@@ -22,7 +22,6 @@ import {
   aggregateUnsubscribers,
   formatReplacementString,
   getErrorMessage,
-  isBlockMarker,
   isLocalizeKey,
   isPlatformError,
   LanguageStrings,
@@ -30,19 +29,66 @@ import {
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
-  usfmMarkers,
   UsjDocumentLocation,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import type { ScriptureRange } from 'platform-scripture-editor';
+import type { ScriptureEditorViewType, ScriptureRange } from 'platform-scripture-editor';
 import type { SharedProjectsInfo } from 'platform-scripture';
 import type { MutableRefObject } from 'react';
+// import type ONLY: this module is reachable from main.ts (the extension host), and any RUNTIME
+// import from the editor package drags its React-bundling dist into the main bundle, breaking
+// extension activation. See platform-scripture-editor.web-view.utils.ts's header.
 import type { DeltaOp, EditorRef } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 
 // Note: src/main/shutdown-tasks.ts has a copy of this value — keep them in sync.
 export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
+
+/**
+ * Resolves the view type the editor is allowed to show under the current `platform.interfaceMode`.
+ * Standard view is a power-mode-only surface: its PT9-parity editing affordances (the `\`/Enter
+ * marker palettes, paragraph-marker editing) assume paragraph markers can be edited, but simple
+ * mode pairs with structure protection, which intentionally blocks paragraph-marker edits — so a
+ * simple-mode user must never land in standard view (e.g. via a `viewType` persisted during a
+ * power-mode session). Coerces 'standard' to 'formatted' (the simple-mode default view) when not in
+ * power mode; every other combination passes through unchanged.
+ *
+ * @param viewType The current (requested or persisted) view type
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @returns The view type that should actually be shown
+ */
+export function resolveViewTypeForInterfaceMode(
+  viewType: ScriptureEditorViewType,
+  isPowerMode: boolean,
+): ScriptureEditorViewType {
+  if (viewType === 'standard' && !isPowerMode) return 'formatted';
+  return viewType;
+}
+
+/**
+ * Computes the next view type for the view-cycling affordance (the `changeScriptureView` command).
+ * Power mode cycles formatted -> standard -> markers -> formatted; simple mode skips 'standard'
+ * entirely (see {@link resolveViewTypeForInterfaceMode}), cycling formatted <-> markers.
+ *
+ * Cycles on the view type rather than `ViewOptions.markerMode`: in non-power mode both 'formatted'
+ * and 'markers' resolve to markerMode 'hidden' (the non-power markers view overrides only
+ * noteMode), so a markerMode-based cycle would orphan 'formatted'.
+ *
+ * @param viewType The current view type (resolved for mode first, so a lingering 'standard' in
+ *   simple mode advances as if it were already coerced)
+ * @param isPowerMode Whether `platform.interfaceMode` is 'power'
+ * @returns The next view type in the mode-appropriate cycle
+ */
+export function getNextViewTypeInCycle(
+  viewType: ScriptureEditorViewType,
+  isPowerMode: boolean,
+): ScriptureEditorViewType {
+  const current = resolveViewTypeForInterfaceMode(viewType, isPowerMode);
+  if (current === 'formatted') return isPowerMode ? 'standard' : 'markers';
+  if (current === 'standard') return 'markers';
+  return 'formatted';
+}
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
@@ -82,6 +128,63 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
   // well right now
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return { ...editorUsj, version: '3.0' as typeof USJ_VERSION };
+}
+
+/** Snapshot of the state a collapsed-note caller click decides against. */
+export interface NoteCallerClickState {
+  /**
+   * Whether the clicked note is collapsed (expanded notes are edited in place, not via click).
+   * `undefined` (the adaptor could not tell) is treated as not collapsed, matching the original
+   * `noteCallerOnClick` guard.
+   */
+  isCollapsed: boolean | undefined;
+  /** The note key of an in-progress footnote-editor session, if any. */
+  editingNoteKey: string | undefined;
+  /** Whether the footnote-editor popover is actually shown right now. */
+  popoverShown: boolean;
+  /** Whether the footnotes pane is actually rendered (visible toggle AND data loaded). */
+  paneRendered: boolean;
+}
+
+/** What a collapsed-note caller click should do — see {@link decideNoteCallerClickAction}. */
+export interface NoteCallerClickDecision {
+  /**
+   * True when `editingNoteKey` belongs to a session whose popover is no longer shown — orphaned
+   * bookkeeping that would otherwise dead-end every future caller click; clearing it keeps the
+   * failure benign. The caller must clear the editing-session refs before acting.
+   */
+  clearStaleEditingSession: boolean;
+  /**
+   * What the caller click resolves to:
+   *
+   * - `ignore-expanded` — the note is expanded (edited in place), so the click does nothing.
+   * - `ignore-popover-open` — a footnote-editor popover is already shown, so the click is ignored.
+   * - `focus-pane` — focus/highlight the note in the footnotes pane (PT9 navigate-to-note).
+   * - `open-popover` — open the footnote-editor popover for the clicked note.
+   */
+  action: 'ignore-expanded' | 'ignore-popover-open' | 'focus-pane' | 'open-popover';
+}
+
+/**
+ * Decides what a click on a note caller does. Pure decision logic extracted from
+ * `noteCallerOnClick` in the web view so the dead-click branches stay pinned by unit tests:
+ *
+ * - An expanded note's caller does nothing (the note is edited in place).
+ * - While a footnote-editor popover is really shown, clicks are ignored (one session at a time).
+ * - An editing-session key without a shown popover is STALE — it must not block the click.
+ * - Pane actually rendered → focus/highlight the note there (PT9 navigate-to-note); the pane's
+ *   visibility toggle alone is not enough (the pane also needs its data to render).
+ * - Otherwise → open the footnote-editor popover.
+ */
+export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCallerClickDecision {
+  if (!state.isCollapsed) return { clearStaleEditingSession: false, action: 'ignore-expanded' };
+  // A truthy editingNoteKey marks an editing session (matches the original inline guard's
+  // truthiness check; an empty-string key is never a live session).
+  if (state.editingNoteKey && state.popoverShown)
+    return { clearStaleEditingSession: false, action: 'ignore-popover-open' };
+  const clearStaleEditingSession = !!state.editingNoteKey;
+  if (state.paneRendered) return { clearStaleEditingSession, action: 'focus-pane' };
+  return { clearStaleEditingSession, action: 'open-popover' };
 }
 
 // #region Editor Title Formatting
@@ -424,63 +527,11 @@ export function generateParagraphMenuListItems(
   });
 }
 
-/**
- * Function that generates the inline marker menu items that will update as the cursor location
- * changes. In the future this function will take data from an `.sty` file so that users can define
- * their own markers.
- *
- * @param editorRef The ref for the editor component to be able to insert markers
- * @param closeMarkersMenu Callback to close the markers menu after an action
- * @param localizedStrings The localized strings to use to localize the marker titles
- * @param isStructureProtected Whether the project's paragraph structure is currently protected;
- *   when `true`, block-level markers will be disallowed and their action will call
- *   `notifyStructureProtected` instead of inserting
- * @param notifyStructureProtected Callback to invoke when the user attempts to insert a block-level
- *   marker while structure is protected
- * @param parentMarker The current parent marker which is used to determine which markers to include
- * @returns The list of inline marker menu items
- */
-export function generateInlineMarkerMenuListItems(
-  editorRef: MutableRefObject<EditorRef | null>,
-  closeMarkersMenu: () => void,
-  localizedStrings: LanguageStrings,
-  isStructureProtected: boolean,
-  notifyStructureProtected: () => void,
-  parentMarker?: string,
-): MarkerMenuItem[] {
-  if (!parentMarker) return [];
-
-  const markerDetails = usfmMarkers[parentMarker];
-  if (!markerDetails?.children) return [];
-
-  const markerMenuItems: MarkerMenuItem[] = [];
-  Object.entries(markerDetails.children).forEach(([, markers]) => {
-    markerMenuItems.push(
-      ...markers.map((marker): MarkerMenuItem => {
-        const isDisallowed = isStructureProtected && isBlockMarker(marker);
-        return {
-          marker,
-          title:
-            localizedStrings[usfmMarkers[marker].description] ?? usfmMarkers[marker].description,
-          isDisallowed,
-          action: () => {
-            // Defense-in-depth: unreachable while the menu renders `isDisallowed` items as disabled
-            // `CommandItem`s (a disabled cmdk item never fires `onSelect`). Kept as a second layer of
-            // protection in case that disabled rendering is ever loosened or the menu wiring changes.
-            if (isDisallowed) {
-              notifyStructureProtected();
-              closeMarkersMenu();
-              return;
-            }
-            editorRef.current?.insertMarker(marker);
-            closeMarkersMenu();
-          },
-        };
-      }),
-    );
-  });
-  return markerMenuItems.sort((a, b) => (a.marker ?? a.title).localeCompare(b.marker ?? b.title));
-}
+// NOTE: the stylesheet-driven inline marker menu generator and the command-palette helpers live in
+// `platform-scripture-editor.web-view.utils.ts`, NOT here — they import runtime values from
+// `@eten-tech-foundation/platform-editor`, whose React-bundling dist must never reach the
+// extension-host (`main.ts`) bundle this module is part of. This module is restricted to
+// `import type` from that package. See that file's header for the full activation-failure story.
 
 // #region Open Editor Dispatch
 

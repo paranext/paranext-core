@@ -77,7 +77,23 @@ export type {
 export {
   default as FootnoteEditor,
   type FootnoteEditorProps,
+  type FootnoteEditorMarkerPalette,
+  markerMenuItemToPaletteItem,
 } from './components/advanced/footnote-editor/footnote-editor.component';
+export {
+  clearPaletteSessionIfCurrent,
+  getMarkerPaletteClaimedKeys,
+  handleMarkerPaletteSessionKeyDown,
+  type MarkerPaletteKeyEvent,
+  type MarkerPaletteKeyOutcome,
+  type MarkerPaletteSessionDriver,
+  type MarkerPaletteSessionKind,
+  type MarkerPaletteSessionState,
+} from './components/advanced/marker-palette-keydown.util';
+export {
+  filterAndRankPaletteItems,
+  type PaletteFilterMode,
+} from './components/advanced/marker-palette-filter.util';
 export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,

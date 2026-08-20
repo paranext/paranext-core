@@ -6,7 +6,9 @@
  * behalf.
  */
 
-import { LocalizeKey, PlatformError } from 'platform-bible-utils';
+import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
+import { filterAndRankPaletteItems } from 'platform-bible-react';
 import type { ReactElement } from 'react';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 
@@ -96,22 +98,15 @@ export interface PopoverRequest {
 /**
  * A single item in a command palette. Items are displayed in a searchable, filterable list. The
  * user types to filter and selects one item.
+ *
+ * Extends the shared {@link PaletteItem} contract (id/label/description/badge/disabled/muted) with
+ * the presentation extras only this overlay renders.
  */
-export type CommandPaletteItem = {
-  /** Unique identifier returned when this item is selected */
-  id: string;
-  /** Primary display text (e.g., marker code like "ft" or command name) */
-  label: string | LocalizeKey;
-  /** Secondary description text displayed below the label */
-  description?: string | LocalizeKey;
+export type CommandPaletteItem = PaletteItem & {
   /** Optional icon displayed to the left of the label */
   icon?: string;
-  /** Optional badge text (e.g., "Deprecated", "Disallowed") */
-  badge?: string | LocalizeKey;
   /** Optional group key for visual sectioning with group headers */
   group?: string;
-  /** Whether the item is grayed out and non-selectable. Defaults to false. */
-  disabled?: boolean;
 };
 
 /** Request payload for {@link IOverlayService.showCommandPalette}. */
@@ -133,6 +128,95 @@ export interface CommandPaletteRequest {
   maxHeight?: number;
   /** Whether clicking outside dismisses the palette. Defaults to true. */
   dismissOnClickOutside?: boolean;
+  /**
+   * When true, renders without a search input and without stealing focus from the requesting
+   * WebView. Filter text and the highlighted selection are driven externally via
+   * {@link IOverlayService.updateCommandPalette} and committed via
+   * {@link IOverlayService.commitCommandPaletteSelection} instead of the palette's own search box
+   * and keyboard handling. Defaults to false (the palette owns its own search input and focus, as
+   * today).
+   *
+   * @remarks
+   * Passive-palette filtering and commit resolution match the externally supplied filter text
+   * case-insensitively against the PREFIX of each item's `label`: a leading `+` in the filter is
+   * stripped first (so `"+w"` matches the same items as `"w"`), and an empty or omitted filter
+   * shows every item. `LocalizeKey` labels are resolved to localized text when the palette is
+   * shown, so matching always runs against the same label text the palette displays.
+   */
+  passive?: boolean;
+  /**
+   * Keys the REQUESTING session claims while this palette is open, and where to send them.
+   *
+   * The palette and the session that opened it live in different documents, so whichever holds
+   * focus is the only one that sees a keystroke. A palette that takes focus therefore silently
+   * takes the session's keys with it: its commit semantics stop running, and a local default (e.g.
+   * cmdk's own navigation) answers instead. Declaring the claimed keys closes that — the palette
+   * forwards exactly those to {@link PaletteKeyForwarding.onKey} and acts on none of them itself.
+   *
+   * A focus-stealing (non-passive) palette is what makes this necessary; a passive one never takes
+   * focus, so its requester already receives every key and forwarding is inert there. Requesters
+   * still declare it for both, so one code path covers a palette that unexpectedly receives a key.
+   * Omit it entirely and the palette behaves exactly as it did before forwarding existed.
+   *
+   * @remarks
+   * The handler is called synchronously, in the palette's own document. This is a direct function
+   * reference rather than serialized data: the overlay service is renderer-only and a requesting
+   * WebView is a same-origin iframe sharing the renderer's `papi`, so no boundary is crossed. The
+   * forwarded value is a plain `ForwardedPaletteKeyEvent` rather than a live DOM event, which keeps
+   * it free of the requester's realm.
+   */
+  keyForwarding?: PaletteKeyForwarding;
+}
+
+/**
+ * How {@link filterPaletteItems} matches filter text against items — one mode per palette flavor:
+ *
+ * - `'passive'` — case-insensitive PREFIX match on `label` only. Passive palettes show bare marker
+ *   codes (`f`, `fe`, `fig`) filtered by the marker prefix the user has typed into the document,
+ *   mirroring PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in
+ *   the filter text is stripped before matching, so `"+w"` matches the same items as `"w"`.
+ * - `'active'` — case-insensitive CONTAINMENT match, still on `label` only. Description/badge
+ *   matching was retired (owner-directed): it buried exact marker matches under description hits
+ *   (typing `w` ranked the exact `w` ninth behind items whose descriptions contained a "w").
+ *
+ * Both modes rank matches exact-first — see {@link filterPaletteItems}.
+ */
+export type PaletteFilterMode = 'active' | 'passive';
+
+/**
+ * Filters command palette items by matching `filterText` against each item's `label`, with
+ * per-{@link PaletteFilterMode} semantics (passive prefix-matches with a leading `+` stripped from
+ * the filter first, active containment-matches), and ranks the matches EXACT-FIRST: exact label
+ * match, then prefix matches, then containment matches, ties keeping their original context order.
+ * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
+ * never be case-picky). Returns `items` unchanged when `filterText` is empty or undefined.
+ *
+ * Delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the editor package's
+ * own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette — so the host
+ * palette and the editor palette can never disagree about ordering, and the marker-palette keydown
+ * table's zero-match detection counts with the same semantics.
+ *
+ * This is the single filtering implementation shared by {@link IOverlayService}'s host-side
+ * `commitCommandPaletteSelection` (to resolve the highlighted item) and the command palette
+ * component (to render the filtered list) — using one function for both keeps host-side selection
+ * and on-screen rendering from disagreeing about which items are visible.
+ *
+ * @remarks
+ * Matching operates directly on the strings in `items` with no localization of its own. Both
+ * callers pass items whose `LocalizeKey` text was already resolved to localized strings when the
+ * palette was shown (see {@link IOverlayService.showCommandPalette}), so host-side filtering, commit
+ * resolution, and the rendered list all match against the same display text.
+ * @param items The full, unfiltered list of command palette items
+ * @param filterText The current filter text, or undefined/empty for no filtering
+ * @param mode Which palette flavor's matching semantics to apply
+ * @returns The items matching the filter text under the given mode, ranked exact-first
+ */
+export function filterPaletteItems(
+  items: CommandPaletteItem[],
+  filterText: string | undefined,
+  mode: PaletteFilterMode,
+): CommandPaletteItem[] {
+  return filterAndRankPaletteItems(items, filterText, mode);
 }
 
 // ── Service Interface ──
@@ -220,6 +304,10 @@ export interface IOverlayService {
    * Shows a command palette with searchable/filterable items. Returns a promise that resolves with
    * the selected item's `id`, or `undefined` if dismissed.
    *
+   * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings when
+   * the palette is shown, so all filtering — the palette's own search box and text forwarded via
+   * {@link updateCommandPalette} — matches against the text the user actually sees.
+   *
    * @param request The items, optional anchor position, and display options
    * @param webViewId The ID of the WebView requesting the command palette
    * @returns The selected item's ID, or `undefined` if dismissed
@@ -231,6 +319,48 @@ export interface IOverlayService {
     request: CommandPaletteRequest,
     webViewId: string,
   ): Promise<string | undefined>;
+  /**
+   * Updates the filter text and/or moves the highlighted selection of the active command palette
+   * for the given WebView. No-op if no command palette is active for that WebView.
+   *
+   * Unlike the popover family above (keyed by the overlay ID returned from `showPopover`), the
+   * command palette mutators are keyed by `webViewId` instead. The service enforces one command
+   * palette per WebView at a time (see this interface's class docs), so the requesting WebView's
+   * own ID is a sufficient handle — passive-mode callers drive the palette without ever seeing an
+   * overlay ID.
+   *
+   * @param webViewId The ID of the WebView whose command palette should be updated
+   * @param update `filterText` and/or `moveSelection` (clamped to the filtered list's bounds).
+   *   `filterText` drives passive palettes' list directly and, for ACTIVE palettes, the
+   *   (controlled) search input — callers forward keystrokes this way when the cross-frame focus
+   *   handoff loses and the user's typing lands in their WebView instead of the palette.
+   */
+  updateCommandPalette(
+    webViewId: string,
+    update: { filterText?: string; moveSelection?: number },
+  ): Promise<void>;
+  /**
+   * Commits the currently highlighted item of the active command palette for the given WebView,
+   * resolving its `showCommandPalette` promise with that item's `id` (mirrors how a click on a
+   * command palette item resolves the promise). If the highlighted item is `disabled`, moves
+   * forward to the next enabled item in the filtered list; if none are enabled, no-ops. No-op if no
+   * command palette is active for that WebView.
+   *
+   * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+   *
+   * @param webViewId The ID of the WebView whose command palette selection should be committed
+   */
+  commitCommandPaletteSelection(webViewId: string): Promise<void>;
+  /**
+   * Dismisses the active command palette for the given WebView, resolving its `showCommandPalette`
+   * promise with `undefined`. Works for both active and passive palettes. No-op if no command
+   * palette is active for that WebView.
+   *
+   * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+   *
+   * @param webViewId The ID of the WebView whose command palette should be dismissed
+   */
+  dismissCommandPalette(webViewId: string): Promise<void>;
 }
 
 // ── Internal Overlay Store Types ──
@@ -312,8 +442,26 @@ export type OverlayEntry =
       webViewId: string;
       /** The original request */
       request: CommandPaletteRequest;
-      /** Items to render */
+      /**
+       * Items to render, with any `LocalizeKey` `label`/`description`/`badge` text already resolved
+       * to localized strings at show time — filtering, commit resolution, and rendering all read
+       * from here so they always agree on each item's text.
+       */
       items: CommandPaletteItem[];
+      /**
+       * Current filter text. Mutable — updated in place by `updateCommandPalette` for BOTH passive
+       * and active palettes: a passive palette's list is driven by this filter text directly, while
+       * an active palette uses it to drive its controlled cmdk input from forwarded keystrokes.
+       * Undefined when unset or cleared — never the empty string (the store normalizes `''` to
+       * undefined).
+       */
+      filterText?: string;
+      /**
+       * Index of the highlighted item within `filterPaletteItems(items, filterText)`. Mutable —
+       * updated in place by `updateCommandPalette`'s `moveSelection`, clamped to the filtered
+       * list's bounds. Defaults to 0 at creation.
+       */
+      selectedIndex: number;
       /** Document-relative position (translated + clamped), or undefined for centered */
       position?: { x: number; y: number };
       /** Settles the caller's promise with the selected item ID, or undefined if dismissed */

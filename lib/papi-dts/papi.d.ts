@@ -4107,6 +4107,189 @@ declare module 'shared/services/web-view.service-model' {
     SingleMethodDocumentation
   >;
 }
+declare module 'shared/services/window.service-model' {
+  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { DirectionFromTab } from 'shared/models/docking-framework.model';
+  /**
+   *
+   * This name is used to register the window data provider on the papi. You can use this name to
+   * find the data provider when accessing it using the useData hook
+   */
+  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
+  export const windowServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the window data provider on the papi. You can use this name to
+     * find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.windowServiceDataProvider';
+  }>;
+  /** Focus of the window is on a WebView iframe with the specified id */
+  export type FocusSubjectWebView = {
+    focusType: 'webView';
+    /** ID of the WebView in focus (its tab ID is the same) */
+    id: string;
+  };
+  /**
+   * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
+   *
+   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
+   * focused in the WebView's iframe
+   */
+  export type FocusSubjectTab = {
+    focusType: 'tab';
+    /** The type of tab. `webView` if it is a WebView tab. */
+    tabType: 'webView' | string;
+    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
+    id: string;
+  };
+  /** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
+  export type FocusSubjectOther = {
+    focusType: 'other';
+  };
+  /** Current item that is the subject of top-level focus in the window */
+  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  /**
+   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
+   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
+   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
+   * for focus subjects that do not refer to a web view.
+   *
+   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
+   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
+   * focus subject shapes change.
+   */
+  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
+  /**
+   * A raw input gesture in the app window that transient overlays (context menus, command palettes,
+   * dismissable popovers) treat as a request to dismiss.
+   *
+   * - `'mouseDown'` — a mouse button went down anywhere in the window
+   * - `'escape'` — the Escape key went down anywhere in the window
+   *
+   * These two gestures are deliberately the ONLY inputs this type can describe. Do not add other keys
+   * or richer mouse detail — see the security note on {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT}.
+   */
+  export type AppWindowInputKind = 'mouseDown' | 'escape';
+  /**
+   * Payload of the {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} network event.
+   *
+   * Deliberately carries nothing but which of the two gestures happened — no key identity, no mouse
+   * coordinates, button, or target. See the security note on
+   * {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} before adding fields.
+   */
+  export type AppWindowInputEvent = {
+    /** Which input gesture happened */
+    kind: AppWindowInputKind;
+  };
+  /**
+   * Name of the network event the main process emits for every mouse-down and every Escape key-down
+   * in the app window.
+   *
+   * The main process's `before-mouse-event`/`before-input-event` hooks see input in EVERY frame,
+   * including WebView iframes whose events never reach the parent document. Overlays render in the
+   * parent document, so this event is the only way they learn that a click landed inside a WebView.
+   * Escape is announced without `preventDefault`, so the focused frame still receives the key and can
+   * act on it too.
+   *
+   * SECURITY: network events are visible to every process and every extension, and the hooks feeding
+   * this one see ALL input in the window — including keystrokes typed into other extensions' web
+   * views. The announcement is therefore restricted to the two overlay-dismissal gestures, with no
+   * key identity, coordinates, or any other detail, so the event cannot be used as a keylogger or to
+   * surveil user input. Do not broaden what is announced here without a security review.
+   */
+  export const EVENT_NAME_ON_DID_APP_WINDOW_INPUT = 'platform.onDidAppWindowInput';
+  /** Specific item that is intended to be focused in the top-level app window */
+  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
+  /** Instructions that indicate how to change the focus within the window */
+  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
+  export type WindowDataTypes = {
+    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [windowServiceProviderName]: IWindowService;
+    }
+  }
+  /**
+   *
+   * Service that allows to interact with the current application window
+   */
+  export type IWindowService = {
+    /**
+     *
+     * Get information about the current subject of focus in the current window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the current window's current subject of focus
+     */
+    getFocus(selector: undefined): Promise<FocusSubject>;
+    /**
+     *
+     * Get information about the current subject of focus in the current window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the current window's current subject of focus
+     */
+    getFocus(): Promise<FocusSubject>;
+    /**
+     * Sets the subject of focus in the current window.
+     *
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Sets the subject of focus in the current window.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     *
+     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
+     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
+     *   `'detect'`.
+     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      selector: undefined,
+      focusSubject: SetFocusSpecifier,
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the current window's subject of focus is changed
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the updated localized menuContent for this selector. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeFocus(
+      selector: undefined,
+      callback: (focusSubject: FocusSubject | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof windowServiceObjectToProxy &
+    IDataProvider<WindowDataTypes>;
+}
 declare module 'shared/models/web-view-provider.model' {
   import {
     WebViewDefinition,
@@ -4473,6 +4656,7 @@ declare module 'papi-shared-types' {
     OpenWebViewEvent,
     UpdateWebViewEvent,
   } from 'shared/services/web-view.service-model';
+  import type { AppWindowInputEvent } from 'shared/services/window.service-model';
   import { WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -5355,6 +5539,14 @@ declare module 'papi-shared-types' {
   interface NetworkEvents extends MultiSourceNetworkEvents {
     /** Emitted when extensions finish reloading. `true` if reload succeeded, `false` if it failed. */
     'platform.onDidReloadExtensions': boolean;
+    /**
+     * Emitted by the main process for every mouse-down and every Escape key-down anywhere in the
+     * app window, including inside WebView iframes. Transient overlays (context menus, command
+     * palettes, dismissable popovers) dismiss on it.
+     *
+     * @experimental
+     */
+    'platform.onDidAppWindowInput': AppWindowInputEvent;
   }
   /** Union of all known network event names (keys of {@link NetworkEvents}). */
   type NetworkEventTypes = keyof NetworkEvents;
@@ -9536,6 +9728,30 @@ declare module 'renderer/services/overlays/overlay-store' {
    * @returns True if the overlay was found and updated, false otherwise
    */
   export function updateOverlayContent(id: string, content: PopoverContent): boolean;
+  /**
+   * Updates the mutable `filterText`/`selectedIndex` state of a command palette overlay and notifies
+   * subscribers. `selectedIndex` is always clamped to `[0, itemCount - 1]` (or `0` when `itemCount`
+   * is `0`) — both when moved by `selectedIndexDelta` and when left alone, since a `filterText`
+   * change can shrink the filtered list out from under the previous index.
+   *
+   * @param id The overlay id to update
+   * @param patch `filterText` replaces the stored filter text (omit to leave it unchanged; the empty
+   *   string is normalized to undefined so the entry never stores `''`); `selectedIndex` sets the
+   *   highlighted index ABSOLUTELY (the active palette mirrors cmdk's arrow-key highlight this way —
+   *   it knows the resulting index, not a delta) and wins over `selectedIndexDelta`, which moves the
+   *   current index by this many items; both clamp; `itemCount` is the length of the filtered item
+   *   list used to clamp `selectedIndex`
+   * @returns True if the overlay was found and updated, false otherwise
+   */
+  export function updateCommandPaletteState(
+    id: string,
+    patch: {
+      filterText?: string;
+      selectedIndex?: number;
+      selectedIndexDelta?: number;
+      itemCount: number;
+    },
+  ): boolean;
 }
 declare module 'renderer/components/overlays/overlay-context-menu.component' {
   import { OverlayEntry } from 'renderer/services/overlays/overlay.service-model';
@@ -9628,7 +9844,8 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * so this service provides a way for them to request overlays that the renderer hosts on their
    * behalf.
    */
-  import { LocalizeKey, PlatformError } from 'platform-bible-utils';
+  import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
+  import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
   import type { ReactElement } from 'react';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   /**
@@ -9715,22 +9932,15 @@ declare module 'renderer/services/overlays/overlay.service-model' {
   /**
    * A single item in a command palette. Items are displayed in a searchable, filterable list. The
    * user types to filter and selects one item.
+   *
+   * Extends the shared {@link PaletteItem} contract (id/label/description/badge/disabled/muted) with
+   * the presentation extras only this overlay renders.
    */
-  export type CommandPaletteItem = {
-    /** Unique identifier returned when this item is selected */
-    id: string;
-    /** Primary display text (e.g., marker code like "ft" or command name) */
-    label: string | LocalizeKey;
-    /** Secondary description text displayed below the label */
-    description?: string | LocalizeKey;
+  export type CommandPaletteItem = PaletteItem & {
     /** Optional icon displayed to the left of the label */
     icon?: string;
-    /** Optional badge text (e.g., "Deprecated", "Disallowed") */
-    badge?: string | LocalizeKey;
     /** Optional group key for visual sectioning with group headers */
     group?: string;
-    /** Whether the item is grayed out and non-selectable. Defaults to false. */
-    disabled?: boolean;
   };
   /** Request payload for {@link IOverlayService.showCommandPalette}. */
   export interface CommandPaletteRequest {
@@ -9756,7 +9966,92 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     maxHeight?: number;
     /** Whether clicking outside dismisses the palette. Defaults to true. */
     dismissOnClickOutside?: boolean;
+    /**
+     * When true, renders without a search input and without stealing focus from the requesting
+     * WebView. Filter text and the highlighted selection are driven externally via
+     * {@link IOverlayService.updateCommandPalette} and committed via
+     * {@link IOverlayService.commitCommandPaletteSelection} instead of the palette's own search box
+     * and keyboard handling. Defaults to false (the palette owns its own search input and focus, as
+     * today).
+     *
+     * @remarks
+     * Passive-palette filtering and commit resolution match the externally supplied filter text
+     * case-insensitively against the PREFIX of each item's `label`: a leading `+` in the filter is
+     * stripped first (so `"+w"` matches the same items as `"w"`), and an empty or omitted filter
+     * shows every item. `LocalizeKey` labels are resolved to localized text when the palette is
+     * shown, so matching always runs against the same label text the palette displays.
+     */
+    passive?: boolean;
+    /**
+     * Keys the REQUESTING session claims while this palette is open, and where to send them.
+     *
+     * The palette and the session that opened it live in different documents, so whichever holds
+     * focus is the only one that sees a keystroke. A palette that takes focus therefore silently
+     * takes the session's keys with it: its commit semantics stop running, and a local default (e.g.
+     * cmdk's own navigation) answers instead. Declaring the claimed keys closes that — the palette
+     * forwards exactly those to {@link PaletteKeyForwarding.onKey} and acts on none of them itself.
+     *
+     * A focus-stealing (non-passive) palette is what makes this necessary; a passive one never takes
+     * focus, so its requester already receives every key and forwarding is inert there. Requesters
+     * still declare it for both, so one code path covers a palette that unexpectedly receives a key.
+     * Omit it entirely and the palette behaves exactly as it did before forwarding existed.
+     *
+     * @remarks
+     * The handler is called synchronously, in the palette's own document. This is a direct function
+     * reference rather than serialized data: the overlay service is renderer-only and a requesting
+     * WebView is a same-origin iframe sharing the renderer's `papi`, so no boundary is crossed. The
+     * forwarded value is a plain `ForwardedPaletteKeyEvent` rather than a live DOM event, which keeps
+     * it free of the requester's realm.
+     */
+    keyForwarding?: PaletteKeyForwarding;
   }
+  /**
+   * How {@link filterPaletteItems} matches filter text against items — one mode per palette flavor:
+   *
+   * - `'passive'` — case-insensitive PREFIX match on `label` only. Passive palettes show bare marker
+   *   codes (`f`, `fe`, `fig`) filtered by the marker prefix the user has typed into the document,
+   *   mirroring PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in
+   *   the filter text is stripped before matching, so `"+w"` matches the same items as `"w"`.
+   * - `'active'` — case-insensitive CONTAINMENT match, still on `label` only. Description/badge
+   *   matching was retired (owner-directed): it buried exact marker matches under description hits
+   *   (typing `w` ranked the exact `w` ninth behind items whose descriptions contained a "w").
+   *
+   * Both modes rank matches exact-first — see {@link filterPaletteItems}.
+   */
+  export type PaletteFilterMode = 'active' | 'passive';
+  /**
+   * Filters command palette items by matching `filterText` against each item's `label`, with
+   * per-{@link PaletteFilterMode} semantics (passive prefix-matches with a leading `+` stripped from
+   * the filter first, active containment-matches), and ranks the matches EXACT-FIRST: exact label
+   * match, then prefix matches, then containment matches, ties keeping their original context order.
+   * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
+   * never be case-picky). Returns `items` unchanged when `filterText` is empty or undefined.
+   *
+   * Delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the editor package's
+   * own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette — so the host
+   * palette and the editor palette can never disagree about ordering, and the marker-palette keydown
+   * table's zero-match detection counts with the same semantics.
+   *
+   * This is the single filtering implementation shared by {@link IOverlayService}'s host-side
+   * `commitCommandPaletteSelection` (to resolve the highlighted item) and the command palette
+   * component (to render the filtered list) — using one function for both keeps host-side selection
+   * and on-screen rendering from disagreeing about which items are visible.
+   *
+   * @remarks
+   * Matching operates directly on the strings in `items` with no localization of its own. Both
+   * callers pass items whose `LocalizeKey` text was already resolved to localized strings when the
+   * palette was shown (see {@link IOverlayService.showCommandPalette}), so host-side filtering, commit
+   * resolution, and the rendered list all match against the same display text.
+   * @param items The full, unfiltered list of command palette items
+   * @param filterText The current filter text, or undefined/empty for no filtering
+   * @param mode Which palette flavor's matching semantics to apply
+   * @returns The items matching the filter text under the given mode, ranked exact-first
+   */
+  export function filterPaletteItems(
+    items: CommandPaletteItem[],
+    filterText: string | undefined,
+    mode: PaletteFilterMode,
+  ): CommandPaletteItem[];
   /**
    *
    * Service for showing overlays (context menus, popovers, command palettes) that render outside
@@ -9844,6 +10139,10 @@ declare module 'renderer/services/overlays/overlay.service-model' {
      * Shows a command palette with searchable/filterable items. Returns a promise that resolves with
      * the selected item's `id`, or `undefined` if dismissed.
      *
+     * `LocalizeKey` item text (`label`/`description`/`badge`) is resolved to localized strings when
+     * the palette is shown, so all filtering — the palette's own search box and text forwarded via
+     * {@link updateCommandPalette} — matches against the text the user actually sees.
+     *
      * @param request The items, optional anchor position, and display options
      * @param webViewId The ID of the WebView requesting the command palette
      * @returns The selected item's ID, or `undefined` if dismissed
@@ -9855,6 +10154,51 @@ declare module 'renderer/services/overlays/overlay.service-model' {
       request: CommandPaletteRequest,
       webViewId: string,
     ): Promise<string | undefined>;
+    /**
+     * Updates the filter text and/or moves the highlighted selection of the active command palette
+     * for the given WebView. No-op if no command palette is active for that WebView.
+     *
+     * Unlike the popover family above (keyed by the overlay ID returned from `showPopover`), the
+     * command palette mutators are keyed by `webViewId` instead. The service enforces one command
+     * palette per WebView at a time (see this interface's class docs), so the requesting WebView's
+     * own ID is a sufficient handle — passive-mode callers drive the palette without ever seeing an
+     * overlay ID.
+     *
+     * @param webViewId The ID of the WebView whose command palette should be updated
+     * @param update `filterText` and/or `moveSelection` (clamped to the filtered list's bounds).
+     *   `filterText` drives passive palettes' list directly and, for ACTIVE palettes, the
+     *   (controlled) search input — callers forward keystrokes this way when the cross-frame focus
+     *   handoff loses and the user's typing lands in their WebView instead of the palette.
+     */
+    updateCommandPalette(
+      webViewId: string,
+      update: {
+        filterText?: string;
+        moveSelection?: number;
+      },
+    ): Promise<void>;
+    /**
+     * Commits the currently highlighted item of the active command palette for the given WebView,
+     * resolving its `showCommandPalette` promise with that item's `id` (mirrors how a click on a
+     * command palette item resolves the promise). If the highlighted item is `disabled`, moves
+     * forward to the next enabled item in the filtered list; if none are enabled, no-ops. No-op if no
+     * command palette is active for that WebView.
+     *
+     * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+     *
+     * @param webViewId The ID of the WebView whose command palette selection should be committed
+     */
+    commitCommandPaletteSelection(webViewId: string): Promise<void>;
+    /**
+     * Dismisses the active command palette for the given WebView, resolving its `showCommandPalette`
+     * promise with `undefined`. Works for both active and passive palettes. No-op if no command
+     * palette is active for that WebView.
+     *
+     * Keyed by `webViewId` for the same reason as {@link updateCommandPalette}.
+     *
+     * @param webViewId The ID of the WebView whose command palette should be dismissed
+     */
+    dismissCommandPalette(webViewId: string): Promise<void>;
   }
   /**
    * Internal representation of an active overlay stored in the overlay store. Each entry holds the
@@ -9939,8 +10283,26 @@ declare module 'renderer/services/overlays/overlay.service-model' {
         webViewId: string;
         /** The original request */
         request: CommandPaletteRequest;
-        /** Items to render */
+        /**
+         * Items to render, with any `LocalizeKey` `label`/`description`/`badge` text already resolved
+         * to localized strings at show time — filtering, commit resolution, and rendering all read
+         * from here so they always agree on each item's text.
+         */
         items: CommandPaletteItem[];
+        /**
+         * Current filter text. Mutable — updated in place by `updateCommandPalette` for BOTH passive
+         * and active palettes: a passive palette's list is driven by this filter text directly, while
+         * an active palette uses it to drive its controlled cmdk input from forwarded keystrokes.
+         * Undefined when unset or cleared — never the empty string (the store normalizes `''` to
+         * undefined).
+         */
+        filterText?: string;
+        /**
+         * Index of the highlighted item within `filterPaletteItems(items, filterText)`. Mutable —
+         * updated in place by `updateCommandPalette`'s `moveSelection`, clamped to the filtered
+         * list's bounds. Defaults to 0 at creation.
+         */
+        selectedIndex: number;
         /** Document-relative position (translated + clamped), or undefined for centered */
         position?: {
           x: number;
@@ -10515,150 +10877,6 @@ declare module 'shared/services/project-settings.service-model' {
   export type AllProjectSettingsValidators = {
     [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
   };
-}
-declare module 'shared/services/window.service-model' {
-  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
-  import {
-    DataProviderDataType,
-    DataProviderSubscriberOptions,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
-  import { DirectionFromTab } from 'shared/models/docking-framework.model';
-  /**
-   *
-   * This name is used to register the window data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
-   */
-  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
-  export const windowServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the window data provider on the papi. You can use this name to
-     * find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.windowServiceDataProvider';
-  }>;
-  /** Focus of the window is on a WebView iframe with the specified id */
-  export type FocusSubjectWebView = {
-    focusType: 'webView';
-    /** ID of the WebView in focus (its tab ID is the same) */
-    id: string;
-  };
-  /**
-   * Focus of the window is somewhere in a tab (header, toolbar, menu, content, etc.)
-   *
-   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
-   * focused in the WebView's iframe
-   */
-  export type FocusSubjectTab = {
-    focusType: 'tab';
-    /** The type of tab. `webView` if it is a WebView tab. */
-    tabType: 'webView' | string;
-    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
-    id: string;
-  };
-  /** Focus of the window is somewhere not in a tab (app menu, app toolbar, etc.) */
-  export type FocusSubjectOther = {
-    focusType: 'other';
-  };
-  /** Current item that is the subject of top-level focus in the window */
-  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
-  /**
-   * Gets the id of the web view a focus subject refers to, if it refers to one: either the web view
-   * itself (`focusType: 'webView'`) or a web view's tab (`focusType: 'tab'` with
-   * {@link TAB_TYPE_WEBVIEW}; a web view tab's id is the same as its `WebViewId`). Returns `undefined`
-   * for focus subjects that do not refer to a web view.
-   *
-   * Shared so every consumer that projects a focus subject to a web view id (e.g. the window
-   * service's last-selected tracking and `platform.openBookChapterControl`) stays in lockstep when
-   * focus subject shapes change.
-   */
-  export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string | undefined;
-  /** Specific item that is intended to be focused at the top level of the window */
-  export type SetFocusSubject = FocusSubjectWebView | Omit<FocusSubjectTab, 'tabType'>;
-  /** Instructions that indicate how to change the focus within the window */
-  export type SetFocusSpecifier = SetFocusSubject | DirectionFromTab | 'detect' | undefined;
-  export type WindowDataTypes = {
-    Focus: DataProviderDataType<undefined, FocusSubject | undefined, SetFocusSpecifier>;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [windowServiceProviderName]: IWindowService;
-    }
-  }
-  /**
-   *
-   * Service that allows to interact with the current application window
-   */
-  export type IWindowService = {
-    /**
-     *
-     * Get information about the current subject of focus in the current window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the current window's current subject of focus
-     */
-    getFocus(selector: undefined): Promise<FocusSubject>;
-    /**
-     *
-     * Get information about the current subject of focus in the current window
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @returns Information about the current window's current subject of focus
-     */
-    getFocus(): Promise<FocusSubject>;
-    /**
-     * Sets the subject of focus in the current window.
-     *
-     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Sets the subject of focus in the current window.
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param focusSubject What to set the current window's focus to. Provide `'detect'` to instruct
-     *   the window to update the current focus based on what is actually focused in the window (only
-     *   necessary when an action happens that changes the focus but the window service does not
-     *   detect already). In most cases, you will not need to set `'detect'` manually.
-     *
-     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
-     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
-     *   `'detect'`.
-     * @returns `true` or an array of strings if the focus successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
-     */
-    setFocus(
-      selector: undefined,
-      focusSubject: SetFocusSpecifier,
-    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
-    /**
-     * Subscribe to run a callback function when the current window's subject of focus is changed
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param callback Function to run with the updated localized menuContent for this selector. If
-     *   there is an error while retrieving the updated data, the function will run with a
-     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
-     *   to check if it is an error.
-     * @param options Various options to adjust how the subscriber emits updates
-     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
-     */
-    subscribeFocus(
-      selector: undefined,
-      callback: (focusSubject: FocusSubject | PlatformError) => void,
-      options?: DataProviderSubscriberOptions,
-    ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    typeof windowServiceObjectToProxy &
-    IDataProvider<WindowDataTypes>;
 }
 declare module '@papi/core' {
   /** Exporting empty object so people don't have to put 'type' in their import statements */
@@ -12141,6 +12359,11 @@ declare module 'renderer/services/overlays/overlay.service-host' {
   ): Promise<TReturn | undefined>;
   /** The overlay service instance exposed on papi */
   export const overlayService: IOverlayService;
+  /**
+   * Resets the parent-document pointerdown record. Exported for use in tests only, so one test's
+   * recorded click cannot correlate with the next test's input signal. @internal
+   */
+  export function resetAppWindowInputState(): void;
   /** Initialize the overlay service. Called during renderer startup. */
   export function startOverlayService(): Promise<void>;
 }
