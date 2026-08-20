@@ -2537,6 +2537,10 @@ export type EmptyStateProps = {
  * A presentational empty-state message for a list, grid, or panel that currently has nothing to
  * show. Renders the localized `message` in a `role="status"` region so screen readers announce it
  * when the surrounding content becomes empty. Layout is left to the caller via `className`.
+ *
+ * For a richer zero-state that needs media, a heading, or an action, use the `Empty` composition
+ * (`Empty`, `EmptyHeader`, `EmptyMedia`, `EmptyTitle`, `EmptyDescription`, `EmptyContent`)
+ * instead.
  */
 export declare function EmptyState({ message, id, className }: EmptyStateProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
@@ -3028,6 +3032,60 @@ export declare function DropdownMenuSub({ ...props }: React$1.ComponentProps<typ
 export declare function DropdownMenuSubTrigger({ className, inset, children, ...props }: DropdownMenuSubTriggerProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuSubContent({ className, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component displays a centered zero-state message — typically a title, description, and
+ * an optional action — for when there is no content to show. The component is built and styled by
+ * Shadcn UI.
+ *
+ * Use this composition when the zero-state needs media, a heading, or an action. For a plain
+ * one-line "nothing to show" message inside a list, grid, or panel, use {@link EmptyState} instead —
+ * it takes a single localized `message` and renders it in a `role="status"` region. These
+ * primitives set no ARIA role, so pass `role="status"` yourself before the zero-state appears.
+ *
+ * Two things the caller controls: the root sets `border-dashed` but no border width —
+ * Platform.Bible's scoped Tailwind Preflight zeroes borders, so pass `className="tw:border"` to
+ * draw the dashed outline — and {@link EmptyTitle} renders a `<div>`, not a heading, so nest your
+ * own heading element inside it when the zero-state is a region's entire content.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function Empty({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the Empty component's icon/media, title, and description. The component is built
+ * and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+declare const emptyMediaVariants: (props?: ({
+	variant?: "default" | "icon" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Container for the Empty component's icon or other media, e.g. an illustration or avatar. The
+ * component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyMedia({ className, variant, ...props }: React$1.ComponentProps<"div"> & VariantProps<typeof emptyMediaVariants>): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component's title text. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyTitle({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component's description text. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyDescription({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the Empty component's main content, typically actions such as buttons. The
+ * component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyContent({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
 /**
  * Input component displays a form input field or a component that looks like an input field. Built
  * and styled with Shadcn UI.
