@@ -22,10 +22,10 @@ export const SHRINK_STEP = Object.freeze({
 /**
  * The shrink step published by the nearest toolbar root.
  *
- * Deliberately defaults to {@link SHRINK_STEP.WIDE} rather than throwing the way `useMenuContext`
- * does: every component that reads this is also usable standalone (a `BookChapterControl` in a
- * dialog, a story, a test), and those must keep rendering their full-width form when no toolbar is
- * above them.
+ * Deliberately defaults to `SHRINK_STEP.WIDE` rather than throwing the way `useMenuContext` does:
+ * every component that reads this is also usable standalone (a `BookChapterControl` in a dialog, a
+ * story, a test), and those must keep rendering their full-width form when no toolbar is above
+ * them.
  */
 export const ShrinkStepContext = createContext<number>(SHRINK_STEP.WIDE);
 
@@ -36,7 +36,7 @@ export const ShrinkStepContext = createContext<number>(SHRINK_STEP.WIDE);
  * _renders_ the provider sits above it and will always read the default — so anything that needs
  * the real step must be a child of the toolbar, not the thing that builds it.
  *
- * @returns The current step, or {@link SHRINK_STEP.WIDE} when there is no provider.
+ * @returns The current step, or `SHRINK_STEP.WIDE` when there is no provider.
  */
 export function useShrinkStepValue(): number {
   return useContext(ShrinkStepContext);

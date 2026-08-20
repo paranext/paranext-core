@@ -66,7 +66,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { CSSProperties, useCallback, useMemo, useState } from 'react';
+import { CSSProperties, ReactNode, useCallback, useMemo, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
@@ -134,6 +134,40 @@ function ProjectSelectorLabel({
       showSecondary={!isAtMinimum}
       fullText={`${fullName} (${shortName})`}
     />
+  );
+}
+
+/**
+ * The project selector's trigger, sized to the space the toolbar currently has.
+ *
+ * The width floor lives here rather than inline at the call site for the same reason
+ * {@link ProjectSelectorLabel} is its own component: the step comes from `ShrinkStepContext`, which
+ * `Toolbar` publishes, so it can only be read from a component rendered as `Toolbar`'s descendant.
+ *
+ * The floor has to move with the step or dropping the full name buys nothing — the label would just
+ * get shorter inside a box still reserving 192px, and the space it was supposed to free would come
+ * out of `BookChapterControl` instead.
+ */
+function ProjectSelectorTrigger({
+  placeholder,
+  children,
+}: {
+  placeholder: string | undefined;
+  children?: ReactNode;
+}) {
+  const shrinkStep = useShrinkStepValue();
+
+  return (
+    <SelectTrigger
+      className={cn(
+        'tw:max-w-64 tw:border-0 tw:bg-transparent',
+        // Still a floor at the narrowest step, just a smaller one: the short name alone needs
+        // little room, but the trigger has to stay a comfortable click target.
+        shrinkStep >= SHRINK_STEP.MINIMUM ? 'tw:min-w-24' : 'tw:min-w-48',
+      )}
+    >
+      <SelectValue placeholder={placeholder}>{children}</SelectValue>
+    </SelectTrigger>
   );
 }
 
@@ -500,23 +534,21 @@ export function PlatformBibleToolbar() {
             }}
             disabled={!hasProjectPickerItems}
           >
-            <SelectTrigger className="tw:max-w-64 tw:min-w-48 tw:border-0 tw:bg-transparent">
-              <SelectValue
-                placeholder={
-                  hasProjectPickerItems
-                    ? localizedStrings['%projectPicker_toolbar_select_project%']
-                    : localizedStrings['%projectPicker_toolbar_no_projects%']
-                }
-              >
-                {currentProject && (
-                  <ProjectSelectorLabel
-                    fullName={currentProject.fullName}
-                    shortName={currentProject.shortName}
-                    errorMessage={currentProjectError}
-                  />
-                )}
-              </SelectValue>
-            </SelectTrigger>
+            <ProjectSelectorTrigger
+              placeholder={
+                hasProjectPickerItems
+                  ? localizedStrings['%projectPicker_toolbar_select_project%']
+                  : localizedStrings['%projectPicker_toolbar_no_projects%']
+              }
+            >
+              {currentProject && (
+                <ProjectSelectorLabel
+                  fullName={currentProject.fullName}
+                  shortName={currentProject.shortName}
+                  errorMessage={currentProjectError}
+                />
+              )}
+            </ProjectSelectorTrigger>
             {hasProjectPickerItems && (
               <SelectContent>
                 {projectPickerItems.map((p) => (

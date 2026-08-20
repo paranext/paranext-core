@@ -1864,35 +1864,6 @@ type TabToolbarCommonProps = {
 	/** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
 	menuButtonIcon?: React$1.ReactNode;
 };
-/**
- * Breakpoints for the tab toolbar, widest first, measured against the container's own outer box.
- * That box includes its `tw:px-4`, so roughly 32px of each number is padding rather than room for
- * controls. Unlike the application titlebar — where the caption-button reserve lands inside or
- * outside the measured box depending on the platform, so `Toolbar` observes its padding-free inner
- * row instead — this padding is the same everywhere, so there is no cross-platform skew to
- * correct.
- *
- * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
- * adjust them the first time this is watched in a running app.
- */
-export declare const TAB_TOOLBAR_SHRINK_THRESHOLDS_PX: readonly number[];
-/** Wrapper that allows consistent styling for both TabToolbar and TabFloatingMenu. */
-export declare const TabToolbarContainer: React$1.ForwardRefExoticComponent<{
-	/** Optional unique identifier */
-	id?: string;
-	/** Additional css classes to help with unique styling of the extensible toolbar */
-	className?: string;
-	/**
-	 * Overrides the shrink step this toolbar would otherwise measure from its own width, and
-	 * publishes it to descendants through `ShrinkStepContext`. Higher means narrower.
-	 *
-	 * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
-	 * the app, leave this unset and let the toolbar measure itself.
-	 */
-	shrinkStep?: number;
-} & {
-	children?: React$1.ReactNode | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
 export type TabToolbarProps = TabToolbarCommonProps & {
 	/**
 	 * The handler to use for toolbar item commands related to the tab view menu. Here is a basic
@@ -2031,23 +2002,6 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	 */
 	shrinkStep?: number;
 }>;
-/**
- * Breakpoints for the application titlebar, widest first, measured against the width actually
- * available to the toolbar's content — the inner row, inside whatever padding reserves the OS
- * caption buttons — and never against the window's width.
- *
- * Which box is measured is load-bearing here. The caption-button reserve sits INSIDE the toolbar's
- * own box on macOS (`tw:ps-[85px]`) and on the Windows/Linux fallback (`tw:pe-[…]`), but OUTSIDE it
- * when Electron reports a live overlay rect and the wrapper reserves the space instead (see
- * `platform-bible-toolbar.tsx`). Measuring the outer box would therefore report up to ~150px more
- * room on one path than another for the same window width, and the same window would abbreviate the
- * scripture reference on one OS but not on the next. The inner row is the space the controls really
- * get, on every path.
- *
- * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
- * adjust them the first time this is watched in a running app.
- */
-export declare const APP_TOOLBAR_SHRINK_THRESHOLDS_PX: readonly number[];
 /**
  * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing
  * 'darwin' will reserve the necessary space for macos traffic lights at the start, otherwise a
@@ -3817,25 +3771,6 @@ export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCh
 	focusOption: (id: string) => void;
 };
 /**
- * Extra width, in pixels, a container must regain before a shrink step is relaxed. Sub-pixel
- * `ResizeObserver` deliveries around a threshold would otherwise flip a label back and forth while
- * the user drags the window edge. Narrowing is never delayed — only widening.
- */
-export declare const SHRINK_STEP_HYSTERESIS_PX = 8;
-/**
- * Picks the shrink step for a container width.
- *
- * `thresholds` is ordered widest-first: step 0 applies at or above `thresholds[0]`, step 1 between
- * `thresholds[1]` and `thresholds[0]`, and so on. A width below every threshold yields
- * `thresholds.length`, the narrowest step. A higher number means narrower.
- *
- * @param width Current inline size of the observed container, in pixels.
- * @param thresholds Widest-first list of pixel breakpoints.
- * @param previousStep The step currently applied, used to apply hysteresis when widening.
- * @returns The step to apply.
- */
-export declare function getShrinkStep(width: number, thresholds: readonly number[], previousStep: number): number;
-/**
  * Observes an element's inline size and reports a discrete shrink step for it.
  *
  * Takes the element itself rather than a ref: mutating `ref.current` does not re-run an effect, so
@@ -3852,9 +3787,11 @@ export declare function getShrinkStep(width: number, thresholds: readonly number
  *
  * Hidden views: rc-dock keeps an inactive tab's web view mounted with `display: none`, where the
  * width reads 0 and the step pins to the narrowest value. `ResizeObserver` fires again with the
- * real width when the tab is shown, so no catch-up mechanism is needed — but note this is only
- * self-correcting because {@link getShrinkStep} relaxes across bands when widening. See
- * `.claude/rules/cross-view-sync-hidden-views.md`.
+ * real width when the tab is shown, so no catch-up mechanism is needed — but a width of 0 is not a
+ * measurement, and the step taken from it must not make the next real one sticky. Being shown again
+ * is a reveal, not a drag, so hysteresis is skipped for that first width. Without this a consumer
+ * with a single threshold has no other band to relax into and stays at its narrowest form at a
+ * width where it should not be. See `.claude/rules/cross-view-sync-hidden-views.md`.
  *
  * @param element The container to observe, or `undefined` before it mounts.
  * @param thresholds Widest-first list of pixel breakpoints.
@@ -3882,10 +3819,10 @@ export declare const SHRINK_STEP: Readonly<{
 /**
  * The shrink step published by the nearest toolbar root.
  *
- * Deliberately defaults to {@link SHRINK_STEP.WIDE} rather than throwing the way `useMenuContext`
- * does: every component that reads this is also usable standalone (a `BookChapterControl` in a
- * dialog, a story, a test), and those must keep rendering their full-width form when no toolbar is
- * above them.
+ * Deliberately defaults to `SHRINK_STEP.WIDE` rather than throwing the way `useMenuContext` does:
+ * every component that reads this is also usable standalone (a `BookChapterControl` in a dialog, a
+ * story, a test), and those must keep rendering their full-width form when no toolbar is above
+ * them.
  */
 export declare const ShrinkStepContext: import("react").Context<number>;
 /**
@@ -3895,7 +3832,7 @@ export declare const ShrinkStepContext: import("react").Context<number>;
  * _renders_ the provider sits above it and will always read the default — so anything that needs
  * the real step must be a child of the toolbar, not the thing that builds it.
  *
- * @returns The current step, or {@link SHRINK_STEP.WIDE} when there is no provider.
+ * @returns The current step, or `SHRINK_STEP.WIDE` when there is no provider.
  */
 export declare function useShrinkStepValue(): number;
 /** Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200) */

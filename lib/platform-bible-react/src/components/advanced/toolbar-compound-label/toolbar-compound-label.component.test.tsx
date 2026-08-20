@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { beforeAll, describe, expect, test } from 'vitest';
@@ -177,6 +177,77 @@ describe('ToolbarCompoundLabel', () => {
     await userEvent.hover(screen.getByText('GEN'));
 
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+  });
+
+  test('centres the two fields rather than baseline-aligning them', () => {
+    // A field whose content is an `inline-block` with `overflow: hidden` — the paragraph label's
+    // fixed marker slot — reports its bottom margin edge as its baseline, so `items-baseline` hangs
+    // it off the wrong edge and it sits high next to its style name by a font-dependent amount.
+    render(<ToolbarCompoundLabel primary="p" secondary="Paragraph" fullText="p - Paragraph" />);
+
+    const row = screen.getByText('p').parentElement;
+
+    expect(row?.className).toMatch(/(?:^|\s)tw:items-center(?:\s|$)/);
+    expect(row?.className).not.toMatch(/(?:^|\s)tw:items-baseline(?:\s|$)/);
+  });
+
+  test('reveals the full text when the button around the label takes keyboard focus', async () => {
+    // The label is a span inside the trigger, so focus lands on the button and a React `onFocus`
+    // here would never fire. Without a listener on that ancestor, the shortened text is reachable
+    // by mouse only — a keyboard user tabbing to `GEN` has no way to learn it means `Genesis`.
+    render(
+      <button type="button">
+        <ToolbarCompoundLabel
+          primary="GEN"
+          secondary="1:1"
+          showSecondary={false}
+          fullText="Genesis 1:1"
+        />
+      </button>,
+    );
+
+    screen.getByRole('button').focus();
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Genesis 1:1');
+  });
+
+  test('hides the revealed text again when focus leaves', async () => {
+    render(
+      <button type="button">
+        <ToolbarCompoundLabel
+          primary="GEN"
+          secondary="1:1"
+          showSecondary={false}
+          fullText="Genesis 1:1"
+        />
+      </button>,
+    );
+    const button = screen.getByRole('button');
+
+    button.focus();
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+    button.blur();
+
+    // The close comes from a native blur listener rather than a React handler, so the state update
+    // lands outside the synchronous act() window.
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+  });
+
+  test('shows nothing on focus while the label already reads in full', () => {
+    // Focus must not manufacture a tooltip for a label that is not hiding anything, or every
+    // toolbar control would pop one on tab-through.
+    render(
+      <button type="button">
+        <ToolbarCompoundLabel primary="GEN" secondary="1:1" fullText="Genesis 1:1" />
+      </button>,
+    );
+    setClipping(screen.getByText('1:1'), { scrollWidth: 40, clientWidth: 40 });
+
+    screen.getByRole('button').focus();
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
   });
 
   test('closes the tooltip when the label is pressed, so it cannot sit on top of the popover it opens', async () => {

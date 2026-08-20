@@ -586,7 +586,6 @@ step, no automation. Just a record.
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from ADR-0002 without recording why.
-||||||| parent of 89178906df2 (PT-4344: address review findings on the toolbar shrink work)
 
 ## ADR-0016: Responsive toolbars measure their own width in JS, not with CSS container queries
 
