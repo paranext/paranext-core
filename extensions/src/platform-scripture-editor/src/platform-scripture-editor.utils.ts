@@ -1158,3 +1158,76 @@ export function resolveAddChapterNumberClick(
 }
 
 // #endregion Chapter Scaffold Helpers
+
+// #region Missing Book Detection
+
+/**
+ * Matches the message thrown by C#'s `MissingBookException` (`c-sharp/MissingBookException.cs`),
+ * which formats as `Book number {bookNum} not found in project {projectId}.` Unanchored because the
+ * PDP layer prefixes its own context onto the message before it reaches a web view.
+ *
+ * Message matching is the only signal available: the error crosses the PAPI boundary as a
+ * `PlatformError`/rejected promise carrying a string, with no structured code to key off. Keep this
+ * in lockstep with the C# exception — if that message is ever reworded, every consumer of
+ * {@link isMissingBookError} silently starts reporting "book present".
+ */
+const MISSING_BOOK_MESSAGE_REGEX = /Book number \d+ not found in project/;
+
+/**
+ * Whether a failure from a USJ project data provider means "this book is not in this project or
+ * resource" as opposed to a genuine error. Callers use it to swap in a book-not-available view
+ * instead of surfacing a failure or, worse, rendering a silently blank editor.
+ *
+ * Accepts `unknown` so both shapes the error arrives in are covered: a `PlatformError` read off
+ * `useProjectData` and a rejection thrown by an imperative `getChapterUSJ` call.
+ *
+ * @param error The error or `PlatformError` to inspect.
+ * @returns `true` only when the message identifies a missing book; `false` for every other failure,
+ *   including no error at all.
+ */
+export function isMissingBookError(error: unknown): boolean {
+  // No `undefined` guard needed: `getErrorMessage(undefined)` is `''`, which cannot match. That
+  // matters because callers pass a "not loaded yet" value straight through.
+  return MISSING_BOOK_MESSAGE_REGEX.test(getErrorMessage(error));
+}
+
+/** What a resource panel (Model text, Bible texts, Commentaries) should show in its content area. */
+export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'ready';
+
+/**
+ * Decides whether a resource panel shows a spinner, the book-not-available message, or its editor.
+ *
+ * `isUsjLoading` narrowly suppresses the MESSAGE and nothing else. `useProjectData` does not reset
+ * to its default when the selector (the reference) changes — it keeps serving the PREVIOUS
+ * reference's result until the new subscription's first update lands. So an error read while
+ * loading may describe the book the user just left, and rendering the message off it would flash
+ * "this book is not in this text" on the way INTO a book the text does have.
+ *
+ * It deliberately does NOT promote that stale window to `'loading'`. Doing so returns `'loading'`
+ * on every reference change, which unmounts and remounts the editor on every chapter navigation — a
+ * regression in exchange for nothing, since the editor showing the outgoing chapter for a beat is
+ * the pre-existing behaviour on every navigation (tracked separately as PT-4139). The stale window
+ * therefore resolves to `'ready'`.
+ *
+ * @param options.hasResourceProject Whether a resource has resolved to a project id to read from.
+ * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet.
+ * @param options.isUsjLoading Whether a fetch for the CURRENT reference is still outstanding.
+ * @returns Which of the three content states to render.
+ */
+export function resolveResourceContentState({
+  hasResourceProject,
+  usjPossiblyError,
+  isUsjLoading,
+}: {
+  hasResourceProject: boolean;
+  usjPossiblyError: unknown;
+  isUsjLoading: boolean;
+}): ResourceContentState {
+  if (!hasResourceProject || usjPossiblyError === undefined) return 'loading';
+  if (!isUsjLoading && isMissingBookError(usjPossiblyError)) return 'bookNotAvailable';
+  // Every other failure keeps the pre-existing behaviour: the panel renders its editor, which shows
+  // no content. Only a missing book earns the dedicated message.
+  return 'ready';
+}
+
+// #endregion Missing Book Detection

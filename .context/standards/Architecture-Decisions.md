@@ -760,3 +760,40 @@ step, no automation. Just a record.
   should not be assumed to remount anything.
 - **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
   `srcNonce` to its use site.
+
+## ADR-0019: A missing book in a *resource* is mode-agnostic and action-free; only a *project* splits Simple/Power
+
+- **Date:** 2026-08-20
+- **Status:** Accepted
+- **Context:** PT-4132 needed the "book not in this text" state for the Model text and Bible
+  texts/Commentaries panels, and the ticket asked to "compare expected behavior for PT-4111", which
+  had just built `BookNotAvailableView` with a deliberate Simple/Power split. The obvious reading was
+  to reuse that view, or to mirror its shape with a second interface-mode branch.
+- **Decision:** Resource panels get ONE message for both interface modes, with no action button, via
+  a separate `ResourceBookNotAvailable` component. The Simple/Power split in `BookNotAvailableView`
+  exists solely because a *project* missing a book is **actionable** in Power (Manage Books can
+  create it). A published resource cannot gain a book in either mode, so both arms would say the same
+  thing. PT-4111's own `isResource` branch already ignores interface mode for exactly this reason.
+  The panels swap only their content area, leaving the header mounted — the resource panel's selector
+  is the user's real remedy (switch to a text that has the book), and the model panel's label at
+  least attributes the message to a named text. Detection is centralized in `isMissingBookError`
+  (`platform-scripture-editor.utils.ts`), which replaced a `bookNotFoundRegex` local to
+  `platform-scripture-editor.web-view.tsx`.
+- **Alternatives considered:** **Reuse `BookNotAvailableView` with `isPowerMode`** — rejected: it
+  would drag in the `isLoading` gating hazard that view documents at length (a setting's default is
+  indistinguishable from an answer, so branching on it requires a spinner gate) to decide between two
+  identical messages. The model text panel reads `platform.interfaceMode` zero times today, so this
+  would also mean threading mode through a presentational component boundary. **One generic
+  "…in this resource" string** — rejected: the resource panel already keeps four `bibleTexts_` /
+  `commentaries_` key pairs selected by a `resourceType` ternary, including the sibling
+  `emptyState_prompt`; a shared string would be the deviation. **Promote the stale-data window to
+  `'loading'`** — rejected: it returns `'loading'` on every reference change, remounting the editor
+  on every chapter navigation. `isUsjLoading` therefore suppresses only the message, not the spinner.
+- **Consequences:** Two book-not-available views coexist, and the distinction between them is
+  "can this thing gain a book", NOT "is this editable" and NOT "which mode are we in" — the same
+  project-kind-vs-permission distinction ADR-0016's feature draws via `platform.isPublished`. A
+  future resource type that CAN gain books would need its own branch rather than an edit here.
+  Detection still rests on matching a C# exception message, now in one place: reword
+  `MissingBookException` and every consumer silently reports "book present". The stale-content flash
+  on navigation is untouched and remains PT-4139's scope.
+- **Source:** PT-4132 (Empty state needs to be improved for the Model and Bible texts).
