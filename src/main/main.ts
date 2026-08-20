@@ -649,11 +649,14 @@ async function main() {
       height: windowHeight,
       minWidth: 800, // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
       icon: getAssetPath('icon.png'),
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
-      // re-add window controls
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      ...(process.platform !== 'darwin' && process.platform !== 'linux'
+      // Applied on every platform. Linux was excluded behind a `Re-check linux support with
+      // Electron 34` TODO that predates the current Electron 39; PT-4276 rechecked it and found
+      // frameless Linux windows viable, so the guard comes off (PT-4279). 🚩 Authored on macOS and
+      // NOT verified on Linux — see the commit message.
+      titleBarStyle: 'hidden',
+      // re-add window controls. Linux lifted with the guard above — darwin stays excluded because
+      // macOS draws its own traffic lights rather than an overlay.
+      ...(process.platform !== 'darwin'
         ? {
             titleBarOverlay: {
               height: TITLE_BAR_BUTTON_HEIGHT,
@@ -844,9 +847,11 @@ async function main() {
         }
       }
 
-      // Adjust the Window button colors based on the current theme
-      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-      if (process.platform !== 'darwin' && process.platform !== 'linux') {
+      // Adjust the Window button colors based on the current theme. Must move together with the
+      // `titleBarOverlay` guard above: lifting that one without this leaves Linux with window
+      // controls that never follow the theme, which reads as a styling bug rather than as the
+      // question PT-4276 was asking.
+      if (process.platform !== 'darwin') {
         try {
           windowCloseUnsubscribers.add(
             await themeService.subscribeCurrentTheme(undefined, (newTheme) => {
