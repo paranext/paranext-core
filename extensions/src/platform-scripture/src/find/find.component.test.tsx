@@ -3,6 +3,8 @@
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { Canon } from '@sillsdev/scripture';
+import { tryGetAvailableBookIds } from 'platform-bible-react';
 import { Find, FindProps } from './find.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip/Popover components wire
@@ -371,5 +373,38 @@ describe('Find — permission-blocked Replace (per-result button)', () => {
   it('leaves the per-result Replace button enabled when nothing blocks replace', () => {
     render(<Find {...buildPerResultProps({ isEditable: true })} />);
     expect(screen.getByRole('button', { name: 'Replace card' })).toBeEnabled();
+  });
+});
+
+describe('Find — books-scope summary in the "Showing" trigger', () => {
+  // The real BooksPresent setting is one character per canon book; the shared helper rejects any
+  // other length, so these tests use a full-length string rather than buildProps' short stand-in.
+  const ALL_BOOKS_PRESENT = '1'.repeat(Canon.allBookIds.length);
+  const allAvailableBookIds = tryGetAvailableBookIds(ALL_BOOKS_PRESENT);
+
+  function buildBooksScopeProps(selectedBookIds: string[]): FindProps {
+    return buildProps({
+      scope: 'selectedBooks',
+      booksPresent: ALL_BOOKS_PRESENT,
+      selectedBookIds,
+      scopeSelectorLocalizedStrings: { '%webView_book_selector_all_books%': 'All books' },
+    });
+  }
+
+  it('summarizes a full selection as "All books" instead of listing every book', () => {
+    render(<Find {...buildBooksScopeProps(allAvailableBookIds)} />);
+    expect(screen.getByText('All books')).toBeInTheDocument();
+    // The regression this guards: every id joined into the trigger, which overflowed the panel.
+    expect(screen.queryByText(/GEN, EXO, LEV/)).not.toBeInTheDocument();
+  });
+
+  it('truncates to a canon-order first … last range when more than five books are selected', () => {
+    render(<Find {...buildBooksScopeProps(['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU'])} />);
+    expect(screen.getByText('GEN … MRK')).toBeInTheDocument();
+  });
+
+  it('lists the books individually when few enough are selected', () => {
+    render(<Find {...buildBooksScopeProps(['LEV', 'GEN', 'EXO'])} />);
+    expect(screen.getByText('GEN, EXO, LEV')).toBeInTheDocument();
   });
 });

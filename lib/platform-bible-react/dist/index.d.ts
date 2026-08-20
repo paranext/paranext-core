@@ -1479,6 +1479,7 @@ export declare const SCOPE_SELECTOR_STRING_KEYS: readonly [
 	"%webView_book_selector_clear_all%",
 	"%webView_book_selector_no_book_found%",
 	"%webView_book_selector_more%",
+	"%webView_book_selector_all_books%",
 	"%scripture_section_ot_long%",
 	"%scripture_section_ot_short%",
 	"%scripture_section_nt_long%",
@@ -1607,6 +1608,7 @@ export declare const SELECT_BOOKS_STRING_KEYS: readonly [
 	"%webView_book_selector_clear_all%",
 	"%webView_book_selector_no_book_found%",
 	"%webView_book_selector_more%",
+	"%webView_book_selector_all_books%",
 	"%scripture_section_ot_long%",
 	"%scripture_section_ot_short%",
 	"%scripture_section_nt_long%",
@@ -1686,6 +1688,38 @@ type SelectBooksPickerProps = {
  * quick-select buttons and badges for the current selection.
  */
 export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Same as `getAvailableBookIds`, but yields an empty array instead of throwing when
+ * `availableBookInfo` is absent or malformed. Use this where the books list only feeds display
+ * (e.g. a selection summary) and an unusable setting should degrade rather than break the render —
+ * a project setting can legitimately arrive empty before it loads.
+ *
+ * @param availableBookInfo Information about available books, formatted as a 123 character long
+ *   string as defined in a project's BooksPresent setting
+ * @returns Array of available, non-obsolete book IDs in canon order, or an empty array if
+ *   `availableBookInfo` cannot be interpreted
+ */
+export declare function tryGetAvailableBookIds(availableBookInfo: string): string[];
+/**
+ * Builds a short, fixed-width-ish summary of a book selection suitable for a dropdown trigger or a
+ * status line. Listing every selected book overflows its container once a handful are selected, so
+ * the summary collapses: every available book selected reads as "All books", and more than five
+ * selected books collapse into a canon-order `first … last` range.
+ *
+ * @param selectedBookIds Array of currently selected book IDs, in any order
+ * @param availableBookIds Array of book IDs available in the project (see `getAvailableBookIds`).
+ *   Pass an empty array when the project's books are unknown; the summary then never claims "All
+ *   books" but still lists or truncates the selection
+ * @param allBooksText Localized text to show when every available book is selected
+ * @param localizedBookNames Optional map of localized book IDs/short names and full names. Key is
+ *   the (English) book ID
+ * @returns The summary text, or `undefined` when nothing is selected so callers can supply their
+ *   own placeholder
+ */
+export declare function summarizeSelectedBooks(selectedBookIds: string[], availableBookIds: string[], allBooksText: string, localizedBookNames?: Map<string, {
+	localizedId: string;
+	localizedName: string;
+}>): string | undefined;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no

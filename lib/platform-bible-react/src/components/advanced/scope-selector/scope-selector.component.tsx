@@ -32,6 +32,7 @@ import {
   LocalizedStringValue,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { summarizeSelectedBooks, tryGetAvailableBookIds } from './scope-selector.utils';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -247,6 +248,7 @@ export function ScopeSelector({
   const okText = localizeString(localizedStrings, '%webView_scope_selector_ok%');
   const cancelText = localizeString(localizedStrings, '%webView_scope_selector_cancel%');
   const navigateText = localizeString(localizedStrings, '%webView_scope_selector_navigate%');
+  const allBooksText = localizeString(localizedStrings, '%webView_book_selector_all_books%');
 
   // For the verse / chapter / book scopes we surface the current scripture reference alongside the
   // base label (e.g. "Verse: GEN 1:1"). The suffix is kept separate from the base label so the
@@ -461,11 +463,18 @@ export function ScopeSelector({
   const currentScopeOption = displayedScopes.find((option) => option.value === scope);
 
   // Trigger text used by the dropdown variant. For selectedBooks / range we show a short summary
-  // of the active selection. Book IDs are always the uppercase 3-letter English codes (GEN, EXO,
-  // MAT, ...) so the trigger width is predictable and doesn't balloon with long localized names.
+  // of the active selection. Book IDs are always the short 3-letter codes (GEN, EXO, MAT, ...) so
+  // the trigger width is predictable and doesn't balloon with long localized names. The books
+  // summary additionally collapses (see `summarizeSelectedBooks`) so a large selection can't
+  // outgrow the trigger — `tw:truncate` on the trigger is only a backstop.
   const renderTriggerContent = () => {
     if (scope === 'selectedBooks' && selectedBookIds.length > 0) {
-      return selectedBookIds.map((bookId) => bookId.toUpperCase()).join(', ');
+      return summarizeSelectedBooks(
+        selectedBookIds,
+        tryGetAvailableBookIds(availableBookInfo),
+        allBooksText,
+        localizedBookNames,
+      );
     }
     if (scope === 'range') {
       return formatScrRefRange(resolvedRangeStart, resolvedRangeEnd, {

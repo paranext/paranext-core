@@ -192,9 +192,21 @@ export function SelectBooksPicker({
       </PopoverTrigger>
       {/* Fixed 500px width (clamped to the viewport) so the book grid lays out
           consistently instead of tracking the trigger width — carried over from
-          the pre-refactor BookSelector (markers-checklist work). */}
-      <PopoverContent className="tw:w-[500px] tw:max-w-[calc(100vw-2rem)] tw:p-0" align="start">
+          the pre-refactor BookSelector (markers-checklist work).
+
+          Height is capped to the space Radix actually has on whichever side it lands.
+          Without the cap, a trigger sitting low in its container makes Radix flip the
+          popover upward, and the full-height content (input + section buttons + a
+          max-h-72 list) overruns the top of the viewport — inside a web view's iframe
+          that clips the search input away entirely, leaving no way to filter (PT-4092).
+          The list below shrinks instead so the input stays put. */}
+      <PopoverContent
+        className="tw:max-h-(--radix-popover-content-available-height) tw:w-[500px] tw:max-w-[calc(100vw-2rem)] tw:p-0"
+        align="start"
+        collisionPadding={8}
+      >
         <Command
+          className="tw:min-h-0"
           shouldFilter={false}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -216,7 +228,10 @@ export function SelectBooksPicker({
               {clearAllText}
             </Button>
           </div>
-          <CommandList>
+          {/* Drop CommandList's own max-height so it shrinks to whatever the height-capped
+              popover leaves it (and still scrolls); min-h-0 lets it shrink below its content
+              inside the flex column. */}
+          <CommandList className="tw:max-h-none tw:min-h-0 tw:flex-1">
             <CommandEmpty>{noBookFoundText}</CommandEmpty>
             {Object.values(Section).map((section, index) => {
               const sectionBooks = filteredBooksBySection[section];

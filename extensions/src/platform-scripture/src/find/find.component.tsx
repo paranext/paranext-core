@@ -29,12 +29,14 @@ import {
   ScopeSelector,
   Skeleton,
   Sonner,
+  summarizeSelectedBooks,
   ToggleGroup,
   ToggleGroupItem,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  tryGetAvailableBookIds,
 } from 'platform-bible-react';
 import { ScopeWithRange } from 'platform-bible-react/experimental';
 import {
@@ -509,7 +511,7 @@ export function Find({
     });
   }, [results, numberOfHiddenResults, totalNumberOfResults, searchStatus, localizedStrings]);
 
-  /** Text shown in the scope popover trigger, e.g. "Genesis 1" or "Genesis, Exodus, John" */
+  /** Text shown in the scope popover trigger, e.g. "GEN 1", "GEN, EXO, JHN", or "All books" */
   const scopeDisplayText = useMemo(() => {
     switch (scope) {
       case 'chapter': {
@@ -519,12 +521,29 @@ export function Find({
       case 'book':
         return localizedBookData.get(verseRef.book)?.localizedId ?? verseRef.book;
       case 'selectedBooks':
-        if (selectedBookIds.length === 0) return '…';
-        return selectedBookIds.map((id) => localizedBookData.get(id)?.localizedId ?? id).join(', ');
+        // Listing every book overflowed this row and forced a horizontal scrollbar on the whole
+        // panel once more than a few were selected, so the summary collapses to "All books" /
+        // "GEN … HOS" (PT-4092).
+        return (
+          summarizeSelectedBooks(
+            selectedBookIds,
+            tryGetAvailableBookIds(booksPresent),
+            scopeSelectorLocalizedStrings['%webView_book_selector_all_books%'] ??
+              '%webView_book_selector_all_books%',
+            localizedBookData,
+          ) ?? '…'
+        );
       default:
         return '';
     }
-  }, [scope, selectedBookIds, verseRef, localizedBookData]);
+  }, [
+    scope,
+    selectedBookIds,
+    verseRef,
+    localizedBookData,
+    booksPresent,
+    scopeSelectorLocalizedStrings,
+  ]);
 
   // Configuration for the per-result replace preview. Present whenever in replace mode — including
   // an empty replacement term, so the "replace with nothing" (deletion) preview can render its
@@ -780,7 +799,14 @@ export function Find({
                 <ChevronDown className="tw:h-3 tw:w-3 tw:text-muted-foreground" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="tw:w-auto tw:p-3">
+            {/* Height-capped and scrollable for the same reason as the books picker inside it
+                (PT-4092): in a narrow panel this popover can flip above its trigger, and anything
+                taller than the space there is clipped off past the top of the web view's iframe. */}
+            <PopoverContent
+              align="start"
+              className="tw:max-h-(--radix-popover-content-available-height) tw:w-auto tw:overflow-y-auto tw:p-3"
+              collisionPadding={8}
+            >
               <ScopeSelector
                 scope={scope}
                 availableScopes={['chapter', 'book', 'selectedBooks']}

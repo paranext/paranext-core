@@ -380,6 +380,7 @@
       "%webView_bookSelector_currentBook%": "Current book",
       "%webView_bookSelector_selectBooks%": "Select Books",
       "%webView_bookSelector_selectBooks_prompt%": "Select one or more books to run basic checks on",
+      "%webView_book_selector_all_books%": "All books",
       "%webView_book_selector_books_selected%": "Books selected",
       "%webView_book_selector_clear_all%": "Clear all",
       "%webView_book_selector_more%": "more",
