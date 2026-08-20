@@ -1,7 +1,7 @@
 import papi, { logger } from '@papi/frontend';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useEffect } from 'react';
-import { getOpenFindTriggerArgs } from './find-trigger.util';
+import { getOpenFindTriggerArgs, resolveFindSelectionText } from './find-trigger.util';
 
 /**
  * Binds Ctrl+F to open Find for the scripture a tab is showing. Shared by every scripture tab type
@@ -29,7 +29,11 @@ export function useOpenFindShortcut(webViewId: string, sourceProjectId: string |
       const args = getOpenFindTriggerArgs(
         webViewId,
         sourceProjectId,
-        window.getSelection()?.toString() ?? '',
+        // Live selection only, and no pointer-press snapshot: a keystroke destroys nothing, so the
+        // live value is always the honest answer. (The tab menu differs — see
+        // `getMenuFindSelectionText` in `platform-scripture-editor.web-view.tsx`.) Trimmed so a
+        // double-click's trailing space does not narrow the search.
+        resolveFindSelectionText(window.getSelection()?.toString(), undefined),
       );
       if (!args) {
         logger.debug(
