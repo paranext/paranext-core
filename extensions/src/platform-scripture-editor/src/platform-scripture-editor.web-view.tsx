@@ -1343,9 +1343,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return;
     }
     pendingScaffoldInsertRef.current = true;
-    // KNOWN CAVEAT: undo reliability for this insert depends on unreleased fixes in the vendored
-    // `@eten-tech-foundation/platform-editor` package — this extension's package.json still pins an
-    // older version, so don't assume undo works cleanly here until that pin is bumped.
+    // Undo for this insert relies on `applyUpdate('local')` edits staying undoable, which the
+    // pinned `@eten-tech-foundation/platform-editor` provides.
     editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
   }, [scrRef.book, scrRef.chapterNum, lastVerse, isStructureProtected, notifyStructureProtected]);
 
