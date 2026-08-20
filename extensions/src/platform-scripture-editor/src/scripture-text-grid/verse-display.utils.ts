@@ -9,13 +9,13 @@ import { Usj, MarkerObject, MarkerContent } from '@eten-tech-foundation/scriptur
  * that. Display-only: callers must not write the resolved verse back to the scroll group.
  *
  * Chapter surfaces must NOT call this — they show verse-0 front matter directly. Full rationale and
- * rejected alternatives: ADR-0013.
+ * rejected alternatives: ADR-0019.
  *
  * @param verseNum Non-negative integer verse number, as carried by `SerializedVerseRef`. Only `0`
  *   is special-cased; anything else is returned unchanged, so a negative or fractional value passes
  *   through and then slices to nothing, surfacing as the empty state rather than as an error. That
  *   is unreachable through today's callers, but matters if this is promoted to
- *   `lib/platform-bible-utils` (see ADR-0013), where callers lose that guarantee.
+ *   `lib/platform-bible-utils` (see ADR-0019), where callers lose that guarantee.
  */
 export function resolveDisplayVerseNum(verseNum: number): number {
   return verseNum === 0 ? 1 : verseNum;

@@ -333,7 +333,7 @@ export function ScriptureTextGrid({
   // at a verse-0 reference they show verse 1. This names the row, not its contents — a resource that
   // lacks verse 1 shows the empty state under the same label.
   //
-  // Accepted a11y cost (ADR-0013): this makes verse 0 unobservable inside the grid. At MAT 5:0 the
+  // Accepted a11y cost (ADR-0019): this makes verse 0 unobservable inside the grid. At MAT 5:0 the
   // label announces "MAT 5:1" and the cells show verse 1, so a screen-reader user gets no in-grid
   // signal that the shared reference is 5:0. Naming the row after a verse the cells demonstrably do
   // not show would be worse. The boundary cues live outside the grid: the BCV control shows the real

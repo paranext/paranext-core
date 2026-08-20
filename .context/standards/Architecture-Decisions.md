@@ -761,7 +761,7 @@ step, no automation. Just a record.
 - **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
   `srcNonce` to its use site.
 
-## ADR-0013: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
+## ADR-0019: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
 
 - **Date:** 2026-08-05
 - **Status:** Accepted
