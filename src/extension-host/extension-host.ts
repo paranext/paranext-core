@@ -21,6 +21,7 @@ import { gracefulShutdownMessage } from '@node/models/interprocess-messages.mode
 import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
 import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
 import { startLocalOAuthServer } from '@extension-host/services/local-oauth.service';
+import * as analyticsService from '@extension-host/services/analytics.service';
 import { markStartup } from '@shared/utils/startup-timing.util';
 import { STARTUP_MARK_PROCESS_START } from '@shared/data/platform.data';
 
@@ -84,8 +85,25 @@ process.on('unhandledRejection', (reason) => {
 
 (async () => {
   try {
+    // Fire this first: trackEvent() always queues until the engine is ready, so calling it here
+    // — before anything else in this IIFE runs — guarantees app_launch is first in flush order.
+    analyticsService.trackEvent('app_launch');
+
     // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
+    // Analytics initialization must not gate extension-host startup — it can take up to
+    // ENVIRONMENT_RESOLUTION_TIMEOUT_MS if the Send/Receive server-target lookup is slow.
+    // trackEvent()'s `unresolved` queue tolerates this finishing at any point.
+    // This .catch() is unreachable today: resolveEnvironment() never rejects -- its async step,
+    // getSelectedServer(), catches every failure internally (timeout, vanished provider, read
+    // failure) and resolves to `undefined` rather than throwing -- and the rest of initialize()'s
+    // body is synchronous and already self-guarded. It's a defensive guard, not live error
+    // handling -- kept so that if a future change to analytics.service.ts ever breaks that
+    // never-rejects guarantee, it fails safe (logged) instead of raising an unhandled promise
+    // rejection here.
+    analyticsService.initialize().catch((error) => {
+      logger.error(`Analytics: failed to initialize: ${String(error)}`);
+    });
     await initializeSharedStoreService(networkService);
 
     // Prepare all services that need to be running because extensions might rely on them

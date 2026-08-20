@@ -40,6 +40,7 @@ import type {
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
+import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
@@ -153,6 +154,7 @@ function ResourceSelectorDropdown({
 }
 
 globalThis.webViewComponent = function ResourceTextPanel({
+  id: webViewId,
   projectId,
   updateWebViewDefinition,
   useWebViewState,
@@ -323,9 +325,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const selectedRef =
     filteredResources.find((r) => getRefId(r) === selectedResourceId) ?? filteredResources[0];
 
+  const [isSelecting, setIsSelecting] = useState(false);
+
+  // resourceProjectId is the search source passed to Find: the project of the resource this panel
+  // is displaying, NOT the panel's own `projectId` prop (that is the container project whose
+  // reference list is shown).
   let resourceProjectId: string | undefined;
   let dblMatch: (typeof dblResources)[number] | undefined;
-  const [isSelecting, setIsSelecting] = useState(false);
 
   if (isDblResourceReference(selectedRef)) {
     dblMatch = findCachedDblResource(selectedRef, dblResources);
@@ -348,6 +354,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Keyed on the resource's project id (not the user's projectId prop) since the resource is what
   // gets rendered in this iframe.
   useCommentaryMarkerStyles(resourceProjectId);
+
+  // Ctrl+F opens Find for the displayed resource.
+  useOpenFindShortcut(webViewId, resourceProjectId);
 
   // #endregion
 
