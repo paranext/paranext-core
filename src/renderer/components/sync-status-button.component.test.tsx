@@ -320,24 +320,33 @@ describe('SyncStatusButton — startup read retries', () => {
   });
 
   it('stops retrying once an event has told it what is happening', async () => {
+    // Counts only `getSyncState` calls, not every `sendCommand` call: PT-4398 added a second,
+    // independent seed for `getSyncActivity` (see Ruling 3 in use-sync-status.hook.ts) that keeps
+    // retrying on its own schedule regardless of the claim's `onSyncStateChanged` event, so this
+    // assertion must not count its calls or it would fail on that unrelated retry activity.
+    const countSyncStateCalls = () =>
+      vi
+        .mocked(sendCommand)
+        .mock.calls.filter((call) => call[0] === 'paratextBibleSendReceive.getSyncState').length;
+
     const fireSyncStateChanged = captureSyncStateEvent();
     mockSyncStateSequence([new Error('not registered yet')]);
     render(<SyncStatusButton />);
     await screen.findByRole('button', { name: 'Sync' });
-    const callsBeforeEvent = vi.mocked(sendCommand).mock.calls.length;
+    const callsBeforeEvent = countSyncStateCalls();
 
     fireSyncStateChanged(true);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Test Syncing' })).toBeInTheDocument();
     });
-    const callsAfterEvent = vi.mocked(sendCommand).mock.calls.length;
+    const callsAfterEvent = countSyncStateCalls();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(SYNC_STATE_SEED_RETRY_INTERVAL_MS * 5);
     });
 
-    // The live event stream has taken over, so the seed has nothing left to retry for.
-    expect(vi.mocked(sendCommand).mock.calls.length).toBe(callsAfterEvent);
+    // The live event stream has taken over, so the claim seed has nothing left to retry for.
+    expect(countSyncStateCalls()).toBe(callsAfterEvent);
     expect(callsAfterEvent).toBeGreaterThan(callsBeforeEvent);
   });
 });

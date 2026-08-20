@@ -4,7 +4,12 @@ import { getNetworkEvent } from '@shared/services/network.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useEvent, usePromise } from 'platform-bible-react';
-import type { ResultStatus, SyncProgressEvent, SyncState } from 'paratext-bible-send-receive';
+import type {
+  ResultStatus,
+  SyncActivitySnapshot,
+  SyncProgressEvent,
+  SyncState,
+} from 'paratext-bible-send-receive';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /**
@@ -134,6 +139,21 @@ function isValidSyncState(state: unknown): state is SyncState {
 }
 
 /**
+ * Narrows a `getSyncActivity` response. Same treatment as {@link isValidSyncState}: typed by the
+ * seam declaration, but it is untrusted wire data from another process.
+ */
+function isValidSyncActivity(snapshot: unknown): snapshot is SyncActivitySnapshot {
+  if (typeof snapshot !== 'object' || !snapshot) return false;
+  if (!('isSyncing' in snapshot) || typeof snapshot.isSyncing !== 'boolean') return false;
+  if ('projectIds' in snapshot && snapshot.projectIds !== undefined) {
+    const { projectIds } = snapshot;
+    if (!Array.isArray(projectIds)) return false;
+    if (projectIds.some((id: unknown) => typeof id !== 'string')) return false;
+  }
+  return true;
+}
+
+/**
  * Current Send/Receive status for an ambient indicator, seeded so it is correct from the moment it
  * mounts.
  *
@@ -150,23 +170,42 @@ function isValidSyncState(state: unknown): state is SyncState {
  * {@link SYNC_STATE_SEED_RETRY_WINDOW_MS} passes, matching how `useSendReceiveAvailability` handles
  * the same activation race.
  *
- * What the seed CANNOT cover: a sync that never reached the Send/Receive extension's wrappers is
- * absent from `getSyncState` and fires no event, so this reports `idle` throughout it. In Simple
- * mode that currently includes the startup sync itself (`main/startup-tasks.ts` calls the dotnet
- * `syncProjects` command directly), so "correct from startup" holds for manual and scheduled syncs
- * but not yet for that one. See {@link SyncState} for the full list, and ADR-0014 in
- * `.context/standards/Architecture-Decisions.md` for why closing that gap is a change to sync
- * behavior rather than to this hook.
+ * What the claim alone CANNOT cover: a sync that never reached the Send/Receive extension's
+ * wrappers is absent from `getSyncState` and fires no event, so the claim reports `idle` throughout
+ * it. Two core paths land here — the Simple-mode startup sync (`main/startup-tasks.ts` calls the
+ * dotnet `syncProjects` command directly) and the picker's per-project sync
+ * (`syncOnProjectSwitch`). That gap is what {@link SyncActivitySnapshot} closes: it is derived from
+ * the C# sync run marker rather than the extension's claim map, so it sees every path including
+ * these two. This hook unions the two signals (see the `status` derivation below) rather than
+ * relying on the claim alone. See ADR-0014 in `.context/standards/Architecture-Decisions.md` for
+ * the fuller history of that gap.
  *
  * Projects are resolved from project metadata rather than the event, which carries no ids. They are
- * absent (empty, with `status` still `syncing`) in three cases callers must handle: a Send/Receive
- * build predating `syncingProjectIds`; a `getSyncState` call that fails; and briefly after each
- * sync-state event, while the read that names the new set is in flight. A project whose metadata
- * can't be fetched falls back to its id, so a partial failure loses precision but never a project.
+ * absent (empty, with `status` still `syncing`) in several cases callers must handle: a
+ * Send/Receive build predating `syncingProjectIds`; a `getSyncState` call that fails; briefly after
+ * each sync-state event, while the read that names the new set is in flight; and while the activity
+ * signal is the only one reporting a sync and its backend has not yet resolved a merge set for it.
+ * A project whose metadata can't be fetched falls back to its id, so a partial failure loses
+ * precision but never a project.
  */
 export function useSyncStatus(): SyncStatusInfo {
-  const [status, setStatus] = useState<SyncStatus>('idle');
+  const [claimStatus, setClaimStatus] = useState<SyncStatus>('idle');
   const [syncingProjectIds, setSyncingProjectIds] = useState<readonly string[]>(NO_PROJECT_IDS);
+  /**
+   * The backend's view of whether a sync is running, from `onSyncActivityChanged` /
+   * `getSyncActivity`. Independent of the claim because it covers paths the claim cannot see (see
+   * {@link SyncActivitySnapshot}); `undefined` until a snapshot answers, or permanently when the
+   * command is unavailable (public Platform.Bible, or a Studio build predating this signal).
+   */
+  const [activitySyncing, setActivitySyncing] = useState<boolean | undefined>(undefined);
+  /**
+   * Projects the activity signal reports syncing right now. Kept in its OWN state, written only by
+   * the activity seed/event handlers below, rather than sharing {@link syncingProjectIds} — the
+   * claim handler deliberately clears that state and re-reads it on every `isSyncing: true` event
+   * (see {@link handleSyncStateChanged}), and a second writer landing inside that clear-then-read
+   * window would race it. {@link effectiveProjectIds} is the one place the two are combined.
+   */
+  const [activityProjectIds, setActivityProjectIds] = useState<readonly string[]>(NO_PROJECT_IDS);
 
   /**
    * Whether an `onSyncStateChanged` event has been applied. Once one has, the mount snapshot is
@@ -185,12 +224,27 @@ export function useSyncStatus(): SyncStatusInfo {
   const eventSequenceRef = useRef(0);
 
   /**
+   * Whether an `onSyncActivityChanged` event has been applied. Independent of
+   * {@link hasAppliedEventRef}: a claim event must not stop the activity seed from retrying, and an
+   * activity event must not stop the claim seed from retrying — each input seeds and retries on its
+   * own schedule.
+   */
+  const hasAppliedActivityEventRef = useRef(false);
+  /** Same purpose as {@link runRef}, but for the activity seed's own effect. */
+  const activityRunRef = useRef(0);
+
+  /**
    * Replaces the id set only when it differs BY VALUE, so a read that returns the same projects in
    * a fresh array (or a different claim order) doesn't re-fire the metadata lookup keyed on it
    * below.
    */
   const applySyncingProjectIds = useCallback((nextIds: readonly string[]) => {
     setSyncingProjectIds((prevIds) => (isSameProjectIdSet(prevIds, nextIds) ? prevIds : nextIds));
+  }, []);
+
+  /** Same reasoning as {@link applySyncingProjectIds}, for {@link activityProjectIds}. */
+  const applyActivityProjectIds = useCallback((nextIds: readonly string[]) => {
+    setActivityProjectIds((prevIds) => (isSameProjectIdSet(prevIds, nextIds) ? prevIds : nextIds));
   }, []);
 
   const readSyncState = useCallback(async (): Promise<SyncState | undefined> => {
@@ -205,6 +259,25 @@ export function useSyncStatus(): SyncStatusInfo {
       // Send/Receive may not have registered its commands yet (cold start), or may be absent from
       // this build. Either way the caller keeps whatever state it already has.
       logger.warn(`Could not read send/receive sync state: ${getErrorMessage(e)}`);
+      return undefined;
+    }
+  }, []);
+
+  const readSyncActivity = useCallback(async (): Promise<SyncActivitySnapshot | undefined> => {
+    try {
+      const activity = await sendCommand('paratextBibleSendReceive.getSyncActivity');
+      if (!isValidSyncActivity(activity)) {
+        logger.warn(
+          'Send/receive returned a sync activity snapshot in an unexpected shape; ignoring it',
+        );
+        return undefined;
+      }
+      return activity;
+    } catch (e) {
+      // Unavailable on a cold start (not registered yet), or permanently on public Platform.Bible /
+      // a Studio build predating this command. Either way the caller keeps whatever state it
+      // already has.
+      logger.warn(`Could not read send/receive sync activity: ${getErrorMessage(e)}`);
       return undefined;
     }
   }, []);
@@ -230,7 +303,7 @@ export function useSyncStatus(): SyncStatusInfo {
         if (Date.now() >= deadline) {
           // Out of budget with no answer. Say so rather than leaving the initial `idle` standing,
           // which would claim nothing has synced on the strength of a read that never succeeded.
-          setStatus('unknown');
+          setClaimStatus('unknown');
           return;
         }
         retryTimeout = setTimeout(() => {
@@ -241,7 +314,7 @@ export function useSyncStatus(): SyncStatusInfo {
         return;
       }
 
-      setStatus(deriveStatusFromSnapshot(state));
+      setClaimStatus(deriveStatusFromSnapshot(state));
       applySyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_IDS);
     };
 
@@ -256,6 +329,64 @@ export function useSyncStatus(): SyncStatusInfo {
       if (retryTimeout) clearTimeout(retryTimeout);
     };
   }, [readSyncState, applySyncingProjectIds]);
+
+  /**
+   * Seeds {@link activitySyncing}/{@link activityProjectIds} from a snapshot on mount, mirroring the
+   * claim seed effect above (same retry constants, same reasoning: a consumer can mount mid-sync or
+   * during the cold-start activation race, and this command can be temporarily or permanently
+   * unavailable). Kept as its own effect with its own refs rather than folded into the claim seed,
+   * per Ruling 3/1: the two inputs must retry and clear independently, on separate state, so
+   * neither can stop or race the other.
+   *
+   * Unlike the claim's `SyncProgressEvent`, a `SyncActivitySnapshot` already carries `isSyncing`
+   * AND `projectIds` together, so there is no follow-up read to sequence here — the snapshot (from
+   * the seed or from an event) is applied directly.
+   */
+  useEffect(() => {
+    activityRunRef.current += 1;
+    const run = activityRunRef.current;
+    let retryTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    const seed = async (deadline: number) => {
+      // Checked before the read as well as after it, for the same reason the claim seed does: a
+      // retry scheduled before an event arrived would otherwise spend a whole RPC round trip on an
+      // answer that is already known to be discarded.
+      if (hasAppliedActivityEventRef.current) return;
+      const activity = await readSyncActivity();
+      if (run !== activityRunRef.current) return;
+      // An event beat the snapshot here; it describes a later moment, so the snapshot is discarded.
+      if (hasAppliedActivityEventRef.current) return;
+
+      if (!activity) {
+        if (Date.now() >= deadline) {
+          // Out of budget with no answer. Leave `activitySyncing` at its initial `undefined` —
+          // "could not tell", which the derived status already treats as "no input from this
+          // signal" rather than as a false claim in either direction.
+          return;
+        }
+        retryTimeout = setTimeout(() => {
+          seed(deadline).catch((e: unknown) => {
+            logger.warn(`Unexpected failure re-seeding sync activity: ${getErrorMessage(e)}`);
+          });
+        }, SYNC_STATE_SEED_RETRY_INTERVAL_MS);
+        return;
+      }
+
+      setActivitySyncing(activity.isSyncing);
+      applyActivityProjectIds(activity.projectIds ?? NO_PROJECT_IDS);
+    };
+
+    seed(Date.now() + SYNC_STATE_SEED_RETRY_WINDOW_MS).catch((e: unknown) => {
+      // readSyncActivity swallows its own failures, so reaching here means a bug in the code above
+      // rather than an unavailable command — worth a log that says so.
+      logger.warn(`Unexpected failure seeding sync activity: ${getErrorMessage(e)}`);
+    });
+
+    return () => {
+      activityRunRef.current += 1;
+      if (retryTimeout) clearTimeout(retryTimeout);
+    };
+  }, [readSyncActivity, applyActivityProjectIds]);
 
   const handleSyncStateChanged = useCallback(
     ({ isSyncing }: SyncProgressEvent) => {
@@ -274,7 +405,7 @@ export function useSyncStatus(): SyncStatusInfo {
       // A sync ENDING is not: whether it succeeded, failed, or was cancelled lives in `lastResults`,
       // which only the snapshot carries. Claiming `synced` here would put a green check on a failed
       // or cancelled sync, so the status stays as it is until the read below says what happened.
-      if (isSyncing) setStatus('syncing');
+      if (isSyncing) setClaimStatus('syncing');
 
       const run = runRef.current;
       readSyncState()
@@ -287,10 +418,10 @@ export function useSyncStatus(): SyncStatusInfo {
           if (!state) {
             // The event said a sync ended but the outcome is unreadable. `unknown` is the honest
             // answer; `synced` would be a success claim with nothing behind it.
-            if (!isSyncing) setStatus('unknown');
+            if (!isSyncing) setClaimStatus('unknown');
             return undefined;
           }
-          setStatus(deriveStatusFromSnapshot(state));
+          setClaimStatus(deriveStatusFromSnapshot(state));
           applySyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_IDS);
           return undefined;
         })
@@ -307,9 +438,47 @@ export function useSyncStatus(): SyncStatusInfo {
   );
   useEvent(onSyncStateChanged, handleSyncStateChanged);
 
+  /**
+   * Unlike {@link handleSyncStateChanged}, the activity snapshot already carries `projectIds`
+   * alongside `isSyncing`, so it is applied directly with no follow-up read to sequence.
+   */
+  const handleSyncActivityChanged = useCallback(
+    (activity: SyncActivitySnapshot) => {
+      hasAppliedActivityEventRef.current = true;
+      setActivitySyncing(activity.isSyncing);
+      applyActivityProjectIds(activity.projectIds ?? NO_PROJECT_IDS);
+    },
+    [applyActivityProjectIds],
+  );
+
+  const onSyncActivityChanged = useMemo(
+    () => getNetworkEvent<SyncActivitySnapshot>('paratextBibleSendReceive.onSyncActivityChanged'),
+    [],
+  );
+  useEvent(onSyncActivityChanged, handleSyncActivityChanged);
+
+  /**
+   * The single derived status. The OR is deliberate and monotone: either input claiming a sync is
+   * enough — including when the claim's own read has failed (`claimStatus === 'unknown'`), since
+   * `unknown` means "the claim could not tell", not "nothing is syncing", and the activity signal
+   * CAN tell. So the union can be late to CLEAR but can never report idle (or unknown) while a sync
+   * is running. Erring toward "still syncing" is the safe direction for an ambient indicator — and
+   * showing idle mid-sync is precisely the bug this hook exists to fix. Do not add a third
+   * authority here; add an input.
+   */
+  const status: SyncStatus = activitySyncing && claimStatus !== 'syncing' ? 'syncing' : claimStatus;
+
+  /**
+   * Which projects to name. The claim is the detail source when it has an answer; the activity
+   * signal fills in only when the claim has none — e.g. the Simple-mode startup sync, which the
+   * claim never sees at all. See {@link activityProjectIds} for why these are never combined by
+   * writing into one shared state instead of being derived here.
+   */
+  const effectiveProjectIds = syncingProjectIds.length > 0 ? syncingProjectIds : activityProjectIds;
+
   const [syncingProjects] = usePromise(
     useCallback(async () => {
-      const projectIds = syncingProjectIds;
+      const projectIds = effectiveProjectIds;
       if (projectIds.length === 0) return NO_SYNCING_PROJECTS;
 
       // One filtered lookup rather than a call per id: `getMetadataForProject` fans out across every
@@ -342,7 +511,7 @@ export function useSyncStatus(): SyncStatusInfo {
           // same set, so sorting is what keeps an open popover from reshuffling under the user.
           .sort((a, b) => a.name.localeCompare(b.name))
       );
-    }, [syncingProjectIds]),
+    }, [effectiveProjectIds]),
     NO_SYNCING_PROJECTS,
   );
 
