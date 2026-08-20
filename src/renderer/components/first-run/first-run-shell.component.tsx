@@ -232,7 +232,7 @@ export function FirstRunShell({
             <div className="tw:flex tw:gap-2">
               {onSkip && (
                 // Label is sync-specific; if a future step also calls setCanSkip(true) for a
-                // different reason, the shell will need to accept a skip-label callback from it.
+                // different reason, the shell will need to accept a label callback from it.
                 <Button variant="ghost" onClick={onSkip} disabled={isBusy}>
                   {strings['%firstRun_button_dontSyncYet%']}
                 </Button>

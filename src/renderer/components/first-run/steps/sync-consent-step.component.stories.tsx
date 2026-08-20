@@ -18,8 +18,9 @@ type Story = StoryObj<typeof SyncConsentStep>;
 
 /**
  * The step's own content and its primary "Sync" action. The "Don't sync yet" button is rendered by
- * the wizard shell's footer, not by this step — see `First run/FirstRunShell → SyncConsent` for the
- * step as the user actually sees it.
+ * the wizard shell's footer, not by this step — see [First run/FirstRunShell →
+ * SyncConsent](?path=/story/first-run-firstrunshell--sync-consent) for the step as the user
+ * actually sees it.
  */
 export const Default: Story = {};
 

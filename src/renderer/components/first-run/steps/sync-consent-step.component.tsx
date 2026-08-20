@@ -21,8 +21,8 @@ const defaultSyncFn = (): Promise<void> =>
     : sendCommand('paratextBibleSendReceive.syncProjects', undefined);
 
 /**
- * Sync consent wizard step. Presents "Sync" as the primary action; skip is surfaced by the shell
- * footer (signalled via `setCanSkip(true)`). Advancing via "Sync" runs
+ * Sync consent wizard step. Presents "Sync" as the primary action; the decline button is surfaced
+ * by the shell footer (signalled via `setCanSkip(true)`). Advancing via "Sync" runs
  * `paratextBibleSendReceive.syncProjects` then calls `onNext`.
  *
  * `setCanProceed(undefined)` hides the shell's generic Next/Finish button — this step owns its
