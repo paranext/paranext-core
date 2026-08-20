@@ -23,7 +23,7 @@ import {
 } from 'platform-bible-utils';
 import { DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS } from 'platform-bible-utils/experimental';
 import { cn } from '@/utils/shadcn-ui/utils';
-import { Z_INDEX_OVERLAY } from '@/components/z-index';
+import { Z_INDEX_ABOVE_DOCK } from '@/components/z-index';
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
@@ -76,6 +76,10 @@ export type {
   ProjectSelectorMode,
   ProjectSelectorProject,
 } from './project-selector.rows';
+
+// The selector's own popover already sits at `Z_INDEX_ABOVE_DOCK`; overlays that portal from
+// inside it (the row tooltip and the filter dropdown) must stack above that popover, not behind.
+const Z_INDEX_ABOVE_SELECTOR_POPOVER = Z_INDEX_ABOVE_DOCK + 50;
 
 // #region Localized strings
 
@@ -443,7 +447,7 @@ function ProjectRowView({ row, mode, strings, onClick, onOpen, selectedRowRef }:
         sideOffset={8}
         collisionPadding={16}
         className="tw:max-w-xs tw:text-center"
-        style={{ zIndex: Z_INDEX_OVERLAY }}
+        style={{ zIndex: Z_INDEX_ABOVE_SELECTOR_POPOVER }}
       >
         <div className="tw:font-semibold">{row.fullName}</div>
         {tooltipHasLanguage && (
@@ -513,7 +517,11 @@ function FilterMenu({
           <Filter className="tw:h-4 tw:w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="tw:w-56" style={{ zIndex: Z_INDEX_OVERLAY }}>
+      <DropdownMenuContent
+        align="end"
+        className="tw:w-56"
+        style={{ zIndex: Z_INDEX_ABOVE_SELECTOR_POPOVER }}
+      >
         <DropdownMenuLabel>{strings.groupSectionLabel}</DropdownMenuLabel>
         <DropdownMenuCheckboxItem
           checked={groupByOpenTabs}
