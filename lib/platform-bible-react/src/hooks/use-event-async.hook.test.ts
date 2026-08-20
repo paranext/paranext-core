@@ -154,9 +154,11 @@ describe('useEventAsync', () => {
 
     expect(controlled.getSubscribeCount()).toBe(0);
 
-    // Tearing down an effect that never subscribed must be a no-op, not a call through a missing
-    // unsubscriber
-    rerender({ event: controlled.event });
+    // Re-running the effect tears down the never-subscribed one first; that must be a no-op rather
+    // than a call through a missing unsubscriber
+    expect(() => rerender({ event: controlled.event })).not.toThrow();
+    expect(controlled.getSubscribeCount()).toBe(1);
+
     await act(async () => controlled.resolveSubscribe(0));
 
     act(() => controlled.emitTo(0, 'arrived'));
