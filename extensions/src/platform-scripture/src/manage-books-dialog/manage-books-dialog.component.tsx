@@ -2506,7 +2506,7 @@ export function ManageBooksDialog({
                           // user can pick one whose canon matches the
                           // destination project. The destination's own
                           // versification group is pinned to the top.
-                          groupByVersification
+                          defaultGrouping="versification"
                           priorityVersificationId={versification}
                           // Mirror the prior <SelectTrigger> "primary fill while empty" affordance —
                           // the picker reads as a call-to-action until a reference project is set.

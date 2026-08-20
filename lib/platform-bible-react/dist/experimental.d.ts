@@ -68,6 +68,52 @@ export type ProjectSelectorProject = {
 	 * `versificationId` but no `versificationName`. Pair with `versificationId`.
 	 */
 	versificationName?: string;
+	/**
+	 * Locale-stable type key for the "Group by type" option.
+	 *
+	 * **This field is a free-form `string` on purpose — the selector does NOT enforce a taxonomy.**
+	 * It groups rows by exact key equality (case-sensitive) and displays them under whatever
+	 * {@link typeName} the caller supplies. No enum, no union, no wire contract, and no localization
+	 * key set for the values is defined by this component.
+	 *
+	 * ### Why free-form?
+	 *
+	 * Rows in a single picker can come from more than one already-established taxonomy, and none of
+	 * them are owned by `platform-bible-react`:
+	 *
+	 * - **Paratext project types** — the PT9 `ProjectType` enum, surfaced by the C# ParatextData
+	 *   library via `ScrText.Settings.TranslationInfo.Type.InternalValue` and forwarded on the wire
+	 *   as `ProjectListResult.projectType` (see `c-sharp/ManageBooks/ProjectSummary.cs`). Values
+	 *   include `"Standard"`, `"BackTranslation"`, `"Auxiliary"`, `"Daughter"`, `"StudyBible"`,
+	 *   `"StudyBibleAdditions"`, `"ConsultantNotes"`, `"Transliteration"`,
+	 *   `"TransliterationWithEncoder"`.
+	 * - **DBL resource types** — the `ResourceType` union in `platform-bible-utils`
+	 *   (`lib/platform-bible-utils/src/resources.model.ts`): `"ScriptureResource"`,
+	 *   `"CommentaryResource"`, `"EnhancedResource"`, `"XmlResource"`, `"SourceLanguageResource"`.
+	 *
+	 * Constraining `type` to a hard-coded union would either duplicate one of those taxonomies (and
+	 * quickly drift from its source of truth) or invent a new one, and neither buys the selector
+	 * anything — grouping only needs equality.
+	 *
+	 * If a future consumer wants type-safety on the caller side, the recommended shape is a typed
+	 * literal at the call site (e.g. `type: 'Standard' satisfies string`), not a widening of this
+	 * type. Escalating this to a union is a deliberate, future decision — not something to add
+	 * ad-hoc.
+	 */
+	type?: string;
+	/**
+	 * Human-readable label for {@link type} used as the section header in type-grouping mode. Falls
+	 * back to the raw `type` key when absent. Callers own the mapping from `type` to `typeName` and
+	 * should provide a localized string (e.g. `"Back translation"`, `"Study Bible"`, `"Scripture
+	 * resource"`). The selector does not resolve labels itself — see {@link type} for the rationale.
+	 */
+	typeName?: string;
+	/**
+	 * Millisecond-epoch timestamp of when the caller last used this project/resource. Optional;
+	 * consumed by the "Group by last used" option, which places rows with a timestamp under a
+	 * "Recently used" section (sorted newest-first) and rows without under "Other".
+	 */
+	lastUsedAt?: number;
 };
 /** A project that is currently open in a specific scroll group. */
 export type ProjectSelectorOpenTab = {
@@ -103,12 +149,22 @@ export type ProjectSelectorLocalizedStrings = {
 	searchPlaceholder?: string;
 	/** Accessible label for the filter menu icon button. Defaults to `"Filter"`. */
 	filterAriaLabel?: string;
-	/** Filter menu: section heading for the grouping toggle. Defaults to `"Group"`. */
+	/** Filter menu: section heading for the grouping toggle. Defaults to `"Group by"`. */
 	groupSectionLabel?: string;
 	/** Filter menu: section heading for the filter toggles. Defaults to `"Filter"`. */
 	filterSectionLabel?: string;
-	/** Filter menu: "By open tabs" item under the Group section. Defaults to `"By open tabs"`. */
+	/** Filter menu: "None" radio item under the Group by section. Defaults to `"None"`. */
+	filterGroupNone?: string;
+	/** Filter menu: "Open tabs" item under the Group by section. Defaults to `"Open tabs"`. */
 	filterGroupByOpenTabs?: string;
+	/** Filter menu: "Language" item under the Group by section. Defaults to `"Language"`. */
+	filterGroupByLanguage?: string;
+	/** Filter menu: "Last used" item under the Group by section. Defaults to `"Last used"`. */
+	filterGroupByLastUsed?: string;
+	/** Filter menu: "Versification" item under the Group by section. Defaults to `"Versification"`. */
+	filterGroupByVersification?: string;
+	/** Filter menu: "Type" item under the Group by section. Defaults to `"Type"`. */
+	filterGroupByType?: string;
 	/** Filter menu: multi-only item under the Filter section. Defaults to `"Show selected only"`. */
 	filterShowSelectedOnly?: string;
 	/** Section heading for the Open tabs section. Defaults to `"Opened project & resource tabs"`. */
@@ -122,6 +178,26 @@ export type ProjectSelectorLocalizedStrings = {
 	 */
 	versificationUnknownSectionHeading?: string;
 	/**
+	 * Section heading for rows without a `language` field when grouping by language. Defaults to
+	 * `"Unknown language"`.
+	 */
+	languageUnknownSectionHeading?: string;
+	/**
+	 * Section heading for rows without a `type` field when grouping by type. Defaults to `"Unknown
+	 * type"`.
+	 */
+	typeUnknownSectionHeading?: string;
+	/**
+	 * Section heading for the "Recently used" bucket when grouping by last used. Defaults to
+	 * `"Recently used"`.
+	 */
+	lastUsedRecentSectionHeading?: string;
+	/**
+	 * Section heading for the "Other" bucket when grouping by last used — rows without a `lastUsedAt`
+	 * timestamp. Defaults to `"Other"`.
+	 */
+	lastUsedOtherSectionHeading?: string;
+	/**
 	 * Tooltip on the bound-but-closed chip. `{group}` is replaced with the scroll-group letter.
 	 * Defaults to `"Bound to {group} · not currently open"`.
 	 */
@@ -133,6 +209,7 @@ export type ProjectSelectorLocalizedStrings = {
 	/** Multi-select: "Clear all" button. Defaults to `"Clear all"`. */
 	clearAll?: string;
 };
+type ProjectSelectorGroupingOption = "openTabs" | "lastUsed" | "language" | "versification" | "type";
 type CommonProps = {
 	projects: readonly ProjectSelectorProject[];
 	openTabs: readonly ProjectSelectorOpenTab[];
@@ -152,7 +229,27 @@ type CommonProps = {
 	 */
 	isLoading?: boolean;
 	localizedStrings?: ProjectSelectorLocalizedStrings;
-	/** Initial state of the "Group by open tabs" toggle. Defaults to `true`. */
+	/**
+	 * Grouping options exposed in the filter menu, in the order they appear. Defaults to all five
+	 * (`['openTabs', 'lastUsed', 'language', 'versification', 'type']`) so existing callers get every
+	 * grouping without changing props. Pass a subset to hide the ones your data doesn't support (e.g.
+	 * `['openTabs']` if none of your rows carry `type`/`lastUsedAt`), or an empty array to hide the
+	 * filter menu entirely.
+	 */
+	availableGroupings?: readonly ProjectSelectorGroupingOption[];
+	/**
+	 * The grouping selected on initial mount. When absent, defaults to `'openTabs'` if the array
+	 * includes it, otherwise `'none'`. Pass `'none'` to explicitly open with a flat list. A value not
+	 * present in `availableGroupings` falls through to the same default.
+	 */
+	defaultGrouping?: ProjectSelectorGroupingOption | "none";
+	/**
+	 * Legacy shorthand for `defaultGrouping`. When `false`, opens with `'none'`; when `true` or
+	 * absent, uses the resolved default. Prefer `defaultGrouping` for new code. Superseded silently
+	 * if both are set.
+	 *
+	 * @deprecated Use {@link defaultGrouping} instead.
+	 */
 	defaultGroupByOpenTabs?: boolean;
 	/**
 	 * Hide the chevron icon in the trigger button. For very narrow triggers (e.g. an icon-rail
@@ -163,17 +260,9 @@ type CommonProps = {
 	 */
 	hideTriggerChevron?: boolean;
 	/**
-	 * When true, rows are grouped by `versificationId` (with the `priorityVersificationId` bucket
-	 * pinned to the top). The "Group by open tabs" toggle is hidden — the two grouping modes are
-	 * mutually exclusive in the same picker. When `groupByVersification` is enabled, the consumer
-	 * should ensure each {@link ProjectSelectorProject} carries `versificationId` and
-	 * `versificationName`.
-	 */
-	groupByVersification?: boolean;
-	/**
-	 * Versification id whose bucket should render first in versification grouping mode (typically the
-	 * caller's active project's versification). Optional — when absent, all buckets sort
-	 * alphabetically by `versificationName`.
+	 * Versification id whose bucket should render first when the active grouping is `versification`
+	 * (typically the caller's active project's versification). Ignored under any other grouping.
+	 * Optional — when absent, versification buckets sort alphabetically by `versificationName`.
 	 */
 	priorityVersificationId?: string;
 };
