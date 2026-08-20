@@ -6,7 +6,11 @@
 import type { PlatformError } from 'platform-bible-utils';
 import { OverlayEntry, OverlayResolveType, PopoverContent } from './overlay.service-model';
 
-/** Map of overlay id to overlay entry */
+/**
+ * Map of overlay id to overlay entry. Iteration order IS creation order: `addOverlay` appends a new
+ * key, and the in-place updates below re-`set` a key that already exists, which keeps that key in
+ * its original position. {@link getTopmostOverlay} depends on this.
+ */
 const overlays = new Map<string, OverlayEntry>();
 
 /** Set of listeners notified on any store change */
@@ -100,6 +104,24 @@ export function subscribe(listener: () => void): () => void {
 /** Get a specific overlay by id, or undefined if not found */
 export function getOverlayById(id: string): OverlayEntry | undefined {
   return overlays.get(id);
+}
+
+/**
+ * Get the most recently created overlay matching `predicate` — the topmost of the overlays it
+ * accepts, since a newer overlay always renders over an older one.
+ *
+ * @param predicate Which overlays to consider
+ * @returns The newest matching overlay, or undefined if none match
+ */
+export function getTopmostOverlay(
+  predicate: (overlay: OverlayEntry) => boolean,
+): OverlayEntry | undefined {
+  const entriesInCreationOrder = Array.from(overlays.values());
+  for (let index = entriesInCreationOrder.length - 1; index >= 0; index -= 1) {
+    const entry = entriesInCreationOrder[index];
+    if (predicate(entry)) return entry;
+  }
+  return undefined;
 }
 
 /**

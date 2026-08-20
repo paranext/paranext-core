@@ -749,6 +749,43 @@ describe('OverlayCommandPalettePresentational', () => {
       );
     });
 
+    it('should give the listbox an accessible name', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          listAriaLabel="Marcadores"
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      expect(screen.getByRole('listbox', { name: 'Marcadores' })).toBeInTheDocument();
+    });
+
+    it('should highlight the last item when selectedIndex points past the filtered list', () => {
+      render(
+        <OverlayCommandPalettePresentational
+          items={sampleItems}
+          passive
+          filterText="Save"
+          selectedIndex={2}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+        />,
+      );
+
+      // One item survives the filter, so the out-of-range index clamps onto it — the same clamp
+      // the store applies, and the same one active mode uses for its own highlight
+      const options = screen.getAllByRole('option');
+      expect(options).toHaveLength(1);
+      expect(options[0]).toHaveAttribute('aria-selected', 'true');
+      expect(screen.getByRole('listbox')).toHaveAttribute(
+        'aria-activedescendant',
+        options[0].getAttribute('id') ?? '',
+      );
+    });
+
     it('should call onSelect when an item is clicked', () => {
       const onSelect = vi.fn();
 
@@ -841,15 +878,14 @@ describe('OverlayCommandPalettePresentational', () => {
     ];
 
     /**
-     * The text block inside an item — where muted opacity is applied (not the item container).
-     * Muted uses an INLINE style, not a tw: utility: the renderer has no Tailwind build of its own
-     * (all tw: classes come from platform-bible-react's prebuilt stylesheet, which does not scan
-     * this component), so a class-based approach silently loses the CSS rule at runtime.
+     * Whether the text block inside an item carries the reduced-opacity utility. Muted dims the
+     * TEXT BLOCK, not the item container — a muted item stays highlightable and selectable, which
+     * is what separates it from `disabled`.
      */
-    function getTextBlockOpacity(label: string): string {
+    function isTextBlockMuted(label: string): boolean {
       const textBlock = screen.getByText(label).parentElement;
       expect(textBlock).toBeInstanceOf(HTMLElement);
-      return textBlock instanceof HTMLElement ? textBlock.style.opacity : '';
+      return textBlock instanceof HTMLElement && textBlock.classList.contains('tw:opacity-60');
     }
 
     it('should render muted items with reduced-opacity text in active mode, normal items without', () => {
@@ -861,8 +897,8 @@ describe('OverlayCommandPalettePresentational', () => {
         />,
       );
 
-      expect(getTextBlockOpacity('Non-Basic Marker')).toBe('0.6');
-      expect(getTextBlockOpacity('Basic Marker')).toBe('');
+      expect(isTextBlockMuted('Non-Basic Marker')).toBe(true);
+      expect(isTextBlockMuted('Basic Marker')).toBe(false);
     });
 
     it('should render muted items with reduced-opacity text in passive mode, normal items without', () => {
@@ -875,8 +911,8 @@ describe('OverlayCommandPalettePresentational', () => {
         />,
       );
 
-      expect(getTextBlockOpacity('Non-Basic Marker')).toBe('0.6');
-      expect(getTextBlockOpacity('Basic Marker')).toBe('');
+      expect(isTextBlockMuted('Non-Basic Marker')).toBe(true);
+      expect(isTextBlockMuted('Basic Marker')).toBe(false);
     });
 
     it('should keep muted items selectable (unlike disabled)', () => {

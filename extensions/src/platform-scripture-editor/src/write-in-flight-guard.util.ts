@@ -19,10 +19,6 @@ export const WRITE_GUARD_RELEASE_AFTER_MS = 60_000;
  * happens to arrive. If a write is already in flight the call is a no-op (`{ ran: false }`) and the
  * guard is left untouched so the in-flight writer keeps ownership.
  *
- * This replaces the previous arrangement where a successful write's guard was cleared only when the
- * next PDP update reached `useEditorPdpSync` — which meant any unrelated update could reset the
- * guard mid-write, and the write path itself never owned the flag's full lifecycle.
- *
  * If `write` still hasn't settled after `releaseAfterMs` (default
  * {@link WRITE_GUARD_RELEASE_AFTER_MS} — see there for why 60s), the guard is released and a warning
  * is logged so future saves aren't silently dropped by a write that will never come back (a wedged

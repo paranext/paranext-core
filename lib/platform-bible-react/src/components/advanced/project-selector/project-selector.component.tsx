@@ -925,8 +925,8 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                   placeholder={strings.searchPlaceholder}
                   className="tw:border-0"
                   // Picker semantics: with nothing typed, Space picks the highlighted project
-                  // (the Enter UX). Opted in explicitly now that `CommandInput` no longer applies
-                  // this app-wide — a leading space is meaningless in a project name search.
+                  // (the Enter UX) — the project list is the whole point here and a leading space
+                  // is meaningless in a project name search.
                   spaceSelectsHighlightedItem
                 />
               </div>

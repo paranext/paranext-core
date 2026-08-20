@@ -9,8 +9,8 @@
  * filters on the marker name), so the host palette ranks identically — exact match first, then
  * prefix matches, then containment matches (nearest occurrence first), with ties keeping their
  * original context order (stable sort). Matching is label-only in both modes (the label IS the
- * marker for marker palettes); descriptions and badges never match, which is what buried the exact
- * match under description hits before this existed.
+ * marker for marker palettes); descriptions and badges never match, so a description hit can never
+ * outrank — or bury — the exact label match.
  */
 
 import { filterAndRankItems, type Item } from '@eten-tech-foundation/platform-editor';

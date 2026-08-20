@@ -4380,7 +4380,7 @@ export interface PaletteItem {
 	label: string | LocalizeKey;
 	/** Secondary description text displayed below the label */
 	description?: string | LocalizeKey;
-	/** Optional badge text (e.g. "Deprecated", "end") */
+	/** Optional badge text (e.g. "Deprecated", "End"). Localized when given as a `LocalizeKey`. */
 	badge?: string | LocalizeKey;
 	/** Whether the item is grayed out and non-selectable. Defaults to false. */
 	disabled?: boolean;

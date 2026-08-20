@@ -60,6 +60,7 @@ import {
   getOverlaysByWebView,
   getOverlays,
   getOverlayById,
+  getTopmostOverlay,
   updateOverlayContent,
   updateCommandPaletteState,
 } from './overlay-store';
@@ -226,6 +227,65 @@ async function announceLocalizedToScreenReader(
   }
 }
 
+/**
+ * The command palette state most recently announced to screen readers. Compared against on every
+ * update so an update that changes neither the highlighted item nor the match count announces
+ * nothing — a live region that repeats itself talks over the user's next keystroke.
+ *
+ * One record covers every palette: only one is open per WebView, and a different palette replaces
+ * the record rather than adding to it, so a closed palette leaves nothing behind.
+ */
+let lastAnnouncedPaletteState:
+  | { overlayId: string; highlightedItemId: string | undefined; itemCount: number }
+  | undefined;
+
+/**
+ * Announces a command palette's highlighted item and match count to screen readers, unless neither
+ * changed since the last announcement.
+ *
+ * This live region is the palette's only accessible channel while it is driven from elsewhere: a
+ * passive palette never takes focus (the driving WebView keeps it, which is what lets that
+ * WebView's own keydown semantics run), and `aria-activedescendant` speaks only from a focused
+ * element — so without this, a screen reader user hears the palette open and then nothing about
+ * what it went on to show.
+ *
+ * @param overlayId The command palette overlay the state belongs to
+ * @param filteredItems The items currently matching the palette's filter text
+ * @param selectedIndex The highlighted item's index within `filteredItems`
+ */
+function announceCommandPaletteState(
+  overlayId: string,
+  filteredItems: CommandPaletteItem[],
+  selectedIndex: number,
+): void {
+  const highlightedItem = filteredItems[selectedIndex];
+  const previous = lastAnnouncedPaletteState;
+  if (
+    previous &&
+    previous.overlayId === overlayId &&
+    previous.highlightedItemId === highlightedItem?.id &&
+    previous.itemCount === filteredItems.length
+  )
+    return;
+
+  lastAnnouncedPaletteState = {
+    overlayId,
+    highlightedItemId: highlightedItem?.id,
+    itemCount: filteredItems.length,
+  };
+
+  if (filteredItems.length === 0) {
+    announceLocalizedToScreenReader('%overlay_aria_commandPaletteNoResults%');
+    return;
+  }
+  if (!highlightedItem) return;
+  announceLocalizedToScreenReader('%overlay_aria_commandPaletteHighlightedItem%', {
+    label: highlightedItem.label,
+    index: `${selectedIndex + 1}`,
+    count: `${filteredItems.length}`,
+  });
+}
+
 // ── Auto-Dismiss Helpers ──
 
 /** Map of overlay ID to its auto-dismiss timer, cleared on manual dismissal */
@@ -269,8 +329,9 @@ function dismissAll(...types: OverlayEntry['type'][]): void {
  * option (the option governs click-outside, not the key).
  *
  * @param trigger What is dismissing the overlays
- * @param onlyIds When provided, only overlays with these IDs are dismissed. Used by the app-window
- *   input listener to act on exactly the overlays that were open when the input happened.
+ * @param onlyIds When provided, only overlays with these IDs are dismissed. The app-window input
+ *   listener uses it to act on exactly the overlays that were open when the input happened — every
+ *   one of them for a click away, only the topmost for Escape.
  */
 function dismissTransientOverlays(
   trigger: 'clickAway' | 'escape',
@@ -699,6 +760,14 @@ async function showCommandPalette(
   }
 
   announceLocalizedToScreenReader('%overlay_aria_commandPaletteOpened%');
+  // Baseline for the highlight/match-count announcements: what the palette shows the moment it
+  // opens, unfiltered and highlighting its first item. The first update then announces only if it
+  // actually changes one of them.
+  lastAnnouncedPaletteState = {
+    overlayId,
+    highlightedItemId: items[0]?.id,
+    itemCount: items.length,
+  };
 
   noteOverlayCreated(overlayId);
 
@@ -777,16 +846,21 @@ async function updateCommandPalette(
     return;
   }
 
-  const filteredCount = filterPaletteItems(
+  const filteredItems = filterPaletteItems(
     entry.items,
     nextFilterText,
     entry.request.passive ? 'passive' : 'active',
-  ).length;
+  );
   updateCommandPaletteState(entry.id, {
     filterText: nextFilterText,
     selectedIndexDelta: update.moveSelection,
-    itemCount: filteredCount,
+    itemCount: filteredItems.length,
   });
+
+  // Re-read the entry for the index the store clamped, rather than clamping a second time here.
+  const updatedEntry = getActiveCommandPalette(webViewId);
+  if (updatedEntry)
+    announceCommandPaletteState(updatedEntry.id, filteredItems, updatedEntry.selectedIndex);
 }
 
 /**
@@ -930,7 +1004,13 @@ function handleAppWindowInput(event: AppWindowInputEvent): void {
   if (dismissableOverlayIds.size === 0) return;
 
   if (event.kind === 'escape') {
-    dismissTransientOverlays('escape', dismissableOverlayIds);
+    // Escape closes the topmost surface only, so a stack of overlays unwinds one press at a time
+    // (Dismissal Patterns → Accessibility in the platform-bible-react guidelines). Modal dialogs
+    // are skipped because their own shell answers Escape; every other type is dismissed here.
+    const topmost = getTopmostOverlay(
+      (overlay) => overlay.type !== 'modalDialog' && dismissableOverlayIds.has(overlay.id),
+    );
+    if (topmost) dismissTransientOverlays('escape', new Set([topmost.id]));
     return;
   }
 
@@ -1017,13 +1097,11 @@ function registerAutoDismissListeners(): void {
       // changes that would otherwise immediately dismiss the just-created context menu
       if (isWithinOverlayCreationGrace()) return;
 
-      // Focus moving INTO an overlay is not a reason to dismiss it (previously, clicking a focused
-      // palette's own search input closed the palette). Overlays live in the parent document, so
-      // focusing one is classified as leaving the webview by detectFocus — check whether the newly
-      // active element actually sits inside overlay content. Sharing OVERLAY_CONTENT_SELECTOR
-      // deliberately widens this from the host container and Radix popper wrapper it used to check:
-      // it now also spares focus landing in a non-anchored palette or popover, which is the same
-      // "interacting with the overlay" case.
+      // Focus moving INTO an overlay is interacting with it, not leaving it — clicking a palette's
+      // own search input must not close that palette. Overlays live in the parent document, so
+      // detectFocus classifies focusing one as leaving the webview; check whether the newly active
+      // element actually sits inside overlay content before dismissing. OVERLAY_CONTENT_SELECTOR is
+      // shared with the app-window input listener so both spare the same content, anchored or not.
       const active = document.activeElement;
       if (active?.closest(OVERLAY_CONTENT_SELECTOR)) return;
 

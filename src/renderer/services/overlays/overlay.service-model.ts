@@ -8,7 +8,7 @@
 
 import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
 import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
-import { filterAndRankPaletteItems } from 'platform-bible-react';
+import { filterAndRankPaletteItems, type PaletteFilterMode } from 'platform-bible-react';
 import type { ReactElement } from 'react';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 
@@ -175,13 +175,17 @@ export interface CommandPaletteRequest {
  *   codes (`f`, `fe`, `fig`) filtered by the marker prefix the user has typed into the document,
  *   mirroring PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in
  *   the filter text is stripped before matching, so `"+w"` matches the same items as `"w"`.
- * - `'active'` — case-insensitive CONTAINMENT match, still on `label` only. Description/badge
- *   matching was retired (owner-directed): it buried exact marker matches under description hits
- *   (typing `w` ranked the exact `w` ninth behind items whose descriptions contained a "w").
+ * - `'active'` — case-insensitive CONTAINMENT match, still on `label` only. Descriptions and badges
+ *   never match, so an exact marker match cannot be buried under items whose descriptions happen to
+ *   contain the typed letter.
  *
  * Both modes rank matches exact-first — see {@link filterPaletteItems}.
+ *
+ * Re-exported from `platform-bible-react`, the home of the `filterAndRankPaletteItems` that
+ * {@link filterPaletteItems} delegates to, so the mode this service accepts and the mode that
+ * function implements cannot drift apart.
  */
-export type PaletteFilterMode = 'active' | 'passive';
+export type { PaletteFilterMode };
 
 /**
  * Filters command palette items by matching `filterText` against each item's `label`, with

@@ -4175,6 +4175,8 @@ declare module 'shared/services/window.service-model' {
    *
    * These two gestures are deliberately the ONLY inputs this type can describe. Do not add other keys
    * or richer mouse detail — see the security note on {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT}.
+   *
+   * @experimental
    */
   export type AppWindowInputKind = 'mouseDown' | 'escape';
   /**
@@ -4183,6 +4185,8 @@ declare module 'shared/services/window.service-model' {
    * Deliberately carries nothing but which of the two gestures happened — no key identity, no mouse
    * coordinates, button, or target. See the security note on
    * {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} before adding fields.
+   *
+   * @experimental
    */
   export type AppWindowInputEvent = {
     /** Which input gesture happened */
@@ -9708,6 +9712,16 @@ declare module 'renderer/services/overlays/overlay-store' {
   /** Get a specific overlay by id, or undefined if not found */
   export function getOverlayById(id: string): OverlayEntry | undefined;
   /**
+   * Get the most recently created overlay matching `predicate` — the topmost of the overlays it
+   * accepts, since a newer overlay always renders over an older one.
+   *
+   * @param predicate Which overlays to consider
+   * @returns The newest matching overlay, or undefined if none match
+   */
+  export function getTopmostOverlay(
+    predicate: (overlay: OverlayEntry) => boolean,
+  ): OverlayEntry | undefined;
+  /**
    * Removes all overlays from the store and notifies listeners.
    *
    * WARNING: Test-only. Does not resolve or reject pending overlay promises. Using this in production
@@ -9840,6 +9854,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    */
   import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
   import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
+  import { type PaletteFilterMode } from 'platform-bible-react';
   import type { ReactElement } from 'react';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   /**
@@ -10006,13 +10021,17 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    *   codes (`f`, `fe`, `fig`) filtered by the marker prefix the user has typed into the document,
    *   mirroring PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in
    *   the filter text is stripped before matching, so `"+w"` matches the same items as `"w"`.
-   * - `'active'` — case-insensitive CONTAINMENT match, still on `label` only. Description/badge
-   *   matching was retired (owner-directed): it buried exact marker matches under description hits
-   *   (typing `w` ranked the exact `w` ninth behind items whose descriptions contained a "w").
+   * - `'active'` — case-insensitive CONTAINMENT match, still on `label` only. Descriptions and badges
+   *   never match, so an exact marker match cannot be buried under items whose descriptions happen to
+   *   contain the typed letter.
    *
    * Both modes rank matches exact-first — see {@link filterPaletteItems}.
+   *
+   * Re-exported from `platform-bible-react`, the home of the `filterAndRankPaletteItems` that
+   * {@link filterPaletteItems} delegates to, so the mode this service accepts and the mode that
+   * function implements cannot drift apart.
    */
-  export type PaletteFilterMode = 'active' | 'passive';
+  export type { PaletteFilterMode };
   /**
    * Filters command palette items by matching `filterText` against each item's `label`, with
    * per-{@link PaletteFilterMode} semantics (passive prefix-matches with a leading `+` stripped from
@@ -10994,6 +11013,8 @@ declare module '@papi/core' {
   } from 'shared/services/scroll-group.service-model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type {
+    AppWindowInputEvent,
+    AppWindowInputKind,
     FocusSubject,
     SetFocusSubject,
     SetFocusSpecifier,

@@ -10,8 +10,9 @@ import { MutableRefObject } from 'react';
 import type { EditorRef, SelectionRange, StyleInfo } from '@eten-tech-foundation/platform-editor';
 import {
   generateInlineMarkerMenuListItems,
-  isStandardViewEnterKeyEvent,
+  resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  type FootnotesPaneAutoVisibilityInput,
 } from './platform-scripture-editor.web-view.utils';
 
 /** Build a mock editor ref exposing a spy for the method the generator calls. */
@@ -222,36 +223,89 @@ describe('generateInlineMarkerMenuListItems', () => {
   });
 });
 
-describe('isStandardViewEnterKeyEvent', () => {
-  it('claims a plain Enter', () => {
-    expect(isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Enter' }))).toBe(true);
+describe('resolveFootnotesPaneAutoVisibility', () => {
+  const GENESIS_1 = 'GEN|1';
+  const GENESIS_2 = 'GEN|2';
+
+  /** Auto-show on, Standard view, current chapter has notes, no manual override in play. */
+  const AUTO_SHOWING: FootnotesPaneAutoVisibilityInput = {
+    isAutoShowEnabled: true,
+    viewType: 'standard',
+    chapterHasNotes: true,
+    manualOverrideChapterKey: undefined,
+    currentChapterKey: GENESIS_1,
+  };
+
+  it('shows the pane when the chapter has notes', () => {
+    expect(resolveFootnotesPaneAutoVisibility(AUTO_SHOWING)).toBe(true);
   });
 
-  it('claims Enter regardless of modifier state (PT9 parity: no modifier check)', () => {
-    expect(
-      isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true })),
-    ).toBe(true);
-    expect(
-      isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true })),
-    ).toBe(true);
-    expect(
-      isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Enter', altKey: true })),
-    ).toBe(true);
-    expect(
-      isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true })),
-    ).toBe(true);
-    expect(
-      isStandardViewEnterKeyEvent(
-        new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, shiftKey: true }),
-      ),
-    ).toBe(true);
+  it('hides the pane when the chapter has no notes', () => {
+    expect(resolveFootnotesPaneAutoVisibility({ ...AUTO_SHOWING, chapterHasNotes: false })).toBe(
+      false,
+    );
   });
 
-  it('never claims non-Enter keys, modified or not', () => {
-    expect(isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'a' }))).toBe(false);
-    expect(isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: '\\' }))).toBe(false);
+  it('has no opinion while auto-show is off, so the pane keeps whatever the user set', () => {
     expect(
-      isStandardViewEnterKeyEvent(new KeyboardEvent('keydown', { key: 'Escape', ctrlKey: true })),
+      resolveFootnotesPaneAutoVisibility({ ...AUTO_SHOWING, isAutoShowEnabled: false }),
+    ).toBeUndefined();
+    expect(
+      resolveFootnotesPaneAutoVisibility({
+        ...AUTO_SHOWING,
+        isAutoShowEnabled: false,
+        chapterHasNotes: false,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('has no opinion outside Standard view, whatever the chapter holds', () => {
+    expect(
+      resolveFootnotesPaneAutoVisibility({ ...AUTO_SHOWING, viewType: 'markers' }),
+    ).toBeUndefined();
+    expect(
+      resolveFootnotesPaneAutoVisibility({ ...AUTO_SHOWING, viewType: 'formatted' }),
+    ).toBeUndefined();
+    expect(
+      resolveFootnotesPaneAutoVisibility({
+        ...AUTO_SHOWING,
+        viewType: 'markers',
+        chapterHasNotes: false,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('lets a manual show/hide in the current chapter win over the auto decision', () => {
+    // The user hid the pane in a chapter that HAS notes: auto would show it, and must not.
+    expect(
+      resolveFootnotesPaneAutoVisibility({
+        ...AUTO_SHOWING,
+        manualOverrideChapterKey: GENESIS_1,
+      }),
+    ).toBeUndefined();
+    // ...and the mirror image: shown by hand in a chapter with no notes, auto must not hide it.
+    expect(
+      resolveFootnotesPaneAutoVisibility({
+        ...AUTO_SHOWING,
+        chapterHasNotes: false,
+        manualOverrideChapterKey: GENESIS_1,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('resumes the auto decision once a chapter change leaves the override behind', () => {
+    const overriddenInPreviousChapter: FootnotesPaneAutoVisibilityInput = {
+      ...AUTO_SHOWING,
+      manualOverrideChapterKey: GENESIS_1,
+      currentChapterKey: GENESIS_2,
+    };
+
+    expect(resolveFootnotesPaneAutoVisibility(overriddenInPreviousChapter)).toBe(true);
+    expect(
+      resolveFootnotesPaneAutoVisibility({
+        ...overriddenInPreviousChapter,
+        chapterHasNotes: false,
+      }),
     ).toBe(false);
   });
 });

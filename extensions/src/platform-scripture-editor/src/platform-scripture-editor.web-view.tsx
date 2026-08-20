@@ -151,7 +151,7 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
   generateInlineMarkerMenuListItems,
-  isStandardViewEnterKeyEvent,
+  resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
 } from './platform-scripture-editor.web-view.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
@@ -285,6 +285,16 @@ const VIEW_TYPE_UNSET = '__view_type_unset_not_a_real_view_type__';
 const defaultTextDirection = 'ltr';
 
 const defaultMarkersMenuTrigger = '\\';
+
+/**
+ * Identity of one loaded chapter, for the two places that need to compare "the chapter then"
+ * against "the chapter now": the debounced save's chapter-safety guard and the footnotes pane's
+ * per-chapter manual override. One helper so those two can never disagree about what counts as the
+ * same chapter.
+ */
+function getChapterKey(book: string, chapterNum: number): string {
+  return `${book}|${chapterNum}`;
+}
 
 /**
  * The marker-menu context plus the caret/selection anchor rect returned by
@@ -723,6 +733,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     dismissPaletteSessionIfOpen();
   }, [scrRef.book, scrRef.chapterNum, dismissPaletteSessionIfOpen]);
 
+  // #region Footnotes Pane State
+
   const [footnotesPaneVisible, setFootnotesPaneVisible] = useWebViewState<boolean>(
     'footnotesPaneVisible',
     false,
@@ -752,6 +764,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [footnotePaneFocusRequest, setFootnotePaneFocusRequest] = useState<
     { index: number } | undefined
   >(undefined);
+
+  // #endregion Footnotes Pane State
 
   // Project-settings-sourced separators/callers for `nodeOptions` below (PT9
   // ChapterVerseSeparator / RangeIndicator / DefaultFootnoteCaller / DefaultCrossRefCaller). Each
@@ -968,6 +982,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return getViewOptionsForType(viewType, isPowerMode);
   }, [viewType, isPowerMode]);
 
+  // #region Footnotes Auto-Show Setting
+
   /**
    * Footnotes-pane auto-show/hide setting that diverges from PT9 (default off, so PT9's
    * manual/persistent behavior is unchanged by default): when on, the footnotes pane
@@ -986,21 +1002,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [footnotesAutoShow]);
 
   /**
-   * Whether the user has manually toggled the footnotes pane for the current chapter. When set, it
-   * wins over the `footnotesAutoShow` auto-show/hide behavior until the chapter changes. This is
-   * intentionally a ref (not persisted web-view state) since it only needs to survive re-renders
+   * The chapter (`getChapterKey`) in which the user last manually showed or hid the footnotes pane,
+   * or `undefined` when they have not. A manual toggle wins over the `footnotesAutoShow`
+   * auto-show/hide behavior for that chapter only — see `resolveFootnotesPaneAutoVisibility`, which
+   * compares this against the loaded chapter rather than trusting a flag to have been cleared.
+   *
+   * Intentionally a ref (not persisted web-view state) since it only needs to survive re-renders
    * within a chapter, not across web-view reloads.
    */
-  const footnotesAutoOverrideRef = useRef(false);
+  const footnotesManualOverrideChapterRef = useRef<string | undefined>(undefined);
 
-  // Chapter change resets per-chapter transient footnotes state: the manual pane override (so
-  // auto-show/hide resumes for the new chapter) and any pending pane-focus request (so a request
+  // Chapter change drops per-chapter transient footnotes state: the manual pane override (so
+  // auto-show/hide resumes for the new chapter, and so returning to the earlier chapter starts
+  // fresh rather than reviving its old override) and any pending pane-focus request (so a request
   // that was dropped as out-of-bounds while `footnotes` was momentarily empty can't be retried
   // against the NEW chapter's notes once they repopulate).
   useEffect(() => {
-    footnotesAutoOverrideRef.current = false;
+    footnotesManualOverrideChapterRef.current = undefined;
     setFootnotePaneFocusRequest(undefined);
   }, [scrRef.book, scrRef.chapterNum]);
+
+  // #endregion Footnotes Auto-Show Setting
 
   /**
    * Function to run to set the editor's USJ content. Also clears annotation info because setting
@@ -1372,9 +1394,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           break;
         }
         case 'toggleFootnotesPaneVisibility': {
-          // A manual toggle wins over the `footnotesAutoShow` auto-show/hide behavior until the
-          // next chapter change (see `footnotesAutoOverrideRef`).
-          footnotesAutoOverrideRef.current = true;
+          // A manual toggle wins over the `footnotesAutoShow` auto-show/hide behavior for the
+          // chapter it was made in (see `footnotesManualOverrideChapterRef`).
+          footnotesManualOverrideChapterRef.current = getChapterKey(scrRef.book, scrRef.chapterNum);
           const { current } = footnotesPaneVisibleRef;
           setFootnotesPaneVisible(!current);
           break;
@@ -1382,9 +1404,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         case 'toggleFootnotesAutoShow': {
           const { current } = footnotesAutoShowRef;
           // Turning auto-show ON must take effect immediately: a manual pane toggle earlier in
-          // this chapter set the override, and without clearing it the auto-show effect
-          // early-returns until the next chapter change — the menu item looks broken.
-          if (!current) footnotesAutoOverrideRef.current = false;
+          // this chapter recorded the override, and without dropping it the auto-show effect has
+          // no opinion until the next chapter change — the menu item looks broken.
+          if (!current) footnotesManualOverrideChapterRef.current = undefined;
           setFootnotesAutoShow(!current);
           break;
         }
@@ -1583,6 +1605,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     isPowerMode,
   ]);
 
+  // #region Marker Palettes
+
   const inlineMarkerMenuItems = useMemo(
     () =>
       generateInlineMarkerMenuListItems(
@@ -1683,6 +1707,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             items: items.map(markerMenuItemToPaletteItem),
             anchor: ctx.anchorRect,
             passive,
+            // The same key `MarkerMenu` puts in its own search field, so the two ways of picking a
+            // marker read identically instead of this one falling back to a generic "Search...".
+            // Passed as the key, not a resolved string: the overlay renders in the renderer frame
+            // and localizes it there. Inert for the passive flavor, which has no search field.
+            placeholder: '%markerMenu_searchPlaceholder%',
             // The session owns these keys wherever focus ends up — without this, a palette that
             // wins the focus race takes the session's keys with it and none of the ratified
             // commit semantics run. Declared for the passive palette too: it never takes focus,
@@ -1886,6 +1915,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => window.removeEventListener('focusout', handleFocusOut);
   }, [scrRef.book, scrRef.chapterNum]);
 
+  // #endregion Marker Palettes
+
+  // #region Keydown Routing
+
   // Listen for Ctrl+F to open find dialog, for the marker menu trigger to open the marker menu,
   // for Ctrl+T / Ctrl+Shift+T to insert a footnote/cross-reference, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
@@ -1920,7 +1953,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           return;
         }
 
-        if (!session && event.key === defaultMarkersMenuTrigger) {
+        // Everything below runs only with no open session — the `if (session)` above returns.
+        if (event.key === defaultMarkersMenuTrigger) {
           // ACTIVE palette: the trigger never lands, whatever the selection shape — typing
           // filters the palette, not the document. In capture phase the claim keeps Lexical
           // from ever seeing the `\`. (`passive` still selects the overlay's
@@ -1934,12 +1968,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           return;
         }
 
-        // Enter is claimed in EVERY modifier state (PT9 parity: KeyPressEditHandler has no
-        // modifier check). An unclaimed Ctrl/Alt/Meta+Enter would let Lexical plain-split the
-        // paragraph — the unmarked empty-paragraph merge problem this palette exists to prevent —
-        // and Shift+Enter's soft line break has no USFM representation, so it serializes as a
-        // plain space: the same data problem as an unmarked split.
-        if (!session && isStandardViewEnterKeyEvent(event)) {
+        // Enter is claimed in EVERY modifier state, which is why this tests the key alone (PT9
+        // parity: KeyPressEditHandler has no modifier check). An unclaimed Ctrl/Alt/Meta+Enter
+        // would let Lexical plain-split the paragraph — the unmarked empty-paragraph merge problem
+        // this palette exists to prevent — and Shift+Enter's soft line break has no USFM
+        // representation, so it serializes as a plain space: the same data problem as an unmarked
+        // split.
+        if (event.key === 'Enter') {
           const ctx = editorRef.current?.getMarkerMenuContext();
           // Pass through untouched when there's no context, inside a note, or inside marker glyph
           // text — the library engine owns Enter in those cases (e.g. `\fp` inside a footnote).
@@ -2030,6 +2065,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     openMarkerPaletteAtCaret,
     openEnterPalette,
   ]);
+
+  // #endregion Keydown Routing
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
@@ -2265,6 +2302,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editorRef.current?.selectNote(index);
   }, []);
 
+  // #region PDP Save Write Path
+
   /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
   const saveUsjToPdpIfUpdated = useMemo(() => {
     function saveUsjToPdpIfUpdatedInternal(usjFromEditor = editorRef.current?.getUsj()) {
@@ -2360,6 +2399,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return saveUsjToPdpIfUpdatedInternal;
   }, [usjFromPdp, projectName, localizedStrings, projectId, notifySyncEditBlocked]);
 
+  // #endregion PDP Save Write Path
+
   /**
    * Close the footnote editor, optionally deleting the note from the main editor first. Pass
    * `deleteIfNew = true` when the user explicitly discards (X button); pass `false` when the note
@@ -2403,6 +2444,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, []);
 
+  // #region Debounced Save Scheduling
+
   /**
    * Latest save function behind a stable ref: `saveUsjToPdpIfUpdated`'s identity changes with every
    * `usjFromPdp` update, and recreating the debounced wrapper on each change would drop the pending
@@ -2413,12 +2456,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     saveUsjToPdpIfUpdatedRef.current = saveUsjToPdpIfUpdated;
   }, [saveUsjToPdpIfUpdated]);
 
-  // `book|chapterNum` of the chapter currently loaded, kept in a ref so the debounced save's fire
-  // (below) can compare the chapter active NOW against the chapter a pending save was scheduled for
-  // (Fix 2, `performDebouncedPdpSave`'s chapter-safety guard). Assigned during render — NOT in an
-  // effect — so that at a chapter-switch flush (which runs in an effect cleanup, before effects) it
-  // already reflects the NEW chapter and the guard sees the mismatch.
-  const chapterKey = `${scrRef.book}|${scrRef.chapterNum}`;
+  // The chapter currently loaded, kept in a ref so the debounced save's fire (below) can compare
+  // the chapter active NOW against the chapter a pending save was scheduled for (see
+  // `performDebouncedPdpSave`'s chapter-safety guard). Assigned during render — NOT in an effect —
+  // so that at a chapter-switch flush (which runs in an effect cleanup, before effects) it already
+  // reflects the NEW chapter and the guard sees the mismatch.
+  const chapterKey = getChapterKey(scrRef.book, scrRef.chapterNum);
   const chapterKeyRef = useRef(chapterKey);
   chapterKeyRef.current = chapterKey;
 
@@ -2457,11 +2500,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [],
   );
 
-  // Lifecycle for the debounced save: a pending trailing call must never be LOST (crash-resilience
-  // vs. the prior per-change save) nor fire against the WRONG chapter's save context.
+  // Lifecycle for the debounced save: a pending trailing call must never be LOST (the trailing
+  // window is where a crash, dispose, or quit would otherwise take the final edits with it) nor
+  // fire against the WRONG chapter's save context.
   //
   // (1) Chapter/book switch: flush in this effect's CLEANUP so a pending trailing save is not
-  // dropped when the chapter changes or the web view disposes. Chapter-safety no longer rests on
+  // dropped when the chapter changes or the web view disposes. Chapter-safety does not rest on
   // React effect ordering: each `schedule` captured the chapter's save fn and chapter key into the
   // payload, and `performDebouncedPdpSave` compares the captured chapter key against
   // `chapterKeyRef.current` (already the NEW chapter here) — a mismatch saves the captured content
@@ -2490,7 +2534,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const handleEditorialUsjChange = useCallback(
     (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
-      // pending trailing save always targets the chapter this content was typed in (Fix 2).
+      // pending trailing save always targets the chapter this content was typed in.
       //
       // Schedule the SETTLED, transient-excluded snapshot (`EditorRef.getUsj()`), not the raw
       // `usj` this callback was invoked with: `onUsjChange`'s payload is the unsettled document as
@@ -2533,6 +2577,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     },
     [closeFootnoteEditor, openFootnoteEditorOnNewNote, saveUsjToPdpDebounced],
   );
+
+  // #endregion Debounced Save Scheduling
 
   /**
    * Handle selection changes in the editor. Updates the local ref and notifies the backend so it
@@ -2601,6 +2647,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     isEditingSessionActive,
   });
 
+  // #region Footnotes Auto-Show Decision
+
   /**
    * Whether the currently loaded chapter has at least one note. Reuses the same
    * `UsjReaderWriter(...).findAllNotes()` mechanism `FootnotesLayout` uses to populate the
@@ -2622,15 +2670,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [usjFromPdp]);
 
-  // Footnotes-pane auto-show/hide behavior that diverges from PT9 (behind `footnotesAutoShow`,
-  // default off): in standard view, auto-show the footnotes pane when the loaded chapter has notes
-  // and auto-hide it when it
-  // doesn't, unless the user has manually overridden the pane's visibility for this chapter (see
-  // `footnotesAutoOverrideRef`/`toggleFootnotesPaneVisibility` above).
+  // Apply the footnotes-pane auto-show/hide decision. All of the reasoning about when the pane
+  // should follow the chapter — and when a manual toggle keeps it where the user put it — lives in
+  // `resolveFootnotesPaneAutoVisibility`; `undefined` means leave the pane alone.
   useEffect(() => {
-    if (!footnotesAutoShow || viewType !== 'standard' || footnotesAutoOverrideRef.current) return;
-    setFootnotesPaneVisible(chapterHasNotes);
-  }, [footnotesAutoShow, viewType, chapterHasNotes, setFootnotesPaneVisible]);
+    const autoVisibility = resolveFootnotesPaneAutoVisibility({
+      isAutoShowEnabled: footnotesAutoShow,
+      viewType,
+      chapterHasNotes,
+      manualOverrideChapterKey: footnotesManualOverrideChapterRef.current,
+      currentChapterKey: chapterKey,
+    });
+    if (autoVisibility !== undefined) setFootnotesPaneVisible(autoVisibility);
+  }, [footnotesAutoShow, viewType, chapterHasNotes, chapterKey, setFootnotesPaneVisible]);
+
+  // #endregion Footnotes Auto-Show Decision
 
   // On loading the first time, scroll the selected verse into view and set focus to the editor
   useEffect(() => {

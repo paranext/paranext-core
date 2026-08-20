@@ -74,6 +74,8 @@ export function getWebViewIdFromFocusSubject(focusSubject: FocusSubject): string
  *
  * These two gestures are deliberately the ONLY inputs this type can describe. Do not add other keys
  * or richer mouse detail — see the security note on {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT}.
+ *
+ * @experimental
  */
 export type AppWindowInputKind = 'mouseDown' | 'escape';
 
@@ -83,6 +85,8 @@ export type AppWindowInputKind = 'mouseDown' | 'escape';
  * Deliberately carries nothing but which of the two gestures happened — no key identity, no mouse
  * coordinates, button, or target. See the security note on
  * {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT} before adding fields.
+ *
+ * @experimental
  */
 export type AppWindowInputEvent = {
   /** Which input gesture happened */

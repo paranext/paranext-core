@@ -127,18 +127,23 @@ export interface FootnoteEditorMarkerPalette extends PaletteDriver {
  * Maps a library marker-menu item to the shared palette-item shape — THE one converter for marker
  * palettes (the platform-scripture-editor web view consumes it too).
  *
- * All strings are plain (never `LocalizeKey`s): passive palettes filter and commit on RAW `label`
- * strings, and the badge shares that constraint by policy. Items are mapped in the library's
- * PT9-derived order and never regrouped — a `group` key would visually pull close tags out of the
- * PT9 basic-first interleaved ordering, so close tags are instead marked in place with an `'end'`
- * badge, and PT9's grey cue for non-basic markers maps to `muted`.
+ * `label` is always a plain string (never a `LocalizeKey`): passive palettes filter and commit on
+ * the RAW `label`. The badge carries no such constraint — filtering is label-only, so descriptions
+ * and badges never take part in matching or commit resolution (see `marker-palette-filter.util.ts`)
+ * — and the palette host resolves a `LocalizeKey` badge to a localized string before rendering, so
+ * the close-tag badge is a key.
+ *
+ * Items are mapped in the library's PT9-derived order and never regrouped — a `group` key would
+ * visually pull close tags out of the PT9 basic-first interleaved ordering, so close tags are
+ * instead marked in place with an end badge, and PT9's grey cue for non-basic markers maps to
+ * `muted`.
  */
 export function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem): PaletteItem {
   return {
     id: item.marker,
     label: item.marker,
     description: item.description,
-    badge: item.kind === 'closeTag' ? 'end' : undefined,
+    badge: item.kind === 'closeTag' ? '%markerMenu_endTag_label%' : undefined,
     muted: !item.isBasic,
   };
 }

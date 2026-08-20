@@ -1201,6 +1201,138 @@ describe('overlay.service-host', () => {
     });
   });
 
+  describe('command palette screen-reader announcements', () => {
+    const markerPaletteRequest: CommandPaletteRequest = {
+      passive: true,
+      items: [
+        { id: 'f', label: 'f' },
+        { id: 'fe', label: 'fe' },
+        { id: 'fig', label: 'fig' },
+      ],
+    };
+
+    /** Announcement templates the mock localization service resolves */
+    const ANNOUNCEMENT_STRINGS: LanguageStrings = {
+      '%overlay_aria_commandPaletteOpened%': 'Command palette opened',
+      '%overlay_aria_commandPaletteHighlightedItem%': '{label}, {index} of {count}',
+      '%overlay_aria_commandPaletteNoResults%': 'No results',
+    };
+
+    /** Text currently in the overlay service's aria-live region */
+    function ariaLiveText(): string {
+      return document.querySelector('[aria-live="assertive"]')?.textContent ?? '';
+    }
+
+    /**
+     * Runs out every announcement in flight: each one resolves its localized string and then waits
+     * out the delay that separates clearing the live region from filling it again.
+     */
+    async function flushAnnouncements(): Promise<void> {
+      await vi.advanceTimersByTimeAsync(100);
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.mocked(localizationService.getLocalizedStrings).mockImplementation(
+        async ({ localizeKeys }) => {
+          const strings: LanguageStrings = {};
+          localizeKeys.forEach((key) => {
+            if (ANNOUNCEMENT_STRINGS[key] !== undefined) strings[key] = ANNOUNCEMENT_STRINGS[key];
+          });
+          return strings;
+        },
+      );
+    });
+
+    afterEach(() => {
+      // Restore the file-level default so later tests see an empty localization map again
+      vi.mocked(localizationService.getLocalizedStrings).mockImplementation(async () => ({}));
+      document.querySelector('[aria-live="assertive"]')?.remove();
+    });
+
+    /**
+     * Opens a palette and settles its "opened" announcement. The still-pending `showCommandPalette`
+     * promise is handed back wrapped, because an async function that returned it directly would
+     * adopt it and never settle.
+     */
+    async function showAnnouncingPalette(
+      webViewId: string,
+    ): Promise<{ palette: Promise<string | undefined> }> {
+      const palette = overlayService.showCommandPalette(markerPaletteRequest, webViewId);
+      await flushAnnouncements();
+      expect(ariaLiveText()).toBe('Command palette opened');
+      return { palette };
+    }
+
+    /** Dismisses whatever the test opened so its showCommandPalette promise settles */
+    async function dismissAndAwait(palette: Promise<string | undefined>): Promise<void> {
+      getOverlays().forEach((overlay) => overlay.resolve(undefined));
+      await expect(palette).resolves.toBeUndefined();
+    }
+
+    it('should announce the highlighted item and match count when the filter narrows the list', async () => {
+      const { palette } = await showAnnouncingPalette('sr-filter');
+
+      await overlayService.updateCommandPalette('sr-filter', { filterText: 'fe' });
+      await flushAnnouncements();
+
+      expect(ariaLiveText()).toBe('fe, 1 of 1');
+
+      await dismissAndAwait(palette);
+    });
+
+    it('should announce the newly highlighted item when the selection moves', async () => {
+      const { palette } = await showAnnouncingPalette('sr-move');
+
+      await overlayService.updateCommandPalette('sr-move', { moveSelection: 1 });
+      await flushAnnouncements();
+
+      expect(ariaLiveText()).toBe('fe, 2 of 3');
+
+      await dismissAndAwait(palette);
+    });
+
+    it('should announce that nothing matches when the filter empties the list', async () => {
+      const { palette } = await showAnnouncingPalette('sr-empty');
+
+      await overlayService.updateCommandPalette('sr-empty', { filterText: 'zz' });
+      await flushAnnouncements();
+
+      expect(ariaLiveText()).toBe('No results');
+
+      await dismissAndAwait(palette);
+    });
+
+    it('should say nothing when an update changes neither the highlight nor the match count', async () => {
+      const { palette } = await showAnnouncingPalette('sr-repeat');
+
+      await overlayService.updateCommandPalette('sr-repeat', { filterText: 'fe' });
+      await flushAnnouncements();
+      expect(ariaLiveText()).toBe('fe, 1 of 1');
+
+      // Re-sending the same filter text leaves the palette showing exactly what was announced
+      const region = document.querySelector('[aria-live="assertive"]');
+      if (region) region.textContent = 'not re-announced';
+      await overlayService.updateCommandPalette('sr-repeat', { filterText: 'fe' });
+      await flushAnnouncements();
+
+      expect(ariaLiveText()).toBe('not re-announced');
+
+      await dismissAndAwait(palette);
+    });
+
+    it('should say nothing when an update leaves the palette exactly as it opened', async () => {
+      const { palette } = await showAnnouncingPalette('sr-noop');
+
+      await overlayService.updateCommandPalette('sr-noop', { moveSelection: 0 });
+      await flushAnnouncements();
+
+      expect(ariaLiveText()).toBe('Command palette opened');
+
+      await dismissAndAwait(palette);
+    });
+  });
+
   describe('auto-dismiss listeners', () => {
     it('should call registerAutoDismissListeners when startOverlayService is called', async () => {
       const addEventListenerSpy = vi.spyOn(window, 'addEventListener');
@@ -1428,7 +1560,7 @@ describe('overlay.service-host', () => {
       expect(getOverlays()).toHaveLength(0);
     });
 
-    it('should dismiss overlays immediately on an escape signal', async () => {
+    it('should dismiss only the topmost overlay on an escape signal, unwinding one press at a time', async () => {
       vi.useFakeTimers();
 
       const contextMenuPromise = overlayService.showContextMenu('ext.testWebView', 'escape-signal');
@@ -1437,13 +1569,48 @@ describe('overlay.service-host', () => {
       const popoverId = await overlayService.showPopover(popoverRequest, 'escape-signal');
       expectPopoverId(popoverId);
       const popoverDismissed = overlayService.onPopoverDismissed(popoverId);
+      expect(getOverlays()).toHaveLength(3);
 
       vi.advanceTimersByTime(PAST_GRACE_MS);
-      emitAppWindowInput('escape');
 
-      await expect(contextMenuPromise).resolves.toBeUndefined();
-      await expect(palettePromise).resolves.toBeUndefined();
+      // The popover was created last, so it is the surface Escape closes
+      emitAppWindowInput('escape');
       await expect(popoverDismissed).resolves.toBeUndefined();
+      expect(getOverlays().map((overlay) => overlay.type)).toEqual([
+        'contextMenu',
+        'commandPalette',
+      ]);
+
+      emitAppWindowInput('escape');
+      await expect(palettePromise).resolves.toBeUndefined();
+      expect(getOverlays().map((overlay) => overlay.type)).toEqual(['contextMenu']);
+
+      emitAppWindowInput('escape');
+      await expect(contextMenuPromise).resolves.toBeUndefined();
+      expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('should close the newer of two command palettes on escape, and the older on the next escape', async () => {
+      vi.useFakeTimers();
+
+      const olderPalettePromise = overlayService.showCommandPalette(
+        paletteRequest,
+        'older-webview',
+      );
+      const newerPalettePromise = overlayService.showCommandPalette(
+        paletteRequest,
+        'newer-webview',
+      );
+      expect(getOverlays()).toHaveLength(2);
+
+      vi.advanceTimersByTime(PAST_GRACE_MS);
+
+      emitAppWindowInput('escape');
+      await expect(newerPalettePromise).resolves.toBeUndefined();
+      expect(getOverlays()).toHaveLength(1);
+
+      emitAppWindowInput('escape');
+      await expect(olderPalettePromise).resolves.toBeUndefined();
       expect(getOverlays()).toHaveLength(0);
     });
 

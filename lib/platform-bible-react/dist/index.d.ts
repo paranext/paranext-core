@@ -1044,11 +1044,16 @@ export interface FootnoteEditorMarkerPalette extends PaletteDriver {
  * Maps a library marker-menu item to the shared palette-item shape — THE one converter for marker
  * palettes (the platform-scripture-editor web view consumes it too).
  *
- * All strings are plain (never `LocalizeKey`s): passive palettes filter and commit on RAW `label`
- * strings, and the badge shares that constraint by policy. Items are mapped in the library's
- * PT9-derived order and never regrouped — a `group` key would visually pull close tags out of the
- * PT9 basic-first interleaved ordering, so close tags are instead marked in place with an `'end'`
- * badge, and PT9's grey cue for non-basic markers maps to `muted`.
+ * `label` is always a plain string (never a `LocalizeKey`): passive palettes filter and commit on
+ * the RAW `label`. The badge carries no such constraint — filtering is label-only, so descriptions
+ * and badges never take part in matching or commit resolution (see `marker-palette-filter.util.ts`)
+ * — and the palette host resolves a `LocalizeKey` badge to a localized string before rendering, so
+ * the close-tag badge is a key.
+ *
+ * Items are mapped in the library's PT9-derived order and never regrouped — a `group` key would
+ * visually pull close tags out of the PT9 basic-first interleaved ordering, so close tags are
+ * instead marked in place with an end badge, and PT9's grey cue for non-basic markers maps to
+ * `muted`.
  */
 export declare function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem): PaletteItem;
 /**
@@ -1192,8 +1197,8 @@ export declare function clearPaletteSessionIfCurrent<TSession extends {
  * filters on the marker name), so the host palette ranks identically — exact match first, then
  * prefix matches, then containment matches (nearest occurrence first), with ties keeping their
  * original context order (stable sort). Matching is label-only in both modes (the label IS the
- * marker for marker palettes); descriptions and badges never match, which is what buried the exact
- * match under description hits before this existed.
+ * marker for marker palettes); descriptions and badges never match, so a description hit can never
+ * outrank — or bury — the exact label match.
  */
 /**
  * How {@link filterAndRankPaletteItems} matches filter text against item labels — one mode per
@@ -3041,11 +3046,11 @@ type CommandInputProps = React$1.ComponentProps<typeof CommandPrimitive.Input> &
 	 * When true, pressing Space while the input is EMPTY selects the currently highlighted item
 	 * instead of typing a space (the Enter UX). **Opt-in — defaults to false.**
 	 *
-	 * This began as an unconditional patch applied to every `CommandInput` in the app, which meant
-	 * any surface with its own Space semantics silently lost the key: a palette whose owner claims
-	 * Space to commit what the user TYPED would instead have the HIGHLIGHTED item committed here,
-	 * locally, bypassing the owner's resolution entirely. Opting in makes each consumer state that
-	 * Space is a selection key for it.
+	 * Opt-in rather than unconditional because a surface that owns Space itself must not have the
+	 * highlighted item committed out from under it: in a palette whose owner claims Space to commit
+	 * what the user TYPED, an unconditional patch here would commit the HIGHLIGHTED item locally
+	 * instead, bypassing the owner's resolution entirely. Requiring the flag makes each consumer
+	 * state that Space is a selection key for it.
 	 *
 	 * Enable it on pickers where the list is the whole point and a leading space is meaningless.
 	 * Leave it off wherever the input's own text matters, or wherever something outside this

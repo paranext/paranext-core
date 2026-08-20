@@ -120,6 +120,8 @@ export type {
 } from '@shared/services/scroll-group.service-model';
 export type { SettingValidator } from '@shared/services/settings.service-model';
 export type {
+  AppWindowInputEvent,
+  AppWindowInputKind,
   FocusSubject,
   SetFocusSubject,
   SetFocusSpecifier,

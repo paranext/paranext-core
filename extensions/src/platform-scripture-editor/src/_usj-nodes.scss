@@ -76,10 +76,17 @@
   margin-top: 8pt;
 }
 
+/* `\ca` renders identically in BOTH of its states — a first-class `char ca` span at root and the
+   chapter's attribute-run form (AttributeRunNode carries `usfm_ca` for runKind "ca", the same
+   wrapper-class mechanism `usfm_va`/`usfm_vp` use): non-bold green italic, never the chapter's own
+   bold. `font-weight: normal` is explicit — a no-op for the standalone span (nothing bold above
+   it) but load-bearing for the run, which sits INSIDE the chapter element and would otherwise
+   inherit `.usfm_c`'s bold. */
 .formatted-font .usfm_ca {
   color: #007306;
   font-size: 133%;
   font-style: italic;
+  font-weight: normal;
 }
 
 .formatted-font .usfm_cp {
@@ -90,6 +97,31 @@
 .text-spacing .usfm_cp {
   margin-bottom: 4pt;
   margin-top: 8pt;
+}
+
+/* The chapter's OWN `\ca`/`\cp` attribute runs, nested inside the chapter element. Font-size
+   percentages resolve against the PARENT's computed size, so the runs' 133%/150% would compound
+   with `.usfm_c`'s 150% (≈200%/225% of body text) and dwarf their standalone twins; dividing by
+   the same 1.5 lands each run at exactly the size its standalone form renders at (133%/150% of
+   body). If `.usfm_c`'s font-size changes, change the divisor with it. Glyph sizing needs no
+   `usfm_va`-style reset here: `.opening`/`.closing` render at 0.7em of the span in BOTH states,
+   so leaving them alone is what keeps the two states identical.
+
+   `display: block` puts the `\ca` run on the line AFTER `\c N` — matching PT9's Standard view,
+   which renders the `\ca` span outside the chapter's block div, and matching the standalone
+   `char ca`, which sits at root between two blocks and so occupies its own line already. Purely
+   presentational: the run's bytes, document positions, and caret order are untouched (display
+   bytes are excluded from positions by node state, not by layout). `\cp` deliberately stays
+   inline on the chapter's line (moving it to its own line is tracked separately); when both runs
+   display, the block `\ca` run pushes the `\cp` run onto the following line as a layout
+   consequence — which is PT9's own three-line layout for that shape. */
+.formatted-font .usfm_c .usfm_ca {
+  display: block;
+  font-size: calc(133% / 1.5);
+}
+
+.formatted-font .usfm_c .usfm_cp {
+  font-size: calc(150% / 1.5);
 }
 
 /* VerseNode, ImmutableVerseNode */
@@ -2152,8 +2184,11 @@
   color: rgba(170, 170, 170, 1);
 }
 
+/* Hovering an attribute run lifts it out of its dim resting color to the host's ordinary text
+   color. The literal is only the fallback for a host that defines no `--foreground`: a fixed
+   near-black would be all but invisible against a dark theme. */
 .attribute:hover {
-  color: rgba(25, 25, 25, 1);
+  color: var(--foreground, rgba(25, 25, 25, 1));
 }
 
 /* AttributeRunNode: the ONE wrapper span holding a verse's \va/\vp display triplet or a
@@ -2169,8 +2204,9 @@
   color: rgba(170, 170, 170, 1);
 }
 
+/* Same hover treatment as `.attribute` above, and for the same reason. */
 .attribute-run:hover {
-  color: rgba(25, 25, 25, 1);
+  color: var(--foreground, rgba(25, 25, 25, 1));
 }
 
 .invalid {
@@ -2415,16 +2451,17 @@
   border: 1px dashed rgba(140, 140, 140, 0.5);
   background-color: rgba(140, 140, 140, 0.08);
   color: rgba(140, 140, 140, 0.85);
-  /* Whole-block selection/deletion only: a selection can be made within the container but is
-     contained by it rather than merging with the surrounding text. */
-  user-select: contain;
+  /* Whole-block selection/deletion: the containment (a selection stays within the box rather
+     than merging with surrounding text) is provided by the opaque/inert UnknownNode, not CSS.
+     `user-select: contain` is not implemented in Blink/Chromium (only auto | text | none | all),
+     so it was a no-op and is intentionally omitted. */
 }
 
 .marker-editable .unknown-inline {
   display: inline;
   color: rgba(140, 140, 140, 0.85);
-  /* Same containment as the block variant. */
-  user-select: contain;
+  /* Same as the block variant: containment comes from the inert UnknownNode, not CSS
+     (`user-select: contain` is a Blink no-op), so no user-select is set here. */
 }
 
 .caption {

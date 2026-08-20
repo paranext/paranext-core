@@ -169,7 +169,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'dismiss-overlays',
     purpose:
-      'Dismiss open context menus, command palettes, and popovers (works in every frame, including web views)',
+      'Dismiss the topmost open overlay — a context menu, command palette, or popover (works in every frame, including web views)',
     category: 'Menus',
     context: 'Main process (global)',
     // Announced without preventDefault, so the focused frame still receives Escape and may act on
@@ -197,7 +197,43 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '\\', windows: '\\', linux: '\\' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts',
     ],
+  },
+  {
+    id: 'scripture-markers-menu-commit-typed',
+    purpose: 'Commit the marker typed in the markers menu',
+    category: 'Editing',
+    context: 'Scripture editor web view, while the markers menu is open',
+    // Space commits what was TYPED, not the highlighted entry: at a collapsed caret it materializes
+    // the typed marker; over a selection it wraps only on an exact match and otherwise closes
+    // without touching the selection. In the Enter-triggered paragraph menu Space keeps filtering
+    // instead, matching the editor package's own Enter menu.
+    keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
+    locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
+  },
+  {
+    id: 'scripture-markers-menu-commit-closing-marker',
+    purpose: 'Commit a closing marker from the markers menu',
+    category: 'Editing',
+    context: 'Scripture editor web view, while the markers menu is open',
+    // The counterpart to Space's opening-marker commit: commits the typed marker's closing form
+    // with no terminating space. Over a non-collapsed selection the selected content is replaced,
+    // which is what typing a closing marker by hand has always done. Not offered in the
+    // Enter-triggered paragraph menu.
+    keys: { macOS: '*', windows: '*', linux: '*' },
+    locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
+  },
+  {
+    id: 'scripture-markers-menu-commit-and-reopen',
+    purpose: 'Commit the typed marker and immediately open the markers menu again',
+    category: 'Editing',
+    context: 'Scripture editor web view, while the markers menu is open',
+    // Commits like Space but without the terminating space, then reopens for the backslash just
+    // pressed, so a paired marker is one continuous flow. With nothing typed there is nothing to
+    // commit and the backslash lands as an ordinary character.
+    keys: { macOS: '\\', windows: '\\', linux: '\\' },
+    locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
   {
     id: 'scripture-close-markers-menu',
@@ -262,6 +298,26 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'scripture-remove-character-formatting',
+    purpose: 'Remove character formatting from the selection',
+    category: 'Editing',
+    // Handled inside the editor library that ships as the `@eten-tech-foundation/platform-editor`
+    // package (its `MarkerEditPlugin` claims the chord from a `KEY_DOWN_COMMAND` handler that
+    // requires Ctrl with no Alt/Shift/Meta, and acts only when there is a selection to unformat),
+    // so there is no handler file in this repo to link. `locations` names the web view that mounts
+    // that editor — the nearest in-repo code — because the field renders as links into
+    // paranext-core and a path in another repo would not resolve.
+    context:
+      'Scripture editor web view (handled by the @eten-tech-foundation/platform-editor package)',
+    // ⌃Space on macOS, deliberately not ⌘Space, which is Spotlight. ⌃ also keeps this consistent
+    // with the editor's other in-web-view chords (⌃F, ⌃T, ⌃⇧T). ⌃Space can still collide with the
+    // macOS input-source switcher and with some IME on/off toggles.
+    keys: { macOS: '⌃Space', windows: 'Ctrl+Space', linux: 'Ctrl+Space' },
+    locations: [
+      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+    ],
+  },
+  {
     id: 'scripture-paragraph-markers-menu',
     purpose:
       'In Standard view, open the paragraph markers menu to split the paragraph. In other views, creates a new paragraph marker whose style matches the current paragraph marker style.',
@@ -273,7 +329,6 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
-      'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.utils.ts',
     ],
   },
   // The editor's arrow-key caret movement (verse hops, note boundaries, the two caret stops
@@ -416,6 +471,22 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '⏎', windows: 'Enter', linux: 'Enter' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/footnote-editor/footnote-editor.component.tsx',
+    ],
+  },
+  {
+    id: 'picker-select-highlighted-item',
+    purpose: 'Select the highlighted item in a picker whose search box is empty',
+    category: 'Selection',
+    // Opt-in per picker (`spaceSelectsHighlightedItem`) so a surface with its own Space semantics —
+    // the marker palettes, the generic combo boxes — keeps the key. Currently enabled on the book
+    // and chapter picker, the project selector, and the book scope picker.
+    context: 'Book/chapter picker, project selector, book scope picker',
+    keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/shadcn-ui/command.tsx',
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/scope-selector/select-books-picker.component.tsx',
     ],
   },
   {

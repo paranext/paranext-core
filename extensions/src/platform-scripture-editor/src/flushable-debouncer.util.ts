@@ -1,13 +1,12 @@
 /**
  * Trailing-edge debouncer with an explicit lifecycle, for the web view's keystroke-driven PDP save.
- * `platform-bible-utils`' `debounce` exposes no `flush`/`cancel`, which left two holes once the
- * save became debounced:
+ * `platform-bible-utils`' `debounce` exposes no `flush`/`cancel`, which leaves two holes in a
+ * debounced save:
  *
- * - Renderer death (crash, web-view dispose, app quit) inside the trailing window silently lost the
- *   final edits — a crash-resilience regression vs. the prior per-change save.
- * - A pending trailing call captured the OLD chapter's USJ but would resolve AFTER rapid chapter
- *   navigation swapped the save function's closure to the NEW chapter — a latent cross-chapter
- *   stale write.
+ * - Renderer death (crash, web-view dispose, app quit) inside the trailing window silently loses the
+ *   final edits.
+ * - A pending trailing call captures the OLD chapter's USJ but resolves AFTER rapid chapter
+ *   navigation swaps the save function's closure to the NEW chapter — a cross-chapter stale write.
  *
  * `flush` fires the pending call immediately (with its captured args) and clears the timer;
  * `cancel` discards it. Callers wire `flush` to unmount/blur/pagehide and to the moment BEFORE the

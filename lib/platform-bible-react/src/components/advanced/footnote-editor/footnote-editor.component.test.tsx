@@ -983,8 +983,8 @@ describe('FootnoteEditor marker palette wiring', () => {
     });
 
     it('`\\` on an EMPTY filter lands a literal backslash and opens NO new palette', () => {
-      // Preserved behavior, owner-confirmed: with nothing typed there is nothing to commit, so
-      // the backslash is an ordinary character and must reach the document unclaimed.
+      // With nothing typed there is nothing to commit, so the backslash is an ordinary character
+      // and must reach the document unclaimed.
       mockGetMarkerMenuItems.mockReturnValue([makeItem({ marker: 'nd' })]);
       const show = vi.fn(() => new Promise<string | undefined>(() => {}));
       const markerPalette = makeMarkerPalette(show);
@@ -1465,10 +1465,10 @@ describe('markerMenuItemToPaletteItem', () => {
     });
   });
 
-  it('gives close-tag items an "end" badge', () => {
+  it('gives close-tag items a localizable end-tag badge', () => {
     expect(
       markerMenuItemToPaletteItem({ marker: 'wj*', kind: 'closeTag', isBasic: true }).badge,
-    ).toBe('end');
+    ).toBe('%markerMenu_endTag_label%');
   });
 
   it('does not badge non-close-tag items', () => {

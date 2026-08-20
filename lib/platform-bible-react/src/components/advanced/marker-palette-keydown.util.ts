@@ -1,12 +1,12 @@
 /**
  * Shared keydown forwarding table for standard-view marker-palette sessions. This is THE single
- * source of the while-open key semantics — previously duplicated between
- * `platform-scripture-editor.web-view.tsx` and `footnote-editor.component.tsx`, and the copies
- * drifted: the capture-phase key handling (stopPropagation on session-ending keys, the
- * every-key-claiming 'selection' session that fixed the wrap-palette text loss, Enter-session
- * type-to-filter) landed only in the web view, so the popover's in-session Enter still reached
- * MarkerEditPlugin FIRST (double mutation: `\fp` insert/plain split committed before the palette
- * apply ran).
+ * source of the while-open key semantics for BOTH consumers —
+ * `platform-scripture-editor.web-view.tsx` and `footnote-editor.component.tsx`. Neither may carry
+ * its own copy: the capture-phase handling here (stopPropagation on session-ending keys, the
+ * every-key-claiming `'selection'` session that keeps a wrap palette from losing the selected text,
+ * Enter-session type-to-filter) is what stops an in-session Enter from reaching MarkerEditPlugin
+ * FIRST and double-mutating the document — a `\fp` insert or plain split committing before the
+ * palette apply runs.
  *
  * Consumers register a `keydown` listener in CAPTURE phase and call
  * {@link handleMarkerPaletteSessionKeyDown} while a session is open; on an `'ended'` outcome they
@@ -50,8 +50,7 @@
  * Modifier-only keydowns (the Shift half of a `+` chord) pass through untouched so chords like
  * `\+w` keep filtering. Real chords (Ctrl/Cmd/Alt + key) are never ingested into the filter and
  * never claimed — the session is dismissed and the chord does its normal job (e.g. Ctrl+C copies
- * the wrapped selection; previously the selection session claimed it and copy was dead while a wrap
- * palette was open).
+ * the wrapped selection instead of being swallowed while a wrap palette is open).
  */
 
 import type { ForwardedPaletteKeyEvent, PaletteDriver } from 'platform-bible-utils/experimental';
@@ -333,11 +332,10 @@ export function handleMarkerPaletteSessionKeyDown(
     // `\` + filter + `*`, with no terminating space and no opening glyph, and close.
     // Claimed: nothing may land on top of the commit.
     //
-    // Commits in EVERY selection shape (owner-directed, Paratext 9 parity). At a collapsed caret
-    // the closer lands at the caret; over a NON-COLLAPSED selection the selected content is
-    // DELETED and the closer lands in its place, which is what typing `\nd*` with text selected
-    // has always done. That is a different gesture from Space's selection WRAP, so the two keys
-    // are not interchangeable there.
+    // Commits in EVERY selection shape (Paratext 9 parity). At a collapsed caret the closer lands
+    // at the caret; over a NON-COLLAPSED selection the selected content is DELETED and the closer
+    // lands in its place, which is what typing `\nd*` with text selected has always done. That is a
+    // different gesture from Space's selection WRAP, so the two keys are not interchangeable there.
     //
     // No `shouldSpaceCommit` exception here, unlike Space. That exception exists because a
     // materialized `\f ` OPENING literal absorbs the text after the caret as the note's caller; a
@@ -351,14 +349,14 @@ export function handleMarkerPaletteSessionKeyDown(
   }
 
   if (event.key === '\\' && session.kind === 'backslash') {
-    // The palette's THIRD commit key (owner-directed): `\` commits what was typed exactly as
-    // Space does but with NO terminating space byte, then opens a FRESH palette for the backslash
-    // just pressed — so `\qt-s\qt-e` is one continuous flow instead of losing the first marker.
-    // The separator is unnecessary: a marker-name scan terminates at `\`, and the reopened
-    // session's own commit supplies it.
+    // The palette's THIRD commit key: `\` commits what was typed exactly as Space does but with NO
+    // terminating space byte, then opens a FRESH palette for the backslash just pressed — so
+    // `\qt-s\qt-e` is one continuous flow instead of losing the first marker. The separator is
+    // unnecessary: a marker-name scan terminates at `\`, and the reopened session's own commit
+    // supplies it.
     if (session.filter === '') {
       // Nothing typed, so there is nothing to commit and `\` is just a character: it must LAND
-      // (not claimed) and no replacement palette opens. Preserved behavior, owner-confirmed.
+      // (not claimed) and no replacement palette opens.
       driver.dismiss();
       return 'ended';
     }

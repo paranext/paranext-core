@@ -9,8 +9,8 @@
  *    save function when the user has navigated away (never read the editor, which now shows the new
  *    chapter). A same-chapter save takes `EditorRef.getUsj()` as-is — it is already settled, and it
  *    already excludes any in-flight input an open command surface declared via
- *    `EditorRef.setTransientInput`. Nothing here mutates the document: a pre-save settle used to,
- *    and that mutation is exactly what let a debounced save re-settle an explicitly-undone literal.
+ *    `EditorRef.setTransientInput`. Nothing here mutates the document — a pre-save settle would,
+ *    and a save that settles the document can re-settle a literal the user explicitly undid.
  * 3. A self-clearing write guard (`write-in-flight-guard.util.ts`) — serializes writes, with the
  *    flag's lifecycle owned by the write promise itself.
  * 4. Echo deferral (`use-editor-pdp-sync.hook.ts`) — an incoming same-document echo is not applied
@@ -63,9 +63,10 @@ export interface DebouncedPdpSaveParams {
  * Decides what an imperative "save the editor's USJ if it changed" should write to the PDP: returns
  * the USJ to save, or `undefined` when there is nothing new to write.
  *
- * No literal stripping any more: an in-editor command surface with input in flight declares it to
- * the editor (`EditorRef.setTransientInput`), which excludes those bytes from the settled USJ this
- * receives. The caller records the returned USJ as what was sent so the echo comparison converges.
+ * No literal stripping is needed here: an in-editor command surface with input in flight declares
+ * it to the editor (`EditorRef.setTransientInput`), which excludes those bytes from the settled USJ
+ * this receives. The caller records the returned USJ as what was sent so the echo comparison
+ * converges.
  */
 export function resolveUsjToSaveToPdp(
   usjFromEditor: Usj,
@@ -80,10 +81,10 @@ export function resolveUsjToSaveToPdp(
  *
  * A pending 700ms trailing save may fire (via the chapter-switch flush) AFTER the user has already
  * navigated to another chapter. By that point the editor holds the NEW chapter's content and the
- * current-chapter save refs have moved on. The prior implementation stayed correct only because
- * React happens to run effect cleanups (where the flush lives) before the effects that re-point
- * those refs — an implicit ordering guarantee. Here, WHICH content is saved and through WHICH of
- * the captured/current save fns is explicit and data-driven:
+ * current-chapter save refs have moved on. Leaning on React to run effect cleanups (where the flush
+ * lives) before the effects that re-point those refs would make this correct only by an implicit
+ * ordering guarantee, so instead WHICH content is saved and through WHICH of the captured/current
+ * save fns is explicit and data-driven:
  *
  * - If the chapter changed between scheduling and firing, save the CAPTURED content via the CAPTURED
  *   save fn (both bound to the chapter the content was typed in) and never touch the editor —
@@ -92,15 +93,15 @@ export function resolveUsjToSaveToPdp(
  * - Otherwise (same chapter), save what the editor shows. `EditorRef.getUsj` already returns it
  *   settled, and already excludes any in-progress input an open command surface has declared, so
  *   there is no palette case to special-case and nothing here mutates the document. A pre-save
- *   settle used to, and that mutation is exactly what made a debounced save able to re-settle an
- *   explicitly-undone literal.
+ *   settle would, and a save that settles the document can re-settle a literal the user explicitly
+ *   undid.
  *
  * This narrows, but does not remove, the effect-ordering dependency: both save fns still resolve
- * the actual PDP setter via `saveUsjToPdpRawStableRef.current` in
- * `platform-scripture-editor.web-view.tsx` (~line 1923), which is re-pointed to the new chapter's
- * setter from a `useEffect` BODY, not during render. A cross-chapter flush (itself running in an
- * effect CLEANUP) still relies on React's cleanup-before-body ordering to observe the OLD chapter's
- * setter there before that `useEffect` body reassigns it.
+ * the actual PDP setter via `saveUsjToPdpRawStableRef` in `platform-scripture-editor.web-view.tsx`,
+ * which is re-pointed to the new chapter's setter from a `useEffect` BODY, not during render. A
+ * cross-chapter flush (itself running in an effect CLEANUP) still relies on React's
+ * cleanup-before-body ordering to observe the OLD chapter's setter there before that `useEffect`
+ * body reassigns it.
  */
 export function performDebouncedPdpSave({
   usj,

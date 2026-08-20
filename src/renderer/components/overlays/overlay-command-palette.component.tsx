@@ -61,6 +61,11 @@ export type OverlayCommandPalettePresentationalProps = {
   placeholder?: string;
   /** Text shown when no items match the search filter. Defaults to 'No results found'. */
   noResultsText?: string;
+  /**
+   * Accessible name for the passive mode's list of items. Passive mode only — active mode's list is
+   * cmdk's own `CommandList`, which names itself. Defaults to 'Command palette results'.
+   */
+  listAriaLabel?: string;
   /** Maximum width in pixels. Defaults to 500. */
   maxWidth?: number;
   /** Maximum height in pixels. Defaults to 400. */
@@ -134,16 +139,15 @@ function PaletteItemContent({ item }: { item: CommandPaletteItem }) {
           {item.icon}
         </span>
       )}
-      {/* `muted` de-emphasizes the text only (e.g. PT9's grey cue for non-basic markers) — unlike
-          `disabled`, the item stays highlightable/selectable, so the opacity lives here on the text
-          block rather than on the item container where the disabled styling goes. Inline style
-          rather than tw:opacity-60: the renderer has no Tailwind build of its
-          own — all tw: utilities come from platform-bible-react's prebuilt stylesheet, whose
-          content scan does not include this file, so the class only worked when some unrelated
-          PBR component happened to use the same utility. An inline style is build-independent. */}
+      {/* `muted` de-emphasizes the text only (e.g. PT9's grey cue for non-basic markers). Unlike
+          `disabled`, which dims the whole item container and blocks interaction, a muted item stays
+          highlightable and selectable — so the reduced opacity belongs here on the text block, not
+          on the container. */}
       <div
-        className="tw:flex tw:flex-1 tw:flex-col tw:overflow-hidden"
-        style={item.muted ? { opacity: 0.6 } : undefined}
+        className={cn(
+          'tw:flex tw:flex-1 tw:flex-col tw:overflow-hidden',
+          item.muted && 'tw:opacity-60',
+        )}
       >
         <span className="tw:truncate">{item.label}</span>
         {item.description && (
@@ -302,6 +306,7 @@ export function OverlayCommandPalettePresentational({
   side = 'bottom',
   placeholder = 'Search...',
   noResultsText = 'No results found',
+  listAriaLabel = 'Command palette results',
   maxWidth = DEFAULT_MAX_WIDTH,
   maxHeight = DEFAULT_MAX_HEIGHT,
   passive = false,
@@ -408,12 +413,16 @@ export function OverlayCommandPalettePresentational({
       filterPaletteItems(items, passive ? filterText : inputValue, passive ? 'passive' : 'active'),
     [items, passive, filterText, inputValue],
   );
-  const highlightedItem: CommandPaletteItem | undefined = filteredItems[selectedIndex];
-
-  // Active-mode highlight resolution: clamp the mirrored index to the (possibly just-narrowed)
-  // filtered list, exactly as the store clamps on every update.
-  const effectiveActiveIndex = Math.min(activeSelectedIndex, Math.max(0, filteredItems.length - 1));
-  const activeHighlightedId = filteredItems[effectiveActiveIndex]?.id;
+  // Highlight resolution, identical in both modes: clamp the driving index to the (possibly
+  // just-narrowed) filtered list, exactly as the store clamps on every update, so neither mode can
+  // point past the end of its own list. Passive is driven by the external `selectedIndex`, active
+  // by the local mirror cmdk's arrow keys move.
+  const drivingSelectedIndex = passive ? selectedIndex : activeSelectedIndex;
+  const highlightedIndex = Math.min(
+    Math.max(drivingSelectedIndex, 0),
+    Math.max(0, filteredItems.length - 1),
+  );
+  const highlightedItem: CommandPaletteItem | undefined = filteredItems[highlightedIndex];
 
   // cmdk reports arrow-key highlight moves via the root's onValueChange (values are item ids —
   // see PaletteItem). Mirror into local state and out to the store owner. cmdk normalizes value
@@ -476,16 +485,21 @@ export function OverlayCommandPalettePresentational({
       {searchInput}
       {/* Not cmdk's CommandList: cmdk overrides a caller-supplied aria-activedescendant with its
           own (empty in passive mode, which registers no cmdk items), so passive mode renders its
-          own listbox with CommandList's classes. tabIndex matches CommandList; focus stays in the
-          requesting WebView. */}
+          own listbox carrying the classes CommandList applies — including a visible scrollbar when
+          the list overflows. tabIndex matches CommandList; focus stays in the requesting WebView,
+          so aria-activedescendant alone is inert here (it only speaks from a focused element) —
+          the overlay service announces highlight and match-count changes through its live region
+          instead. The listbox still names itself for a screen reader that reaches it another way,
+          e.g. by browsing the page. */}
       <div
         data-slot="command-list"
         role="listbox"
+        aria-label={listAriaLabel}
         tabIndex={-1}
         aria-activedescendant={
           highlightedItem ? getPassiveItemDomId(highlightedItem.id) : undefined
         }
-        className="pr-twp tw:no-scrollbar tw:max-h-72 tw:scroll-py-1 tw:overflow-x-hidden tw:overflow-y-auto tw:outline-none"
+        className="pr-twp tw:max-h-72 tw:scroll-py-1 tw:overflow-x-hidden tw:overflow-y-auto tw:outline-none"
         style={{ maxHeight: maxHeight - SEARCH_INPUT_RESERVED_HEIGHT }}
       >
         {filteredItems.length === 0 ? (
@@ -517,7 +531,7 @@ export function OverlayCommandPalettePresentational({
       // algorithm; cmdk only drives the highlight, two-way-synced with the store via the
       // controlled value below.
       shouldFilter={false}
-      value={activeHighlightedId ?? ''}
+      value={highlightedItem?.id ?? ''}
       onValueChange={handleCmdkValueChange}
     >
       {searchInput}
@@ -602,6 +616,8 @@ export function OverlayCommandPalettePresentational({
 // Platform-level default keys for search placeholder and no-results text
 const DEFAULT_PLACEHOLDER_KEY: LocalizeKey = '%overlay_commandPalette_searchPlaceholder%';
 const DEFAULT_NO_RESULTS_KEY: LocalizeKey = '%overlay_commandPalette_noResults%';
+/** Accessible name for the passive palette's list of items */
+const DEFAULT_LIST_ARIA_LABEL_KEY: LocalizeKey = '%overlay_aria_commandPaletteList%';
 
 /** Helper to push a value to the keys array if it is a LocalizeKey */
 function pushIfKey(keys: LocalizeKey[], value: string | LocalizeKey | undefined): void {
@@ -612,7 +628,8 @@ function pushIfKey(keys: LocalizeKey[], value: string | LocalizeKey | undefined)
  * Collects all localization keys from a command palette configuration.
  *
  * Extracts localization keys from the provided command palette items and placeholder, returning an
- * array of keys that need to be localized. Always includes the default "no results" key.
+ * array of keys that need to be localized. Always includes the default "no results" and list
+ * accessible-name keys.
  *
  * @param items - Array of command palette items to collect keys from
  * @param placeholder - Optional localization key or placeholder text to display when no items are
@@ -624,7 +641,7 @@ function collectCommandPaletteKeys(
   items: CommandPaletteItem[],
   placeholder: string | LocalizeKey | undefined,
 ): LocalizeKey[] {
-  const keys: LocalizeKey[] = [DEFAULT_NO_RESULTS_KEY];
+  const keys: LocalizeKey[] = [DEFAULT_NO_RESULTS_KEY, DEFAULT_LIST_ARIA_LABEL_KEY];
   pushIfKey(keys, placeholder ?? DEFAULT_PLACEHOLDER_KEY);
   items.forEach((item) => {
     pushIfKey(keys, item.label);
@@ -696,6 +713,11 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
     [localizedStrings],
   );
 
+  const localizedListAriaLabel = useMemo(
+    () => localizedStrings[DEFAULT_LIST_ARIA_LABEL_KEY] ?? 'Command palette results',
+    [localizedStrings],
+  );
+
   const handleSelect = useCallback(
     (itemId: string) => {
       if (hasResolved.current) return;
@@ -749,6 +771,7 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       side={overlay.request.side}
       placeholder={localizedPlaceholder}
       noResultsText={localizedNoResults}
+      listAriaLabel={localizedListAriaLabel}
       maxWidth={overlay.request.maxWidth}
       maxHeight={overlay.request.maxHeight}
       passive={overlay.request.passive}

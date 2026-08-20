@@ -38,30 +38,48 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     expect(scss).not.toMatch(/content:\s*['"]\/\/['"]/);
   });
 
+  /**
+   * Builds a matcher for "this exact selector list carries this declaration". Tolerant of
+   * whitespace and of the declaration's position within the block, so reformatting the stylesheet
+   * cannot fail these pins for a reason that has nothing to do with what they guard.
+   */
+  const rule = (selectors: string[], declaration: string) => {
+    const escape = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(
+      `${selectors.map(escape).join(',\\s*')}\\s*\\{[^}]*${escape(declaration)}[^}]*\\}`,
+    );
+  };
+
   describe('PT9 Standard-view marker glyph styling', () => {
     // Standard view renders marker glyphs as MarkerNode spans carrying marker-syntax classes
     // (opening/closing/selfClosing) — not `marker`, which MarkerNode dropped upstream in #359.
     // The PT9 look (small gray) must target those classes, scoped to
     // `.formatted-font.marker-editable` so the Unformatted view keeps full-size plain markers.
     it('grays the editable marker glyphs', () => {
-      expect(scss).toContain(
-        '.formatted-font.marker-editable .opening,\n' +
-          '.formatted-font.marker-editable .closing,\n' +
-          '.formatted-font.marker-editable .selfClosing,\n' +
-          '.formatted-font.marker-editable .marker {\n' +
-          '  color: rgba(140, 140, 140, 1);\n' +
-          '}',
+      expect(scss).toMatch(
+        rule(
+          [
+            '.formatted-font.marker-editable .opening',
+            '.formatted-font.marker-editable .closing',
+            '.formatted-font.marker-editable .selfClosing',
+            '.formatted-font.marker-editable .marker',
+          ],
+          'color: rgba(140, 140, 140, 1);',
+        ),
       );
     });
 
     it('shrinks the editable marker glyphs to 0.7em, chapter tokens excluded', () => {
-      expect(scss).toContain(
-        '.formatted-font.marker-editable .opening,\n' +
-          '.formatted-font.marker-editable .closing,\n' +
-          '.formatted-font.marker-editable .selfClosing,\n' +
-          '.formatted-font.marker-editable .marker:not(.chapter) {\n' +
-          '  font-size: 0.7em;\n' +
-          '}',
+      expect(scss).toMatch(
+        rule(
+          [
+            '.formatted-font.marker-editable .opening',
+            '.formatted-font.marker-editable .closing',
+            '.formatted-font.marker-editable .selfClosing',
+            '.formatted-font.marker-editable .marker:not(.chapter)',
+          ],
+          'font-size: 0.7em;',
+        ),
       );
     });
 
@@ -71,15 +89,18 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // the value they belong to. The four-class selector outranks the three-class glyph rule, so
     // the reset wins on specificity rather than declaration order.
     it('keeps \\va/\\vp glyphs the same size as their value instead of compounding', () => {
-      expect(scss).toContain(
-        '.formatted-font.marker-editable .usfm_va .opening,\n' +
-          '.formatted-font.marker-editable .usfm_va .closing,\n' +
-          '.formatted-font.marker-editable .usfm_va .selfClosing,\n' +
-          '.formatted-font.marker-editable .usfm_vp .opening,\n' +
-          '.formatted-font.marker-editable .usfm_vp .closing,\n' +
-          '.formatted-font.marker-editable .usfm_vp .selfClosing {\n' +
-          '  font-size: 100%;\n' +
-          '}',
+      expect(scss).toMatch(
+        rule(
+          [
+            '.formatted-font.marker-editable .usfm_va .opening',
+            '.formatted-font.marker-editable .usfm_va .closing',
+            '.formatted-font.marker-editable .usfm_va .selfClosing',
+            '.formatted-font.marker-editable .usfm_vp .opening',
+            '.formatted-font.marker-editable .usfm_vp .closing',
+            '.formatted-font.marker-editable .usfm_vp .selfClosing',
+          ],
+          'font-size: 100%;',
+        ),
       );
     });
 
@@ -95,6 +116,44 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       // The unscoped legacy rules were superseded by the scoped ones; they must not return.
       expect(scss).not.toMatch(/^\.status_unknown/m);
       expect(scss).not.toMatch(/^\.status_invalid/m);
+    });
+  });
+
+  describe('theming and dead declarations', () => {
+    // A fixed near-black hover color is all but invisible against a dark theme. The host's
+    // `--foreground` carries a complete color value here, so `var()` resolves; the literal stays
+    // only as the fallback for a host that defines no such token.
+    it('resolves the attribute hover color against the host theme', () => {
+      expect(scss).toMatch(rule(['.attribute:hover'], 'color: var(--foreground'));
+      expect(scss).toMatch(rule(['.attribute-run:hover'], 'color: var(--foreground'));
+    });
+
+    // Blink implements only `auto | text | none | all`, so `contain` never did anything. The
+    // containment it appeared to provide comes from the inert UnknownNode itself. Matches a
+    // DECLARATION (trailing semicolon) so the comments explaining the omission don't trip it.
+    it('does not declare the no-op user-select: contain', () => {
+      expect(scss).not.toMatch(/user-select:\s*contain\s*;/);
+    });
+  });
+
+  describe('chapter \\ca/\\cp attribute runs', () => {
+    // A chapter's own `\ca`/`\cp` runs are nested INSIDE the chapter element, so they inherit
+    // `.usfm_c`'s bold and compound against its 150% font-size. Without these three rules the runs
+    // render bold at roughly 200%/225% of body text instead of matching their standalone
+    // `char ca`/`cp` twins, and `\ca` stays on the chapter's line instead of dropping below it.
+    it('keeps a nested \\ca run non-bold like its standalone twin', () => {
+      expect(scss).toMatch(
+        /\.formatted-font \.usfm_ca \{[^}]*font-style: italic;[^}]*font-weight: normal;[^}]*\}/,
+      );
+    });
+
+    it('uncompounds the nested run sizes against the chapter and drops \\ca to its own line', () => {
+      expect(scss).toContain(
+        '.formatted-font .usfm_c .usfm_ca {\n  display: block;\n  font-size: calc(133% / 1.5);\n}',
+      );
+      expect(scss).toContain(
+        '.formatted-font .usfm_c .usfm_cp {\n  font-size: calc(150% / 1.5);\n}',
+      );
     });
   });
 

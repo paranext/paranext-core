@@ -26,6 +26,7 @@ import {
   type StyleInfo,
 } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
+import type { ScriptureEditorViewType } from 'platform-scripture-editor';
 
 /**
  * Resolves the display title for a stylesheet-sourced marker-menu item: localizes `description`
@@ -106,22 +107,51 @@ export function generateInlineMarkerMenuListItems(
   });
 }
 
+/** Inputs to {@link resolveFootnotesPaneAutoVisibility}. */
+export interface FootnotesPaneAutoVisibilityInput {
+  /** Whether the footnotes pane's auto-show/hide behavior is turned on. */
+  isAutoShowEnabled: boolean;
+  /** The editor view the pane belongs to. */
+  viewType: ScriptureEditorViewType;
+  /** Whether the chapter currently loaded in the editor has at least one note. */
+  chapterHasNotes: boolean;
+  /**
+   * The chapter the user last manually showed or hid the pane in, or `undefined` when they have not
+   * done so. Same shape as {@link currentChapterKey}.
+   */
+  manualOverrideChapterKey: string | undefined;
+  /** The chapter currently loaded in the editor. */
+  currentChapterKey: string;
+}
+
 /**
- * Whether a keydown event is one the Standard view's Enter-palette flow claims. PT9's
- * KeyPressEditHandler claims the Enter key with NO modifier check, and Standard view matches that:
- * EVERY Enter variant is claimed, modifiers or not. Letting any variant through to Lexical loses
- * data — an unclaimed Ctrl/Alt/Meta+Enter plain-splits the paragraph (creating the unmarked
- * empty-paragraph merge problem the palette exists to prevent), and Shift+Enter's soft line break
- * has no USFM representation, so it serializes as a plain space.
+ * Decides what the footnotes pane's auto-show/hide behavior should do right now: show the pane,
+ * hide it, or leave it exactly as the user has it.
  *
- * Deliberately a pure predicate on the event alone: the caller's surrounding pre-checks (IME
- * composition bail, focus/session gating, note/marker-text pass-throughs) stay in the web view.
+ * Auto-show/hide is a PT9 divergence and defaults to off, so PT9's manual, persistent pane
+ * visibility is what ships unless the user turns it on. It is also scoped to Standard view; the
+ * other views keep manual visibility whatever the setting says. When it does apply, the pane
+ * follows the loaded chapter: shown for a chapter that has notes, hidden for one that doesn't.
  *
- * @param event The keydown event (or any object exposing its `key`)
- * @returns True when the event is an Enter keypress in any modifier state
+ * A manual show/hide wins over that, but only for the chapter it was made in — the user asked for
+ * THIS chapter to look a particular way, not for the feature to stop working. Recording the
+ * override against a chapter, rather than as a flag some other code has to clear, is what makes it
+ * expire on navigation without depending on which effect runs first.
+ *
+ * @returns `true` to show the pane, `false` to hide it, or `undefined` when the auto behavior has
+ *   no opinion and the pane must be left however it already is
  */
-export function isStandardViewEnterKeyEvent(event: Pick<KeyboardEvent, 'key'>): boolean {
-  return event.key === 'Enter';
+export function resolveFootnotesPaneAutoVisibility({
+  isAutoShowEnabled,
+  viewType,
+  chapterHasNotes,
+  manualOverrideChapterKey,
+  currentChapterKey,
+}: FootnotesPaneAutoVisibilityInput): boolean | undefined {
+  if (!isAutoShowEnabled) return undefined;
+  if (viewType !== 'standard') return undefined;
+  if (manualOverrideChapterKey === currentChapterKey) return undefined;
+  return chapterHasNotes;
 }
 
 /**

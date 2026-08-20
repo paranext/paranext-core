@@ -83,17 +83,20 @@ function CommandDialog({
   );
 }
 
-// CUSTOM: props added on top of cmdk's own Input props
+// CUSTOM: Added CommandInputProps — props added on top of cmdk's own Input props, so the
+// Space-selects-highlighted-item opt-in below has a named home instead of an inline intersection
+// type. Upstream references, matching CommandDialogProps above: shadcn/ui
+// https://ui.shadcn.com/docs/components/command, cmdk https://cmdk.paco.me/
 type CommandInputProps = React.ComponentProps<typeof CommandPrimitive.Input> & {
   /**
    * When true, pressing Space while the input is EMPTY selects the currently highlighted item
    * instead of typing a space (the Enter UX). **Opt-in — defaults to false.**
    *
-   * This began as an unconditional patch applied to every `CommandInput` in the app, which meant
-   * any surface with its own Space semantics silently lost the key: a palette whose owner claims
-   * Space to commit what the user TYPED would instead have the HIGHLIGHTED item committed here,
-   * locally, bypassing the owner's resolution entirely. Opting in makes each consumer state that
-   * Space is a selection key for it.
+   * Opt-in rather than unconditional because a surface that owns Space itself must not have the
+   * highlighted item committed out from under it: in a palette whose owner claims Space to commit
+   * what the user TYPED, an unconditional patch here would commit the HIGHLIGHTED item locally
+   * instead, bypassing the owner's resolution entirely. Requiring the flag makes each consumer
+   * state that Space is a selection key for it.
    *
    * Enable it on pickers where the list is the whole point and a leading space is meaningless.
    * Leave it off wherever the input's own text matters, or wherever something outside this
@@ -280,4 +283,6 @@ export {
   CommandShortcut,
   CommandSeparator,
 };
+// CUSTOM: Added CommandInputProps to the type exports so consumers can name the props type when
+// they opt in to `spaceSelectsHighlightedItem` (CommandDialogProps was already exported here)
 export type { CommandDialogProps, CommandInputProps };

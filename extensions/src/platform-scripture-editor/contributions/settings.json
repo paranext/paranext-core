@@ -11,6 +11,7 @@
       "platformScriptureEditor.markerSettleDelayMs": {
         "label": "%settings_platformScriptureEditor_markerSettleDelayMs_label%",
         "description": "%settings_platformScriptureEditor_markerSettleDelayMs_description%",
+        "isHidden": true,
         "default": null
       }
     }

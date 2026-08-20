@@ -8,6 +8,7 @@ import {
   getOverlaysByWebView,
   subscribe,
   getOverlayById,
+  getTopmostOverlay,
   clearAllOverlays,
   resolveAndRemoveOverlay,
   rejectAndRemoveOverlay,
@@ -107,6 +108,36 @@ describe('overlay-store', () => {
 
     it('should return undefined for non-existent id', () => {
       expect(getOverlayById('non-existent')).toBeUndefined();
+    });
+  });
+
+  describe('getTopmostOverlay', () => {
+    it('should return the most recently added matching overlay', () => {
+      const oldest = createContextMenuEntry('overlay-1', 'webview-1');
+      const newest = createCommandPaletteEntry('overlay-2', 'webview-2');
+      addOverlay(oldest);
+      addOverlay(newest);
+
+      expect(getTopmostOverlay(() => true)).toBe(newest);
+      expect(getTopmostOverlay((overlay) => overlay.type === 'contextMenu')).toBe(oldest);
+    });
+
+    it('should return undefined when nothing matches', () => {
+      addOverlay(createContextMenuEntry('overlay-1', 'webview-1'));
+
+      expect(getTopmostOverlay((overlay) => overlay.type === 'popover')).toBeUndefined();
+    });
+
+    it('should keep an overlay in its creation position after an in-place update', () => {
+      const palette = createCommandPaletteEntry('overlay-1', 'webview-1');
+      const newer = createContextMenuEntry('overlay-2', 'webview-2');
+      addOverlay(palette);
+      addOverlay(newer);
+
+      // Updating the older palette must not promote it above the overlay created after it
+      updateCommandPaletteState('overlay-1', { filterText: 'f', itemCount: 1 });
+
+      expect(getTopmostOverlay(() => true)).toBe(newer);
     });
   });
 
