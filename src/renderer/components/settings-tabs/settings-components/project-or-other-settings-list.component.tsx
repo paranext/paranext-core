@@ -1,6 +1,7 @@
 import { ProjectSettingNames, SettingNames } from 'papi-shared-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'platform-bible-react';
 import { Localized, ProjectSettingProperties, SettingProperties } from 'platform-bible-utils';
+import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { OtherSetting } from './other-setting.component';
 import './project-or-other-settings-list.component.scss';
 import { ProjectSetting } from './project-setting.component';
@@ -38,6 +39,10 @@ export function ProjectOrOtherSettingsList({
   className,
   disabled = false,
 }: ProjectOrOtherSettingsListProps) {
+  // Read here rather than as a prop from SettingsTab so both visibility filters (`isHidden` and
+  // `hiddenInterfaceModes`) stay in one place and no call site can forget to plumb the mode.
+  const [interfaceMode] = useInterfaceMode();
+
   // Only project settings (projectId defined) can be edit-blocked. `disabled` is computed ONCE by
   // the parent SettingsTab (which also renders the single blocked notice above all of a project's
   // groups) and passed down, so a project's several setting groups don't each subscribe to the
@@ -53,7 +58,10 @@ export function ProjectOrOtherSettingsList({
       </CardHeader>
       <CardContent>
         {Object.entries(settingProperties)
-          .filter(([, property]) => !property.isHidden)
+          .filter(
+            ([, property]) =>
+              !property.isHidden && !property.hiddenInterfaceModes?.includes(interfaceMode),
+          )
           .map(([key, property]) =>
             projectId ? (
               <ProjectSetting

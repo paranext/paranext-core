@@ -3,7 +3,7 @@
 // changed so they align.
 //----------------------------------------------------------------------------------------------
 
-import { LocalizeKey, ReferencedItem } from './menus.model';
+import { InterfaceMode, LocalizeKey, ReferencedItem } from './menus.model';
 
 /** The data an extension provides to inform Platform.Bible of the settings it provides */
 export type SettingsContribution = SettingsGroup | SettingsGroup[];
@@ -24,6 +24,14 @@ export type SettingBase = StateBase & {
    * user unless an extension provides a way to interact with the setting.
    */
   isHidden?: boolean;
+  /**
+   * Interface modes in which this setting should be hidden. In a listed mode, the setting will not
+   * show up in the settings dialog in `paranext-core`, exactly as if `isHidden` were `true`; in
+   * every other mode it shows normally. Use this for settings that only take effect in some modes.
+   * Omit (or use an empty array) for settings that should show in every mode — most settings need
+   * no value here at all.
+   */
+  hiddenInterfaceModes?: InterfaceMode[];
 };
 /** The data an extension provides to inform Platform.Bible of the project settings it provides */
 export type ProjectSettingsContribution = ProjectSettingsGroup | ProjectSettingsGroup[];
@@ -449,6 +457,13 @@ const settingsDefs = {
             will not be configurable by the user unless an extension provides a way to interact with
             the setting.`,
             type: 'boolean',
+          },
+          hiddenInterfaceModes: {
+            description:
+              'Interface modes in which this setting should be hidden. Omit (or use an empty array) for settings that should show in every mode.',
+            type: 'array',
+            items: { enum: ['simple', 'power'] },
+            uniqueItems: true,
           },
         },
         required: ['label'],
