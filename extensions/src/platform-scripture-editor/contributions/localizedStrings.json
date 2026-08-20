@@ -11,6 +11,9 @@
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
+    },
+    "%webView_platformScriptureEditor_error_bookNotFoundProject%": {
+      "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%"
     }
   },
   "localizedStrings": {

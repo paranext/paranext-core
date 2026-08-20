@@ -153,7 +153,32 @@ describe('BookGridSelector scrollToBook', () => {
     // The id is interpolated into a `[data-book="..."]` selector inside a LAYOUT effect, where a
     // `SyntaxError` escapes during commit with no error boundary to catch it — taking the dialog down
     // to a blank panel. Inert for today's book ids, which is why it needs a test rather than a comment.
-    expect(() => render(grid({ scrollToBook: 'B"AD' }))).not.toThrow();
-    expect(scrolledElements()).toEqual([]);
+    //
+    // The unsafe id has to be IN `items`: the effect resolves the owning group first and returns
+    // early when the book is absent, so a grid that does not contain it never builds the selector at
+    // all — the test would then pass with `CSS.escape` deleted. Asserting the scroll landed on that
+    // pill is what proves the escaped selector was built and matched.
+    const unsafeBook = 'B"AD';
+    const items: BookGridItem[] = [
+      ...ITEMS,
+      {
+        book: unsafeBook,
+        present: false,
+        tone: 'neutral',
+        statusGroupKey: 'notInProject',
+        statusLabel: 'Not in project',
+      },
+    ];
+
+    let container: HTMLElement | undefined;
+    expect(() => {
+      ({ container } = render(grid({ items, scrollToBook: unsafeBook })));
+    }).not.toThrow();
+
+    const unsafePill = Array.from(container!.querySelectorAll('[data-book]')).find(
+      (element) => element.getAttribute('data-book') === unsafeBook,
+    );
+    expect(unsafePill).toBeTruthy();
+    expect(scrolledElements()).toEqual([unsafePill]);
   });
 });
