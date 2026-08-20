@@ -2,14 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { platformSettings, coreSettingsValidators } from './core-settings-info.data';
 
 describe('platform.syncOnStartup setting', () => {
-  it('is declared as a visible setting with a true default', () => {
+  it('is declared as a Simple-mode-only setting with a true default', () => {
     const group = Array.isArray(platformSettings) ? platformSettings[0] : platformSettings;
     const setting = group.properties['platform.syncOnStartup'];
     expect(setting).toBeDefined();
     expect(setting?.default).toBe(true);
-    // Visible (not hidden) so the user has a settings-UI path to turn startup sync off and back on.
-    // The first-run wizard's "Don't sync yet" is wizard-scoped and never writes this (PT-4369).
+    // Visible (not globally hidden) so a Simple-mode user has a settings-UI path to turn startup
+    // sync off and back on. The first-run wizard's "Don't sync yet" is wizard-scoped and never
+    // writes this (PT-4369).
     expect(setting?.isHidden).toBeUndefined();
+    // Hidden in Power mode: only the Simple-mode startup path reads this setting, so showing the
+    // toggle in Power mode would be a control that does nothing.
+    expect(setting?.hiddenInterfaceModes).toEqual(['power']);
     expect(setting?.description).toBe('%settings_platform_syncOnStartup_description%');
   });
 
