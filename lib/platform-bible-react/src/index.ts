@@ -156,10 +156,6 @@ export {
 export { default as TabDropdownMenu } from './components/advanced/menus/tab-dropdown-menu.component';
 export { default as TabToolbar } from './components/advanced/tab-toolbar/tab-toolbar.component';
 export type { TabToolbarProps } from './components/advanced/tab-toolbar/tab-toolbar.component';
-export {
-  default as TabToolbarContainer,
-  TAB_TOOLBAR_SHRINK_THRESHOLDS_PX,
-} from './components/advanced/tab-toolbar/tab-toolbar-container.component';
 export { default as TabFloatingMenu } from './components/advanced/tab-toolbar/tab-floating-menu.component';
 export {
   default as NavigationContentSearch,
@@ -167,7 +163,6 @@ export {
 } from './components/advanced/tab-navigation-content-search.component';
 export { default as Toolbar } from './components/advanced/toolbar.component';
 export type { ToolbarProps } from './components/advanced/toolbar.component';
-export { APP_TOOLBAR_SHRINK_THRESHOLDS_PX } from './components/advanced/toolbar.component';
 export {
   ToolbarCompoundLabel,
   type ToolbarCompoundLabelProps,
@@ -336,11 +331,11 @@ export {
   type UseListboxProps,
   type ListboxOption,
 } from './hooks/listbox-keyboard-navigation.hook';
-export {
-  useShrinkStep,
-  getShrinkStep,
-  SHRINK_STEP_HYSTERESIS_PX,
-} from './hooks/use-shrink-step.hook';
+// `getShrinkStep` and `SHRINK_STEP_HYSTERESIS_PX` are deliberately NOT re-exported: they are the
+// hook's internals, and the per-toolbar threshold constants are tuning values the ADR expects to
+// move. Exporting either would make changing them a consumer-visible change. Tests import them by
+// module path instead.
+export { useShrinkStep } from './hooks/use-shrink-step.hook';
 
 // Contexts
 export { ShrinkStepContext, useShrinkStepValue, SHRINK_STEP } from './context/shrink-step.context';

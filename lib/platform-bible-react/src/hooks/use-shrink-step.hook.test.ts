@@ -43,6 +43,13 @@ describe('getShrinkStep', () => {
     expect(getShrinkStep(600, THRESHOLDS, 0)).toBe(0);
     expect(getShrinkStep(380, THRESHOLDS, 2)).toBe(2);
   });
+
+  test('takes the width at face value when there is no previous step, since hysteresis only damps a drag', () => {
+    // 425 sits inside step 1's hysteresis band (420 + 8). With a previous step it would be held
+    // back; with none there is no drag to damp, so the honest answer is the band the width is in.
+    expect(getShrinkStep(425, THRESHOLDS, undefined)).toBe(1);
+    expect(getShrinkStep(425, THRESHOLDS)).toBe(1);
+  });
 });
 
 /**
@@ -155,12 +162,51 @@ describe('useShrinkStep', () => {
     act(() => FakeResizeObserver.instances[0].emitResize());
     expect(result.current).toBe(3);
 
-    // Shown again at 425: inside step 1's hysteresis band (420 + 8) but clear of step 2's
-    // (340 + 8). Refusing to relax at all would strand the toolbar at its narrowest form, so it
-    // relaxes as far as it safely can — to 2, not all the way to 1.
+    // Shown again at 425. Being revealed is not a drag, so the step taken while the width read 0
+    // is not treated as something to be sticky about: 425 clears 420, so step 1 — not step 2, which
+    // is what holding the hidden step and relaxing one band at a time would give.
     setWidth(element, 425);
     act(() => FakeResizeObserver.instances[0].emitResize());
+    expect(result.current).toBe(1);
+  });
+
+  test('does not strand a single-threshold consumer at its narrowest form after it was hidden', () => {
+    // A consumer with one threshold has no other band to relax into, so holding the hidden step
+    // would leave it collapsed at any width inside that band. 385 clears 384 but not 384 + 8.
+    const SINGLE_THRESHOLD = [384] as const;
+    const element = document.createElement('div');
+    setWidth(element, 500);
+    const { result } = renderHook(() => useShrinkStep(element, SINGLE_THRESHOLD));
+    expect(result.current).toBe(0);
+
+    setWidth(element, 0);
+    act(() => FakeResizeObserver.instances[0].emitResize());
+    expect(result.current).toBe(1);
+
+    setWidth(element, 385);
+    act(() => FakeResizeObserver.instances[0].emitResize());
+    expect(result.current).toBe(0);
+  });
+
+  test('still applies hysteresis to a genuine widening drag, so a label cannot flutter on a threshold', () => {
+    const element = document.createElement('div');
+    setWidth(element, 450);
+    const { result } = renderHook(() => useShrinkStep(element, THRESHOLDS));
+    expect(result.current).toBe(1);
+
+    // Narrowing past 420 applies at once...
+    setWidth(element, 419);
+    act(() => FakeResizeObserver.instances[0].emitResize());
     expect(result.current).toBe(2);
+
+    // ...but coming back to 421 does not, because it has not cleared 420 + 8.
+    setWidth(element, 421);
+    act(() => FakeResizeObserver.instances[0].emitResize());
+    expect(result.current).toBe(2);
+
+    setWidth(element, 428);
+    act(() => FakeResizeObserver.instances[0].emitResize());
+    expect(result.current).toBe(1);
   });
 
   test('observes the element it was given', () => {

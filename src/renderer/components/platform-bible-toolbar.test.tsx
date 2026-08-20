@@ -970,6 +970,25 @@ describe('PlatformBibleToolbar project selector label', () => {
     expect(trigger).not.toHaveTextContent('Test Project');
   });
 
+  it('lowers the trigger width floor at the narrowest step, so dropping the full name actually frees space', () => {
+    // Without this the label just gets shorter inside a box still reserving 192px, and the room the
+    // abbreviation was supposed to buy comes out of the reference control instead.
+    const { unmount } = renderAtStep(SHRINK_STEP.WIDE);
+    const wideTrigger = document
+      .querySelector('[data-select-trigger-classname]')
+      ?.getAttribute('data-select-trigger-classname');
+    unmount();
+
+    renderAtStep(SHRINK_STEP.MINIMUM);
+    const narrowTrigger = document
+      .querySelector('[data-select-trigger-classname]')
+      ?.getAttribute('data-select-trigger-classname');
+
+    expect(wideTrigger).toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
+    expect(narrowTrigger).toMatch(/(?:^|\s)tw:min-w-24(?:\s|$)/);
+    expect(narrowTrigger).not.toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
+  });
+
   it('keeps an error visible at the narrowest step, where the project name would be dropped', async () => {
     // Routing the error through the label's droppable field would leave the user with a red short
     // name and no statement of what went wrong.
