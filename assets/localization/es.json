@@ -616,7 +616,7 @@
   "%settings_platform_showRegistrationReminderOnStartup_label%": "Mostrar el recordatorio de registro al iniciar",
   "%settings_platform_supporter_group_description%": "Configuraciones que una persona de soporte puede pedirle ajustar al ayudarle",
   "%settings_platform_supporter_group_label%": "Configuración de soporte",
-  "%settings_platform_syncOnStartup_description%": "En el modo simplificado, sincroniza automáticamente sus proyectos cada vez que se inicia la aplicación. El modo avanzado ignora esta configuración y usa la programación de sincronización de cada proyecto.",
+  "%settings_platform_syncOnStartup_description%": "Sincroniza automáticamente sus proyectos cada vez que se inicia la aplicación.",
   "%settings_platform_syncOnStartup_label%": "Sincronizar automáticamente al iniciar",
   "%settings_platform_webViewContentZoom_atDefault%": "Ya está en el zoom predeterminado",
   "%settings_platform_webViewContentZoom_atMaximum%": "Ya está en el zoom máximo (300 %)",
