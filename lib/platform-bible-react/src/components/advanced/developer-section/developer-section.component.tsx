@@ -21,15 +21,16 @@ export const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_developer_section_label%',
   '%paratextRegistration_label_serverType_option_Production%',
   '%paratextRegistration_label_serverType_option_Development%',
+  '%paratextRegistration_label_serverType_option_Test%',
 ];
 
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export type DeveloperSectionProps = {
   /** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
   localizedStrings: LanguageStrings;
-  /** The currently selected server type. QA and Test values display as Production. */
+  /** The currently selected server type. QA values display as Production; Test displays as Test. */
   selectedServer: ServerType;
-  /** Called when the user switches to Production or Development. */
+  /** Called when the user switches to Production, Development, or Test. */
   onServerChange: (server: ServerType) => void;
   /** When true, the toggle items are non-interactive (loading or saving in progress). */
   disabled: boolean;
@@ -43,8 +44,13 @@ export function DeveloperSection({
   disabled,
 }: DeveloperSectionProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  // QA and Test are not surfaced in this UI; they display as Production.
-  const displayValue = selectedServer === 'Development' ? 'Development' : 'Production';
+  // `selectedServer` mirrors ParatextData's persisted `InternetSettings.xml`, whose enum also
+  // includes 'QualityAssurance'. No Platform.Bible UI writes that value — this toggle only offers
+  // the other three — but it can still arrive from the internet-settings API (which accepts the
+  // full enum) or from a pre-existing settings file. Render any value this toggle cannot represent
+  // as Production so it is never blank; the deselect branch below is the escape hatch back out.
+  const displayValue =
+    selectedServer === 'Development' || selectedServer === 'Test' ? selectedServer : 'Production';
 
   return (
     <div className="tw:border-t tw:pt-2">
@@ -66,14 +72,15 @@ export function DeveloperSection({
           type="single"
           value={displayValue}
           onValueChange={(v) => {
-            if (v === 'Production' || v === 'Development') onServerChange(v);
+            if (v === 'Production' || v === 'Development' || v === 'Test') onServerChange(v);
             // Radix single-toggle fires '' when the already-selected item is clicked (deselect).
-            // If the user is on QA/Test (displayed as Production), that click should switch them
-            // to actual Production so they're not stranded with no escape route.
+            // If the user is on a hidden value (QA/unknown, displayed as Production), that click
+            // should switch them to actual Production so they're not stranded.
             else if (
               v === '' &&
               selectedServer !== 'Production' &&
-              selectedServer !== 'Development'
+              selectedServer !== 'Development' &&
+              selectedServer !== 'Test'
             )
               onServerChange('Production');
           }}
@@ -92,6 +99,9 @@ export function DeveloperSection({
             data-testid="server-type-development"
           >
             {localizedStrings['%paratextRegistration_label_serverType_option_Development%']}
+          </ToggleGroupItem>
+          <ToggleGroupItem value="Test" variant="outline" data-testid="server-type-test">
+            {localizedStrings['%paratextRegistration_label_serverType_option_Test%']}
           </ToggleGroupItem>
         </ToggleGroup>
       </div>

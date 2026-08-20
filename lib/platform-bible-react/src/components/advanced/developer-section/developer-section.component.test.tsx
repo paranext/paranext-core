@@ -25,6 +25,7 @@ const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_developer_section_label%': 'Developer only',
   '%paratextRegistration_label_serverType_option_Production%': 'Production',
   '%paratextRegistration_label_serverType_option_Development%': 'Development',
+  '%paratextRegistration_label_serverType_option_Test%': 'Test',
 };
 
 function renderSection(overrides: Partial<DeveloperSectionProps> = {}) {
@@ -86,16 +87,44 @@ describe('DeveloperSection', () => {
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
     expect(screen.getByTestId('server-type-production')).toBeDisabled();
     expect(screen.getByTestId('server-type-development')).toBeDisabled();
+    expect(screen.getByTestId('server-type-test')).toBeDisabled();
   });
 
-  test('QualityAssurance and Test selectedServer display as Production being active', () => {
+  test('QualityAssurance selectedServer displays as Production being active', () => {
     renderSection({ selectedServer: 'QualityAssurance' });
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
     expect(screen.getByTestId('server-type-production')).toHaveAttribute('data-state', 'on');
     expect(screen.getByTestId('server-type-development')).toHaveAttribute('data-state', 'off');
+    expect(screen.getByTestId('server-type-test')).toHaveAttribute('data-state', 'off');
   });
 
-  test('clicking Production while on QA/Test calls onServerChange with Production (escape hatch)', () => {
+  test('shows the Test item as active when selectedServer is Test', () => {
+    renderSection({ selectedServer: 'Test' });
+    fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
+    expect(screen.getByTestId('server-type-test')).toHaveAttribute('data-state', 'on');
+    expect(screen.getByTestId('server-type-production')).toHaveAttribute('data-state', 'off');
+    expect(screen.getByTestId('server-type-development')).toHaveAttribute('data-state', 'off');
+  });
+
+  test('clicking Test calls onServerChange with Test', () => {
+    const onServerChange = vi.fn();
+    renderSection({ onServerChange });
+    fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
+    fireEvent.click(screen.getByTestId('server-type-test'));
+    expect(onServerChange).toHaveBeenCalledWith('Test');
+  });
+
+  test('clicking the already-active Test item does not switch servers (Test is visible, not hidden)', () => {
+    const onServerChange = vi.fn();
+    renderSection({ selectedServer: 'Test', onServerChange });
+    fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
+    // Radix fires deselect (value='') when the active item is clicked. Unlike a hidden QA value,
+    // Test is directly re-selectable, so it must NOT be re-routed to Production.
+    fireEvent.click(screen.getByTestId('server-type-test'));
+    expect(onServerChange).not.toHaveBeenCalled();
+  });
+
+  test('clicking Production while on hidden QA calls onServerChange with Production (escape hatch)', () => {
     const onServerChange = vi.fn();
     renderSection({ selectedServer: 'QualityAssurance', onServerChange });
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
