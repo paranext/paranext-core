@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/utils/shadcn-ui/utils';
 import {
   Tooltip,
@@ -72,8 +72,41 @@ export function ToolbarCompoundLabel({
   // has to open the tooltip. Same two-source pattern `project-selector.component.tsx` uses.
   const [isIncompleteHovered, setIsIncompleteHovered] = useState(false);
 
+  // Keyboard reveal. These labels render inside a button or select trigger, so focus lands on that
+  // ancestor and never on the span below — a React `onFocus` here would not fire. Without this the
+  // shortened text is a pointer-only affordance: a keyboard user tabbing to an abbreviated
+  // reference has no way at all to see what it stands for.
+  const [isFocusRevealed, setIsFocusRevealed] = useState(false);
+  const rootRef = useRef<HTMLSpanElement>(
+    // React's ref API requires `null` as the initial value for DOM refs.
+    // eslint-disable-next-line no-null/no-null
+    null,
+  );
+
   const isSecondaryRendered = showSecondary && secondary !== undefined;
   const isShowingPartialLabel = isPartial ?? (secondary !== undefined && !showSecondary);
+
+  useEffect(() => {
+    const focusable = rootRef.current?.closest('button, [role="combobox"], [tabindex]');
+    if (!focusable) return undefined;
+
+    const reveal = () => {
+      // Same two sources as hover: a label that is short by construction, or one CSS has clipped.
+      // Anything that already reads in full needs no tooltip on focus either.
+      const secondaryElement = secondaryRef.current;
+      const isClipped =
+        !!secondaryElement && secondaryElement.scrollWidth > secondaryElement.clientWidth;
+      if (isShowingPartialLabel || isClipped) setIsFocusRevealed(true);
+    };
+    const hide = () => setIsFocusRevealed(false);
+
+    focusable.addEventListener('focus', reveal);
+    focusable.addEventListener('blur', hide);
+    return () => {
+      focusable.removeEventListener('focus', reveal);
+      focusable.removeEventListener('blur', hide);
+    };
+  }, [isShowingPartialLabel, secondaryRef]);
 
   const handlePointerEnter = useCallback(() => {
     if (isShowingPartialLabel) setIsIncompleteHovered(true);
@@ -85,6 +118,7 @@ export function ToolbarCompoundLabel({
   // the click just opened, because the pointer never "leaves".
   const closeTooltip = useCallback(() => {
     setIsIncompleteHovered(false);
+    setIsFocusRevealed(false);
     onClipPointerLeave();
   }, [onClipPointerLeave]);
 
@@ -110,13 +144,20 @@ export function ToolbarCompoundLabel({
     // Nested TooltipProviders are harmless in Radix, so carrying our own means this works in any
     // host, including toolbars that never set one up.
     <TooltipProvider>
-      <Tooltip open={isClippedHovered || isIncompleteHovered}>
+      <Tooltip open={isClippedHovered || isIncompleteHovered || isFocusRevealed}>
         <TooltipTrigger asChild>
           <span
+            ref={rootRef}
             onPointerEnter={handlePointerEnter}
             onPointerLeave={closeTooltip}
             onPointerDown={closeTooltip}
-            className={cn('tw:flex tw:min-w-0 tw:items-baseline', className)}
+            // Centred, not baseline-aligned. A field whose content is an `inline-block` with
+            // `overflow: hidden` — which the paragraph label's fixed marker slot is — takes its
+            // bottom margin edge as its baseline rather than its text baseline, so baseline
+            // alignment hangs the marker off the wrong edge and it sits visibly high next to the
+            // style name. How far off depends on the font's metrics, so it shows on some platforms
+            // and not others. Both fields here are the same size, so centring costs nothing.
+            className={cn('tw:flex tw:min-w-0 tw:items-center', className)}
           >
             {first}
             {/* Only between two rendered fields — never leading or trailing, which is what a
