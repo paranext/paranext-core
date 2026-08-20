@@ -22,6 +22,8 @@ import {
   buildChapterScaffoldOps,
   canAddChapterNumber,
   resolveAddChapterNumberClick,
+  isMissingBookError,
+  resolveResourceContentState,
 } from './platform-scripture-editor.utils';
 
 /** Build a mock editor ref exposing spies for the methods the generators call. */
@@ -2589,5 +2591,117 @@ describe('resolveAddChapterNumberClick', () => {
 
   it('returns "insert" when not in flight and lastVerse is positive', () => {
     expect(resolveAddChapterNumberClick(false, 3)).toBe('insert');
+  });
+});
+
+describe('isMissingBookError', () => {
+  it('returns true for the message C# MissingBookException actually produces', () => {
+    expect(isMissingBookError(new Error('Book number 1 not found in project abc123.'))).toBe(true);
+  });
+
+  it('returns true when the PDP has wrapped the message in its own prefix', () => {
+    expect(
+      isMissingBookError(
+        new Error('Error in getChapterUSJ: Book number 40 not found in project abc123.'),
+      ),
+    ).toBe(true);
+  });
+
+  it('returns true for a plain string message rather than an Error', () => {
+    expect(isMissingBookError('Book number 66 not found in project abc123.')).toBe(true);
+  });
+
+  it('returns false for an unrelated failure', () => {
+    expect(isMissingBookError(new Error('Project abc123 is not available'))).toBe(false);
+  });
+
+  it('returns false when the book number is absent, so a partial match cannot pass', () => {
+    expect(isMissingBookError(new Error('Book number not found in project abc123.'))).toBe(false);
+  });
+
+  it('returns false for undefined, so a missing error is never read as a missing book', () => {
+    expect(isMissingBookError(undefined)).toBe(false);
+  });
+});
+
+describe('resolveResourceContentState', () => {
+  const MISSING_BOOK = new Error('Book number 1 not found in project abc123.');
+
+  it('returns "loading" before a resource project has resolved', () => {
+    expect(
+      resolveResourceContentState({
+        hasResourceProject: false,
+        usjPossiblyError: undefined,
+        isUsjLoading: false,
+      }),
+    ).toBe('loading');
+  });
+
+  it('returns "loading" while no chapter data has arrived yet', () => {
+    expect(
+      resolveResourceContentState({
+        hasResourceProject: true,
+        usjPossiblyError: undefined,
+        isUsjLoading: true,
+      }),
+    ).toBe('loading');
+  });
+
+  it('returns "ready" once chapter data has arrived', () => {
+    expect(
+      resolveResourceContentState({
+        hasResourceProject: true,
+        usjPossiblyError: { type: 'USJ', version: '3.1', content: [] },
+        isUsjLoading: false,
+      }),
+    ).toBe('ready');
+  });
+
+  it('returns "bookNotAvailable" when the resource does not contain the book', () => {
+    expect(
+      resolveResourceContentState({
+        hasResourceProject: true,
+        usjPossiblyError: MISSING_BOOK,
+        isUsjLoading: false,
+      }),
+    ).toBe('bookNotAvailable');
+  });
+
+  it('withholds the message while the error may still describe the previous reference', () => {
+    // `useProjectData` keeps the PREVIOUS selector's result until the new subscription's first update
+    // lands, so an error read while `isUsjLoading` may describe the book the user just left. Showing
+    // the message off it would flash "not in this text" on the way INTO a book the text does have.
+    expect(
+      resolveResourceContentState({
+        hasResourceProject: true,
+        usjPossiblyError: MISSING_BOOK,
+        isUsjLoading: true,
+      }),
+    ).toBe('ready');
+  });
+
+  it('stays "ready" through a stale window rather than remounting the editor', () => {
+    // Not 'loading': that would fire on every reference change and remount the editor on every
+    // chapter navigation. The outgoing chapter lingering for a beat is pre-existing behaviour on
+    // every navigation (PT-4139), not something this fix makes worse.
+    expect(
+      resolveResourceContentState({
+        hasResourceProject: true,
+        usjPossiblyError: { type: 'USJ', version: '3.1', content: [] },
+        isUsjLoading: true,
+      }),
+    ).toBe('ready');
+  });
+
+  it('returns "ready" for an unrelated failure, leaving other errors to the existing path', () => {
+    // Only a missing book earns the dedicated message. Widening this to every error would relabel
+    // genuine failures as "this book is not here", which is a different and misleading claim.
+    expect(
+      resolveResourceContentState({
+        hasResourceProject: true,
+        usjPossiblyError: new Error('Project abc123 is not available'),
+        isUsjLoading: false,
+      }),
+    ).toBe('ready');
   });
 });

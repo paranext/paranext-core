@@ -32,6 +32,8 @@ import { useIsOnline } from './use-is-online.hook';
 import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { scrollToVerse } from './editor-dom.util';
 import { getRefLabel } from './resource-reference.utils';
+import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import { isMissingBookError } from './platform-scripture-editor.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -61,6 +63,7 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
+  '%webView_modelTextPanel_bookNotAvailable%',
 ] as const);
 
 type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];
@@ -184,6 +187,10 @@ export function ModelTextPanel({
   const [textDirection, setTextDirection] = useState<string>(DEFAULT_TEXT_DIRECTION);
   // `undefined` means "not yet fetched" so we can show the loading state, matching the original.
   const [isUsjLoading, setIsUsjLoading] = useState(false);
+  // Distinguishes "this model text simply has no such book" from a genuine fetch failure. Both
+  // arrive as a rejection from `getResourceChapter`, and before this the catch collapsed them into
+  // "no USJ" — which rendered a blank editor with no explanation.
+  const [isBookMissing, setIsBookMissing] = useState(false);
 
   useEffect(() => {
     if (!resourceProjectId) {
@@ -192,6 +199,8 @@ export function ModelTextPanel({
     }
     let isActive = true;
     setIsUsjLoading(true);
+    // Cleared per fetch so a message for the book the user just left cannot outlive the navigation.
+    setIsBookMissing(false);
     const load = async () => {
       const { usj: nextUsj, textDirection: nextTextDirection } = await getResourceChapter(
         resourceProjectId,
@@ -202,9 +211,10 @@ export function ModelTextPanel({
       setTextDirection(nextTextDirection || DEFAULT_TEXT_DIRECTION);
       setIsUsjLoading(false);
     };
-    load().catch(() => {
+    load().catch((e) => {
       if (!isActive) return;
       setUsj(undefined);
+      setIsBookMissing(isMissingBookError(e));
       setIsUsjLoading(false);
     });
     return () => {
@@ -499,14 +509,25 @@ export function ModelTextPanel({
           </Tooltip>
         </TooltipProvider>
       )}
+      {/* The model text, or the reason there is none. The label header above stays mounted either
+        way, so the message is attributed to a named text rather than floating in an anonymous panel.
+        Unlike the Bible texts panel there is no in-panel selector to preserve — this panel surfaces
+        its picker only in the zero and not-found states — so the remedy here is a book the text
+        covers, or changing the configured model text. */}
       <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={handleScrRefChange}
-          options={options}
-          logger={logger}
-        />
+        {isBookMissing ? (
+          <ResourceBookNotAvailable
+            message={localizedStrings['%webView_modelTextPanel_bookNotAvailable%'] ?? ''}
+          />
+        ) : (
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={handleScrRefChange}
+            options={options}
+            logger={logger}
+          />
+        )}
       </div>
     </div>
   );

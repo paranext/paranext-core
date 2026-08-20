@@ -53,6 +53,8 @@ import {
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { InstallFailedView, InstallingView } from './install-state-views.component';
+import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import { resolveResourceContentState } from './platform-scripture-editor.utils';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -65,10 +67,12 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_installFailedOffline%',
   '%webView_resourcePanel_retry%',
   '%webView_resourcePanel_downloadResources%',
+  '%webView_resourcePanel_bibleTexts_bookNotAvailable%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
   '%webView_resourcePanel_bibleTexts_title%',
   '%webView_resourcePanel_bibleTexts_title_withResource%',
+  '%webView_resourcePanel_commentaries_bookNotAvailable%',
   '%webView_resourcePanel_commentaries_emptyState_prompt%',
   '%webView_resourcePanel_commentaries_pick%',
   '%webView_resourcePanel_commentaries_title%',
@@ -409,7 +413,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // sliced by scripture-text-grid/verse-display.utils — slicing would blank the verse-0 front matter
   // (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve verse 0
   // to verse 1; whole-chapter surfaces like this one must not (see ADR-0019).
-  const [usjPossiblyError] = useProjectData(
+  const [usjPossiblyError, , isUsjLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     resourceProjectId,
   ).ChapterUSJ(
@@ -543,6 +547,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
       ? '%webView_resourcePanel_bibleTexts_emptyState_prompt%'
       : '%webView_resourcePanel_commentaries_emptyState_prompt%';
 
+  const bookNotAvailableKey =
+    resourceType === 'ScriptureResource'
+      ? '%webView_resourcePanel_bibleTexts_bookNotAvailable%'
+      : '%webView_resourcePanel_commentaries_bookNotAvailable%';
+
   const pickButtonKey =
     resourceType === 'ScriptureResource'
       ? '%webView_resourcePanel_bibleTexts_pick%'
@@ -611,8 +620,17 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Loading state: USJ not yet available
-  if (!resourceProjectId || usjPossiblyError === undefined) {
+  // Loading state: USJ not yet available. `isUsjLoading` feeds in only to withhold the
+  // book-not-available message while the error may still belong to the reference the user just left;
+  // it deliberately does not gate the spinner, which would remount the editor on every chapter
+  // navigation. See `resolveResourceContentState`.
+  const contentState = resolveResourceContentState({
+    hasResourceProject: !!resourceProjectId,
+    usjPossiblyError,
+    isUsjLoading,
+  });
+
+  if (contentState === 'loading') {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />
@@ -635,15 +653,21 @@ globalThis.webViewComponent = function ResourceTextPanel({
         downloadResourcesLabel={localizedStrings['%webView_resourcePanel_downloadResources%']}
       />
 
-      {/* Scripture content */}
+      {/* Scripture content, or the reason there is none. The selector above stays mounted either
+        way: a resource missing a book has no remedy inside this panel, so the only thing the user
+        can do about it is switch to a text that has the book. */}
       <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={setScrRef}
-          options={options}
-          logger={logger}
-        />
+        {contentState === 'bookNotAvailable' ? (
+          <ResourceBookNotAvailable message={localizedStrings[bookNotAvailableKey]} />
+        ) : (
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={setScrRef}
+            options={options}
+            logger={logger}
+          />
+        )}
       </div>
     </div>
   );
