@@ -81,10 +81,10 @@ If `$BRANCH` is `main`, stop and tell the author:
 
 ```bash
 git status --porcelain
-git diff -- package-lock.json
+git diff -- package-lock.json | head -n 40
 ```
 
-**Worktree-transient noise check:** inside a git worktree, `npm install`/`npm ci` rewrites `package-lock.json`'s top-level `"name"` field to match the worktree directory's basename (npm treats the checkout directory as the local package name). This produces a permanent, harmless, feature-unrelated local diff that disappears when the worktree is disposed of — it must never be treated as review content. If the `package-lock.json` diff above is confined to that `"name"` field (and/or `packages[""].name`) changing to `$(basename $(git rev-parse --show-toplevel))` — nothing else — treat it as **worktree noise**: exclude it from the uncommitted-changes count/list below, from Step 1.3's file count and analyzer input, from Step 4.1's quality-check scope, from Step 4.2's findings and summary, and from Step 5.1's final commit. Never mention it to the author unless they ask. If `package-lock.json` has other changes beyond the name field, do not apply this exclusion — treat the whole file normally.
+**Worktree-transient noise check:** inside a git worktree, `npm install`/`npm ci` rewrites `package-lock.json`'s top-level `"name"` field to match the worktree directory's basename (npm treats the checkout directory as the local package name). This produces a permanent, harmless, feature-unrelated local diff that disappears when the worktree is disposed of — it must never be treated as review content. The `name` field sits at the top of the file, so the 40-line cap above is enough to see it without spending tokens on the rest of a potentially huge lockfile diff. If the `package-lock.json` diff is confined to that `"name"` field (and/or `packages[""].name`) changing to `$(basename $(git rev-parse --show-toplevel))` — nothing else — treat it as **worktree noise**: exclude it from the uncommitted-changes count/list below, from Step 1.3's file count and analyzer input, from Step 4.1's quality-check scope, from Step 4.2's findings and summary, and from Step 5.1's final commit. Never mention it to the author unless they ask. If `package-lock.json` has other changes beyond the name field, do not apply this exclusion — treat the whole file normally.
 
 If there are uncommitted changes (excluding any worktree noise), inform the author:
 
