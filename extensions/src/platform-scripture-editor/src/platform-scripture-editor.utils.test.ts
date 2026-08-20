@@ -2314,26 +2314,32 @@ describe('startDefaultProjectPicker', () => {
 function createSyncMockPapi() {
   const mockSendCommand = vi.fn().mockResolvedValue(undefined);
   const mockWarn = vi.fn();
-  const mockDebug = vi.fn();
-  // `syncOnProjectSwitch` reads exactly one setting. Default is the consented path so the other
-  // assertions still exercise the syncing behavior; a test sets `false` to close the gate, or an
-  // `Error` to make the read reject.
-  let firstRunComplete: unknown = true;
-  const setFirstRunComplete = (value: unknown) => {
-    firstRunComplete = value;
+  const mockInfo = vi.fn();
+  // `syncOnProjectSwitch` reads two settings. Defaults are Simple mode with consent given, so the
+  // other assertions exercise the syncing behavior; a test overrides one to close the gate, or
+  // stores an `Error` to make that key's read reject. An unstubbed key throws so a newly added
+  // read cannot pass unnoticed.
+  const settings: Record<string, unknown> = {
+    'platform.interfaceMode': 'simple',
+    'platform.firstRunComplete': true,
   };
-  const mockGetSetting = vi.fn(async () => {
-    if (firstRunComplete instanceof Error) throw firstRunComplete;
-    return firstRunComplete;
+  const setSetting = (key: string, value: unknown) => {
+    settings[key] = value;
+  };
+  const mockGetSetting = vi.fn(async (key: string) => {
+    if (!(key in settings)) throw new Error(`Unexpected settings key in test stub: ${key}`);
+    const value = settings[key];
+    if (value instanceof Error) throw value;
+    return value;
   });
   // Must cast since the mock only includes the papi properties used by syncOnProjectSwitch.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const papi = {
     commands: { sendCommand: mockSendCommand },
-    logger: { warn: mockWarn, debug: mockDebug },
+    logger: { warn: mockWarn, info: mockInfo },
     settings: { get: mockGetSetting },
   } as unknown as typeof PapiBackend;
-  return { papi, mockSendCommand, mockWarn, mockDebug, mockGetSetting, setFirstRunComplete };
+  return { papi, mockSendCommand, mockWarn, mockInfo, mockGetSetting, setSetting };
 }
 
 /**
@@ -2457,27 +2463,53 @@ describe('syncOnProjectSwitch', () => {
   });
 
   it('syncs nothing while the first-run wizard is incomplete', async () => {
-    const { papi, mockSendCommand, mockDebug, setFirstRunComplete } = createSyncMockPapi();
-    setFirstRunComplete(false);
+    const { papi, mockSendCommand, mockInfo, setSetting } = createSyncMockPapi();
+    setSetting('platform.firstRunComplete', false);
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
 
     expectNoSyncCommands(mockSendCommand);
     // A silent skip is indistinguishable from a switch that never reached the sync, so the gate
-    // must say it closed.
-    expect(mockDebug).toHaveBeenCalledWith(
+    // must say it closed — at info, since packaged builds drop debug.
+    expect(mockInfo).toHaveBeenCalledWith(
       expect.stringContaining('Project-switch sync skipped: first-run sync consent not confirmed'),
     );
   });
 
   it('syncs nothing when the first-run setting read rejects (consent-safe default)', async () => {
-    const { papi, mockSendCommand, mockWarn, setFirstRunComplete } = createSyncMockPapi();
-    setFirstRunComplete(new Error('settings service unavailable'));
+    const { papi, mockSendCommand, mockWarn, setSetting } = createSyncMockPapi();
+    setSetting('platform.firstRunComplete', new Error('settings service unavailable'));
 
     await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
 
     expectNoSyncCommands(mockSendCommand);
     expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platform.firstRunComplete'));
+  });
+  it('does not apply the consent gate in power mode', async () => {
+    // platform.firstRunComplete is never written outside Simple mode, so gating a power-mode caller
+    // on it would suppress that caller's sync permanently. Reading the mode here is what keeps that
+    // from being a comment someone can miss.
+    const { papi, mockSendCommand, setSetting } = createSyncMockPapi();
+    setSetting('platform.interfaceMode', 'power');
+    setSetting('platform.firstRunComplete', false);
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expect(mockSendCommand.mock.calls.map(([commandName]) => commandName)).toEqual(
+      PROJECT_SWITCH_SYNC_COMMANDS,
+    );
+  });
+
+  it('still applies the consent gate when the interface mode cannot be read', async () => {
+    // Consent-safe direction: an unreadable mode must not become a way past the gate.
+    const { papi, mockSendCommand, mockWarn, setSetting } = createSyncMockPapi();
+    setSetting('platform.interfaceMode', new Error('settings service unavailable'));
+    setSetting('platform.firstRunComplete', false);
+
+    await syncOnProjectSwitch(papi, 'proj-incoming', 'proj-outgoing');
+
+    expectNoSyncCommands(mockSendCommand);
+    expect(mockWarn).toHaveBeenCalledWith(expect.stringContaining('platform.interfaceMode'));
   });
 });
 

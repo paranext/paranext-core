@@ -8,6 +8,7 @@ import {
 } from '@main/services/web-view-routing.service';
 import { logger } from '@shared/services/logger.service';
 import { performShutdownTasks, performWindowCloseTasks } from './shutdown-tasks';
+import { createSettingsStub, READ_THROWS } from './settings-stub.test-util';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
@@ -50,34 +51,15 @@ function openWebViews(definitions: object[], unreachableWindowIds: number[] = []
   >;
 }
 
-/** {@link stubSettings} value meaning "this setting's read rejects" rather than a resolved value. */
-const READ_THROWS = Symbol('settings read throws');
-
-/** What {@link stubSettings} answers a read with: the resolved value, or a rejection. */
-type StubbedSettingValue<T> = T | typeof READ_THROWS;
-
 /**
- * Per-setting settings stub, mirroring the sibling startup-tasks.test.ts helper. A blanket
- * `mockResolvedValue('simple')` silently disables sync in every Simple-mode test: it answers the
- * `platform.firstRunComplete` read with `'simple'` too, which the consent gate reads as "not
- * complete". An unstubbed key throws, so a newly added setting read cannot pass unnoticed.
+ * The settings this suite's code under test reads (see {@link createSettingsStub}). Deliberately no
+ * `platform.syncOnStartup`: shutdown never reads it, so a read added here would throw rather than
+ * pass unnoticed.
  */
-function stubSettings({
-  mode = 'simple',
-  firstRunComplete = true,
-}: {
-  mode?: string;
-  firstRunComplete?: StubbedSettingValue<boolean>;
-} = {}) {
-  mockSettingsGet.mockImplementation(async (key: string) => {
-    if (key === 'platform.interfaceMode') return mode;
-    if (key === 'platform.firstRunComplete') {
-      if (firstRunComplete === READ_THROWS) throw new Error('read failed');
-      return firstRunComplete;
-    }
-    throw new Error(`Unexpected settings key in test stub: ${key}`);
-  });
-}
+const stubSettings = createSettingsStub(mockSettingsGet, {
+  mode: 'simple',
+  firstRunComplete: true,
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

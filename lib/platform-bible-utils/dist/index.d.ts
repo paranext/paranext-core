@@ -4393,6 +4393,14 @@ export type SettingBase = StateBase & {
 	 * user unless an extension provides a way to interact with the setting.
 	 */
 	isHidden?: boolean;
+	/**
+	 * Interface modes in which this setting should be hidden. In a listed mode, the setting will not
+	 * show up in the settings dialog in `paranext-core`, exactly as if `isHidden` were `true`; in
+	 * every other mode it shows normally. Use this for settings that only take effect in some modes.
+	 * Omit (or use an empty array) for settings that should show in every mode — most settings need
+	 * no value here at all.
+	 */
+	hiddenInterfaceModes?: InterfaceMode[];
 };
 /** The data an extension provides to inform Platform.Bible of the project settings it provides */
 export type ProjectSettingsContribution = ProjectSettingsGroup | ProjectSettingsGroup[];
@@ -4781,6 +4789,14 @@ export declare const projectSettingsDocumentSchema: {
 						description: string;
 						type: string;
 					};
+					hiddenInterfaceModes: {
+						description: string;
+						type: string;
+						items: {
+							enum: string[];
+						};
+						uniqueItems: boolean;
+					};
 				};
 				required: string[];
 				$ref?: undefined;
@@ -5076,6 +5092,14 @@ export declare const settingsDocumentSchema: {
 					isHidden: {
 						description: string;
 						type: string;
+					};
+					hiddenInterfaceModes: {
+						description: string;
+						type: string;
+						items: {
+							enum: string[];
+						};
+						uniqueItems: boolean;
 					};
 				};
 				required: string[];

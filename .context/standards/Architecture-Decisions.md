@@ -669,7 +669,9 @@ step, no automation. Just a record.
   `continueWithoutRegistration`, which deliberately persists nothing — keeps `firstRunComplete:
   false`, so all four triggers stay closed for that session, not just startup as before. That is the
   consent-safe reading (they were never asked), but it now also costs them the quit-time flush.
-  Users who already have `syncOnStartup: false` from the old behavior keep it,
+  `platform.syncOnStartup` deliberately stays scoped to the startup sync — its label says "on
+  startup" and means it; the shutdown, window-close and project-switch syncs are not governed by
+  it, and it is hidden in Power mode, which never reads it. Users who already have `syncOnStartup: false` from the old behavior keep it,
   and can now see and reverse it in Settings. `%firstRun_button_skipSync%` is retired in
   `metadata.json` rather than deleted, per the convention its neighbours follow. Two latent issues are
   noted here only, not fixed and as of 2026-08-16 not yet ticketed: the project picker auto-opens a

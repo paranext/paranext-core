@@ -11,6 +11,7 @@ import * as commandService from '@shared/services/command.service';
 import * as networkService from '@shared/services/network.service';
 import { logger } from '@shared/services/logger.service';
 import { performStartupTasks, STARTUP_SYNC_RETRY_BUDGET_MS } from './startup-tasks';
+import { createSettingsStub, READ_THROWS } from './settings-stub.test-util';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
@@ -32,6 +33,7 @@ const mockSettingsGet = vi.mocked(settingsService.get);
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockRequestNoRetry = vi.mocked(networkService.requestNoRetry);
 const mockLoggerDebug = vi.mocked(logger.debug);
+const mockLoggerInfo = vi.mocked(logger.info);
 const mockLoggerWarn = vi.mocked(logger.warn);
 
 /**
@@ -54,40 +56,12 @@ function requestTimedOutError() {
   );
 }
 
-/** {@link stubSettings} value meaning "this setting's read rejects" rather than a resolved value. */
-const READ_THROWS = Symbol('settings read throws');
-
-/** What {@link stubSettings} answers a read with: the resolved value, or a rejection. */
-type StubbedSettingValue<T> = T | typeof READ_THROWS;
-
-/**
- * Per-setting settings stub, mirroring the sibling shutdown-tasks.test.ts helper. A blanket
- * `mockResolvedValue('simple')` silently disables sync in every Simple-mode test: it answers the
- * `platform.firstRunComplete` read with `'simple'` too, which the consent gate reads as "not
- * complete". An unstubbed key throws, so a newly added setting read cannot pass unnoticed.
- */
-function stubSettings({
-  mode = 'simple',
-  firstRunComplete = true,
-  syncOnStartup = true,
-}: {
-  mode?: string;
-  firstRunComplete?: StubbedSettingValue<boolean>;
-  syncOnStartup?: StubbedSettingValue<boolean>;
-} = {}) {
-  mockSettingsGet.mockImplementation(async (key: string) => {
-    if (key === 'platform.interfaceMode') return mode;
-    if (key === 'platform.firstRunComplete') {
-      if (firstRunComplete === READ_THROWS) throw new Error('read failed');
-      return firstRunComplete;
-    }
-    if (key === 'platform.syncOnStartup') {
-      if (syncOnStartup === READ_THROWS) throw new Error('read failed');
-      return syncOnStartup;
-    }
-    throw new Error(`Unexpected settings key in test stub: ${key}`);
-  });
-}
+/** The settings this suite's code under test reads (see {@link createSettingsStub}). */
+const stubSettings = createSettingsStub(mockSettingsGet, {
+  mode: 'simple',
+  firstRunComplete: true,
+  syncOnStartup: true,
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -149,7 +123,9 @@ describe('performStartupTasks', () => {
     await performStartupTasks();
     expect(mockSendCommand).not.toHaveBeenCalled();
     // Its own line, distinct from the syncOnStartup skip below, so the log says which gate closed.
-    expect(mockLoggerDebug).toHaveBeenCalledWith(
+    // Info, not debug, so packaged builds (log level `info`) keep it — the shutdown and
+    // window-close consent skips log at info for the same reason.
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
       expect.stringContaining('Startup sync skipped: first-run sync consent not confirmed'),
     );
   });
