@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   ManageBooksDialog,
   type ManageBooksDialogBookInfo,
@@ -11,64 +11,16 @@ import {
   type ManageBooksDialogProps,
   type MutationResult,
 } from './manage-books-dialog.component';
+import { installManageBooksJsdomShims, scrolledElements } from './manage-books-dialog.test-utils';
 
-const originalScrollIntoView = Element.prototype.scrollIntoView;
-const originalQuerySelectorAll = Element.prototype.querySelectorAll;
+let uninstallShims: () => void;
 
 beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    const stubResizeObserver = vi.fn(() => ({
-      observe: vi.fn(),
-      unobserve: vi.fn(),
-      disconnect: vi.fn(),
-    }));
-    // ResizeObserver constructor as a vi.fn factory satisfies the runtime contract but not
-    // structural typing; we cast through unknown to adapt it to the required type
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    globalThis.ResizeObserver = stubResizeObserver as unknown as typeof ResizeObserver;
-  }
-  // jsdom does not implement `window.matchMedia`; Sonner's Toaster (rendered inside the dialog)
-  // calls it directly to pick its light/dark default. Precedent: notification-display.test.tsx.
-  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: undefined,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }));
-
-  // jsdom has no layout, so scrollIntoView is not implemented. Stub it so the grid's
-  // scroll-to-book layout effect doesn't throw.
-  Element.prototype.scrollIntoView = vi.fn();
-
-  // BookGridSelector's column-measurement effect queries `:scope > li` on its `tw:grid` <ul>.
-  // jsdom's nwsapi implements `:scope` by anchoring on the context element's class list, which
-  // chokes on Tailwind v4 colon classes (e.g. `tw:grid`) — parsing `:grid` as an unknown
-  // pseudo-class. Patch the one selector here rather than touching production code (same
-  // workaround as book-grid.component.test.tsx).
-  Element.prototype.querySelectorAll = function scopedQuerySelectorAll<E extends Element>(
-    selectors: string,
-  ) {
-    if (selectors === ':scope > li') {
-      const lis = Array.from(this.children).filter((child) => child.tagName === 'LI');
-      // Test-only shim: NodeList is not constructible directly, and every caller of this
-      // selector only iterates or indexes the result, so an array stands in faithfully.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return lis as unknown as NodeListOf<E>;
-    }
-    // `Element.prototype.querySelectorAll` is a generic overload; `.call` widens the return to
-    // NodeListOf<Element>, so it needs re-narrowing to the caller's element type.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return originalQuerySelectorAll.call(this, selectors) as NodeListOf<E>;
-  };
+  uninstallShims = installManageBooksJsdomShims();
 });
 
 afterAll(() => {
-  Element.prototype.scrollIntoView = originalScrollIntoView;
-  Element.prototype.querySelectorAll = originalQuerySelectorAll;
+  uninstallShims();
 });
 
 const PROJECTS: ManageBooksDialogProject[] = [
@@ -126,25 +78,55 @@ describe('ManageBooksDialog launch parameters', () => {
     expect(isBookSelected(container, 'MRK')).toBe(true);
   });
 
-  it('re-applies the launch parameters when the launch token changes', async () => {
-    const { container, rerender } = render(
-      dialog({ launchToken: 1, initialSection: 'create', initialSelectedBooks: ['MRK'] }),
+  it('scrolls the launched book into view', async () => {
+    const { container } = render(
+      dialog({ initialSection: 'create', initialSelectedBooks: ['MRK'] }),
     );
 
     await waitFor(() => expect(isSectionActive('create')).toBe(true));
+    // Assert WHICH element scrolled, not merely that something did — see `scrolledElements`.
+    await waitFor(() =>
+      expect(scrolledElements()).toContain(container.querySelector('[data-book="MRK"]')),
+    );
+  });
 
-    // A relaunch re-renders the SAME mounted dialog with new launch parameters and a new token.
-    await act(async () => {
-      rerender(dialog({ launchToken: 2, initialSection: 'delete', initialSelectedBooks: ['GEN'] }));
-    });
+  it('leaves Apply usable on a create-missing-book launch', async () => {
+    render(dialog({ initialSection: 'create', initialSelectedBooks: ['MRK'] }));
+
+    await waitFor(() => expect(isSectionActive('create')).toBe(true));
+
+    // The launch pre-ticks a book, so the user's next click should be the footer action. The default
+    // create method ("create based on" a reference project) has no reference selected yet and is
+    // excluded from `canApply`, which would hand them a greyed-out button with nothing saying what is
+    // missing. The footer label itself is the tell: it counts the books only while `canApply` holds,
+    // and degrades to a bare "Create" otherwise.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /create 1 book in WEB/i })).toBeEnabled(),
+    );
+  });
+
+  it('applies a new launch on the remount that a relaunch actually causes', async () => {
+    const first = render(dialog({ initialSection: 'create', initialSelectedBooks: ['MRK'] }));
+    await waitFor(() => expect(isSectionActive('create')).toBe(true));
+
+    // A relaunch onto an already-open dialog reaches this component as a REMOUNT, not a re-render:
+    // `reloadWebView` re-runs the provider's `getWebView`, whose regenerated per-call nonce changes the
+    // generated web view `content`, so the iframe's `srcDoc` changes and the React root is destroyed
+    // and recreated. Unmount-then-mount is therefore the faithful simulation; a `rerender` would
+    // certify a path production never takes.
+    first.unmount();
+
+    const { container } = render(
+      dialog({ initialSection: 'delete', initialSelectedBooks: ['GEN'] }),
+    );
 
     await waitFor(() => expect(isSectionActive('delete')).toBe(true));
     expect(isBookSelected(container, 'GEN')).toBe(true);
   });
 
-  it('leaves the user selections alone when a re-render does not change the launch token', async () => {
+  it('ignores a launch parameter change that arrives without a remount', async () => {
     const { container, rerender } = render(
-      dialog({ launchToken: 1, initialSection: 'create', initialSelectedBooks: ['MRK'] }),
+      dialog({ initialSection: 'create', initialSelectedBooks: ['MRK'] }),
     );
 
     await waitFor(() => expect(isSectionActive('create')).toBe(true));
@@ -153,8 +135,11 @@ describe('ManageBooksDialog launch parameters', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Select Exodus' }));
     expect(isBookSelected(container, 'EXO')).toBe(true);
 
+    // Launch parameters are mount-only ON PURPOSE. A plain prop change is not a relaunch, so honoring
+    // it here would let a stale launch value yank the user out of the section they navigated to and
+    // discard the selection they just made.
     await act(async () => {
-      rerender(dialog({ launchToken: 1, initialSection: 'create', initialSelectedBooks: ['MRK'] }));
+      rerender(dialog({ initialSection: 'delete', initialSelectedBooks: ['GEN'] }));
     });
 
     expect(isSectionActive('create')).toBe(true);

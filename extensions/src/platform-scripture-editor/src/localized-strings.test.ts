@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils';
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
+import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
 
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
@@ -141,5 +142,50 @@ describe('character marker removal notifications', () => {
     it(`Spanish label differs from English for ${key}`, () => {
       expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
     });
+  });
+});
+
+// Same guard for the book-not-available zero-state. This one matters more than most: the string family
+// it replaced (`%webView_platformScriptureEditor_error_bookNotFoundProject%`) already shipped with a
+// Spanish value, so an en-only replacement would have been a REGRESSION for Spanish users rather than
+// merely a gap — English title, description, button and tooltips where they previously had a
+// localized sentence.
+describe.each([...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS])(
+  'book-not-available view label %s',
+  (key) => {
+    it('has an English label', () => {
+      expect(localizedStrings.en[key]).toBeTruthy();
+    });
+
+    it('has a Spanish label', () => {
+      expect(localizedStrings.es[key]).toBeTruthy();
+    });
+
+    it('Spanish label differs from English', () => {
+      expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+    });
+  },
+);
+
+// The description embeds the button's own localized label through a placeholder rather than repeating
+// it in prose, so every locale must keep the slot. Losing it renders the sentence with the action
+// unnamed — "You can add it with ." — which reads as a truncation bug.
+describe.each(['en', 'es'])('book-not-available description placeholder in %s', (locale) => {
+  it('keeps the {buttonLabel} slot', () => {
+    const value =
+      localizedStrings[locale]['%webView_platformScriptureEditor_bookNotAvailable_description%'];
+    expect(value).toBeTruthy();
+    expect(value).toContain('{buttonLabel}');
+  });
+});
+
+// The retired key must stay retired. It told users to "use Paratext 9 to create the book" — exactly
+// the workflow this view replaces — so leaving it in the file would keep shipping obsolete advice, and
+// a `metadata.fallbackKey` redirect onto it would serve that advice under the new keys.
+describe('retired book-not-found-in-project string', () => {
+  it.each(['en', 'es'])('is absent from %s', (locale) => {
+    expect(
+      localizedStrings[locale]['%webView_platformScriptureEditor_error_bookNotFoundProject%'],
+    ).toBeUndefined();
   });
 });

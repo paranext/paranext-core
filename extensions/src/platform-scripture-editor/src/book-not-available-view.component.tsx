@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+import { formatReplacementString } from 'platform-bible-utils';
 import {
   Button,
   DisabledActionTooltip,
@@ -7,74 +9,40 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from 'platform-bible-react';
+import {
+  BOOK_NOT_AVAILABLE_VIEW_KEYS,
+  DISABLED_REASON_TOOLTIP_KEYS,
+  type BookNotAvailableViewLocalizedStrings,
+  type BookNotAvailableViewStringKey,
+  type ManageBooksDisabledReason,
+} from './book-not-available-view.const';
 
-const SIMPLE_MESSAGE_KEY = '%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%';
-const TITLE_KEY = '%webView_platformScriptureEditor_bookNotAvailable_title%';
-const DESCRIPTION_KEY = '%webView_platformScriptureEditor_bookNotAvailable_description%';
-const MANAGE_BOOKS_BUTTON_KEY =
-  '%webView_platformScriptureEditor_bookNotAvailable_manageBooksButton%';
-const READ_ONLY_TOOLTIP_KEY = '%webView_platformScriptureEditor_bookNotAvailable_readOnlyTooltip%';
-const MARKERS_VIEW_TOOLTIP_KEY =
-  '%webView_platformScriptureEditor_bookNotAvailable_markersViewTooltip%';
-const SYNC_IN_PROGRESS_TOOLTIP_KEY =
-  '%webView_platformScriptureEditor_bookNotAvailable_syncInProgressTooltip%';
+const { SIMPLE_MESSAGE_KEY, TITLE_KEY, DESCRIPTION_KEY, MANAGE_BOOKS_BUTTON_KEY } =
+  BOOK_NOT_AVAILABLE_VIEW_KEYS;
 
-/**
- * Localization keys used by {@link BookNotAvailableView}. Spread these into the editor web-view's
- * localized-strings list so the values are loaded and passed into `localizedStrings`.
- */
-export const BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS = Object.freeze([
-  SIMPLE_MESSAGE_KEY,
-  TITLE_KEY,
-  DESCRIPTION_KEY,
-  MANAGE_BOOKS_BUTTON_KEY,
-  READ_ONLY_TOOLTIP_KEY,
-  MARKERS_VIEW_TOOLTIP_KEY,
-  SYNC_IN_PROGRESS_TOOLTIP_KEY,
-] as const);
-
-export type BookNotAvailableViewStringKey = (typeof BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS)[number];
-
-export type BookNotAvailableViewLocalizedStrings = {
-  [key in BookNotAvailableViewStringKey]?: string;
-};
+// Re-exported so consumers keep importing the view's contract from the view.
+export {
+  BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
+  type BookNotAvailableViewLocalizedStrings,
+  type BookNotAvailableViewStringKey,
+  type ManageBooksDisabledReason,
+} from './book-not-available-view.const';
 
 const localize = (
   strings: BookNotAvailableViewLocalizedStrings,
   key: BookNotAvailableViewStringKey,
 ) => strings[key] ?? key;
 
-/**
- * Why the Manage books action cannot be taken right now. Each reason maps to its own tooltip text
- * so the disabled button explains the actual cause instead of a generic "unavailable".
- */
-export type ManageBooksDisabledReason = 'readOnly' | 'markersView' | 'syncInProgress';
-
-const DISABLED_REASON_TOOLTIP_KEYS: Record<
-  ManageBooksDisabledReason,
-  BookNotAvailableViewStringKey
-> = {
-  readOnly: READ_ONLY_TOOLTIP_KEY,
-  markersView: MARKERS_VIEW_TOOLTIP_KEY,
-  syncInProgress: SYNC_IN_PROGRESS_TOOLTIP_KEY,
-};
-
 export type BookNotAvailableViewProps = {
   /** Localized strings for the message, title, description, button label, and disabled tooltips. */
   localizedStrings?: BookNotAvailableViewLocalizedStrings;
   /**
-   * Power mode renders the richer `Empty` zero-state (title + description). Simple mode renders
-   * only the administrator message — Saroj is pointed at an administrator rather than at a
-   * book-management flow, so the button never appears in Simple regardless of editability.
+   * Power mode renders the richer `Empty` zero-state (title + description) with the Manage books
+   * action. Simple mode renders only the administrator message — Saroj is pointed at an
+   * administrator rather than at a book-management flow, so the button never appears in Simple
+   * regardless of editability.
    */
   isPowerMode: boolean;
-  /**
-   * Whether this surface offers the Manage books action at all (Power mode only). When true the
-   * button always renders, because the Power-mode description promises it; whether it can be
-   * clicked is `manageBooksDisabledReason`'s job. Pass false only from a surface that has no Manage
-   * Books entry point to offer — the editor web view passes true.
-   */
-  showManageBooksButton: boolean;
   /**
    * When set, the Manage books button renders disabled with a tooltip explaining this reason. Leave
    * undefined when the user can actually add the book.
@@ -87,52 +55,88 @@ export type BookNotAvailableViewProps = {
 /**
  * Replaces the editor canvas when the current book is not present in the active project. Simple
  * mode shows a plain message; Power mode shows a zero-state that can launch Manage Books directly
- * into creating this book. When Manage Books is momentarily unavailable (read-only project, markers
- * view, in-progress Send/Receive) the button stays visible but disabled with a tooltip, so the
+ * into creating this book. When Manage Books is momentarily unavailable (read-only project,
+ * in-progress Send/Receive) the button stays visible but disabled with a tooltip, so the
  * description's promise of an action is never left unexplained.
+ *
+ * Accessibility: this view REPLACES the editor subtree, so its arrival is a content swap a
+ * screen-reader user gets no other notice of, and the focused element inside the editor is
+ * destroyed along with it. Both modes therefore mark the message region `role="status"`, and the
+ * region takes focus on mount — but only when this document already had focus, so navigating here
+ * from the toolbar's book/chapter control does not yank focus out of the control the user is still
+ * using.
+ *
+ * This deliberately diverges from the sibling `EmptyChapterView`, which keeps the editor
+ * mounted-but-hidden and refocuses it: that view has a chapter to return to, whereas a book missing
+ * from the project has no editable content to keep mounted.
  */
 export function BookNotAvailableView({
   localizedStrings = {},
   isPowerMode,
-  showManageBooksButton,
   manageBooksDisabledReason,
   onOpenManageBooks,
 }: BookNotAvailableViewProps) {
+  // Using null for React ref compatibility
+  // eslint-disable-next-line no-null/no-null
+  const regionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // `document.hasFocus()` distinguishes "the editor inside this iframe had focus and we just
+    // unmounted it, so focus has fallen to `body`" from "focus is in the toolbar outside this
+    // iframe". Only the first case is ours to repair.
+    if (!document.hasFocus()) return;
+    regionRef.current?.focus();
+  }, []);
+
   if (!isPowerMode) {
     return (
-      <div className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4">
+      <div
+        ref={regionRef}
+        role="status"
+        tabIndex={-1}
+        className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4 tw:outline-none"
+      >
         <span>{localize(localizedStrings, SIMPLE_MESSAGE_KEY)}</span>
       </div>
     );
   }
 
   const isManageBooksDisabled = !!manageBooksDisabledReason;
+  const manageBooksButtonLabel = localize(localizedStrings, MANAGE_BOOKS_BUTTON_KEY);
 
   return (
-    <Empty className="tw:h-full">
+    <Empty ref={regionRef} role="status" tabIndex={-1} className="tw:h-full tw:outline-none">
       <EmptyHeader>
-        <EmptyTitle>{localize(localizedStrings, TITLE_KEY)}</EmptyTitle>
-        <EmptyDescription>{localize(localizedStrings, DESCRIPTION_KEY)}</EmptyDescription>
+        {/* `EmptyTitle` renders a `div`, not a heading. This zero-state is the entire content of the
+          editor panel, so it needs a real heading for structure-based navigation — nesting one inside
+          is what the shadcn `Empty` docs prescribe rather than changing the vendored primitive. */}
+        <EmptyTitle>
+          <h2>{localize(localizedStrings, TITLE_KEY)}</h2>
+        </EmptyTitle>
+        {/* The button's label is a `{buttonLabel}` placeholder in the description rather than
+          concatenated in prose, so each translation decides where the control's name falls in the
+          sentence — and there is exactly one localized spelling of the label, shared with the button
+          below. */}
+        <EmptyDescription>
+          {formatReplacementString(localize(localizedStrings, DESCRIPTION_KEY), {
+            buttonLabel: manageBooksButtonLabel,
+          })}
+        </EmptyDescription>
       </EmptyHeader>
-      {showManageBooksButton && (
-        <EmptyContent>
-          <DisabledActionTooltip
-            disabled={isManageBooksDisabled}
-            tooltipText={
-              manageBooksDisabledReason
-                ? localize(
-                    localizedStrings,
-                    DISABLED_REASON_TOOLTIP_KEYS[manageBooksDisabledReason],
-                  )
-                : ''
-            }
-          >
-            <Button disabled={isManageBooksDisabled} onClick={onOpenManageBooks}>
-              {localize(localizedStrings, MANAGE_BOOKS_BUTTON_KEY)}
-            </Button>
-          </DisabledActionTooltip>
-        </EmptyContent>
-      )}
+      <EmptyContent>
+        <DisabledActionTooltip
+          disabled={isManageBooksDisabled}
+          tooltipText={
+            manageBooksDisabledReason
+              ? localize(localizedStrings, DISABLED_REASON_TOOLTIP_KEYS[manageBooksDisabledReason])
+              : ''
+          }
+        >
+          <Button disabled={isManageBooksDisabled} onClick={onOpenManageBooks}>
+            {manageBooksButtonLabel}
+          </Button>
+        </DisabledActionTooltip>
+      </EmptyContent>
     </Empty>
   );
 }

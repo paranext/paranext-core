@@ -231,13 +231,13 @@ async function openMarkersChecklistSettings(): Promise<void> {
 }
 
 /**
- * Monotonically increasing launch token stamped onto every `openManageBooks` invocation. The
- * already-open path below only re-renders the existing dialog (the iframe content is unchanged, so
- * `reloadWebView` does NOT remount it) — a changed token is therefore the ONLY signal the dialog
- * has that a NEW launch happened. Value comparison is not enough: two consecutive create-missing-
- * book launches for the same book produce identical `initialSection`/`initialSelectedBooks`.
+ * Serializes `openManageBooks` so two rapid invocations cannot both miss the existing-instance
+ * probe and open two dialogs. FN-003 allows only one Manage Books dialog at a time, and the probe
+ * below is an `await` with nothing holding the gap — a double-click, or a click on two editors'
+ * buttons in quick succession, is enough. Each call chains onto the previous one's completion, so
+ * the second call's probe runs after the first call's web view exists and finds it.
  */
-let manageBooksLaunchToken = 0;
+let openManageBooksInFlight: Promise<string | undefined> = Promise.resolve(undefined);
 
 /**
  * FN-008 (2026-05-01): Open the unified Manage Books dialog as a centered floating window. The
@@ -248,6 +248,20 @@ let manageBooksLaunchToken = 0;
  * main-menu invocation) the dialog opens with the project picker visible.
  */
 async function openManageBooks(
+  webViewIdOrProjectId: string | undefined,
+  intent?: 'createMissingBook',
+): Promise<string | undefined> {
+  // Chain onto whatever open is already running, ignoring its outcome (a failed open must not stop
+  // the next one). `openManageBooksInFlight` is reassigned before the await so concurrent callers all
+  // queue behind this call rather than behind the one it queued behind.
+  const runAfter = openManageBooksInFlight.catch(() => undefined);
+  const thisRun = runAfter.then(() => openManageBooksUnserialized(webViewIdOrProjectId, intent));
+  openManageBooksInFlight = thisRun;
+  return thisRun;
+}
+
+/** {@link openManageBooks}'s body. Do not call directly — it has no single-instance protection. */
+async function openManageBooksUnserialized(
   webViewIdOrProjectId: string | undefined,
   intent?: 'createMissingBook',
 ): Promise<string | undefined> {
@@ -267,12 +281,15 @@ async function openManageBooks(
     }
   }
 
-  manageBooksLaunchToken += 1;
-  const options: ManageBooksWebViewOptions = { projectId, launchToken: manageBooksLaunchToken };
+  const isCreateMissingBookLaunch = intent === 'createMissingBook' && !!projectId;
+
+  const options: ManageBooksWebViewOptions = { projectId };
 
   // Only the intent is passed by the caller; the target book is derived from the calling editor's
-  // scroll-group reference rather than plumbed through the command signature.
-  if (intent === 'createMissingBook' && projectId) {
+  // scroll-group reference rather than plumbed through the command signature. The lookup is bounded
+  // inside `resolveMissingBookId` (`papi.scrollGroups` can take up to 30s to resolve during a re-arm
+  // window) so a click can never sit here long enough to read as "the button did nothing".
+  if (isCreateMissingBookLaunch && projectId) {
     options.initialSection = 'create';
     const bookId = await resolveMissingBookId(
       scrollGroupScrRef,
@@ -280,12 +297,19 @@ async function openManageBooks(
       papi.scrollGroups.getScrRefForProject,
     );
     if (bookId) options.initialSelectedBooks = [bookId];
+    else
+      logger.debug(
+        'openManageBooks: could not resolve a book to preselect for the createMissingBook intent; opening without one',
+      );
   }
 
-  const floatLayoutSize =
-    intent === 'createMissingBook'
-      ? MANAGE_BOOKS_CREATE_INTENT_FLOAT_SIZE
-      : { width: 1100, height: 720 };
+  // Keyed on the same condition as the launch parameters above, NOT on `intent` alone: without a
+  // project there is no preselection and the dialog opens on its project picker, which needs the full
+  // width. `openManageBooks(undefined, 'createMissingBook')` would otherwise get the narrow
+  // create-focused window around a picker it cannot fit.
+  const floatLayoutSize = isCreateMissingBookLaunch
+    ? MANAGE_BOOKS_CREATE_INTENT_FLOAT_SIZE
+    : { width: 1100, height: 720 };
 
   // Reuse the existing Manage Books tab if one is already open (per FN-003 — only one
   // Manage Books dialog at a time). `existingId: '?'` matches any open instance of this
@@ -307,17 +331,39 @@ async function openManageBooks(
     createNewIfNotFound: false,
   });
   if (existingId) {
-    // Bring the existing tab to the front and hand it the new launch parameters. Reloading does NOT
-    // remount the dialog — the generated web view `content` is unchanged, so the iframe is kept and
-    // only the saved state is updated — so the parameters land as fresh props on the SAME React
-    // tree. That is why they are stamped with `launchToken`: the dialog applies them in an effect
-    // keyed on the token, which is what makes a second click on the editor's Manage books button do
-    // something instead of silently keeping the previous section. Mirrors `openFind`'s
-    // reload-when-`selectedText`-present branch. The panel is deliberately NOT resized to the intent
-    // float size here — resizing a window the user already placed is more surprising than leaving
-    // it.
-    await papi.webViews.reloadWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, existingId, options);
-    return existingId;
+    // Bring the existing tab to the front and hand it the new launch parameters.
+    //
+    // Reloading DOES remount the dialog, which is what makes the launch parameters take effect
+    // without any re-apply machinery: `reloadWebView` re-runs the provider's `getWebView`, and the
+    // per-call `srcNonce = newNonce()` that gets interpolated into the generated `content`
+    // (`web-view.service-host.ts`) makes `content` differ every time, so the `srcDoc` bound in
+    // `web-view.component.tsx` changes and the iframe reloads. The dialog therefore reads the new
+    // values in its ordinary mount-time initializers. There is a standing TODO on that nonce asking
+    // whether it should be stable per web view; if it ever becomes stable, this path stops working
+    // and the dialog will need an explicit re-apply signal.
+    //
+    // The cost of that remount is real and accepted: a relaunch discards the open dialog's transient
+    // state — attached import files, filter text, presence filter, group-by, copy source, scroll
+    // position. It is bounded by the fact that a relaunch is an explicit user action on a dialog they
+    // are choosing to re-target.
+    //
+    // Unlike `openFind`, which reloads only when it has a `selectedText` to deliver, this reloads
+    // unconditionally, because fronting the existing tab is itself part of what the caller asked for.
+    //
+    // The panel is deliberately NOT resized to the intent float size here — resizing a window the
+    // user already placed is more surprising than leaving it.
+    const reloadedId = await papi.webViews.reloadWebView(
+      MANAGE_BOOKS_WEB_VIEW_TYPE,
+      existingId,
+      options,
+    );
+    // `reloadWebView` resolves undefined when the web view it was asked to reload is no longer there
+    // (closed between the probe and here). Treating that as success would hand the caller an id for a
+    // tab that does not exist, so fall through and open a fresh one.
+    if (reloadedId) return reloadedId;
+    logger.debug(
+      `openManageBooks: web view ${existingId} was gone by the time it could be reloaded; opening a new one`,
+    );
   }
   return papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, options);
 }

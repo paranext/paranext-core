@@ -264,23 +264,15 @@ export type ManageBooksDialogProps = {
   projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
 
   /**
-   * Section to open on. Defaults to `'view'`. Applied at mount, and again whenever `launchToken`
-   * changes; a change to this prop WITHOUT a new token is ignored, because the user's in-dialog
-   * navigation must not be overridden by a stale launch value.
+   * Section to open on. Defaults to `'view'`. Applied at mount ONLY — a later change to this prop
+   * is deliberately ignored, because the user's in-dialog navigation must not be overridden by a
+   * launch value. Mount-only is sufficient even for a relaunch onto an already-open dialog, because
+   * reloading a web view remounts it — see `openManageBooks` in `platform-scripture/src/main.ts`
+   * for why.
    */
   initialSection?: ManageBooksAction;
-  /**
-   * Book ids preselected for `initialSection`. Applied at mount and on every `launchToken` change,
-   * same rationale as `initialSection`.
-   */
+  /** Book ids preselected for `initialSection`. Applied at mount only, same rationale. */
   initialSelectedBooks?: string[];
-  /**
-   * Identifies the launch the two props above came from. Bump it (any new number) to re-apply them
-   * — the dialog can stay mounted across relaunches, and consecutive launches can repeat the same
-   * section and books, so the values alone cannot say "this is a new launch". Leave it undefined
-   * when the launch parameters only ever apply at mount.
-   */
-  launchToken?: number;
 };
 
 // --------------------------------------------------------------------------
@@ -550,7 +542,6 @@ export function ManageBooksDialog({
   projectSelectorLocalizedStrings,
   initialSection,
   initialSelectedBooks,
-  launchToken,
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
@@ -631,12 +622,32 @@ export function ManageBooksDialog({
       : {},
   );
 
+  /**
+   * Book the launch asked to scroll into view, or undefined once that has happened. Owned here
+   * rather than derived in the grid because the grid is conditionally rendered and unkeyed
+   * (filtering to nothing unmounts it), so a grid-mount-scoped one-shot would re-fire and yank the
+   * view back to the launched book every time the user cleared a filter. The grid reports back
+   * through `onScrolledToBook` only when it actually found and scrolled to the pill, so this also
+   * survives the grid mounting before the project's book list has loaded — it stays pending and the
+   * grid retries as its items arrive.
+   */
+  const [pendingScrollBook, setPendingScrollBook] = useState<string | undefined>(() =>
+    initialSection ? initialSelectedBooks?.[0] : undefined,
+  );
   const [filter, setFilter] = useState('');
   const [copySourceId, setCopySourceId] = useState<string | undefined>(undefined);
   // Default Create method is "Create based on" (FromTemplate): the prompt copy reads "Create based
   // on" rather than "Based on", and the most useful default for users is to start by picking a
   // reference project; they can switch to Empty or ChapterAndVerse if they prefer.
-  const [createMethod, setCreateMethod] = useState<ManageBooksCreateMethod>('fromTemplate');
+  //
+  // EXCEPT on a create-missing-book launch, which seeds `'empty'` instead. `fromTemplate` needs a
+  // reference project, and `canApply` below excludes `fromTemplate` with no `createReferenceId` —
+  // so landing on the default would hand the user a pre-ticked book above a greyed-out Apply with
+  // nothing saying what is missing. `empty` is immediately applicable, and the method picker is
+  // right there if they want a template after all.
+  const [createMethod, setCreateMethod] = useState<ManageBooksCreateMethod>(() =>
+    initialSection === 'create' && initialSelectedBooks?.length ? 'empty' : 'fromTemplate',
+  );
   const [createReferenceId, setCreateReferenceId] = useState<string | undefined>(undefined);
   const [importFiles, setImportFiles] = useState<Record<string, ManageBooksImportFile>>({});
   const [importConflict, setImportConflict] = useState<
@@ -870,28 +881,13 @@ export function ManageBooksDialog({
     setSelectionsByAction({});
   }, [projectId]);
 
-  // A relaunch (`openManageBooks` called again while the dialog is already open) re-renders this
-  // tree rather than remounting it, so the lazy initializers for `action`/`selectionsByAction` never
-  // see the new launch values. Re-apply them here, keyed strictly on the launch token: the ref is
-  // seeded with the mount-time token so first mount is a no-op (the initializers already did the
-  // work), and re-renders that do not change the token leave the user's own navigation and
-  // selections alone. Declared AFTER the project-change wipe above so that when a relaunch also
-  // switches project, this effect's selection write is the one that survives the commit.
-  const lastAppliedLaunchTokenRef = useRef(launchToken);
-  useEffect(() => {
-    if (launchToken === undefined || launchToken === lastAppliedLaunchTokenRef.current) return;
-    lastAppliedLaunchTokenRef.current = launchToken;
-    if (!initialSection) return;
-    setAction(initialSection);
-    // Only the launched section's selection is replaced; selections the user made in OTHER sections
-    // are left intact, matching how a section switch behaves the rest of the time.
-    setSelectionsByAction((prev) => ({
-      ...prev,
-      [initialSection]: new Set(initialSelectedBooks ?? []),
-    }));
-  }, [launchToken, initialSection, initialSelectedBooks]);
-
   // Changing the copy source invalidates the copy selection (we re-seed it below with defaults).
+  //
+  // Note this ALSO runs on mount, so it would wipe a mount-seeded `copy` selection. Unreachable today —
+  // `openManageBooks` only ever sets `initialSection: 'create'` — but it is the trap waiting for the
+  // first launch that targets Copy (or Import, whose filter reset below is the same shape). A launch
+  // into either section must seed its selection in a way this mount pass cannot clear, or skip the
+  // first run of these effects.
   useEffect(() => {
     setSelectionsByAction((prev) => {
       if (!prev.copy) return prev;
@@ -2471,8 +2467,8 @@ export function ManageBooksDialog({
                       interactive={action !== 'view'}
                       localizedStrings={bookGridStrings}
                       getRowAriaLabel={gridRowAriaLabel}
-                      scrollToBook={initialSelectedBooks?.[0]}
-                      scrollToken={launchToken}
+                      scrollToBook={pendingScrollBook}
+                      onScrolledToBook={() => setPendingScrollBook(undefined)}
                       // Leave BookGridSelector's default tw:p-1 in place so the
                       // first pill checkbox horizontally aligns with the
                       // toolbar's select-all checkbox. A `tw:px-0` override would

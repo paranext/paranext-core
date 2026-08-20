@@ -37,13 +37,6 @@ export interface ManageBooksWebViewOptions extends GetWebViewOptions {
   initialSection?: ManageBooksAction;
   /** Book ids to pre-select in `initialSection`. TRANSIENT — same scrubbing as `initialSection`. */
   initialSelectedBooks?: string[];
-  /**
-   * Monotonically increasing token identifying THIS launch. Bumped by `openManageBooks` on every
-   * invocation so an already-open dialog can tell a new launch from an unrelated re-render — the
-   * launch parameters above can repeat verbatim, so their values alone cannot signal a relaunch.
-   * TRANSIENT — same scrubbing as `initialSection`.
-   */
-  launchToken?: number;
 }
 
 /**
@@ -104,16 +97,22 @@ export class ManageBooksWebViewProvider implements IWebViewProvider {
       state: {
         ...savedWebView.state,
         webViewType: MANAGE_BOOKS_WEB_VIEW_TYPE,
-        // Always rebuild from the CURRENT options, never from saved state. These three keys are
-        // transient launch parameters owned by the `openManageBooks` launch path: they
-        // must apply to the open/reload call that supplied them and to nothing else. Assigning
-        // unconditionally (rather than spreading only when present) is what scrubs a stale value off
-        // a restored layout — otherwise reopening the app with the dialog still docked would jump to
-        // Create with a preselected book the user never asked for. Mirrors the `isSyncBlocked: false`
-        // scrub in platform-scripture-editor's main.ts and legacy-comment-manager's main.ts.
+        // Always rebuild from the CURRENT options, never from saved state. These two keys are
+        // transient launch parameters owned by the `openManageBooks` launch path: they must apply to
+        // the open/reload call that supplied them and to nothing else. Assigning unconditionally
+        // (rather than spreading only when present) is what scrubs a stale value off any rebuild —
+        // otherwise reopening the app with the dialog still docked would jump to Create with a
+        // preselected book the user never asked for. Mirrors the `isSyncBlocked: false` scrub in
+        // platform-scripture-editor's main.ts and legacy-comment-manager's main.ts.
+        //
+        // Scope note: `getWebView` runs on EVERY rebuild, not only a layout restore — installing or
+        // enabling an extension reloads every web view (`web-view.component.tsx` reacts to
+        // `platform.onDidReloadExtensions`), and that rebuild carries no launch options, so it
+        // scrubs the launch context too. That is deliberate and consistent: because a rebuild
+        // regenerates the iframe's nonce, the whole dialog remounts anyway, so the launch context
+        // could not have survived it regardless of what this assignment did.
         initialSection: getWebViewOptions.initialSection,
         initialSelectedBooks: getWebViewOptions.initialSelectedBooks,
-        launchToken: getWebViewOptions.launchToken,
       },
       shouldShowToolbar: false,
     };

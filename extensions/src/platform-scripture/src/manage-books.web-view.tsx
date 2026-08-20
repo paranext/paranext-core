@@ -317,7 +317,7 @@ global.webViewComponent = function ManageBooksWebView({
   // Transient launch parameters from `openManageBooks(..., 'createMissingBook')`. The provider
   // rebuilds these from the current open/reload options on every getWebView and scrubs them
   // otherwise, so they are already guaranteed not to survive a layout restore — no clearing needed
-  // here.
+  // here. Read as ordinary mount-time values for the reason given on `projectId` below.
   const [initialSection] = useWebViewState<ManageBooksAction | undefined>(
     'initialSection',
     undefined,
@@ -326,12 +326,6 @@ global.webViewComponent = function ManageBooksWebView({
     'initialSelectedBooks',
     undefined,
   );
-  // Identifies WHICH launch the two values above came from. `reloadWebView` does not remount this
-  // web view (the iframe content is unchanged), so a relaunch arrives as a plain prop change on the
-  // existing React tree; the token is what distinguishes it from an unrelated re-render, and it
-  // changes even when the launch parameters repeat verbatim.
-  const [launchToken] = useWebViewState<number | undefined>('launchToken', undefined);
-
   // The EXPLICIT open context wins over persisted state: the dialog is only
   // opened from a scripture editor's hamburger menu, so a fresh
   // `initialProjectId` means "the user asked to manage THIS
@@ -339,21 +333,16 @@ global.webViewComponent = function ManageBooksWebView({
   // a project id that no longer resolves) must not override it. Persistence
   // still covers dock-layout session restores, where the definition carries
   // no fresh option.
+  //
+  // A mount-only initializer is sufficient, including for a RELAUNCH onto an already-open dialog,
+  // because reloading a web view remounts it — every launch is a fresh mount. Do not add a re-apply
+  // effect on top of it. Why the reload remounts is stated once, in `openManageBooks`
+  // (`platform-scripture/src/main.ts`), and as a rule in `.claude/rules/architecture/react-patterns.md`;
+  // it is not restated here, because the previous version of this feature duplicated that claim into
+  // five comments and when it turned out to be wrong all five were wrong together.
   const [projectId, setProjectIdLocal] = useState<string>(
     () => initialProjectId || persistedProjectId || '',
   );
-
-  // ...and on a RELAUNCH the same rule applies: the mount-only initializer above cannot see the new
-  // `initialProjectId` that `openManageBooks` just supplied, so re-seed it when the launch token
-  // changes. Guarded by a ref seeded with the mount-time token so first-mount behavior is unchanged
-  // and unrelated re-renders (including the user's own in-dialog project switches) never get
-  // clobbered.
-  const lastAppliedLaunchTokenRef = useRef(launchToken);
-  useEffect(() => {
-    if (launchToken === undefined || launchToken === lastAppliedLaunchTokenRef.current) return;
-    lastAppliedLaunchTokenRef.current = launchToken;
-    if (initialProjectId) setProjectIdLocal(initialProjectId);
-  }, [launchToken, initialProjectId]);
 
   // Pull all the localization strings the dialog + picker need in one batch. Including the
   // picker keys here ensures the inline-rendered picker reads from the same string map and
@@ -1088,7 +1077,6 @@ global.webViewComponent = function ManageBooksWebView({
         projectId={projectId}
         initialSection={initialSection}
         initialSelectedBooks={initialSelectedBooks}
-        launchToken={launchToken}
         onProjectIdChange={setProjectIdLocal}
         loadProjects={loadProjects}
         loadBooks={loadBooks}

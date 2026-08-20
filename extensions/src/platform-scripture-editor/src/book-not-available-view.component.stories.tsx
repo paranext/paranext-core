@@ -21,7 +21,6 @@ const meta: Meta<typeof BookNotAvailableView> = {
   args: {
     localizedStrings: getLocalizedStrings([...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS]),
     isPowerMode: true,
-    showManageBooksButton: true,
     onOpenManageBooks: () => {},
   },
   // The view fills its container, so give it a canvas with real height to sit in.
@@ -50,12 +49,11 @@ export const PowerModeDisabledBySync: Story = {
   args: { manageBooksDisabledReason: 'syncInProgress' },
 };
 
-/** Power mode in the markers view, where books cannot be added. */
-export const PowerModeDisabledByMarkersView: Story = {
-  args: { manageBooksDisabledReason: 'markersView' },
-};
-
-/** Power mode on a read-only project. */
+/**
+ * Power mode on a read-only project: the book is still missing and still worth naming, but the user
+ * cannot add it. Reachable because the editor only diverts to the "not in this resource" message
+ * for an actual resource (`platform.isPublished`), so a read-only PROJECT lands here.
+ */
 export const PowerModeDisabledByReadOnly: Story = {
   args: { manageBooksDisabledReason: 'readOnly' },
 };

@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
+import type { SavedWebViewDefinition } from '@papi/core';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { ManageBooksWebViewOptions } from './manage-books.web-view-provider';
 
 vi.mock('@papi/backend', () => ({
   default: {
@@ -16,11 +18,25 @@ const { ManageBooksWebViewProvider, MANAGE_BOOKS_WEB_VIEW_TYPE } = await import(
   './manage-books.web-view-provider'
 );
 
-const savedWebView = {
+/**
+ * Both builders are typed against the REAL contract rather than cast to `never`. That is the whole
+ * point of this file: it exists to pin the shape of the transient launch options, and a cast to
+ * `never` would let a field be renamed in `ManageBooksWebViewOptions` with no compile error and no
+ * failing test — in the tests written specifically to catch that. `state` stays loosely typed
+ * because `WebViewDefinitionBase.state` is genuinely `Record<string, unknown>`.
+ */
+const savedWebView = (state: Record<string, unknown> = {}): SavedWebViewDefinition => ({
   id: 'wv-1',
   webViewType: MANAGE_BOOKS_WEB_VIEW_TYPE,
-  state: {},
-};
+  state,
+});
+
+const options = (
+  overrides: Partial<ManageBooksWebViewOptions> = {},
+): ManageBooksWebViewOptions => ({
+  projectId: 'project-1',
+  ...overrides,
+});
 
 describe('ManageBooksWebViewProvider transient launch options', () => {
   let provider: InstanceType<typeof ManageBooksWebViewProvider>;
@@ -31,69 +47,54 @@ describe('ManageBooksWebViewProvider transient launch options', () => {
 
   it('passes initialSection and initialSelectedBooks into state when supplied', async () => {
     const result = await provider.getWebView(
-      // The test doubles below intentionally omit most of the real
-      // `SavedWebViewDefinition`/`ManageBooksWebViewOptions` shape; only the fields this test
-      // cares about are needed, so the loose test doubles are cast rather than fully typed.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      savedWebView as never,
-      // Loose test double, see comment above.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      {
-        projectId: 'project-1',
-        initialSection: 'create',
-        initialSelectedBooks: ['GEN'],
-        launchToken: 7,
-      } as never,
+      savedWebView(),
+      options({ initialSection: 'create', initialSelectedBooks: ['GEN'] }),
     );
 
     expect(result?.state?.initialSection).toBe('create');
     expect(result?.state?.initialSelectedBooks).toEqual(['GEN']);
-    expect(result?.state?.launchToken).toBe(7);
   });
 
   it('scrubs stale launch options carried on the saved state when options omit them', async () => {
-    const staleSavedWebView = {
-      ...savedWebView,
-      state: { initialSection: 'create', initialSelectedBooks: ['GEN'], launchToken: 7 },
-    };
-
     const result = await provider.getWebView(
-      // Loose test double, see comment near the top of the previous test.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      staleSavedWebView as never,
-      // Loose test double, see comment near the top of the previous test.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      {
-        projectId: 'project-1',
-      } as never,
+      savedWebView({ initialSection: 'create', initialSelectedBooks: ['GEN'] }),
+      options(),
     );
 
-    // A restored layout must never reopen on Create with a stale preselection, and must not carry a
-    // stale token that would make the dialog re-apply one.
+    // A restored layout must never reopen on Create with a stale preselection. This is why the
+    // assignment in the provider is unconditional rather than a spread-when-present: a conditional
+    // spread reads as tidier and lets exactly this stale state survive.
     expect(result?.state?.initialSection).toBeUndefined();
     expect(result?.state?.initialSelectedBooks).toBeUndefined();
-    expect(result?.state?.launchToken).toBeUndefined();
   });
 
   it('preserves unrelated saved state while scrubbing the launch options', async () => {
-    const staleSavedWebView = {
-      ...savedWebView,
-      state: { initialSection: 'create', launchToken: 7, somethingElse: 'keep me' },
-    };
-
     const result = await provider.getWebView(
-      // Loose test double, see comment near the top of the first test.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      staleSavedWebView as never,
-      // Loose test double, see comment near the top of the first test.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      {
-        projectId: 'project-1',
-      } as never,
+      savedWebView({ initialSection: 'create', somethingElse: 'keep me' }),
+      options(),
     );
 
     expect(result?.state?.initialSection).toBeUndefined();
-    expect(result?.state?.launchToken).toBeUndefined();
     expect(result?.state?.somethingElse).toBe('keep me');
+  });
+
+  it('scrubs every transient launch key the options type declares', async () => {
+    // Belt-and-braces against the scrub and the type drifting apart: a launch key added to
+    // `ManageBooksWebViewOptions` but forgotten in the provider's state assignment would survive on
+    // the saved state and be restored on a future layout load. Listed explicitly (rather than derived
+    // from the type, which does not exist at runtime) so adding a key here is the one deliberate step.
+    const transientLaunchKeys: readonly (keyof ManageBooksWebViewOptions)[] = [
+      'initialSection',
+      'initialSelectedBooks',
+    ];
+
+    const result = await provider.getWebView(
+      savedWebView(Object.fromEntries(transientLaunchKeys.map((key) => [key, 'stale']))),
+      options(),
+    );
+
+    transientLaunchKeys.forEach((key) => {
+      expect(result?.state?.[key]).toBeUndefined();
+    });
   });
 });

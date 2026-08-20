@@ -1,57 +1,22 @@
 // @vitest-environment jsdom
 
+import type React from 'react';
 import '@testing-library/jest-dom';
-import { render } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from 'platform-bible-react';
 import { BookGridSelector, type BookGridItem } from './book-grid.component';
+import { installManageBooksJsdomShims, scrolledElements } from './manage-books-dialog.test-utils';
 
-const originalScrollIntoView = Element.prototype.scrollIntoView;
-const originalQuerySelectorAll = Element.prototype.querySelectorAll;
+let uninstallShims: () => void;
 
 beforeAll(() => {
-  if (typeof globalThis.ResizeObserver === 'undefined') {
-    const stubResizeObserver = vi.fn(() => ({
-      observe: vi.fn(),
-      unobserve: vi.fn(),
-      disconnect: vi.fn(),
-    }));
-    // ResizeObserver constructor as a vi.fn factory satisfies the runtime contract but not
-    // structural typing; we cast through unknown to adapt it to the required type
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    globalThis.ResizeObserver = stubResizeObserver as unknown as typeof ResizeObserver;
-  }
-  // jsdom has no layout, so scrollIntoView is not implemented. Stub it to observe the call.
-  Element.prototype.scrollIntoView = vi.fn();
-
-  // BookGridSelector's column-measurement effect queries `:scope > li` on its `tw:grid` <ul>.
-  // jsdom's nwsapi implements `:scope` by anchoring on the context element's class list, which
-  // chokes on Tailwind v4 colon classes (e.g. `tw:grid`) — parsing `:grid` as an unknown
-  // pseudo-class (see the same workaround in
-  // semantic-domain-viewer.test.tsx's getRowButton/getLabelButton). That effect is unrelated to
-  // scrollToBook, so patch the one selector here rather than touching production code.
-  Element.prototype.querySelectorAll = function scopedQuerySelectorAll<E extends Element>(
-    selectors: string,
-  ) {
-    if (selectors === ':scope > li') {
-      const lis = Array.from(this.children).filter((child) => child.tagName === 'LI');
-      // Test-only shim: NodeList is not constructible directly, and every caller of this
-      // selector only iterates or indexes the result, so an array stands in faithfully.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return lis as unknown as NodeListOf<E>;
-    }
-    // `Element.prototype.querySelectorAll` is a generic overload; `.call` widens the return to
-    // NodeListOf<Element>, so it needs re-narrowing to the caller's element type.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return originalQuerySelectorAll.call(this, selectors) as NodeListOf<E>;
-  };
+  uninstallShims = installManageBooksJsdomShims();
 });
 
 afterAll(() => {
-  // Both patches are on shared prototypes, so restore them rather than leaking the stubs into any
-  // other suite that happens to share this worker.
-  Element.prototype.scrollIntoView = originalScrollIntoView;
-  Element.prototype.querySelectorAll = originalQuerySelectorAll;
+  uninstallShims();
 });
 
 beforeEach(() => {
@@ -82,97 +47,113 @@ const ITEMS: BookGridItem[] = [
   },
 ];
 
-describe('BookGridSelector scrollToBook', () => {
-  it('scrolls the named book into view on mount', () => {
-    const { container } = render(
-      <TooltipProvider>
-        <BookGridSelector
-          items={ITEMS}
-          selected={new Set(['MRK'])}
-          onToggle={vi.fn()}
-          groupBy="none"
-          scrollToBook="MRK"
-        />
-      </TooltipProvider>,
-    );
+/** Grouped by canon, MRK lands in a New Testament group and GEN/EXO in an Old Testament one. */
+const grid = (props: Partial<React.ComponentProps<typeof BookGridSelector>> = {}) => (
+  <TooltipProvider>
+    <BookGridSelector
+      items={ITEMS}
+      selected={new Set()}
+      onToggle={vi.fn()}
+      groupBy="none"
+      {...props}
+    />
+  </TooltipProvider>
+);
 
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
-    // Sanity-check the query target the implementation relies on actually exists.
-    expect(container.querySelector('[data-book="MRK"]')).not.toBeNull();
+describe('BookGridSelector scrollToBook', () => {
+  it('scrolls the named book — and only that book — into view on mount', () => {
+    const { container } = render(grid({ scrollToBook: 'MRK' }));
+
+    expect(scrolledElements()).toEqual([container.querySelector('[data-book="MRK"]')]);
   });
 
   it('does not scroll when scrollToBook is omitted', () => {
-    render(
-      <TooltipProvider>
-        <BookGridSelector items={ITEMS} selected={new Set()} onToggle={vi.fn()} groupBy="none" />
-      </TooltipProvider>,
-    );
+    render(grid());
 
-    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
-  });
-
-  it('scrolls again when the scroll token changes', () => {
-    const { rerender } = render(
-      <TooltipProvider>
-        <BookGridSelector
-          items={ITEMS}
-          selected={new Set(['MRK'])}
-          onToggle={vi.fn()}
-          groupBy="none"
-          scrollToBook="MRK"
-          scrollToken={1}
-        />
-      </TooltipProvider>,
-    );
-
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-
-    // A re-render with the same token is not a new launch — the user may have scrolled since.
-    rerender(
-      <TooltipProvider>
-        <BookGridSelector
-          items={ITEMS}
-          selected={new Set(['MRK'])}
-          onToggle={vi.fn()}
-          groupBy="none"
-          scrollToBook="MRK"
-          scrollToken={1}
-        />
-      </TooltipProvider>,
-    );
-
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
-
-    // A new token means Manage Books was relaunched for this book, so scroll to it again.
-    rerender(
-      <TooltipProvider>
-        <BookGridSelector
-          items={ITEMS}
-          selected={new Set(['GEN'])}
-          onToggle={vi.fn()}
-          groupBy="none"
-          scrollToBook="GEN"
-          scrollToken={2}
-        />
-      </TooltipProvider>,
-    );
-
-    expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(scrolledElements()).toEqual([]);
   });
 
   it('does not scroll when the named book is not in the grid', () => {
-    render(
-      <TooltipProvider>
-        <BookGridSelector
-          items={ITEMS}
-          selected={new Set()}
-          onToggle={vi.fn()}
-          groupBy="none"
-          scrollToBook="REV"
-        />
-      </TooltipProvider>,
+    render(grid({ scrollToBook: 'REV' }));
+
+    expect(scrolledElements()).toEqual([]);
+  });
+
+  it('reports back once it has scrolled, so the owner can make the scroll one-shot', () => {
+    const onScrolledToBook = vi.fn();
+    render(grid({ scrollToBook: 'MRK', onScrolledToBook }));
+
+    expect(onScrolledToBook).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not report back when it could not scroll', () => {
+    const onScrolledToBook = vi.fn();
+    render(grid({ scrollToBook: 'REV', onScrolledToBook }));
+
+    // Staying silent is what keeps the request pending instead of being swallowed.
+    expect(onScrolledToBook).not.toHaveBeenCalled();
+  });
+
+  it('waits for the book to arrive rather than giving up on the first attempt', async () => {
+    const onScrolledToBook = vi.fn();
+    // The primary first-launch path: the grid mounts before the project's book list has loaded, so its
+    // universe is briefly empty (or the full canon, then collapsed) and the target pill does not exist
+    // yet. A mount-only scroll silently no-ops here.
+    const { container, rerender } = render(
+      grid({ items: [], scrollToBook: 'MRK', onScrolledToBook }),
     );
 
-    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(scrolledElements()).toEqual([]);
+    expect(onScrolledToBook).not.toHaveBeenCalled();
+
+    rerender(grid({ items: ITEMS, scrollToBook: 'MRK', onScrolledToBook }));
+
+    await waitFor(() =>
+      expect(scrolledElements()).toEqual([container.querySelector('[data-book="MRK"]')]),
+    );
+    expect(onScrolledToBook).toHaveBeenCalledTimes(1);
+  });
+
+  it('expands a collapsed group so the launched book is reachable', async () => {
+    const onScrolledToBook = vi.fn();
+    // Group-by defaults to canon in the dialog, and a group the user collapsed earlier stays collapsed.
+    // Pills render only inside an expanded group, so without the expand the launch is swallowed
+    // entirely: no scroll, and a footer counting a selection whose pill is nowhere on screen.
+    const { container, rerender } = render(grid({ groupBy: 'canon' }));
+
+    const ntHeader = screen
+      .getAllByRole('button', { expanded: true })
+      .find((button) => button.textContent?.includes('New Testament'));
+    if (!ntHeader) throw new Error('expected an expanded New Testament group header to collapse');
+    await userEvent.click(ntHeader);
+
+    expect(container.querySelector('[data-book="MRK"]')).toBeNull();
+
+    rerender(grid({ groupBy: 'canon', scrollToBook: 'MRK', onScrolledToBook }));
+
+    await waitFor(() =>
+      expect(scrolledElements()).toEqual([container.querySelector('[data-book="MRK"]')]),
+    );
+    expect(onScrolledToBook).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands the roving tabindex to the book it scrolled to', async () => {
+    const { container } = render(grid({ scrollToBook: 'MRK' }));
+
+    // `focusedIndex` owns the grid's single `tabIndex={0}`. Left at 0, the user's first Tab focuses
+    // book 0 and scrolls the grid straight back to the top, undoing the scroll.
+    await waitFor(() => {
+      const tabbable = container.querySelectorAll<HTMLButtonElement>('button[tabindex="0"]');
+      expect(tabbable).toHaveLength(1);
+      expect(container.querySelector('[data-book="MRK"]')).toContainElement(tabbable[0]);
+    });
+  });
+
+  it('does not throw on a book id that is not selector-safe', () => {
+    // The id is interpolated into a `[data-book="..."]` selector inside a LAYOUT effect, where a
+    // `SyntaxError` escapes during commit with no error boundary to catch it — taking the dialog down
+    // to a blank panel. Inert for today's book ids, which is why it needs a test rather than a comment.
+    expect(() => render(grid({ scrollToBook: 'B"AD' }))).not.toThrow();
+    expect(scrolledElements()).toEqual([]);
   });
 });

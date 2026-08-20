@@ -499,15 +499,29 @@ step, no automation. Just a record.
   `EmptyDescription` is typed `React.ComponentProps<'p'>` but renders a `<div>`; do not "fix" it
   locally, since that would diverge from the baseline for no behavioral gain. Adding a shadcn
   component is its own PR with its own branch, so any feature depending on a not-yet-vendored
-  primitive stacks on that PR rather than bundling it.
-- **Source:** PT-4111 design + implementation (`docs/superpowers/specs/2026-08-17-pt-4111-book-not-available-design.md`).
+  primitive stacks on that PR rather than bundling it — which is how PT-4111 shipped it: the vendoring
+  is PR #2690 and the feature PR #2691 is based on it, so squash-merging the feature cannot flatten the
+  baseline.
+
+  **Accessibility is the caller's job, and this decision is what makes it so.** `EmptyState` came with
+  `role="status"`; `Empty` sets no role, and `EmptyTitle` renders a `<div>` rather than a heading.
+  Choosing `Empty` therefore silently drops an announcement that the rejected component provided —
+  something this entry originally failed to record, and which a review caught only after the first
+  implementation shipped without it. Every `Empty` consumer must pass `role="status"` and nest its own
+  heading; a zero state that REPLACES focused content (as the editor canvas one does) must also move
+  focus into the region, guarded on the document already having focus. Recorded as a rule in
+  [Component-Selection-Quick-Reference.md](Component-Selection-Quick-Reference.md#zero-states-no-content-to-show).
+- **Source:** PT-4111 design + implementation. (The original design note lives under gitignored
+  `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
+  precisely because that path is not readable from the repo.)
 
 ## ADR-0015: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
 - **Date:** 2026-08-18
-- **Status:** Accepted, except for delivery to an already-open instance — superseded in that part by
-  ADR-0016. Points (1)-(3) stand; point (4) and the "a nonce or launch token — rejected" alternative
-  rest on a premise that proved false.
+- **Status:** Accepted. (Briefly amended by ADR-0016, now withdrawn: ADR-0016 asserted that point (4)
+  rested on a false premise about `reloadWebView`. Tracing the nonce showed the opposite — the premise
+  here is correct and the mechanism is stronger than stated. Point (4)'s wording is corrected below to
+  say why the reload works, and the "a nonce or launch token — rejected" alternative stands.)
 - **Context:** Opening a tool web view sometimes needs a value that applies to *this* launch only —
   text to pre-fill, a section to land on, a row to pre-select — as distinct from the durable state the
   web view persists. The pattern existed in the codebase but was never written down: `openFind` takes
@@ -523,7 +537,13 @@ step, no automation. Just a record.
   carried as a field on that web view's `*WebViewOptions`; (3) written into the web view's `state` in
   `getWebView` by **unconditional assignment from the current options**, which is what scrubs a stale
   value off a restored layout; and (4) delivered to an already-open instance by force-calling
-  `reloadWebView` when the value is present. Contextual inputs that can be derived — `projectId`, the
+  `reloadWebView` when the value is present. Point (4) works because `reloadWebView` **remounts** the
+  web view: it re-runs the provider's `getWebView`, and `srcNonce = newNonce()` is regenerated on every
+  call and interpolated into the generated `content`
+  (`src/renderer/services/web-view.service-host.ts`), so `content` differs each time and the `srcDoc`
+  bound in `web-view.component.tsx` changes, reloading the iframe and recreating the React root. The
+  mount-time initializers therefore see the new values with no re-apply machinery at all. Note the
+  trap: `getWebViewNonce(id)` IS stable per id, but it is not the nonce that reaches `content`. Contextual inputs that can be derived — `projectId`, the
   current reference, the current book — are resolved from the triggering web view's definition
   (`getOpenWebViewDefinition`, `scrollGroupScrRef`), not added as parameters. Only the caller's
   *intent* is passed, because intent is the one thing not derivable.
@@ -539,7 +559,16 @@ step, no automation. Just a record.
   the bug the scrub prevents.
 - **Consequences:** Consumers read the value as ordinary mount-time state (a lazy `useState`
   initializer), with no clearing logic and no re-apply effect — re-applying would override the user's
-  own in-dialog navigation. The scrub is easy to regress into a conditional spread, so it warrants a
+  own in-dialog navigation. Two costs come with the remount that makes this work. First, it discards
+  the web view's transient UI state on every relaunch — for Manage Books that is attached import files,
+  filter text, presence filter, group-by, copy source and scroll position — which is accepted because a
+  relaunch is an explicit user action on a dialog they are choosing to re-target, but it should be
+  weighed for any tool a user may be mid-task in. Second, the mechanism rests on a nonce the service
+  host has a standing TODO to make stable; if that TODO is ever acted on, every consumer of this
+  pattern silently stops seeing new options, so that TODO is the place to look if a launch parameter
+  ever stops arriving. A one-shot scroll or other launch side effect must be owned ABOVE any
+  conditionally-rendered child that performs it — otherwise the child's own remount (a filter clearing,
+  say) re-fires it long after the launch. The scrub is easy to regress into a conditional spread, so it warrants a
   test that fails when the assignment becomes conditional (see
   `manage-books.web-view-provider.test.ts`). Note `useWebViewState` is per-`webViewId` and does not
   survive close/reopen, which is why this pattern flows through provider options rather than relying
@@ -547,10 +576,35 @@ step, no automation. Just a record.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
 
-## ADR-0016: A launch token is required to deliver launch parameters to an already-open web view
+## ADR-0016: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
-- **Date:** 2026-08-18
-- **Status:** Accepted (supersedes ADR-0015's delivery mechanism)
+- **Date:** 2026-08-18 (withdrawn 2026-08-19)
+- **Status:** **Withdrawn.** Its central factual claim is wrong, and the mechanism it introduced was
+  dead code. ADR-0015 stands unamended in substance. Kept rather than deleted because the *way* it was
+  wrong is the useful part: it is a worked example of a plausible mechanism claim that survived
+  implementation, five duplicated code comments and a passing test, and was caught only by tracing the
+  nonce to its use site.
+- **What was wrong:** it asserted "the generated `content` string and per-id nonce are unchanged." Two
+  nonces exist and they were conflated. `getWebViewNonce(id)` is indeed stable per id — but it never
+  enters `content`. `srcNonce = newNonce()` does, regenerating on every `getWebView` call and
+  interpolated throughout the generated document, so `content` differs on every reload,
+  `web-view.component.tsx`'s `srcDoc={content}` changes, the iframe reloads, and the React root IS
+  destroyed and recreated. The service host even carries a standing TODO saying so in as many words
+  ("Generating nonces every time causes webviews to rerender every time `getWebView` is used on an
+  existing webview").
+- **Consequences of the withdrawal:** the launch token could never have fired — every guard seeded its
+  ref from the incoming token at mount, so `launchToken === ref.current` was always true and no effect
+  body ever ran. The feature worked throughout because ADR-0015's lazy initializers were correct all
+  along. The token plumbing has been removed from all five files, and the inverted trade-off ADR-0016
+  claimed to avoid is recorded honestly in ADR-0015's consequences instead: the remount really does
+  discard in-dialog state, which is the cost of the mechanism rather than something a token avoided.
+  The sibling `projectId` bug ADR-0016 reported is likewise not a bug: a mount-only initializer is
+  correct precisely because the reload remounts.
+- **Process lesson:** a claim about platform behavior belongs in ONE place. This one was duplicated into
+  five code comments, and when it turned out false all five were wrong together — and their number read
+  as corroboration. Assert platform mechanics once, at the site that depends on them, and link to it.
+- **Superseded content follows, for the record.**
+- **Original status:** Accepted (supersedes ADR-0015's delivery mechanism)
 - **Context:** ADR-0015 rejected a launch token on the stated premise that force-calling
   `reloadWebView` re-triggers the launch. Code review traced the call and found the premise false.
   `reloadWebView` -> `openOrReloadWebView` (`src/renderer/services/web-view.service-host.ts`) calls the
@@ -584,4 +638,5 @@ step, no automation. Just a record.
   already-open relaunch path needs a test — it is invisible in the mount-only tests that previously
   covered this feature (see `manage-books-dialog.component.test.tsx`). More generally: `reloadWebView`
   should not be assumed to remount anything.
-- **Source:** PT-4111 `/review-paratext` code review; corrects ADR-0015.
+- **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
+  `srcNonce` to its use site.
