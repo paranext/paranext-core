@@ -432,13 +432,17 @@ export const CodeStyledMarkersWithTrailingDetail: Story = {
 };
 
 export const NarrowPopover: Story = {
-  render: (args) => (
-    <div className="tw:w-[200px] tw:border">
-      <MarkerMenu {...args} />
-    </div>
-  ),
+  // Same 200px squeeze as `NarrowWithLongTitles`, on the other row shape: marker code plus trailing
+  // detail, rather than long titles with selection affordances. The two shapes give up their space
+  // differently, so both are worth seeing at the narrow end.
+  decorators: [
+    (Story) => (
+      <div className="tw:w-[200px] tw:rounded-md tw:border tw:border-border">
+        <Story />
+      </div>
+    ),
+  ],
   args: {
-    localizedStrings,
     markerMenuItems: [
       {
         marker: 'p',

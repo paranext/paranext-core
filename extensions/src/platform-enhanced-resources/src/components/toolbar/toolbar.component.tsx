@@ -460,6 +460,18 @@ export type EnhancedResourceTabBarProps = {
    */
   hasMatches?: boolean;
   localizedStringsWithLoadingState?: [ToolbarLocalizedStrings, boolean];
+  /**
+   * Overrides the shrink step this bar would otherwise measure from its own width. Higher means
+   * narrower; anything above 0 collapses the tab labels to icon-only.
+   *
+   * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
+   * the app, leave this unset and let the bar measure itself.
+   */
+  // `EnhancedResourceTabBar` destructures and reads this. The rule mis-attributes both prop types
+  // in this file to the first component declared in it, which is why the props above carry the same
+  // disable — see the ones on `ToolbarProps`.
+  // eslint-disable-next-line react/no-unused-prop-types
+  shrinkStep?: number;
 };
 
 /**
@@ -491,6 +503,7 @@ export function EnhancedResourceTabBar({
   onSearchChange = () => {},
   hasMatches = true,
   localizedStringsWithLoadingState = [{}, false],
+  shrinkStep,
 }: EnhancedResourceTabBarProps) {
   // The node lives in state, not a ref: mutating `ref.current` does not re-run the effect inside
   // `useShrinkStep`, so a ref would leave the observer permanently unattached.
@@ -499,10 +512,13 @@ export function EnhancedResourceTabBar({
     (node: HTMLDivElement | null) => setRootNode(node ?? undefined),
     [],
   );
-  const shrinkStep = useShrinkStep(rootNode, ENHANCED_RESOURCES_TAB_BAR_SHRINK_THRESHOLDS_PX);
+  const measuredShrinkStep = useShrinkStep(
+    rootNode,
+    ENHANCED_RESOURCES_TAB_BAR_SHRINK_THRESHOLDS_PX,
+  );
   // This bar is not inside a `TabToolbar`, so there is no `ShrinkStepContext` above it to read —
-  // it measures its own width.
-  const areTabLabelsHidden = shrinkStep > 0;
+  // it measures its own width, unless a caller states the step outright.
+  const areTabLabelsHidden = (shrinkStep ?? measuredShrinkStep) > 0;
 
   const getLocalizedString = (key: ToolbarLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
@@ -653,8 +669,8 @@ export function EnhancedResourceTabBar({
 
         {/*
          * FN-024: filter input is now ALWAYS rendered with min-width: 80px so the toolbar shrinks
-         * based on available space (and the tab labels collapse to icon-only via the shrink step
-         * container query) rather than hiding the input until the user clicks a word. The X clear
+         * based on available space (and the tab labels collapse to icon-only at the narrow shrink
+         * step) rather than hiding the input until the user clicks a word. The X clear
          * button only appears when there's something to clear so the empty input stays clean.
          */}
         <div

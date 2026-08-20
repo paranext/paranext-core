@@ -158,6 +158,19 @@ function PortalContents({ children }: PropsWithChildren) {
 }
 
 /**
+ * Characters the paragraph-style trigger reserves for the USFM marker. UX set six, which fits the
+ * long markers in ordinary use (`periph`). Must match the `tw:w-[6ch]` literal on the marker slot —
+ * Tailwind cannot read this constant, so the two are kept in step by hand.
+ */
+const MARKER_SLOT_CHARACTERS = 6;
+
+/**
+ * Separator between the marker and its style name. Shared by the rendered label and the tooltip's
+ * full text so the two can never disagree about how the label reads.
+ */
+const MARKER_STYLE_SEPARATOR = ' - ';
+
+/**
  * Label for the paragraph-style trigger: the marker code, then the style name.
  *
  * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which
@@ -177,6 +190,10 @@ function ParagraphStyleLabel({
   // With no style name there is nothing to put beside the marker, so the label is already at its
   // shortest form — and `fullText` must not advertise a name it cannot show.
   const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM || !styleName;
+  // A marker longer than the slot is cut without an ellipsis, and a clipped `restor` still reads as
+  // a plausible marker — so declare the label partial and let the tooltip carry the real one.
+  // `ToolbarCompoundLabel`'s own clip detection cannot see this: it watches the style name.
+  const isMarkerClipped = blockMarker.length > MARKER_SLOT_CHARACTERS;
 
   return (
     <ToolbarCompoundLabel
@@ -184,19 +201,21 @@ function ParagraphStyleLabel({
       // rather than taking a marker colour.
       //
       // The slot is a fixed 6 characters at every step, not sized to the marker: monospace makes
-      // `6ch` exactly six glyphs, which covers the longest markers in use, and a content-sized slot
-      // would resize the trigger as the cursor moved between a `p` and a `toc1`, shifting every
-      // button after it. `overflow-hidden` keeps a longer-than-expected marker inside the slot
-      // instead of pushing the chevron out.
+      // `6ch` exactly six glyphs, which is the width UX asked for, and a content-sized slot would
+      // resize the trigger as the cursor moved between a `p` and a `toc1`, shifting every button
+      // after it. `overflow-hidden` keeps a longer marker inside the slot instead of pushing the
+      // chevron out. Written as a literal because Tailwind extracts class names statically — an
+      // interpolated `tw:w-[${n}ch]` would silently emit no rule at all.
       primary={
         <span className="tw:inline-block tw:w-[6ch] tw:overflow-hidden tw:font-mono">
           {blockMarker}
         </span>
       }
       secondary={styleName}
-      separator=" - "
+      separator={MARKER_STYLE_SEPARATOR}
       showSecondary={!isAtMinimum}
-      fullText={styleName ? `${blockMarker} - ${styleName}` : blockMarker}
+      isPartial={isMarkerClipped || (!!styleName && isAtMinimum)}
+      fullText={styleName ? `${blockMarker}${MARKER_STYLE_SEPARATOR}${styleName}` : blockMarker}
       // A ceiling, not a width: long style names stop the trigger growing without bound, but the
       // label still shrinks below this.
       className="tw:max-w-[30ch]"
@@ -2132,7 +2151,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                           // the same units UX specified it in — see ParagraphStyleLabel.
                           className="tw:h-8 tw:min-w-0"
                           aria-label="Paragraph Selection"
-                          title={isStructureProtected ? undefined : 'Paragraph Selection'}
+                          // No native `title` here. The label inside now raises its own tooltip
+                          // whenever it is abbreviated or clipped, and a native tooltip would open
+                          // on top of it a beat later — two overlapping bubbles for one control.
+                          // `aria-label` still names the button for assistive technology.
                           disabled={isStructureProtected}
                           variant="outline"
                         >

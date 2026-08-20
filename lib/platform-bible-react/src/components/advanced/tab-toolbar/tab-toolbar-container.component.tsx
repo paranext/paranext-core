@@ -62,7 +62,12 @@ export type TabToolbarContainerProps = PropsWithChildren<{
 }>;
 
 /**
- * Breakpoints for the tab toolbar, widest first, measured against its own width.
+ * Breakpoints for the tab toolbar, widest first, measured against the container's own outer box.
+ * That box includes its `tw:px-4`, so roughly 32px of each number is padding rather than room for
+ * controls. Unlike the application titlebar — where the caption-button reserve lands inside or
+ * outside the measured box depending on the platform, so `Toolbar` observes its padding-free inner
+ * row instead — this padding is the same everywhere, so there is no cross-platform skew to
+ * correct.
  *
  * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
  * adjust them the first time this is watched in a running app.

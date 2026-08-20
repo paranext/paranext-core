@@ -416,12 +416,12 @@ describe('MarkerMenu — row layout', () => {
   it('places the detail after the title so it reads as a trailing annotation rather than a second line', () => {
     render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
 
-    const title = screen.getByText('Paragraph');
-    const detail = screen.getByText('Normal paragraph text');
+    // Reading the row's text in document order says "detail comes after title" directly, and
+    // survives the two being nested differently — which a `compareDocumentPosition` bitmask check
+    // does not.
+    const row = screen.getByRole('option', { name: /Paragraph/ });
 
-    // Node.DOCUMENT_POSITION_FOLLOWING === 4
-    // eslint-disable-next-line no-bitwise
-    expect(title.compareDocumentPosition(detail) & 4).toBeTruthy();
+    expect(row.textContent).toMatch(/Paragraph.*Normal paragraph text/);
   });
 
   it('renders the detail smaller and muted so it never competes with the title', () => {

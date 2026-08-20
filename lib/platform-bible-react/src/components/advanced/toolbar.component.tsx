@@ -59,11 +59,17 @@ export type ToolbarProps = PropsWithChildren<{
 }>;
 
 /**
- * Breakpoints for the application titlebar, widest first, measured against the toolbar's OWN width
- * — not the window's. On Windows and Linux the toolbar sits inside a wrapper whose padding reserves
- * the caption-button strip, so it is roughly 150px narrower than the window; on macOS it is not.
- * Thresholds picked from window width would therefore fire a step early, and differently per
- * platform.
+ * Breakpoints for the application titlebar, widest first, measured against the width actually
+ * available to the toolbar's content — the inner row, inside whatever padding reserves the OS
+ * caption buttons — and never against the window's width.
+ *
+ * Which box is measured is load-bearing here. The caption-button reserve sits INSIDE the toolbar's
+ * own box on macOS (`tw:ps-[85px]`) and on the Windows/Linux fallback (`tw:pe-[…]`), but OUTSIDE it
+ * when Electron reports a live overlay rect and the wrapper reserves the space instead (see
+ * `platform-bible-toolbar.tsx`). Measuring the outer box would therefore report up to ~150px more
+ * room on one path than another for the same window width, and the same window would abbreviate the
+ * scripture reference on one OS but not on the next. The inner row is the space the controls really
+ * get, on every path.
  *
  * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
  * adjust them the first time this is watched in a running app.
@@ -115,26 +121,30 @@ export function Toolbar({
   menubarVariant = 'default',
   shrinkStep: shrinkStepOverride,
 }: ToolbarProps) {
-  // The root node lives in state, not a ref: mutating `ref.current` does not re-run the effect
+  // The content row lives in state, not a ref: mutating `ref.current` does not re-run the effect
   // inside `useShrinkStep`, so a ref would leave the observer permanently unattached.
-  const [rootNode, setRootNode] = useState<HTMLDivElement | undefined>(undefined);
-  const attachRoot = useCallback(
-    (node: HTMLDivElement | null) => setRootNode(node ?? undefined),
+  const [contentRowNode, setContentRowNode] = useState<HTMLDivElement | undefined>(undefined);
+  const attachContentRow = useCallback(
+    (node: HTMLDivElement | null) => setContentRowNode(node ?? undefined),
     [],
   );
-  const measuredShrinkStep = useShrinkStep(rootNode, APP_TOOLBAR_SHRINK_THRESHOLDS_PX);
+  const measuredShrinkStep = useShrinkStep(contentRowNode, APP_TOOLBAR_SHRINK_THRESHOLDS_PX);
   const shrinkStep = shrinkStepOverride ?? measuredShrinkStep;
 
   return (
     <ShrinkStepContext.Provider value={shrinkStep}>
       <div
         className={cn('tw:border tw:px-4 tw:text-foreground', className)}
-        ref={attachRoot}
         style={{ position: 'relative' }}
         id={id}
       >
+        {/* Observed for the shrink step, not the bordered wrapper above: this row's box is the
+          space the controls actually have, with the OS caption-button reserve already taken out of
+          it however the current platform reserves that space. See
+          APP_TOOLBAR_SHRINK_THRESHOLDS_PX. */}
         <div
           className="tw:flex tw:h-full tw:w-full tw:justify-between tw:overflow-hidden"
+          ref={attachContentRow}
           /* @ts-ignore Electron-only property */
           style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
         >
