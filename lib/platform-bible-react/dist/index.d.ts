@@ -1995,6 +1995,33 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * This component is designed to be used in the window title bar of an electron application.
  *
+ * The root element declares a named container-query context, `toolbar`, whose content box is the
+ * bar's genuinely usable width — the window width minus the OS caption-button reservation and the
+ * bar's own padding. Children passed through any of the three areas can therefore shrink or hide
+ * themselves against the space actually available, which stays correct across the macOS, Windows,
+ * and Linux reservations and in RTL, where a viewport breakpoint would not.
+ *
+ * Note the container context also applies CSS containment to the root: it becomes a containing
+ * block for `position: fixed` descendants and establishes a new stacking context, and its inline
+ * size is computed as if it had no contents. Render `Toolbar` as a full-width block; in a
+ * shrink-to-fit context (an `inline-block`, a `w-auto` flex item, an `auto` grid track) it
+ * collapses. Overlay content should portal out of the subtree, as the shadcn Select, Tooltip, and
+ * Menubar primitives already do.
+ *
+ * Two `data-testid` hooks are part of this contract as well, relied on by end-to-end tests outside
+ * this package: `toolbar-content-row` (the row that clips when contents do not fit) and
+ * `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking change.
+ *
+ * @example
+ *
+ * Hide a child once the usable bar width drops below 52rem:
+ *
+ * ```tsx
+ * <Toolbar {...props}>
+ *   <Badge className="tw:@max-[52rem]/toolbar:hidden">{version}</Badge>
+ * </Toolbar>;
+ * ```
+ *
  * @param {ToolbarProps} props - The props for the component.
  */
 export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;

@@ -33,7 +33,7 @@ import { logger } from '@shared/services/logger.service';
 import { menuDataService } from '@shared/services/menu-data.service';
 import { notificationService } from '@shared/services/notification.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { CircleCheck, HomeIcon } from 'lucide-react';
+import { CircleCheck, HomeIcon, RefreshCw } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -76,6 +76,81 @@ const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 // width. Tuned by eye — smaller than the static reserved-space guess's 1rem (see
 // getToolbarOSReservedSpaceClassName) because the live measurement is exact, unlike that guess.
 const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
+
+// #region Narrow-title-bar degradation ladder (PT-4218)
+//
+// Simple mode packs a project selector, the reference-history buttons and the BCV control into the
+// title bar. Together they need more room than the app's 800px minimum window width leaves once the
+// OS caption buttons are reserved, so at that width the trailing controls used to be clipped
+// outright by the Toolbar's `overflow-hidden`.
+//
+// These are container queries against `@container/toolbar`, declared by the Toolbar component on
+// the element whose CONTENT box is the usable bar width (window width minus the OS caption-button
+// reservation minus the bar's own padding) — so they respond to the space actually available rather
+// than to the raw viewport, and they stay correct across macOS/Windows/Linux and in RTL.
+//
+// A container query cannot oscillate here: the container's width comes from its `w-full` ancestors,
+// never from the content these rules hide, so hiding something can't widen the container and
+// re-show it.
+//
+// The thresholds are set from the container width each platform actually leaves at the app's
+// enforced 800px minimum window width, measured in the running app rather than calculated:
+//
+// | Platform                   | Caption-button reservation | Container content box |
+// | -------------------------- | -------------------------- | --------------------- |
+// | Windows (static class)     | `pe-[calc(138px+1rem)]`    | 628px                 |
+// | Windows (live measurement) | ~142px on the wrapper      | 642px                 |
+// | macOS                      | `ps-[85px]`                | 697px                 |
+// | Linux                      | none                       | 766px                 |
+//
+// Note the two Windows rows: which one applies depends on whether the live overlay measurement has
+// arrived yet, so a threshold falling between them would make the same window on the same machine
+// look different from run to run.
+//
+// A tier that must hold at the minimum window width therefore needs a threshold above the WIDEST
+// number in that column (Linux, 766px), not the narrowest — one tuned to Windows alone silently
+// does nothing on the platform with the roomiest bar, and CI runs on Linux.
+//
+// Tiers are numbered in the order they FIRE as the bar narrows (52rem -> 50rem -> 46rem), which is
+// deliberately not the order they are declared in below — the declarations group the two sync
+// constants together. Renumber if you retune a threshold past its neighbour.
+//
+// The order the tiers fire in is a judgement about what the user can most afford to lose: the
+// version badge is pure decoration, the project's full name still leaves the short name that
+// actually identifies the project, and the sync label goes last because an icon-only sync button
+// is the least self-explanatory of the three.
+
+/** Tier 1 — drop the marketing version badge. It is decoration, and costs up to 150px. */
+const HIDE_VERSION_BADGE_BELOW_52REM = 'tw:@max-[52rem]/toolbar:hidden';
+
+/**
+ * Tier 3 — collapse the sync button to icon-only; its tooltip still names the action. `idle` is the
+ * one sync state with no icon of its own, so the collapsed button would render empty; the paired
+ * class reveals a stand-in icon exactly when the label goes away. Both are needed: revealing the
+ * icon unconditionally would add an icon to the wide layout, which is not this ticket's business.
+ */
+const HIDE_SYNC_LABEL_BELOW_46REM = 'tw:@max-[46rem]/toolbar:hidden';
+const SHOW_IDLE_SYNC_ICON_BELOW_46REM = 'tw:hidden tw:@max-[46rem]/toolbar:block';
+
+/**
+ * Tier 2 — show the project's short name alone instead of `Full Name (SHORT)`. The short name is
+ * the identifying part, so swapping to it degrades better than ellipsizing the full string down to
+ * a meaningless prefix.
+ *
+ * 50rem (800px) is chosen to clear every row of the table above, Linux's 766px included, so the
+ * swap is guaranteed at the app's minimum window width on every platform. Two narrower values were
+ * measured and rejected: 40rem/640px falls _between_ the two Windows numbers, so the same window
+ * would keep the full name or swap depending only on whether the live overlay measurement had
+ * landed; 45rem/720px covers Windows and macOS but not Linux, leaving the swap untestable on CI.
+ *
+ * Measured effect: with the version badge and sync button present, a tight bar squeezes the trigger
+ * to ~129px, which renders `English Standard Version 2016 (ESVUS16)` as `English Sta…` — the short
+ * name it swaps in needs only ~97px and stays whole.
+ */
+const HIDE_LONG_PROJECT_NAME_BELOW_50REM = 'tw:@max-[50rem]/toolbar:hidden';
+/** `inline`, not `block` — these two swap inside a `truncate` span, which is an inline context. */
+const SHOW_SHORT_PROJECT_NAME_BELOW_50REM = 'tw:hidden tw:@max-[50rem]/toolbar:inline';
+// #endregion
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
@@ -336,6 +411,16 @@ export function PlatformBibleToolbar() {
     }
   }, []);
 
+  // Hoisted so the visible label and the button's accessible name are the SAME value. Tier 3 hides
+  // the label with `display: none`, which drops it out of the accessibility tree — without an
+  // explicit `aria-label` the collapsed button is announced as an unnamed "button" at exactly the
+  // widths this ticket targets. Mirrors how PlatformTabTitle names a tab collapsed to icon-only.
+  const syncButtonLabel = {
+    idle: localizedStrings['%toolbar_sync%'],
+    syncing: localizedStrings['%toolbar_sync_status_syncing%'],
+    synced: localizedStrings['%toolbar_sync_status_synced%'],
+  }[syncState];
+
   return (
     <div data-testid="toolbar-reserved-space-wrapper" style={toolbarReservedSpaceStyle}>
       <Toolbar
@@ -373,19 +458,19 @@ export function PlatformBibleToolbar() {
                       variant="ghost"
                       size="sm"
                       className="pr-twp tw:h-8 tw:shrink-0"
+                      aria-label={syncButtonLabel}
                       onClick={openSyncStatus}
                     >
                       {syncState === 'syncing' && <Spinner className="tw:h-4 tw:w-4" />}
                       {syncState === 'synced' && (
                         <CircleCheck className="tw:h-4 tw:w-4 tw:text-success-foreground" />
                       )}
-                      {
-                        {
-                          idle: localizedStrings['%toolbar_sync%'],
-                          syncing: localizedStrings['%toolbar_sync_status_syncing%'],
-                          synced: localizedStrings['%toolbar_sync_status_synced%'],
-                        }[syncState]
-                      }
+                      {syncState === 'idle' && (
+                        <RefreshCw
+                          className={cn('tw:h-4 tw:w-4', SHOW_IDLE_SYNC_ICON_BELOW_46REM)}
+                        />
+                      )}
+                      <span className={HIDE_SYNC_LABEL_BELOW_46REM}>{syncButtonLabel}</span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -402,7 +487,10 @@ export function PlatformBibleToolbar() {
                   <TooltipTrigger asChild>
                     <Badge
                       variant="ghost"
-                      className="tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:font-normal tw:text-ellipsis tw:whitespace-nowrap"
+                      className={cn(
+                        'tw:block tw:max-w-[150px] tw:shrink tw:overflow-hidden tw:font-normal tw:text-ellipsis tw:whitespace-nowrap',
+                        !isPowerMode && HIDE_VERSION_BADGE_BELOW_52REM,
+                      )}
                     >
                       {marketingVersion}
                     </Badge>
@@ -453,7 +541,18 @@ export function PlatformBibleToolbar() {
             }}
             disabled={!hasProjectPickerItems}
           >
-            <SelectTrigger className="tw:max-w-64 tw:min-w-48 tw:border-0 tw:bg-transparent">
+            {/* Replaces a `min-w-48` (192px) floor that alone was a quarter of the usable bar at
+                the app's minimum window width and could not be shrunk past (PT-4218). Not dropped
+                to `min-w-0`: with everything else in the row shrinkable too, the trigger could
+                collapse to just its chevron and swallow the short name that tier 2 above swaps in.
+                `min-w-24` (96px) is the measured width the short name needs (~97px for `ESVUS16`,
+                including the trigger's padding and chevron) — an 80px floor was below that, so the
+                very name tier 2 swaps in could itself ellipsize with nothing to recover it. The
+                `max-w-64` cap continues to govern the roomy case. */}
+            <SelectTrigger
+              data-testid="toolbar-project-selector"
+              className="tw:max-w-64 tw:min-w-24 tw:border-0 tw:bg-transparent"
+            >
               <SelectValue
                 placeholder={
                   hasProjectPickerItems
@@ -468,8 +567,19 @@ export function PlatformBibleToolbar() {
                       currentProjectError && 'tw:text-destructive',
                     )}
                   >
-                    {currentProjectError ??
-                      `${currentProject.fullName} (${currentProject.shortName})`}
+                    {currentProjectError ?? (
+                      <>
+                        <span className={HIDE_LONG_PROJECT_NAME_BELOW_50REM}>
+                          {currentProject.fullName} ({currentProject.shortName})
+                        </span>
+                        {/* The short name alone once the full string no longer fits. Not a
+                            `truncate` of the full string: `World English Bible (WEB)` clipped to
+                            `World Eng…` loses the very part that identifies the project. */}
+                        <span className={SHOW_SHORT_PROJECT_NAME_BELOW_50REM}>
+                          {currentProject.shortName}
+                        </span>
+                      </>
+                    )}
                   </span>
                 )}
               </SelectValue>
