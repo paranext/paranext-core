@@ -4,8 +4,9 @@ import { createContext, useContext } from 'react';
  * Named shrink steps, ordered widest to narrowest. Consumers compare against these (`step >=
  * SHRINK_STEP.MINIMUM`), so the ascending order is part of the contract.
  *
- * Not every surface uses all four — the marker menu, for example, only distinguishes `WIDE` from
- * everything narrower.
+ * Not every surface uses all four. `BookChapterControl` walks the whole ladder, while a control
+ * with only one shorter form — the project selector, the paragraph style label — reads a single
+ * boundary (`step >= SHRINK_STEP.MINIMUM`) and ignores the rest.
  */
 export const SHRINK_STEP = Object.freeze({
   /** Full labels. */

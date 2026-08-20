@@ -83,9 +83,9 @@ describe('BookChapterControl imperative handle', () => {
     );
 
     // Open via the trigger and drill into chapters view by picking a multi-chapter book.
-    // Matched by its `option` role rather than its text: the trigger itself now renders the book
-    // name in its own span (the shrink ladder splits the reference into book + chapter:verse), so
-    // a bare text query matches both the trigger and the list entry.
+    // Matched by its `option` role rather than its text: the trigger renders the book name in a
+    // span of its own (the shrink ladder splits the reference into book + chapter:verse), so a bare
+    // text query matches both the trigger and the list entry.
     await user.click(screen.getByRole('combobox', { name: 'book-chapter-trigger' }));
     await user.click(await screen.findByRole('option', { name: /Genesis/ }));
     // CommandInput only renders in books view — its absence proves we're in chapters view

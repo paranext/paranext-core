@@ -80,14 +80,10 @@ export function ToolbarCompoundLabel({
     if (isSecondaryRendered) onClipPointerEnter();
   }, [isShowingPartialLabel, isSecondaryRendered, onClipPointerEnter]);
 
-  const handlePointerLeave = useCallback(() => {
-    setIsIncompleteHovered(false);
-    onClipPointerLeave();
-  }, [onClipPointerLeave]);
-
-  // These labels sit inside popover and select triggers. Without this the tooltip stays open on top
-  // of the popover the click just opened, because the pointer never "leaves".
-  const handlePointerDown = useCallback(() => {
+  // Wired to both pointer-leave and pointer-down. The press case is not redundant: these labels sit
+  // inside popover and select triggers, and without it the tooltip stays open on top of the popover
+  // the click just opened, because the pointer never "leaves".
+  const closeTooltip = useCallback(() => {
     setIsIncompleteHovered(false);
     onClipPointerLeave();
   }, [onClipPointerLeave]);
@@ -118,8 +114,8 @@ export function ToolbarCompoundLabel({
         <TooltipTrigger asChild>
           <span
             onPointerEnter={handlePointerEnter}
-            onPointerLeave={handlePointerLeave}
-            onPointerDown={handlePointerDown}
+            onPointerLeave={closeTooltip}
+            onPointerDown={closeTooltip}
             className={cn('tw:flex tw:min-w-0 tw:items-baseline', className)}
           >
             {first}
