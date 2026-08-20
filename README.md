@@ -148,13 +148,17 @@ may be needed to successfully handle platform-bible:// if Platform.Bible is not 
 
 ### macOS Development Pre-requisites
 
-macOS doesn't come preinstalled with all the
-[icu4c](https://unicode-org.github.io/icu/userguide/icu4c/) libraries. They must be
-installed separately to provide Unicode support to our .NET code. Platform.Bible is
-configured to expect those libraries to be installed using
-[MacPorts](https://www.macports.org/). The
-[icu package on MacPorts](https://ports.macports.org/port/icu/) has the icu4c
-libraries needed for icu.net to run properly.
+You will need to separately install the [icu4c](https://unicode-org.github.io/icu/userguide/icu4c/) libraries that provide Unicode support to our .NET code, since they do not come preinstalled with macOS.
+
+In order to do this, you must first install [MacPorts](https://www.macports.org/).
+
+Then, run the following command:
+
+```bash
+sudo port install icu
+```
+
+You can reference the full instructions [here](https://ports.macports.org/port/icu/), as well as the icu4c libraries needed for icu.net to run properly.
 
 The build processes are configured to automatically download and package icu4c
 libraries with the application, but for development this has to be done manually.
