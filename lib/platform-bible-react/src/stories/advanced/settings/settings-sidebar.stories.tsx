@@ -93,11 +93,27 @@ const sampleExtensions = {
 };
 
 const sampleProjects: ProjectInfo[] = [
-  { projectId: 'project-1', projectName: 'English Standard Version' },
-  { projectId: 'project-2', projectName: 'New International Version' },
-  { projectId: 'project-3', projectName: 'King James Version' },
-  { projectId: 'project-4', projectName: 'New American Standard Bible' },
-  { projectId: 'project-5', projectName: 'Revised Standard Version' },
+  {
+    projectId: 'project-1',
+    projectName: 'ESV',
+    projectFullName: 'English Standard Version',
+  },
+  {
+    projectId: 'project-2',
+    projectName: 'NIV',
+    projectFullName: 'New International Version',
+  },
+  { projectId: 'project-3', projectName: 'KJV', projectFullName: 'King James Version' },
+  {
+    projectId: 'project-4',
+    projectName: 'NASB',
+    projectFullName: 'New American Standard Bible',
+  },
+  {
+    projectId: 'project-5',
+    projectName: 'RSV',
+    projectFullName: 'Revised Standard Version',
+  },
 ];
 
 function SettingsSidebarDemo({

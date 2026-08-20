@@ -106,6 +106,79 @@ type Story = StoryObj<typeof ProjectSelector>;
 
 // #region project (single)
 
+export const ShortNameTriggerLabel: Story = {
+  render: () => {
+    // Legacy-project fixtures: `fullName` mirrors `shortName` (as consumers do when
+    // upstream data has no `platform.fullName`). The row renderer's de-dup
+    // (`fullName && fullName !== shortName`) then collapses each row to a single
+    // line, matching what the trigger label shows.
+    const shortOnlyProjects: ProjectSelectorProject[] = sampleProjects.map((p) => ({
+      ...p,
+      fullName: p.shortName,
+    }));
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    return (
+      <div className="tw:w-80">
+        <ProjectSelector
+          mode="project"
+          projects={shortOnlyProjects}
+          openTabs={sampleOpenTabs}
+          selection={{ projectId }}
+          onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+          buttonPlaceholder="Select a project"
+          ariaLabel="Project"
+          triggerLabelFormat="shortName"
+          buttonClassName="tw:w-full"
+        />
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          '`triggerLabelFormat="shortName"` (the default) renders only the selected project\'s short name in the trigger. This story pairs the format with legacy-project fixtures (`fullName` mirrors `shortName`) so the popover rows also collapse to a single line — the trigger and rows both read the short name only. Compare with `WideTriggerLabel` at the same width to see the `{shortName} - {fullName}` variant with distinct names.',
+      },
+    },
+  },
+};
+
+export const ShortNameTriggerLabelNoScrollGroups: Story = {
+  render: () => {
+    // Same legacy-project fixtures as `ShortNameTriggerLabel`, but with `openTabs={[]}`.
+    // No project is open in any scroll group, so the right-side scroll-group chips are
+    // suppressed and every row renders in muted text (the "not open anywhere" state).
+    const shortOnlyProjects: ProjectSelectorProject[] = sampleProjects.map((p) => ({
+      ...p,
+      fullName: p.shortName,
+    }));
+    const [projectId, setProjectId] = useState<string | undefined>('esvus16');
+    return (
+      <div className="tw:w-80">
+        <ProjectSelector
+          mode="project"
+          projects={shortOnlyProjects}
+          openTabs={[]}
+          selection={{ projectId }}
+          onChangeSelection={({ projectId: newId }) => setProjectId(newId)}
+          buttonPlaceholder="Select a project"
+          ariaLabel="Project"
+          triggerLabelFormat="shortName"
+          buttonClassName="tw:w-full"
+        />
+      </div>
+    );
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Same short-name-only setup as `ShortNameTriggerLabel`, but with no open tabs. The scroll-group chips on the right disappear and every row renders muted (the "not open anywhere" state), yielding the plainest single-line row layout the selector can render.',
+      },
+    },
+  },
+};
+
 export const SingleProject: Story = {
   render: () => {
     const [projectId, setProjectId] = useState<string | undefined>('esvus16');

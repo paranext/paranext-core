@@ -1319,7 +1319,18 @@ export type SelectedSettingsSidebarItem = {
 };
 export type ProjectInfo = {
 	projectId: string;
+	/**
+	 * Short project name — the trigger label for the `<ProjectSelector>` and the primary line of each
+	 * popover row. Sourced from the `platform.name` project setting.
+	 */
 	projectName: string;
+	/**
+	 * Optional full project name — rendered as the muted secondary line beneath `projectName` in the
+	 * popover rows. Sourced from the `platform.fullName` project setting. When absent or equal to
+	 * `projectName`, the row falls back to a single-line layout (matching the {@link ProjectSelector}
+	 * de-dup rule for `fullName === shortName`).
+	 */
+	projectFullName?: string;
 };
 export type SettingsSidebarProps = {
 	/** Optional id for testing */
