@@ -58,6 +58,7 @@ import {
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './find/search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -126,10 +127,22 @@ async function revertBookSnapshots(
 }
 
 global.webViewComponent = function FindWebView({
-  projectId,
+  projectId: webViewProjectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
+  const [verseRefSetting, setVerseRefSetting, , , scrollGroupSourceProjectId] =
+    useWebViewScrollGroupScrRef();
+
+  // The project to search. Normally the tab's own — `openFind` sets it from the trigger (the
+  // editor's project, or the resource a reference panel is displaying). The simple-mode layout also
+  // seeds a Find tab that carries no projectId at all, so fall back to whichever project is driving
+  // this web view's scroll group reference (the Scripture editor, since the provider puts Find in
+  // group 0 in simple mode). Without the fallback that seeded tab renders a search box that silently
+  // searches nothing until the user's first Ctrl+F. Mirrors the Text Collection tab, which resolves
+  // its own default-layout tab the same way.
+  const projectId = webViewProjectId ?? scrollGroupSourceProjectId;
+
   // Each instance needs its own mutex — a module-level mutex would cause operations from one Find
   // panel to block another if two panels are open for different projects simultaneously.
   const findPdpMutex = useRef(new Mutex()).current;
@@ -166,7 +179,9 @@ global.webViewComponent = function FindWebView({
       if (!term) return;
       if (term === lastPersistedHistoryTermRef.current) return;
       lastPersistedHistoryTermRef.current = term;
-      findHistoryProviderRef.current?.addHistoryItem(term, projectId).catch(() => {});
+      findHistoryProviderRef.current
+        ?.addHistoryItem(term, projectId)
+        .catch((e) => logger.warn(`Find: failed to save search history: ${getErrorMessage(e)}`));
     },
     [projectId],
   );
@@ -262,12 +277,10 @@ global.webViewComponent = function FindWebView({
     );
   }, [results]);
 
-  const [verseRefSetting, setVerseRefSetting] = useWebViewScrollGroupScrRef();
-
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
 
   const editorWebViewController = useWebViewController(
-    'platformScriptureEditor.react',
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     editorWebViewId,
   );
 
@@ -333,7 +346,11 @@ global.webViewComponent = function FindWebView({
 
   const persistLastSearchTerm = useCallback(
     (term: string) => {
-      findHistoryProviderRef.current?.setLastSearchTerm(projectId, term).catch(() => {});
+      findHistoryProviderRef.current
+        ?.setLastSearchTerm(projectId, term)
+        .catch((e) =>
+          logger.warn(`Find: failed to persist last search term: ${getErrorMessage(e)}`),
+        );
     },
     [projectId],
   );
@@ -1082,7 +1099,9 @@ global.webViewComponent = function FindWebView({
   useEffect(() => {
     const currentController = editorWebViewController;
     return () => {
-      currentController?.runAnnotationAction('find-current-result', 'removed').catch(() => {});
+      currentController
+        ?.runAnnotationAction('find-current-result', 'removed')
+        .catch((e) => logger.warn(`Find: failed to clear result highlight: ${getErrorMessage(e)}`));
     };
   }, [editorWebViewController]);
 
@@ -1106,14 +1125,18 @@ global.webViewComponent = function FindWebView({
         try {
           editorWebViewController
             .selectRange({ start: searchResult.start, end: searchResult.end })
-            .catch(() => {});
+            .catch((e) =>
+              logger.warn(`Find: failed to select result in editor: ${getErrorMessage(e)}`),
+            );
           editorWebViewController
             .setAnnotation(
               { start: searchResult.start, end: searchResult.end },
               'find-result-highlight',
               'find-current-result',
             )
-            .catch(() => {});
+            .catch((e) =>
+              logger.warn(`Find: failed to highlight result in editor: ${getErrorMessage(e)}`),
+            );
         } catch {
           // Ignore any synchronous errors from the controller methods.
         }

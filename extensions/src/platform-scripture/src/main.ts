@@ -16,6 +16,11 @@ import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import { FindHistoryDataProviderEngine } from './find/find-history.data-provider';
 import {
+  resolveFindInvocation,
+  shouldReloadExistingFind,
+  type FindTriggerWebViewDefinition,
+} from './find/open-find.utils';
+import {
   checkAggregatorService,
   notifyCheckResultsInvalidated,
 } from './checks/check-aggregator.service';
@@ -283,19 +288,17 @@ async function openManageBooks(
 async function openFind(
   editorWebViewId: string | undefined,
   selectedText?: string,
+  sourceProjectId?: string,
 ): Promise<string | undefined> {
-  let projectId: FindWebViewOptions['projectId'];
-  let tabIdFromWebViewId: string | undefined;
-  let editorScrollGroupId: FindWebViewOptions['editorScrollGroupId'];
-
   logger.debug('Opening find UI');
 
+  let webViewDefinition: FindTriggerWebViewDefinition | undefined;
   if (editorWebViewId) {
-    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
-    projectId = webViewDefinition?.projectId;
-    tabIdFromWebViewId = webViewDefinition?.id;
-    editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
+    webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
   }
+
+  const { projectId, editorScrollGroupId, tabIdFromWebViewId, editorWebViewIdForFind } =
+    resolveFindInvocation(webViewDefinition, editorWebViewId, sourceProjectId);
 
   if (!projectId) {
     logger.debug('No project!');
@@ -306,7 +309,10 @@ async function openFind(
     projectId,
     editorScrollGroupId,
     bringToFront: true,
-    editorWebViewId,
+    editorWebViewId: editorWebViewIdForFind,
+    // A non-editor trigger has no controller to couple to, so tell the provider to drop whatever
+    // editor id the panel is holding rather than leaving a stale one in place.
+    clearEditorWebViewId: !editorWebViewIdForFind,
     initialSearchText: selectedText,
   };
 
@@ -317,13 +323,22 @@ async function openFind(
     { ...options, existingId: '?', createNewIfNotFound: false },
   );
 
-  // If found an existing web view, reload it when the project differs OR when the caller supplied
-  // text to pre-fill (e.g. Ctrl+F with a selection) — reloading is how initialSearchText reaches the
-  // existing panel's search box; without it the selection would be dropped for an already-open panel.
+  // If found an existing web view, reload it when the project differs, when the caller supplied a
+  // new term to pre-fill (e.g. Ctrl+F with a selection the panel isn't already showing), or when the
+  // editor coupling changed — reloading is the only way fresh options (initialSearchText, a cleared
+  // editorWebViewId) reach an already-open panel. See shouldReloadExistingFind for why the
+  // editor-coupling clause matters (stale-id hang) and why an unchanged term must not reload.
   if (findWebViewId) {
     const existingFindWebViewDefinition =
       await papi.webViews.getOpenWebViewDefinition(findWebViewId);
-    if (existingFindWebViewDefinition?.projectId !== projectId || selectedText) {
+    if (
+      shouldReloadExistingFind(
+        existingFindWebViewDefinition,
+        projectId,
+        editorWebViewIdForFind,
+        selectedText,
+      )
+    ) {
       await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
     }
   } else {
@@ -683,6 +698,13 @@ export async function activate(context: ExecutionActivationContext) {
           name: 'selectedText',
           required: false,
           summary: 'Text to pre-fill in the search field and immediately search for',
+          schema: { type: 'string' },
+        },
+        {
+          name: 'sourceProjectId',
+          required: false,
+          summary:
+            "Explicit project/resource id to search, overriding the project resolved from the triggering web view. Used when the triggering tab displays a resource whose id differs from the tab's own project (model text, Bible texts, commentaries panels).",
           schema: { type: 'string' },
         },
       ],

@@ -83,6 +83,9 @@ step, no automation. Just a record.
 - **Consequences:** shortcuts are app-global and cross-platform from one place; couples `main.ts` to
   an extension's command name by string (degrades gracefully if the extension is absent). **Revisit**
   (and likely supersede this) once enough shortcuts accumulate to justify the declarative API.
+  Narrowed by ADR-0015: this applies to shortcuts whose command needs nothing from the focused view;
+  a shortcut whose command needs the focused web view's id, project, or text selection stays in the
+  renderer, in one shared hook.
 - **Source:** discovery brief for "Donna syncs her project with the team (core Send/Receive)".
 
 ## ADR-0003: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
@@ -539,3 +542,47 @@ step, no automation. Just a record.
   `docs/superpowers/specs/2026-08-13-analytics-abstraction-layer-design.md`; final whole-branch review
   of the implementing branch, which surfaced and fixed a startup-path regression (analytics
   initialization briefly gated extension-host activation) before merge.
+
+## ADR-0015: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
+
+- **Date:** 2026-08-18
+- **Status:** Accepted (narrows ADR-0002 rather than superseding it)
+- **Context:** PT-4341 makes Find (Ctrl+F) reachable from every scripture tab type, not just the
+  Scripture editor. ADR-0002 says app-global shortcuts belong in the Electron main-process
+  `before-input-event` handler (`src/main/main.ts`) and explicitly rejects "renderer-level global
+  `keydown` — duplicated into every web-view" as the alternative. Find is app-wide in the sense that
+  the user expects Ctrl+F to work wherever scripture is on screen, so on its face this work looks
+  like an ADR-0002 case. But `platformScripture.openFind` is not a zero-argument command: it needs
+  the id of the web view the user is *in*, the project of the scripture that web view is *showing*
+  (for a reference panel this is the displayed resource, not the tab's own `projectId`), and that
+  web view's current **text selection** to pre-fill the search box. `before-input-event` fires in the
+  main process, which has none of those: it can identify the focused window, not the focused tab, and
+  it cannot read a selection inside an `about:srcdoc` iframe. Routing them back would mean inventing
+  a "focused scripture tab reports its selection" channel — a platform capability that does not exist.
+- **Decision:** Keep the Ctrl+F handler in the renderer, inside the web views, but hold it in **one
+  shared hook** — `useOpenFindShortcut` in
+  `extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts` — that every
+  scripture tab type mounts (Scripture editor, model text, Bible text, commentary, Text Collection).
+  The hook owns the key match, the "no scripture resolved yet" no-op, the selection read, and the
+  error logging; a tab supplies only its web view id and the project id of the scripture it is
+  showing. ADR-0002 continues to govern shortcuts whose command needs nothing from the focused view.
+  The Text Collection tab shows several resources at once and so has no single displayed resource: it
+  supplies the project of the resource holding the **caret**, tracked by `useFocusedResourceProjectId`
+  off the cells' `data-project-id`.
+- **Alternatives:** (a) **A `before-input-event` branch per ADR-0002** — rejected: it cannot supply
+  the triggering web view id, the displayed resource's project, or the selection, so Find would open
+  against the wrong scripture and never pre-fill. (b) **`before-input-event` plus a new "focused
+  scripture tab" PAPI channel that reports id + project + selection** — deferred: that is the
+  general fix (and the honest precondition for making Ctrl+F app-global), but it is a platform
+  capability well beyond this ticket's scope. (c) **Duplicate the listener per web view** (what the
+  first draft of this branch did, with the editor keeping its own inline copy) — rejected: two
+  implementations of the same shortcut drift, which is exactly ADR-0002's stated objection.
+- **Consequences:** Ctrl+F works only in tabs that mount the hook, so **each new scripture tab type
+  is an opt-in** — the real coverage gap of the renderer-level approach, and the one thing the
+  main-process handler would have given for free. Adding a tab type is one hook call plus a resolved
+  source project. The catalog entry `scripture-find` in `src/stories/keyboard-shortcuts.data.ts` lists
+  the hook plus every mount site, so the current coverage is greppable in one place; keeping it
+  accurate is what stops the gap from going unnoticed. **Revisit** if (b) is ever built, or once
+  enough view-context-dependent shortcuts accumulate to justify a general channel.
+- **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
+  branch diverged from ADR-0002 without recording why.
