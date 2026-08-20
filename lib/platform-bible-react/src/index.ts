@@ -280,6 +280,14 @@ export {
 export * from './components/shadcn-ui/button-group';
 export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
+export {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from './components/shadcn-ui/empty';
 export { Input } from './components/shadcn-ui/input';
 export { Kbd, KbdGroup } from './components/shadcn-ui/kbd';
 export { Label } from './components/shadcn-ui/label';
