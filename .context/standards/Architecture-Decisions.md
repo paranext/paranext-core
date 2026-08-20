@@ -631,18 +631,28 @@ step, no automation. Just a record.
   Each interface mode keeps **exactly one** persistent sync surface: Simple mode → the toolbar
   indicator; Power mode → the C# toast. This is not symmetric by default — the indicator is rendered
   only `!isPowerMode`, so gating the toast off in Power mode as well would leave Power mode with no
-  sync surface at all. The mode gate is applied **inside** `ShowSyncNotification` in Studio's patch —
-  one choke point, downstream of the `showNotification` parameter — so it covers every caller
-  (`SyncProjects`, which omits `showNotification` and defaults it to `true`; `SendReceiveProjects`,
-  which defaults `suppressNotification` to `false`) without touching either signature. Of
-  `RunWithSyncNotification`'s three separate toast surfaces, only the in-progress, cancellable one
-  (`ShowSyncNotification`) is gated off in Simple mode, because it is the one the indicator's `syncing`
-  state and popover Cancel already cover. `NotifyIfRoleChanged` and the thrown-failure/connection toast
-  keep firing in both modes — the indicator has no state for either, and NN-4's "Connection problem"
-  UX remains explicitly deferred (ADR-0014). Plain sync failure (`NotifyIfSyncFailed`) is the one
-  terminal case gated off in Simple mode: it is reported instead by the indicator's `failed` state,
-  which already exists and is truthful (ADR-0014), with detail staying in the sync-status web view
-  behind the popover's existing link. Reading interface mode on the toast-gate path is a cached value
+  sync surface at all. `RunWithSyncNotification` actually carries **four** separate toast surfaces,
+  and the mode gate — a single predicate, `ShouldShowPersistentSyncToast()` — is consulted at two of
+  them, suppressing two and leaving two untouched:
+  - `ShowSyncNotification` — the persistent, cancellable in-progress toast. **Gated off** in Simple
+    mode, because it is the one the indicator's `syncing` state and popover Cancel already cover. The
+    gate for this surface is placed **inside** `ShowSyncNotification` itself rather than at its call
+    sites, which is what makes it cover every caller including the wrapper-less ones: `SyncProjects`
+    omits the `showNotification` argument entirely (defaulting it to `true`) and `SendReceiveProjects`
+    defaults its own `suppressNotification` to `false`, but neither caller needs to know the mode gate
+    exists, and `syncProjects` having no `suppressNotification` parameter at all stops mattering.
+  - `NotifyIfSyncFailed` — the plain-failure toast. Also **gated off** in Simple mode, by a second,
+    deliberate call to the same `ShouldShowPersistentSyncToast()` predicate immediately before this
+    toast fires — because the indicator already derives a `failed` state from
+    `lastResults.resultsInfo` (ADR-0014) and links to the sync-status web view for detail, so showing
+    this toast too would recreate the double surface this decision removes.
+  - `NotifyIfRoleChanged` — **kept** in both modes; the indicator has no state for a role change.
+  - The thrown-failure toast in the `catch` block, including its connection-failure variant —
+    **kept** in both modes; the indicator has no state for a connection problem, and NN-4's
+    "Connection problem" UX remains explicitly deferred (ADR-0014).
+
+  So two of the four surfaces are suppressed in Simple mode and two are kept; nothing is gated in
+  Power mode. Reading interface mode on the toast-gate path is a cached value
   (seeded at startup, refreshed from `SettingsService`'s `onDidUpdate`) rather than a live round trip,
   because `ShowSyncNotification` runs under the held sync semaphore and a blocking `GetSetting` call
   there would compete with the same 10-second budget `WaitUntilAvailableAsync` already protects.
@@ -670,8 +680,9 @@ step, no automation. Just a record.
   - **Thread a `suppressNotification` flag to every call site.** Rejected: `syncProjects` has no such
     parameter today, so this would mean changing the C# signature, the extension's own `.d.ts`, core's
     mirrored `src/@types/paratext-bible-send-receive/index.d.ts`, and every call site — for a flag
-    whose only job is "don't show this one toast in this one mode." The single choke point inside
-    `ShowSyncNotification` achieves the same effect with none of that surface area.
+    whose only job is "don't show this one toast in this one mode." Placing the mode check inside the
+    two gated toast functions themselves — `ShowSyncNotification` and `NotifyIfSyncFailed` — achieves
+    the same effect with none of that surface area, and neither call site needs to change.
 - **Consequences:**
   - **A cached-mode read and a fail-open renderer hook disagree by design on a failed settings read.**
     `useIsPowerMode` (`src/renderer/hooks/use-is-power-mode.hook.ts`) falls back to `false` (Simple)
