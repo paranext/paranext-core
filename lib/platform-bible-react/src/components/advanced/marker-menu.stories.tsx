@@ -396,3 +396,76 @@ export const ParagraphMarkersAndCommands: Story = {
     },
   },
 };
+
+export const CodeStyledMarkersWithTrailingDetail: Story = {
+  args: {
+    localizedStrings,
+    markerMenuItems: [
+      {
+        marker: 'p',
+        title: 'Paragraph - Normal - First Line Indent',
+        subtitle: 'Paragraph text, with first line indent',
+        action: fn(),
+      },
+      {
+        marker: 'q1',
+        title: 'Poetry - Level 1',
+        subtitle: 'Poetic line, first level of indent',
+        action: fn(),
+      },
+      { marker: 'toc1', title: 'Long Table of Contents Text', action: fn() },
+      { marker: 'mt1', title: 'Major Title - Level 1', subtitle: 'Book title', action: fn() },
+    ],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Marker codes render in monospace, so they read as the codes they are rather than as ' +
+          "prose. Each row's detail sits to the right of its title, smaller and muted, and gives " +
+          'up its space first — the title identifies the row, so it keeps as much of the width as ' +
+          'it can. Both truncate rather than wrap, and both carry the full text in a `title` ' +
+          'attribute. The `toc1` row shows a marker with no detail at all.',
+      },
+    },
+  },
+};
+
+export const NarrowPopover: Story = {
+  // Same 200px squeeze as `NarrowWithLongTitles`, on the other row shape: marker code plus trailing
+  // detail, rather than long titles with selection affordances. The two shapes give up their space
+  // differently, so both are worth seeing at the narrow end.
+  decorators: [
+    (Story) => (
+      <div className="tw:w-[200px] tw:rounded-md tw:border tw:border-border">
+        <Story />
+      </div>
+    ),
+  ],
+  args: {
+    markerMenuItems: [
+      {
+        marker: 'p',
+        title: 'Paragraph - Normal - First Line Indent',
+        subtitle: 'Paragraph text, with first line indent',
+        action: fn(),
+      },
+      {
+        marker: 'q1',
+        title: 'Poetry - Level 1',
+        subtitle: 'Poetic line, first level of indent',
+        action: fn(),
+      },
+    ],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The narrowest width consumers pin this popover to. The detail is down to an ellipsis ' +
+          'while the title is still readable — the row stays identifiable when there is only ' +
+          'room for one of the two.',
+      },
+    },
+  },
+};

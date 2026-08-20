@@ -164,6 +164,10 @@ export {
 export { default as Toolbar } from './components/advanced/toolbar.component';
 export type { ToolbarProps } from './components/advanced/toolbar.component';
 export {
+  ToolbarCompoundLabel,
+  type ToolbarCompoundLabelProps,
+} from './components/advanced/toolbar-compound-label/toolbar-compound-label.component';
+export {
   default as UiLanguageSelector,
   type LanguageInfo,
   type UiLanguageSelectorProps,
@@ -326,6 +330,14 @@ export {
   type UseListboxProps,
   type ListboxOption,
 } from './hooks/listbox-keyboard-navigation.hook';
+// `getShrinkStep` and `SHRINK_STEP_HYSTERESIS_PX` are deliberately NOT re-exported: they are the
+// hook's internals, and the per-toolbar threshold constants are tuning values the ADR expects to
+// move. Exporting either would make changing them a consumer-visible change. Tests import them by
+// module path instead.
+export { useShrinkStep } from './hooks/use-shrink-step.hook';
+
+// Contexts
+export { ShrinkStepContext, useShrinkStepValue, SHRINK_STEP } from './context/shrink-step.context';
 
 // Z-index scale
 export {

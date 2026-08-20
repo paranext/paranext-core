@@ -1,5 +1,7 @@
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
-import React, { PropsWithChildren, ReactNode } from 'react';
+import React, { PropsWithChildren, ReactNode, useCallback, useState } from 'react';
+import { ShrinkStepContext } from '@/context/shrink-step.context';
+import { useShrinkStep } from '@/hooks/use-shrink-step.hook';
 import { SelectMenuItemHandler } from '../menus/platform-menubar.component';
 
 export type TabToolbarCommonProps = {
@@ -49,19 +51,65 @@ export type TabToolbarContainerProps = PropsWithChildren<{
   id?: string;
   /** Additional css classes to help with unique styling of the extensible toolbar */
   className?: string;
+  /**
+   * Overrides the shrink step this toolbar would otherwise measure from its own width, and
+   * publishes it to descendants through `ShrinkStepContext`. Higher means narrower.
+   *
+   * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
+   * the app, leave this unset and let the toolbar measure itself.
+   */
+  shrinkStep?: number;
 }>;
+
+/**
+ * Breakpoints for the tab toolbar, widest first, measured against the container's own outer box.
+ * That box includes its `tw:px-4`, so roughly 32px of each number is padding rather than room for
+ * controls. Unlike the application titlebar — where the caption-button reserve lands inside or
+ * outside the measured box depending on the platform, so `Toolbar` observes its padding-free inner
+ * row instead — this padding is the same everywhere, so there is no cross-platform skew to
+ * correct.
+ *
+ * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
+ * adjust them the first time this is watched in a running app.
+ */
+export const TAB_TOOLBAR_SHRINK_THRESHOLDS_PX = Object.freeze([520, 420, 340]);
 
 /** Wrapper that allows consistent styling for both TabToolbar and TabFloatingMenu. */
 export const TabToolbarContainer = React.forwardRef<HTMLDivElement, TabToolbarContainerProps>(
-  ({ id, className, children }, ref) => (
-    <div
-      ref={ref}
-      className={`tw:sticky tw:top-0 tw:box-border tw:flex tw:h-14 tw:flex-row tw:items-center tw:justify-between tw:gap-2 tw:overflow-clip tw:px-4 tw:py-2 tw:text-foreground tw:@container/toolbar ${className}`}
-      id={id}
-    >
-      {children}
-    </div>
-  ),
+  ({ id, className, children, shrinkStep: shrinkStepOverride }, ref) => {
+    // The root node lives in state, not a ref: mutating `ref.current` does not re-run the effect
+    // inside `useShrinkStep`, so a ref would leave the observer permanently unattached. The
+    // forwarded ref is still populated alongside it so callers keep the node they expect.
+    const [rootNode, setRootNode] = useState<HTMLDivElement | undefined>(undefined);
+
+    const attachRoot = useCallback(
+      (node: HTMLDivElement | null) => {
+        setRootNode(node ?? undefined);
+        if (typeof ref === 'function') ref(node);
+        // Writing `ref.current` IS how an object ref is populated — React itself does exactly this
+        // for a non-callback ref. There is no non-mutating alternative when forwarding one by hand,
+        // which this component must do because it also needs the node in state for the observer.
+        // eslint-disable-next-line no-param-reassign
+        else if (ref) ref.current = node;
+      },
+      [ref],
+    );
+
+    const measuredShrinkStep = useShrinkStep(rootNode, TAB_TOOLBAR_SHRINK_THRESHOLDS_PX);
+    const shrinkStep = shrinkStepOverride ?? measuredShrinkStep;
+
+    return (
+      <ShrinkStepContext.Provider value={shrinkStep}>
+        <div
+          ref={attachRoot}
+          className={`tw:sticky tw:top-0 tw:box-border tw:flex tw:h-14 tw:flex-row tw:items-center tw:justify-between tw:gap-2 tw:overflow-clip tw:px-4 tw:py-2 tw:text-foreground tw:@container/toolbar ${className}`}
+          id={id}
+        >
+          {children}
+        </div>
+      </ShrinkStepContext.Provider>
+    );
+  },
 );
 
 export default TabToolbarContainer;

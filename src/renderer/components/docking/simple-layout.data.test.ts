@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
-import { simpleLayout } from './simple-layout.data';
+import { RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX, simpleLayout } from './simple-layout.data';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
 vi.mock('../../../shared/services/logger.service');
@@ -92,16 +92,61 @@ describe('simple-layout.data', () => {
       expect(allWebViewTypes).toContain('platformScripture.find');
     });
 
-    it('each column panel has panelLock.minWidth of 300 so it cannot be resized to nothing', () => {
-      columns.forEach((col) => {
-        // Narrowing column to BoxData and its first child to PanelData to read panelLock.
-        // rc-dock's Algorithm.fixPanelOrBox unconditionally resets box/panel minWidth to 0,
-        // but then respects panelLock.minWidth as an override (Algorithm.js lines 566-569).
-        // This test verifies the constraint is set on panelLock, the field that survives fixup.
+    // Narrowing column to BoxData and its first child to PanelData to read panelLock.
+    // rc-dock's Algorithm.fixPanelOrBox unconditionally resets box/panel minWidth to 0,
+    // but then respects panelLock.minWidth as an override (Algorithm.js lines 566-569).
+    // panelLock is the field that survives that fixup, so it is the one to assert on.
+    const columnMinWidths = () =>
+      columns.map((col) => {
+        // rc-dock types a box child as the union BoxData | PanelData | TabData, with no
+        // discriminant to narrow on. This layout is authored right here in simple-layout.data.ts,
+        // so the shape is known statically; asserting it is the only way to read panelLock.
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         const panel = (col as BoxData).children[0] as PanelData;
-        expect(panel.panelLock?.minWidth).toBe(300);
+        return panel.panelLock?.minWidth ?? 0;
       });
+
+    it('each column panel has a panelLock.minWidth so it cannot be resized to nothing', () => {
+      columnMinWidths().forEach((minWidth) => {
+        expect(minWidth).toBeGreaterThan(0);
+      });
+    });
+
+    it('leaves the three columns plus their dividers narrower than the smallest window the app allows, so narrowing to the minimum cannot force a horizontal scrollbar', () => {
+      // Mirrors `minWidth` on the BrowserWindow in src/main/main.ts. It cannot be imported —
+      // main.ts pulls in Electron — so lowering that number will NOT fail this test. Change both.
+      const WINDOW_MIN_WIDTH_PX = 900;
+
+      // The reserve rc-dock actually budgets per divider, which is what decides whether the dock
+      // overflows. Deliberately NOT the 2px the Simple-mode stylesheet paints: rc-dock hard-codes 4
+      // in its own arithmetic, so using the visual width here makes 3 x 300 look like it fits (898)
+      // while rc-dock demands 902 and the app grows a scrollbar.
+      const minWidths = columnMinWidths();
+      const dividerCount = minWidths.length - 1;
+      const totalMinWidth =
+        minWidths.reduce((sum, minWidth) => sum + minWidth, 0) +
+        dividerCount * RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX;
+
+      expect(totalMinWidth).toBeLessThanOrEqual(WINDOW_MIN_WIDTH_PX);
+    });
+
+    it('keeps each column close to the ~300px UX asked for, so the fit is not bought by shrinking columns', () => {
+      // Guards the other direction from the invariant above: that test alone would pass if someone
+      // "fixed" an overflow by dropping the columns to 100px each.
+      columnMinWidths().forEach((minWidth) => {
+        expect(minWidth).toBeGreaterThanOrEqual(290);
+      });
+    });
+
+    it('keeps the editor column weighted wider than the two side columns', () => {
+      // rc-dock renders each column as `flex: (size) (size * 1e6) (size)px` (DockBox.js), so `size`
+      // is a proportional weight and the columns already rescale continuously with the window —
+      // no JS resize handling involved. The weighting only stops mattering at the narrowest window,
+      // where all three floors bind and the columns come out equal; above that the editor grows
+      // twice as fast as its neighbours.
+      const sizes = columns.map((col) => col.size);
+
+      expect(sizes).toEqual([1, 2, 1]);
     });
   });
 });

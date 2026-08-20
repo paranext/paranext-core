@@ -48,14 +48,17 @@ import {
   SelectTrigger,
   SelectValue,
   ScrollGroupSelector,
+  SHRINK_STEP,
   Spinner,
   Toolbar,
+  ToolbarCompoundLabel,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
   useEvent,
   usePromise,
+  useShrinkStepValue,
 } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -63,7 +66,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { CSSProperties, useCallback, useMemo, useState } from 'react';
+import { CSSProperties, ReactNode, useCallback, useMemo, useState } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
@@ -89,6 +92,84 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
 ];
+
+/**
+ * The project selector's trigger label.
+ *
+ * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which `Toolbar`
+ * publishes. `PlatformBibleToolbar` _renders_ `Toolbar`, so a hook call there would sit above the
+ * provider and read the widest step forever. This renders as `Toolbar`'s descendant, so it sees the
+ * real value.
+ */
+function ProjectSelectorLabel({
+  fullName,
+  shortName,
+  errorMessage,
+}: {
+  fullName: string;
+  shortName: string;
+  errorMessage?: string;
+}) {
+  const shrinkStep = useShrinkStepValue();
+  const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM;
+
+  // An error replaces the label rather than sharing it. Putting it in the compound label's
+  // secondary slot would clip it mid-sentence and then drop it entirely at the narrowest step,
+  // leaving red text as the only signal that anything is wrong.
+  if (errorMessage) {
+    return (
+      <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-destructive" title={errorMessage}>
+        {errorMessage}
+      </span>
+    );
+  }
+
+  return (
+    <ToolbarCompoundLabel
+      // The short name is the identifying part, so it is the field that must survive — but it reads
+      // second, hence `secondaryFirst`.
+      primary={isAtMinimum ? shortName : `(${shortName})`}
+      secondary={fullName}
+      secondaryFirst
+      showSecondary={!isAtMinimum}
+      fullText={`${fullName} (${shortName})`}
+    />
+  );
+}
+
+/**
+ * The project selector's trigger, sized to the space the toolbar currently has.
+ *
+ * The width floor lives here rather than inline at the call site for the same reason
+ * {@link ProjectSelectorLabel} is its own component: the step comes from `ShrinkStepContext`, which
+ * `Toolbar` publishes, so it can only be read from a component rendered as `Toolbar`'s descendant.
+ *
+ * The floor has to move with the step or dropping the full name buys nothing — the label would just
+ * get shorter inside a box still reserving 192px, and the space it was supposed to free would come
+ * out of `BookChapterControl` instead.
+ */
+function ProjectSelectorTrigger({
+  placeholder,
+  children,
+}: {
+  placeholder: string | undefined;
+  children?: ReactNode;
+}) {
+  const shrinkStep = useShrinkStepValue();
+
+  return (
+    <SelectTrigger
+      className={cn(
+        'tw:max-w-64 tw:border-0 tw:bg-transparent',
+        // Still a floor at the narrowest step, just a smaller one: the short name alone needs
+        // little room, but the trigger has to stay a comfortable click target.
+        shrinkStep >= SHRINK_STEP.MINIMUM ? 'tw:min-w-24' : 'tw:min-w-48',
+      )}
+    >
+      <SelectValue placeholder={placeholder}>{children}</SelectValue>
+    </SelectTrigger>
+  );
+}
 
 export function PlatformBibleToolbar() {
   const { currentProject, recentProjects, allProjects, currentProjectError } =
@@ -453,27 +534,21 @@ export function PlatformBibleToolbar() {
             }}
             disabled={!hasProjectPickerItems}
           >
-            <SelectTrigger className="tw:max-w-64 tw:min-w-48 tw:border-0 tw:bg-transparent">
-              <SelectValue
-                placeholder={
-                  hasProjectPickerItems
-                    ? localizedStrings['%projectPicker_toolbar_select_project%']
-                    : localizedStrings['%projectPicker_toolbar_no_projects%']
-                }
-              >
-                {currentProject && (
-                  <span
-                    className={cn(
-                      'tw:min-w-0 tw:flex-1 tw:truncate',
-                      currentProjectError && 'tw:text-destructive',
-                    )}
-                  >
-                    {currentProjectError ??
-                      `${currentProject.fullName} (${currentProject.shortName})`}
-                  </span>
-                )}
-              </SelectValue>
-            </SelectTrigger>
+            <ProjectSelectorTrigger
+              placeholder={
+                hasProjectPickerItems
+                  ? localizedStrings['%projectPicker_toolbar_select_project%']
+                  : localizedStrings['%projectPicker_toolbar_no_projects%']
+              }
+            >
+              {currentProject && (
+                <ProjectSelectorLabel
+                  fullName={currentProject.fullName}
+                  shortName={currentProject.shortName}
+                  errorMessage={currentProjectError}
+                />
+              )}
+            </ProjectSelectorTrigger>
             {hasProjectPickerItems && (
               <SelectContent>
                 {projectPickerItems.map((p) => (
