@@ -164,8 +164,10 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   // Consent gate (see isFirstRunComplete): no automatic sync until the user has been asked.
   if (!(await isFirstRunComplete())) {
     // States only what is known: the gate is also closed when the flag could not be read, which
-    // already warned for itself.
-    logger.debug('Startup sync skipped: first-run sync consent not confirmed');
+    // already warned for itself. Info, not debug, so it survives the packaged builds' info log
+    // level — matching the shutdown and window-close consent skips (`shutdown-tasks.ts`), which
+    // support reads to explain a session that did not sync.
+    logger.info('Startup sync skipped: first-run sync consent not confirmed');
     return;
   }
 

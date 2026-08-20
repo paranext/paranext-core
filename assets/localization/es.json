@@ -542,7 +542,7 @@
   "%settings_platform_ptxUtilsMementoData_label%": "PtxUtils Memento Data (oculto - sin traducir intencionalmente)",
   "%settings_platform_requestTimeout_description%": "Número de segundos que se permite para que las solicitudes internas se completen. Las solicitudes que tarden más de este tiempo serán abortadas. Establezca en 0 para nunca abortar solicitudes.",
   "%settings_platform_requestTimeout_label%": "Tiempo de espera de la solicitud",
-  "%settings_platform_syncOnStartup_description%": "En el modo simplificado, sincroniza automáticamente sus proyectos cada vez que se inicia la aplicación. El modo avanzado ignora esta configuración y usa la programación de sincronización de cada proyecto.",
+  "%settings_platform_syncOnStartup_description%": "Sincroniza automáticamente sus proyectos cada vez que se inicia la aplicación.",
   "%settings_platform_syncOnStartup_label%": "Sincronizar automáticamente al iniciar",
   "%settings_platform_zoomFactor_description%": "Se aplica a toda la aplicación. El valor predeterminado es 1. El rango permitido es de 0,5 a 3.",
   "%settings_platform_zoomFactor_errorMessage%": "El rango permitido es de {lowerLimit} a {upperLimit}.",

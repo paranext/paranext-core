@@ -1112,9 +1112,9 @@ export function startDefaultProjectPicker(papi: typeof PapiBackend): Unsubscribe
  * e.g. `openDefaultActiveProjectIfApplicable`'s `paratextBibleSendReceive.getSharedProjects`
  * registry lookup.)
  *
- * Contract: this assumes a Simple-mode caller, since the gate is applied unconditionally. A future
- * Power-mode call site must NOT reuse this function as-is — `platform.firstRunComplete` is never
- * set outside Simple mode, so the gate would suppress that caller's sync permanently.
+ * The consent gate applies in Simple mode only. `platform.firstRunComplete` is never written
+ * outside Simple mode, so gating a Power-mode caller on it would suppress that caller's sync
+ * permanently — this reads the mode rather than trusting callers to know that.
  */
 export async function syncOnProjectSwitch(
   papi: typeof PapiBackend,
@@ -1124,23 +1124,35 @@ export async function syncOnProjectSwitch(
   // First-run consent gate (PT-4369). The wizard is an overlay, not a replacement: the project
   // picker behind it can drive a switch through here long before the sync-consent step. An
   // unreadable flag means DON'T sync — a failed read must never be why a fresh user's projects go
-  // over the network unasked. Gating unconditionally is safe only because the sole caller — the
-  // `needsOverlay` branch of this extension's own entry point,
-  // `extensions/src/platform-scripture-editor/src/main.ts` (NOT the main process's `src/main/`) —
-  // requires Simple mode; see `src/main/first-run-consent.util.ts` for why Power mode must never be
-  // gated on this flag.
-  let firstRunComplete = false;
+  // over the network unasked. See `src/main/first-run-consent.util.ts` (the main process's
+  // `src/main/`, not this extension's) for the same rule and why Power mode is exempt.
+  //
+  // Read the mode here rather than trusting the caller: today the only call site is the
+  // `needsOverlay` branch of this extension's own `main.ts`, which is Simple-mode only, but a
+  // Power-mode caller that inherited this gate would lose its sync silently and permanently. An
+  // unreadable mode is treated as Simple, so the gate still applies — the consent-safe direction.
+  let interfaceMode;
   try {
-    firstRunComplete = (await papi.settings.get('platform.firstRunComplete')) === true;
+    interfaceMode = await papi.settings.get('platform.interfaceMode');
   } catch (e) {
     papi.logger.warn(
-      `Project-switch sync: failed to read platform.firstRunComplete (${getErrorMessage(e)}); skipping sync`,
+      `Project-switch sync: failed to read platform.interfaceMode (${getErrorMessage(e)}); applying the first-run consent gate anyway`,
     );
   }
-  if (!firstRunComplete) {
-    // Says only what is known: the read may have failed rather than the wizard being unfinished.
-    papi.logger.debug('Project-switch sync skipped: first-run sync consent not confirmed');
-    return;
+  if (interfaceMode !== 'power') {
+    let firstRunComplete = false;
+    try {
+      firstRunComplete = (await papi.settings.get('platform.firstRunComplete')) === true;
+    } catch (e) {
+      papi.logger.warn(
+        `Project-switch sync: failed to read platform.firstRunComplete (${getErrorMessage(e)}); skipping sync`,
+      );
+    }
+    if (!firstRunComplete) {
+      // Says only what is known: the read may have failed rather than the wizard being unfinished.
+      papi.logger.info('Project-switch sync skipped: first-run sync consent not confirmed');
+      return;
+    }
   }
 
   try {

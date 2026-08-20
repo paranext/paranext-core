@@ -16,7 +16,8 @@ import { getErrorMessage } from 'platform-bible-utils';
  * Simple mode ONLY, deliberately: `platform.firstRunComplete` is only ever written by the
  * Simple-mode wizard (`markFirstRunComplete` in `src/renderer/services/first-run-store.ts`), so in
  * Power mode it stays false forever — gating Power mode on it would permanently disable that mode's
- * scheduled session sync, and the setting is `isHidden`, so there is no UI to turn it back on.
+ * scheduled session sync, and `platform.firstRunComplete` is `isHidden`, so there is no UI to turn
+ * it back on.
  */
 export async function isFirstRunComplete(): Promise<boolean> {
   try {
