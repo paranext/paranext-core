@@ -50,6 +50,11 @@ export function getShrinkStep(
  * a ref-based version would silently never observe a node that attaches after mount. Callers keep
  * the node in state behind a callback ref.
  *
+ * Observe the element whose box IS the space available to content — a padding-free inner row rather
+ * than a wrapper that reserves space with padding. The measurement is a border box, so padding on
+ * the observed element counts as usable width; where a toolbar's reserved space lives can differ
+ * between platforms for the same window, which would otherwise make the steps platform-dependent.
+ *
  * `thresholds` must be a stable reference (a module-level constant). A fresh array on every render
  * would tear down and rebuild the observer on every render.
  *
@@ -78,9 +83,8 @@ export function useShrinkStep(
     if (!element || typeof ResizeObserver === 'undefined') return undefined;
 
     // Always re-measure the element rather than reading the observer entry: `contentRect` is the
-    // content box while this seed reads the border box, and every toolbar root has horizontal
-    // padding — mixing the two shifts the thresholds by that padding between mount and first
-    // resize.
+    // content box while this seed reads the border box, so mixing the two would shift the
+    // thresholds by the observed element's padding between mount and the first resize.
     const measure = () => {
       const { width } = element.getBoundingClientRect();
       setStep((previousStep) => getShrinkStep(width, thresholds, previousStep));

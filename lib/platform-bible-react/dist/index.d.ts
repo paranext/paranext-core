@@ -1883,7 +1883,12 @@ type TabToolbarCommonProps = {
 	menuButtonIcon?: React$1.ReactNode;
 };
 /**
- * Breakpoints for the tab toolbar, widest first, measured against its own width.
+ * Breakpoints for the tab toolbar, widest first, measured against the container's own outer box.
+ * That box includes its `tw:px-4`, so roughly 32px of each number is padding rather than room for
+ * controls. Unlike the application titlebar — where the caption-button reserve lands inside or
+ * outside the measured box depending on the platform, so `Toolbar` observes its padding-free inner
+ * row instead — this padding is the same everywhere, so there is no cross-platform skew to
+ * correct.
  *
  * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
  * adjust them the first time this is watched in a running app.
@@ -2045,11 +2050,17 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	shrinkStep?: number;
 }>;
 /**
- * Breakpoints for the application titlebar, widest first, measured against the toolbar's OWN width
- * — not the window's. On Windows and Linux the toolbar sits inside a wrapper whose padding reserves
- * the caption-button strip, so it is roughly 150px narrower than the window; on macOS it is not.
- * Thresholds picked from window width would therefore fire a step early, and differently per
- * platform.
+ * Breakpoints for the application titlebar, widest first, measured against the width actually
+ * available to the toolbar's content — the inner row, inside whatever padding reserves the OS
+ * caption buttons — and never against the window's width.
+ *
+ * Which box is measured is load-bearing here. The caption-button reserve sits INSIDE the toolbar's
+ * own box on macOS (`tw:ps-[85px]`) and on the Windows/Linux fallback (`tw:pe-[…]`), but OUTSIDE it
+ * when Electron reports a live overlay rect and the wrapper reserves the space instead (see
+ * `platform-bible-toolbar.tsx`). Measuring the outer box would therefore report up to ~150px more
+ * room on one path than another for the same window width, and the same window would abbreviate the
+ * scripture reference on one OS but not on the next. The inner row is the space the controls really
+ * get, on every path.
  *
  * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
  * adjust them the first time this is watched in a running app.
@@ -3896,6 +3907,11 @@ export declare function getShrinkStep(width: number, thresholds: readonly number
  * a ref-based version would silently never observe a node that attaches after mount. Callers keep
  * the node in state behind a callback ref.
  *
+ * Observe the element whose box IS the space available to content — a padding-free inner row rather
+ * than a wrapper that reserves space with padding. The measurement is a border box, so padding on
+ * the observed element counts as usable width; where a toolbar's reserved space lives can differ
+ * between platforms for the same window, which would otherwise make the steps platform-dependent.
+ *
  * `thresholds` must be a stable reference (a module-level constant). A fresh array on every render
  * would tear down and rebuild the observer on every render.
  *
@@ -3914,8 +3930,9 @@ export declare function useShrinkStep(element: HTMLElement | undefined, threshol
  * Named shrink steps, ordered widest to narrowest. Consumers compare against these (`step >=
  * SHRINK_STEP.MINIMUM`), so the ascending order is part of the contract.
  *
- * Not every surface uses all four — the marker menu, for example, only distinguishes `WIDE` from
- * everything narrower.
+ * Not every surface uses all four. `BookChapterControl` walks the whole ladder, while a control
+ * with only one shorter form — the project selector, the paragraph style label — reads a single
+ * boundary (`step >= SHRINK_STEP.MINIMUM`) and ignores the rest.
  */
 export declare const SHRINK_STEP: Readonly<{
 	/** Full labels. */

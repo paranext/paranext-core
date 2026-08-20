@@ -1,13 +1,39 @@
 // @vitest-environment jsdom
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
-import { Toolbar } from '@/components/advanced/toolbar.component';
+import {
+  getToolbarOSReservedSpaceClassName,
+  Toolbar,
+} from '@/components/advanced/toolbar.component';
 
 /** Reads the step from inside the toolbar, which is the only position that sees the provider. */
 function StepProbe() {
   return <span data-testid="step">{useShrinkStepValue()}</span>;
+}
+
+/** Jsdom ships no `ResizeObserver`. This one records which element the toolbar chose to measure. */
+class RecordingResizeObserver implements ResizeObserver {
+  static instances: RecordingResizeObserver[] = [];
+
+  observed: Element[] = [];
+
+  constructor() {
+    RecordingResizeObserver.instances.push(this);
+  }
+
+  observe(target: Element) {
+    this.observed.push(target);
+  }
+
+  unobserve(target: Element) {
+    this.observed = this.observed.filter((element) => element !== target);
+  }
+
+  disconnect() {
+    this.observed = [];
+  }
 }
 
 describe('Toolbar', () => {
@@ -64,5 +90,44 @@ describe('Toolbar', () => {
     );
 
     expect(screen.getByTestId('step')).toHaveTextContent(String(SHRINK_STEP.MINIMUM));
+  });
+
+  describe('what it measures', () => {
+    const originalResizeObserver = globalThis.ResizeObserver;
+
+    beforeEach(() => {
+      RecordingResizeObserver.instances = [];
+      globalThis.ResizeObserver = RecordingResizeObserver;
+    });
+
+    afterEach(() => {
+      globalThis.ResizeObserver = originalResizeObserver;
+    });
+
+    it('measures the inner content row, not the wrapper that reserves the OS caption buttons', () => {
+      // The reserve is padding on the outer box on macOS and on the Windows/Linux fallback, but a
+      // sibling wrapper's padding when Electron reports a live overlay rect. Measuring the outer box
+      // would therefore report up to ~150px more room on one path than another at the same window
+      // width, so the same window would abbreviate the reference on one OS but not the next.
+      render(
+        <Toolbar
+          onSelectMenuItem={() => {}}
+          id="app-toolbar"
+          className={getToolbarOSReservedSpaceClassName('darwin')}
+        >
+          <span>Content</span>
+        </Toolbar>,
+      );
+      const outerBox = document.getElementById('app-toolbar');
+      const [observed] = RecordingResizeObserver.instances.flatMap((instance) => instance.observed);
+
+      expect(observed).toBeDefined();
+      expect(observed).not.toBe(outerBox);
+      expect(outerBox?.contains(observed)).toBe(true);
+      // Whatever element it settles on, the reserve and the toolbar's own inline padding have to be
+      // outside it — that is the property the thresholds depend on, not the identity of the node.
+      expect(observed.className).not.toMatch(/tw:ps-\[85px\]/);
+      expect(observed.className).not.toMatch(/(?:^|\s)tw:px-4(?:\s|$)/);
+    });
   });
 });
