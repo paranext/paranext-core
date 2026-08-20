@@ -166,7 +166,7 @@ function setUsjResult(value: unknown, isLoading = false) {
 function lastFedUsjText(): string {
   if (!setUsjSpy.mock.lastCall) throw new Error('setUsj was never called — nothing was fed');
   const [fedUsj] = setUsjSpy.mock.lastCall;
-  return JSON.stringify(fedUsj) ?? '';
+  return JSON.stringify(fedUsj);
 }
 
 // Renders ResourceCell with the given chapter USJ wired through useProjectData, mirroring the
