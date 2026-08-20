@@ -2,9 +2,17 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
-import { forwardRef, ReactNode, useEffect } from 'react';
+import { forwardRef, type Ref, ReactNode, useEffect } from 'react';
 import * as store from '@renderer/services/first-run-store';
 import { FirstRunOverlay } from './first-run-overlay.component';
+
+// Records what FirstRunGate hands TooltipPortalContainerProvider, so a test can prove the gate
+// actually wires its dialog element through (see the "portals tooltips into the gate" test).
+// vi.hoisted so the value exists before the hoisted vi.mock factory below references it.
+const tooltipPortal = vi.hoisted<{
+  container: HTMLElement | null | undefined;
+  wrapped: boolean;
+}>(() => ({ container: undefined, wrapped: false }));
 
 vi.mock('@renderer/services/first-run-store', async (importActual) => {
   const actual = await importActual<typeof store>();
@@ -72,8 +80,22 @@ vi.mock('platform-bible-react', () => {
   function DialogStub({ children }: { children: ReactNode }) {
     return <div>{children}</div>;
   }
-  function DialogContentStub({ children }: { children: ReactNode }) {
-    return <div>{children}</div>;
+  // Forwards ref and keeps data-testid so a test can assert the gate wires this element into
+  // TooltipPortalContainerProvider. React 19 passes `ref` as an ordinary prop.
+  function DialogContentStub({
+    children,
+    ref,
+    'data-testid': testId,
+  }: {
+    children: ReactNode;
+    ref?: Ref<HTMLDivElement>;
+    'data-testid'?: string;
+  }) {
+    return (
+      <div ref={ref} data-testid={testId}>
+        {children}
+      </div>
+    );
   }
   function DialogTitleStub({ children }: { children: ReactNode }) {
     return <span>{children}</span>;
@@ -97,9 +119,24 @@ vi.mock('platform-bible-react', () => {
   function InterfaceLanguagePickerStub() {
     return <div data-testid="language-picker" />;
   }
+  // Context-only provider in the real library (it just chooses a portal target), so passing the
+  // children straight through is a faithful stub. Records its container prop so a test can prove
+  // the gate wires its dialog element in rather than silently dropping the fix.
+  function TooltipPortalContainerProviderStub({
+    container,
+    children,
+  }: {
+    container: HTMLElement | null;
+    children: ReactNode;
+  }) {
+    tooltipPortal.container = container;
+    tooltipPortal.wrapped = true;
+    return children;
+  }
   return {
     Dialog: DialogStub,
     DialogContent: DialogContentStub,
+    TooltipPortalContainerProvider: TooltipPortalContainerProviderStub,
     DialogTitle: DialogTitleStub,
     DialogDescription: DialogDescriptionStub,
     Button: ButtonStub,
@@ -158,7 +195,11 @@ beforeAll(() => {
 });
 
 // beforeEach (not afterEach) so mocks are clean even when a prior test throws mid-run.
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  tooltipPortal.container = undefined;
+  tooltipPortal.wrapped = false;
+});
 // restoreAllMocks resets vi.spyOn implementations; clearAllMocks alone does not. useRealTimers
 // undoes any fake timers a test installed so it can't leak into the next test's userEvent.
 afterEach(() => {
@@ -171,6 +212,19 @@ describe('FirstRunOverlay', () => {
     mockGetStatus.mockReturnValue({ kind: 'app' });
     const { container } = render(<FirstRunOverlay />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  // The gate is opaque and stacks above the tooltip layer (Z_INDEX_FIRST_RUN 700 vs
+  // Z_INDEX_TOOLTIP 550), so a tooltip in any step would portal to document.body and paint behind
+  // it. Guards both halves of the fix: that the provider wraps the gate's content at all, and that
+  // it receives the dialog element rather than staying null. Removing either the wrapper or the
+  // DialogContent ref in FirstRunGate fails this.
+  it('portals tooltips into the gate dialog so they are not painted behind it', () => {
+    mockGetStatus.mockReturnValue({ kind: 'wizard', step: 'language' });
+    render(<FirstRunOverlay />);
+
+    expect(tooltipPortal.wrapped).toBe(true);
+    expect(tooltipPortal.container).toBe(screen.getByTestId('first-run-dialog'));
   });
 
   it('renders the wizard shell when status is wizard', () => {

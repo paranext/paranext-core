@@ -6,6 +6,7 @@ import { getNetworkEvent } from '@shared/services/network.service';
 import type { SyncProgressDetail, SyncProgressEvent } from 'paratext-bible-send-receive';
 import { LocalizeKey, PlatformEvent } from 'platform-bible-utils';
 import { FirstRunStepProps } from '../first-run-step-props.model';
+import { WizardStepHeading } from '../wizard-step-heading.component';
 
 type SyncProgressStepProps = FirstRunStepProps & {
   /**
@@ -187,9 +188,9 @@ export function SyncProgressStep({
         {/* role="status" wraps only the announcement text — not the rows — so screen readers
             do not re-read the whole project list on the heading transition. */}
         <div role="status" className="tw:flex tw:flex-col tw:gap-2">
-          <h2 className="tw:text-base tw:font-medium">
+          <WizardStepHeading>
             {strings['%firstRun_step_syncProgress_complete_heading%']}
-          </h2>
+          </WizardStepHeading>
           <p className="tw:text-sm tw:text-muted-foreground">
             {strings['%firstRun_step_syncProgress_complete_body%']}
           </p>
@@ -205,9 +206,7 @@ export function SyncProgressStep({
           for both states. Wraps only the static heading/body — not the progress indicator
           (which changes frequently) — to avoid over-announcing. */}
       <div role="status" className="tw:flex tw:flex-col tw:gap-1">
-        <h2 className="tw:text-base tw:font-medium">
-          {strings['%firstRun_step_syncProgress_heading%']}
-        </h2>
+        <WizardStepHeading>{strings['%firstRun_step_syncProgress_heading%']}</WizardStepHeading>
         <p className="tw:text-sm tw:text-muted-foreground">
           {strings['%firstRun_step_syncProgress_body%']}
         </p>

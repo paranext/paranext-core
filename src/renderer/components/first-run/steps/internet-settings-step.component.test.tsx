@@ -18,6 +18,8 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%internetSettings_button_retry%': 'Retry',
+      '%internetSettings_webView_title_2%': 'Internet & connectivity',
+      '%internetSettings_subtitle_short%': 'Manage how Paratext accesses the internet',
       '%firstRun_step_internetSettings_connecting%': 'Getting things ready…',
       '%firstRun_step_internetSettings_loadError%':
         "We couldn't get things ready. Please try again in a moment.",
@@ -125,6 +127,25 @@ function renderStep(setCanProceed = vi.fn()) {
 describe('InternetSettingsStep', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  // The heading and its lead-in match the standalone Internet & Connectivity web view. They wrap
+  // every state so they hold their place instead of popping in once the provider resolves.
+  it.each([
+    ['loaded', { value: MOCK_SETTINGS, isLoading: false }],
+    ['provider not yet registered', { provider: undefined }],
+    ['data still loading', { isLoading: true }],
+    ['read failed', { value: newPlatformError('boom'), isLoading: false }],
+  ])('shows the "Internet & connectivity" heading and its lead-in when %s', (_label, opts) => {
+    configureHooks(opts);
+    renderStep();
+
+    expect(
+      screen.getByRole('heading', { name: 'Internet & connectivity', level: 2 }),
+    ).toBeInTheDocument();
+    // The lead-in is what frames the radio list, so it must be present in every state — without it
+    // the first thing the user reads is the bare "Unrestricted" option (PT-4363).
+    expect(screen.getByText('Manage how Paratext accesses the internet')).toBeInTheDocument();
   });
 
   it('shows a spinner and no error while the provider is undefined', () => {
