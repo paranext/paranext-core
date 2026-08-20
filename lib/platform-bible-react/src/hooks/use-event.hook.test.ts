@@ -25,6 +25,7 @@ function createControlledEvent<T>({ throwOnUnsubscribe = false } = {}) {
     event,
     emitTo: (index: number, data: T) => registrations[index].handler(data),
     getUnsubscribeCallCount: (index: number) => registrations[index].unsubscribeCallCount,
+    getSubscribeCount: () => registrations.length,
   };
 }
 
@@ -105,9 +106,12 @@ describe('useEvent', () => {
       { initialProps },
     );
 
-    // Tearing down an effect that never subscribed must be a no-op, not a call through a missing
-    // unsubscriber
-    rerender({ event: controlled.event });
+    expect(controlled.getSubscribeCount()).toBe(0);
+
+    // Re-running the effect tears down the never-subscribed one first; that must be a no-op rather
+    // than a call through a missing unsubscriber
+    expect(() => rerender({ event: controlled.event })).not.toThrow();
+    expect(controlled.getSubscribeCount()).toBe(1);
 
     act(() => controlled.emitTo(0, 'arrived'));
     expect(eventHandler).toHaveBeenCalledExactlyOnceWith('arrived');
@@ -123,13 +127,16 @@ describe('useEvent', () => {
     expect(controlled.getUnsubscribeCallCount(0)).toBe(1);
   });
 
-  it('warns instead of throwing when the unsubscriber fails during cleanup', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('logs instead of throwing when the unsubscriber fails during cleanup', () => {
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const controlled = createControlledEvent<string>({ throwOnUnsubscribe: true });
     const { unmount } = renderHook(() => useEvent(controlled.event, vi.fn()));
 
     expect(() => unmount()).not.toThrow();
     expect(controlled.getUnsubscribeCallCount(0)).toBe(1);
-    expect(warn).toHaveBeenCalledOnce();
+    expect(logError).toHaveBeenCalledWith(
+      'useEvent: error while unsubscribing from event',
+      expect.objectContaining({ message: 'unsubscribe failed' }),
+    );
   });
 });

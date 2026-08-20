@@ -17,8 +17,8 @@ import {
  * it — e.g. one already in flight over the network — is ignored rather than delivered to
  * `eventHandler`. If the subscribe promise resolves only after the subscription was already
  * superseded, the resolved unsubscriber is invoked immediately so the subscription does not leak.
- * Subscribe and unsubscribe failures are logged as warnings rather than thrown — neither has a
- * caller that could catch them.
+ * Subscribe and unsubscribe failures are logged rather than thrown — neither has a caller that
+ * could catch them. A failed unsubscribe is logged, not retried.
  *
  * @param event The asynchronously (un)subscribing event to subscribe to.
  *
@@ -51,9 +51,12 @@ export const useEventAsync = <T>(
       if (!isCancelled) eventHandler(eventData);
     };
 
-    // Runs the unsubscriber at most once no matter which path gets there first (cleanup, or the
-    // subscribe promise resolving after cleanup). Fire-and-forget: nothing can await an effect
-    // cleanup, so failures are logged instead of thrown
+    // Makes ONE attempt to unsubscribe, from whichever path gets there first (cleanup, or the
+    // subscribe promise resolving after cleanup). The flag is set before the await, so a failed
+    // unsubscribe is NOT retried - for a network event that leaves the remote registration live for
+    // the rest of the session, which is the accepted cost of a fire-and-forget teardown: nothing
+    // can await an effect cleanup, so there is no caller to retry or surface the failure to.
+    // Delivery is still muted locally by `isCancelled` either way.
     const unsubscribeOnce = () => {
       if (hasUnsubscribed || !unsubscribe) return;
 
@@ -63,7 +66,7 @@ export const useEventAsync = <T>(
         try {
           await unsubscribeCaptured();
         } catch (error) {
-          console.warn('useEventAsync: error while unsubscribing from event', error);
+          console.error('useEventAsync: error while unsubscribing from event', error);
         }
       })();
     };
@@ -75,7 +78,7 @@ export const useEventAsync = <T>(
         // Cleanup already ran while the subscribe was in flight, so tear down right away
         if (isCancelled) unsubscribeOnce();
       } catch (error) {
-        console.warn('useEventAsync: error while subscribing to event', error);
+        console.error('useEventAsync: error while subscribing to event', error);
       }
     })();
 

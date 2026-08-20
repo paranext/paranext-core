@@ -188,10 +188,14 @@ describe('useEventAsync', () => {
     expect(controlled.getUnsubscribeCallCount(0)).toBe(1);
   });
 
-  it('warns instead of throwing when subscribing fails', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('logs instead of throwing when subscribing fails', async () => {
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
     // A subscribe failure surfaces asynchronously, so escaping as an unhandled rejection is the
     // async shape of "throwing" — nothing in an effect could ever catch it.
+    const subscribeError = new Error('subscribe failed');
+    // Both listeners below are process-global within the vitest worker, so anything else running
+    // concurrently could land in them. Every assertion therefore matches on THIS error rather than
+    // counting events, so a neighboring test's rejection or log cannot fail this one.
     const escapedRejections: unknown[] = [];
     const recordRejection = (reason: unknown) => {
       escapedRejections.push(reason);
@@ -203,7 +207,7 @@ describe('useEventAsync', () => {
       const { unmount } = renderHook(() => useEventAsync(controlled.event, vi.fn()));
 
       const failedSubscribe = act(async () => {
-        controlled.rejectSubscribe(0, new Error('subscribe failed'));
+        controlled.rejectSubscribe(0, subscribeError);
       });
 
       // The failure must settle quietly rather than reject the render pass...
@@ -216,15 +220,18 @@ describe('useEventAsync', () => {
         setTimeout(resolve, 0);
       });
 
-      expect(escapedRejections).toEqual([]);
-      expect(warn).toHaveBeenCalledOnce();
+      expect(escapedRejections).not.toContain(subscribeError);
+      expect(logError).toHaveBeenCalledWith(
+        'useEventAsync: error while subscribing to event',
+        subscribeError,
+      );
     } finally {
       process.off('unhandledRejection', recordRejection);
     }
   });
 
-  it('warns instead of throwing when the unsubscriber fails', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('logs instead of throwing when the unsubscriber fails', async () => {
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const controlled = createControlledAsyncEvent<string>({
       unsubscriberFactory: (countCall) => async () => {
         countCall();
@@ -238,7 +245,11 @@ describe('useEventAsync', () => {
     await act(async () => {});
 
     expect(controlled.getUnsubscribeCallCount(0)).toBe(1);
-    expect(warn).toHaveBeenCalledOnce();
+    // Match on this error rather than counting calls: the spy is process-global within the worker
+    expect(logError).toHaveBeenCalledWith(
+      'useEventAsync: error while unsubscribing from event',
+      expect.objectContaining({ message: 'unsubscribe failed' }),
+    );
   });
 
   it('delivers exactly once per emission and leaks nothing under StrictMode double-mounting', async () => {
