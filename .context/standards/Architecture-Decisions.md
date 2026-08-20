@@ -1264,3 +1264,57 @@ step, no automation. Just a record.
   answer would have wiped that selection permanently — `useProjectSetting` reports an error as
   loaded, so the error branch has to be recognized on its own.
 - **Source:** PT-3299, review of #2708.
+
+## ADR-0026: A tab’s own web view supplies its selection to Find, rather than a shared selection store
+
+- **Date:** 2026-08-16
+- **Status:** Accepted
+- **Source:** PT-3216 (pass editor text selection to Find), PR #2692; builds on the shared Ctrl+F
+  hook from ADR-0015 / PT-4341.
+- **Context:** Opening Find from a scripture editor tab's menu needed that tab's text selection. The
+  work item proposed publishing the selection into the platform's shared store so a command handler
+  could read it. Two facts made that unnecessary and unavailable: (a) the scripture editor sets
+  `shouldShowToolbar: false` (`extensions/src/platform-scripture-editor/src/main.ts`) and instead
+  renders its own `TabToolbar` *inside* its web view
+  (`extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`), so its
+  menu handler already runs in the document that owns the selection; (b) `sharedStoreService`
+  (`src/shared/services/shared-store.service.ts`) is explicitly not part of the public API and is not
+  reachable from extensions.
+- **Decision:** Find takes the selection of the tab it was triggered from, read in that tab's own web
+  view via `window.getSelection()` and passed through the existing `platformScripture.openFind`
+  `selectedText` parameter. No cross-tab selection state. `resolveFindSelectionText`
+  (`extensions/src/platform-scripture-editor/src/find-trigger.util.ts`) is the single normalizer
+  every trigger goes through, so all of them apply the same two rules: trim (a double-click word
+  selection often carries a trailing space), and reject anything spanning lines (Find's search box is
+  a single-line input, so a Ctrl+A selection cannot be shown honestly and must not be flattened into
+  a run-on term). The two trigger paths deliberately
+  differ in one respect: the tab menu additionally consults a capture-phase pointer-press snapshot
+  (`use-selection-snapshot.hook.ts`), because the click that opens the dropdown is itself what
+  collapses the selection; Ctrl+F (`use-open-find-shortcut.hook.ts`, ADR-0015) reads only the live
+  selection, because a keystroke destroys nothing, and a fallback there would let a long-abandoned
+  selection pre-fill and immediately re-run a search over whatever term an open Find panel already
+  held.
+- **Alternatives:** (a) Shared store — rejected: not extension-accessible, and unnecessary once the
+  menu handler's location is understood. (b) A global "last selection" registry in the editor
+  extension built on the existing `platformScriptureEditor.onDidSelectionChange` event — deferred:
+  every Find entry point today is tab-scoped, so the triggering tab *is* the focused editor; a
+  registry would add cross-tab state with no current consumer. (c) Deriving the text from the
+  existing `PlatformScriptureEditorWebViewController.getSelection()` — rejected: that carries USJ
+  document offsets, not text, so it would mean re-reading and slicing USJ to recover a string the
+  triggering document already has.
+- **Consequences:** The selection path stays inside one file per tab type and needs no new
+  cross-process state. The snapshot is deliberately narrow, because a remembered selection that
+  outlives the interaction that produced it would pre-fill — and immediately re-run — a search over
+  whatever term the user had since typed into an open Find panel. Three bounds keep it honest: it
+  only remembers selections anchored inside the tab's text content (chrome has its own selectable
+  text — a reference input, a search box — that is not scripture); a press inside that content clears
+  it; and reading it consumes it, so it bridges exactly the one pointer press it exists for.
+  **Revisit** if a Find entry point ever lives outside a tab (a top-toolbar or application-menu Find,
+  or an extension asking "what is selected right now" to enable/disable menu items) — that is the
+  point where alternative (b) becomes the right answer. The snapshot is load-bearing, not defensive: in Chromium, a menu item's `click` handler
+  reads an empty `window.getSelection()` even though the same selection is still live at the
+  capture-phase `pointerdown` on that item — the collapse lands between the two, which is exactly the
+  window the snapshot covers. The end-to-end test written to prove this inside the real editor could
+  not be run in this development environment, and `test:e2e:isolated` (the only runner that reaches
+  `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
+  a manual pass rather than by automation.
