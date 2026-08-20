@@ -3,9 +3,9 @@ import { Section } from 'platform-bible-utils';
 import { getLocalizedBookName } from '@/components/shared/book.utils';
 import { useCallback, useMemo } from 'react';
 import {
-  getAvailableBookIds,
   getBooksForSection,
   isSectionFullySelected,
+  getAvailableBookIds,
 } from './scope-selector.utils';
 import { SelectBooksLocalizedStrings } from './select-books.types';
 import { SelectBooksPicker } from './select-books-picker.component';
@@ -52,6 +52,10 @@ export function SelectBooks({
 }: SelectBooksProps) {
   const moreText = localizedStrings['%webView_book_selector_more%'];
 
+  // `availableBookInfo` comes from the `BooksPresent` project setting, which is the empty default
+  // string until the setting resolves (and stays empty if the read errors). This component can
+  // mount inside that window, so it renders an empty book list — `getAvailableBookIds` degrades
+  // rather than throwing, which during render would tear down the web view. (PT-4092)
   const availableBooksIds = useMemo(
     () => getAvailableBookIds(availableBookInfo),
     [availableBookInfo],

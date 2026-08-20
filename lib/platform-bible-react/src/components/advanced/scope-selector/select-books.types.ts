@@ -13,7 +13,6 @@ export const SELECT_BOOKS_STRING_KEYS = Object.freeze([
   '%webView_book_selector_clear_all%',
   '%webView_book_selector_no_book_found%',
   '%webView_book_selector_more%',
-  '%webView_book_selector_all_books%',
   '%scripture_section_ot_long%',
   '%scripture_section_ot_short%',
   '%scripture_section_nt_long%',

@@ -76,6 +76,10 @@ export function SelectBooksPicker({
   const lastSelectedBookRef = useRef<string | undefined>(undefined);
   const lastKeyEventShiftKey = useRef(false);
 
+  // `availableBookInfo` comes from the `BooksPresent` project setting, which is the empty default
+  // string until the setting resolves (and stays empty if the read errors). This component can
+  // mount inside that window, so it renders an empty book list — `getAvailableBookIds` degrades
+  // rather than throwing, which during render would tear down the web view. (PT-4092)
   const availableBookIds = useMemo(
     () => getAvailableBookIds(availableBookInfo),
     [availableBookInfo],

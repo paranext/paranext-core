@@ -17,6 +17,7 @@ import {
   Checkbox,
   DisabledActionTooltip,
   EmptyState,
+  formatSelectedBooksList,
   Input,
   Label,
   Popover,
@@ -36,7 +37,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-  tryGetAvailableBookIds,
+  getAvailableBookIds,
 } from 'platform-bible-react';
 import { ScopeWithRange } from 'platform-bible-react/experimental';
 import {
@@ -522,14 +523,14 @@ export function Find({
         return localizedBookData.get(verseRef.book)?.localizedId ?? verseRef.book;
       case 'selectedBooks':
         // Listing every book overflowed this row and forced a horizontal scrollbar on the whole
-        // panel once more than a few were selected, so the summary collapses to "All books" /
-        // "GEN … HOS" (PT-4092).
+        // panel once more than a few were selected, so the summary collapses to "All books" or to a
+        // canon-order range of its first and last books, e.g. "GEN … HOS" (PT-4092).
         return (
           summarizeSelectedBooks(
             selectedBookIds,
-            tryGetAvailableBookIds(booksPresent),
-            scopeSelectorLocalizedStrings['%webView_book_selector_all_books%'] ??
-              '%webView_book_selector_all_books%',
+            getAvailableBookIds(booksPresent),
+            scopeSelectorLocalizedStrings['%webView_scope_selector_all_books%'] ??
+              '%webView_scope_selector_all_books%',
             localizedBookData,
           ) ?? '…'
         );
@@ -544,6 +545,37 @@ export function Find({
     booksPresent,
     scopeSelectorLocalizedStrings,
   ]);
+
+  /**
+   * Full canon-ordered book list for the trigger's tooltip, or undefined when the row already says
+   * everything. The collapsed summary above is lossy ("All books", or the first five books plus a
+   * "+N more" count past six books) and the selection is visible nowhere else in Find, so
+   * Guidelines/Responsiveness wants the full information reachable from the truncated text
+   * (PT-4092).
+   */
+  const scopeTooltipText = useMemo(() => {
+    if (scope !== 'selectedBooks') return undefined;
+    const fullList = formatSelectedBooksList(selectedBookIds, localizedBookData);
+    return fullList && fullList !== scopeDisplayText ? fullList : undefined;
+  }, [scope, selectedBookIds, localizedBookData, scopeDisplayText]);
+
+  /**
+   * The "Showing <scope>" button. Held in a variable so it can be the single element that both
+   * PopoverTrigger and (when there is a tooltip) TooltipTrigger compose their props onto.
+   */
+  const scopeTriggerButton = (
+    <Button
+      variant="outline"
+      size="sm"
+      className="tw:h-auto tw:gap-1 tw:px-2 tw:py-1 tw:font-normal"
+    >
+      <span className="tw:text-sm tw:text-muted-foreground">
+        {localizedStrings['%webView_find_showing%']}
+      </span>
+      <span className="tw:text-sm tw:font-medium">{scopeDisplayText}</span>
+      <ChevronDown className="tw:h-3 tw:w-3 tw:text-muted-foreground" />
+    </Button>
+  );
 
   // Configuration for the per-result replace preview. Present whenever in replace mode — including
   // an empty replacement term, so the "replace with nothing" (deletion) preview can render its
@@ -786,19 +818,24 @@ export function Find({
         {/* Scope selector row */}
         <div className="tw:flex tw:items-center tw:justify-between">
           <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="tw:h-auto tw:gap-1 tw:px-2 tw:py-1 tw:font-normal"
-              >
-                <span className="tw:text-sm tw:text-muted-foreground">
-                  {localizedStrings['%webView_find_showing%']}
-                </span>
-                <span className="tw:text-sm tw:font-medium">{scopeDisplayText}</span>
-                <ChevronDown className="tw:h-3 tw:w-3 tw:text-muted-foreground" />
-              </Button>
-            </PopoverTrigger>
+            {/* The trigger Button is already PopoverTrigger's `asChild` child, so the tooltip
+                composes into that same element — TooltipTrigger `asChild` in between, both sets of
+                props landing on the one Button — rather than adding a wrapper the popover would no
+                longer be anchored to. Only rendered when there is a lossy summary to expand
+                (PT-4092); otherwise the markup is exactly what it was. */}
+            {scopeTooltipText ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <PopoverTrigger asChild>
+                    <TooltipTrigger asChild>{scopeTriggerButton}</TooltipTrigger>
+                  </PopoverTrigger>
+                  {/* TooltipContent caps its own width (tw:max-w-xs), so a long list wraps. */}
+                  <TooltipContent>{scopeTooltipText}</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <PopoverTrigger asChild>{scopeTriggerButton}</PopoverTrigger>
+            )}
             {/* Height-capped and scrollable for the same reason as the books picker inside it
                 (PT-4092): in a narrow panel this popover can flip above its trigger, and anything
                 taller than the space there is clipped off past the top of the web view's iframe. */}

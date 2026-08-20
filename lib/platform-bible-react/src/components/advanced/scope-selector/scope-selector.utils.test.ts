@@ -1,20 +1,24 @@
 import { Canon } from '@sillsdev/scripture';
-import { summarizeSelectedBooks, tryGetAvailableBookIds } from './scope-selector.utils';
+import {
+  formatSelectedBooksList,
+  summarizeSelectedBooks,
+  getAvailableBookIds,
+} from './scope-selector.utils';
 
 describe('scope-selector.utils', () => {
-  describe('tryGetAvailableBookIds', () => {
+  describe('getAvailableBookIds', () => {
     test('Returns the available books for a well-formed info string', () => {
       const onlyGenesis = `1${'0'.repeat(Canon.allBookIds.length - 1)}`;
-      expect(tryGetAvailableBookIds(onlyGenesis)).toEqual(['GEN']);
+      expect(getAvailableBookIds(onlyGenesis)).toEqual(['GEN']);
     });
 
     test('Returns an empty array for an empty info string', () => {
       // `BOOKS_PRESENT_DEFAULT` is '', so this is what callers see before the setting loads.
-      expect(tryGetAvailableBookIds('')).toEqual([]);
+      expect(getAvailableBookIds('')).toEqual([]);
     });
 
     test('Returns an empty array for a wrong-length info string', () => {
-      expect(tryGetAvailableBookIds('1'.repeat(66))).toEqual([]);
+      expect(getAvailableBookIds('1'.repeat(66))).toEqual([]);
     });
   });
 
@@ -38,6 +42,15 @@ describe('scope-selector.utils', () => {
       expect(summarizeSelectedBooks(shuffled, availableBookIds, allBooksText)).toBe(allBooksText);
     });
 
+    test('Prefers the "all books" text over the collapsed range', () => {
+      // A full selection of a seven-book project is past the listing threshold, so the range form
+      // would otherwise apply; "All books" has to win or it would read "GEN … JDG".
+      const sevenBookProject = ['GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'JOS', 'JDG'];
+      expect(summarizeSelectedBooks(sevenBookProject, sevenBookProject, allBooksText)).toBe(
+        allBooksText,
+      );
+    });
+
     test('Lists every book when five or fewer are selected', () => {
       expect(summarizeSelectedBooks(['GEN', 'EXO', 'LEV'], availableBookIds, allBooksText)).toBe(
         'GEN, EXO, LEV',
@@ -51,12 +64,15 @@ describe('scope-selector.utils', () => {
     });
 
     test('Lists exactly five selected books in full', () => {
+      // The boundary of the listing threshold: five still lists, six collapses.
       expect(
         summarizeSelectedBooks(['GEN', 'EXO', 'LEV', 'NUM', 'DEU'], availableBookIds, allBooksText),
       ).toBe('GEN, EXO, LEV, NUM, DEU');
     });
 
-    test('Truncates to first … last in canon order when more than five are selected', () => {
+    test('Collapses to a first-to-last range once more than five are selected', () => {
+      // Listing every book overflowed the trigger, so past the threshold the summary keeps only
+      // the canon-order endpoints (this is how Paratext 9 summarizes a book set).
       expect(
         summarizeSelectedBooks(
           ['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU'],
@@ -64,6 +80,18 @@ describe('scope-selector.utils', () => {
           allBooksText,
         ),
       ).toBe('GEN … MRK');
+    });
+
+    test('Picks the range endpoints in canon order, not selection order', () => {
+      // Click order is meaningless to a reader, so the first and last books of the range must come
+      // from the canonical sort rather than from whichever book was clicked first.
+      expect(
+        summarizeSelectedBooks(
+          ['REV', 'MRK', 'MAT', 'JDG', 'JOS', 'DEU', 'NUM'],
+          availableBookIds,
+          allBooksText,
+        ),
+      ).toBe('NUM … REV');
     });
 
     test('Does not claim "all books" when a book the project lacks is selected', () => {
@@ -90,6 +118,22 @@ describe('scope-selector.utils', () => {
       ).toBe('Gén, Éxo');
     });
 
+    test('Uses localized book IDs for the endpoints of a collapsed range', () => {
+      // The range form must localize too — it used to be built from the raw English IDs.
+      const localizedBookNames = new Map([
+        ['GEN', { localizedId: 'Gén', localizedName: 'Génesis' }],
+        ['MRK', { localizedId: 'Mar', localizedName: 'Marcos' }],
+      ]);
+      expect(
+        summarizeSelectedBooks(
+          ['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU'],
+          availableBookIds,
+          allBooksText,
+          localizedBookNames,
+        ),
+      ).toBe('Gén … Mar');
+    });
+
     test('Falls back to the uppercase book ID when a book is missing from the localized map', () => {
       const localizedBookNames = new Map([
         ['GEN', { localizedId: 'Gén', localizedName: 'Génesis' }],
@@ -97,6 +141,39 @@ describe('scope-selector.utils', () => {
       expect(
         summarizeSelectedBooks(['GEN', 'EXO'], availableBookIds, allBooksText, localizedBookNames),
       ).toBe('Gén, EXO');
+    });
+  });
+
+  describe('formatSelectedBooksList', () => {
+    test('Returns undefined when nothing is selected', () => {
+      expect(formatSelectedBooksList([])).toBeUndefined();
+    });
+
+    test('Lists every selected book, however many there are', () => {
+      // This is the tooltip behind the collapsed summary, so it must never collapse into a
+      // `first … last` range the way `summarizeSelectedBooks` does past five books.
+      expect(formatSelectedBooksList(['GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'MRK', 'MAT'])).toBe(
+        'GEN, EXO, LEV, NUM, DEU, MAT, MRK',
+      );
+    });
+
+    test('Lists books in canon order, not selection order', () => {
+      expect(formatSelectedBooksList(['REV', 'GEN', 'MAT'])).toBe('GEN, MAT, REV');
+    });
+
+    test('Uses localized book IDs when a localized name map is provided', () => {
+      const localizedBookNames = new Map([
+        ['GEN', { localizedId: 'Gén', localizedName: 'Génesis' }],
+        ['EXO', { localizedId: 'Éxo', localizedName: 'Éxodo' }],
+      ]);
+      expect(formatSelectedBooksList(['GEN', 'EXO'], localizedBookNames)).toBe('Gén, Éxo');
+    });
+
+    test('Falls back to the uppercase book ID when a book is missing from the localized map', () => {
+      const localizedBookNames = new Map([
+        ['GEN', { localizedId: 'Gén', localizedName: 'Génesis' }],
+      ]);
+      expect(formatSelectedBooksList(['GEN', 'EXO'], localizedBookNames)).toBe('Gén, EXO');
     });
   });
 });

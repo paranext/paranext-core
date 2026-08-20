@@ -2,9 +2,10 @@
 
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { Canon } from '@sillsdev/scripture';
-import { tryGetAvailableBookIds } from 'platform-bible-react';
+import { getAvailableBookIds } from 'platform-bible-react';
 import { Find, FindProps } from './find.component';
 
 // jsdom does not implement ResizeObserver; platform-bible-react's Tooltip/Popover components wire
@@ -380,14 +381,17 @@ describe('Find — books-scope summary in the "Showing" trigger', () => {
   // The real BooksPresent setting is one character per canon book; the shared helper rejects any
   // other length, so these tests use a full-length string rather than buildProps' short stand-in.
   const ALL_BOOKS_PRESENT = '1'.repeat(Canon.allBookIds.length);
-  const allAvailableBookIds = tryGetAvailableBookIds(ALL_BOOKS_PRESENT);
+  const allAvailableBookIds = getAvailableBookIds(ALL_BOOKS_PRESENT);
 
   function buildBooksScopeProps(selectedBookIds: string[]): FindProps {
     return buildProps({
       scope: 'selectedBooks',
       booksPresent: ALL_BOOKS_PRESENT,
       selectedBookIds,
-      scopeSelectorLocalizedStrings: { '%webView_book_selector_all_books%': 'All books' },
+      scopeSelectorLocalizedStrings: {
+        '%webView_scope_selector_all_books%': 'All books',
+        '%webView_book_selector_more%': 'more',
+      },
     });
   }
 
@@ -400,11 +404,23 @@ describe('Find — books-scope summary in the "Showing" trigger', () => {
 
   it('truncates to a canon-order first … last range when more than five books are selected', () => {
     render(<Find {...buildBooksScopeProps(['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU'])} />);
+    // The regression this guards: every selected id joined into the trigger, which widened the
+    // "Showing" row until the whole panel grew a horizontal scrollbar.
     expect(screen.getByText('GEN … MRK')).toBeInTheDocument();
   });
 
   it('lists the books individually when few enough are selected', () => {
     render(<Find {...buildBooksScopeProps(['LEV', 'GEN', 'EXO'])} />);
     expect(screen.getByText('GEN, EXO, LEV')).toBeInTheDocument();
+  });
+
+  it('still opens the scope popover when the trigger also carries the full-selection tooltip', async () => {
+    // With a lossy summary the trigger Button is the asChild child of both PopoverTrigger and
+    // TooltipTrigger (PT-4092); nesting two asChild triggers is easy to get wrong in a way that
+    // silently stops the popover from opening.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<Find {...buildBooksScopeProps(['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'MAT'])} />);
+    await user.click(screen.getByText('GEN … MRK'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 });

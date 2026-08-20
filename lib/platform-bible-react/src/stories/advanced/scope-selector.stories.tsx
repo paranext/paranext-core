@@ -180,6 +180,7 @@ const rangeLocalizedStrings = {
   '%webView_scope_selector_selected_text%': 'Selected text',
   '%webView_scope_selector_scope%': 'Scope',
   '%webView_scope_selector_choose_books%': 'Choose specific books',
+  '%webView_scope_selector_all_books%': 'All books',
   '%webView_scope_selector_range%': 'Range',
   '%webView_scope_selector_select_range%': 'Select a range',
   '%webView_scope_selector_range_start%': 'From',
@@ -349,11 +350,13 @@ export const SelectedBooksScope: Story = {
           '%webView_scope_selector_current_verse%': 'Current verse',
           '%webView_scope_selector_scope%': 'Scope',
           '%webView_scope_selector_choose_books%': 'Choose specific books',
+          '%webView_scope_selector_all_books%': 'All books',
           '%webView_book_selector_books_selected%': 'books selected',
           '%webView_book_selector_select_books%': 'Select books',
           '%webView_book_selector_search_books%': 'Search books',
           '%webView_book_selector_select_all%': 'Select all',
           '%webView_book_selector_clear_all%': 'Clear all',
+          '%webView_book_selector_more%': 'more',
         }}
         localizedBookNames={mockLocalizedBookNames}
       />
@@ -497,11 +500,13 @@ export const WithLocalizedSpanishBookNames: Story = {
           '%webView_scope_selector_current_chapter%': 'Current chapter',
           '%webView_scope_selector_scope%': 'Scope',
           '%webView_scope_selector_choose_books%': 'Choose specific books',
+          '%webView_scope_selector_all_books%': 'All books',
           '%webView_book_selector_books_selected%': 'books selected',
           '%webView_book_selector_select_books%': 'Select books',
           '%webView_book_selector_search_books%': 'Search books',
           '%webView_book_selector_select_all%': 'Select all',
           '%webView_book_selector_clear_all%': 'Clear all',
+          '%webView_book_selector_more%': 'more',
         }}
         localizedBookNames={spanishBookNames}
       />
@@ -558,11 +563,13 @@ export const WithLocalizedGermanBookNames: Story = {
           '%webView_scope_selector_current_chapter%': 'Current chapter',
           '%webView_scope_selector_scope%': 'Scope',
           '%webView_scope_selector_choose_books%': 'Choose specific books',
+          '%webView_scope_selector_all_books%': 'All books',
           '%webView_book_selector_books_selected%': 'books selected',
           '%webView_book_selector_select_books%': 'Select books',
           '%webView_book_selector_search_books%': 'Search books',
           '%webView_book_selector_select_all%': 'Select all',
           '%webView_book_selector_clear_all%': 'Clear all',
+          '%webView_book_selector_more%': 'more',
         }}
         localizedBookNames={germanBookNames}
       />
