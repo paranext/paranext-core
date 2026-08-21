@@ -4,7 +4,7 @@
  * can import without dragging in React or PAPI.
  */
 
-import { ScrVersType } from '@sillsdev/scripture';
+import { Canon, ScrVersType } from '@sillsdev/scripture';
 import type {
   ManageBooksComparisonState,
   ManageBooksDialogLocalizedStrings,
@@ -147,3 +147,82 @@ export const versificationFallbackName = (value: number | string): string => {
       return 'Unknown';
   }
 };
+
+/**
+ * Paratext's book-number filename prefix, mirroring ParatextData
+ * `ProjectSettings.BookFileNameDigits` (`bookNum` is the 1-based canonical number, GEN=1):
+ * `01`-`09`, `10`-`39`, then a `+1` gap for 40-99 (so Matthew=40 is `41`), and `A0`/`B0`/`C0`
+ * letter codes for 100+.
+ */
+function bookFileNamePrefix(bookNum: number): string {
+  if (bookNum < 10) return `0${bookNum}`;
+  if (bookNum < 40) return `${bookNum}`;
+  if (bookNum < 100) return `${bookNum + 1}`;
+  if (bookNum < 110) return `A${bookNum - 100}`;
+  if (bookNum < 120) return `B${bookNum - 110}`;
+  return `C${bookNum - 120}`;
+}
+
+/**
+ * Detect the book id for an import file from its `\id` marker (preferred) or its filename.
+ *
+ * The book id is taken from the first `\id` marker in the SFM `content` when present and valid.
+ * Otherwise it falls back to the filename, which covers USX/XML imports (whose content never
+ * carries a `\id` marker), story decorators, and files whose text could not be read.
+ *
+ * Paratext names book files `<bookNumberDigits><bookId><projectShortName>` — or, in the `MAT`
+ * filename form, just `<bookId><projectShortName>` (see ParatextData
+ * `ProjectSettings.GetFileNameBookPart`). The fallback reconstructs each book's expected stem and
+ * returns the one the filename actually starts with. This replaces the old canonical-order
+ * substring scan, which returned the first book id appearing _anywhere_ in the name and so
+ * mis-detected:
+ *
+ * - Ids that appear earlier as a substring — `38ZECCUNP89T` contains `ECC` (Ecclesiastes) inside
+ *   `ZEC...`, so Zechariah was read as Ecclesiastes; and
+ * - Project short names that contain a book code.
+ *
+ * Anchoring to the reconstructed `<prefix><id>` keeps digit-leading ids correct too: `471COLXX` (1
+ * Corinthians from a project named `LXX...`) resolves to `1CO`, not `COL`, and `41MAT` resolves to
+ * `MAT`, not `1MA`. A leftmost-occurrence scan remains only as a last resort for names that match
+ * neither expected form.
+ *
+ * @param filename Import file name (e.g. `38ZECCUNP89T.SFM`).
+ * @param content Optional file text; the `\id` marker is used when present and recognized.
+ * @param allBooks Recognized book ids to match against, in canonical order.
+ * @returns The detected book id, or `undefined` when nothing matches.
+ */
+export function resolveImportBookId(
+  filename: string,
+  content: string | undefined,
+  allBooks: readonly string[],
+): string | undefined {
+  if (content) {
+    const idMatch = content.match(/^\s*\\id\s+([A-Za-z0-9]{2,4})/m);
+    if (idMatch) {
+      const candidate = idMatch[1].toUpperCase();
+      if (allBooks.includes(candidate)) return candidate;
+    }
+  }
+  const upper = filename.toUpperCase();
+  // Standard form: the name starts with the book's number prefix followed by its id.
+  const standard = allBooks.find((book) => {
+    const bookNum = Canon.bookIdToNumber(book);
+    return bookNum > 0 && upper.startsWith(`${bookFileNamePrefix(bookNum)}${book}`);
+  });
+  if (standard) return standard;
+  // `MAT` filename form: the name starts with the bare id (no number prefix).
+  const bareId = allBooks.find((book) => upper.startsWith(book));
+  if (bareId) return bareId;
+  // Last resort for names that follow neither form: the book id that occurs earliest in the name
+  // (position-based, so an earlier-canon substring no longer wins over the real book).
+  let detected: string | undefined;
+  let detectedIndex = Number.POSITIVE_INFINITY;
+  allBooks.forEach((book) => {
+    const index = upper.indexOf(book);
+    if (index !== -1 && index < detectedIndex) {
+      detectedIndex = index;
+      detected = book;
+    }
+  });
+  return detected;
+}
