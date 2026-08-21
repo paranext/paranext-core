@@ -6,6 +6,8 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
+import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
+import { RESOURCE_PANEL_TYPED_STRING_KEYS } from './resource-panel-strings.utils';
 
 type LocalizedStringsFile = {
   localizedStrings: Record<string, Record<string, string>>;
@@ -187,5 +189,37 @@ describe('retired book-not-found-in-project string', () => {
     expect(
       localizedStrings[locale]['%webView_platformScriptureEditor_error_bookNotFoundProject%'],
     ).toBeUndefined();
+  });
+});
+
+// The resource panels' strings come in matched `bibleTexts_` / `commentaries_` pairs and the model
+// text panel's in a single set, and none of them were covered here — so an en-only addition (or a
+// dropped `es` value) failed no check at all. Driven off the exported key lists so a key added to
+// either panel is covered without anyone remembering to edit this file.
+describe.each([...RESOURCE_PANEL_TYPED_STRING_KEYS])('resource panel label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+describe.each([...MODEL_TEXT_PANEL_STRING_KEYS])('model text panel label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });

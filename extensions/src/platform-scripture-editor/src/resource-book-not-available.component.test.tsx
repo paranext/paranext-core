@@ -3,7 +3,10 @@
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import {
+  RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID,
+  ResourceBookNotAvailable,
+} from './resource-book-not-available.component';
 
 const MESSAGE = 'This book does not exist in this Bible text.';
 
@@ -43,7 +46,8 @@ describe('ResourceBookNotAvailable', () => {
 
       render(<ResourceBookNotAvailable message={MESSAGE} />);
 
-      expect(screen.getByRole('status')).toHaveFocus();
+      // `role="status"` sits on the `EmptyState` message; the focusable wrapper is its parent.
+      expect(screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID)).toHaveFocus();
     });
 
     it('leaves focus alone when it is outside this document', () => {
@@ -54,7 +58,7 @@ describe('ResourceBookNotAvailable', () => {
 
       render(<ResourceBookNotAvailable message={MESSAGE} />);
 
-      expect(screen.getByRole('status')).not.toHaveFocus();
+      expect(screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID)).not.toHaveFocus();
     });
   });
 });

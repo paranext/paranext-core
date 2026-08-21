@@ -33,6 +33,7 @@ import {
   LocalizeKey,
   ResourceType,
 } from 'platform-bible-utils';
+import { Canon } from '@sillsdev/scripture';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -55,6 +56,7 @@ import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup
 import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { resolveResourceContentState } from './platform-scripture-editor.utils';
+import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -373,14 +375,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
     resourceShortName = selectedRef?.name;
   }
 
-  const titleKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_title%'
-      : '%webView_resourcePanel_commentaries_title%';
-  const titleWithResourceKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_title_withResource%'
-      : '%webView_resourcePanel_commentaries_title_withResource%';
+  // One resource type, one matched set of strings. See `resolveResourcePanelStringKeys`.
+  const {
+    titleKey,
+    titleWithResourceKey,
+    emptyStatePromptKey,
+    bookNotAvailableKey,
+    pickButtonKey,
+  } = resolveResourcePanelStringKeys(resourceType);
 
   useEffect(() => {
     const baseTitle = localizedStrings[titleKey];
@@ -409,7 +411,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region USJ Fetch
 
-  const [usjPossiblyError, , isUsjLoading] = useProjectData(
+  const [usjPossiblyError] = useProjectData(
     'platformScripture.USJ_Chapter',
     resourceProjectId,
   ).ChapterUSJ(
@@ -538,21 +540,6 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Render
 
-  const emptyStatePromptKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_emptyState_prompt%'
-      : '%webView_resourcePanel_commentaries_emptyState_prompt%';
-
-  const bookNotAvailableKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_bookNotAvailable%'
-      : '%webView_resourcePanel_commentaries_bookNotAvailable%';
-
-  const pickButtonKey =
-    resourceType === 'ScriptureResource'
-      ? '%webView_resourcePanel_bibleTexts_pick%'
-      : '%webView_resourcePanel_commentaries_pick%';
-
   if (!projectId) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
@@ -616,14 +603,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Loading state: USJ not yet available. `isUsjLoading` feeds in only to withhold the
-  // book-not-available message while the error may still belong to the reference the user just left;
-  // it deliberately does not gate the spinner, which would remount the editor on every chapter
-  // navigation. See `resolveResourceContentState`.
+  // Loading state: USJ not yet available. The book-not-available message is withheld unless the
+  // failure names the book AND project on screen right now, so a result still describing the
+  // reference the user just left cannot be misattributed to this one. See
+  // `resolveResourceContentState`.
   const contentState = resolveResourceContentState({
-    hasResourceProject: !!resourceProjectId,
+    resourceProjectId,
     usjPossiblyError,
-    isUsjLoading,
+    currentBookNum: Canon.bookIdToNumber(scrRef.book),
   });
 
   if (contentState === 'loading') {
@@ -651,11 +638,17 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
       {/* Scripture content, or the reason there is none. The selector above stays mounted either
         way: a resource missing a book has no remedy inside this panel, so the only thing the user
-        can do about it is switch to a text that has the book. */}
-      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-        {contentState === 'bookNotAvailable' ? (
+        can do about it is switch to a text that has the book.
+
+        Only the editor gets `dir`. That is the RESOURCE's text direction, and the message is app
+        chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
+        resource is RTL. */}
+      {contentState === 'bookNotAvailable' ? (
+        <div className="tw:flex-1 tw:overflow-auto">
           <ResourceBookNotAvailable message={localizedStrings[bookNotAvailableKey]} />
-        ) : (
+        </div>
+      ) : (
+        <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
           <Editorial
             ref={editorRef}
             scrRef={scrRef}
@@ -663,8 +656,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
             options={options}
             logger={logger}
           />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 

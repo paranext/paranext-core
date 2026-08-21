@@ -36,7 +36,8 @@ const STRINGS = {
     "The model text couldn't be installed. Check your connection and try again.",
   '%webView_modelTextPanel_retry%': 'Try again',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
-  '%webView_modelTextPanel_bookNotAvailable%': 'This book does not exist in this model text.',
+  '%webView_modelTextPanel_bookNotAvailable%':
+    'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -290,7 +291,9 @@ describe('ModelTextPanel', () => {
     });
 
     expect(
-      await screen.findByText('This book does not exist in this model text.'),
+      await screen.findByText(
+        'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+      ),
     ).toBeInTheDocument();
     // The blank editor is the bug being fixed: it gave the user no reason for the emptiness.
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
@@ -313,7 +316,9 @@ describe('ModelTextPanel', () => {
     // failure would state something the panel does not actually know.
     expect(await screen.findByTestId('editorial')).toBeInTheDocument();
     expect(
-      screen.queryByText('This book does not exist in this model text.'),
+      screen.queryByText(
+        'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -332,7 +337,9 @@ describe('ModelTextPanel', () => {
       scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
     });
     expect(
-      await screen.findByText('This book does not exist in this model text.'),
+      await screen.findByText(
+        'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+      ),
     ).toBeInTheDocument();
 
     rerender(
@@ -348,7 +355,9 @@ describe('ModelTextPanel', () => {
     // right there to be rendered.
     expect(await screen.findByTestId('editorial')).toBeInTheDocument();
     expect(
-      screen.queryByText('This book does not exist in this model text.'),
+      screen.queryByText(
+        'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+      ),
     ).not.toBeInTheDocument();
   });
 });

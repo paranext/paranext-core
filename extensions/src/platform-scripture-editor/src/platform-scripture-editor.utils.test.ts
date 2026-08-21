@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
-import { UsjTextContentLocation } from 'platform-bible-utils';
+import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
@@ -23,6 +23,7 @@ import {
   canAddChapterNumber,
   resolveAddChapterNumberClick,
   isMissingBookError,
+  parseMissingBookError,
   resolveResourceContentState,
 } from './platform-scripture-editor.utils';
 
@@ -2624,15 +2625,43 @@ describe('isMissingBookError', () => {
   });
 });
 
+describe('parseMissingBookError', () => {
+  it('reports which book and which project the failure names', () => {
+    expect(parseMissingBookError(new Error('Book number 40 not found in project abc123.'))).toEqual(
+      {
+        bookNum: 40,
+        projectId: 'abc123',
+      },
+    );
+  });
+
+  it('reads through the prefix the PDP wraps the message in', () => {
+    expect(
+      parseMissingBookError(
+        new Error('Error in getChapterUSJ: Book number 1 not found in project abc123.'),
+      ),
+    ).toEqual({ bookNum: 1, projectId: 'abc123' });
+  });
+
+  it('returns undefined for an unrelated failure, so callers cannot read identities off one', () => {
+    expect(parseMissingBookError(new Error('Project abc123 is not available'))).toBeUndefined();
+  });
+});
+
 describe('resolveResourceContentState', () => {
-  const MISSING_BOOK = new Error('Book number 1 not found in project abc123.');
+  const PROJECT_ID = 'abc123';
+  // Genesis. `Canon.bookIdToNumber('GEN')` is 1, which is what the panel passes.
+  const GENESIS = 1;
+  const MATTHEW = 40;
+  const missingBook = (bookNum: number, projectId = PROJECT_ID) =>
+    newPlatformError(new Error(`Book number ${bookNum} not found in project ${projectId}.`));
 
   it('returns "loading" before a resource project has resolved', () => {
     expect(
       resolveResourceContentState({
-        hasResourceProject: false,
+        resourceProjectId: undefined,
         usjPossiblyError: undefined,
-        isUsjLoading: false,
+        currentBookNum: GENESIS,
       }),
     ).toBe('loading');
   });
@@ -2640,9 +2669,9 @@ describe('resolveResourceContentState', () => {
   it('returns "loading" while no chapter data has arrived yet', () => {
     expect(
       resolveResourceContentState({
-        hasResourceProject: true,
+        resourceProjectId: PROJECT_ID,
         usjPossiblyError: undefined,
-        isUsjLoading: true,
+        currentBookNum: GENESIS,
       }),
     ).toBe('loading');
   });
@@ -2650,45 +2679,64 @@ describe('resolveResourceContentState', () => {
   it('returns "ready" once chapter data has arrived', () => {
     expect(
       resolveResourceContentState({
-        hasResourceProject: true,
+        resourceProjectId: PROJECT_ID,
         usjPossiblyError: { type: 'USJ', version: '3.1', content: [] },
-        isUsjLoading: false,
+        currentBookNum: GENESIS,
       }),
     ).toBe('ready');
   });
 
-  it('returns "bookNotAvailable" when the resource does not contain the book', () => {
+  it('returns "bookNotAvailable" when the failure names the book and project on screen', () => {
     expect(
       resolveResourceContentState({
-        hasResourceProject: true,
-        usjPossiblyError: MISSING_BOOK,
-        isUsjLoading: false,
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: missingBook(GENESIS),
+        currentBookNum: GENESIS,
       }),
     ).toBe('bookNotAvailable');
   });
 
-  it('withholds the message while the error may still describe the previous reference', () => {
-    // `useProjectData` keeps the PREVIOUS selector's result until the new subscription's first update
-    // lands, so an error read while `isUsjLoading` may describe the book the user just left. Showing
-    // the message off it would flash "not in this text" on the way INTO a book the text does have.
+  it('ignores a failure about a different book, in either direction of navigation', () => {
+    // `useProjectData` keeps serving the PREVIOUS selector's result until the new subscription's
+    // first update lands, so the error in hand may describe the book the user just left. Attributing
+    // it to the current book would flash "not in this text" on the way INTO a book the text has —
+    // and, because `isLoading` only returns to `true` in the subscription cleanup that runs after
+    // the selector-change render, on the way OUT of one it does not.
     expect(
       resolveResourceContentState({
-        hasResourceProject: true,
-        usjPossiblyError: MISSING_BOOK,
-        isUsjLoading: true,
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: missingBook(MATTHEW),
+        currentBookNum: GENESIS,
       }),
     ).toBe('ready');
   });
 
-  it('stays "ready" through a stale window rather than remounting the editor', () => {
-    // Not 'loading': that would fire on every reference change and remount the editor on every
-    // chapter navigation. The outgoing chapter lingering for a beat is pre-existing behaviour on
-    // every navigation (PT-4139), not something this fix makes worse.
+  it('ignores a failure about a different project, so switching resources cannot misreport', () => {
+    // Same stale window, reached by picking a different text from the panel's selector rather than
+    // by navigating. The book number alone would still match, so the project has to be checked too.
     expect(
       resolveResourceContentState({
-        hasResourceProject: true,
-        usjPossiblyError: { type: 'USJ', version: '3.1', content: [] },
-        isUsjLoading: true,
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: missingBook(GENESIS, 'someOtherProject'),
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('ready');
+  });
+
+  it('never reads a message off a success value', () => {
+    // Two failures at once if the success path reached the message check: `getErrorMessage` falls
+    // back to `JSON.stringify` for an object with no string `message`, so this would serialize the
+    // whole chapter on every render — and then match the regex against the scripture text, which
+    // here says exactly what the C# exception says.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: {
+          type: 'USJ',
+          version: '3.1',
+          content: [`Book number ${GENESIS} not found in project ${PROJECT_ID}.`],
+        },
+        currentBookNum: GENESIS,
       }),
     ).toBe('ready');
   });
@@ -2698,9 +2746,9 @@ describe('resolveResourceContentState', () => {
     // genuine failures as "this book is not here", which is a different and misleading claim.
     expect(
       resolveResourceContentState({
-        hasResourceProject: true,
-        usjPossiblyError: new Error('Project abc123 is not available'),
-        isUsjLoading: false,
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: newPlatformError(new Error('Project abc123 is not available')),
+        currentBookNum: GENESIS,
       }),
     ).toBe('ready');
   });

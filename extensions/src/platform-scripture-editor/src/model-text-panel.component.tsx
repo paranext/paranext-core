@@ -16,7 +16,7 @@ import {
   useExtraValidMarkers,
   useTruncationTooltip,
 } from 'platform-bible-react';
-import { type DblResourceData, type LocalizedStringValue } from 'platform-bible-utils';
+import { getErrorMessage, type DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -34,6 +34,10 @@ import { scrollToVerse } from './editor-dom.util';
 import { getRefLabel } from './resource-reference.utils';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { isMissingBookError } from './platform-scripture-editor.utils';
+import type {
+  ModelTextPanelLocalizedStringKey,
+  ModelTextPanelLocalizedStrings,
+} from './model-text-panel.const';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -46,30 +50,19 @@ const VIEW_OPTIONS = getDefaultViewOptions();
 /** Max ms to retry scrolling via rAF before giving up (e.g. verse marker missing from USJ) */
 const SCROLL_MAX_WAIT_MS = 2000;
 
-/**
- * Object containing all keys used for localization in this component. Pass these keys into the
- * Platform's localization hook and pass the resulting localized strings into the `localizedStrings`
- * prop.
- */
-export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
-  // Shown while an auto-installing (not user-picked) resource downloads.
-  '%webView_modelTextPanel_installing%',
-  // Shown while a user-picked resource is being selected/installed.
-  '%webView_modelTextPanel_selecting%',
-  '%webView_modelTextPanel_noProject%',
-  '%webView_modelTextPanel_pickModelText%',
-  '%webView_modelTextPanel_unknownResource%',
-  '%webView_modelTextPanel_installFailed%',
-  '%webView_modelTextPanel_installFailedOffline%',
-  '%webView_modelTextPanel_retry%',
-  '%webView_modelTextPanel_emptyState_prompt%',
-  '%webView_modelTextPanel_bookNotAvailable%',
-] as const);
+export {
+  MODEL_TEXT_PANEL_STRING_KEYS,
+  type ModelTextPanelLocalizedStringKey,
+  type ModelTextPanelLocalizedStrings,
+} from './model-text-panel.const';
 
-type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];
-type ModelTextPanelLocalizedStrings = {
-  [key in ModelTextPanelLocalizedStringKey]?: LocalizedStringValue;
-};
+/**
+ * Falls back to the key itself, matching the idiom in `book-not-available-view.component.tsx` and
+ * `empty-chapter-view.component.tsx`. Falling back to `''` instead would render an empty message
+ * region — a blank panel, which is the exact failure this panel's message exists to remove.
+ */
+const localize = (strings: ModelTextPanelLocalizedStrings, key: ModelTextPanelLocalizedStringKey) =>
+  strings[key] ?? key;
 
 const DEFAULT_SCR_REF: SerializedVerseRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
@@ -214,8 +207,15 @@ export function ModelTextPanel({
     load().catch((e) => {
       if (!isActive) return;
       setUsj(undefined);
-      setIsBookMissing(isMissingBookError(e));
+      const isMissingBook = isMissingBookError(e);
+      setIsBookMissing(isMissingBook);
       setIsUsjLoading(false);
+      // A missing book is now explained on screen, so it is not a failure worth logging. Anything
+      // else still renders an editor with no content, which is undiagnosable without this — the same
+      // gap this panel's message closes for the missing-book case. The main editor logs the same
+      // class of failure (`platform-scripture-editor.web-view.tsx`).
+      if (!isMissingBook)
+        logger?.error(`Error getting model text chapter USJ: ${getErrorMessage(e)}`);
     });
     return () => {
       isActive = false;
@@ -512,14 +512,20 @@ export function ModelTextPanel({
       {/* The model text, or the reason there is none. The label header above stays mounted either
         way, so the message is attributed to a named text rather than floating in an anonymous panel.
         Unlike the Bible texts panel there is no in-panel selector to preserve — this panel surfaces
-        its picker only in the zero and not-found states — so the remedy here is a book the text
-        covers, or changing the configured model text. */}
-      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-        {isBookMissing ? (
+        its picker only in the zero and not-found states — so this panel's message has to name the
+        remedy in words instead: a different model text, or a book this one covers.
+
+        Only the editor gets `dir`. That is the RESOURCE's text direction, and the message is app
+        chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
+        model text is RTL. */}
+      {isBookMissing ? (
+        <div className="tw:flex-1 tw:overflow-auto">
           <ResourceBookNotAvailable
-            message={localizedStrings['%webView_modelTextPanel_bookNotAvailable%'] ?? ''}
+            message={localize(localizedStrings, '%webView_modelTextPanel_bookNotAvailable%')}
           />
-        ) : (
+        </div>
+      ) : (
+        <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
           <Editorial
             ref={editorRef}
             scrRef={scrRef}
@@ -527,8 +533,8 @@ export function ModelTextPanel({
             options={options}
             logger={logger}
           />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
