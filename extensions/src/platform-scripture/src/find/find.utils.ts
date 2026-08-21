@@ -3,10 +3,13 @@ import {
   escapeStringRegexp,
   isPlatformError,
   isSelectableInvisibleCharOrWhiteSpace,
+  normalizeProjectId,
   PlatformError,
+  ScrollGroupId,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
 import { FindJobStatusReport, FindOptions } from 'platform-scripture';
+import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
@@ -237,6 +240,209 @@ export function armBoundedWait(onTimeout: () => void, delayMs: number): { clear:
  */
 export function isSimpleInterfaceMode(interfaceMode: 'simple' | 'power' | PlatformError): boolean {
   return isPlatformError(interfaceMode) || interfaceMode !== 'power';
+}
+
+/**
+ * A currently open scripture-editor tab, as tracked by `useOpenProjectTabs`.
+ *
+ * Derived from the hook's own type rather than restated, so the two cannot drift. The import is
+ * `import type`, which TypeScript erases entirely — so this module stays free of the runtime
+ * `@papi/frontend` import `use-open-project-tabs.ts` performs, and remains importable by the
+ * presentational component, its story, and this file's unit tests.
+ */
+export type OpenScrollGroupTab = Omit<OpenProjectTabWithWebView, 'webViewType'>;
+
+/**
+ * Runs a web-view-controller call, containing BOTH ways a controller for a CLOSED editor tab fails.
+ *
+ * A controller is a network object: disposing it revokes its proxy. After that, even READING a
+ * method off it (`controller.runAnnotationAction`) throws `TypeError: Cannot perform 'get' on a
+ * proxy that has been revoked` — **synchronously**, before any promise exists. So the
+ * natural-looking `controller?.method(...).catch(() => {})` cannot contain it: `?.` only guards
+ * nullish, and `.catch` only sees rejections. The escaping TypeError crashed the whole Find web
+ * view whenever the selected project's editor tab closed while an annotation-cleanup ran against
+ * the disposed controller.
+ *
+ * Wrapping the call in a thunk lets this helper own the property read too, so the sync throw and
+ * the async rejection funnel into one place.
+ *
+ * @param call Thunk that reads the method off the controller and invokes it. May return `undefined`
+ *   when there is no controller to call.
+ * @param onError Optional handler for either failure mode. Omit to swallow silently (correct for
+ *   best-effort cleanup, where the editor is already gone and there is nothing to report).
+ */
+export function callControllerSafely(
+  call: () => Promise<unknown> | undefined,
+  onError?: (error: unknown) => void,
+): void {
+  try {
+    call()?.catch((error: unknown) => onError?.(error));
+  } catch (error) {
+    // Synchronous throw from a revoked proxy (see above) — the editor tab is gone, so there is
+    // nothing to act on beyond reporting it.
+    onError?.(error);
+  }
+}
+
+/** A `(projectId, scrollGroupId)` pair Find's project selector has selected. */
+export type SelectedProjectScrollGroup = {
+  projectId: string;
+  scrollGroupId: ScrollGroupId;
+};
+
+/**
+ * Whether selecting `newProjectId` moves Find to a DIFFERENT project — the decision that gates
+ * abandoning the running find job, clearing results, and re-running the search.
+ *
+ * Compared case-INSENSITIVELY on purpose. `useOpenProjectTabs` reports lowercased project ids while
+ * canonical ids are UPPERCASE, so the selection can legitimately be corrected from `web` to `WEB`
+ * for the very same project. Treating that casing-only correction as a switch would abandon the
+ * job, wipe the results the user is reading, and start a second identical search.
+ *
+ * @param newProjectId The project id being selected.
+ * @param currentProjectId The project Find currently operates on, or `undefined` before any initial
+ *   selection has been made.
+ * @returns `true` when this is a move to a different project (including the initial selection,
+ *   where there is no current project); `false` for the same project, whatever its casing.
+ */
+export function isDifferentProjectSelection(
+  newProjectId: string,
+  currentProjectId: string | undefined,
+): boolean {
+  if (!currentProjectId) return true;
+  return normalizeProjectId(newProjectId) !== normalizeProjectId(currentProjectId);
+}
+
+/**
+ * Narrows a persisted book selection to the books the currently selected project actually has.
+ *
+ * `selectedBookIds` is persisted per web view, so switching projects can leave it naming books the
+ * new project doesn't contain. The finder engine skips absent books gracefully, so this is not a
+ * crash — but with the `selectedBooks` scope the search would silently cover fewer books than the
+ * checkbox list shows.
+ *
+ * An EMPTY `availableBookIds` means "not known yet", NOT "the project has no books": `booksPresent`
+ * sits at its all-zero default while the project setting resolves, and pruning against that
+ * transient empty set would wipe the whole selection instead of narrowing it. In that case the
+ * selection is returned untouched.
+ *
+ * @param availableBookIds Book ids the selected project has, or empty when not yet known.
+ * @param selectedBookIds The currently selected book ids.
+ * @returns The pruned ids, or the ORIGINAL `selectedBookIds` array reference when nothing needed
+ *   removing — so callers can compare by identity to skip a redundant state write (which also keeps
+ *   an effect that depends on this from re-triggering itself).
+ */
+export function prunePresentBookIds(
+  availableBookIds: readonly string[],
+  selectedBookIds: string[],
+): string[] {
+  if (availableBookIds.length === 0) return selectedBookIds;
+  const availableBookIdSet = new Set(availableBookIds);
+  const prunedBookIds = selectedBookIds.filter((bookId) => availableBookIdSet.has(bookId));
+  return prunedBookIds.length === selectedBookIds.length ? selectedBookIds : prunedBookIds;
+}
+
+/**
+ * Resolves which `(project, scroll group)` pair Find's project selector should have selected, given
+ * the currently open scripture-editor tabs. Restricting the picker to only open projects means the
+ * selection can go stale the moment a tab closes, so this is re-run whenever the set of open tabs
+ * changes.
+ *
+ * - Returns the current selection unchanged when its tab is still open.
+ * - Otherwise prefers another open tab of the SAME project — trying `preferredWebViewId` (the tab
+ *   that originally opened Find, so a reload/first mount resumes exactly where it was) before any
+ *   other tab of that project — since the project itself hasn't changed, only which tab a result
+ *   click targets.
+ * - Falls back to the first remaining open tab of any project once the current project has no open
+ *   tabs left at all.
+ * - Returns `undefined` when no tabs are open anywhere.
+ *
+ * @param currentProjectId Find's current project id.
+ * @param currentScrollGroupId The currently selected scroll group, or `undefined` before an initial
+ *   selection has been made.
+ * @param openTabs Currently open scripture-editor tabs.
+ * @param preferredWebViewId A tab id to prefer when resolving a same-project fallback (typically
+ *   the tab that originally opened Find).
+ */
+export function resolveSelectedProjectScrollGroup(
+  currentProjectId: string,
+  currentScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenScrollGroupTab[],
+  preferredWebViewId: string | undefined,
+): SelectedProjectScrollGroup | undefined {
+  const normalizedCurrentProjectId = normalizeProjectId(currentProjectId);
+  const matchesCurrentProject = (tab: OpenScrollGroupTab) =>
+    normalizeProjectId(tab.projectId) === normalizedCurrentProjectId;
+
+  if (
+    currentScrollGroupId !== undefined &&
+    openTabs.some((tab) => matchesCurrentProject(tab) && tab.scrollGroupId === currentScrollGroupId)
+  ) {
+    return { projectId: currentProjectId, scrollGroupId: currentScrollGroupId };
+  }
+
+  const preferredTab =
+    preferredWebViewId !== undefined
+      ? openTabs.find((tab) => tab.webViewId === preferredWebViewId && matchesCurrentProject(tab))
+      : undefined;
+  if (preferredTab) {
+    return { projectId: currentProjectId, scrollGroupId: preferredTab.scrollGroupId };
+  }
+
+  const sameProjectTab = openTabs.find(matchesCurrentProject);
+  if (sameProjectTab) {
+    return { projectId: currentProjectId, scrollGroupId: sameProjectTab.scrollGroupId };
+  }
+
+  // Cross-project fallback: the current project has no open tab left, so Find moves to another open
+  // project (and re-runs the search there — see the rerun hook). Which project that is must be
+  // DETERMINISTIC: `openTabs` arrives as `[...tabsMap.values()]`, i.e. in the order the web-view
+  // events happened to land, so taking `openTabs[0]` made the landing project depend on event timing
+  // and differ between otherwise identical sessions. Order by scroll group, then project id, so the
+  // same set of open tabs always resolves to the same fallback.
+  const fallbackTab = [...openTabs].sort(
+    (a, b) =>
+      a.scrollGroupId - b.scrollGroupId ||
+      normalizeProjectId(a.projectId).localeCompare(normalizeProjectId(b.projectId)),
+  )[0];
+  if (!fallbackTab) return undefined;
+  return { projectId: fallbackTab.projectId, scrollGroupId: fallbackTab.scrollGroupId };
+}
+
+/**
+ * Resolve which open tab Find should target when the user picks a project from a picker that does
+ * not surface scroll groups (simple interface mode, where `ScrollGroupSelector` is hidden from both
+ * toolbars and the picker reports a project id alone).
+ *
+ * Wraps {@link resolveSelectedProjectScrollGroup} and rejects its cross-project fallback. That
+ * fallback is correct for the reassignment effect that runs when tabs close, but wrong for a click:
+ * it would retarget Find at a project the user did not pick — reachable if the picked project's
+ * last tab closes between render and click. Returning `undefined` leaves the choice to the
+ * reassignment effect.
+ *
+ * Pass the CURRENT selection through rather than `undefined`, which is what makes re-picking the
+ * already-selected project keep the tab Find is already on instead of snapping to that project's
+ * first tab — and keeps the result independent of the order `openTabs` happened to arrive in.
+ *
+ * @returns The project and scroll group to select, or `undefined` if the picked project has no open
+ *   tab and the selection should be ignored.
+ */
+export function resolveScrollGroupForPickedProject(
+  pickedProjectId: string,
+  currentScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenScrollGroupTab[],
+  preferredWebViewId: string | undefined,
+): SelectedProjectScrollGroup | undefined {
+  const resolved = resolveSelectedProjectScrollGroup(
+    pickedProjectId,
+    currentScrollGroupId,
+    openTabs,
+    preferredWebViewId,
+  );
+  if (!resolved) return undefined;
+  if (normalizeProjectId(resolved.projectId) !== normalizeProjectId(pickedProjectId))
+    return undefined;
+  return resolved;
 }
 
 /**

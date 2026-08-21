@@ -77,4 +77,6 @@ e2e-tests/playwright-report
 # Embedded Claude Code profile (vendored from ai-prompts; exempt from repo format/lint)
 .claude
 .context
+.review
+.superpowers
 CLAUDE.md
