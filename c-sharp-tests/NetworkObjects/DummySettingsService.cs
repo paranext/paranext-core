@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 using Paranext.DataProvider;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Services;
@@ -23,6 +24,9 @@ internal class DummySettingsService : DataProvider
         _settingValues.Clear();
     }
 
+    /// <summary>Test-only accessor for what a "set" call actually persisted, if any.</summary>
+    public object? GetSettingValue(string key) => _settingValues.GetValueOrDefault(key);
+
     protected override Task StartDataProviderAsync()
     {
         return Task.CompletedTask;
@@ -46,7 +50,9 @@ internal class DummySettingsService : DataProvider
                 (string settingName, object settingValue) =>
                 {
                     _settingValues[settingName] = settingValue;
-                    return true;
+                    // SettingsService.SetSetting expects a JsonElement wire response (as a real
+                    // PAPI round trip would produce), not a raw bool.
+                    return JsonSerializer.SerializeToElement(true);
                 }
             ),
             (
