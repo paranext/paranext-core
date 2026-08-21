@@ -36,6 +36,8 @@ const STRINGS = {
     "The model text couldn't be installed. Check your connection and try again.",
   '%webView_modelTextPanel_retry%': 'Try again',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
+  '%webView_modelTextPanel_bookNotAvailable%':
+    'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -276,5 +278,86 @@ describe('ModelTextPanel', () => {
         "The model text couldn't be installed. Check your connection and try again.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it('shows the book-not-available message when the model text lacks the current book', async () => {
+    const getResourceChapter = vi.fn(async () => {
+      throw new Error('Book number 1 not found in project project-web.');
+    });
+    renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+    });
+
+    expect(
+      await screen.findByText(
+        'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+      ),
+    ).toBeInTheDocument();
+    // The blank editor is the bug being fixed: it gave the user no reason for the emptiness.
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    // The label header stays, so the message is attributed to a named model text rather than
+    // floating in an anonymous panel.
+    expect(screen.getByTestId('model-text-header')).toBeInTheDocument();
+  });
+
+  it('keeps showing the editor for an unrelated fetch failure', async () => {
+    const getResourceChapter = vi.fn(async () => {
+      throw new Error('Project project-web is not available');
+    });
+    renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+    });
+
+    // Only a missing book earns the message. Claiming "this book is not in this text" for any
+    // failure would state something the panel does not actually know.
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it('clears the message when the user navigates to a book the model text does have', async () => {
+    const getResourceChapter = vi.fn(async (_projectId: string, ref: { book: string }) => {
+      if (ref.book === 'GEN') throw new Error('Book number 1 not found in project project-web.');
+      return { usj: SAMPLE_USJ, textDirection: 'ltr' };
+    });
+    const props = {
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+    };
+    const { rerender } = renderPanel({
+      ...props,
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+    });
+    expect(
+      await screen.findByText(
+        'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+      ),
+    ).toBeInTheDocument();
+
+    rerender(
+      <ModelTextPanel
+        {...makeProps({
+          ...props,
+          scrRef: { book: 'MAT', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+        })}
+      />,
+    );
+
+    // A stale message is its own bug: it would tell the user a book is missing while its text is
+    // right there to be rendered.
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+      ),
+    ).not.toBeInTheDocument();
   });
 });

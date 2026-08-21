@@ -72,7 +72,8 @@
         "items": [
           {
             "label": "%manageBooks_openMenuItem%",
-            "localizeNotes": "Scripture editor top menu > Project > Manage books… (opens Manage Books targeting the editor's active project; the reserved platform.manageBooks default group places it in the Project section)",
+            "hiddenInterfaceModes": ["simple"],
+            "localizeNotes": "Scripture editor top menu > Project > Manage books… (opens Manage Books targeting the editor's active project; the reserved platform.manageBooks default group places it in the Project section). Hidden in Simple mode: book management is a Power-mode task there, and the Simple book-not-available message tells the user to ask their project administrator — leaving the item visible would contradict that advice in the very same tab. Same gate the sibling comments item uses",
             "group": "platform.manageBooks",
             "order": 1,
             "command": "platformScripture.openManageBooks"

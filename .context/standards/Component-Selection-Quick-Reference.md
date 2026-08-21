@@ -310,7 +310,23 @@ ALWAYS use theme colors:
 - **Text**: `tw:text-foreground`, `tw:text-muted-foreground`, `tw:text-primary`, `tw:text-destructive`
 - **Borders**: `tw:border-border`, `tw:border-input`, `tw:border-primary`
 
-## Empty State Handling
+## Zero States (no content to show)
+
+Pick by what the zero state has to carry:
+
+| Zero state needs | Use | Notes |
+| --- | --- | --- |
+| A single sentence inside a list, grid, or panel | `EmptyState` | Takes one localized `message` and renders it in a `role="status"` region. Nothing else — no title, media, or action slot. |
+| A title, description, media, and/or an action | `Empty` + `EmptyHeader` / `EmptyTitle` / `EmptyDescription` / `EmptyMedia` / `EmptyContent` | The shadcn primitive. Compose feature-specific zero states in your own extension rather than adding variants to the shared library. |
+
+Two things `Empty` leaves to you, both easy to miss because Storybook and jsdom look fine either way:
+
+- **It sets no ARIA role.** Pass `role="status"` yourself. A zero state that REPLACES existing content (an editor canvas, a populated list) is a content swap a screen-reader user gets no other notice of. If the swap also destroys the focused element, move focus into the region as well — but only when the document already had focus, so you do not yank focus out of a control elsewhere in the app.
+- **`EmptyTitle` renders a `<div>`, not a heading.** Nest your own heading element inside it when the zero state is a region's entire content.
+
+Reference consumer: `BookNotAvailableView` (`extensions/src/platform-scripture-editor/src/book-not-available-view.component.tsx`). Rationale for `Empty` over extending `EmptyState`: ADR-0014 in [Architecture-Decisions.md](Architecture-Decisions.md).
+
+## Empty State Handling (form fields)
 
 For form fields:
 - **Required fields**: Show asterisk (*) or "(required)" in the label
