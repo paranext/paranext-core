@@ -197,6 +197,16 @@ type CommonProps = {
    * alphabetically by `versificationName`.
    */
   priorityVersificationId?: string;
+  /**
+   * When true, the funnel/filter menu next to the search box is not rendered. Defaults to `false`.
+   *
+   * For a picker whose rows are ALL open tabs (so "Group by open tabs" only toggles a section
+   * heading over an otherwise identical list) and which is single-select (so "Show selected only"
+   * never renders), the menu reduces to a control with no meaningful effect. Set this to drop the
+   * affordance rather than present an inert one. Grouping still applies per
+   * `defaultGroupByOpenTabs`; only the user-facing toggle goes away.
+   */
+  hideFilterMenu?: boolean;
 };
 
 export type ProjectSelectorProps =
@@ -926,7 +936,7 @@ export function ProjectSelector(props: ProjectSelectorProps) {
                   className="tw:border-0"
                 />
               </div>
-              {!props.groupByVersification && (
+              {!props.groupByVersification && !props.hideFilterMenu && (
                 <FilterMenu
                   groupByOpenTabs={groupByOpenTabs}
                   onChangeGroupByOpenTabs={setGroupByOpenTabs}
