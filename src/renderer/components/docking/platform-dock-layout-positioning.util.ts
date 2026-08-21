@@ -92,9 +92,10 @@ export function getGroups(isPowerMode: boolean): { [key: string]: TabGroup } {
 
 /**
  * WebViewTypes that make up Simple mode's fixed 3-column layout, mapped to the rc-dock group each
- * is confined to while pinned there. Kept in sync with the webViewTypes hardcoded in
- * `simple-layout.data.ts` (Columns 1/2) — Column 3 also includes `scriptureTextGrid` (Text
- * Collection), which isn't part of that static default layout but joins Column 3 at runtime once
+ * is confined to while pinned there. Kept in sync with two sources: every webViewType hardcoded in
+ * `simple-layout.data.ts` (all of Columns 1 and 2, and all of Column 3 except `scriptureTextGrid`),
+ * plus `scriptureTextGrid` (Text Collection) itself, which is absent from that static layout and
+ * instead joins Column 3 at runtime from `default-layout-supplement.json` once its feature flag is
  * enabled.
  */
 const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
@@ -104,6 +105,7 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
   'platformScriptureEditor.commentaries': TAB_GROUP_RESOURCES,
   'legacyCommentManager.commentListPanel': TAB_GROUP_RESOURCES,
   'platformScriptureEditor.scriptureTextGrid': TAB_GROUP_RESOURCES,
+  'platformScripture.find': TAB_GROUP_RESOURCES,
 };
 
 /**
@@ -119,6 +121,12 @@ const FIXED_LAYOUT_WEBVIEW_GROUPS: Record<string, string> = {
  * Everything else — floating tabs/dialogs, and these same webViewTypes when `isClosable` is `true`
  * (e.g. opened freely in Power mode, where they aren't confined to a fixed column) — gets the
  * default `TAB_GROUP`, matching pre-existing behavior.
+ *
+ * Reading `isClosable` here is what makes six providers across three extensions each compute
+ * `isClosable: interfaceMode === 'power'` for themselves. PT-4405 centralizes it: the two halves
+ * needed to decide pinning already live in this module and `readCachedInterfaceMode()`, so the
+ * renderer can derive it for any webViewType in {@link FIXED_LAYOUT_WEBVIEW_GROUPS} and the per-
+ * provider copies can go away.
  */
 export function getTabGroup(tabInfo: TabInfo): string {
   if (tabInfo.isClosable !== false || tabInfo.tabType !== TAB_TYPE_WEBVIEW || !tabInfo.data)
