@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ScriptureRange } from 'platform-scripture-editor';
 import type PapiBackend from '@papi/backend';
-import { UsjTextContentLocation } from 'platform-bible-utils';
+import { newPlatformError, UsjTextContentLocation } from 'platform-bible-utils';
 import type { SavedWebViewDefinition } from '@papi/core';
 import { MutableRefObject } from 'react';
 import { EditorRef } from '@eten-tech-foundation/platform-editor';
@@ -18,6 +18,7 @@ import {
   selectProjectIdsForOpenMode,
   startDefaultProjectPicker,
   toScriptureEditorInfos,
+  isBookNotFoundError,
   isChapterBlank,
   buildChapterScaffoldOps,
   canAddChapterNumber,
@@ -2589,5 +2590,27 @@ describe('resolveAddChapterNumberClick', () => {
 
   it('returns "insert" when not in flight and lastVerse is positive', () => {
     expect(resolveAddChapterNumberClick(false, 3)).toBe('insert');
+  });
+});
+
+describe('isBookNotFoundError', () => {
+  it('returns true for a PlatformError whose message says the book number was not found', () => {
+    expect(
+      isBookNotFoundError(newPlatformError('Book number 40 not found in project ProjectName')),
+    ).toBe(true);
+  });
+
+  it('returns false for a PlatformError with an unrelated message', () => {
+    expect(isBookNotFoundError(newPlatformError('Permissions exception for projectId abc'))).toBe(
+      false,
+    );
+  });
+
+  it('returns false for a successfully retrieved USJ document', () => {
+    expect(isBookNotFoundError({ type: USJ_TYPE, version: USJ_VERSION, content: [] })).toBe(false);
+  });
+
+  it('returns false for undefined, as when the data has not arrived yet', () => {
+    expect(isBookNotFoundError(undefined)).toBe(false);
   });
 });
