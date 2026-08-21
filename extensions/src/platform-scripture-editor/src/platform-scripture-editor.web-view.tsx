@@ -126,6 +126,7 @@ import {
   formatEditorTitle,
   generateInlineMarkerMenuListItems,
   generateParagraphMenuListItems,
+  isBookNotFoundError,
   isChapterBlank,
   openCommentListAndSelectThreadSafe,
   resolveAddChapterNumberClick,
@@ -276,9 +277,6 @@ const getViewOptionsForType = (
   if (viewType === 'markers') return { ...paragraphStructure, noteMode: 'expanded' };
   return paragraphStructure;
 };
-
-// This regex is connected directly to the exception message within MissingBookException.cs
-const bookNotFoundRegex = /Book number \d+ not found in project/;
 
 // This regex is connected directly to the exception message within PermissionsException.cs
 const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
@@ -1292,9 +1290,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [usjFromPdp, bookExists] = useMemo(() => {
     if (!isPlatformError(usjFromPdpPossiblyError)) return [usjFromPdpPossiblyError, true];
 
-    const errorMessage = getErrorMessage(usjFromPdpPossiblyError);
-    logger.error(`Error getting USJ from PDP: ${errorMessage}`);
-    return [defaultUsj, !bookNotFoundRegex.test(errorMessage)];
+    logger.error(`Error getting USJ from PDP: ${getErrorMessage(usjFromPdpPossiblyError)}`);
+    return [defaultUsj, !isBookNotFoundError(usjFromPdpPossiblyError)];
   }, [usjFromPdpPossiblyError]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);

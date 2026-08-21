@@ -40,6 +40,7 @@ import type {
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
+import { isBookNotFoundError } from './platform-scripture-editor.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
@@ -58,6 +59,9 @@ import { selectTextConnection } from './select-dbl-resource';
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
+  // Shared with the editable scripture editor's read-only branch so both tabs word a missing book
+  // the same way
+  '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_resourcePanel_noProject%',
   '%webView_resourcePanel_installing%',
   '%webView_resourcePanel_selecting%',
@@ -423,6 +427,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
 
+  // A book missing from the resource comes back from the PDP as an error rather than as empty USJ.
+  // Detect it so the panel can say so: without this branch `Editorial` renders with no scripture
+  // set, showing either the previous chapter's content or its "enter some scripture" placeholder —
+  // neither is honest for a read-only resource.
+  const bookExists = useMemo(() => {
+    if (!isPlatformError(usjPossiblyError)) return true;
+    logger.warn(`Error getting USJ for the resource panel: ${getErrorMessage(usjPossiblyError)}`);
+    return !isBookNotFoundError(usjPossiblyError);
+  }, [usjPossiblyError]);
+
   // #endregion
 
   // #region Text direction
@@ -631,16 +645,25 @@ globalThis.webViewComponent = function ResourceTextPanel({
         downloadResourcesLabel={localizedStrings['%webView_resourcePanel_downloadResources%']}
       />
 
-      {/* Scripture content */}
-      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={setScrRef}
-          options={options}
-          logger={logger}
-        />
-      </div>
+      {/* Scripture content, or an honest message when the resource has no such book. The
+          resource selector above stays mounted in both cases so the user can switch to a resource
+          that does contain the book. The message sits outside the `dir` wrapper because it is
+          UI-locale text, not resource text. */}
+      {bookExists ? (
+        <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={setScrRef}
+            options={options}
+            logger={logger}
+          />
+        </div>
+      ) : (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8 tw:text-center">
+          {localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']}
+        </div>
+      )}
     </div>
   );
 
