@@ -12,6 +12,11 @@
 // Likewise for declarations that exist in BOTH copies: a re-sync must not downgrade a richer
 // declaration here (extra doc detail or type refinements) to a poorer upstream one — merge the
 // two, and upstream the improvement instead.
+// DELIBERATE DIVERGENCE — do not "restore" these to match upstream on a re-sync. Each is optional
+// here and required upstream because a shipped Paratext 10 Studio build answers without it; making
+// it required again turns each consumer's `?? fallback` into a lint-flagged unnecessary coalesce,
+// and removing that coalesce crashes an older Studio build on the missing value:
+//   * `SyncState.syncingProjectIds`
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -252,7 +257,77 @@ declare module 'paratext-bible-send-receive' {
 
   /** Event payload emitted by the `paratextBibleSendReceive.onSyncStateChanged` network event */
   export type SyncProgressEvent = {
+    /**
+     * Whether any sync is running as of this event.
+     *
+     * `true` does NOT mean "a sync just started". It is also emitted when one claim releases while
+     * another still holds — i.e. when the set of syncing projects SHRANK — so the projects covered
+     * can change while this stays `true` and the set never passes through "not syncing". A consumer
+     * naming what is syncing must therefore re-read {@link SyncState.syncingProjectIds} on every
+     * `true` event and must not carry the previous set forward while that read is in flight, or it
+     * will name a project that has already stopped.
+     */
     isSyncing: boolean;
+  };
+
+  /**
+   * Snapshot of Send/Receive activity returned by `paratextBibleSendReceive.getSyncState`. Lets a
+   * consumer that mounts mid-sync (or after a renderer reload) seed its state instead of waiting
+   * for the next `onSyncStateChanged` event, which may not arrive for the rest of the sync.
+   *
+   * Reflects only syncs run through the Send/Receive extension's own wrappers (`runManualSync`,
+   * `syncOpenProjects`, `runScheduledSessionSync`, and the auto-sync engine), which claim through
+   * its state controller. Callers that reach the dotnet `syncProjects`/`sendReceiveProjects`
+   * commands directly are invisible here — nothing in `c-sharp/` emits `onSyncStateChanged` — so
+   * treat this as best-effort rather than ground truth. Making this authoritative would take a
+   * signal derived from the C# sync semaphore itself, which is upstream work in the Send/Receive
+   * extension; see ADR-0016 in `.context/standards/Architecture-Decisions.md`.
+   *
+   * Two core paths are on the invisible side today, both worth knowing before relying on this for a
+   * startup status:
+   *
+   * - **Simple mode startup sync** (`main/startup-tasks.ts`) calls `syncProjects` directly.
+   * - **The picker's per-project sync** (`syncOnProjectSwitch` in `platform-scripture-editor`) calls
+   *   `syncProjects`/`sendReceiveProjects` directly.
+   *
+   * Power mode's session-boundary sync IS visible: it goes through `runScheduledSessionSync`.
+   */
+  export type SyncState = {
+    /** Whether any sync is running right now */
+    isSyncing: boolean;
+    /** Results of the last COMPLETED sync, if one has completed this session */
+    lastResults?: ResultsData;
+    /**
+     * Project ids of the last COMPLETED sync (the one {@link SyncState.lastResults} describes). A
+     * sync that failed before producing results does not update this, so a consumer pairing it with
+     * `lastResults` always sees a matching request/results pair.
+     *
+     * NOT the projects of a sync currently running — for that see
+     * {@link SyncState.syncingProjectIds}. While `isSyncing` is `true` this still describes the
+     * PREVIOUS sync, so labelling an in-progress sync with it names the wrong projects.
+     */
+    lastRequestedProjectIds: string[];
+    /**
+     * Project ids of the sync(s) running RIGHT NOW. Empty exactly when `isSyncing` is `false`.
+     * Overlapping syncs are unioned.
+     *
+     * Consumer notes:
+     *
+     * - A {@link SyncProgressEvent} with `isSyncing: true` may mean the set SHRANK rather than a new
+     *   sync starting (see {@link SyncProgressEvent.isSyncing}), so re-read this on every such
+     *   event.
+     * - Order is claim order and carries no meaning. It can differ between reads of the SAME set — a
+     *   project that releases and re-claims moves to the end — so sort before rendering a list that
+     *   should stay stable.
+     * - A fresh array is built on every `getSyncState` call, so compare by value; an identity check
+     *   reports a change on every read.
+     *
+     * Optional in core's copy only: it was added to the Send/Receive contract after the version
+     * shipping in some builds, so a Paratext 10 Studio build predating that change answers
+     * `getSyncState` without it. Consumers must handle it being absent (fall back to a status that
+     * names no projects) rather than assuming an empty array means "nothing syncing".
+     */
+    syncingProjectIds?: string[];
   };
 
   /**
@@ -292,6 +367,7 @@ declare module 'papi-shared-types' {
     ResultsData,
     SyncProgressDetail,
     SyncProgressEvent,
+    SyncState,
     SyncWriteLockSnapshot,
   } from 'paratext-bible-send-receive';
   import type { SharedProjectsInfo } from 'platform-scripture';
@@ -345,6 +421,25 @@ declare module 'papi-shared-types' {
      * @returns WebView id for the sync status WebView or `undefined` if not created
      */
     'paratextBibleSendReceive.openSyncStatus': () => Promise<string | undefined>;
+
+    /**
+     * Returns the current {@link SyncState} so a consumer can seed its sync status on mount rather
+     * than waiting for the next `paratextBibleSendReceive.onSyncStateChanged` event — which, for a
+     * sync already in progress, has already fired and will not fire again until that sync ends.
+     *
+     * An in-memory read in the extension host; cheap enough to call on mount and on each state
+     * change. Rejects if the Send/Receive extension has not registered its commands yet (a cold
+     * start), so callers should keep their existing state on failure rather than assuming idle. A
+     * cold-start rejection is not fast — the RPC layer retries a missing handler ten times a second
+     * apart before rejecting — so a caller seeding on mount should retry rather than treat one
+     * rejection as the final answer.
+     *
+     * @returns The current {@link SyncState}. Its `syncingProjectIds` may be ABSENT: a Paratext 10
+     *   Studio build predating that field answers without it, so treat missing as "the syncing
+     *   projects are unknown" rather than as "nothing is syncing" — `isSyncing` is what answers the
+     *   latter.
+     */
+    'paratextBibleSendReceive.getSyncState': () => Promise<SyncState>;
 
     /**
      * Commits changes in the specified project to the version history. Unless `forceCommit` is
@@ -420,7 +515,10 @@ declare module 'papi-shared-types' {
      *
      * @param notificationId ID of the notification that triggered this cancel, if any.
      *   Implementations may use this to validate that the cancel is for the expected sync
-     *   operation.
+     *   operation. ABSENT means "cancel whatever sync is in progress" and implementations must
+     *   honour it as such: a caller that raised no notification has no id to give, and an
+     *   implementation that silently ignored an id-less cancel would leave that caller's UI
+     *   reporting a cancel it never performed. Core's toolbar sync popover is such a caller.
      * @throws `PlatformUnimplementedException` if not running in an application that implements
      *   this command (e.g., Paratext 10 Studio)
      */

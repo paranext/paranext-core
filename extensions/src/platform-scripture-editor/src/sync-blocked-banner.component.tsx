@@ -57,6 +57,11 @@ export function SyncBlockedBanner({ localizedStrings }: Props) {
   const handleCancel = useCallback(() => {
     // Single-shot: one cancel request per blocking episode. Disable immediately; re-enable only if
     // the request is rejected (the sync is still running, so the user can retry).
+    // The toolbar's sync popover (`src/renderer/components/sync-status-button.component.tsx`) offers
+    // the same cancel, and in Simple mode both can be on screen during a blocking scheduled sync.
+    // Neither knows the other was clicked, so a cancel requested here still reads as armed there.
+    // Kept separate deliberately — see ADR-0016 in `.context/standards/Architecture-Decisions.md`
+    // for why, and for the follow-up that gives them one shared cancel-requested state.
     setIsCancelEnabled(false);
     papi.commands.sendCommand('paratextBibleSendReceive.cancelSync').catch((e) => {
       logger.warn(`Sync-blocked banner failed to cancel sync: ${getErrorMessage(e)}`);
