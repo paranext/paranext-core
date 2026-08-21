@@ -185,8 +185,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     <ModelTextPanel
       localizedStrings={localizedStrings}
       hasProject={projectId !== undefined}
-      effectiveModelTexts={effectiveModelTexts}
-      modelTextsStatus={effectiveModelTextsState.status}
+      modelTextsState={effectiveModelTextsState}
       dblResources={dblResources}
       isCatalogReady={isCatalogReady}
       hasCatalogError={hasCatalogError}

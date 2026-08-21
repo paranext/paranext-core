@@ -25,6 +25,7 @@ import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
    in by relative path; this mirrors src/stories/platform/ten-layout-shared.tsx. */
 import '../../../../lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css';
 /* eslint-enable import/no-relative-packages */
+import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
 /**
@@ -121,11 +122,15 @@ type DecoratorConfig = {
   hasCatalogError?: boolean;
 };
 
-/** Maps the story's flags to the list status the panel consumes. */
-function modelTextsStatusFor(config: DecoratorConfig): 'loading' | 'error' | 'ready' {
-  if (config.hasSettingsError) return 'error';
-  if (config.isListLoading) return 'loading';
-  return 'ready';
+/** Maps the story's flags to the discriminated list state the panel consumes. */
+function modelTextsStateFor(
+  config: DecoratorConfig,
+  list: EffectiveResourceReferenceList,
+): EffectiveResourceReferenceListState {
+  if (config.hasSettingsError) return { status: 'error' };
+  if (config.isListLoading) return { status: 'loading' };
+
+  return { status: 'ready', list };
 }
 
 /**
@@ -184,8 +189,7 @@ function ModelTextPanelHarness({ config }: { config: DecoratorConfig }) {
       <ModelTextPanel
         localizedStrings={localizedStrings}
         hasProject={config.hasProject ?? true}
-        effectiveModelTexts={effectiveModelTexts}
-        modelTextsStatus={modelTextsStatusFor(config)}
+        modelTextsState={modelTextsStateFor(config, effectiveModelTexts)}
         dblResources={resources}
         isCatalogReady={config.isCatalogReady ?? true}
         hasCatalogError={config.hasCatalogError ?? false}
