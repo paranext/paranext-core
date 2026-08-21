@@ -170,6 +170,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ("canUserWriteProjectTextConnectionSettings", CanUserWriteProjectTextConnectionSettings)
         );
         retVal.Add(("canUserEditScripture", CanUserEditScripture));
+        retVal.Add(("getCanUserEditScripture", GetCanUserEditScripture));
 
         retVal.Add(("getMarkerNames", GetMarkerNames));
 
@@ -1991,6 +1992,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Reactive getter for the CanUserEditScripture project data type. Delegates to
+    /// CanUserEditScripture() so the one-shot RPC method and the reactive data type share
+    /// identical logic. Not settable - subscribers refresh automatically after every Send/Receive
+    /// sync via SendFullProjectUpdateEvent(), which already fires a wildcard data-update event.
+    /// </summary>
+    public bool GetCanUserEditScripture(object? param = null)
+    {
+        return CanUserEditScripture();
     }
 
     public ResourceReferenceList GetUserModelTexts(object? param = null)
