@@ -94,7 +94,10 @@ const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 // re-show it.
 //
 // The thresholds are set from the container width each platform actually leaves at the app's
-// enforced 800px minimum window width, measured in the running app rather than calculated:
+// enforced 800px minimum window width, measured in the running app rather than calculated. That
+// 800px is `minWidth` in main.ts — if it changes, this whole table and every threshold below must be
+// re-derived, because a tier tuned to clear 766px stops firing once the narrowest allowed window is
+// wider than that. PR #2701 (PT-4344) proposes raising it to 900px, which would do exactly this:
 //
 // | Platform                   | Caption-button reservation | Container content box |
 // | -------------------------- | -------------------------- | --------------------- |
@@ -110,6 +113,10 @@ const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 // A tier that must hold at the minimum window width therefore needs a threshold above the WIDEST
 // number in that column (Linux, 766px), not the narrowest — one tuned to Windows alone silently
 // does nothing on the platform with the roomiest bar, and CI runs on Linux.
+//
+// Only tier 1 carries an explicit `!isPowerMode` gate. Tiers 2 and 3 need none — their host
+// elements (the project selector and the sync button) already render only inside `!isPowerMode`
+// blocks, so adding one would be dead weight. Don't "fix" the inconsistency.
 //
 // Tiers are numbered in the order they FIRE as the bar narrows (52rem -> 50rem -> 46rem), which is
 // deliberately not the order they are declared in below — the declarations group the two sync
