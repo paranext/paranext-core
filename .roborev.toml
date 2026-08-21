@@ -1,0 +1,34 @@
+# roborev per-repository configuration — https://roborev.io/configuration/
+#
+# EDIT THIS FILE BY HAND. Do NOT use `roborev config set` on it.
+# `config set` defaults to --local, and a local write REGENERATES this file from roborev's
+# built-in template rather than patching it: the values survive, but every comment below is
+# replaced by generated ones and the file grows to ~225 lines. Verified 2026-08-14 on roborev
+# v0.64.0. Use `roborev config set --global ...` for your own machine-level settings, which
+# writes ~/.roborev/config.toml and leaves this file alone.
+#
+# Review guidelines deliberately live in REVIEW.md at the repo root rather than in a
+# `review_guidelines` key here: roborev falls back to REVIEW.md when that key is unset, and
+# Claude Code's /code-review auto-discovers the same file. One file, both reviewers.
+#
+# The review agent is deliberately NOT pinned here. Agent choice is per-developer (and costs
+# that developer's own quota), so it belongs in ~/.roborev/config.toml, not in a shared file.
+
+# Generated output carries no review signal and consumes the prompt budget. This repo tracks
+# build output under nested paths (lib/platform-bible-react/dist, lib/platform-bible-utils/dist),
+# so patterns need a leading "**/" rather than a bare "dist/" or "*.min.js": exclusions are
+# applied as git :(exclude,glob) pathspecs, where "*" does not cross "/". This matches the form
+# roborev uses for its own built-in defaults. Lockfiles are already excluded by those defaults
+# and do not need listing here.
+exclude_patterns = ["lib/papi-dts/papi.d.ts", "**/dist/**", "**/*.min.js", "**/*.map"]
+
+# Work-in-progress commits get reviewed once the real commit lands. Matching is
+# case-insensitive, so casing variants do not need separate entries.
+excluded_commit_patterns = ["wip:", "fixup!", "squash!", "[skip review]"]
+
+# Keep the queue to commits that actually need attention.
+auto_close_passing_reviews = true
+
+# Satisfies the AI-attribution requirement in CLAUDE.md for commits roborev's fix workflows
+# create on the developer's behalf.
+fix_commit_co_authored_by = ["Claude <noreply@anthropic.com>"]

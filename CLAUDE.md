@@ -239,7 +239,8 @@ Never skip pre-commit hooks (`--no-verify`, `-n`, `HUSKY=0`) — they run the se
   PR body: `AI-assisted — [session 1](<url>), [session 2](<url>)`
 - Use squash-merge for PRs.
 - Keep PR titles short (under 70 characters) with a descriptive body.
-- Run `npm run typecheck && npm run lint && npm test && dotnet test c-sharp-tests/` before committing.
+- Run `npm run typecheck && npm run lint && npm test && dotnet test c-sharp-tests/` before **pushing or opening a PR** — this is the gate that must pass, and it is the same work CI does. Individual commits are gated only by the pre-commit hook (secret scanning and `lint:staged`), which runs in seconds.
+- **Commit early and often.** After each self-contained change that builds, make a commit rather than batching many changes into one. Small, focused commits are easier to review, easier to revert, and give automated review tools a diff they can reason about. Do not let the full verification battery above discourage frequent commits — it belongs at the push boundary, not on every commit.
 - When committing, include ALL related files (plans, docs, configs) — never exclude supporting files unless they are gitignored or you are explicitly told to.
 - When git reports warnings about untracked or uncommitted files, investigate what they are before dismissing them. Never claim a file is unrelated without reading it first.
 - After completing file changes, push all relevant branches before reporting completion.
