@@ -78,3 +78,49 @@ export const Default: Story = {
     },
   },
 };
+
+export const ConstrainedHeightFlipsUpward: Story = {
+  args: {
+    selectedBookIds: [
+      'GEN',
+      'EXO',
+      'LEV',
+      'NUM',
+      'DEU',
+      'JOS',
+      'JDG',
+      'RUT',
+      '1SA',
+      '2SA',
+      'MAT',
+      'MRK',
+      'LUK',
+      'JHN',
+      'ACT',
+    ],
+  },
+  decorators: [
+    (Story) => (
+      // Deliberately short, bordered container with the trigger pushed to the bottom so Radix's
+      // collision detection flips the popover upward. The border makes it obvious whether the
+      // popover overruns the container. (PT-4092)
+      <div className="tw:flex tw:h-[320px] tw:w-full tw:flex-col tw:justify-end tw:border">
+        <Story />
+      </div>
+    ),
+  ],
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'Regression guard for PT-4092. The fix is CSS-only, so jsdom cannot verify it — check ' +
+          'this story visually. The picker sits at the bottom of a short (320px) bordered ' +
+          'container, so opening it should flip the popover *upward*. Verify that the search ' +
+          'input stays visible and reachable at the top of the popover, and that the book list ' +
+          'scrolls internally instead of the popover growing past the top of the bordered ' +
+          'container. Before the fix, the full-height popover overran the container and clipped ' +
+          'the search input off-screen inside a web view.',
+      },
+    },
+  },
+};

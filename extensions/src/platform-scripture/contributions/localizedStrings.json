@@ -553,6 +553,7 @@
       "%webView_platformScripture_tools%": "Tools",
       "%webView_punctuationInventory_title%": "Punctuation Inventory: {projectName}",
       "%webView_repeatedWordsInventory_title%": "Repeated Words Inventory: {projectName}",
+      "%webView_scope_selector_all_books%": "All books",
       "%webView_scope_selector_book%": "Book",
       "%webView_scope_selector_cancel%": "Cancel",
       "%webView_scope_selector_chapter%": "Chapter",

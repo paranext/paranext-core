@@ -145,6 +145,11 @@ export {
   type SelectBooksLocalizedStrings,
 } from './components/advanced/scope-selector/select-books.types';
 export {
+  formatSelectedBooksList,
+  getAvailableBookIds,
+  summarizeSelectedBooks,
+} from './components/advanced/scope-selector/scope-selector.utils';
+export {
   default as ScrollGroupSelector,
   type ScrollGroupSelectorProps,
 } from './components/advanced/scroll-group-selector.component';

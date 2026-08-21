@@ -198,6 +198,20 @@ describe('ScopeSelector — dialog staging', () => {
     expect(onSelectedBookIdsChange).not.toHaveBeenCalled();
   });
 
+  it('dropdown still opens when the trigger also carries the full-selection tooltip', async () => {
+    // With a lossy summary (more than five books) the trigger Button is the asChild child of both
+    // DropdownMenuTrigger and TooltipTrigger (PT-4092). Nesting two asChild triggers is easy to get
+    // wrong in a way that silently stops the menu from opening.
+    const { user, getByRole } = renderDropdown({
+      scope: 'selectedBooks',
+      selectedBookIds: ['GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'MRK', 'MAT'],
+    });
+    const trigger = getByRole('combobox');
+    expect(trigger).toHaveTextContent('GEN … MRK');
+    await user.click(trigger);
+    expect(await screen.findByText(/scope_selector_current_chapter/i)).toBeInTheDocument();
+  });
+
   it('re-clicking the active simple scope re-fires onScopeChange (D4 fix)', async () => {
     const { user, onScopeChange, getByRole } = renderDropdown({ scope: 'chapter' });
     await user.click(getByRole('combobox'));

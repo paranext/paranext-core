@@ -1463,6 +1463,7 @@ export declare const SCOPE_SELECTOR_STRING_KEYS: readonly [
 	"%webView_scope_selector_current_chapter%",
 	"%webView_scope_selector_current_book%",
 	"%webView_scope_selector_choose_books%",
+	"%webView_scope_selector_all_books%",
 	"%webView_scope_selector_scope%",
 	"%webView_scope_selector_select_books%",
 	"%webView_scope_selector_range%",
@@ -1686,6 +1687,61 @@ type SelectBooksPickerProps = {
  * quick-select buttons and badges for the current selection.
  */
 export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
+ *
+ * Yields an empty array rather than throwing when `availableBookInfo` cannot be interpreted. Every
+ * caller reads this to render something, and the string arrives from the `BooksPresent` project
+ * setting, which is the empty default until that setting resolves (and stays empty if the read
+ * errors). A throw here happens during render, and with no error boundary above these components
+ * that tears down the whole web view — so an unusable setting degrades to "no books known" instead.
+ * (PT-4092)
+ *
+ * @param availableBookInfo Information about available books, formatted as a 123 character long
+ *   string as defined in a project's BooksPresent setting. Index N is '1' when the Nth canon book
+ *   is available
+ * @returns Array of available, non-obsolete book IDs in canon order, or an empty array if
+ *   `availableBookInfo` cannot be interpreted
+ */
+export declare function getAvailableBookIds(availableBookInfo: string): string[];
+/**
+ * Builds a short, fixed-width-ish summary of a book selection suitable for a dropdown trigger or a
+ * status line. Listing every selected book overflows its container once a handful are selected, so
+ * the summary collapses: every available book selected reads as "All books", and a longer selection
+ * reads as a canon-order range from its first book to its last (e.g. `GEN … HOS`). This matches how
+ * Paratext 9 summarizes a book set.
+ *
+ * @param selectedBookIds Array of currently selected book IDs, in any order
+ * @param availableBookIds Array of book IDs available in the project (see `getAvailableBookIds`).
+ *   Pass an empty array when the project's books are unknown; the summary then never claims "All
+ *   books" but still lists or collapses the selection
+ * @param allBooksText Localized text to show when every available book is selected
+ * @param localizedBookNames Optional map of localized book IDs/short names and full names. Key is
+ *   the (English) book ID
+ * @returns The summary text, or `undefined` when nothing is selected so callers can supply their
+ *   own placeholder
+ */
+export declare function summarizeSelectedBooks(selectedBookIds: string[], availableBookIds: string[], allBooksText: string, localizedBookNames?: Map<string, {
+	localizedId: string;
+	localizedName: string;
+}>): string | undefined;
+/**
+ * Lists a book selection in full — every selected book, in canon order, localized and
+ * comma-separated. This is the details surface behind `summarizeSelectedBooks`: that summary
+ * collapses "All books" and reduces a longer selection to a `first … last` range, which drops every
+ * book in between, so the full selection needs somewhere else to be readable (a tooltip on the
+ * trigger that shows it).
+ *
+ * @param selectedBookIds Array of currently selected book IDs, in any order
+ * @param localizedBookNames Optional map of localized book IDs/short names and full names. Key is
+ *   the (English) book ID
+ * @returns The comma-separated list of localized book IDs in canon order, or `undefined` when
+ *   nothing is selected so callers can skip rendering the details surface entirely
+ */
+export declare function formatSelectedBooksList(selectedBookIds: string[], localizedBookNames?: Map<string, {
+	localizedId: string;
+	localizedName: string;
+}>): string | undefined;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
