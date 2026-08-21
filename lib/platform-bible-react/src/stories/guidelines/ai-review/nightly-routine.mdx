@@ -1,0 +1,65 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Guidelines/AI Review/Nightly Routine" />
+
+# Nightly Routine
+
+A belt-and-suspenders sweep that runs the [UX Design Review](./ux-design-review.mdx) across
+open PRs as a safety net — for teams that want UI/UX regressions caught automatically. It is
+**not** required, and it does not replace running the review yourself before requesting a UX
+review.
+
+Copy the block below into your own scheduled agent (for example, a Claude Code on the web
+session on a `/loop`, or any nightly job that can drive your reviewer). It assumes the agent
+can read this repo's guideline pages and use GitHub tools to read PRs and to read and write a
+review marker.
+
+````md
+# Nightly Design Review (routine)
+
+Run the "UX Design Review" standard (Guidelines/AI Review/UX Design Review) across selected
+PRs and return one triaged report. Use this repo's guideline pages as the source of truth.
+
+## 1. Select PRs (skip anything with no interface impact)
+Apply the UX Design Review interface-impact gate as the filter, then take:
+- Primary: open, non-draft, UI-affecting PRs labeled ux/UI, or whose linked Jira UX property
+  is "needs review".
+- Backstop A: open, non-draft, UI-affecting PRs that are approved with CI green (about to land).
+- Backstop B: PRs merged in the last 24h that have no review marker, or whose diff materially
+  changed since their last marker.
+
+## 2. De-dupe with a durable marker (survives across sessions)
+State lives on GitHub, not in session memory. Use a label "ai-ux-reviewed:HEAD_SHA" (or an
+HTML-comment marker on the PR) as the record of "reviewed at this head."
+- Skip a PR if a marker exists for the current head AND the files changed since that sha do not
+  intersect the interface-impact gate.
+- After reviewing, write or replace the marker for the current head — whether or not findings
+  were posted. This is what makes the sweep idempotent.
+
+## 3. Review
+Run the UX Design Review on each selected PR. Do not re-implement its rubric, gate, or verdict.
+
+## 4. Report (in-session; never auto-post findings)
+Triage table first, CONFIDENT on top, LOW SIGNAL grouped at the bottom with reasons:
+
+| PR | Verdict | Blockers | Majors | One-line reason |
+| -- | ------- | -------- | ------ | --------------- |
+
+For each CONFIDENT PR, include the findings and a ready-to-paste PR-review block. Posting a
+review happens only on explicit say-so (UX Design Review with --comment).
+
+## 5. (optional) Nudge the author when no AI review happened
+With --nudge: for a UI-affecting, non-draft PR that is about to merge and has no review marker
+and a Jira UX property never advanced past "open"/"needs review", post ONE comment that
+@-mentions the PR author asking them to run the review (or set the Jira property). Keep it
+idempotent — edit the same comment, never add a second; respect a "skip-ai-ux" label and Jira
+"done"/"review not needed"; do not nudge subtask PRs (the parent work item is the unit).
+
+## 6. Log gaps
+Append gap candidates to the "Design System Gaps" page, following the entry format defined
+there. Note in the report how many gaps were added or reinforced.
+````
+
+The routine deliberately keeps no review logic of its own — it orchestrates and defers to the
+[UX Design Review](./ux-design-review.mdx) standard and the [Design System Gaps](./design-system-gaps.mdx)
+log so there is a single source for each.
