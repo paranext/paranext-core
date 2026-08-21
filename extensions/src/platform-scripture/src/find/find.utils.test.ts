@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { Canon } from '@sillsdev/scripture';
 import { newPlatformError } from 'platform-bible-utils';
 import { FindJobStatusReport } from 'platform-scripture';
 import {
@@ -8,6 +9,7 @@ import {
   callControllerSafely,
   CharacterCategorizer,
   classifyPollAttempt,
+  excludeExtraMaterialBooks,
   gateStartSearch,
   isDifferentProjectSelection,
   isFindQueryValid,
@@ -651,6 +653,55 @@ describe('isDifferentProjectSelection', () => {
 
   it('still distinguishes projects whose ids differ by more than casing', () => {
     expect(isDifferentProjectSelection('web', 'WEBBT')).toBe(true);
+  });
+});
+
+/** Builds a `booksPresent` flag string of full canon length with the given books flagged present */
+function booksPresentFor(bookIds: string[]): string {
+  const flags = Array.from({ length: Canon.allBookIds.length }, () => '0');
+  bookIds.forEach((bookId) => {
+    flags[Canon.bookIdToNumber(bookId) - 1] = '1';
+  });
+  return flags.join('');
+}
+
+/** Reads back the ids flagged present in a `booksPresent` flag string */
+function presentBookIds(booksPresent: string): string[] {
+  const ids: string[] = [];
+  for (let index = 0; index < booksPresent.length; index += 1) {
+    if (booksPresent[index] === '1') ids.push(Canon.bookNumberToId(index + 1));
+  }
+  return ids;
+}
+
+describe('excludeExtraMaterialBooks', () => {
+  it('clears extra-scriptural books while keeping OT, NT, and DC books', () => {
+    const booksPresent = booksPresentFor(['GEN', 'MAT', 'TOB', 'GLO', 'FRT', 'INT', 'XXA']);
+    expect(presentBookIds(excludeExtraMaterialBooks(booksPresent))).toEqual(['GEN', 'MAT', 'TOB']);
+  });
+
+  // `getAvailableBookIds` in platform-bible-react throws when the flag string is not exactly canon
+  // length, so the exclusion must clear flags in place rather than drop positions.
+  it('preserves the length of the flag string', () => {
+    const booksPresent = booksPresentFor(['GEN', 'GLO']);
+    expect(excludeExtraMaterialBooks(booksPresent)).toHaveLength(booksPresent.length);
+  });
+
+  it('leaves a string with no extra-scriptural books unchanged', () => {
+    const booksPresent = booksPresentFor(['GEN', 'MAT']);
+    expect(excludeExtraMaterialBooks(booksPresent)).toBe(booksPresent);
+  });
+
+  it('handles the all-zero default that is in place while the project setting resolves', () => {
+    expect(excludeExtraMaterialBooks('')).toBe('');
+    expect(excludeExtraMaterialBooks('000')).toBe('000');
+  });
+
+  it('leaves flags past the end of the canon alone', () => {
+    const overlong = `${booksPresentFor(['GEN', 'GLO'])}1`;
+    const result = excludeExtraMaterialBooks(overlong);
+    expect(result).toHaveLength(overlong.length);
+    expect(result[result.length - 1]).toBe('1');
   });
 });
 

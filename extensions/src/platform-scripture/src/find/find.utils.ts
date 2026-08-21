@@ -1,3 +1,4 @@
+import { Canon } from '@sillsdev/scripture';
 import { Scope } from 'platform-bible-react';
 import {
   escapeStringRegexp,
@@ -311,6 +312,33 @@ export function isDifferentProjectSelection(
 ): boolean {
   if (!currentProjectId) return true;
   return normalizeProjectId(newProjectId) !== normalizeProjectId(currentProjectId);
+}
+
+/**
+ * Clears the extra-scriptural books (GLO, FRT, INT, XXA, etc.) from a
+ * `platformScripture.booksPresent` flag string so Find never offers them.
+ *
+ * Find resolves a result's location by walking the `\c` and `\v` markers of the book it matched in.
+ * Extra-scriptural books are organized by paragraph markers rather than verses, so every match in
+ * one resolves to the same reference, and there is no way to open such a book to act on the result
+ * anyway. Excluding them keeps Find honest until the platform can open and address them.
+ *
+ * Flags are cleared in place rather than removed: the flag string must keep its canonical length,
+ * since consumers index into it by book number and reject a length that does not match the canon.
+ *
+ * Drop this exclusion once extra-scriptural books can be opened and addressed.
+ *
+ * @param booksPresent The `platformScripture.booksPresent` project setting value.
+ * @returns The same flag string with every extra-scriptural book flagged absent.
+ */
+export function excludeExtraMaterialBooks(booksPresent: string): string {
+  return Array.from(booksPresent, (flag, index) =>
+    // Flags past the last canonical book are meaningless (`bookNumberToId` returns a placeholder id
+    // there), so leave them as they are instead of asking whether they are extra material.
+    index < Canon.allBookIds.length && Canon.isExtraMaterial(Canon.bookNumberToId(index + 1))
+      ? '0'
+      : flag,
+  ).join('');
 }
 
 /**

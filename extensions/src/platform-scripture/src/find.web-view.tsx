@@ -46,6 +46,7 @@ import {
   armBoundedWait,
   callControllerSafely,
   classifyPollAttempt,
+  excludeExtraMaterialBooks,
   GIVE_UP_AFTER_MS,
   gateStartSearch,
   isDifferentProjectSelection,
@@ -665,12 +666,16 @@ global.webViewComponent = function FindWebView({
     BOOKS_PRESENT_DEFAULT,
   );
 
+  // Extra-scriptural books are excluded here, at the single point every consumer reads: both the
+  // `availableBooksIds` the search runs over and the `booksPresent` the scope selector builds its
+  // book picker from. Filtering one but not the other would let a user pick a book the search never
+  // covers.
   const booksPresent: string = useMemo(() => {
     if (isPlatformError(booksPresentPossiblyError)) {
       logger.warn(`Error getting books present: ${getErrorMessage(booksPresentPossiblyError)}`);
       return BOOKS_PRESENT_DEFAULT;
     }
-    return booksPresentPossiblyError;
+    return excludeExtraMaterialBooks(booksPresentPossiblyError);
   }, [booksPresentPossiblyError]);
 
   // Whether the project preserves invisible characters literally in USFM. Forwarded to the result
