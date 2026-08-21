@@ -1220,6 +1220,135 @@ declare module 'platform-scripture' {
 
   // #endregion Versification Types
 
+  // #region Pt9 Interlinear Types
+
+  /**
+   * One PT9 interlinear file: its raw text and the lowercase SHA-256 hex of the bytes that text was
+   * read from. The hash is over the raw bytes, so it matches the same file's manifest hash and lets
+   * a caller persist the fingerprint of exactly the content it received.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearFile = {
+    /** The file's raw text (any byte-order mark is stripped; the hash still covers the raw bytes). */
+    text: string;
+    /** Lowercase SHA-256 hex of the file's raw bytes. */
+    sha256: string;
+  };
+
+  /**
+   * Map of project-relative, forward-slash-normalized PT9 interlinear file path to that file's
+   * content and fingerprint. Empty when the project has no interlinear data.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearFileSet = { [filePath: string]: Pt9InterlinearFile };
+
+  /**
+   * Map of project-relative, forward-slash-normalized PT9 interlinear file path to the lowercase
+   * SHA-256 hex of that file's current bytes. Empty when the project has no interlinear data.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearManifest = { [filePath: string]: string };
+
+  /**
+   * Data types the PT9 interlinear projectInterface exposes via its base
+   * {@link IProjectDataProvider}. Both are read-only - the Paratext project's interlinear files on
+   * disk are the authoritative source; `set*` is not supported and throws if called. There are no
+   * change events; poll `getPt9InterlinearManifest` to detect changes.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearProjectInterfaceDataTypes = {
+    /** Per-file SHA-256 hex, for change detection without transferring content. */
+    Pt9InterlinearManifest: DataProviderDataType<undefined, Pt9InterlinearManifest, never>;
+    /** Per-file raw text plus fingerprint. */
+    Pt9InterlinearFiles: DataProviderDataType<undefined, Pt9InterlinearFileSet, never>;
+  };
+
+  /**
+   * Read-only access to a Paratext project's persisted PT9 interlinear files, for importing legacy
+   * interlinear data into an interlinearizer. Advertised only on editable projects - published
+   * (resource) projects are archives that do not carry interlinear authoring data - so a consumer
+   * reads "interface unsupported" as "no PT9 interlinear import available for this project".
+   *
+   * Both data types are read-only: `set*` is unsupported and throws if called; the authoritative
+   * source is the files on disk, not this projectInterface. The interface raises no change events -
+   * `subscribe*` emits at most the current value once (per `retrieveDataImmediately`) and never
+   * tracks file changes. Poll `getPt9InterlinearManifest` and compare hashes to detect changes.
+   *
+   * Acquire via `papi.projectDataProviders.get('platformScripture.Pt9Interlinear', projectId)`
+   * (backend) or the `useProjectDataProvider('platformScripture.Pt9Interlinear', projectId)` React
+   * hook (frontend).
+   *
+   * @experimental
+   */
+  export type IPt9InterlinearProjectDataProvider =
+    IProjectDataProvider<Pt9InterlinearProjectInterfaceDataTypes> & {
+      /**
+       * Returns the lowercase SHA-256 hex of each PT9 interlinear file's current bytes, keyed by
+       * project-relative path; empty when the project has no interlinear data. The cheap
+       * change-detection probe. Throws if a file found by the scan cannot be read, so a caller
+       * never receives a partial manifest.
+       *
+       * @experimental
+       */
+      getPt9InterlinearManifest(): Promise<Pt9InterlinearManifest>;
+      /**
+       * Read-only - throws if called. The authoritative source is the Paratext project's
+       * interlinear files on disk.
+       *
+       * @experimental
+       */
+      setPt9InterlinearManifest(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<Pt9InterlinearProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to the manifest. Emits at most the current value once; the interface does not
+       * track file changes, so no further updates fire. Poll `getPt9InterlinearManifest` to detect
+       * changes.
+       *
+       * @experimental
+       */
+      subscribePt9InterlinearManifest(
+        selector: undefined,
+        callback: (manifest: Pt9InterlinearManifest | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+
+      /**
+       * Returns each PT9 interlinear file's raw text and byte fingerprint, keyed by
+       * project-relative path; empty when the project has no interlinear data. Throws if a file
+       * found by the scan cannot be read, so a caller never receives a partial set.
+       *
+       * @experimental
+       */
+      getPt9InterlinearFiles(): Promise<Pt9InterlinearFileSet>;
+      /**
+       * Read-only - throws if called. See {@link setPt9InterlinearManifest}.
+       *
+       * @experimental
+       */
+      setPt9InterlinearFiles(
+        newValue: never,
+      ): Promise<DataProviderUpdateInstructions<Pt9InterlinearProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to the file set. Emits at most the current value once; the interface does not
+       * track file changes, so no further updates fire. Poll `getPt9InterlinearManifest` to detect
+       * changes.
+       *
+       * @experimental
+       */
+      subscribePt9InterlinearFiles(
+        selector: undefined,
+        callback: (files: Pt9InterlinearFileSet | PlatformError) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  // #endregion Pt9 Interlinear Types
+
   // #region Check Types
 
   /** Details about a check provided by the check itself */
@@ -2375,6 +2504,7 @@ declare module 'papi-shared-types' {
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
     IVersificationProjectDataProvider,
+    IPt9InterlinearProjectDataProvider,
     IFindInScriptureProjectDataProvider,
     IReplaceWithUsfmProjectDataProvider,
     ITextConnectionSettingsProjectDataProvider,
@@ -2406,6 +2536,8 @@ declare module 'papi-shared-types' {
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
     /** @experimental */
     'platformScripture.Versification': IVersificationProjectDataProvider;
+    /** @experimental */
+    'platformScripture.Pt9Interlinear': IPt9InterlinearProjectDataProvider;
     'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
     'platformScripture.replaceWithUsfm': IReplaceWithUsfmProjectDataProvider;
     'platformScripture.textConnectionSettings': ITextConnectionSettingsProjectDataProvider;

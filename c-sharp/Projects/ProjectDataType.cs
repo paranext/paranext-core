@@ -24,4 +24,9 @@ public static class ProjectDataType
     public const string FINAL_VERSE_NUMBER = "FinalVerseNumber";
     public const string FINAL_CHAPTER = "FinalChapter";
     public const string FINAL_VERSE_NUMBERS_IN_BOOK = "FinalVerseNumbersInBook";
+
+    // platformScripture.Pt9Interlinear projectInterface. Kept for parity with the other data-type
+    // constants and for possible future change-event use; unreferenced today (no events emitted).
+    public const string PT9_INTERLINEAR_MANIFEST = "Pt9InterlinearManifest";
+    public const string PT9_INTERLINEAR_FILES = "Pt9InterlinearFiles";
 }
