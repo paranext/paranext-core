@@ -83,6 +83,9 @@ step, no automation. Just a record.
 - **Consequences:** shortcuts are app-global and cross-platform from one place; couples `main.ts` to
   an extension's command name by string (degrades gracefully if the extension is absent). **Revisit**
   (and likely supersede this) once enough shortcuts accumulate to justify the declarative API.
+  Narrowed by ADR-0015: this applies to shortcuts whose command needs nothing from the focused view;
+  a shortcut whose command needs the focused web view's id, project, or text selection stays in the
+  renderer, in one shared hook.
 - **Source:** discovery brief for "Donna syncs her project with the team (core Send/Receive)".
 
 ## ADR-0003: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
@@ -415,3 +418,171 @@ step, no automation. Just a record.
   than inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
+
+## ADR-0013: `InstalledExtensions.packaged` reports discovered extensions, not activated ones
+
+- **Date:** 2026-08-13
+- **Status:** Accepted
+- **Context:** `getInstalledExtensions` in `extension.service.ts` built its `packaged` list from the
+  live `activeExtensions` map, so the answer moved as startup progressed. Extensions activate
+  sequentially in a deterministic order that places every `platform*` extension before every
+  `paratext*` one, which means `platformGetResources` — the extension that answers
+  `platformGetResources.isSendReceiveAvailable` — is always running while `paratextBibleSendReceive`
+  is still queued. A Paratext 10 Studio log measured that gap at ~1.5s, widened by whatever the
+  extensions in between (notably the network-bound marketplace extension) take. Callers asking inside
+  the gap got a truthful `false` to "is send/receive installed?" and had no way to know it was
+  temporary; the toolbar's Sync button therefore stayed hidden for the session (PT-3954), since
+  `platform.onDidReloadExtensions` does not fire on a cold start.
+- **Decision:** `packaged` is derived from the extensions **discovered** for this build
+  (`availableExtensions`, assigned in `reloadExtensions` before any activation begins) via
+  `derivePackagedExtensionIdentifiers` in `extension-host/utils/extension-data.util.ts`. The list now
+  answers "did this ship with the application?" — a question whose answer does not change during
+  startup — and its TSDoc in `manage-extensions-privilege.model.ts` says so explicitly, including that
+  it is *not* an answer to "can I call this extension's commands right now?".
+- **Alternatives:** **Add a separate `available` field and leave `packaged` on activation state** —
+  rejected: `packaged` is already documented as "explicitly bundled to be part of the application …
+  at runtime no extensions can be added or removed from this set", which describes the build, not the
+  activation queue; two near-identical lists would invite callers to pick the wrong one. **Fix only
+  the toolbar with a retry** — rejected as the sole fix: it leaves every other caller of this list
+  with the same trap. To be clear about which change does what: this decision is the fix. The
+  renderer's re-checks and the Home web view's retries are fallbacks for a different failure — the
+  extension answering the check not having activated yet, which no change to this list can address.
+  **Emit `platform.onDidReloadExtensions` on cold start** — rejected: it would trigger refetch
+  storms across all consumers at startup, and a renderer that subscribes late would still miss it;
+  making the query stable beats making the event more frequent.
+- **Consequences:** An extension that fails or times out during activation (5s cap, see
+  `getExtensionActivationTimeoutMs`) is now reported as packaged, so callers may show affordances for
+  an extension that cannot answer — the toolbar accepts this trade deliberately, as the user already
+  receives an `%extension_failed_to_start%` notification in that case. Consumers that need "is it
+  usable right now?" must ask that question directly rather than inferring it from this list.
+  This also inherits `availableExtensions`' staleness, which `packaged` did not have before: during a
+  reload the previous list stands until `reloadExtensions` reassigns it, so an extension mid-disable
+  can briefly be reported as packaged (i.e. bundled and undisableable), and a failed `getExtensions()`
+  leaves the list stale for the session. Both windows are short and only observable by a caller
+  polling during a reload, but they are new here, not pre-existing. Because the inputs are
+  module-private (`availableExtensions` is only populated by a full reload), the invariant is guarded
+  by a source check — `extension.service.packaged-extensions.test.ts` — rather than a behavioral test.
+  Revisit if a caller genuinely needs activation state: that wants a new, honestly-named signal, not a
+  redefinition of this one. The same "don't answer a question you can't answer" rule applies one level
+  up: `platformGetResources.isSendReceiveAvailable` returns `undefined` — not `false` — when it lacks
+  the `manageExtensions` privilege to check with, and its consumers treat `undefined` and a thrown
+  error alike as unknown, failing open.
+- **Source:** PT-3954 (Sync button on toolbar sometimes does not show), with the activation timeline
+  measured from a Paratext 10 Studio `main.log`.
+
+## ADR-0014: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
+
+- **Date:** 2026-08-14
+- **Status:** Accepted
+- **Context:** PT-4337 asked for a provider-agnostic analytics abstraction (call sites never touch a
+  vendor SDK or write-key directly) that is fire-and-forget and fail-safe, and that correctly targets
+  a "test" vs "production" analytics audience so dev/tester activity never pollutes production
+  numbers. Determining which audience applies requires reading the current Send/Receive server
+  target, which is only reachable via the `paratextRegistration.internetSettingsDataProvider` PAPI
+  data provider (`c-sharp/Users/InternetSettingsDataProvider.cs`) — a lookup available only from the
+  extension-host and renderer processes, not from Electron's main process. This ticket's own DoD was
+  narrow (wire up one proof-of-concept `app_launch` event with a console-log stand-in provider), but
+  the abstraction itself — shared types, the resolution/queueing engine, and the provider seam — is
+  the actual deliverable and shapes every later analytics call site under epic PT-1797.
+- **Decision:** New top-level structure `analytics-providers/` under
+  `src/extension-host/services/`, holding provider implementations behind the shared
+  `AnalyticsProvider` interface (`src/shared/models/analytics.model.ts`). The engine
+  (`analytics.service.ts`) lives in extension-host — chosen over main or a shared/cross-process
+  module specifically because it's the process that can reach the PAPI data provider the resolution
+  needs. `AnalyticsEvent.environment` is decided once, when an event is fired (or when it leaves the
+  service's `unresolved` queue), never re-decided at transmission time, so an event that sits queued
+  through an app upgrade still lands with the vendor account that was correct when it happened.
+  Environment resolution itself is fail-safe: any timeout or error resolves to `'test'` rather than
+  `'production'`, since under-counting is an acceptable cost and mis-tagging test/dev activity as
+  production data is not. `ConsoleAnalyticsProvider` — the only provider this ticket ships — is not
+  disposable proof-of-concept scaffolding; it is expected to remain the permanent "don't actually hit
+  the vendor" implementation for normal dev/tester activity and for most automated E2E runs, even
+  after a real vendor provider exists.
+- **Alternatives:** **Host the engine in main**, closest to true process-start timing — rejected: main
+  cannot consume PAPI data providers, so the S/R-target check would need new cross-process plumbing
+  just to relocate a process boundary the design doesn't otherwise need yet. **Build the full
+  cross-process facade now** (a `src/shared/services/analytics.service.ts` every process imports,
+  mirroring `logger.service.ts`) so call sites already look ubiquitous — rejected for this ticket:
+  logger's ubiquity comes from being a dumb per-process module needing no IPC, but environment
+  resolution genuinely needs one process to own the PAPI round-trip, so a shared facade would need
+  real IPC transport built now for zero current call sites outside extension-host. Types were still
+  placed in `src/shared/models/` immediately so this facade can be added later additively, without a
+  call-site rename. **Re-resolve environment fresh at transmission time instead of stamping at fire
+  time** — rejected: an event can sit queued indefinitely while offline, and by send time the app may
+  have upgraded to a different vendor; stamping at fire time is what lets the queue design extend
+  cleanly to a durable, cross-restart queue later. **Resolve environment reactively when the user
+  changes S/R server mid-session** — deferred to PT-4378; this ticket resolves once per session and
+  caches it, an accepted simplification for the POC's single startup-time event.
+- **Consequences:** Every future analytics call site funnels through `trackEvent()`/the
+  `AnalyticsProvider` seam rather than touching a vendor SDK directly, so swapping vendors later means
+  writing one new provider, not auditing call sites. Until PT-4378 lands, an event fired after a
+  mid-session S/R server change still targets the environment resolved at startup. Until a follow-on
+  ticket adds cross-process transport, only extension-host can call `trackEvent()`/`initialize()` —
+  main and renderer cannot yet emit analytics events. Until a follow-on ticket adds durable
+  persistence, the `test`/`production`/`unresolved` in-memory queue is lost on crash or restart; its
+  three-bucket shape was chosen specifically so that ticket can persist three queues without a format
+  rewrite. No user-consent gating exists yet (PT-4366 builds the actual setting), though the design
+  leaves the same async-resolve-once seam open for it that environment resolution uses.
+
+  **Core depending on an extension-owned data provider:** `analytics.service.ts` calls
+  `dataProviderService.get('paratextRegistration.internetSettingsDataProvider')` — a data provider
+  namespaced under the `paratextRegistration` **extension**, not a core-owned one sourced from a
+  shared `*.service-model.ts`/`*.service.ts` file the way every other core `dataProviderService.get`
+  call site is (`themeServiceDataProviderName`, `localizationServiceProviderName`,
+  `settingsServiceDataProviderName`, `menuDataServiceProviderName`). This typechecks only because
+  `tsconfig.json` puts `./extensions/src` on `typeRoots`, making the extension's ambient
+  `DataProviders` augmentation (`paratext-registration.d.ts`) visible from core without an explicit
+  import — that's an incidental property of the typeRoots configuration, not a reviewed decision
+  that core may depend on extension-provided data providers in general. The dependency exists here
+  because the S/R server target has no core-owned equivalent; it does not establish that pattern as
+  generally sanctioned. Code that wants to depend on a different extension-provided data provider
+  from core should treat this as a one-off, not a precedent, and reconsider whether a core-owned
+  alternative should exist instead.
+- **Source:** PT-4337 (epic PT-1797, "Analytics II (Implementation)"); design spec
+  `docs/superpowers/specs/2026-08-13-analytics-abstraction-layer-design.md`; final whole-branch review
+  of the implementing branch, which surfaced and fixed a startup-path regression (analytics
+  initialization briefly gated extension-host activation) before merge.
+
+## ADR-0015: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
+
+- **Date:** 2026-08-18
+- **Status:** Accepted (narrows ADR-0002 rather than superseding it)
+- **Context:** PT-4341 makes Find (Ctrl+F) reachable from every scripture tab type, not just the
+  Scripture editor. ADR-0002 says app-global shortcuts belong in the Electron main-process
+  `before-input-event` handler (`src/main/main.ts`) and explicitly rejects "renderer-level global
+  `keydown` — duplicated into every web-view" as the alternative. Find is app-wide in the sense that
+  the user expects Ctrl+F to work wherever scripture is on screen, so on its face this work looks
+  like an ADR-0002 case. But `platformScripture.openFind` is not a zero-argument command: it needs
+  the id of the web view the user is *in*, the project of the scripture that web view is *showing*
+  (for a reference panel this is the displayed resource, not the tab's own `projectId`), and that
+  web view's current **text selection** to pre-fill the search box. `before-input-event` fires in the
+  main process, which has none of those: it can identify the focused window, not the focused tab, and
+  it cannot read a selection inside an `about:srcdoc` iframe. Routing them back would mean inventing
+  a "focused scripture tab reports its selection" channel — a platform capability that does not exist.
+- **Decision:** Keep the Ctrl+F handler in the renderer, inside the web views, but hold it in **one
+  shared hook** — `useOpenFindShortcut` in
+  `extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts` — that every
+  scripture tab type mounts (Scripture editor, model text, Bible text, commentary, Text Collection).
+  The hook owns the key match, the "no scripture resolved yet" no-op, the selection read, and the
+  error logging; a tab supplies only its web view id and the project id of the scripture it is
+  showing. ADR-0002 continues to govern shortcuts whose command needs nothing from the focused view.
+  The Text Collection tab shows several resources at once and so has no single displayed resource: it
+  supplies the project of the resource holding the **caret**, tracked by `useFocusedResourceProjectId`
+  off the cells' `data-project-id`.
+- **Alternatives:** (a) **A `before-input-event` branch per ADR-0002** — rejected: it cannot supply
+  the triggering web view id, the displayed resource's project, or the selection, so Find would open
+  against the wrong scripture and never pre-fill. (b) **`before-input-event` plus a new "focused
+  scripture tab" PAPI channel that reports id + project + selection** — deferred: that is the
+  general fix (and the honest precondition for making Ctrl+F app-global), but it is a platform
+  capability well beyond this ticket's scope. (c) **Duplicate the listener per web view** (what the
+  first draft of this branch did, with the editor keeping its own inline copy) — rejected: two
+  implementations of the same shortcut drift, which is exactly ADR-0002's stated objection.
+- **Consequences:** Ctrl+F works only in tabs that mount the hook, so **each new scripture tab type
+  is an opt-in** — the real coverage gap of the renderer-level approach, and the one thing the
+  main-process handler would have given for free. Adding a tab type is one hook call plus a resolved
+  source project. The catalog entry `scripture-find` in `src/stories/keyboard-shortcuts.data.ts` lists
+  the hook plus every mount site, so the current coverage is greppable in one place; keeping it
+  accurate is what stops the gap from going unnoticed. **Revisit** if (b) is ever built, or once
+  enough view-context-dependent shortcuts accumulate to justify a general channel.
+- **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
+  branch diverged from ADR-0002 without recording why.

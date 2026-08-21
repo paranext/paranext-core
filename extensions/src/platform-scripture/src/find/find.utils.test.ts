@@ -1,10 +1,17 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { newPlatformError } from 'platform-bible-utils';
+import { FindJobStatusReport } from 'platform-scripture';
 import {
   applyPreserveCase,
+  armBoundedWait,
   buildSearchRegex,
   CharacterCategorizer,
+  classifyPollAttempt,
+  gateStartSearch,
+  isFindQueryValid,
   isSimpleInterfaceMode,
+  MAX_CONSECUTIVE_POLL_MISSES,
+  nextPollMissState,
 } from './find.utils';
 
 /** Default character categorizer matching the project-settings defaults used in production */
@@ -360,5 +367,167 @@ describe('buildSearchRegex – trailing space', () => {
     );
     // "Abraham." ends the sentence — no space follows
     expect(matchAll(regex, 'the son of Abraham.')).toEqual([]);
+  });
+});
+
+describe('nextPollMissState', () => {
+  it('does not exceed the retry limit on the first miss', () => {
+    const result = nextPollMissState(0);
+    expect(result).toEqual({ consecutiveMisses: 1, hasExceededRetryLimit: false });
+  });
+
+  it('increments the miss count on each successive call', () => {
+    expect(nextPollMissState(1)).toEqual({ consecutiveMisses: 2, hasExceededRetryLimit: false });
+    expect(nextPollMissState(2)).toEqual({ consecutiveMisses: 3, hasExceededRetryLimit: false });
+  });
+
+  it('has not exceeded the retry limit one miss below the threshold', () => {
+    const result = nextPollMissState(MAX_CONSECUTIVE_POLL_MISSES - 2);
+    expect(result.consecutiveMisses).toBe(MAX_CONSECUTIVE_POLL_MISSES - 1);
+    expect(result.hasExceededRetryLimit).toBe(false);
+  });
+
+  it('exceeds the retry limit once the miss count reaches the threshold', () => {
+    const result = nextPollMissState(MAX_CONSECUTIVE_POLL_MISSES - 1);
+    expect(result.consecutiveMisses).toBe(MAX_CONSECUTIVE_POLL_MISSES);
+    expect(result.hasExceededRetryLimit).toBe(true);
+  });
+});
+
+const FAKE_UPDATE: FindJobStatusReport = {
+  jobId: 'job-1',
+  status: 'running',
+  percentComplete: 50,
+  totalResultsCount: 3,
+  totalExecutionTimeMs: 100,
+};
+
+describe('classifyPollAttempt', () => {
+  it('classifies as noActiveJob without calling getUpdate, regardless of what it would return', async () => {
+    const getUpdate = vi.fn(async () => FAKE_UPDATE);
+    const outcome = await classifyPollAttempt({
+      hasActiveJob: false,
+      getUpdate,
+      consecutiveMisses: 0,
+    });
+    expect(outcome).toEqual({ kind: 'noActiveJob' });
+    expect(getUpdate).not.toHaveBeenCalled();
+  });
+
+  it('classifies as update when there is an active job and getUpdate resolves a report', async () => {
+    const outcome = await classifyPollAttempt({
+      hasActiveJob: true,
+      getUpdate: async () => FAKE_UPDATE,
+      consecutiveMisses: 3,
+    });
+    expect(outcome).toEqual({ kind: 'update', update: FAKE_UPDATE });
+  });
+
+  it('classifies as a miss — not noActiveJob — when there IS an active job but getUpdate resolves undefined', async () => {
+    // Regression: a prior version conflated "no job to poll for" with "have a job, couldn't get an
+    // update", which caused a false "search interrupted" error on every ordinary new search.
+    const outcome = await classifyPollAttempt({
+      hasActiveJob: true,
+      getUpdate: async () => undefined,
+      consecutiveMisses: 0,
+    });
+    expect(outcome).toEqual({ kind: 'miss', consecutiveMisses: 1, hasExceededRetryLimit: false });
+  });
+
+  it('reports hasExceededRetryLimit once consecutiveMisses reaches the threshold', async () => {
+    const outcome = await classifyPollAttempt({
+      hasActiveJob: true,
+      getUpdate: async () => undefined,
+      consecutiveMisses: MAX_CONSECUTIVE_POLL_MISSES - 1,
+    });
+    expect(outcome).toEqual({
+      kind: 'miss',
+      consecutiveMisses: MAX_CONSECUTIVE_POLL_MISSES,
+      hasExceededRetryLimit: true,
+    });
+  });
+});
+
+describe('armBoundedWait', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('fires the callback once the delay elapses', () => {
+    const onTimeout = vi.fn();
+    armBoundedWait(onTimeout, 5000);
+    expect(onTimeout).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(5000);
+    expect(onTimeout).toHaveBeenCalledOnce();
+  });
+
+  it('does not fire the callback if cleared before the delay elapses', () => {
+    const onTimeout = vi.fn();
+    const { clear } = armBoundedWait(onTimeout, 5000);
+    vi.advanceTimersByTime(4000);
+    clear();
+    vi.advanceTimersByTime(10_000);
+    expect(onTimeout).not.toHaveBeenCalled();
+  });
+});
+
+describe('isFindQueryValid', () => {
+  it('is false for an empty (or whitespace-only) search term regardless of scope', () => {
+    expect(isFindQueryValid({ searchTerm: '', scope: 'book', selectedBookIds: [] })).toBe(false);
+    expect(isFindQueryValid({ searchTerm: '   ', scope: 'chapter', selectedBookIds: [] })).toBe(
+      false,
+    );
+  });
+
+  it('is true for a non-empty term in the chapter/book scopes, which need no book selection', () => {
+    expect(isFindQueryValid({ searchTerm: 'God', scope: 'chapter', selectedBookIds: [] })).toBe(
+      true,
+    );
+    expect(isFindQueryValid({ searchTerm: 'God', scope: 'book', selectedBookIds: [] })).toBe(true);
+  });
+
+  it('is false for the selectedBooks scope with no books selected, even with a non-empty term', () => {
+    expect(
+      isFindQueryValid({ searchTerm: 'God', scope: 'selectedBooks', selectedBookIds: [] }),
+    ).toBe(false);
+  });
+
+  it('is true for the selectedBooks scope once at least one book is selected', () => {
+    expect(
+      isFindQueryValid({ searchTerm: 'God', scope: 'selectedBooks', selectedBookIds: ['GEN'] }),
+    ).toBe(true);
+  });
+});
+
+describe('gateStartSearch', () => {
+  it('runs the search when the query is valid, the PDP is ready, and nothing else is starting', () => {
+    expect(
+      gateStartSearch({ isSearchQueryValid: true, hasPdp: true, isAlreadyStarting: false }),
+    ).toEqual({ action: 'run' });
+  });
+
+  it('skips without retry when the query itself is invalid, regardless of PDP readiness', () => {
+    expect(
+      gateStartSearch({ isSearchQueryValid: false, hasPdp: true, isAlreadyStarting: false }),
+    ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: false });
+    expect(
+      gateStartSearch({ isSearchQueryValid: false, hasPdp: false, isAlreadyStarting: false }),
+    ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: false });
+  });
+
+  it('skips without retry when a search is already starting', () => {
+    expect(
+      gateStartSearch({ isSearchQueryValid: true, hasPdp: true, isAlreadyStarting: true }),
+    ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: false });
+  });
+
+  it('skips WITH retry when the query is valid but the data provider is not ready yet', () => {
+    expect(
+      gateStartSearch({ isSearchQueryValid: true, hasPdp: false, isAlreadyStarting: false }),
+    ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: true });
   });
 });

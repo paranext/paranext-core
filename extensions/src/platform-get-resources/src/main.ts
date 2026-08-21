@@ -296,17 +296,22 @@ export async function activate(context: ExecutionActivationContext) {
   const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(
     'platformGetResources.isSendReceiveAvailable',
     async () => {
-      let isSendReceiveAvailable: boolean = false;
-      if (context.elevatedPrivileges.manageExtensions) {
-        manageExtensions = context.elevatedPrivileges.manageExtensions;
-        const installedExtensions = await manageExtensions.getInstalledExtensions();
-        isSendReceiveAvailable = installedExtensions.packaged
-          .concat(installedExtensions.enabled)
-          .some((extension) => {
-            return extension.extensionName === 'paratextBibleSendReceive';
-          });
+      if (!context.elevatedPrivileges.manageExtensions) {
+        // `undefined`, not `false`: without the privilege there is nothing to check, so answering
+        // `false` would report "send/receive isn't in this build" on no evidence — and callers hide
+        // send/receive UI for the session on a `false`. `undefined` says "couldn't determine",
+        // which callers treat as unknown and fail open on.
+        logger.warn(
+          'platformGetResources cannot check whether send/receive is available without the manageExtensions privilege; reporting unknown',
+        );
+        return undefined;
       }
-      return isSendReceiveAvailable;
+
+      manageExtensions = context.elevatedPrivileges.manageExtensions;
+      const installedExtensions = await manageExtensions.getInstalledExtensions();
+      return installedExtensions.packaged.concat(installedExtensions.enabled).some((extension) => {
+        return extension.extensionName === 'paratextBibleSendReceive';
+      });
     },
   );
 

@@ -38,7 +38,16 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Find, FIND_LOCALIZED_STRING_KEYS } from './find/find.component';
-import { applyPreserveCase, isSimpleInterfaceMode } from './find/find.utils';
+import {
+  applyPreserveCase,
+  armBoundedWait,
+  classifyPollAttempt,
+  GIVE_UP_AFTER_MS,
+  gateStartSearch,
+  isFindQueryValid,
+  isSimpleInterfaceMode,
+  POLL_INTERVAL_MS,
+} from './find/find.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
@@ -49,6 +58,7 @@ import {
   SEARCH_RESULT_LOCALIZED_STRING_KEYS,
 } from './find/search-result.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -60,6 +70,7 @@ const WEB_VIEW_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_find_replacedOneOccurrence%',
   '%webView_find_replacedNOccurrences%',
   '%webView_find_replacementReverted%',
+  '%webView_find_searchInterruptedError%',
 ];
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
@@ -116,10 +127,22 @@ async function revertBookSnapshots(
 }
 
 global.webViewComponent = function FindWebView({
-  projectId,
+  projectId: webViewProjectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
+  const [verseRefSetting, setVerseRefSetting, , , scrollGroupSourceProjectId] =
+    useWebViewScrollGroupScrRef();
+
+  // The project to search. Normally the tab's own — `openFind` sets it from the trigger (the
+  // editor's project, or the resource a reference panel is displaying). The simple-mode layout also
+  // seeds a Find tab that carries no projectId at all, so fall back to whichever project is driving
+  // this web view's scroll group reference (the Scripture editor, since the provider puts Find in
+  // group 0 in simple mode). Without the fallback that seeded tab renders a search box that silently
+  // searches nothing until the user's first Ctrl+F. Mirrors the Text Collection tab, which resolves
+  // its own default-layout tab the same way.
+  const projectId = webViewProjectId ?? scrollGroupSourceProjectId;
+
   // Each instance needs its own mutex — a module-level mutex would cause operations from one Find
   // panel to block another if two panels are open for different projects simultaneously.
   const findPdpMutex = useRef(new Mutex()).current;
@@ -156,7 +179,9 @@ global.webViewComponent = function FindWebView({
       if (!term) return;
       if (term === lastPersistedHistoryTermRef.current) return;
       lastPersistedHistoryTermRef.current = term;
-      findHistoryProviderRef.current?.addHistoryItem(term, projectId).catch(() => {});
+      findHistoryProviderRef.current
+        ?.addHistoryItem(term, projectId)
+        .catch((e) => logger.warn(`Find: failed to save search history: ${getErrorMessage(e)}`));
     },
     [projectId],
   );
@@ -252,12 +277,10 @@ global.webViewComponent = function FindWebView({
     );
   }, [results]);
 
-  const [verseRefSetting, setVerseRefSetting] = useWebViewScrollGroupScrRef();
-
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
 
   const editorWebViewController = useWebViewController(
-    'platformScriptureEditor.react',
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     editorWebViewId,
   );
 
@@ -282,6 +305,12 @@ global.webViewComponent = function FindWebView({
   );
 
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
+  // useLocalizedStrings returns a freshly-allocated object on its loading/error branch, so its
+  // identity is not stable across renders — reading it via a ref (rather than depending on it
+  // directly) keeps the poll effect below from tearing down and resetting its miss counter on an
+  // unrelated localization re-render.
+  const localizedStringsRef = useRef(localizedStrings);
+  localizedStringsRef.current = localizedStrings;
 
   const [scopeSelectorLocalizedStrings] = useLocalizedStrings(
     useMemo(() => {
@@ -317,7 +346,11 @@ global.webViewComponent = function FindWebView({
 
   const persistLastSearchTerm = useCallback(
     (term: string) => {
-      findHistoryProviderRef.current?.setLastSearchTerm(projectId, term).catch(() => {});
+      findHistoryProviderRef.current
+        ?.setLastSearchTerm(projectId, term)
+        .catch((e) =>
+          logger.warn(`Find: failed to persist last search term: ${getErrorMessage(e)}`),
+        );
     },
     [projectId],
   );
@@ -412,6 +445,22 @@ global.webViewComponent = function FindWebView({
   const allowInvisibleCharacters: boolean = isPlatformError(allowInvisibleCharactersPossiblyError)
     ? false
     : allowInvisibleCharactersPossiblyError;
+
+  // Whether the active project can be edited. Replace mutates the project, so it's disabled (with
+  // an explanatory tooltip) while this is false; Find itself is read-only and stays unaffected. The
+  // `true` third argument is `useProjectSetting`'s own documented default for the platform-level
+  // *unset* case, returned once the read resolves and the project simply never overrode the
+  // setting — that value is trusted as-is below. Fails closed (matching this extension's other
+  // permission-adjacent read in use-checklist.ts) both while still loading and if the read
+  // genuinely errors: the safer default for a write-gating permission is to assume not-editable
+  // rather than silently allow a mutation before we actually know.
+  const [isEditablePossiblyError, , , isEditableLoading] = useProjectSetting(
+    projectId,
+    'platform.isEditable',
+    true,
+  );
+  const isEditable: boolean =
+    isEditableLoading || isPlatformError(isEditablePossiblyError) ? false : isEditablePossiblyError;
 
   const availableBooksIds = useMemo(() => {
     return getBookIdsFromBooksPresent(booksPresent).filter(
@@ -544,11 +593,10 @@ global.webViewComponent = function FindWebView({
 
   // #region Search related functions
 
-  const isSearchQueryValid = useMemo(() => {
-    if (searchTerm.trim() === '') return false;
-    if (scope === 'selectedBooks' && selectedBookIds.length === 0) return false;
-    return true;
-  }, [scope, searchTerm, selectedBookIds]);
+  const isSearchQueryValid = useMemo(
+    () => isFindQueryValid({ searchTerm, scope, selectedBookIds }),
+    [scope, searchTerm, selectedBookIds],
+  );
 
   const findScope = useMemo((): FindScope[] => {
     switch (scope) {
@@ -598,17 +646,45 @@ global.webViewComponent = function FindWebView({
   const pendingAdvanceIndexRef = useRef<number | undefined>(undefined);
   // On the initial render, skip the debounce-triggered auto-search only when searchTerm is empty.
   // When searchTerm is non-empty (restored from state), let the search run so results appear on
-  // startup. A separate effect handles the case where findPdp isn't ready within the debounce
-  // window.
+  // startup. A separate effect handles the case where findPdp isn't ready.
   const isInitialAutoSearchRef = useRef(true);
-  // Tracks whether the startup search (for a pre-filled search term) has already been triggered,
-  // so the findPdp-readiness effect below only fires once. Intentionally never reset: the fallback
-  // effect is a one-shot safety net for mount-time races and should not re-fire on project switch.
-  const initialSearchTriggeredRef = useRef(false);
+  // Set whenever handleStartSearch bails specifically because findPdp isn't ready (query was
+  // otherwise valid). The readiness-retry effect below clears it and retries as soon as findPdp
+  // becomes available — covering both a mount-time race and findPdp dropping later during a long
+  // idle period, not just the first attempt ever.
+  const pendingSearchDesiredRef = useRef(false);
+  // Bounds how long a search can sit waiting for findPdp before giving up. Without this, a valid
+  // term with findPdp never arriving would show the pending/loading skeleton forever with no
+  // error — the same silently-stuck-forever failure the poll loop's own give-up treatment exists
+  // to prevent, just one step earlier (before a search job even starts).
+  const pendingSearchWaitRef = useRef<{ clear: () => void } | undefined>(undefined);
+  const clearPendingSearchTimeout = useCallback(() => {
+    pendingSearchWaitRef.current?.clear();
+    pendingSearchWaitRef.current = undefined;
+  }, []);
+  useEffect(() => clearPendingSearchTimeout, [clearPendingSearchTimeout]);
 
   const handleStartSearch = useCallback(
     async (isExplicitSearch = false) => {
-      if (!isSearchQueryValid || !findPdp || isStartingSearchRef.current) return;
+      const gate = gateStartSearch({
+        isSearchQueryValid,
+        hasPdp: !!findPdp,
+        isAlreadyStarting: isStartingSearchRef.current,
+      });
+      if (gate.action === 'skip') {
+        if (gate.shouldRetryWhenPdpReady) {
+          pendingSearchDesiredRef.current = true;
+          clearPendingSearchTimeout();
+          pendingSearchWaitRef.current = armBoundedWait(() => {
+            pendingSearchWaitRef.current = undefined;
+            if (!pendingSearchDesiredRef.current || !isMountedRef.current) return;
+            pendingSearchDesiredRef.current = false;
+            setSearchStatus('errored');
+            setSearchError(localizedStringsRef.current['%webView_find_searchInterruptedError%']);
+          }, GIVE_UP_AFTER_MS);
+        }
+        return;
+      }
 
       const isPostReplace = isPostReplaceSearchRef.current;
       isPostReplaceSearchRef.current = false;
@@ -668,6 +744,7 @@ global.webViewComponent = function FindWebView({
       abandonFindJob,
       addToHistory,
       beginFindJob,
+      clearPendingSearchTimeout,
       findPdp,
       findScope,
       isRegexAllowed,
@@ -737,14 +814,50 @@ global.webViewComponent = function FindWebView({
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
     let isEffectActive = true;
+    // Consecutive polls that came back with no update (a transient PDP/connection blip). Reset on
+    // any successful update; past MAX_CONSECUTIVE_POLL_MISSES the job is treated as lost rather
+    // than left to poll forever with a frozen, stale UI and no feedback.
+    let consecutiveMisses = 0;
 
     const checkForUpdates = async () => {
       // Check if this effect is still active to avoid race conditions
       if (!isEffectActive) return;
 
       try {
-        const update = await retrieveFindJobUpdate(0);
-        if (!update || !isEffectActive) return;
+        // classifyPollAttempt distinguishes "no active job right now" (most commonly because a new
+        // search's abandonFindJob() already cleared activeJobIdRef synchronously while its PDP
+        // round-trip is still in flight) from a genuine miss — collapsing that distinction
+        // previously caused a false "search interrupted" error on every ordinary new search.
+        const outcome = await classifyPollAttempt({
+          hasActiveJob: !!activeJobIdRef.current,
+          getUpdate: () => retrieveFindJobUpdate(0),
+          consecutiveMisses,
+        });
+        if (!isEffectActive) return;
+
+        if (outcome.kind === 'noActiveJob') return;
+
+        if (outcome.kind === 'miss') {
+          consecutiveMisses = outcome.consecutiveMisses;
+          if (outcome.hasExceededRetryLimit) {
+            setSearchStatus('errored');
+            setSearchError(localizedStringsRef.current['%webView_find_searchInterruptedError%']);
+            // Best-effort: we can no longer get updates for this job, so tell the backend to stop
+            // running it rather than leaving it tracked with nothing left polling it.
+            abandonFindJob().catch((error) =>
+              logger.error(
+                `Error abandoning find job after giving up on polling: ${getErrorMessage(error)}`,
+              ),
+            );
+            return;
+          }
+          timeoutId = setTimeout(checkForUpdates, POLL_INTERVAL_MS);
+          return;
+        }
+
+        // outcome.kind === 'update'
+        consecutiveMisses = 0;
+        const { update } = outcome;
 
         setSearchProgress(update.percentComplete);
         setTotalNumberOfResults(update.totalResultsCount);
@@ -759,11 +872,14 @@ global.webViewComponent = function FindWebView({
 
         // Continue polling if the job is still running and this effect is still active
         if (update.status === 'running' && isEffectActive)
-          timeoutId = setTimeout(checkForUpdates, 100);
+          timeoutId = setTimeout(checkForUpdates, POLL_INTERVAL_MS);
       } catch (error) {
         if (isEffectActive) {
           logger.error(`Error checking search results: ${getErrorMessage(error)}`);
           setSearchStatus('errored');
+          // A raw exception message isn't localized or meaningful to the user; show the same
+          // generic message the give-up path above shows, and keep the real message in the log.
+          setSearchError(localizedStringsRef.current['%webView_find_searchInterruptedError%']);
         }
       }
     };
@@ -775,7 +891,7 @@ global.webViewComponent = function FindWebView({
       isEffectActive = false;
       if (timeoutId) clearTimeout(timeoutId);
     };
-  }, [activeJobId, loadMoreResults, retrieveFindJobUpdate]);
+  }, [activeJobId, loadMoreResults, retrieveFindJobUpdate, abandonFindJob]);
 
   // #endregion
 
@@ -911,7 +1027,6 @@ global.webViewComponent = function FindWebView({
       // Only skip the initial auto-search when the field is empty. When searchTerm is non-empty
       // (e.g. restored from state), fall through so results appear immediately on startup.
       if (searchTerm.trim() === '') return undefined;
-      initialSearchTriggeredRef.current = true;
     }
     debouncedHandleStartSearch.current();
   }, [
@@ -923,21 +1038,19 @@ global.webViewComponent = function FindWebView({
     relevantScopeKey,
   ]);
 
-  // Fallback for startup search: if findPdp wasn't ready when the debounce fired on mount,
-  // run the search as soon as findPdp becomes available (fires at most once).
-  // Set explicitSearchPendingRef so the debounce timer (still pending when findPdp was already
-  // available at mount) skips its redundant second call.
+  // Readiness retry: if handleStartSearch bailed because findPdp wasn't available (mount-time race,
+  // or findPdp dropping later during a long idle period), retry as soon as it becomes available —
+  // not just once at mount. Deliberately does NOT gate on searchStatus: pendingSearchDesiredRef is
+  // only ever set after a search already ran once and bailed on !findPdp, so by definition any
+  // findPdp-driven auto-search debounce that could have raced this retry has already fired — there
+  // is nothing left to deduplicate against, so explicitSearchPendingRef is not set here either
+  // (setting it unconditionally previously risked swallowing the user's next legitimate keystroke).
   useEffect(() => {
-    if (
-      !findPdp ||
-      !initialSearchTriggeredRef.current ||
-      searchStatus !== undefined ||
-      searchTerm.trim() === ''
-    )
-      return;
-    explicitSearchPendingRef.current = true;
+    if (!findPdp || !pendingSearchDesiredRef.current) return;
+    pendingSearchDesiredRef.current = false;
+    clearPendingSearchTimeout();
     handleStartSearchRef.current();
-  }, [findPdp, searchStatus, searchTerm]);
+  }, [findPdp, clearPendingSearchTimeout]);
 
   // Reset isPostReplaceSearch once the search finishes so a subsequent search in replace mode
   // (e.g. triggered by an external change) is not mistakenly treated as a post-replace search.
@@ -986,7 +1099,9 @@ global.webViewComponent = function FindWebView({
   useEffect(() => {
     const currentController = editorWebViewController;
     return () => {
-      currentController?.runAnnotationAction('find-current-result', 'removed').catch(() => {});
+      currentController
+        ?.runAnnotationAction('find-current-result', 'removed')
+        .catch((e) => logger.warn(`Find: failed to clear result highlight: ${getErrorMessage(e)}`));
     };
   }, [editorWebViewController]);
 
@@ -1010,14 +1125,18 @@ global.webViewComponent = function FindWebView({
         try {
           editorWebViewController
             .selectRange({ start: searchResult.start, end: searchResult.end })
-            .catch(() => {});
+            .catch((e) =>
+              logger.warn(`Find: failed to select result in editor: ${getErrorMessage(e)}`),
+            );
           editorWebViewController
             .setAnnotation(
               { start: searchResult.start, end: searchResult.end },
               'find-result-highlight',
               'find-current-result',
             )
-            .catch(() => {});
+            .catch((e) =>
+              logger.warn(`Find: failed to highlight result in editor: ${getErrorMessage(e)}`),
+            );
         } catch {
           // Ignore any synchronous errors from the controller methods.
         }
@@ -1459,6 +1578,7 @@ global.webViewComponent = function FindWebView({
       isReplacing={isReplacing}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
+      isEditable={isEditable}
       results={results}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}

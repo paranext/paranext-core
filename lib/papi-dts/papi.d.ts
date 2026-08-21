@@ -518,6 +518,12 @@ declare module 'shared/models/web-view.model' {
    */
   export const SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react';
   /**
+   * The `webViewType` of the Find web view provided by the `platform-scripture` extension. Must match
+   * `findWebViewType` in `extensions/src/platform-scripture/src/find.web-view-provider.ts` — core
+   * code cannot import extension source, so the value is mirrored here as the single core-side copy.
+   */
+  export const FIND_WEBVIEW_TYPE = 'platformScripture.find';
+  /**
    * Finds the first open Scripture editor web view that has a project (first match in the given
    * order, which is dock-layout order for the open web view lists) — the shared "current project
    * editor" rule used by the project picker and by BCV navigation-target resolution so the two can
@@ -7854,6 +7860,12 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     /**
      * Extensions that are explicitly bundled to be part of the application. They cannot be disabled.
      * At runtime no extensions can be added or removed from the set of packaged extensions.
+     *
+     * Reflects the bundled extensions with code to run that were discovered for this build, not what
+     * is currently running: an extension appears here even if it has not finished activating or
+     * failed to activate. So this answers "did this ship with the application?", asked at any time,
+     * and never "can I call its commands right now?" A bundled extension that contributes no code to
+     * run (its manifest has an empty `main`) is not in this list.
      */
     packaged: ExtensionIdentifier[];
     /**
