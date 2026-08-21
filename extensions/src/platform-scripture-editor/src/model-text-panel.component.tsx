@@ -19,7 +19,6 @@ import { type DblResourceData, type LocalizedStringValue } from 'platform-bible-
 import type {
   DblResourceReference,
   EffectiveResourceReference,
-  EffectiveResourceReferenceList,
   ResourceReferenceList,
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -80,16 +79,17 @@ export type ModelTextPanelProps = {
   /** Whether the panel has a project context (opened with a project id). */
   hasProject: boolean;
   /**
-   * The resolved ("effective") model-text references for this project, or `undefined` while still
-   * resolving. The first item is the configured model text.
+   * Readiness of the configured model-text list, passed as the whole discriminated state rather
+   * than unpacked into a list plus a status.
+   *
+   * Unpacking it at this boundary would hand the panel an `undefined`-able list AND a loose status
+   * string — two values free to disagree, which is precisely what the union exists to prevent. `{
+   * status: 'ready', list: undefined }` and `{ status: 'loading' }` carrying a list are both
+   * unrepresentable this way, and narrowing survives into the component. The first item of a
+   * `ready` list is the configured model text. See `getResourcePanelReadiness` for how the panels
+   * share their front-state derivation.
    */
-  effectiveModelTexts: EffectiveResourceReferenceList | undefined;
-  /**
-   * Readiness of the configured model-text list. One status rather than separate loading/error
-   * booleans so this panel and the Resource panel derive their front states the same way — see
-   * `getResourcePanelReadiness`.
-   */
-  modelTextsStatus: EffectiveResourceReferenceListState['status'];
+  modelTextsState: EffectiveResourceReferenceListState;
   /** All DBL resources — used to match the configured model text and to feed the resource picker. */
   dblResources: DblResourceData[];
   /**
@@ -143,8 +143,7 @@ export type ModelTextPanelProps = {
 export function ModelTextPanel({
   localizedStrings,
   hasProject,
-  effectiveModelTexts,
-  modelTextsStatus,
+  modelTextsState,
   dblResources,
   isCatalogReady,
   hasCatalogError,
@@ -160,6 +159,9 @@ export function ModelTextPanel({
 }: ModelTextPanelProps) {
   // --- Resolve the configured model text against the DBL resource list ---
 
+  // Derived from the narrowed union, so it can only be non-undefined when the list is genuinely
+  // ready — the invariant the prop shape now guarantees rather than merely documents.
+  const effectiveModelTexts = modelTextsState.status === 'ready' ? modelTextsState.list : undefined;
   const effectiveModelText = effectiveModelTexts?.items[0];
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
   if (isDblResourceReference(effectiveModelText)) dblRef = effectiveModelText;
@@ -392,7 +394,7 @@ export function ModelTextPanel({
   // the Resource panel uses, so the two panels cannot drift apart on the question that caused this
   // bug in the first place.
   const readiness = getResourcePanelReadiness({
-    listStatus: modelTextsStatus,
+    listStatus: modelTextsState.status,
     isCatalogReady,
     hasCatalogError,
     configuredCount: effectiveModelTexts?.items.length ?? 0,
