@@ -94,3 +94,5 @@ export function useDblResourceCatalog(): DblResourceCatalog {
     refetchCatalog,
   };
 }
+
+export default useDblResourceCatalog;
