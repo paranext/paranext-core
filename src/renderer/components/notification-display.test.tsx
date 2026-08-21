@@ -101,12 +101,17 @@ describe('NotificationDisplay with real Sonner', () => {
 
   afterEach(() => {
     // toast.dismiss() marks toasts as removed, but Sonner then schedules a new setTimeout for the
-    // exit animation that calls removeToast (which accesses window). vi.runAllTimers() flushes that
-    // timer now, while jsdom is still up.
+    // exit animation that calls removeToast (which accesses window). The first act() flushes the
+    // dismiss re-render and Sonner's useEffect (which schedules the exit timer). The second act()
+    // fires all fake timers AND flushes the React MessageChannel update those callbacks post —
+    // without act() wrapping runAllTimers(), the MessageChannel message escapes into real-time and
+    // fires after jsdom tears down, producing "window is not defined".
     act(() => {
       toast.dismiss();
     });
-    vi.runAllTimers();
+    act(() => {
+      vi.runAllTimers();
+    });
     vi.useRealTimers();
   });
 
