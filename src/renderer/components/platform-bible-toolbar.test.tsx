@@ -388,11 +388,11 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  // The button's own behavior — the popover, Cancel, project names, failure reporting — is covered
-  // by sync-status-button.component.test.tsx, which drives the real component. What stays here is
-  // the toolbar's question: whether the button appears at all, and whether the status the toolbar
-  // renders it with tracks the sync-state event, since the toolbar is what mounts it (and mounts it
-  // before send/receive availability has settled).
+  // Scope of this block: the toolbar's own questions — whether the sync button appears at all, and
+  // whether the status it renders with tracks the sync-state event. The toolbar is what mounts the
+  // button, and it mounts it before send/receive availability has settled. The button's own
+  // behavior — popover, Cancel, project names, failure reporting — is covered by
+  // sync-status-button.component.test.tsx, which drives the real component.
 
   it('shows Syncing label when onSyncStateChanged fires with isSyncing: true', async () => {
     let capturedSyncStateCallback: ((arg: { isSyncing: boolean }) => void) | undefined;

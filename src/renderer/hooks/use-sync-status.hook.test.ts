@@ -434,7 +434,7 @@ describe('useSyncStatus', () => {
     expect(commands.countGetSyncActivityCalls()).toBe(1);
   });
 
-  // --- Pre-existing claim-only behavior (unaffected by the activity union) ---
+  // --- Claim-signal behavior, with the activity signal reporting no sync of its own ---
 
   it('reports idle when nothing has synced and neither signal says otherwise', async () => {
     commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });

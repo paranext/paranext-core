@@ -60,7 +60,7 @@ vi.mock('@shared/services/project-lookup.service', () => ({
  * Installs a `sendCommand` implementation from a per-command map.
  *
  * `sendCommand`'s per-command generic signature can't be satisfied by a single mock body, so the
- * cast lives here once instead of at each of the call sites that used to repeat it.
+ * cast lives here once rather than at every call site.
  */
 const mockCommands = (handlers: Record<string, (() => unknown) | undefined>) => {
   vi.mocked(sendCommand).mockImplementation(
@@ -388,7 +388,7 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
   });
 
   // The event says a sync ended; only the snapshot says whether it worked. Claiming `synced` off the
-  // event alone is what put a green check on a cancelled sync.
+  // event alone would put a green check on a cancelled or failed sync.
   it('does not claim success from the end-of-sync event before reading the outcome', async () => {
     const fireSyncStateChanged = captureSyncStateEvent();
     mockSyncStateSequence([
@@ -1090,8 +1090,8 @@ describe('SyncStatusButton — popover and cancel', () => {
     const button = await screen.findByTestId('toolbar-sync-button');
 
     // The button variants set `shrink-0` by default; this must override it, keep no width floor, and
-    // cap how wide a long project name can push it. (`[&_svg]:shrink-0` stays — that guards the
-    // icons, not the button.)
+    // cap how wide a long project name can push it. (`[&_svg]:shrink-0` is a separate concern — it
+    // guards the icons, not the button.)
     expect(button.classList.contains('tw:shrink-0')).toBe(false);
     expect(button.classList.contains('tw:shrink')).toBe(true);
     expect(button.classList.contains('tw:min-w-0')).toBe(true);
