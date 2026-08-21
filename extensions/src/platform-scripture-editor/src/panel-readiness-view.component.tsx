@@ -1,17 +1,16 @@
 import { Button } from 'platform-bible-react';
 import { ReactNode } from 'react';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
-import { InstallFailedView, LoadingView } from './panel-state-views.component';
+import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 
 /**
  * Renders the front of a resource panel's state machine — everything before it has something to
  * display — from a single `readiness` value.
  *
- * Used by the Resource (Bible Texts / Commentaries) panel, which lives entirely in a web view with
- * no extracted component and so has no other seam these states can be tested through. The Model
- * Text panel renders the equivalent states inline; it is already a component with its own tests, so
- * it was left alone rather than churned. It could adopt this view if its props ever carry the list
- * status instead of separate loading/error booleans.
+ * Used by BOTH the Resource (Bible Texts / Commentaries) and Model Text panels, so neither can
+ * drift from the other on the question that caused this bug. Keeping the states here also gives the
+ * Resource panel its only testable seam for them: it lives entirely in a web view with no extracted
+ * component.
  *
  * Deciding these states inline is what went wrong in both panels: an empty prompt was rendered from
  * a value that was only meaningful once the data had arrived. Taking one `readiness` value makes
@@ -57,7 +56,10 @@ export function PanelReadinessView({
   // to replace a resource that may already be configured.
   if (readiness === 'error') {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
+      <div
+        className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center"
+        role="alert"
+      >
         <p>{errorMessage}</p>
       </div>
     );
@@ -67,7 +69,7 @@ export function PanelReadinessView({
   // state gets a control and the settings error does not.
   if (readiness === 'catalogError') {
     return (
-      <InstallFailedView
+      <RetryableErrorView
         message={catalogErrorMessage}
         retryLabel={retryLabel}
         onRetry={onRetryCatalog}
