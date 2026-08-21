@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import type {
   ResourceReferenceList,
   ITextConnectionSettingsProjectDataProvider,
@@ -404,6 +404,34 @@ describe('useEffectiveResourceReferenceList', () => {
 
     expect(result.current.status).toBe('ready');
     expect(readyList(result.current).items[0]).toMatchObject({ name: 'ESV' });
+  });
+
+  it('falls back to the project-level list when the user subscription itself rejects', async () => {
+    // The hook's doc promises "if the user setting cannot be retrieved, the project-level items are
+    // returned tagged as 'admin'". That held only for a PlatformError delivered THROUGH the
+    // callback; a rejected `subscribe` call left the user list undefined, so the memo reported
+    // `loading` forever — an unresolvable spinner on the primary path.
+    const projectList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'ESV', id: 'abc' }],
+    };
+    mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
+
+    const mockSubscribe = vi.fn(async () => {
+      throw new Error('subscribe rejected');
+    });
+    // Mock object literal cannot satisfy the full PDP interface — cast needed for test isolation
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    mockUseProjectDataProvider.mockReturnValue({
+      subscribeUserModelTexts: mockSubscribe,
+    } as unknown as ReturnType<typeof useProjectDataProvider>);
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(readyList(result.current).items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
   });
 
   it('discards name-based items that are missing a string name', () => {

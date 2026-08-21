@@ -321,6 +321,11 @@ describe('ModelTextPanel', () => {
     expect(
       screen.queryByText('The selected model text could not be found.'),
     ).not.toBeInTheDocument();
+    // Asserting only the not-found string left this blind to the mutation it exists to guard:
+    // flipping the pre-catalog branch from 'loading' to 'empty' kept it green. The empty prompt's
+    // absence and the spinner's presence are what actually pin AC-1 here.
+    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 
   it('does not show the empty prompt while the configured list is still resolving', () => {
