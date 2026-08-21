@@ -8,6 +8,7 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
+  EmptyState,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -16,7 +17,11 @@ import {
   useExtraValidMarkers,
   useTruncationTooltip,
 } from 'platform-bible-react';
-import { type DblResourceData, type LocalizedStringValue } from 'platform-bible-utils';
+import {
+  getErrorMessage,
+  type DblResourceData,
+  type LocalizedStringValue,
+} from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -24,6 +29,7 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isBookNotFoundError } from './platform-scripture-editor.utils';
 import { selectTextConnection } from './select-dbl-resource';
 import { isDblResourceReference } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
@@ -61,6 +67,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
+  // Shared with both Scripture tabs' missing-book branch so every panel words a book the resource
+  // lacks the same way
+  '%webView_platformScriptureEditor_error_bookNotFoundResource%',
 ] as const);
 
 type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];
@@ -184,6 +193,11 @@ export function ModelTextPanel({
   const [textDirection, setTextDirection] = useState<string>(DEFAULT_TEXT_DIRECTION);
   // `undefined` means "not yet fetched" so we can show the loading state, matching the original.
   const [isUsjLoading, setIsUsjLoading] = useState(false);
+  // A book missing from the resource makes `getChapterUSJ` reject rather than return empty USJ.
+  // Without tracking it, the load below just clears `usj` and this panel falls through to the
+  // read-only editor, which then shows either the previous chapter's text or its "enter some
+  // Scripture" placeholder — an edit prompt in a resource the user cannot edit.
+  const [bookExists, setBookExists] = useState(true);
 
   useEffect(() => {
     if (!resourceProjectId) {
@@ -200,11 +214,18 @@ export function ModelTextPanel({
       if (!isActive) return;
       setUsj(nextUsj);
       setTextDirection(nextTextDirection || DEFAULT_TEXT_DIRECTION);
+      setBookExists(true);
       setIsUsjLoading(false);
     };
-    load().catch(() => {
+    load().catch((e) => {
       if (!isActive) return;
       setUsj(undefined);
+      // A book the resource simply doesn't have is ordinary navigation, not a fault, so it is
+      // logged quietly; every other failure is a real error. Matches both Scripture tabs.
+      const bookNotFound = isBookNotFoundError(e);
+      if (bookNotFound) logger?.debug(`Book not found in model text: ${getErrorMessage(e)}`);
+      else logger?.error(`Error getting USJ for the model text panel: ${getErrorMessage(e)}`);
+      setBookExists(!bookNotFound);
       setIsUsjLoading(false);
     });
     return () => {
@@ -446,6 +467,24 @@ export function ModelTextPanel({
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
         <Spinner />
+      </div>
+    );
+  }
+
+  // Missing book: the resolved resource has no such book. Say so rather than handing the reader an
+  // empty read-only editor. Uses the same borrowed string and `EmptyState` treatment as both
+  // Scripture tabs, so the identical sentence is worded, styled, and announced to screen readers
+  // the same way in every panel that can hit this state.
+  if (!bookExists) {
+    return (
+      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8">
+        <EmptyState
+          id="model-text-panel-book-not-found"
+          className="tw:text-center"
+          message={
+            localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%'] ?? ''
+          }
+        />
       </div>
     );
   }

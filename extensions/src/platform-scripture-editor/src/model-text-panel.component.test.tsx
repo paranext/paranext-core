@@ -36,6 +36,8 @@ const STRINGS = {
     "The model text couldn't be installed. Check your connection and try again.",
   '%webView_modelTextPanel_retry%': 'Try again',
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
+  '%webView_platformScriptureEditor_error_bookNotFoundResource%':
+    'This book does not exist in this resource.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -276,5 +278,92 @@ describe('ModelTextPanel', () => {
         "The model text couldn't be installed. Check your connection and try again.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it('shows the missing-book message instead of the editor when the resource lacks the book', async () => {
+    // A book the resource doesn't have makes getChapterUSJ reject. Without the bookExists branch the
+    // panel just clears `usj` and still renders the read-only editor, which then shows the previous
+    // chapter's text or an "enter some Scripture" prompt — an edit prompt in a read-only resource.
+    const getResourceChapter = vi.fn(async () => {
+      throw new Error(
+        'JSON-RPC Request error (-32000): Book number 1 not found in project project-web.',
+      );
+    });
+    renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+    });
+
+    expect(
+      await screen.findByText('This book does not exist in this resource.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+
+  it('announces the missing-book message in a live region', async () => {
+    // The panel swaps the editor out for this message as the user navigates, so without a status
+    // role a screen reader user gets silence where the model text used to be.
+    const getResourceChapter = vi.fn(async () => {
+      throw new Error('Book number 1 not found in project project-web.');
+    });
+    renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+    });
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'This book does not exist in this resource.',
+    );
+  });
+
+  it('keeps rendering the editor when the chapter load fails for an unrelated reason', async () => {
+    // Only a missing book earns the "this book does not exist" claim. Any other failure must fall
+    // back to the editor rather than telling the user something untrue about the resource.
+    const getResourceChapter = vi.fn(async () => {
+      throw new Error('Network request failed');
+    });
+    renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+    });
+
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
+    expect(
+      screen.queryByText('This book does not exist in this resource.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('recovers to the editor when navigating from a missing book to one the resource has', async () => {
+    // bookExists must be re-set on a successful load, or the panel stays stuck on the message for
+    // the rest of the session once the user hits one missing book.
+    const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
+    getResourceChapter.mockRejectedValueOnce(
+      new Error('Book number 1 not found in project project-web.'),
+    );
+    const { rerender } = renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    });
+    expect(
+      await screen.findByText('This book does not exist in this resource.'),
+    ).toBeInTheDocument();
+
+    // Navigate to a book the resource does contain; the next load resolves.
+    rerender(
+      <ModelTextPanel
+        {...makeProps({
+          effectiveModelTexts: configuredModelText('uid-web'),
+          dblResources: [INSTALLED_RESOURCE],
+          getResourceChapter,
+          scrRef: { book: 'MAT', chapterNum: 1, verseNum: 1 },
+        })}
+      />,
+    );
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
   });
 });

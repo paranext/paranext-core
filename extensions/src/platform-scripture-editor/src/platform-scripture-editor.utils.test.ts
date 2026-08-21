@@ -2613,4 +2613,18 @@ describe('isBookNotFoundError', () => {
   it('returns false for undefined, as when the data has not arrived yet', () => {
     expect(isBookNotFoundError(undefined)).toBe(false);
   });
+
+  it('returns true for a thrown Error, as when awaiting getChapterUSJ rejects', () => {
+    expect(
+      isBookNotFoundError(
+        new Error(
+          'JSON-RPC Request error (-32000): Book number 1 not found in project ProjectName.',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('returns false for a thrown Error with an unrelated message', () => {
+    expect(isBookNotFoundError(new Error('Network request failed'))).toBe(false);
+  });
 });

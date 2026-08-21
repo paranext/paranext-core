@@ -96,7 +96,14 @@ export function BookNotAvailableView({
         tabIndex={-1}
         className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4 tw:outline-none"
       >
-        <span>{localize(localizedStrings, SIMPLE_MESSAGE_KEY)}</span>
+        {/* Same small muted treatment as `EmptyDescription` in the Power branch below and as
+            `EmptyState` in the resource panels, so a missing book reads identically whichever
+            surface the user is on. The message stays a plain `span` rather than `EmptyState`
+            because the `role="status"` live region and the focus repair both live on the wrapper
+            above, which `EmptyState` has no way to accept. */}
+        <span className="tw:text-sm tw:text-muted-foreground tw:text-center">
+          {localize(localizedStrings, SIMPLE_MESSAGE_KEY)}
+        </span>
       </div>
     );
   }
