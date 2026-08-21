@@ -6,6 +6,7 @@ import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
+import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { ModelTextPanel, ModelTextPanelProps } from './model-text-panel.component';
 
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
@@ -66,12 +67,16 @@ function configuredModelText(dblEntryUid: string): EffectiveResourceReferenceLis
   };
 }
 
+/** Wraps a list in the hook's `ready` state — the only state that may carry one. */
+function readyState(list: EffectiveResourceReferenceList): EffectiveResourceReferenceListState {
+  return { status: 'ready', list };
+}
+
 function makeProps(overrides: Partial<ModelTextPanelProps> = {}): ModelTextPanelProps {
   return {
     localizedStrings: STRINGS,
     hasProject: true,
-    effectiveModelTexts: { dataVersion: '1.0.0', items: [] },
-    modelTextsStatus: 'ready',
+    modelTextsState: readyState({ dataVersion: '1.0.0', items: [] }),
     isCatalogReady: true,
     hasCatalogError: false,
     onRetryCatalog: vi.fn(),
@@ -104,7 +109,7 @@ describe('ModelTextPanel', () => {
   it('auto-installs a configured model text whose resource is matched but not installed', async () => {
     const installResource = vi.fn(async () => {});
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
@@ -117,7 +122,7 @@ describe('ModelTextPanel', () => {
   it('renders the editor once the configured resource finishes installing', async () => {
     const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
     const { rerender } = renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       getResourceChapter,
     });
@@ -128,7 +133,7 @@ describe('ModelTextPanel', () => {
     rerender(
       <ModelTextPanel
         {...makeProps({
-          effectiveModelTexts: configuredModelText('uid-web'),
+          modelTextsState: readyState(configuredModelText('uid-web')),
           dblResources: [INSTALLED_RESOURCE],
           getResourceChapter,
         })}
@@ -142,7 +147,7 @@ describe('ModelTextPanel', () => {
       throw new Error('install failed');
     });
     const { rerender } = renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
@@ -154,7 +159,7 @@ describe('ModelTextPanel', () => {
     rerender(
       <ModelTextPanel
         {...makeProps({
-          effectiveModelTexts: configuredModelText('uid-web'),
+          modelTextsState: readyState(configuredModelText('uid-web')),
           dblResources: [{ ...UNINSTALLED_RESOURCE }],
           installResource,
         })}
@@ -170,7 +175,7 @@ describe('ModelTextPanel', () => {
     installResource.mockRejectedValueOnce(new Error('install failed'));
     const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
     const { rerender } = renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
       getResourceChapter,
@@ -184,7 +189,7 @@ describe('ModelTextPanel', () => {
     rerender(
       <ModelTextPanel
         {...makeProps({
-          effectiveModelTexts: configuredModelText('uid-web'),
+          modelTextsState: readyState(configuredModelText('uid-web')),
           dblResources: [INSTALLED_RESOURCE],
           installResource,
           getResourceChapter,
@@ -198,7 +203,7 @@ describe('ModelTextPanel', () => {
     // A never-resolving install keeps the panel in the installing state so it is observable.
     const installResource = vi.fn(() => new Promise<void>(() => {}));
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
@@ -213,7 +218,7 @@ describe('ModelTextPanel', () => {
       throw new Error('install failed');
     });
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
@@ -236,7 +241,7 @@ describe('ModelTextPanel', () => {
     const installResource = vi.fn(async () => {});
     const getResourceChapter = vi.fn(async () => ({ usj: undefined, textDirection: 'ltr' }));
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       installResource,
       getResourceChapter,
@@ -254,10 +259,10 @@ describe('ModelTextPanel', () => {
     // recover by picking another.
     const showResourcePicker = vi.fn(async () => undefined);
     renderPanel({
-      effectiveModelTexts: {
+      modelTextsState: readyState({
         dataVersion: '1.0.0',
         items: [{ type: 'project', id: 'p1', name: 'Some Project', source: 'admin' }],
-      },
+      }),
       dblResources: [],
       showResourcePicker,
     });
@@ -273,7 +278,7 @@ describe('ModelTextPanel', () => {
       throw new Error('offline');
     });
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
@@ -287,7 +292,7 @@ describe('ModelTextPanel', () => {
   it('shows the settings-unavailable error instead of the empty prompt when the setting cannot be read', () => {
     // An unreadable setting is not "nothing configured": offering only the picker would invite the
     // user to reconfigure a model text that may already be set.
-    render(<ModelTextPanel {...makeProps({ modelTextsStatus: 'error' })} />);
+    render(<ModelTextPanel {...makeProps({ modelTextsState: { status: 'error' } })} />);
 
     expect(
       screen.getByText("Couldn't load your model text. It will appear once it's available."),
@@ -296,7 +301,7 @@ describe('ModelTextPanel', () => {
   });
 
   it('offers no controls in the settings-error state', () => {
-    render(<ModelTextPanel {...makeProps({ modelTextsStatus: 'error' })} />);
+    render(<ModelTextPanel {...makeProps({ modelTextsState: { status: 'error' } })} />);
 
     // Nothing in this panel can re-drive the project-setting read, so any button here would be
     // inert. The message carries the recovery expectation instead; the setting stays watched and
@@ -311,7 +316,7 @@ describe('ModelTextPanel', () => {
     render(
       <ModelTextPanel
         {...makeProps({
-          effectiveModelTexts: configuredModelText('uid-web'),
+          modelTextsState: readyState(configuredModelText('uid-web')),
           dblResources: [],
           isCatalogReady: false,
         })}
@@ -334,8 +339,7 @@ describe('ModelTextPanel', () => {
     render(
       <ModelTextPanel
         {...makeProps({
-          effectiveModelTexts: undefined,
-          modelTextsStatus: 'loading',
+          modelTextsState: { status: 'loading' },
         })}
       />,
     );
