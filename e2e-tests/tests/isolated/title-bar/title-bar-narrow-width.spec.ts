@@ -13,18 +13,7 @@
  */
 import { ElectronApplication, Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import {
-  preConfigureSettings,
-  waitForAppReady,
-  waitForPapiMethodRegistered,
-} from '../../../fixtures/helpers';
-
-/**
- * The Paratext project data provider factory. The project selector stays disabled until the C#
- * backend has finished enumerating projects, which happens well after `waitForAppReady` resolves —
- * without waiting for this, the selector is still showing its disabled placeholder.
- */
-const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProviderId';
+import { preConfigureSettings, waitForAppReady } from '../../../fixtures/helpers';
 
 /**
  * A width no window can honor, so Electron clamps to the `minWidth` enforced in `main.ts`. Asking
@@ -32,9 +21,6 @@ const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProvid
  * whatever the app's narrowest permitted window is, the title bar has to fit in it.
  */
 const IMPOSSIBLY_NARROW_PX = 1;
-
-/** Comfortably wider than every container-query threshold in the degradation ladder. */
-const ROOMY_WIDTH_PX = 1600;
 
 /** Sub-pixel layout rounding shows up as a 1px scrollWidth excess that is not a real overflow. */
 const ROUNDING_TOLERANCE_PX = 1;
@@ -140,32 +126,6 @@ async function expectControlWithinRow(
   );
 }
 
-/**
- * Opens the first project in the title bar's project selector, if none is open yet.
- *
- * The tier-2 short-name swap can only be observed with a project open — otherwise the trigger shows
- * the "select a project" placeholder and there is no name to swap. No fixture seeds a current
- * project, so the test drives the same selector a user would.
- */
-async function ensureProjectOpen(mainPage: Page): Promise<void> {
-  await waitForPapiMethodRegistered(PARATEXT_PDPF_METHOD);
-
-  const trigger = mainPage.locator('[data-testid="toolbar-project-selector"]');
-  await expect(trigger).toBeEnabled({ timeout: 60_000 });
-
-  // Radix marks the trigger with `data-placeholder` while no value is selected. Testing the
-  // rendered text instead would be wrong: the placeholder ("Select project") is itself non-empty,
-  // so a text check reports "a project is open" when none is.
-  const isPlaceholder = async () => trigger.evaluate((el) => el.hasAttribute('data-placeholder'));
-  if (!(await isPlaceholder())) return;
-
-  await trigger.click();
-  const firstProject = mainPage.locator('[role="option"]').first();
-  await expect(firstProject).toBeVisible({ timeout: 15_000 });
-  await firstProject.click();
-  await expect.poll(isPlaceholder, { timeout: 60_000 }).toBe(false);
-}
-
 test.describe('Title bar at narrow window widths', () => {
   test('Simple-mode controls fit without clipping at the minimum window width', async ({
     electronApp,
@@ -246,35 +206,5 @@ test.describe('Title bar at narrow window widths', () => {
       'profile button',
       '[data-testid="user-profile-popover-trigger"]',
     );
-  });
-
-  test('the project name swaps to the short name only when the bar is narrow', async ({
-    electronApp,
-    mainPage,
-  }) => {
-    await waitForAppReady(mainPage);
-
-    // Its own test id, not `[role="combobox"]`: the BCV control is a combobox inside the same row,
-    // so that selector matches two elements and picking this one would depend on DOM order.
-    const projectSelector = mainPage.locator('[data-testid="toolbar-project-selector"]');
-    await expect(projectSelector).toBeVisible();
-
-    // `innerText`, never `textContent`: both the full-name and short-name spans are always in the
-    // DOM and the ladder swaps them with `display: none`. `textContent` reports hidden text too, so
-    // asserting on it would pass in BOTH states and quietly test nothing.
-    const renderedName = async () => (await projectSelector.innerText()).trim();
-
-    // A project has to be open for either span to render.
-    await setWindowWidth(electronApp, mainPage, ROOMY_WIDTH_PX);
-    await ensureProjectOpen(mainPage);
-
-    // Roomy: the full `Full Name (SHORT)` form, which is the only one carrying parentheses.
-    await expect.poll(renderedName).toMatch(/\(.+\)/);
-
-    // Narrow: the short name alone. Asserting the parentheses are GONE is what makes this pair
-    // falsifiable — if the container query never fired, or fired always, one of these two fails.
-    await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
-    await expect.poll(renderedName).not.toMatch(/\(.+\)/);
-    await expect.poll(renderedName).not.toBe('');
   });
 });

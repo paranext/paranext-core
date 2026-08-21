@@ -77,19 +77,6 @@ export function getToolbarOSReservedSpaceClassName(
  *
  * This component is designed to be used in the window title bar of an electron application.
  *
- * The root element declares a named container-query context, `toolbar`, whose content box is the
- * bar's genuinely usable width — the window width minus the OS caption-button reservation and the
- * bar's own padding. Children passed through any of the three areas can therefore shrink or hide
- * themselves against the space actually available, which stays correct across the macOS, Windows,
- * and Linux reservations and in RTL, where a viewport breakpoint would not.
- *
- * Note the container context also applies CSS containment to the root: it becomes a containing
- * block for `position: fixed` descendants and establishes a new stacking context, and its inline
- * size is computed as if it had no contents. Render `Toolbar` as a full-width block; in a
- * shrink-to-fit context (an `inline-block`, a `w-auto` flex item, an `auto` grid track) it
- * collapses. Overlay content should portal out of the subtree, as the shadcn Select, Tooltip, and
- * Menubar primitives already do.
- *
  * Two `data-testid` hooks are part of this contract as well, relied on by end-to-end tests outside
  * this package: `toolbar-content-row` (the row that clips when contents do not fit) and
  * `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking change.
@@ -124,24 +111,7 @@ export function Toolbar({
 
   return (
     <div
-      /* `@container/toolbar` is the container context consumers use to shrink/hide title bar
-         controls at narrow widths (see PlatformBibleToolbar). Deliberately on this element rather
-         than the inner flex: a container query measures the container's CONTENT box, and this
-         div's padding is where every OS caption-button reservation lands — the static
-         `ps-[85px]`/`pe-[calc(138px+1rem)]` from getToolbarOSReservedSpaceClassName arrives via
-         `className`, and the live-measured Windows variant is padding on an ancestor. So this
-         content box is the genuinely usable bar width in all three cases. It is also already
-         `position: relative`, so the `contain: layout` implied by `container-type: inline-size`
-         does not change which element is the containing block for absolutely positioned
-         descendants — putting the context on the inner flex would.
-
-         Containment does have three further effects, none of them live here but all of them worth
-         knowing before moving this: the root also becomes the containing block for `position:
-         fixed` descendants (which `position: relative` alone does NOT do), it establishes a new
-         stacking context, and inline-size containment makes its width independent of its contents.
-         Nothing in the toolbar positions `fixed`, every overlay it can open portals to
-         `document.body`, and all consumers render it full-width — see the TSDoc above. */
-      className={cn('tw:@container/toolbar tw:border tw:px-4 tw:text-foreground', className)}
+      className={cn('tw:border tw:px-4 tw:text-foreground', className)}
       ref={containerRef}
       style={{ position: 'relative' }}
       id={id}
