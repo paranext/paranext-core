@@ -102,9 +102,10 @@ export function useRemoveCharacterMarker({
       // only part of a NESTED marker whose OUTER marker is the target. That case still takes a
       // snapshot for an edit that does not happen, and still reports nothing to the user. It is
       // reachable only in theory today (`isMarkerRowInert` disables the row that would ask for it),
-      // which is why it is documented rather than defended against: the defense needs an outcome
-      // signal the editor does not expose — either a return value from `removeCharacterMarker`, or
-      // the discrete-update-plus-inline-re-derive that `applyUpdate` does elsewhere in this feature.
+      // which is why it is documented rather than defended against: the defense needs this hook to
+      // consume an outcome signal — either the boolean `removeCharacterMarker` returns, which the
+      // call above discards, or the discrete-update-plus-inline-re-derive that `applyUpdate` does
+      // elsewhere in this feature.
       //
       // A before/after `getUsj()` comparison cannot stand in for either: `getUsj()` returns
       // `editedUsjRef.current`, a cached ref, and the
