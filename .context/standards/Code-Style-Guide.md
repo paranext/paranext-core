@@ -30,6 +30,7 @@ High-level guidelines that should shape both writing and reviewing code. The top
 - **Follow existing patterns and code**
   - Respect separation of execution environments (processes, extension/renderer). Don't pass functions or class instances over the PAPI. Don't use `instanceof` on values that may have crossed execution environments — see [MDN's note](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/instanceof#instanceof_and_multiple_realms).
   - Prefer string unions over multiple interdependent booleans. Instead of `didError`, `isRunning`, `didComplete`, use a finite state union. This reduces contradictory states and increases flexibility.
+- **Comments face forward, not backward** — a comment must help someone who reads the code later and never saw the change that introduced it. Applies to TypeScript and C# alike; see [forward-facing comments](../../.claude/rules/code-quality/forward-facing-comments.md) for the strip-the-PR-context test and the cut/keep lists.
 - **Prioritize sustainability**
   - As the code owner, you're responsible for maintaining what you approve in your area.
   - If you aren't comfortable with the change, don't approve it.
@@ -52,14 +53,6 @@ High-level guidelines that should shape both writing and reviewing code. The top
   - Avoid [initialisms and abbreviations](#initialisms-and-abbreviations) that aren't explicitly established or widely accepted.
   - Capitalize acronyms per [.NET capitalization conventions](https://learn.microsoft.com/en-us/dotnet/standard/design-guidelines/capitalization-conventions): two-letter together (`IOStream`), longer as words (`HttpRequest`).
 - **Use comments to explain why**, not what. Don't narrate obvious code; do explain non-obvious intent or purpose.
-- **Comments describe the code, not its history**: no change narration ("previously", "this PR",
-  "the review found") and no backward-facing ticket or PR references — those rot the moment the
-  branch merges. **Forward-facing ticket pointers are the exception**: when a comment defers work
-  or documents a known limitation whose fix lives elsewhere, name the ticket (`TODO (PT-XXXX)`,
-  "until PT-XXXX lands", "PT-XXXX's scope") — it is the only searchable pointer from the code to
-  the rest of the story. The test: would the reference still help a reader who never saw this
-  change land? A pointer to where deferred work lives does; a citation of what the code used to do
-  does not.
 - **Prefer `undefined` over `null`**: [JavaScript's two concepts of nothing](https://medium.com/@hbarcelos/why-i-banned-null-from-my-js-code-and-why-you-should-too-13df90323cfa) cause confusion. Use `undefined` throughout the codebase. Confine `null` to the boundary with external APIs that require or return it.
 - **Use empty arrays over `undefined`** when an absent collection is meaningful — empty arrays are always safe to iterate.
 - **Prefer path aliases for imports**: `import ... from '<alias>/...'` over long relative paths. Webpack is configured to understand the aliases.

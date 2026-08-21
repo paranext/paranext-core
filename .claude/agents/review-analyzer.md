@@ -73,7 +73,7 @@ Read changed files and assess whether the changes accomplish what the author sta
 
 Flag (Critical or Important):
 
-- Incomplete implementations (stubs, TODOs in new code)
+- Incomplete implementations (stubs, untracked TODOs in new code — a TODO naming an open ticket is a deliberate deferral, not an omission)
 - Dead code added
 - Logic issues or bugs
 - Mismatches between `PURPOSE` and what the code actually does

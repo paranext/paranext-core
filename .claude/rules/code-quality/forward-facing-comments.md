@@ -14,6 +14,9 @@ reader:
 
 - Ticket/PR references for work done *in this PR*: `PT-4214`, `PR #2561`, review-finding IDs like
   `(review C61-2)`.
+- Change narration with no ID at all — "previously", "used to", "the review found", "now returns
+  early instead of throwing". This is the most common AI-authored form, and dropping the ticket
+  number doesn't make it forward-facing: describe what the code does, not what it stopped doing.
 - "Fixes error E1 found in a test pass", "addressed in review round 2".
 - Stage/epic tags: `Stage U`, `Phase 3`.
 - Dated development notes: `found live in E2E 2026-07-16`.
@@ -26,10 +29,14 @@ the source file.
 These tell a future maintainer something they still need:
 
 - An **open** `PT-XXXX` for follow-up work deliberately *not* done in this PR — best written as a
-  TODO, so the ID signals exactly when the code can be cleaned up:
+  TODO naming the open ticket, so the ID signals exactly when the code can be cleaned up. Either
+  spelling counts; the ticket is what matters, not the token shape:
   ```ts
   // TODO(PT-1234): Remove this workaround once the upstream bug is fixed
+  // TODO (PT-1234): Remove this workaround once the upstream bug is fixed
   ```
+- A prose pointer to where deferred work lives — "until PT-XXXX lands", "out of scope; see
+  PT-XXXX" — which is often the only searchable link from the code to the rest of the story.
 - A non-inlinable rationale or deep link, e.g. a specific comment thread:
   ```ts
   // The API rejects empty ranges on purpose; see PT-2196?focusedCommentId=... for the reasoning.
