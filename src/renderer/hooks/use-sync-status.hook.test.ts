@@ -9,8 +9,8 @@ import type {
   SyncState,
 } from 'paratext-bible-send-receive';
 import {
-  SYNC_STATE_SEED_RETRY_INTERVAL_MS,
-  SYNC_STATE_SEED_RETRY_WINDOW_MS,
+  SYNC_SEED_RETRY_INTERVAL_MS,
+  SYNC_SEED_RETRY_WINDOW_MS,
   useSyncStatus,
 } from './use-sync-status.hook';
 
@@ -57,6 +57,23 @@ function captureEventCallbacks() {
   };
 }
 
+/** A queued answer that `sendCommand` resolves only after some fake time has passed. */
+type DelayedAnswer = { delayMs: number; answer: unknown };
+
+/**
+ * Marks a queued answer as slow, so the read stays in flight across a microtask flush. That is the
+ * only way to observe what the hook shows WHILE a read is pending, since a flush would otherwise
+ * settle the read and the rendering it drives in the same step.
+ */
+function delayedAnswer(answer: unknown, delayMs: number): DelayedAnswer {
+  return { delayMs, answer };
+}
+
+function isDelayedAnswer(answer: unknown): answer is DelayedAnswer {
+  if (typeof answer !== 'object' || !answer) return false;
+  return 'delayMs' in answer && 'answer' in answer;
+}
+
 /**
  * Routes `sendCommand` to per-command answer queues so `getSyncState` and `getSyncActivity` can be
  * mocked independently in the same test. Each command repeats its last answer once its queue is
@@ -74,6 +91,12 @@ function mockCommands() {
     indices.set(command, index);
     const answer = queue[index];
     if (answer instanceof Error) throw answer;
+    if (isDelayedAnswer(answer)) {
+      await new Promise((resolve) => {
+        setTimeout(resolve, answer.delayMs);
+      });
+      return answer.answer;
+    }
     return answer;
   };
   // sendCommand's return type is resolved from the command name, so no single implementation
@@ -82,10 +105,14 @@ function mockCommands() {
   vi.mocked(sendCommand).mockImplementation(implementation as unknown as typeof sendCommand);
 
   return {
-    mockGetSyncState: (...answers: (Partial<SyncState> | Error)[]) =>
+    mockGetSyncState: (...answers: (Partial<SyncState> | DelayedAnswer | Error)[]) =>
       queues.set('paratextBibleSendReceive.getSyncState', answers),
     mockGetSyncActivity: (...answers: (unknown | Error)[]) =>
       queues.set('paratextBibleSendReceive.getSyncActivity', answers),
+    countGetSyncStateCalls: () =>
+      vi
+        .mocked(sendCommand)
+        .mock.calls.filter((call) => call[0] === 'paratextBibleSendReceive.getSyncState').length,
     countGetSyncActivityCalls: () =>
       vi
         .mocked(sendCommand)
@@ -93,13 +120,16 @@ function mockCommands() {
   };
 }
 
-function mockProjectName(projectId: string, name: string) {
+function mockProjectNames(namesById: Record<string, string>) {
+  const metadata = Object.entries(namesById).map(([id, name]) => ({ id, name }));
   // mockResolvedValue's parameter type comes from the real service's full metadata shape; the hook
   // reads only `id`/`name`, so asserting through avoids fabricating every other required field.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue([
-    { id: projectId, name },
-  ] as never);
+  vi.mocked(projectLookupService.getMetadataForAllProjects).mockResolvedValue(metadata as never);
+}
+
+function mockProjectName(projectId: string, name: string) {
+  mockProjectNames({ [projectId]: name });
 }
 
 describe('useSyncStatus', () => {
@@ -209,16 +239,17 @@ describe('useSyncStatus', () => {
     expect(result.current.status).toBe('idle');
   });
 
-  it('does not wipe activity-derived project ids when a claim event clears the claim set (Ruling 1)', async () => {
+  it('keeps activity-derived project ids through a claim event that clears the claim set', async () => {
     // Regression guard for two writers on one piece of state: handleSyncStateChanged deliberately
     // clears syncingProjectIds before re-reading it. If the activity handler wrote into that same
-    // state, this clear would transiently wipe the activity-derived ids too, and effectiveProjectIds
-    // would flash empty even though the activity signal still reports PROJ1 syncing.
-    commands.mockGetSyncState({
-      isSyncing: true,
-      syncingProjectIds: ['PROJ1'],
-      lastRequestedProjectIds: [],
-    });
+    // state, this clear would wipe the activity-derived ids too, and the activity signal's PROJ1
+    // would be gone for good once the claim's re-read came back naming no projects of its own.
+    commands.mockGetSyncState(
+      { isSyncing: true, syncingProjectIds: ['PROJ1'], lastRequestedProjectIds: [] },
+      // The re-read after the event: the claim no longer names any project, so what the hook shows
+      // from here on can only come from the activity signal's own state.
+      { isSyncing: false, lastRequestedProjectIds: [] },
+    );
     commands.mockGetSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
     mockProjectName('PROJ1', 'HNF');
     const { emitSyncStateChanged } = captureEventCallbacks();
@@ -229,25 +260,61 @@ describe('useSyncStatus', () => {
     });
     expect(result.current.syncingProjects).toEqual([{ projectId: 'PROJ1', name: 'HNF' }]);
 
-    // A claim event fires: handleSyncStateChanged clears syncingProjectIds synchronously, then
-    // re-reads it. While that read is in flight (still queued as a microtask), effectiveProjectIds
-    // must fall back to the activity-derived ids rather than showing an empty list.
-    commands.mockGetSyncState({
-      isSyncing: true,
-      syncingProjectIds: ['PROJ1'],
-      lastRequestedProjectIds: [],
-    });
     emitSyncStateChanged({ isSyncing: true });
-
-    expect(result.current.syncingProjects).toEqual([{ projectId: 'PROJ1', name: 'HNF' }]);
-
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
+
+    expect(result.current.status).toBe('syncing');
     expect(result.current.syncingProjects).toEqual([{ projectId: 'PROJ1', name: 'HNF' }]);
   });
 
-  it('reports syncing when the claim read fails (unknown) but the activity signal says syncing (Ruling 2)', async () => {
+  it('names no projects while the claim re-read is in flight, rather than a stale activity set', async () => {
+    // handleSyncStateChanged clears the claim set before re-reading it, so an empty claim set means
+    // "the claim names nothing" only once that read has answered. Treating the deliberate clear as
+    // an answer would hand the gap to the activity signal, whose snapshot can still name the
+    // project the claim has just stopped reporting — a name the user would see for the read's
+    // length. PROJ2 is that project: the claim drops it, the stale activity snapshot still has it.
+    const slowReadMs = 5000;
+    commands.mockGetSyncState(
+      { isSyncing: true, syncingProjectIds: ['PROJ1', 'PROJ2'], lastRequestedProjectIds: [] },
+      delayedAnswer(
+        { isSyncing: true, syncingProjectIds: ['PROJ1'], lastRequestedProjectIds: [] },
+        slowReadMs,
+      ),
+    );
+    commands.mockGetSyncActivity({ isSyncing: true, projectIds: ['PROJ1', 'PROJ2'] });
+    mockProjectNames({ PROJ1: 'HNF', PROJ2: 'XYZ' });
+    const { emitSyncStateChanged } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.syncingProjects).toEqual([
+      { projectId: 'PROJ1', name: 'HNF' },
+      { projectId: 'PROJ2', name: 'XYZ' },
+    ]);
+
+    // PROJ2 finished, so the claim releases it and reports the shrunken set as `isSyncing: true`.
+    emitSyncStateChanged({ isSyncing: true });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Mid-read: nothing is named. The activity signal must not fill the gap with PROJ2.
+    expect(result.current.syncingProjects).toEqual([]);
+    // The status never goes quiet during the window — only the names are withheld.
+    expect(result.current.status).toBe('syncing');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(slowReadMs);
+    });
+
+    expect(result.current.syncingProjects).toEqual([{ projectId: 'PROJ1', name: 'HNF' }]);
+  });
+
+  it('reports syncing when the claim read fails but the activity signal says syncing', async () => {
     // Regression guard: `unknown` means "the claim could not tell", not "nothing is syncing". The
     // union must win over an `unknown` claim just as it wins over `idle`.
     commands.mockGetSyncState(new Error('extension host not ready'));
@@ -255,13 +322,34 @@ describe('useSyncStatus', () => {
 
     const { result } = renderHook(() => useSyncStatus());
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(SYNC_STATE_SEED_RETRY_WINDOW_MS + 1000);
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_WINDOW_MS + 1000);
     });
 
     expect(result.current.status).toBe('syncing');
   });
 
-  it('retries the activity seed and recovers once a later attempt answers (Ruling 3)', async () => {
+  it('reports unknown once the claim seed exhausts its retry window with no answer', async () => {
+    // The other half of the same case: with no activity signal claiming a sync either, running out
+    // of retry budget must be reported as `unknown` rather than left at the initial `idle`, which
+    // would claim nothing has synced on the strength of a read that never succeeded.
+    commands.mockGetSyncState(new Error('extension host not ready'));
+    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS);
+    });
+    // Still inside the window, so the seed is retrying rather than giving up.
+    expect(result.current.status).toBe('idle');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_WINDOW_MS);
+    });
+
+    expect(result.current.status).toBe('unknown');
+  });
+
+  it('retries the activity seed and recovers once a later attempt answers', async () => {
     // Regression guard for the case this feature exists for: the renderer can mount while the
     // dotnet backend has not registered getSyncActivity yet (the startup race). A single
     // non-retrying read would reject once and show idle for the rest of the sync, since the next
@@ -280,11 +368,70 @@ describe('useSyncStatus', () => {
     expect(commands.countGetSyncActivityCalls()).toBe(1);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(SYNC_STATE_SEED_RETRY_INTERVAL_MS);
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS);
     });
 
     expect(commands.countGetSyncActivityCalls()).toBe(2);
     expect(result.current.status).toBe('syncing');
+  });
+
+  it('stops the claim seed on unmount, both its pending retry and its in-flight read', async () => {
+    // Both halves of the seed's teardown. A pending retry that outlives the hook keeps reading for
+    // the rest of the retry window, and a read still in flight at unmount comes back to schedule
+    // the next retry — and to set state on a hook that no longer exists — unless its run is
+    // recognised as abandoned.
+    commands.mockGetSyncState(new Error('extension host not ready'));
+    commands.mockGetSyncActivity(new Error('method not found'));
+
+    const withPendingRetry = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(commands.countGetSyncStateCalls()).toBe(1);
+
+    withPendingRetry.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 3);
+    });
+    expect(commands.countGetSyncStateCalls()).toBe(1);
+
+    // Unmounting before any flush leaves the mount read in flight, which is the other half.
+    vi.mocked(sendCommand).mockClear();
+    const withReadInFlight = renderHook(() => useSyncStatus());
+    withReadInFlight.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 3);
+    });
+
+    expect(commands.countGetSyncStateCalls()).toBe(1);
+  });
+
+  it('stops the activity seed on unmount, both its pending retry and its in-flight read', async () => {
+    // Same teardown, on the activity seed's own effect, refs and retry budget — see the claim-seed
+    // test above.
+    commands.mockGetSyncState(new Error('extension host not ready'));
+    commands.mockGetSyncActivity(new Error('method not found'));
+
+    const withPendingRetry = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(commands.countGetSyncActivityCalls()).toBe(1);
+
+    withPendingRetry.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 3);
+    });
+    expect(commands.countGetSyncActivityCalls()).toBe(1);
+
+    vi.mocked(sendCommand).mockClear();
+    const withReadInFlight = renderHook(() => useSyncStatus());
+    withReadInFlight.unmount();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 3);
+    });
+
+    expect(commands.countGetSyncActivityCalls()).toBe(1);
   });
 
   // --- Pre-existing claim-only behavior (unaffected by the activity union) ---
@@ -300,6 +447,52 @@ describe('useSyncStatus', () => {
 
     expect(result.current.status).toBe('idle');
     expect(result.current.syncingProjects).toEqual([]);
+  });
+
+  it('names a project whose metadata casing differs from the id send/receive reported', async () => {
+    // getMetadataForAllProjects filters includeProjectIds case-insensitively, and the metadata it
+    // returns carries the casing of whichever factory reported the project first. So the filter can
+    // return the project while a raw-id map lookup misses it, labelling it with its bare id.
+    commands.mockGetSyncState({
+      isSyncing: true,
+      syncingProjectIds: ['proj1'],
+      lastRequestedProjectIds: [],
+    });
+    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
+    mockProjectName('PROJ1', 'HNF');
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // The id keeps the casing send/receive reported — only the NAME comes from the metadata.
+    expect(result.current.syncingProjects).toEqual([{ projectId: 'proj1', name: 'HNF' }]);
+  });
+
+  it('treats the same project ids in a different casing as an unchanged set', async () => {
+    // A casing flip is not a set change: reporting one would re-run the whole metadata lookup and
+    // re-render for projects that never changed.
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    commands.mockGetSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    mockProjectName('PROJ1', 'HNF');
+    const { emitSyncActivityChanged } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const projectsBefore = result.current.syncingProjects;
+    expect(projectsBefore).toEqual([{ projectId: 'PROJ1', name: 'HNF' }]);
+
+    // The same project, reported in the other casing.
+    emitSyncActivityChanged({ isSyncing: true, projectIds: ['proj1'] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    // Same array identity: the set was recognised as unchanged, so nothing was re-resolved.
+    expect(result.current.syncingProjects).toBe(projectsBefore);
   });
 
   it('reports syncing from the claim alone, unaffected by an idle activity signal', async () => {

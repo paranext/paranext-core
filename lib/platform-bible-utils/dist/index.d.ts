@@ -3905,6 +3905,33 @@ export declare function toKebabCase(input: string): string;
  *   x tokens, followed by `[...]` and the last x tokens
  */
 export declare function collapseMiddleWords(text: string, numberOfTokensToKeepBeforeAndAfter: number): string;
+/**
+ * Wraps text in Unicode bidi isolates so it cannot reorder the sentence it is interpolated into.
+ *
+ * The Unicode bidirectional algorithm lays out a string by grouping it into directional runs, and
+ * neighboring characters of the same direction join the same run regardless of which variable they
+ * came from. So a right-to-left value dropped bare into a left-to-right sentence (or the reverse)
+ * pulls the punctuation and words next to it into its own run: `Syncing {projectName}.` with an
+ * Arabic name can display the period on the wrong side, and a value that mixes scripts can
+ * rearrange the words around it. Combined with CSS truncation, the visible fragment can even be a
+ * different substring than the one the reader would expect.
+ *
+ * Isolating the value fixes its direction to its own content and hides that direction from the
+ * surrounding text, so the sentence lays out the same way whatever the value turns out to be. These
+ * two code points are the character-level equivalent of HTML's `<bdi>` element, for the cases where
+ * the result has to be a plain string — a button label, an `aria-label`, a notification message, a
+ * log line — rather than markup.
+ *
+ * Use this on any value whose script you do not control before interpolating it into localized
+ * text: project names, user names, file paths, book or resource names. Text you fully control (a
+ * number, an id, a localized string with no interpolation) does not need it. Isolating twice is
+ * harmless but pointless, so isolate at the interpolation site rather than at the source of the
+ * value.
+ *
+ * @param text Text to isolate, typically a name or other value in an unknown script.
+ * @returns `text` surrounded by the isolate code points.
+ */
+export declare function isolateBidi(text: string): string;
 /** Options for calculating resizable pane size limits. */
 export type PaneSizeLimitsOptions = {
 	/**

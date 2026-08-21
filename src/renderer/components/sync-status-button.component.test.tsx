@@ -12,8 +12,9 @@ import {
   SyncStatusButton,
   LOCALIZED_STRING_KEYS,
   SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
+  SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
 } from './sync-status-button.component';
-import { SYNC_STATE_SEED_RETRY_INTERVAL_MS } from '../hooks/use-sync-status.hook';
+import { SYNC_SEED_RETRY_INTERVAL_MS } from '../hooks/use-sync-status.hook';
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
@@ -32,6 +33,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_status_syncing_project%': 'Test Syncing {projectName}',
       '%toolbar_sync_status_syncing_projects%': 'Test Syncing {count} projects',
       '%toolbar_sync_view_details%': 'Test View sync details',
+      '%toolbar_sync_view_details_unavailable%': 'Test sync details unavailable',
     },
   ]),
 }));
@@ -291,7 +293,7 @@ describe('SyncStatusButton — startup read retries', () => {
     await screen.findByRole('button', { name: 'Sync' });
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(SYNC_STATE_SEED_RETRY_INTERVAL_MS * 3);
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 3);
     });
 
     await waitFor(() => {
@@ -320,10 +322,10 @@ describe('SyncStatusButton — startup read retries', () => {
   });
 
   it('stops retrying once an event has told it what is happening', async () => {
-    // Counts only `getSyncState` calls, not every `sendCommand` call: PT-4398 added a second,
-    // independent seed for `getSyncActivity` (see Ruling 3 in use-sync-status.hook.ts) that keeps
-    // retrying on its own schedule regardless of the claim's `onSyncStateChanged` event, so this
-    // assertion must not count its calls or it would fail on that unrelated retry activity.
+    // Counts only `getSyncState` calls, not every `sendCommand` call: the hook also runs a second,
+    // independent seed for `getSyncActivity` (see `use-sync-status.hook.ts`) that keeps retrying on
+    // its own schedule regardless of the claim's `onSyncStateChanged` event, so this assertion must
+    // not count its calls or it would fail on that unrelated retry activity.
     const countSyncStateCalls = () =>
       vi
         .mocked(sendCommand)
@@ -342,7 +344,7 @@ describe('SyncStatusButton — startup read retries', () => {
     const callsAfterEvent = countSyncStateCalls();
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(SYNC_STATE_SEED_RETRY_INTERVAL_MS * 5);
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS * 5);
     });
 
     // The live event stream has taken over, so the claim seed has nothing left to retry for.
@@ -441,6 +443,61 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
         'paratextBibleSendReceive.openSyncStatus',
       );
     });
+  });
+
+  // The popover is shown whenever send/receive is part of the build, which is true before its
+  // commands finish registering — so a click can land while nothing is listening. Without a toast
+  // the link just appears to do nothing.
+  it('tells the user when the sync status view cannot be opened', async () => {
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => completedState({ proj1: 'failed' }),
+      'paratextBibleSendReceive.openSyncStatus': () => {
+        throw new Error('send/receive has not registered its commands yet');
+      },
+    });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Sync failed' }));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-view-details-button'));
+
+    await waitFor(() => {
+      expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
+          severity: 'warning',
+        }),
+      );
+    });
+  });
+
+  // Repeat clicks must replace the toast rather than stack copies of it, which is what the shared
+  // notification id is for.
+  it('replaces the unavailable toast rather than stacking one per click', async () => {
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => completedState({ proj1: 'failed' }),
+      'paratextBibleSendReceive.openSyncStatus': () => {
+        throw new Error('send/receive has not registered its commands yet');
+      },
+    });
+    render(<SyncStatusButton />);
+
+    const trigger = await screen.findByRole('button', { name: 'Test Sync failed' });
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByTestId('toolbar-sync-view-details-button'));
+    await waitFor(() => {
+      expect(vi.mocked(notificationService.send)).toHaveBeenCalledTimes(1);
+    });
+
+    // The click closes the popover, so it has to be reopened to click through a second time.
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByTestId('toolbar-sync-view-details-button'));
+
+    await waitFor(() => {
+      expect(vi.mocked(notificationService.send)).toHaveBeenCalledTimes(2);
+    });
+    const [[first], [second]] = vi.mocked(notificationService.send).mock.calls;
+    expect(first.notificationId).toBeDefined();
+    expect(second.notificationId).toBe(first.notificationId);
   });
 });
 
@@ -975,6 +1032,54 @@ describe('SyncStatusButton — popover and cancel', () => {
     expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancel sync');
   });
 
+  // The same sync re-reads its project set on every sync-state event, and `useSyncStatus` clears the
+  // set before each read — so `[a,b] → [] → [a,b]` is what one unchanged sync looks like from here.
+  // Re-arming on that would flip a pending "Cancelling…" back to an enabled "Cancel sync" while the
+  // original request is still in flight.
+  it('keeps Cancel pending when the same sync re-reads its own project set', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a', 'b'] },
+      // The same sync, re-read after the event: the set is cleared and then re-applied unchanged.
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a', 'b'] },
+      // A genuinely different sync has taken over, without the status ever leaving `syncing`.
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['c'] },
+    ]);
+    mockProjectNames({ a: 'AAA', b: 'BBB', c: 'CCC' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    fireSyncStateChanged(true);
+
+    // The clear-then-reread has been through both transitions by the time the names are back.
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent(
+        'Test Syncing 2 projects',
+      );
+    });
+    const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveTextContent('Test Cancelling');
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+
+    // But a set that really did change is a different sync, and its Cancel has to be live.
+    fireSyncStateChanged(true);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent(
+        'Test Cancel sync',
+      );
+    });
+    expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveAttribute(
+      'aria-disabled',
+      'false',
+    );
+  });
+
   // The label carries a project name of any length, so the button has to be allowed to shrink and
   // truncate: a toolbar item that grows without bound pushes its neighbours off the bar.
   it('lets the label truncate instead of growing the toolbar item', async () => {
@@ -996,6 +1101,86 @@ describe('SyncStatusButton — popover and cancel', () => {
         'tw:truncate',
       );
     });
+  });
+});
+
+// A cross-origin sandboxed WebView swallows the pointerdown, so Radix's outside-press detection
+// never fires and the popover would stay open over a view the user has already moved into. See the
+// `Guidelines/Dismissal Patterns` Storybook page.
+describe('SyncStatusButton — dismissal across a WebView boundary', () => {
+  /**
+   * Reports the two document-level signals the dismissal reads — whether this window still holds
+   * focus, and which element holds it — without moving real focus.
+   *
+   * Real focus is deliberately NOT moved. Doing so also drives Radix's own focus-outside machinery,
+   * and that machinery is exactly what a cross-origin sandboxed WebView defeats in the app: jsdom
+   * has no such boundary, so a focus call there produces parent-document focus events that a real
+   * WebView never delivers, and the popover would close for a reason the supplement had no part in.
+   * Stubbing the two signals keeps the test about the supplement.
+   */
+  const mockFocus = ({ hasFocus, focusedEl }: { hasFocus: boolean; focusedEl: Element }) => {
+    vi.spyOn(document, 'hasFocus').mockReturnValue(hasFocus);
+    vi.spyOn(document, 'activeElement', 'get').mockReturnValue(focusedEl);
+  };
+
+  /**
+   * Stands in for a scripture-editor WebView: the frame element focus lands on, outside the
+   * popover.
+   */
+  const addForeignWebView = () => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    return iframe;
+  };
+
+  afterEach(() => {
+    // Spies here replace real document accessors, so they must be put back rather than just cleared.
+    vi.restoreAllMocks();
+    document.querySelectorAll('iframe').forEach((iframe) => iframe.remove());
+  });
+
+  it('dismisses the popover when focus moves into a WebView', async () => {
+    mockSyncState(IDLE_STATE);
+    render(<SyncStatusButton />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sync' }));
+    await screen.findByTestId('toolbar-sync-popover-status');
+
+    mockFocus({ hasFocus: true, focusedEl: addForeignWebView() });
+    // The only signal the parent document gets: its own window blurs while the page keeps focus.
+    fireEvent.blur(window);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('toolbar-sync-popover-status')).not.toBeInTheDocument();
+    });
+  });
+
+  // A plain window switch is not a move into a WebView, and dismissing on it would close the popover
+  // every time the user glanced at another app or opened DevTools.
+  it('stays open when the whole window loses focus', async () => {
+    mockSyncState(IDLE_STATE);
+    render(<SyncStatusButton />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sync' }));
+    await screen.findByTestId('toolbar-sync-popover-status');
+
+    mockFocus({ hasFocus: false, focusedEl: addForeignWebView() });
+    fireEvent.blur(window);
+
+    expect(screen.getByTestId('toolbar-sync-popover-status')).toBeInTheDocument();
+  });
+
+  // Radix portals the content to document.body, so containment has to be measured against the
+  // content node: measuring against the trigger would read the popover's own content as "outside"
+  // and dismiss the popover the moment the user interacted with it.
+  it('stays open when focus is inside its own portaled content', async () => {
+    mockSyncState(IDLE_STATE);
+    render(<SyncStatusButton />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Sync' }));
+    const viewDetails = await screen.findByTestId('toolbar-sync-view-details-button');
+
+    mockFocus({ hasFocus: true, focusedEl: viewDetails });
+    fireEvent.blur(window);
+
+    expect(screen.getByTestId('toolbar-sync-popover-status')).toBeInTheDocument();
   });
 });
 

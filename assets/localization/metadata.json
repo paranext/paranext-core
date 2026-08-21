@@ -160,7 +160,7 @@
   "%toolbar_sync_unavailable%": {
     "deprecationInfo": {
       "date": "2026-08-19",
-      "message": "The toolbar sync button no longer opens the sync status web view on click, so it no longer has a click that can fail with \"sync isn't available\". A cancel that can't be delivered now uses %toolbar_sync_cancel_unavailable%, and an unreadable status is shown in the popover with %toolbar_sync_popover_unknown%."
+      "message": "The toolbar sync button now opens a status popover instead of the sync status web view, so this one message no longer covers every way that button can fail. A \"View sync details\" click that can't open the web view uses %toolbar_sync_view_details_unavailable%, a cancel that can't be delivered uses %toolbar_sync_cancel_unavailable%, and an unreadable status is shown in the popover with %toolbar_sync_popover_unknown%."
     }
   },
   "%toolbar_theme_change_to_dark%": {

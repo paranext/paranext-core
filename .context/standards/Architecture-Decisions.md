@@ -473,15 +473,17 @@ step, no automation. Just a record.
 - **Source:** PT-3954 (Sync button on toolbar sometimes does not show), with the activation timeline
   measured from a Paratext 10 Studio `main.log`.
 
-## ADR-0014: The toolbar's sync status is local renderer UI, and names in-progress projects from a new upstream field
+## ADR-0016: The toolbar's sync status is local renderer UI, and names in-progress projects from a new upstream field
 
 - **Date:** 2026-08-17
 - **Status:** Accepted
-- **Context:** PT-4336 NN-4 asks for a single truthful sync status with a one-click cancel. Two
+- **Context:** PT-4336 asks that the user only ever see a single, truthful Send/Receive notification
+  at a time for the sync currently running, and be able to cancel any sync with a single click — the
+  fourth non-negotiable of the PRD "Simple — Saroj (and Donna) can trust the app". Two
   obstacles surfaced while implementing PT-4348. First, the existing toolbar button's only action was
   `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface — a web view that
   updates on its own schedule — alongside the button, which is exactly the "two messages that seem to
-  contradict each other" the NN exists to remove. Second, the ticket specified naming the syncing
+  contradict each other" that requirement exists to remove. Second, the ticket specified naming the syncing
   projects from `SyncState.lastRequestedProjectIds`, but that field is written only by the Send/Receive
   extension's `setResults` (on completion), never at `beginSync` — deliberately, so a failed sync
   cannot pair its ids with the previous run's results. Read during a sync it names the PREVIOUS
@@ -497,10 +499,10 @@ step, no automation. Just a record.
   copy so core merges independently of the upstream release. Absent field ⇒ a bare "Syncing" that
   names no project.
 - **Alternatives:** **Read `lastRequestedProjectIds` during a sync** (the ticket as written) —
-  rejected: names the wrong projects, which is the specific failure NN-4 exists to fix. **Derive names
+  rejected: names the wrong projects, which is the specific failure the single-truthful-status requirement exists to fix. **Derive names
   from `onSyncProgress.progressText`** — rejected: it carries the current *item*, not the set, and for
   indeterminate progress it is a full localized sentence, so the label's meaning would change shape
-  mid-sync. **Ship without names** — viable and fully truthful, but misses the NN's explicit "shows
+  mid-sync. **Ship without names** — viable and fully truthful, but misses that requirement's explicit "shows
   which project(s) are syncing". **Declare `syncingProjectIds` required in core** — rejected: it would
   make core's types lie for any Studio build predating the upstream change.
 - **Consequences:** Core now ships a type declaration for a field that only exists once the companion
@@ -513,7 +515,7 @@ step, no automation. Just a record.
   `runScheduledSessionSync`. That holds for Power mode only. In Simple mode — the only mode this
   button renders in — `main/startup-tasks.ts` calls the dotnet `syncProjects` command directly, and
   the picker's `syncOnProjectSwitch` (`platform-scripture-editor`) does the same, so neither raises a
-  claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: NN-4's "status is
+  claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: the requirement's "status is
   correct from app startup" is met for manual and scheduled syncs, but the Simple-mode startup sync
   still shows no status. Closing that needs either PT-4214 or routing those two call sites through a
   claiming wrapper (e.g. `runManualSync`); this decision deliberately does neither, since both are
@@ -527,11 +529,11 @@ step, no automation. Just a record.
   empty `SetSyncing([])` would be toothless, would waste a full drain on nothing, and would trip the
   gate's "no valid project ids" warning. The Simple-mode startup sync **is** the scheduled path, so
   the gate stays silent through its entire share-resolution phase — precisely the window this
-  paragraph identifies as unclosed. What actually closed it is PT-4398 (ADR-0015): a new
+  paragraph identifies as unclosed. What actually closed it is PT-4398 (ADR-0017): a new
   run-marker-derived signal (`onSyncActivityChanged` / `getSyncActivity`) taken from the
   `BeginSyncRun`/`EndSync` bracket, which is entered before the suppression branch above and held
   across the whole resolution phase, so it sees the startup sync from the moment it starts. Of the four richer UX
-  states in the NN-4 design, three ("Connection problem", "Unsaved changes", "Unsynced changes") are
+  states in the design for that non-negotiable, three ("Connection problem", "Unsaved changes", "Unsynced changes") are
   deferred and marked as such in `sync-status-button.component.tsx`: none is derivable from what
   Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this work
   removes. Sync FAILURE is the exception and IS reported, because it is derivable: the snapshot's
@@ -579,34 +581,34 @@ step, no automation. Just a record.
   specifically the **Simple-mode overlap**, not the toast's existence. Note also that suppressing the
   toast is only wired for `sendReceiveProjects`; `syncProjects` has no such parameter, so quieting the
   scheduled path needs a C# change in Studio's patch plus a contract addition in both copies of the
-  Send/Receive declaration. NN-4's "a single, truthful notification" is therefore not achieved in the
+  Send/Receive declaration. The "single, truthful notification" requirement is therefore not achieved in the
   shipped product by this decision alone, and the remaining work is cross-repo rather than a change to
   this component.
 - **Follow-up (needs tickets under PT-4336, none filed as of this entry):** three items above are
   deliberately out of this decision's scope and will not happen on their own.
   1. *Close the Simple-mode startup-sync blind spot* — route `main/startup-tasks.ts` and the picker's
      `syncOnProjectSwitch` through a claiming wrapper, or land upstream PT-4214. Owner: core.
-  2. *Achieve NN-4's "single, truthful notification"* — suppress the C# toast on the paths this
+  2. *Achieve the "single, truthful notification" requirement* — suppress the C# toast on the paths this
      button covers. Needs a `suppressNotification` parameter on `syncProjects` in Studio's
      `repo-patches/paranext-core.patch`, plus the matching contract addition in BOTH copies of the
      Send/Receive declaration. Owner: whoever owns Studio's patch — this cannot be done from core.
   3. *Reconcile the two in-core cancel surfaces* — share one piece of cancel-requested state between
      this popover and `sync-blocked-banner.component.tsx`. Owner: core.
-- **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
+- **Source:** PT-4348, under PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can trust the app"; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` contract.
 
-## ADR-0015: One sync surface per interface mode, closed by a run-marker signal rather than the gate
+## ADR-0017: One sync surface per interface mode, closed by a run-marker signal rather than the gate
 
 - **Date:** 2026-08-20
 - **Status:** Accepted
-- **Context:** ADR-0014 recorded, and then corrected above, that PT-4214's write-gate signal cannot
+- **Context:** ADR-0016 recorded, and then corrected above, that PT-4214's write-gate signal cannot
   report the Simple-mode startup sync: the gate's initial arm is deliberately suppressed on the
   scheduled path, so it stays silent through exactly the window (share resolution) that startup sync
   spends before it knows which projects it is syncing. Separately, Paratext 10 Studio's
   `repo-patches/paranext-core.patch` carries a persistent C# toast
   (`RunWithSyncNotification` / `ShowSyncNotification`) that overlaps the toolbar indicator on most
   syncs in Simple mode — two live regions, two Cancel buttons wired to the same
-  `paratextBibleSendReceive.cancelSync`, for one sync. PT-4398 (sub-task of PT-4336 NN-4) closes both:
+  `paratextBibleSendReceive.cancelSync`, for one sync. PT-4398 (a sub-task of PT-4336, which carries non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can trust the app") closes both:
   give every sync path a truthful signal, and stop showing it twice in the same mode.
 - **Decision:** Sync activity is reported from a **run-marker-derived** signal, not the gate. Studio's
   patch already holds a better bracket than the raw semaphore: `RunWithSyncNotification` calls
@@ -645,8 +647,8 @@ step, no automation. Just a record.
     correction below for why this reverses the original decision recorded here).
   - `NotifyIfRoleChanged` — **kept** in both modes; the indicator has no state for a role change.
   - The thrown-failure toast in the `catch` block, including its connection-failure variant —
-    **kept** in both modes; the indicator has no state for a connection problem, and NN-4's
-    "Connection problem" UX remains explicitly deferred (ADR-0014).
+    **kept** in both modes; the indicator has no state for a connection problem, and the requirement's
+    "Connection problem" UX remains explicitly deferred (ADR-0016).
 
   So one of the four surfaces is suppressed in Simple mode and three are kept; nothing is gated in
   Power mode. Reading interface mode on the toast-gate path is a cached value
@@ -654,14 +656,14 @@ step, no automation. Just a record.
   because `ShowSyncNotification` runs under the held sync semaphore and a blocking `GetSetting` call
   there would compete with the same 10-second budget `WaitUntilAvailableAsync` already protects.
 
-  NN-4's "Saroj (and Donna) can trust the app" wording stands on this one-surface-per-mode reading:
+  The non-negotiable's "Saroj (and Donna) can trust the app" wording stands on this one-surface-per-mode reading:
   Donna (Power mode) is served by the toast, not the indicator, which never renders for her.
 - **Alternatives:**
   - **Gate-derived signal only (`onSyncWriteLockChanged`).** Rejected: silent through the scheduled
-    path's resolution phase, i.e. broken at exactly the moment — app startup — NN-4 cares most about.
-    See ADR-0014's correction above for the mechanism.
+    path's resolution phase, i.e. broken at exactly the moment — app startup — the requirement cares most about.
+    See ADR-0016's correction above for the mechanism.
   - **Route `startup-tasks.ts` and `syncOnProjectSwitch` through a claiming wrapper** (e.g.
-    `runManualSync`), as ADR-0014 first floated. Rejected for the same reason ADR-0014 declined it:
+    `runManualSync`), as ADR-0016 first floated. Rejected for the same reason ADR-0016 declined it:
     it covers today's two direct-call sites but leaves the next one dark, it recruits `runManualSync`
     — designed for a manual, foreground sync — for a background sync it was never shaped for, and,
     most importantly, it fixes a **reporting** problem by changing sync **behavior**. This design's
@@ -685,7 +687,7 @@ step, no automation. Just a record.
   - **Corrected 2026-08-21, after this decision was first written:** the original text above gated
     TWO of the four toast surfaces — `ShowSyncNotification` and `NotifyIfSyncFailed` — on
     `ShouldShowPersistentSyncToast()`, on the theory that the toolbar indicator's `failed` state
-    (derived from `lastResults.resultsInfo`, ADR-0014) already covers a plain sync failure in Simple
+    (derived from `lastResults.resultsInfo`, ADR-0016) already covers a plain sync failure in Simple
     mode. A whole-branch final review found that theory false for precisely the syncs this decision
     exists to cover: `main/startup-tasks.ts` and the picker's `syncOnProjectSwitch` call the dotnet
     commands directly, so the Send/Receive extension raises no claim and there is no `lastResults` for
@@ -717,7 +719,7 @@ step, no automation. Just a record.
     something," not "fail toward showing exactly one thing."
   - **Public Platform.Bible now runs two independent 60-second seed-retry loops instead of one.**
     `useSyncStatus` seeds the claim (`getSyncState`) and the activity signal (`getSyncActivity`) in two
-    separate effects, each with its own `SYNC_STATE_SEED_RETRY_WINDOW_MS` (60s) retry budget, because
+    separate effects, each with its own `SYNC_SEED_RETRY_WINDOW_MS` (60s) retry budget, because
     Ruling 3/1 (recorded in the hook's own comments) requires the two inputs to retry and clear
     independently so neither can stall or race the other. On public Platform.Bible, which ships only
     the Send/Receive stub, `getSyncActivity` never resolves — the command doesn't exist — so that
@@ -731,12 +733,12 @@ step, no automation. Just a record.
     `repo-patches/paranext-core.patch` (the `SyncActivityChanged` event, its notifier, and the toast
     gate). Neither half is independently useful: core's union degrades cleanly to claim-only behavior
     when the patch is absent (older Studio build, or public Platform.Bible), by the same
-    declare-it-optional pattern ADR-0014 established for `syncingProjectIds`, but the invisible-path
+    declare-it-optional pattern ADR-0016 established for `syncingProjectIds`, but the invisible-path
     gap and the double-toast overlap are only actually closed once both halves ship. As with PT-4214
     (core #2574 / studio #164), the core PR and the studio PR carrying this work must merge in the same
-    window; landing one without the other leaves the product in an intermediate, ADR-0014-documented
+    window; landing one without the other leaves the product in an intermediate, ADR-0016-documented
     state rather than a broken one.
-- **Source:** PT-4398, sub-task of PT-4336 NN-4; ADR-0014's "second sync surface" finding and its
+- **Source:** PT-4398, sub-task of PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can trust the app"; ADR-0016's "second sync surface" finding and its
   correction above; `src/renderer/hooks/use-sync-status.hook.ts` for the union and seed-retry
   behavior; `c-sharp/Projects/SendReceive/SendReceiveBlockNotifierService.cs` for the mirrored notifier
   pattern; Paratext 10 Studio's `repo-patches/paranext-core.patch` for `RunWithSyncNotification`,

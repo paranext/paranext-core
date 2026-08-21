@@ -217,14 +217,17 @@ beforeEach(() => {
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
 });
 
-const mockSendCommand = (
+const mockSendCommandWithSyncStates = (
   isSendReceiveAvailable: boolean,
   /**
-   * What `getSyncState` answers. The sync status refuses to report success without evidence of it,
-   * so a test driving a sync to completion has to supply the results that say it succeeded.
+   * What successive `getSyncState` calls answer, in order; the final entry answers every call after
+   * it. A test that drives a sync from one state to another needs this, because the read that
+   * follows a sync-state event has to describe the state the sync has just moved TO — answering
+   * every call with the mount-time state would silently undo the transition under test.
    */
-  syncState?: unknown,
+  syncStates: unknown[],
 ) => {
+  let syncStateCallCount = 0;
   vi.mocked(sendCommand).mockImplementation(
     // sendCommand has a complex generic signature; cast is required for the mock implementation
     // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
@@ -233,12 +236,28 @@ const mockSendCommand = (
         return isSendReceiveAvailable;
       if (commandName === 'platform.getOSPlatform') return 'win32';
       if (commandName === 'platform.isFullScreen') return false;
-      if (commandName === 'paratextBibleSendReceive.getSyncState') return syncState;
+      if (commandName === 'paratextBibleSendReceive.getSyncState') {
+        const syncState = syncStates[Math.min(syncStateCallCount, syncStates.length - 1)];
+        syncStateCallCount += 1;
+        return syncState;
+      }
       return undefined;
       // sendCommand has a complex generic signature; cast is required for the mock implementation
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
     }) as any,
   );
+};
+
+const mockSendCommand = (
+  isSendReceiveAvailable: boolean,
+  /**
+   * What `getSyncState` answers, for every call. The sync status refuses to report success without
+   * evidence of it, so a test driving a sync to completion has to supply the results that say it
+   * succeeded.
+   */
+  syncState?: unknown,
+) => {
+  mockSendCommandWithSyncStates(isSendReceiveAvailable, [syncState]);
 };
 
 describe('PlatformBibleToolbar — Sync button', () => {
@@ -430,21 +449,28 @@ describe('PlatformBibleToolbar — Sync button', () => {
       }) as any,
     );
 
-    // A sync that ENDED is only "Synced" if it succeeded, which the results are what establish.
-    mockSendCommand(true, {
-      isSyncing: false,
-      lastRequestedProjectIds: ['proj1'],
-      syncingProjectIds: [],
-      lastResults: {
-        sendReceiveDate: '2026-08-19T00:00:00Z',
-        resultsInfo: { proj1: { id: 'proj1', resultStatus: 'succeeded' } },
+    // Seeded mid-sync, NOT already synced: the event has to be what drives the transition, or this
+    // test would pass with the component's event handling deleted.
+    mockSendCommandWithSyncStates(true, [
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: [] },
+      // A sync that ENDED is only "Synced" if it succeeded, which the results are what establish —
+      // and only the read that follows the event carries them.
+      {
+        isSyncing: false,
+        lastRequestedProjectIds: ['proj1'],
+        syncingProjectIds: [],
+        lastResults: {
+          sendReceiveDate: '2026-08-19T00:00:00Z',
+          resultsInfo: { proj1: { id: 'proj1', resultStatus: 'succeeded' } },
+        },
       },
-    });
+    ]);
     render(<PlatformBibleToolbar />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Test Syncing' })).toBeInTheDocument();
     });
+    expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
 
     expect(capturedSyncStateCallback).toBeDefined();
     if (!capturedSyncStateCallback)
