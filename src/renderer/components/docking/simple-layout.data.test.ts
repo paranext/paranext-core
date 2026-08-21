@@ -43,11 +43,11 @@ describe('simple-layout.data', () => {
       });
     });
 
-    it('column 3 has exactly 3 tabs', () => {
+    it('column 3 has exactly 4 tabs', () => {
       // Narrowing column to BoxData and its first child to PanelData to access tabs.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const col3Panel = (columns[2] as BoxData).children[0] as PanelData;
-      expect(col3Panel.tabs).toHaveLength(3);
+      expect(col3Panel.tabs).toHaveLength(4);
     });
 
     it('all tab ids are unique across the layout', () => {
@@ -71,7 +71,7 @@ describe('simple-layout.data', () => {
       });
     });
 
-    it('contains the five expected webViewType strings', () => {
+    it('contains the six expected webViewType strings', () => {
       const allWebViewTypes: string[] = [];
       columns.forEach((col) => {
         // Narrowing column to BoxData and its first child to PanelData to iterate tabs.
@@ -89,6 +89,7 @@ describe('simple-layout.data', () => {
       expect(allWebViewTypes).toContain('platformScriptureEditor.bibleTexts');
       expect(allWebViewTypes).toContain('platformScriptureEditor.commentaries');
       expect(allWebViewTypes).toContain('legacyCommentManager.commentListPanel');
+      expect(allWebViewTypes).toContain('platformScripture.find');
     });
 
     it('each column panel has panelLock.minWidth of 300 so it cannot be resized to nothing', () => {

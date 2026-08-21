@@ -108,6 +108,7 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
@@ -1133,7 +1134,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [showMarkersMenu]);
 
-  // Listen for Ctrl+F to open find dialog and for the marker menu trigger to open the marker menu
+  // Ctrl+F opens Find for this editor's own project. Uses the same hook as the read-only reference
+  // panels so there is a single Ctrl+F→openFind implementation across every scripture tab type.
+  useOpenFindShortcut(webViewId, projectId);
+
+  // Listen for the marker menu trigger to open the marker menu, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
@@ -1154,24 +1159,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
       }
 
-      // Find dialog trigger listener
-      if (event.ctrlKey && event.key.toLowerCase() === 'f') {
+      const isInsertCommentHotkey = isMac
+        ? event.metaKey &&
+          event.altKey &&
+          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
+          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
+        : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
+          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
+      if (isInsertCommentHotkey) {
         event.preventDefault();
-        const selectedText = window.getSelection()?.toString() ?? '';
-        papi.commands.sendCommand('platformScripture.openFind', webViewId, selectedText);
-      } else {
-        const isInsertCommentHotkey = isMac
-          ? event.metaKey &&
-            event.altKey &&
-            // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
-            (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
-          : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
-            (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
-        if (isInsertCommentHotkey) {
-          event.preventDefault();
-          event.stopPropagation();
-          insertCommentAtCurrentSelection();
-        }
+        event.stopPropagation();
+        insertCommentAtCurrentSelection();
       }
     };
 
@@ -1180,7 +1178,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu, isMac]);
+  }, [insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu, isMac]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
