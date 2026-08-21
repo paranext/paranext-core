@@ -61,4 +61,35 @@ describe('useDblResourceCatalog', () => {
     await waitFor(() => expect(result.current.hasCatalogError).toBe(false));
     await waitFor(() => expect(result.current.dblResources).toEqual([RESOURCE]));
   });
+
+  it('ignores a superseded fetch that resolves late and would clear a real error', async () => {
+    // `usePromise`'s own `promiseIsCurrent` flag guards only its `setValue`/`setIsLoading`; a
+    // superseded factory invocation still runs to completion and still writes OUR state. Left
+    // unguarded, a late-resolving stale fetch clears a genuine error, leaving hasCatalogError
+    // false + an empty catalog + isCatalogReady true — which `getResourcePanelReadiness` reads as
+    // 'empty'. That is exactly the premature empty state this branch exists to remove.
+    let resolveStale: ((value: DblResourceData[]) => void) | undefined;
+    mockSendCommand.mockImplementationOnce(
+      () =>
+        new Promise<DblResourceData[]>((resolve) => {
+          resolveStale = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() => useDblResourceCatalog());
+    await waitFor(() => expect(resolveStale).toBeDefined());
+
+    // A refetch supersedes the in-flight fetch, and the new one fails for real.
+    mockSendCommand.mockRejectedValue(new Error('offline'));
+    act(() => result.current.refetchCatalog());
+    await waitFor(() => expect(result.current.hasCatalogError).toBe(true));
+
+    // The superseded fetch now resolves successfully, out of order.
+    await act(async () => {
+      resolveStale?.([RESOURCE]);
+      await Promise.resolve();
+    });
+
+    expect(result.current.hasCatalogError).toBe(true);
+  });
 });

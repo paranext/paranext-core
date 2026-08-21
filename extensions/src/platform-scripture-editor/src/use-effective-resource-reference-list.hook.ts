@@ -79,8 +79,9 @@ export type EffectiveResourceReferenceListState =
  * `source` tag (`'admin'` or `'user'`); admin items are listed first.
  *
  * Reports `loading` until _both_ the project-level setting and the user-level subscription have
- * delivered. If the user setting cannot be retrieved, the project-level items are returned tagged
- * as `'admin'`.
+ * delivered. If the user setting cannot be retrieved — whether a {@link PlatformError} arrives
+ * through the callback or the `subscribe` call itself rejects — the project-level items are
+ * returned tagged as `'admin'` rather than leaving the panel waiting.
  */
 export function useEffectiveResourceReferenceList(
   projectId: string | undefined,
@@ -124,6 +125,10 @@ export function useEffectiveResourceReferenceList(
       })
       .catch((err) => {
         console.error(`Failed to subscribe to user text connection settings: ${err}`);
+        // Fall back to an empty user layer so the merged list still resolves. Leaving it
+        // `undefined` reported `loading` forever — an unresolvable spinner — and contradicted this
+        // hook's own contract, which promises the project-level items in this case.
+        if (!disposed) setUserResourceReferenceList(DEFAULT_LIST);
       });
 
     return () => {
