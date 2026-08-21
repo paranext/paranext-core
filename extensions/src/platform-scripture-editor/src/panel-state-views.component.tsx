@@ -27,20 +27,24 @@ export function LoadingView({ label }: { label: ReactNode }) {
 }
 
 /**
- * Full-panel "install failed" recovery state with a retry action. Shared by the Model Text and
- * Resource panels, which render an identical block and differ only in the localized strings they
- * resolve. The inline message is the single user-facing channel for an install failure (no
- * accompanying toast), so callers own the recovery affordance here rather than duplicating it.
+ * Full-panel error state with a retry action, for any failure a retry can actually act on — a
+ * failed install, or a failed resource-catalog fetch. Shared by the Model Text and Resource panels,
+ * which render an identical block and differ only in the localized strings they resolve. The inline
+ * message is the single user-facing channel for these failures (no accompanying toast), so callers
+ * own the recovery affordance here rather than duplicating it.
  *
- * Only for failures a retry can actually act on. The settings-read failure deliberately does NOT
- * use this view: nothing in either panel can re-drive that read, so it renders a message alone (see
- * `PanelReadinessView`) rather than an inert button.
+ * The settings-read failure deliberately does NOT use this view: nothing in either panel can
+ * re-drive that read, so it renders a message alone (see `PanelReadinessView`) rather than offering
+ * an inert button.
  *
- * @param message Already-localized failure message (callers vary it for the offline case).
+ * Carries `role="alert"` so a screen-reader user sitting on the panel is told when it flips out of
+ * the loading state, which announces through its own live region.
+ *
+ * @param message Already-localized failure message (callers vary it per failure and for offline).
  * @param retryLabel Already-localized label for the retry button.
- * @param onRetry Re-attempts the install for the same resource.
+ * @param onRetry Re-attempts whatever failed — the install, or the catalog fetch.
  */
-export function InstallFailedView({
+export function RetryableErrorView({
   message,
   retryLabel,
   onRetry,
@@ -50,7 +54,10 @@ export function InstallFailedView({
   onRetry: () => void;
 }) {
   return (
-    <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
+    <div
+      className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center"
+      role="alert"
+    >
       <p>{message}</p>
       <Button onClick={() => onRetry()}>{retryLabel}</Button>
     </div>

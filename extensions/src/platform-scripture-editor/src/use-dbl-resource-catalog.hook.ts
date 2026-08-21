@@ -1,7 +1,7 @@
 import papi, { logger } from '@papi/frontend';
 import { usePromise } from 'platform-bible-react';
 import { DblResourceData, getErrorMessage } from 'platform-bible-utils';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 /** The DBL resource catalog plus everything a panel needs to reason about its arrival. */
 export type DblResourceCatalog = {
@@ -10,9 +10,11 @@ export type DblResourceCatalog = {
   /** Whether the fetch is in flight. */
   isLoadingResources: boolean;
   /**
-   * Whether the catalog has finished loading AND delivered. Distinct from `!isLoadingResources`:
-   * `dblResources` coerces a missing catalog to `[]`, which is indistinguishable from a genuinely
-   * empty one, so this is the only safe signal for "the answer is known".
+   * Whether the catalog has finished loading AND delivered a real answer. Distinct from
+   * `!isLoadingResources`: `dblResources` coerces a missing catalog to `[]`, which is
+   * indistinguishable from a genuinely empty one. A failed fetch is not "ready" either — the catch
+   * below resolves to `[]` to clear the loading flag, so without folding in `hasCatalogError` a
+   * consumer reading this alone would treat a failure as a genuinely empty catalog.
    */
   isCatalogReady: boolean;
   /** Whether the last fetch failed. Recoverable — call {@link DblResourceCatalog.refetchCatalog}. */
@@ -38,6 +40,12 @@ export function useDblResourceCatalog(): DblResourceCatalog {
   const [fetchResources, setFetchResources] = useState(true);
   const [hasCatalogError, setHasCatalogError] = useState(false);
 
+  // `usePromise`'s own currency flag guards only its `setValue`/`setIsLoading` — a superseded
+  // factory invocation still runs to completion and still writes state we own. Overlapping fetches
+  // are reachable because `refetchCatalog` is also the install-completion stale marker, so a stale
+  // fetch resolving late could clear a real error and leave the panel reading `empty`.
+  const fetchGenerationRef = useRef(0);
+
   const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
     useCallback(async () => {
       if (fetchResources) {
@@ -47,15 +55,19 @@ export function useDblResourceCatalog(): DblResourceCatalog {
         return Promise.resolve(undefined);
       }
 
+      const generation = fetchGenerationRef.current;
+
       try {
         const resources = await papi.commands.sendCommand(
           'platformGetResources.getCachedResources',
         );
-        setHasCatalogError(false);
+        if (generation === fetchGenerationRef.current) setHasCatalogError(false);
+
         return resources;
       } catch (error) {
         logger.warn(`Failed to load the DBL resource catalog: ${getErrorMessage(error)}`);
-        setHasCatalogError(true);
+        if (generation === fetchGenerationRef.current) setHasCatalogError(true);
+
         return [];
       }
     }, [fetchResources]),
@@ -68,6 +80,7 @@ export function useDblResourceCatalog(): DblResourceCatalog {
   );
 
   const refetchCatalog = useCallback(() => {
+    fetchGenerationRef.current += 1;
     setHasCatalogError(false);
     setFetchResources(true);
   }, []);
@@ -75,7 +88,8 @@ export function useDblResourceCatalog(): DblResourceCatalog {
   return {
     dblResources,
     isLoadingResources,
-    isCatalogReady: !isLoadingResources && resourcesPossiblyUndefined !== undefined,
+    isCatalogReady:
+      !isLoadingResources && resourcesPossiblyUndefined !== undefined && !hasCatalogError,
     hasCatalogError,
     refetchCatalog,
   };

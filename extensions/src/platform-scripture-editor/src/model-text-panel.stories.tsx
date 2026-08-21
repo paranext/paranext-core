@@ -113,7 +113,7 @@ type DecoratorConfig = {
   failInstall?: boolean;
   /** Hold the configured list in its loading state so the resolving spinner is observable. */
   isListLoading?: boolean;
-  /** Make the configured-list read fail so the recoverable settings-error state is observable. */
+  /** Make the configured-list read fail so the settings-error state is observable. */
   hasSettingsError?: boolean;
   /** Hold the DBL catalog as not-yet-arrived so the pre-catalog spinner is observable. */
   isCatalogReady?: boolean;
@@ -300,7 +300,10 @@ export const Loading: Story = {
   decorators: [createDecorator({ initialAdmin: [dblRef(seedResources[0])], isListLoading: true })],
 };
 
-/** The configured-model-text setting can't be read: a distinct, recoverable error state. */
+/**
+ * The configured-model-text setting can't be read. Deliberately offers no control: nothing in the
+ * panel can re-drive that read, so the message carries the recovery expectation instead.
+ */
 export const SettingsError: Story = {
   decorators: [
     createDecorator({ initialAdmin: [dblRef(seedResources[0])], hasSettingsError: true }),
