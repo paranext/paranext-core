@@ -1,5 +1,5 @@
 import { Editorial, EditorOptions, EditorRef } from '@eten-tech-foundation/platform-editor';
-import { EMPTY_USJ } from '@eten-tech-foundation/scripture-utilities';
+import { EMPTY_USJ, Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  EmptyState,
   Spinner,
   usePromise,
   useExtraValidMarkers,
@@ -40,6 +41,7 @@ import type {
   EffectiveResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
+import { isBookNotFoundError } from './platform-scripture-editor.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
@@ -58,6 +60,9 @@ import { selectTextConnection } from './select-dbl-resource';
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
+  // Shared with the editable scripture editor's read-only branch so both tabs word a missing book
+  // the same way
+  '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_resourcePanel_noProject%',
   '%webView_resourcePanel_installing%',
   '%webView_resourcePanel_selecting%',
@@ -421,7 +426,22 @@ globalThis.webViewComponent = function ResourceTextPanel({
     EMPTY_USJ,
   );
 
-  const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
+  // Handle a PlatformError if one comes in instead of resource text. A book missing from the
+  // resource comes back from the PDP as an error rather than as empty USJ, so detect it and let the
+  // panel say so: otherwise `Editorial` renders with no scripture set, showing either the previous
+  // chapter's content or its "enter some scripture" placeholder — neither is honest for a read-only
+  // resource. Derived in one pass, like the editable Scripture tab.
+  const [usjFromPdp, bookExists] = useMemo<[Usj | undefined, boolean]>(() => {
+    if (!isPlatformError(usjPossiblyError)) return [usjPossiblyError, true];
+
+    // A book missing from the resource is ordinary navigation, not a fault, so it is logged
+    // quietly; every other PDP failure is a real error. Matches the editable Scripture tab.
+    const bookNotFound = isBookNotFoundError(usjPossiblyError);
+    const errorMessage = getErrorMessage(usjPossiblyError);
+    if (bookNotFound) logger.debug(`Book not found in resource: ${errorMessage}`);
+    else logger.error(`Error getting USJ for the resource panel: ${errorMessage}`);
+    return [undefined, !bookNotFound];
+  }, [usjPossiblyError]);
 
   // #endregion
 
@@ -631,16 +651,33 @@ globalThis.webViewComponent = function ResourceTextPanel({
         downloadResourcesLabel={localizedStrings['%webView_resourcePanel_downloadResources%']}
       />
 
-      {/* Scripture content */}
-      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={setScrRef}
-          options={options}
-          logger={logger}
-        />
-      </div>
+      {/* Scripture content, or an honest message when the resource has no such book. The
+          resource selector above stays mounted in both cases so the user can switch to a resource
+          that does contain the book. The message sits outside the `dir` wrapper because it is
+          UI-locale text, not resource text. `EmptyState` (rather than bare text) because this
+          region swaps content in place as the user navigates, so its `role="status"` is what
+          announces the missing book to a screen reader instead of scripture going silent. */}
+      {bookExists ? (
+        <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={setScrRef}
+            options={options}
+            logger={logger}
+          />
+        </div>
+      ) : (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <EmptyState
+            id="resource-text-panel-book-not-found"
+            className="tw:text-center"
+            message={
+              localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
+            }
+          />
+        </div>
+      )}
     </div>
   );
 

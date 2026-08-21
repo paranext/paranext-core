@@ -42,6 +42,7 @@ import {
   CommentEditor,
   DisabledActionTooltip,
   EditorKeyboardShortcuts,
+  EmptyState,
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   MarkdownRenderer,
@@ -126,6 +127,7 @@ import {
   formatEditorTitle,
   generateInlineMarkerMenuListItems,
   generateParagraphMenuListItems,
+  isBookNotFoundError,
   isChapterBlank,
   openCommentListAndSelectThreadSafe,
   resolveAddChapterNumberClick,
@@ -276,9 +278,6 @@ const getViewOptionsForType = (
   if (viewType === 'markers') return { ...paragraphStructure, noteMode: 'expanded' };
   return paragraphStructure;
 };
-
-// This regex is connected directly to the exception message within MissingBookException.cs
-const bookNotFoundRegex = /Book number \d+ not found in project/;
 
 // This regex is connected directly to the exception message within PermissionsException.cs
 const PERMISSIONS_EXCEPTION_REGEX = /Permissions exception for projectId/;
@@ -1292,9 +1291,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [usjFromPdp, bookExists] = useMemo(() => {
     if (!isPlatformError(usjFromPdpPossiblyError)) return [usjFromPdpPossiblyError, true];
 
+    // A book missing from the project is ordinary navigation, not a fault, so it is logged
+    // quietly; every other PDP failure is a real error. Both Scripture tabs branch the same way.
+    const bookNotFound = isBookNotFoundError(usjFromPdpPossiblyError);
     const errorMessage = getErrorMessage(usjFromPdpPossiblyError);
-    logger.error(`Error getting USJ from PDP: ${errorMessage}`);
-    return [defaultUsj, !bookNotFoundRegex.test(errorMessage)];
+    if (bookNotFound) logger.debug(`Book not found in project: ${errorMessage}`);
+    else logger.error(`Error getting USJ from PDP: ${errorMessage}`);
+    return [defaultUsj, !bookNotFound];
   }, [usjFromPdpPossiblyError]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
@@ -1972,7 +1975,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         return (
           <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
             {workaround}
-            {localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']}
+            {/* `EmptyState` rather than bare text: this region swaps content in place as the user
+                navigates, so its `role="status"` is what announces the missing book to a screen
+                reader instead of scripture going silent. It is also the treatment the Bible text,
+                commentary, and model text panels use for the same sentence, so the message reads
+                and announces identically wherever a resource lacks the book. */}
+            <EmptyState
+              id="platform-scripture-editor-book-not-found-resource"
+              className="tw:text-center"
+              message={
+                localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
+              }
+            />
           </div>
         );
       }

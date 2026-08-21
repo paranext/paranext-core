@@ -1158,3 +1158,30 @@ export function resolveAddChapterNumberClick(
 }
 
 // #endregion Chapter Scaffold Helpers
+
+// #region PDP Error Detection
+
+// This regex is connected directly to the exception message within MissingBookException.cs.
+// `c-sharp-tests/MissingBookExceptionTests.cs` duplicates this pattern and fails if that message is
+// reworded, so the two sides cannot drift silently — update both together.
+const BOOK_NOT_FOUND_REGEX = /Book number \d+ not found in project/;
+
+/**
+ * Whether a value received from a scripture PDP is the error it reports when the requested book
+ * does not exist in the project or resource. Views use this to show an honest "this book does not
+ * exist" message instead of an empty editor.
+ *
+ * Handles both shapes the scripture PDPs surface, because the two call styles fail differently:
+ * `useProjectData` hands back a `PlatformError` in place of the data, while awaiting
+ * `getChapterUSJ` directly rejects with a thrown `Error`. Anything that is neither — including the
+ * USJ itself and `undefined` while the data is still in flight — is not a book-not-found error.
+ *
+ * @param possibleError Value returned by a scripture PDP (e.g. `ChapterUSJ`) or thrown by one of
+ *   its methods, which may be a `PlatformError` or an `Error`.
+ */
+export function isBookNotFoundError(possibleError: unknown): boolean {
+  if (!isPlatformError(possibleError) && !(possibleError instanceof Error)) return false;
+  return BOOK_NOT_FOUND_REGEX.test(getErrorMessage(possibleError));
+}
+
+// #endregion PDP Error Detection
