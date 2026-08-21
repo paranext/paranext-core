@@ -1,5 +1,27 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { getLocalizedStrings } from '../../../../.storybook/localization.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
+
+/**
+ * Resolved from the extension's real `localizedStrings.json` rather than hardcoded, so this story
+ * cannot drift from the copy that ships — it already had, showing "Bible text" where the shipping
+ * strings say "Bible texts".
+ *
+ * The keys are listed here rather than imported from `RESOURCE_PANEL_STRING_KEYS`, which lives in
+ * the web-view module: importing it would pull the whole web view (and `Editorial`) into Storybook
+ * to obtain a string array. These are the Resource panel's Bible Texts strings; the Model Text
+ * panel renders the same view with its own equivalents.
+ */
+const RESOURCE_PANEL_KEYS = [
+  '%webView_resourcePanel_settingsUnavailable%',
+  '%webView_resourcePanel_catalogUnavailable%',
+  '%webView_resourcePanel_loading%',
+  '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
+  '%webView_resourcePanel_bibleTexts_pick%',
+  '%webView_resourcePanel_retry%',
+];
+
+const localizedStrings = getLocalizedStrings(RESOURCE_PANEL_KEYS);
 
 /**
  * The front of a resource panel's state machine — everything shown before the panel has content to
@@ -17,13 +39,12 @@ const meta: Meta<typeof PanelReadinessView> = {
   component: PanelReadinessView,
   tags: ['autodocs'],
   args: {
-    errorMessage: "Couldn't load your resources. They will appear once they're available.",
-    catalogErrorMessage: "Couldn't load the list of available resources.",
-    loadingLabel: 'Loading…',
-    emptyPrompt:
-      'No Bible text selected. Pick one to display a reference translation alongside your project.',
-    pickLabel: 'Pick Bible text…',
-    retryLabel: 'Try again',
+    errorMessage: localizedStrings['%webView_resourcePanel_settingsUnavailable%'],
+    catalogErrorMessage: localizedStrings['%webView_resourcePanel_catalogUnavailable%'],
+    loadingLabel: localizedStrings['%webView_resourcePanel_loading%'],
+    emptyPrompt: localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_prompt%'],
+    pickLabel: localizedStrings['%webView_resourcePanel_bibleTexts_pick%'],
+    retryLabel: localizedStrings['%webView_resourcePanel_retry%'],
   },
 };
 export default meta;
