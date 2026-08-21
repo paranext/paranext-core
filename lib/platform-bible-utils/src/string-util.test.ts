@@ -24,6 +24,7 @@ import {
   formatReplacementStringToArray,
   toKebabCase,
   collapseMiddleWords,
+  isolateBidi,
 } from './string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
@@ -868,5 +869,31 @@ describe('truncateOmittingMiddleWords', () => {
     expect(
       collapseMiddleWords('- ? lorem ipsum dolor sit amed 0 0 - hi 0 1 2 3 4 5 6 7', 7),
     ).toEqual('- ? lorem ipsum dolor sit amed [...] 1 2 3 4 5 6 7');
+  });
+});
+
+describe('isolateBidi', () => {
+  it('should surround the text with the isolate code points', () => {
+    expect(isolateBidi('HNF')).toEqual('\u2068HNF\u2069');
+  });
+
+  it('should isolate a right-to-left name interpolated into a left-to-right sentence', () => {
+    expect(
+      formatReplacementString('Syncing {projectName}.', {
+        projectName: isolateBidi('\u0645\u0634\u0631\u0648\u0639'),
+      }),
+    ).toEqual('Syncing \u2068\u0645\u0634\u0631\u0648\u0639\u2069.');
+  });
+
+  it('should leave the text itself untouched', () => {
+    // Only the two code points are added, so the isolated value still contains exactly what it did.
+    const isolated = isolateBidi(SHORT_SURROGATE_PAIRS_STRING);
+    expect(substring(isolated, 1, stringLength(isolated) - 1)).toEqual(
+      SHORT_SURROGATE_PAIRS_STRING,
+    );
+  });
+
+  it('should isolate an empty string without producing anything else', () => {
+    expect(isolateBidi('')).toEqual('\u2068\u2069');
   });
 });
