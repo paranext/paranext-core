@@ -586,3 +586,96 @@ step, no automation. Just a record.
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from ADR-0002 without recording why.
+## ADR-0016: First-run sync consent is enforced per sync trigger, never by one global gate
+
+- **Date:** 2026-08-16
+- **Status:** Accepted
+- **Context:** PT-4369: in the Simple-mode first-run wizard, selecting "Unrestricted" on the
+  internet-settings step started a Send/Receive before the user reached the sync-consent step. The
+  ticket blamed the Simple-mode startup auto-sync, but that path had been gated on
+  `platform.firstRunComplete` since PT-4175. The real trigger was a second, ungated path: the wizard
+  is an **overlay**, not a replacement (`src/renderer/app.component.tsx` mounts the dock layout
+  behind it), so the default active project picker keeps running during it, opens an editor once
+  internet is permitted, and drives `syncOnProjectSwitch` → `syncProjects`. A third ungated path,
+  `performSimpleModeShutdownSync`, is reachable mid-wizard because the identify step calls
+  `platform.restart()`.
+- **Decision:** Gate each sync trigger at its own entry point on `platform.firstRunComplete`, with an
+  unreadable value meaning "do not sync" (consent-safe: the user may never have been asked, and
+  syncing unasked cannot be undone). The three main-process gates (startup, shutdown, window close)
+  share `isFirstRunComplete` in
+  `src/main/first-run-consent.util.ts`, which is the canonical statement of the rule;
+  `syncOnProjectSwitch` keeps its own copy because the extension host cannot import from `src/main`.
+  **Any new automatic sync trigger must carry this gate — there is no central chokepoint that will
+  catch it.** The rule is promoted to `.claude/rules/first-run-sync-consent.md` so it is enforced
+  on the next feature rather than living only in this log.
+
+  The gate deliberately does NOT read `platform.syncOnStartup`, and the two must not be "unified" —
+  they answer different questions over different lifetimes. `firstRunComplete` is internal state
+  meaning "the wizard has been answered"; `syncOnStartup` is a user preference meaning "auto-sync
+  when the app starts". The gate was briefly extended to read both, on the assumption that the
+  wizard's decline was a standing preference. It is not: per the epic owner (2026-08-16) declining at
+  the wizard defers only the sync the wizard itself would run, and the user IS expected to be synced
+  automatically on their next launch.
+
+  Squaring the code with that meaning is the second half of this entry. The decline button said
+  "Skip automatic sync" — standing-preference wording that PT-4178's approved 2026-07-25 UX review had
+  already relabelled to **"Don't sync yet"** — and it persisted `platform.syncOnStartup = false`,
+  which needed a localStorage hint and a self-heal block in `resolveInternal` to make that durable
+  write reliable. Since the setting was `isHidden` and nothing ever wrote it `true`, one click during
+  setup disabled startup sync permanently, invisibly, with no way back. So: the button now uses
+  `%firstRun_button_dontSyncYet%`, `completeFirstRun` writes no preference at all (the hint and
+  self-heal are deleted, and `skippedStep` went with them), and `platform.syncOnStartup` is now a
+  visible, reversible setting with a description. A transient onboarding button no longer authors a
+  permanent preference; the preference lives where preferences live.
+- **Alternatives:** **Hoist the `firstRunComplete` gate above the `interfaceMode === 'power'` early
+  return in `startup-tasks.ts` so one check covers both modes** — rejected, and must not be retried:
+  `platform.firstRunComplete` is written only by `markFirstRunComplete` in `first-run-store.ts`, which
+  is unreachable when `interfaceMode !== 'simple'`, so the flag is *never* written in Power mode.
+  Hoisting would permanently and silently disable Power-mode scheduled startup sync for exactly the
+  users who configured "On startup/shutdown", with no recovery — the setting is `isHidden`. Pinned by
+  `startup-tasks.test.ts` → "still fires the power-mode startup sync when first run is not complete".
+  **Have the background registration re-check write `platform.syncOnStartup = false` while a re-raised
+  wizard is pending** — rejected: once `firstRunComplete` is true `resolveInternal` never routes back
+  to the sync-consent step, so nothing in the wizard could ever clear that `false`. (When this was
+  first written `platform.syncOnStartup` was also a one-way latch — `isHidden`, and never written
+  `true` anywhere. This entry's second half ends that by making it user-editable, so the latch is no
+  longer the reason; the re-route argument is.) **A new cross-process "consent pending" signal** —
+  rejected as premature:
+  `platform.firstRunComplete` already carries the meaning, and every trigger found is in core.
+- **Consequences:** A future Power-mode call site could NOT reuse this gate. It is safe at these
+  sites only because each is Simple-mode-only — `syncOnProjectSwitch` is reached solely from the
+  `needsOverlay` branch. Consent enforcement is distributed, so it is only as complete as the set of
+  triggers we know about, and it stops at the repo boundary: `paratextBibleSendReceive.syncOpenProjects`
+  has no caller in core, so the Send/Receive extension can start syncs core cannot gate. The gate is
+  also only as strong as the durable setting write — `first-run-store.ts` treats its localStorage
+  cache as authoritative when the setting reads `false`, so a user whose setting write fails is shown
+  the full app while every gated path still sees `false` — until one of `resolveInternal`'s
+  re-attempts of that write succeeds, which it retries on each launch. The shutdown and window-close
+  skips log at `info`; the startup and project-switch ones log at `debug`, which packaged builds drop
+  — so that state is only partly visible in a support log. `shutdown-tasks.ts` gained a
+  `skipped-consent-not-confirmed` outcome so the log separates "consent not confirmed" from "nothing
+  was open"; its gate sits after `cancelSync` so a user-consented sync in flight is still cancellable
+  at quit. Skip messages say "consent not confirmed" rather than "first run not complete", because
+  the gate cannot tell an unfinished wizard from an unreadable flag.
+
+  Because the gate reads only `platform.firstRunComplete`, it enforces that the user was ASKED, not
+  what they answered — by design, per the Decision above. Note what that means concretely, because it
+  surprises reviewers: declining sets `firstRunComplete = true`, which opens every gate immediately.
+  So the decline suppresses only the wizard's own sync — an automatic sync can still run later in the
+  SAME session (at app quit, at window close, or on a project switch), not just at the next launch.
+  That is the epic owner's ruling ("only the sync the wizard does, not every sync after"), not an
+  oversight; if it ever needs to hold for the rest of the session, that takes a session-scoped flag
+  the gates also consult. A user who leaves onboarding by an escape hatch —
+  `continueWithoutRegistration`, which deliberately persists nothing — keeps `firstRunComplete:
+  false`, so all four triggers stay closed for that session, not just startup as before. That is the
+  consent-safe reading (they were never asked), but it now also costs them the quit-time flush.
+  `platform.syncOnStartup` deliberately stays scoped to the startup sync — its label says "on
+  startup" and means it; the shutdown, window-close and project-switch syncs are not governed by
+  it, and it is hidden in Power mode, which never reads it. Users who already have `syncOnStartup: false` from the old behavior keep it,
+  and can now see and reverse it in Settings. `%firstRun_button_skipSync%` is retired in
+  `metadata.json` rather than deleted, per the convention its neighbours follow. Two latent issues are
+  noted here only, not fixed and as of 2026-08-16 not yet ticketed: the project picker auto-opens a
+  project behind the wizard overlay, and `platform.syncOnStartup` is read only on the Simple-mode
+  startup path, so the newly visible toggle does nothing in Power mode (its description says so).
+- **Source:** PT-4369; adversarial review of the initial fix plan, which refuted the ticket's stated
+  cause and both first-draft fixes.

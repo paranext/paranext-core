@@ -8,6 +8,7 @@ import {
 } from '@main/services/web-view-routing.service';
 import { logger } from '@shared/services/logger.service';
 import { performShutdownTasks, performWindowCloseTasks } from './shutdown-tasks';
+import { createSettingsStub, READ_THROWS } from './settings-stub.test-util';
 
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn() },
@@ -49,6 +50,16 @@ function openWebViews(definitions: object[], unreachableWindowIds: number[] = []
     ReturnType<typeof getAllOpenWebViewDefinitionsWithReachability>
   >;
 }
+
+/**
+ * The settings this suite's code under test reads (see {@link createSettingsStub}). Deliberately no
+ * `platform.syncOnStartup`: shutdown never reads it, so a read added here would throw rather than
+ * pass unnoticed.
+ */
+const stubSettings = createSettingsStub(mockSettingsGet, {
+  mode: 'simple',
+  firstRunComplete: true,
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -127,7 +138,7 @@ describe('performShutdownTasks', () => {
   });
 
   it('cancels sync but skips S/R when no Scripture Editor is open', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
     await performShutdownTasks();
     expect(mockRequestNoRetry).toHaveBeenCalledWith(expect.stringContaining('cancelSync'));
@@ -137,7 +148,7 @@ describe('performShutdownTasks', () => {
   });
 
   it('skips S/R when the only open Scripture Editor is read-only', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViews.mockResolvedValue(
       openWebViews([
         {
@@ -154,7 +165,7 @@ describe('performShutdownTasks', () => {
   });
 
   it('calls sendReceiveProjects with the writable editor project id', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViews.mockResolvedValue(
       openWebViews([
         {
@@ -172,7 +183,7 @@ describe('performShutdownTasks', () => {
   });
 
   it('syncs every distinct writable editor project when several windows are open', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     // The main-process WebView service proxy fans getAllOpenWebViewDefinitions out across every
     // window and merges the results, so this one list represents two windows' editors.
     mockGetOpenWebViews.mockResolvedValue(
@@ -203,7 +214,7 @@ describe('performShutdownTasks', () => {
   });
 
   it('sends a project shared by two windows only once', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViews.mockResolvedValue(
       openWebViews([
         {
@@ -226,7 +237,7 @@ describe('performShutdownTasks', () => {
   });
 
   it('ignores a writable editor with no project id', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViews.mockResolvedValue(
       openWebViews([
         { webViewType: 'platformScriptureEditor.react', state: { isReadOnly: false } },
@@ -245,7 +256,7 @@ describe('performShutdownTasks', () => {
   });
 
   it('skips S/R when every writable editor lacks a project id', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViews.mockResolvedValue(
       openWebViews([
         { webViewType: 'platformScriptureEditor.react', state: { isReadOnly: false } },
@@ -261,7 +272,7 @@ describe('performShutdownTasks', () => {
     // This read happens once, at quit, with no event stream to correct it afterwards. A window that
     // failed to answer looks exactly like one with nothing open, so the projects it was editing
     // drop out of the sync silently — reporting that as a completed sync is the dangerous part.
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViews.mockResolvedValue(
       openWebViews(
         [
@@ -284,7 +295,7 @@ describe('performShutdownTasks', () => {
   });
 
   it('warns when the window that did not answer was the only one that could have had editors', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViews.mockResolvedValue(openWebViews([], [1]));
     await performShutdownTasks();
     expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
@@ -297,7 +308,7 @@ describe('performShutdownTasks', () => {
     // Every window's unsynced work goes out unsynced here, and this is the app's last chance to know
     // it. A support engineer reading the log after a data-loss report must not find a clean
     // shutdown with nothing at all between "quitting" and process exit.
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViews.mockRejectedValue(new Error('service unavailable'));
 
     await performShutdownTasks();
@@ -315,7 +326,7 @@ describe('performShutdownTasks', () => {
   it('records a skip when nothing writable was open anywhere', async () => {
     // Every exit path from the shutdown sync leaves a line, so the log distinguishes "nothing to
     // sync" from "the sync never got as far as choosing anything"
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViews.mockResolvedValue(openWebViews([]));
 
     await performShutdownTasks();
@@ -344,8 +355,95 @@ describe('performShutdownTasks', () => {
     );
   });
 
+  describe('automatic sync consent gate (simple mode)', () => {
+    /** A writable editor is open, so only the gate can be what stops the S/R below */
+    function stubWritableEditorOpen() {
+      mockGetOpenWebViews.mockResolvedValue(
+        openWebViews([
+          {
+            webViewType: 'platformScriptureEditor.react',
+            state: { isReadOnly: false },
+            projectId: 'mid-wizard-project',
+          },
+        ]),
+      );
+    }
+
+    it('does NOT S/R on shutdown while the first-run wizard is still unfinished', async () => {
+      // Reachable mid-wizard: the Identify step restarts the app (see isFirstRunComplete).
+      stubSettings({ mode: 'simple', firstRunComplete: false });
+      stubWritableEditorOpen();
+
+      await performShutdownTasks();
+
+      expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+        expect.stringContaining('sendReceiveProjects'),
+      );
+      // The skip must stay distinguishable from "nothing was open" — the whole reason
+      // skipped-consent-not-confirmed exists as its own outcome rather than reusing skipped.
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        expect.stringContaining('first-run sync consent not confirmed'),
+      );
+      // ...and must never be reported as a sync that ran, per this file's logging contract.
+      expect(mockLoggerInfo).not.toHaveBeenCalledWith('Sync on shutdown complete');
+    });
+
+    it('still cancels an in-progress sync while the first-run wizard is unfinished', async () => {
+      // The consent step's own `syncProjects` runs while the flag is still false, so a quit during
+      // that user-initiated sync must still cancel it rather than let it hold the app open.
+      stubSettings({ mode: 'simple', firstRunComplete: false });
+      stubWritableEditorOpen();
+
+      await performShutdownTasks();
+
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(expect.stringContaining('cancelSync'));
+    });
+
+    it('does NOT S/R on shutdown when the first-run flag cannot be read (consent-safe)', async () => {
+      stubSettings({ mode: 'simple', firstRunComplete: READ_THROWS });
+      stubWritableEditorOpen();
+
+      await performShutdownTasks();
+
+      expect(mockRequestNoRetry.mock.calls.map(([cmd]) => cmd)).not.toContainEqual(
+        expect.stringContaining('sendReceiveProjects'),
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        expect.stringContaining('Could not read platform.firstRunComplete'),
+      );
+      // The gate handled the failed read itself; it never escaped to the outer catch-all.
+      expect(mockLoggerError).not.toHaveBeenCalled();
+    });
+
+    it('S/Rs on shutdown once the first-run wizard has completed', async () => {
+      // Counterpart to the skip cases: without this, a gate that never opens would look correct.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      stubWritableEditorOpen();
+
+      await performShutdownTasks();
+
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('sendReceiveProjects'),
+        ['mid-wizard-project'],
+      );
+    });
+
+    it('leaves the power-mode shutdown sync ungated by the consent setting', async () => {
+      // The gate is Simple-mode only, on purpose (see isFirstRunComplete): the setting is never
+      // written in Power mode, so gating there would permanently kill scheduled sync.
+      stubSettings({ mode: 'power', firstRunComplete: false });
+
+      await performShutdownTasks();
+
+      expect(mockRequestNoRetry).toHaveBeenCalledWith(
+        expect.stringContaining('runScheduledSessionSync'),
+        'shutdown',
+      );
+    });
+  });
+
   it('swallows unexpected errors and does not throw (exercises the outer try/catch)', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     // A WRITABLE editor so the flow runs past the `if (!projectId) return` early return and into
     // performSimpleModeShutdownSync's unguarded region (an empty list would return early and never
     // exercise the outer catch — the whole point of this test).
@@ -392,7 +490,7 @@ describe('performWindowCloseTasks', () => {
   it('syncs the projects the closing window was editing, asking that window and no other', async () => {
     // Nothing else can answer for this window: once it is gone the shutdown fan-out only reaches the
     // windows that are still there, so whatever it had open would never be sent
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViewsForWindow.mockResolvedValue(
       windowWebViews([writableEditor('p1'), writableEditor('p2')]),
     );
@@ -410,7 +508,7 @@ describe('performWindowCloseTasks', () => {
   it('does not cancel a sync another window may have started', async () => {
     // The app is staying up, unlike a shutdown — an in-progress sync belongs to a window that is not
     // going anywhere
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
 
     await performWindowCloseTasks(2);
@@ -421,7 +519,7 @@ describe('performWindowCloseTasks', () => {
   });
 
   it('deduplicates projects and ignores read-only viewers', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViewsForWindow.mockResolvedValue(
       windowWebViews([
         writableEditor('p1'),
@@ -444,7 +542,7 @@ describe('performWindowCloseTasks', () => {
   });
 
   it('syncs nothing when the closing window had no writable editor open', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([]));
 
     await performWindowCloseTasks(2);
@@ -463,6 +561,45 @@ describe('performWindowCloseTasks', () => {
     expect(mockGetOpenWebViewsForWindow).not.toHaveBeenCalled();
   });
 
+  it('does NOT sync a closing window while the first-run wizard is still unfinished', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: false });
+    mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
+
+    await performWindowCloseTasks(2);
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    // The skip line is the only record this window's editors were left unsent on purpose.
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining('first-run sync consent not confirmed'),
+    );
+  });
+
+  it('does NOT sync a closing window when the first-run flag cannot be read (consent-safe)', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: READ_THROWS });
+    mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
+
+    await performWindowCloseTasks(2);
+
+    expect(mockRequestNoRetry).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining('Could not read platform.firstRunComplete'),
+    );
+    // The gate handled the failed read itself; it never escaped to the outer catch-all.
+    expect(mockLoggerError).not.toHaveBeenCalled();
+  });
+
+  it('syncs a closing window once the first-run wizard has completed', async () => {
+    stubSettings({ mode: 'simple', firstRunComplete: true });
+    mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
+
+    await performWindowCloseTasks(2);
+
+    expect(mockRequestNoRetry).toHaveBeenCalledWith(
+      expect.stringContaining('sendReceiveProjects'),
+      ['p1'],
+    );
+  });
+
   it('skips the sync and warns when the interface mode cannot be read', async () => {
     mockSettingsGet.mockRejectedValue(new Error('extension host is going away'));
 
@@ -477,7 +614,7 @@ describe('performWindowCloseTasks', () => {
   it('warns rather than silently syncing nothing when the closing window cannot be asked', async () => {
     // This is the last moment anything can know what the window had open, so an unanswered read is
     // not the same as "nothing was open"
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViewsForWindow.mockRejectedValue(new Error('window is unreachable'));
 
     await performWindowCloseTasks(2);
@@ -489,7 +626,7 @@ describe('performWindowCloseTasks', () => {
   });
 
   it('swallows a missing or failing S/R command so the window can still close', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
     mockRequestNoRetry.mockRejectedValue(new Error('command not registered'));
 
@@ -498,7 +635,7 @@ describe('performWindowCloseTasks', () => {
   });
 
   it('swallows unexpected errors and does not throw (exercises the outer try/catch)', async () => {
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViewsForWindow.mockResolvedValue(windowWebViews([writableEditor('p1')]));
     mockLoggerInfo.mockImplementationOnce(() => {
       throw new Error('unexpected logging failure');
@@ -512,7 +649,7 @@ describe('performWindowCloseTasks', () => {
     // The closing window's editors only ever existed in it, so its sync is the only thing that can
     // ever cover them. A quit arriving while it runs used to cancel it with nothing left to sync
     // those projects.
-    mockSettingsGet.mockResolvedValue('simple');
+    stubSettings({ mode: 'simple' });
     mockGetOpenWebViewsForWindow.mockResolvedValue(
       windowWebViews([writableEditor('closing-window-project')]),
     );
