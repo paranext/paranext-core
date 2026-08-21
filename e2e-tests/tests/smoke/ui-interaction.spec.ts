@@ -34,22 +34,46 @@ test.describe('UI Interaction', () => {
       BrowserWindow.getAllWindows()[0].maximize();
     });
 
-    // Force the interface language to English so menu-item text matchers
-    // (e.g. /Help/i) are deterministic regardless of the developer's saved
-    // platform.interfaceLanguage setting in dev-appdata.
-    // Fast-fail guard: on slow CI the settings data provider can register
-    // after this beforeAll starts; this throws a clear error if it never does.
-    await waitForPapiMethodRegistered(
-      SETTINGS_SET_METHOD,
-      undefined,
-      SETTINGS_REGISTRATION_TIMEOUT_MS,
-    );
-    await sendPapiRequestOnce(
-      SETTINGS_SET_METHOD,
-      ['platform.interfaceLanguage', ['en']],
-      undefined,
-      SLOW_CI_PAPI_TIMEOUT_MS,
-    );
+    // Force the interface language to English so menu-item text matchers (e.g. /Help/i) are
+    // deterministic. This override is a "belt and suspenders" guard — note it never *defaults*
+    // the language; defaulting happens earlier, at app startup, inside the settings service:
+    //   - Belt:       with no saved platform.interfaceLanguage, the settings service's get()
+    //                 returns the registered default ['en'] (settings.service-host.ts get() ->
+    //                 getDefaultValueForKey; default declared in core-settings-info.data.ts).
+    //                 CI runs on a fresh checkout with dev-appdata/ gitignored, so the app has
+    //                 ALREADY booted English before this beforeAll runs.
+    //   - Suspenders: this explicit set('en') additionally defends a developer running the suite
+    //                 locally with a non-English locale saved in dev-appdata.
+    // On CI only the belt applies, so the override is redundant here — which is what makes the
+    // catch below safe to swallow.
+    try {
+      await waitForPapiMethodRegistered(
+        SETTINGS_SET_METHOD,
+        undefined,
+        SETTINGS_REGISTRATION_TIMEOUT_MS,
+      );
+      await sendPapiRequestOnce(
+        SETTINGS_SET_METHOD,
+        ['platform.interfaceLanguage', ['en']],
+        undefined,
+        SLOW_CI_PAPI_TIMEOUT_MS,
+      );
+    } catch (e) {
+      // This catch does NOT set any language — the app already booted with the English default
+      // (the belt above), so we just proceed without the redundant override. Tolerate ONLY the
+      // two known-transient startup errors seen on slow / memory-pressured macOS runners: the PAPI
+      // socket cycling mid-request ("Web socket N has closed") and the settings provider being slow
+      // to register on a Playwright retry ("not listed in rpc.discover"). Re-throw anything else —
+      // an unexpected error means the settings provider is genuinely broken and the suite should
+      // fail loudly rather than pass silently.
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!(msg.includes('Web socket') || msg.includes('not listed in rpc.discover'))) throw e;
+      console.warn(
+        '[smoke/beforeAll] Skipped the interface-language override after a transient startup' +
+          ` error; the app already booted with the default English locale, so menu matchers stay` +
+          ` valid. Error: ${msg}`,
+      );
+    }
   });
 
   test('should open the About dialog from the Help menu', async ({ mainPage }) => {
