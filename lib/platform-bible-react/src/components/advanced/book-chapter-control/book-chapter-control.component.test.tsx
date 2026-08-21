@@ -69,6 +69,10 @@ describe('BookChapterControl imperative handle', () => {
     });
   });
 
+  // This is the only test here that drives the whole popover through userEvent — opening the
+  // book list, drilling into chapters, closing, then reopening. In jsdom that is heavy enough
+  // to overrun the 5s default on a contended CI worker (observed at ~5.4s on Windows), so it
+  // gets explicit headroom rather than being left to flake.
   test('open() resets a stale chapters view back to books view and focuses the search input', async () => {
     const handleRef = createRef<BookChapterControlHandle>();
     // Radix popovers rely on PointerEvent sequences that jsdom lays out poorly;
@@ -109,7 +113,7 @@ describe('BookChapterControl imperative handle', () => {
       expect(input).not.toBeNull();
       expect(input).toHaveFocus();
     });
-  });
+  }, 30_000);
 
   test('disabled prop disables the trigger button', () => {
     render(
