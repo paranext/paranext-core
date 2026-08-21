@@ -1005,9 +1005,29 @@ step, no automation. Just a record.
   thing. PT-4111's own `isResource` branch already ignores interface mode for exactly this reason.
   The panels swap only their content area, leaving the header mounted — the resource panel's selector
   is the user's real remedy (switch to a text that has the book), and the model panel's label at
-  least attributes the message to a named text. Detection is centralized in `isMissingBookError`
-  (`platform-scripture-editor.utils.ts`), which replaced a `bookNotFoundRegex` local to
-  `platform-scripture-editor.web-view.tsx`.
+  least attributes the message to a named text. Detection is centralized in
+  `platform-scripture-editor.utils.ts`, which replaced a `bookNotFoundRegex` local to
+  `platform-scripture-editor.web-view.tsx`. Detection is shared; the loading/message/editor DECISION
+  is not, and deliberately so. `ResourceTextPanel` reads through `useProjectData`, whose result can
+  lag its selector, so it calls `resolveResourceContentState` to check identities.
+  `ModelTextPanel` fetches imperatively and therefore already knows which request each result belongs
+  to — it clears its own flag at fetch start, which is a correct and simpler answer to the same
+  problem. Forcing both through one resolver would add an abstraction that fits neither.
+
+  The message itself is `EmptyState`, per ADR-0016's reservation of that component for the
+  bare-sentence case; `ResourceBookNotAvailable` contributes only panel-sized centring and the focus
+  target, and does not repeat the `role="status"` that `EmptyState` already sets.
+
+  The message is shown only when the failure names BOTH the book and the project the panel is
+  displaying right now. `parseMissingBookError` returns the `bookNum` and `projectId` the C#
+  `MissingBookException` message carries, and the panel compares them against what is on screen. A
+  data hook keeps serving the previous selector's result until the new subscription's first update
+  lands, so an error in hand may describe a book the user has navigated away from or a resource they
+  have switched off — comparing identities rejects both cases with no timing signal and no
+  bookkeeping. Non-`PlatformError` values are rejected structurally before the message is read,
+  because `getErrorMessage` falls back to `JSON.stringify` for an object with no string `message`:
+  letting a success value through would serialize the whole chapter USJ on every render and match the
+  regex against the scripture text itself.
 - **Alternatives considered:** **Reuse `BookNotAvailableView` with `isPowerMode`** — rejected: it
   would drag in the `isLoading` gating hazard that view documents at length (a setting's default is
   indistinguishable from an answer, so branching on it requires a spinner gate) to decide between two
@@ -1017,12 +1037,26 @@ step, no automation. Just a record.
   `commentaries_` key pairs selected by a `resourceType` ternary, including the sibling
   `emptyState_prompt`; a shared string would be the deviation. **Promote the stale-data window to
   `'loading'`** — rejected: it returns `'loading'` on every reference change, remounting the editor
-  on every chapter navigation. `isUsjLoading` therefore suppresses only the message, not the spinner.
+  on every chapter navigation. **Gate the message on the data hook's `isLoading`** — implemented
+  first, then withdrawn during `/review-paratext`: it only covers the way IN to a book the text has.
+  `isLoading` returns to `true` in the subscription cleanup, which runs AFTER the render in which the
+  selector changed, so one committed render still asserted "this book does not exist in this Bible
+  text" about a book that does. Replaced by comparing identities — see the decision above.
 - **Consequences:** Two book-not-available views coexist, and the distinction between them is
   "can this thing gain a book", NOT "is this editable" and NOT "which mode are we in" — the same
   project-kind-vs-permission distinction ADR-0016's feature draws via `platform.isPublished`. A
   future resource type that CAN gain books would need its own branch rather than an edit here.
   Detection still rests on matching a C# exception message, now in one place: reword
-  `MissingBookException` and every consumer silently reports "book present". The stale-content flash
-  on navigation is untouched and remains PT-4139's scope.
+  `MissingBookException` and every consumer silently reports "book present". Reordering or renaming
+  its two interpolated values is now also breaking, since the panel reads them positionally. The
+  project group is matched lazily up to the trailing period, so a project id containing a period
+  would compare unequal and fall back to rendering the editor — the pre-existing behaviour, not a new
+  false claim. The stale-content flash on navigation is untouched and remains PT-4139's scope.
+
+  The focus repair both book-not-available views perform lives in `useFocusReplacedContent`
+  (`extensions/src/platform-scripture-editor/src/use-focus-replaced-content.hook.ts`). It requires
+  focus to have fallen to the document body, not merely `document.hasFocus()`: a panel that keeps a
+  header mounted beside the swapped content has focusable siblings in the SAME document, so the
+  looser guard stole focus off the resource selector — the one control that can remedy a missing
+  book.
 - **Source:** PT-4132 (Empty state needs to be improved for the Model and Bible texts).

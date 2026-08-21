@@ -1,4 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { EmptyState } from 'platform-bible-react';
+import { useFocusReplacedContent } from './use-focus-replaced-content.hook';
+
+/**
+ * Identifies the focusable wrapper. The message inside carries `role="status"`, so tests and e2e
+ * need a separate handle for the element that actually takes focus.
+ */
+export const RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID = 'resource-book-not-available';
 
 export type ResourceBookNotAvailableProps = {
   /**
@@ -24,33 +31,32 @@ export type ResourceBookNotAvailableProps = {
  * remedy — switch to a text that has the book — stays one click away; in the Model text panel it is
  * a label, which at least attributes the message to a named text.
  *
+ * The message itself is `EmptyState`, the shared message-only zero-state primitive that ADR-0016
+ * reserves for exactly this case (a bare sentence, no title, media, or action). Going through it
+ * rather than a local `<p>` is what keeps this reading like every other empty state in the app —
+ * `EmptyState` supplies the `tw:text-sm tw:text-muted-foreground` treatment and the `role="status"`
+ * live region. This component contributes only the layout that centres it in a panel-sized area and
+ * the focus target.
+ *
  * Accessibility: this REPLACES the editor subtree, so its arrival is a content swap a screen-reader
  * user gets no other notice of, and the focused element inside the editor is destroyed along with
- * it. The message region is therefore `role="status"`, and takes focus on mount — but only when
- * this document already had focus, so navigating here from the toolbar's book/chapter control does
- * not yank focus out of the control the user is still using.
+ * it. `EmptyState` marks the message `role="status"`; the wrapper deliberately does NOT repeat that
+ * role, since nesting two status regions is worse than one. The wrapper is the focus target
+ * instead, taking focus on mount via {@link useFocusReplacedContent} — which repairs focus only when
+ * it actually fell to the body, so arriving here by picking a text from the panel's own selector
+ * does not yank focus off that selector.
  */
 export function ResourceBookNotAvailable({ message }: ResourceBookNotAvailableProps) {
-  // Using null for React ref compatibility
-  // eslint-disable-next-line no-null/no-null
-  const regionRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    // `document.hasFocus()` distinguishes "the editor inside this iframe had focus and we just
-    // unmounted it, so focus has fallen to `body`" from "focus is in the toolbar outside this
-    // iframe". Only the first case is ours to repair.
-    if (!document.hasFocus()) return;
-    regionRef.current?.focus();
-  }, []);
+  const regionRef = useFocusReplacedContent<HTMLDivElement>();
 
   return (
     <div
       ref={regionRef}
-      role="status"
+      data-testid={RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID}
       tabIndex={-1}
-      className="tw:flex tw:h-full tw:items-center tw:justify-center tw:p-8 tw:text-center tw:outline-none"
+      className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4 tw:outline-none"
     >
-      <p>{message}</p>
+      <EmptyState message={message} className="tw:text-center" />
     </div>
   );
 }

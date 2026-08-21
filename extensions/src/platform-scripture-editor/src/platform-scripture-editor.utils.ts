@@ -1196,7 +1196,7 @@ export function resolveAddChapterNumberClick(
 // #region Missing Book Detection
 
 /**
- * Matches the message thrown by C#'s `MissingBookException` (`c-sharp/MissingBookException.cs`),
+ * Captures the message thrown by C#'s `MissingBookException` (`c-sharp/MissingBookException.cs`),
  * which formats as `Book number {bookNum} not found in project {projectId}.` Unanchored because the
  * PDP layer prefixes its own context onto the message before it reaches a web view.
  *
@@ -1204,8 +1204,43 @@ export function resolveAddChapterNumberClick(
  * `PlatformError`/rejected promise carrying a string, with no structured code to key off. Keep this
  * in lockstep with the C# exception — if that message is ever reworded, every consumer of
  * {@link isMissingBookError} silently starts reporting "book present".
+ *
+ * The two capture groups matter as much as the match: knowing WHICH book and WHICH project the
+ * failure describes is what lets a caller tell "the resource I am showing lacks the book I am
+ * showing" from a leftover error about somewhere the user has already navigated away from. The
+ * project group is lazy up to the trailing period, so a project id containing a period would be
+ * truncated — {@link resolveResourceContentState} treats a non-comparing id as "not this project",
+ * which falls back to rendering the editor rather than asserting something false.
  */
-const MISSING_BOOK_MESSAGE_REGEX = /Book number \d+ not found in project/;
+const MISSING_BOOK_MESSAGE_REGEX = /Book number (\d+) not found in project (.+?)\./;
+
+/** The book and project a `MissingBookException` names. */
+export type MissingBookErrorInfo = {
+  /** The 1-based book number that was not found. */
+  bookNum: number;
+  /** The id of the project or resource the book was not found in. */
+  projectId: string;
+};
+
+/**
+ * Reads the book and project out of a missing-book failure, or `undefined` if the failure is
+ * something else.
+ *
+ * Prefer this over {@link isMissingBookError} wherever the caller knows what it is currently
+ * displaying: a bare boolean cannot distinguish a live failure from a stale one, because a data
+ * hook keeps serving the previous selector's result until the new subscription's first update
+ * lands.
+ *
+ * @param error The error or `PlatformError` to inspect.
+ * @returns The book number and project id, or `undefined` for any other failure.
+ */
+export function parseMissingBookError(error: unknown): MissingBookErrorInfo | undefined {
+  // No `undefined` guard needed: `getErrorMessage(undefined)` is `''`, which cannot match. That
+  // matters because callers pass a "not loaded yet" value straight through.
+  const match = MISSING_BOOK_MESSAGE_REGEX.exec(getErrorMessage(error));
+  if (!match) return undefined;
+  return { bookNum: Number(match[1]), projectId: match[2] };
+}
 
 /**
  * Whether a failure from a USJ project data provider means "this book is not in this project or
@@ -1215,14 +1250,16 @@ const MISSING_BOOK_MESSAGE_REGEX = /Book number \d+ not found in project/;
  * Accepts `unknown` so both shapes the error arrives in are covered: a `PlatformError` read off
  * `useProjectData` and a rejection thrown by an imperative `getChapterUSJ` call.
  *
+ * This answers only "is it that kind of failure". A caller that renders a message about the book it
+ * is currently showing should use {@link parseMissingBookError} and compare, so a leftover error
+ * cannot be attributed to the wrong book.
+ *
  * @param error The error or `PlatformError` to inspect.
  * @returns `true` only when the message identifies a missing book; `false` for every other failure,
  *   including no error at all.
  */
 export function isMissingBookError(error: unknown): boolean {
-  // No `undefined` guard needed: `getErrorMessage(undefined)` is `''`, which cannot match. That
-  // matters because callers pass a "not loaded yet" value straight through.
-  return MISSING_BOOK_MESSAGE_REGEX.test(getErrorMessage(error));
+  return !!parseMissingBookError(error);
 }
 
 /** What a resource panel (Model text, Bible texts, Commentaries) should show in its content area. */
@@ -1231,36 +1268,52 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'ready';
 /**
  * Decides whether a resource panel shows a spinner, the book-not-available message, or its editor.
  *
- * `isUsjLoading` narrowly suppresses the MESSAGE and nothing else. `useProjectData` does not reset
- * to its default when the selector (the reference) changes — it keeps serving the PREVIOUS
- * reference's result until the new subscription's first update lands. So an error read while
- * loading may describe the book the user just left, and rendering the message off it would flash
- * "this book is not in this text" on the way INTO a book the text does have.
+ * The message is shown only when the failure names BOTH the book and the project the panel is
+ * currently displaying. That identity check, rather than any timing signal, is what keeps a stale
+ * error from being misattributed: `useProjectData` does not reset to its default when the selector
+ * changes — it keeps serving the PREVIOUS selector's result until the new subscription's first
+ * update lands — so an error in hand may describe the book the user just left or the resource they
+ * just switched away from. Reading it as current would flash "this book is not in this text" on the
+ * way INTO a book the text does have, and on the way OUT of one it does not.
  *
- * It deliberately does NOT promote that stale window to `'loading'`. Doing so returns `'loading'`
- * on every reference change, which unmounts and remounts the editor on every chapter navigation — a
- * regression in exchange for nothing, since the editor showing the outgoing chapter for a beat is
- * the pre-existing behaviour on every navigation (tracked separately as PT-4139). The stale window
- * therefore resolves to `'ready'`.
+ * An earlier revision gated on the hook's `isLoading` instead. That only covered the way in:
+ * `isLoading` returns to `true` in the subscription cleanup, which runs AFTER the render in which
+ * the selector changed, so one committed render still asserted the message about the wrong book.
+ * Comparing identities has no such edge and needs no bookkeeping.
  *
- * @param options.hasResourceProject Whether a resource has resolved to a project id to read from.
+ * Non-`PlatformError` values are rejected structurally before the message is ever read. That is not
+ * only tidiness: `getErrorMessage` falls back to `JSON.stringify` for any object without a string
+ * `message`, so letting a success value through would serialize the entire chapter USJ on every
+ * render and then match the regex against the scripture text itself.
+ *
+ * @param options.resourceProjectId The project id the panel is reading from, or `undefined` if a
+ *   resource has not resolved to one yet.
  * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet.
- * @param options.isUsjLoading Whether a fetch for the CURRENT reference is still outstanding.
+ * @param options.currentBookNum The book number the panel is currently displaying.
  * @returns Which of the three content states to render.
  */
 export function resolveResourceContentState({
-  hasResourceProject,
+  resourceProjectId,
   usjPossiblyError,
-  isUsjLoading,
+  currentBookNum,
 }: {
-  hasResourceProject: boolean;
+  resourceProjectId: string | undefined;
   usjPossiblyError: unknown;
-  isUsjLoading: boolean;
+  currentBookNum: number;
 }): ResourceContentState {
-  if (!hasResourceProject || usjPossiblyError === undefined) return 'loading';
-  if (!isUsjLoading && isMissingBookError(usjPossiblyError)) return 'bookNotAvailable';
+  if (!resourceProjectId || usjPossiblyError === undefined) return 'loading';
+  if (!isPlatformError(usjPossiblyError)) return 'ready';
+
+  const missingBook = parseMissingBookError(usjPossiblyError);
+  if (
+    missingBook &&
+    missingBook.bookNum === currentBookNum &&
+    missingBook.projectId === resourceProjectId
+  )
+    return 'bookNotAvailable';
+
   // Every other failure keeps the pre-existing behaviour: the panel renders its editor, which shows
-  // no content. Only a missing book earns the dedicated message.
+  // no content. Only a missing book in the text on screen right now earns the dedicated message.
   return 'ready';
 }
 
