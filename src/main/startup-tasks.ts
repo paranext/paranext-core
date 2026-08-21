@@ -16,6 +16,7 @@ import {
 import { JSONRPCErrorCode } from 'json-rpc-2.0';
 import type { SettingTypes } from 'papi-shared-types';
 import { getErrorMessage, wait } from 'platform-bible-utils';
+import { getRecentlyOpenedProjectIds } from '@shared/utils/recently-opened-project.util';
 
 /**
  * How long (ms) to keep retrying `runScheduledSessionSync` while it's still unregistered before
@@ -106,10 +107,12 @@ type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 
  * Runs initialization tasks (currently: triggering an initial project sync) shortly after the app
  * finishes starting up.
  *
- * In Simple mode: requests a sync of all locally-known shared projects so the user sees the latest
- * content as soon as they open the app. All errors are swallowed — the S/R extension may not be
- * installed (e.g. Platform.Bible), the command may not yet be registered, or the sync may fail.
- * Startup must never be blocked or visibly affected by this.
+ * In Simple mode: only fires a bootstrap sync of every locally-known shared project when no project
+ * has been opened in Simple mode yet (zero-state) — otherwise this is a no-op, because the Default
+ * Active Project Picker syncs exactly the project it resolves and opens once it does. All errors
+ * are swallowed — the S/R extension may not be installed (e.g. Platform.Bible), the command may not
+ * yet be registered, or the sync may fail. Startup must never be blocked or visibly affected by
+ * this.
  *
  * In Power mode: requests a sync of just the projects scheduled "On startup/shutdown" via the S/R
  * extension's `runScheduledSessionSync` command. Same error-swallowing contract as Simple mode — if
@@ -191,12 +194,21 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
     return;
   }
 
-  // Simple mode: sync all locally-known shared projects (no project IDs = "sync all" per the
-  // C# `String[]? projectIds` contract). The C# S/R command registers asynchronously during
-  // startup; `sendCommand` will wait (with retry on missing handler) until it's available or
-  // times out. `undefined` as the single arg serializes as `null` in the JSON-RPC params array
-  // — matching the "sync all" sentinel on the C# side.
-  logger.debug('Startup sync starting');
+  // Simple mode: only bootstrap-sync here when no project has been opened yet (zero-state) — the
+  // Default Active Project Picker syncs exactly the project it resolves and opens once it does
+  // (see syncOnProjectSwitch calls in platform-scripture-editor.utils.ts), so guessing a scope
+  // here would either duplicate that sync or sync projects that aren't actually becoming active.
+  const recentProjectIds = await getRecentlyOpenedProjectIds();
+  if (recentProjectIds.length > 0) {
+    logger.debug('Startup sync skipped: a recent project exists; the picker will sync it');
+    return;
+  }
+
+  // Zero-state: no project IDs = "sync all" per the C# `String[]? projectIds` contract, so a
+  // brand-new user can discover a project they already have via Paratext 9. The C# S/R command
+  // registers asynchronously during startup; `sendCommand` will wait (with retry on missing
+  // handler) until it's available or times out.
+  logger.debug('Startup sync starting (zero-state bootstrap)');
   try {
     await commandService.sendCommand('paratextBibleSendReceive.syncProjects', undefined);
     logger.debug('Startup sync complete');
