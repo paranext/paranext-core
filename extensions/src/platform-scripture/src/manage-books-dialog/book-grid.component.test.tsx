@@ -175,7 +175,11 @@ describe('BookGridSelector scrollToBook', () => {
       ({ container } = render(grid({ items, scrollToBook: unsafeBook })));
     }).not.toThrow();
 
-    const unsafePill = Array.from(container!.querySelectorAll('[data-book]')).find(
+    // The expect above already fails the test if render threw, but it cannot narrow the type for
+    // TypeScript, so guard rather than assert non-null.
+    if (!container) throw new Error('render did not produce a container');
+
+    const unsafePill = Array.from(container.querySelectorAll('[data-book]')).find(
       (element) => element.getAttribute('data-book') === unsafeBook,
     );
     expect(unsafePill).toBeTruthy();
