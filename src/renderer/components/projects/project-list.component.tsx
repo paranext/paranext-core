@@ -1,5 +1,6 @@
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
-import { Button, Checkbox, Label } from 'platform-bible-react';
+import { Check } from 'lucide-react';
+import { Button, Label } from 'platform-bible-react';
 import { ProjectInterfaces } from 'papi-shared-types';
 import { PropsWithChildren, useCallback } from 'react';
 import './project-list.component.scss';
@@ -157,10 +158,30 @@ export function ProjectList({
   );
 
   const createListItemContents = (project: ProjectMetadataDisplay) => {
+    const selected = isSelected(project);
+    // When checkable, the row itself is the checkbox (role + aria-checked) so the selected state
+    // stays accessible. The visual indicator below is purely presentational (aria-hidden) - it must
+    // not be an interactive control, because a <button> (e.g. a Radix Checkbox) cannot be a
+    // descendant of this <button> (invalid DOM nesting). See PT-3924.
     return (
-      <Button variant="ghost" onClick={() => handleSelectProject(project.id)}>
+      <Button
+        variant="ghost"
+        onClick={() => handleSelectProject(project.id)}
+        role={isCheckable ? 'checkbox' : undefined}
+        aria-checked={isCheckable ? !!selected : undefined}
+      >
         {isCheckable && (
-          <Checkbox style={{ marginInlineEnd: '8px' }} checked={isSelected(project)} />
+          <span
+            aria-hidden
+            style={{ marginInlineEnd: '8px' }}
+            className={`pr-twp tw:flex tw:size-4 tw:shrink-0 tw:items-center tw:justify-center tw:rounded-[4px] tw:border ${
+              selected
+                ? 'tw:border-primary tw:bg-primary tw:text-primary-foreground'
+                : 'tw:border-input'
+            }`}
+          >
+            {selected && <Check className="tw:size-3.5" />}
+          </span>
         )}
         {children}
         <Label>{project.name}</Label>
