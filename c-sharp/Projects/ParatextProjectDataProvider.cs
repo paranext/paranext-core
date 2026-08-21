@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Xml;
@@ -180,17 +181,24 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("getFinalVerseNumbersInBook", GetFinalVerseNumbersInBook));
         retVal.Add(("setFinalVerseNumbersInBook", SetFinalVerseNumbersInBook));
 
+        retVal.Add(("getPt9InterlinearManifest", GetPt9InterlinearManifest));
+        retVal.Add(("setPt9InterlinearManifest", SetPt9InterlinearManifest));
+        retVal.Add(("getPt9InterlinearFiles", GetPt9InterlinearFiles));
+        retVal.Add(("setPt9InterlinearFiles", SetPt9InterlinearFiles));
+
         return retVal;
     }
 
     /// <summary>
-    /// Documentation marking ONLY the versification projectInterface's methods experimental
+    /// Documentation marking ONLY the experimental projectInterfaces' methods experimental
     /// (<c>x-experimental: true</c>). This PDP exposes many projectInterfaces (USFM, USJ, comments,
-    /// settings, versification, …) on a single network object, so only the versification functions
-    /// are listed in <c>Methods</c> and the object-level <c>Experimental</c> flag is left unset — the
-    /// stable interfaces and the <c>object:{name}</c> existence method stay unmarked. Mirrors the
-    /// <c>@experimental</c> tag on <c>platformScripture.Versification</c> /
-    /// <c>IVersificationProjectDataProvider</c> in <c>platform-scripture.d.ts</c>.
+    /// settings, versification, PT9 interlinear, ...) on a single network object, so only the methods
+    /// of the experimental interfaces (versification and PT9 interlinear) are listed in
+    /// <c>Methods</c> and the object-level <c>Experimental</c> flag is left unset - the stable
+    /// interfaces and the <c>object:{name}</c> existence method stay unmarked. Mirrors the
+    /// <c>@experimental</c> tags on <c>platformScripture.Versification</c> /
+    /// <c>IVersificationProjectDataProvider</c> and <c>platformScripture.Pt9Interlinear</c> /
+    /// <c>IPt9InterlinearProjectDataProvider</c> in <c>platform-scripture.d.ts</c>.
     /// </summary>
     protected override NetworkObjectDocumentation GetNetworkObjectDocumentation() =>
         new()
@@ -283,6 +291,43 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         ),
                         ExperimentalMethodDocumentation.Param("value", "Ignored.", "array"),
                     ],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "boolean",
+                        "Never returns; always throws"
+                    )
+                ),
+                ["getPt9InterlinearManifest"] = ExperimentalMethodDocumentation.Create(
+                    "Get a map of project-relative PT9 interlinear file path to the SHA-256 hex of "
+                        + "the file's current bytes. Empty when the project has no interlinear data.",
+                    [],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "Map of file path to SHA-256 hex"
+                    )
+                ),
+                ["setPt9InterlinearManifest"] = ExperimentalMethodDocumentation.Create(
+                    "Read-only - throws. PT9 interlinear data is owned by the Paratext project's "
+                        + "files on disk.",
+                    [ExperimentalMethodDocumentation.Param("value", "Ignored.", "object")],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "boolean",
+                        "Never returns; always throws"
+                    )
+                ),
+                ["getPt9InterlinearFiles"] = ExperimentalMethodDocumentation.Create(
+                    "Get a map of project-relative PT9 interlinear file path to the file's raw text "
+                        + "and the SHA-256 hex of its bytes. Empty when the project has no "
+                        + "interlinear data.",
+                    [],
+                    ExperimentalMethodDocumentation.ResultOf(
+                        "object",
+                        "Map of file path to { text, sha256 }"
+                    )
+                ),
+                ["setPt9InterlinearFiles"] = ExperimentalMethodDocumentation.Create(
+                    "Read-only - throws. PT9 interlinear data is owned by the Paratext project's "
+                        + "files on disk.",
+                    [ExperimentalMethodDocumentation.Param("value", "Ignored.", "object")],
                     ExperimentalMethodDocumentation.ResultOf(
                         "boolean",
                         "Never returns; always throws"
@@ -2561,6 +2606,129 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     public bool SetFinalVerseNumbersInBook(int bookNum, int[] value) =>
         throw new NotSupportedException(VersificationReadOnlyMessage);
+
+    #endregion
+
+    #region PT9 Interlinear (platformScripture.Pt9Interlinear)
+
+    // Read-only access to a Paratext project's PT9 interlinear files as raw text plus a byte
+    // fingerprint, for importing legacy interlinear data. Files on disk are authoritative; no
+    // writer, no events.
+
+    private const string Pt9InterlinearReadOnlyMessage =
+        "PT9 interlinear data is read-only. It reflects the Paratext project's interlinear files on "
+        + "disk, which are the authoritative source; there is no write path through this "
+        + "projectInterface.";
+
+    // The three project-root PT9 interlinear files. Per-language verse files live under
+    // Interlinear_{language}/ and are matched separately by pattern.
+    private static readonly string[] s_pt9InterlinearRootFileNames =
+    [
+        "Lexicon.xml",
+        "WordAnalyses.xml",
+        "InterlinearSetup.xml",
+    ];
+
+    /// <summary>
+    /// Enumerates the project's PT9 interlinear files: whichever of the three root files are
+    /// present, plus every <c>Interlinear_{language}/Interlinear_{language}_{book}.xml</c>. Each
+    /// entry pairs the file's project-relative, forward-slash-normalized path with its absolute
+    /// path. Empty when the project carries no interlinear data. Both get methods build from this
+    /// one list, so they cannot disagree on the file set or on the relative path each file is
+    /// keyed by.
+    /// </summary>
+    private List<(string RelativePath, string FullPath)> FindPt9InterlinearFiles()
+    {
+        var homeDirectory = ProjectDetails.HomeDirectory;
+        var filePaths = new List<(string, string)>();
+        if (!Directory.Exists(homeDirectory))
+            return filePaths;
+
+        foreach (var fileName in s_pt9InterlinearRootFileNames)
+        {
+            var fullPath = Path.Join(homeDirectory, fileName);
+            if (File.Exists(fullPath))
+                filePaths.Add((fileName, fullPath));
+        }
+
+        foreach (
+            var languageDirectory in Directory.EnumerateDirectories(homeDirectory, "Interlinear_*")
+        )
+        {
+            foreach (
+                var fullPath in Directory.EnumerateFiles(languageDirectory, "Interlinear_*_*.xml")
+            )
+            {
+                var relativePath = Path.GetRelativePath(homeDirectory, fullPath).Replace('\\', '/');
+                filePaths.Add((relativePath, fullPath));
+            }
+        }
+
+        return filePaths;
+    }
+
+    private static string ComputeSha256Hex(byte[] bytes) =>
+        Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+
+    // Decodes file bytes to text, honoring a byte-order mark when present and defaulting to UTF-8.
+    // The fingerprint is taken from the raw bytes, so decoding never affects change detection.
+    private static string DecodeFileText(byte[] bytes)
+    {
+        using var stream = new MemoryStream(bytes, writable: false);
+        using var reader = new StreamReader(
+            stream,
+            Encoding.UTF8,
+            detectEncodingFromByteOrderMarks: true
+        );
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>
+    /// Gets a map of project-relative PT9 interlinear file path to the SHA-256 hex of that file's
+    /// current bytes. The cheap change-detection probe: hashes only, no content. Empty when the
+    /// project has no interlinear data. Throws if a file found by the scan cannot be read, so a
+    /// caller never receives a partial manifest.
+    /// </summary>
+    public Dictionary<string, string> GetPt9InterlinearManifest(object? param = null)
+    {
+        var manifest = new Dictionary<string, string>();
+        foreach (var (relativePath, fullPath) in FindPt9InterlinearFiles())
+            manifest[relativePath] = ComputeSha256Hex(File.ReadAllBytes(fullPath));
+        return manifest;
+    }
+
+    /// <summary>
+    /// Read-only - always throws. PT9 interlinear data is owned by the Paratext project's files on
+    /// disk.
+    /// </summary>
+    public bool SetPt9InterlinearManifest(object? value) =>
+        throw new NotSupportedException(Pt9InterlinearReadOnlyMessage);
+
+    /// <summary>
+    /// Gets a map of project-relative PT9 interlinear file path to the file's raw text and the
+    /// SHA-256 hex of its bytes, content and fingerprint read together. Empty when the project has
+    /// no interlinear data. Throws if a file found by the scan cannot be read, so a caller never
+    /// receives a partial set.
+    /// </summary>
+    public Dictionary<string, Pt9InterlinearFile> GetPt9InterlinearFiles(object? param = null)
+    {
+        var files = new Dictionary<string, Pt9InterlinearFile>();
+        foreach (var (relativePath, fullPath) in FindPt9InterlinearFiles())
+        {
+            var bytes = File.ReadAllBytes(fullPath);
+            files[relativePath] = new Pt9InterlinearFile(
+                DecodeFileText(bytes),
+                ComputeSha256Hex(bytes)
+            );
+        }
+        return files;
+    }
+
+    /// <summary>
+    /// Read-only - always throws. See <see cref="SetPt9InterlinearManifest"/>.
+    /// </summary>
+    public bool SetPt9InterlinearFiles(object? value) =>
+        throw new NotSupportedException(Pt9InterlinearReadOnlyMessage);
 
     #endregion
 
