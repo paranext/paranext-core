@@ -320,6 +320,27 @@ function respondToGetLayout(response: unknown) {
   );
 }
 
+/**
+ * Hold every `windowLayout:get` open the way a slow main process would, so a test can act while a
+ * load is mid-flight. Returns a function that answers the request made so far.
+ */
+function holdGetLayout() {
+  let answer: ((response: unknown) => void) | undefined;
+  mocks.networkRequest.mockImplementation(async (requestType: string) => {
+    if (requestType !== 'windowLayout:get') return undefined;
+    return new Promise((resolve) => {
+      answer = resolve;
+    });
+  });
+  return {
+    hasRequest: () => answer !== undefined,
+    answerWith: (response: unknown) => {
+      if (!answer) throw new Error('the saved-layout request was never made');
+      answer(response);
+    },
+  };
+}
+
 /** All `windowLayout:save` pushes made so far, as [windowId, layout] pairs */
 function layoutPushes() {
   return mocks.networkRequest.mock.calls
@@ -804,6 +825,10 @@ describe('handleSwitchToSimpleMode', () => {
       key === 'platform.interfaceMode' ? 'power' : false,
     );
     host.registerDockLayout(fakeDockLayout);
+    // Wait for the fire-and-forget initial `loadLayout` to reach the dock before firing the
+    // synthetic event below — otherwise the structural `layoutLoadGenerationInDock` hold (a still
+    // in-flight initial load) intercepts first, masking the content-based guard this test targets.
+    await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalled());
     mocks.networkRequest.mockClear();
 
     // Simulate rc-dock's own reactive onLayoutChange firing - e.g. from a stale async
@@ -1533,5 +1558,155 @@ describe('saveLayout pushes this window’s layout to the main process', () => {
     await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('ephemeral'), undefined, undefined);
 
     expect(layoutPushes()).toEqual([]);
+  });
+
+  test('a layout change before the initial load lands pushes nothing', async () => {
+    // Until the initial load lands, the dock holds rc-dock's empty default rather than anything of
+    // this window's. Pushing that would replace the saved entry with an empty layout — and an entry
+    // that HAS a layout is no longer eligible for the legacy fallback, so the window would start
+    // empty from then on.
+    const heldGet = holdGetLayout();
+
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
+    registerDockLayout(dockLayout);
+    await vi.waitFor(() => expect(heldGet.hasRequest()).toBe(true));
+
+    await dockLayout.onLayoutChangeRef.current?.(
+      layoutWithTab('rc-dock-default'),
+      undefined,
+      undefined,
+    );
+    expect(layoutPushes()).toEqual([]);
+
+    // Once the saved layout lands, pushes resume from there
+    heldGet.answerWith({ kind: 'entry', layout: layoutWithTab('saved-tab') });
+    await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
+
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('after'), undefined, undefined);
+    expect(layoutPushes()).toHaveLength(1);
+  });
+
+  test('a layout change while the switch to power is still loading pushes nothing', async () => {
+    // The switch to power flips the mode cache before the saved power layout can reach the dock, so
+    // for the length of that load the dock still holds the SIMPLE layout while pushes are armed. A
+    // web view writing state or focus moving in that window (both run through the dock's
+    // onLayoutChange) would push the simple layout as this window's power layout, destroying the
+    // saved one for good.
+    let interfaceMode = 'simple';
+    settingsGetMock.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    settingsSubscribeMock.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    // Hold the power-mode load's saved-layout request open the way a slow main process would
+    const heldGet = holdGetLayout();
+
+    const { dockLayout, loadedLayouts } = await registerWindow(layoutWithAnchor());
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+
+    interfaceMode = 'power';
+    const switchToPower = interfaceModeCallback('power');
+    await vi.waitFor(() => expect(heldGet.hasRequest()).toBe(true));
+
+    // The dock still holds the simple layout at this point
+    await dockLayout.onLayoutChangeRef.current?.(
+      layoutWithTab('still-the-simple-layout'),
+      undefined,
+      undefined,
+    );
+    expect(layoutPushes()).toEqual([]);
+
+    // Once the saved power layout lands, it is what the dock gets — and pushes resume from there
+    heldGet.answerWith({ kind: 'entry', layout: layoutWithTab('saved-power-tab') });
+    await switchToPower;
+    expect(tabIdsIn(loadedLayouts[loadedLayouts.length - 1])).toEqual(['saved-power-tab-w2']);
+
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('after'), undefined, undefined);
+    expect(layoutPushes()).toHaveLength(1);
+  });
+
+  test('a layout change after a load throws pushes nothing', async () => {
+    // A load that throws leaves the dock exactly where the hold exists to protect it: holding the
+    // old mode's layout, with pushes armed under the new mode. Releasing on the way out — the
+    // obvious way to keep a failure from wedging persistence for the session — would resume pushes
+    // into precisely that state, so the marker stays behind instead and the next load that reaches
+    // the dock is what lifts the hold.
+    // Switching TO power, so the push that follows is one simple mode would not have blocked anyway
+    let failModeRead = false;
+    settingsGetMock.mockImplementation(async (key: string) => {
+      if (key !== 'platform.interfaceMode') return false;
+      if (failModeRead) throw new Error('settings service is down');
+      return 'simple';
+    });
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    settingsSubscribeMock.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    respondToGetLayout({ kind: 'entry', layout: layoutWithTab('saved-tab') });
+
+    const { dockLayout } = await registerWindow(layoutWithAnchor());
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+
+    // The switch's own load cannot even read the mode, so it never reaches the dock — but the mode
+    // cache is already on 'power', so `saveLayout` is armed
+    failModeRead = true;
+    await interfaceModeCallback('power');
+
+    await dockLayout.onLayoutChangeRef.current?.(
+      layoutWithTab('after-throw'),
+      undefined,
+      undefined,
+    );
+    expect(layoutPushes()).toEqual([]);
+  });
+
+  test('an abandoned load must not hold pushes once a newer load has reached the dock', async () => {
+    // The hold tracks which load's layout is IN the dock, not how many loads are running. A load
+    // that is superseded can sit in its saved-layout request for a long time (it retries, and the
+    // request itself may never settle), and it ends without ever writing the dock — so once a newer
+    // load HAS written the dock, the abandoned one must not keep layout changes from being saved.
+    // Counting loads in flight instead would silently stop persisting for the rest of the session.
+    let interfaceMode = 'power';
+    settingsGetMock.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? interfaceMode : false,
+    );
+    let interfaceModeCallback: ((newMode: unknown) => Promise<void>) | undefined;
+    settingsSubscribeMock.mockImplementation(
+      async (_key: string, callback: (newMode: unknown) => Promise<void>) => {
+        interfaceModeCallback = callback;
+        return async () => true;
+      },
+    );
+    // The initial power load parks on a saved-layout request that never comes back
+    const abandonedGet = holdGetLayout();
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { dockLayout } = makeDockLayout(layoutWithAnchor());
+    registerDockLayout(dockLayout);
+    await vi.waitFor(() => expect(abandonedGet.hasRequest()).toBe(true));
+
+    // The user round-trips through simple and back; this time the power load gets an answer and
+    // reaches the dock, superseding the parked one
+    if (!interfaceModeCallback) throw new Error('interface mode subscription never registered');
+    interfaceMode = 'simple';
+    await interfaceModeCallback('simple');
+    interfaceMode = 'power';
+    respondToGetLayout({ kind: 'entry', layout: layoutWithTab('saved-power-tab') });
+    await interfaceModeCallback('power');
+
+    // The abandoned load is still parked, but the dock holds this window's layout — pushes must work
+    await dockLayout.onLayoutChangeRef.current?.(layoutWithTab('after'), undefined, undefined);
+    expect(layoutPushes()).toHaveLength(1);
+
+    // Keep the dangling dock-layout registration from leaking into the next test
+    dockLayout.onLayoutChangeRef.current = undefined;
   });
 });

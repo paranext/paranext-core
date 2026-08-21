@@ -62,7 +62,14 @@ declare module 'papi-shared-types' {
      */
     'platformGetResources.openNewTab': (tabGroupId?: string) => Promise<string | undefined>;
 
-    /** @returns True if Send/Receive is available to the user, false if not */
+    /**
+     * Whether the Send/Receive extension is part of this build.
+     *
+     * @returns `true` if Send/Receive is available to the user, `false` if it is not, or
+     *   `undefined` if availability could not be determined. Treat `undefined` as unknown — never
+     *   as unavailable — since it means this extension had no way to check, not that Send/Receive
+     *   is missing.
+     */
     'platformGetResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
 
     /**
