@@ -1130,3 +1130,44 @@ step, no automation. Just a record.
 - **Source:** PT-4347 (NN 5C Resource panel shows correct loading state), whose named root cause —
   the merged conditional in `model-text-panel.component.tsx` — proved to be the symptom site rather
   than the defect.
+
+## ADR-0015: Async hook state shape — discriminated union when the payload is state-specific, flat object otherwise
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Context:** PT-4347 introduced `useEffectiveResourceReferenceList`'s
+  `EffectiveResourceReferenceListState` — the repo's first discriminated-union async state. A review
+  grep confirmed no other exists: siblings use a tuple (`useBufferedLayoutSetting` →
+  `[value, isLoading, settingError]`) or a flat named state object (`useStructureProtectionState` →
+  `StructureProtectionState.adminSettingError`). The same PR also added `useDblResourceCatalog`, which
+  uses the flat-object shape, so one change shipped two shapes. The reviewer flagged the divergence as
+  a pattern question: either converge, or say why not.
+- **Decision:** Keep both, chosen by whether the payload is state-specific.
+  - **Discriminated union** when data exists in only one state, so the type can make the other
+    combinations unrepresentable. `useEffectiveResourceReferenceList` returns
+    `{ status: 'loading' } | { status: 'error' } | { status: 'ready'; list }` — there is no list to
+    hand out while loading or on error, and the union is what prevents a caller reading one anyway.
+  - **Flat named state object** when the values are always present and the flags describe them.
+    `useDblResourceCatalog` returns a catalog (coerced to `[]`), loading/ready/error flags, and a
+    refetch callback — all meaningful together, with nothing to make unrepresentable.
+  - **Corollary — do not unpack a union at a boundary.** A union's guarantee is lost the moment a
+    consumer splits it into a nullable payload plus a bare status: indexing the discriminant
+    (`SomeState['status']`) strips the payload and hands the callee two values free to disagree, which
+    is the shape the union existed to forbid. Pass the whole state so narrowing survives. PT-4347 hit
+    this exactly — `ModelTextPanelProps` took `modelTextsStatus` plus an `undefined`-able list until it
+    was corrected to take `modelTextsState`.
+- **Alternatives:** **Converge everything on the flat object** for consistency with the existing
+  majority — rejected: it makes `ready`-implies-`list` unenforceable and reintroduces the
+  nullable-payload-plus-flag shape this epic spent its effort removing. **Converge everything on the
+  union** — rejected: it would force a discriminant onto hooks like `useDblResourceCatalog` whose
+  values are all always present, inventing states to satisfy a form. **Leave it unstated** — rejected:
+  with one instance of each shape and no rule, the next hook re-litigates it.
+- **Consequences:** Reviewers should expect both shapes and ask which fits rather than flagging
+  either as wrong. The union costs something real: consumers must narrow, and it cannot be spread into
+  props piecemeal — that constraint is the point. `resource-panel-readiness.utils.ts` keeps a
+  `*.utils.ts` → `*.hook.ts` type import to derive the status union, which is the only such import in
+  the extension and would have become moot had the flat shape won; with the union kept it stands as a
+  known wart, and moving the union into the utils module (or a `.types.ts`) is the fix if it bothers a
+  future reader.
+- **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
+  author rather than decided in the review pass.
