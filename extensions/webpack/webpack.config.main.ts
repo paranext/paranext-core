@@ -4,6 +4,7 @@ import merge from 'webpack-merge';
 import CopyPlugin from 'copy-webpack-plugin';
 import configBase, { rootDir } from './webpack.config.base';
 import WebViewResolveWebpackPlugin from './web-view-resolve-webpack-plugin';
+import { EmitShippedModulesPlugin } from '../../.erb/configs/emit-shipped-modules-plugin';
 import {
   outputFolder,
   getExtensions,
@@ -61,6 +62,14 @@ const configMain: () => Promise<webpack.Configuration> = async () => {
       // Copy static files to the output folder https://webpack.js.org/plugins/copy-webpack-plugin/
       new CopyPlugin({
         patterns: getMainCopyFilePatterns(extensions),
+      }),
+      // Writes .notices/modules/extension-main.json: the modules webpack actually compiled into
+      // this bundle, for the third-party notices generator. Emitted on every build rather than only
+      // a production one - see the matching comment in webpack.config.web-view.ts for why the
+      // production gate silently cost the notices generator two of its five manifests.
+      new EmitShippedModulesPlugin({
+        bundleName: 'extension-main',
+        outputDir: path.join(rootDir, '..', '.notices', 'modules'),
       }),
     ],
   });

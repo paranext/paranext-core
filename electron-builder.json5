@@ -4,7 +4,7 @@
 {
   productName: 'Platform.Bible',
   appId: 'org.paranext.PlatformBible',
-  copyright: 'Copyright © 2017-2025 SIL Global and United Bible Societies',
+  copyright: 'Copyright © 2017-2026 SIL Global and United Bible Societies',
   protocols: {
     name: 'platform-bible',
     schemes: ['platform-bible'],
@@ -85,7 +85,16 @@
     buildResources: 'assets',
     output: 'release/build',
   },
-  extraResources: ['./assets/**', { from: './extensions/dist/', to: './extensions' }],
+  extraResources: [
+    './assets/**',
+    { from: './extensions/dist/', to: './extensions' },
+    // Third-party attribution obligations - MIT, BSD, ISC and Apache-2.0 alike - apply to the
+    // distributed binary regardless of the terms the application itself ships under, so the notices
+    // travel with the installer. This is NOT the end-user licence: nsis.license / dmg license is a
+    // separate artifact and stays unset while the end-user terms are undecided (LICENSING.md).
+    './THIRD-PARTY-NOTICES.md',
+    './LICENSE',
+  ],
   publish: {
     provider: 'github',
     owner: 'paranext',

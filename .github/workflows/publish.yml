@@ -152,6 +152,28 @@ jobs:
           npm ci
           npm run build
 
+      # `npm run build` builds the extensions in DEVELOPMENT mode: its extensions leg sets no
+      # NODE_ENV, and `extensions/webpack/webpack.config.base.ts` reads `mode` from it. electron-
+      # builder copies `extensions/dist/` into the artifact as it finds it, so without this step the
+      # installers this job uploads carry unminified extension bundles with inline source maps,
+      # while `npm run package` (which runs this) produces production ones from the same commit.
+      - name: Build extensions for production
+        run: npm run build:extensions:production
+
+      # THIRD-PARTY-NOTICES.md is packaged into every installer this job produces, so a release cut
+      # from a ref whose Linux test.yml leg never ran green would ship a stale legal document with
+      # nothing to say so. The full check needs Ruby and four dotnet restores and cannot run here;
+      # this is the cheap cross-platform half - this platform's resolved npm shipping set against
+      # the committed lock the document was generated from. No Ruby, no dotnet, no network.
+      #
+      # After the production build on purpose: the extension webpack configs write their module
+      # manifests on every run, so this compares the graph that is actually being packaged. The two
+      # graphs agree in package terms today (measured: the same 217 npm packages either way), and if
+      # a production-only dependency ever makes them diverge, this fails here rather than shipping a
+      # document describing the other graph.
+      - name: Verify third-party notices describe what this build ships
+        run: npm run verify:third-party-notices:shipping-set
+
       - name: Prepare release - Windows
         if: ${{ matrix.os == env.OS_WINDOWS }}
         env:

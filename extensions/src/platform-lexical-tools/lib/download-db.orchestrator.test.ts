@@ -1,3 +1,4 @@
+import path from 'path';
 import { describe, it, expect, vi } from 'vitest';
 import { runDownload, FileNotFoundError, type OrgDetectionResult } from './download-db';
 
@@ -22,7 +23,22 @@ const baseOpts = {
   localDbPath: '/tmp/lexical-db/lexical.db.xz',
   dbFilename: 'lexical.db.xz',
   checksumFilename: 'lexical.db.xz.sha256',
+  noticeFilenames: ['LICENSE.md', 'SOURCE.md'],
 };
+
+const RAW_BASE = 'https://raw.githubusercontent.com/paranext/dependencies/main/lexical-db';
+
+/** Every URL `downloadFile` was asked for, in call order. */
+function downloadedUrls(deps: Deps): string[] {
+  return vi.mocked(deps.downloadFile).mock.calls.map(([url]) => url);
+}
+
+/**
+ * The DB archive and the notice files that travel with it are both fetched through `downloadFile`,
+ * so assertions about one have to say which they mean.
+ */
+const isDbUrl = (url: string) => url.endsWith('.xz');
+const isNoticeUrl = (url: string) => url.endsWith('.md');
 
 describe('runDownload', () => {
   it('strict + happy path: downloads and extracts', async () => {
@@ -31,7 +47,7 @@ describe('runDownload', () => {
       { ...baseOpts, detection: { org: 'paranext' } satisfies OrgDetectionResult },
       deps,
     );
-    expect(deps.downloadFile).toHaveBeenCalledTimes(1);
+    expect(downloadedUrls(deps).filter(isDbUrl)).toHaveLength(1);
     expect(deps.extractXzFile).toHaveBeenCalledTimes(1);
     expect(deps.warn).not.toHaveBeenCalled();
   });
@@ -133,7 +149,7 @@ describe('runDownload', () => {
       calculateChecksum: vi.fn(async () => 'abc123'),
     });
     await runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps);
-    expect(deps.downloadFile).not.toHaveBeenCalled();
+    expect(downloadedUrls(deps).filter(isDbUrl)).toHaveLength(0);
     expect(deps.extractXzFile).not.toHaveBeenCalled();
   });
 
@@ -143,7 +159,7 @@ describe('runDownload', () => {
       calculateChecksum: vi.fn(async () => 'abc123'),
     });
     await runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps);
-    expect(deps.downloadFile).not.toHaveBeenCalled();
+    expect(downloadedUrls(deps).filter(isDbUrl)).toHaveLength(0);
     expect(deps.extractXzFile).toHaveBeenCalledTimes(1);
   });
 
@@ -159,7 +175,7 @@ describe('runDownload', () => {
         .mockResolvedValueOnce('remote-hash'), // re-downloaded file → matches
     });
     await runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps);
-    expect(deps.downloadFile).toHaveBeenCalledTimes(1);
+    expect(downloadedUrls(deps).filter(isDbUrl)).toHaveLength(1);
     expect(deps.extractXzFile).toHaveBeenCalledTimes(1);
   });
 
@@ -169,7 +185,7 @@ describe('runDownload', () => {
       { ...baseOpts, detection: { org: 'tjcouch-sil' } satisfies OrgDetectionResult },
       deps,
     );
-    expect(deps.downloadFile).toHaveBeenCalledTimes(1);
+    expect(downloadedUrls(deps).filter(isDbUrl)).toHaveLength(1);
     expect(deps.extractXzFile).toHaveBeenCalledTimes(1);
     expect(deps.warn).not.toHaveBeenCalled();
   });
@@ -182,5 +198,119 @@ describe('runDownload', () => {
     await expect(
       runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps),
     ).rejects.toThrow('Checksum verification failed');
+  });
+
+  it('fetches the notice files into the DB directory', async () => {
+    // Portions of the DB are UBS material under CC BY-SA 4.0, whose section 3(a)(1) requires the
+    // attribution and licence notice to travel with the work, and the rest is distributable only
+    // under UBS's grant to Paratext. The extension's `assets` directory is
+    // copied wholesale into every installer, so landing the notices beside the DB is what actually
+    // puts them in front of a user.
+    const deps = makeDeps();
+    await runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps);
+    expect(vi.mocked(deps.downloadFile).mock.calls.filter(([url]) => isNoticeUrl(url))).toEqual([
+      [`${RAW_BASE}/LICENSE.md`, path.join(baseOpts.localDbDir, 'LICENSE.md')],
+      [`${RAW_BASE}/SOURCE.md`, path.join(baseOpts.localDbDir, 'SOURCE.md')],
+    ]);
+  });
+
+  it('DB up to date, one notice missing: fetches only the missing notice', async () => {
+    const deps = makeDeps({
+      fileExists: vi.fn(
+        (p: string) =>
+          p === baseOpts.localDbPath ||
+          p === baseOpts.localDbPath.replace('.xz', '') ||
+          p === path.join(baseOpts.localDbDir, 'LICENSE.md'),
+      ),
+    });
+    await runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps);
+    expect(downloadedUrls(deps)).toEqual([`${RAW_BASE}/SOURCE.md`]);
+  });
+
+  it('DB up to date and notices present: downloads nothing', async () => {
+    const deps = makeDeps({ fileExists: vi.fn(() => true) });
+    await runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps);
+    expect(deps.downloadFile).not.toHaveBeenCalled();
+    expect(deps.extractXzFile).not.toHaveBeenCalled();
+  });
+
+  it('re-downloading the DB re-fetches the notices, so they cannot go stale against it', async () => {
+    const deps = makeDeps({
+      fileExists: vi.fn(() => true),
+      fetchRemoteChecksum: vi.fn(async () => 'remote-hash'),
+      calculateChecksum: vi
+        .fn()
+        .mockResolvedValueOnce('local-hash-stale')
+        .mockResolvedValueOnce('remote-hash'),
+    });
+    await runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps);
+    expect(downloadedUrls(deps).filter(isNoticeUrl)).toEqual([
+      `${RAW_BASE}/LICENSE.md`,
+      `${RAW_BASE}/SOURCE.md`,
+    ]);
+  });
+
+  it('strict + 404 on a notice: rethrows rather than packaging the DB bare', async () => {
+    const deps = makeDeps({
+      downloadFile: vi.fn(async (url: string) => {
+        if (url === `${RAW_BASE}/SOURCE.md`) throw new FileNotFoundError(url);
+      }),
+    });
+    await expect(
+      runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps),
+    ).rejects.toBeInstanceOf(FileNotFoundError);
+  });
+
+  it('lenient + 404 on a notice: warns about the obligation but still prepares the DB', async () => {
+    const noticeUrl =
+      'https://raw.githubusercontent.com/tjcouch-sil/dependencies/main/lexical-db/LICENSE.md';
+    const warn = vi.fn();
+    const deps = makeDeps({
+      downloadFile: vi.fn(async (url: string) => {
+        if (isNoticeUrl(url)) throw new FileNotFoundError(noticeUrl);
+      }),
+      warn,
+    });
+    await runDownload({ ...baseOpts, detection: { org: 'tjcouch-sil' } }, deps);
+    expect(deps.extractXzFile).toHaveBeenCalledTimes(1);
+    const messages = warn.mock.calls.flat().join('\n');
+    expect(messages).toContain(noticeUrl);
+    expect(messages).toContain('attribution and licence text');
+  });
+
+  it('lenient + both notices missing: names every URL it could not fetch', async () => {
+    // `Promise.all` rejected on the first failure and abandoned the fetch still in flight, so this
+    // warning named ONE url while telling the maintainer to publish both files - and which one it
+    // named depended on which request happened to fail first.
+    const warn = vi.fn();
+    const deps = makeDeps({
+      downloadFile: vi.fn(async (url: string) => {
+        if (isNoticeUrl(url)) throw new FileNotFoundError(url);
+      }),
+      warn,
+    });
+    await runDownload({ ...baseOpts, detection: { org: 'tjcouch-sil' } }, deps);
+    const messages = warn.mock.calls.flat().join('\n');
+    expect(messages).toContain('LICENSE.md');
+    expect(messages).toContain('SOURCE.md');
+    // Both were attempted, rather than the second being abandoned when the first failed.
+    expect(downloadedUrls(deps).filter(isNoticeUrl)).toHaveLength(2);
+  });
+
+  it('lenient + 404 on a notice: does not claim the DB is missing', async () => {
+    // The outer handler's message ("extension will run without lexical data") is about a missing
+    // DB. By the time notices are fetched the DB is on disk, so reusing that message would send a
+    // reader after the wrong problem.
+    const log = vi.fn();
+    const deps = makeDeps({
+      downloadFile: vi.fn(async (url: string) => {
+        if (isNoticeUrl(url)) throw new FileNotFoundError(url);
+      }),
+      log,
+    });
+    await runDownload({ ...baseOpts, detection: { org: 'tjcouch-sil' } }, deps);
+    const messages = log.mock.calls.flat().join('\n');
+    expect(messages).not.toContain('extension will run without lexical data');
+    expect(messages).toContain('DB file preparation complete.');
   });
 });

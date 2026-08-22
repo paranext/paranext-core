@@ -524,10 +524,9 @@ async function main() {
   // Note that this condition (`process.defaultApp`) is not quite the same as whether we're
   // packaged, so we're not using `globalThis.isPackaged` here.
   if (process.defaultApp && args.length > 2) args[2] = path.resolve(args[2]);
-  const uriSchemeHandlerWasSet = app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args);
-  if (!uriSchemeHandlerWasSet) {
+  if (!app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args)) {
     logger.error(
-      `Failed to set myself (${launchPath} with arguments ${args}) as handler for ${APP_URI_SCHEME}://... URIs, reason unknown`,
+      `Could not register ${launchPath} (arguments: ${args}) as the ${APP_URI_SCHEME}:// URI handler. Electron reported the failure without a cause, so links using this scheme will not open the app.`,
     );
   }
   if (process.platform === 'darwin') {

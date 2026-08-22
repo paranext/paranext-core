@@ -131,6 +131,19 @@ jobs:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
 
+      # licensee (Ruby) identifies license texts for the third-party notices generator. Linux only:
+      # the generator writes the artifact only on Linux, and the other legs verify against the
+      # committed lock, which needs no Ruby.
+      - name: Install Ruby
+        if: ${{ matrix.os == env.OS_LINUX }}
+        uses: ruby/setup-ruby@v1
+        with:
+          # Pinned to match the developer prerequisite. licensee 10.x requires >= 3.2, and letting
+          # CI float to a newer Ruby than developers run invites a version of the matcher resolving
+          # differently in the two places - which would show up as unexplained verdict churn.
+          ruby-version: '3.4'
+          bundler-cache: true
+
       - name: Install packages
         run: npm ci
 
@@ -144,16 +157,78 @@ jobs:
       - name: Build
         run: npm run build
 
+      # THIRD-PARTY-NOTICES.lock.json records each package's licensee version, matched file, SPDX id
+      # and TEXT HASH. Diffing the freshly derived set against the committed lock is the only thing
+      # that reports a licence text CHANGING under an unchanged name@version, and it names which
+      # package and which file - where the regeneration step below would simply rewrite the document
+      # and the staleness check would say only "this file changed". Run BEFORE regeneration, because
+      # regeneration overwrites the lock; a legitimate dependency bump fails here first with a diff
+      # a human reads and acknowledges, which is what makes the lock's drift detection a gate rather
+      # than a record. Linux only: it needs Ruby and the dotnet restore, same as regeneration.
+      - name: verify third-party notices against the committed lock
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm run verify:third-party-notices
+
+      # Linux only: the NuGet section is read from the restore closure, which is RID-dependent, so
+      # exactly one platform has to be canonical or the three legs would each produce a different
+      # file. Placed before verify-changed-files so that step doubles as the staleness check —
+      # a stale THIRD-PARTY-NOTICES.md fails the build. This is also what runs the strong-copyleft
+      # gate on every pull request. Requires the restore that `npm run build` above performs.
+      - name: check third-party notices are current
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: npm run build:third-party-notices
+
+      # The notices file is packaged into every platform's installer, so a Linux-generated
+      # artifact is a claim carried by Windows and macOS binaries too. The full check (`--verify`,
+      # available via `npm run verify:third-party-notices`) cannot run on these legs: licence
+      # identification needs Ruby, installed on the Linux leg only, and the NuGet closure needs four
+      # `dotnet restore` passes against an internal SIL feed. Neither of those varies by platform, so
+      # re-running them here would only repeat the Linux leg's answer at a cost this leg cannot pay.
+      # Licence identification is platform-invariant (same files, same pinned licensee version) and
+      # the NuGet closure is already made platform-complete FROM Linux by the four-RID union.
+      # The one thing that genuinely varies is the npm closure - npm installs an optional dependency
+      # only where its os/cpu constraints match - so that is the one thing this leg checks: its own
+      # resolved npm packages, by name@version, against the committed lock's npm entries. No Ruby, no
+      # dotnet, no network. See ADR-0024.
+      - name: verify npm shipping set matches this platform
+        if: ${{ matrix.os != env.OS_LINUX }}
+        run: npm run verify:third-party-notices:shipping-set
+
       - name: Verify no files changed after build
         id: verify-changed-files
         uses: tj-actions/verify-changed-files@v20
 
       - name: Report file changes
         if: steps.verify-changed-files.outputs.files_changed == 'true'
+        # This step runs on all three legs, and `case`/`esac` is POSIX shell: without this the
+        # windows leg runs it under pwsh, where it is a parse error - the leg still fails, but the
+        # list of changed files it exists to print is lost, which is the only thing it does.
+        shell: bash
         env:
           CHANGED_FILES: ${{ steps.verify-changed-files.outputs.changed_files }}
         run: |
           echo "Error - changed files after build: $CHANGED_FILES"
+          # THIRD-PARTY-NOTICES.md is the one build output whose remedy is not "run the build":
+          # regenerating it needs a Linux machine with a full `dotnet restore` and a complete
+          # node_modules, which is why a dependency-version bump lands here rather than at review.
+          # The lock is matched too: it is written as the document's pair, and a run that rewrites
+          # only the lock (a licence text changing under an unchanged name@version) would otherwise
+          # print the generic message and none of the remedy.
+          case "$CHANGED_FILES" in
+            *THIRD-PARTY-NOTICES*)
+              echo
+              echo "THIRD-PARTY-NOTICES.md is out of date. It is generated, never edited by hand."
+              echo "On Linux, with dependencies installed:"
+              echo
+              echo "    dotnet restore c-sharp/ParanextDataProvider.csproj"
+              echo "    npm run build:third-party-notices"
+              echo
+              echo "Then commit BOTH regenerated files - THIRD-PARTY-NOTICES.md and"
+              echo "THIRD-PARTY-NOTICES.lock.json are written as a pair. A dependency version"
+              echo "change - npm or NuGet, including the ParatextData/ParatextChecks pins in"
+              echo "c-sharp/ParanextDataProvider.csproj - always changes them."
+              ;;
+          esac
           exit 1
 
       - name: dotnet unit tests
