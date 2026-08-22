@@ -5,7 +5,7 @@
   "main": "src/main.js",
   "types": "src/types/platform-scripture-editor.d.ts",
   "author": "Katherine Jensen",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
     "build:main": "webpack --config ./webpack/webpack.config.main.ts",
@@ -41,9 +41,9 @@
   },
   "devDependencies": {
     "@dreamsicle.io/stylelint-config-tailwindcss": "^1.2.2",
-    "@fontsource-variable/ibm-plex-sans": "^5.2.8",
     "@eten-tech-foundation/platform-editor": "~0.8.14",
     "@eten-tech-foundation/scripture-utilities": "~0.1.6",
+    "@fontsource-variable/ibm-plex-sans": "^5.2.8",
     "@stylistic/eslint-plugin-ts": "^2.13.0",
     "@swc/core": "1.13.3",
     "@tailwindcss/postcss": "^4.0.0",

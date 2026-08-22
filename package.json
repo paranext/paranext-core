@@ -19,7 +19,7 @@
     "type": "git",
     "url": "git+https://github.com/paranext/paranext-core.git"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "author": {
     "name": "Paranext",
     "url": "https://github.com/paranext/"
@@ -41,6 +41,7 @@
   ],
   "main": "./.erb/dll/main.bundle.dev.js",
   "scripts": {
+    "prebuild": "node ./.erb/scripts/notices-build-id.js",
     "build": "concurrently --kill-others-on-fail \"npm:build:main\" \"npm:build:extension-host\" \"npm:build:renderer\" \"npm:build:types\" \"npm:build:extensions\" \"npm:build:data-release\"",
     "build:data": "dotnet build c-sharp/ParanextDataProvider.sln",
     "build:data-release": "run-script-os",
@@ -58,6 +59,9 @@
     "build:platform-bible-utils": "cd lib/platform-bible-utils && npm run build",
     "build:preload:dev": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",
+    "build:third-party-notices": "node ./.erb/scripts/third-party-notices/main.js",
+    "verify:third-party-notices": "node ./.erb/scripts/third-party-notices/main.js --verify",
+    "verify:third-party-notices:shipping-set": "node ./.erb/scripts/third-party-notices/main.js --verify-shipping-set",
     "build:types": "cd lib/papi-dts && npm run build",
     "bump-versions": "ts-node ./.erb/scripts/bump-versions.ts",
     "clean:build-cache": "rimraf ./node_modules/.cache",
@@ -78,7 +82,7 @@
     "lint:staged": "lint-staged -q && npm run lint:staged --workspaces --if-present",
     "lint:styles": "stylelint **/*.{css,scss}",
     "ncu:group": "npx npm-check-updates --interactive --format group --workspaces",
-    "package": "tsx ./.erb/scripts/clean.js dist && npm run build && npm run build:extensions:production && electron-builder build --publish never && npm run build:dll",
+    "package": "tsx ./.erb/scripts/clean.js dist && npm run build && npm run build:extensions:production && npm run verify:third-party-notices:shipping-set && electron-builder build --publish never && npm run build:dll",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
     "postinstall": "patch-package && npm run link-dev-packages && tsx .erb/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts && npm run build --workspace=eslint-plugin-paranext",
     "prepare": "husky && npm run csharp:tool:restore",
@@ -255,6 +259,11 @@
     "run-script-os": "^1.1.6",
     "sass": "^1.85.0",
     "sass-loader": "^16.0.5",
+    "source-map-support": "^0.5.21",
+    "spdx-correct": "^3.2.0",
+    "spdx-expression-parse": "^5.0.0",
+    "spdx-license-ids": "^3.0.23",
+    "spdx-license-list": "^6.12.0",
     "storybook": "9.1.19",
     "storybook-addon-code-editor": "^5.0.0",
     "storybook-addon-rtl": "^2.0.0",

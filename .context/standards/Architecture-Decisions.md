@@ -760,3 +760,497 @@ step, no automation. Just a record.
   should not be assumed to remount anything.
 - **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
   `srcNonce` to its use site.
+
+## ADR-0019: The MIT carve-out under `lib/` is drawn by runtime linking, not by dependency section
+
+- **Date:** 2026-08-07
+- **Status:** Accepted
+- **Context:** The repository relicensed from MIT to AGPL-3.0-or-later. A blanket relicense was not
+  viable: Platform.Bible's extension model expects third parties to build and distribute their own
+  extensions, and those extensions import Platform.Bible's developer libraries. If those libraries
+  were AGPL, every third-party extension would inherit AGPL obligations simply by being built —
+  which would make the platform's own extension model a copyleft trap. So some packages under `lib/`
+  had to stay MIT. The initial split was justified package by package, with no single stated
+  principle, and it did not survive scrutiny: `eslint-plugin-paranext` and
+  `browserslist-config-detect-electron` were kept MIT despite contributing nothing to any extension,
+  so the carve-out was protecting packages that needed no protection.
+- **Decision:** Draw the boundary with one rule, recorded in
+  [`LICENSING.md`](../../LICENSING.md#the-rule-that-draws-the-line):
+
+  > **MIT if a third-party extension links against the package at runtime — whether webpack bundles
+  > it in or Platform.Bible supplies it as an external. AGPL-3.0-or-later if the package exists only
+  > while the extension is being built and the extension never links against it.**
+
+  Applied to the five packages under `lib/`:
+
+  | Package                               | License           | Why                                                     |
+  | ------------------------------------- | ----------------- | ------------------------------------------------------- |
+  | `platform-bible-react`                | MIT               | Linked at runtime; webpack bundles it into extension output |
+  | `platform-bible-utils`                | MIT               | Linked at runtime; not bundled — supplied as a webpack external |
+  | `papi-dts`                            | AGPL-3.0-or-later | Types only; declarations erased at compile time          |
+  | `browserslist-config-detect-electron` | AGPL-3.0-or-later | Build-time browserslist config; emits nothing            |
+  | `eslint-plugin-paranext`              | AGPL-3.0-or-later | Lint-time only; emits nothing                            |
+
+  The rule keys on **runtime linking**, deliberately and explicitly not on which `package.json`
+  section declares the package, and not on bundling either — `platform-bible-utils` is an external
+  and reaches a third-party extension without being bundled into it, yet the extension is combined
+  with it just the same.
+- **Alternatives:** relicense everything, including the `lib/` packages — rejected: it makes the AGPL
+  viral for third-party extensions and defeats the extension model. Key the rule on the
+  `dependencies`/`devDependencies` section — rejected because that field was already wrong:
+  `platform-bible-react` was declared a `devDependency` by every extension in this repository while
+  extension source across all of them imported it at runtime, so a mechanical "devDependency means
+  AGPL" reading would have relicensed exactly the package the carve-out exists to protect.
+  (The declarations were corrected to `dependencies` alongside this decision, but the rule still must
+  not depend on them.) Keep all four originally-MIT `lib/` packages MIT — rejected: two of them
+  contribute nothing to extension output, so the carve-out bought no protection there and the
+  boundary no longer tracked a single principle.
+- **Consequences:** a directory's own `LICENSE` file governs that directory, and the MIT side is now
+  exactly `lib/platform-bible-react/` and `lib/platform-bible-utils/` — not `lib/` as a whole.
+  Moving code across that boundary in either direction is a relicensing act requiring the copyright
+  holders' agreement, not a refactor. `papi-dts` is AGPL yet imposes nothing on extension authors,
+  because TypeScript erases its declarations at compile time and no part of it reaches a built
+  extension. The sharpest ongoing constraint: **adding a runtime import of a currently-AGPL
+  build-time package from extension source is a licensing change, not just a build change** — it
+  would put AGPL bytes into a third-party extension's distributed output. Check
+  `extensions/webpack/webpack.config.base.ts` `externals` to determine what a given import actually
+  bundles. **Revisit** if a package changes character — e.g. if `eslint-plugin-paranext` ever grew a
+  runtime helper that extensions import.
+- **Source:** the AGPL relicense (`LICENSING.md`, per-directory `LICENSE` files); rule settled during
+  the relicense code review.
+
+---
+
+## ADR-0020: The notices generator reproduces canonical SPDX texts from the repo, and every dual-license election is recorded per ecosystem
+
+- **Date:** 2026-08-07
+- **Status:** Superseded by ADR-0023 (the canonical texts are no longer checked in, and the
+  per-ecosystem election maps moved into `notices-policy.json`; the principles both express stand)
+- **Context:** `THIRD-PARTY-NOTICES.md` listed 28 of 88 NuGet packages (and 19 npm packages) as an
+  identifier plus a copyright line with no license text at all, because those packages declare a
+  license but bundle no file. For MIT and its relatives that is short of "this permission notice
+  shall be included in all copies". Separately, `CsvHelper` shipped as `MS-PL OR Apache-2.0` with no
+  recorded election, even though the npm side already had `ELECTED_LICENSES` for exactly that
+  ambiguity — and MS-PL is GPL-incompatible while `ParanextDataProvider`, which links it, is now
+  AGPL-3.0-or-later.
+- **Decision:** (a) Check the canonical SPDX text of each needed identifier into
+  `.erb/scripts/license-texts/<SPDX-ID>.txt` and have the generator reproduce it, labelled as SPDX's
+  text and paired with the package's own copyright notice, whenever a package resolves an identifier
+  but ships no file. (b) Record dual-license elections in a per-ecosystem map —
+  `ELECTED_LICENSES` (npm) and `DOTNET_ELECTED_LICENSES` (NuGet) — render the elected branch beside
+  the expression it was elected from, and classify the elected branch rather than the declared
+  expression. `CsvHelper` is elected Apache-2.0.
+- **Alternatives:** fetch the canonical texts at generation time — rejected: CI regenerates the
+  artifact on every pull request and fails on a stale copy, so a network dependency would make a
+  legal artifact depend on a third-party host's availability and on whatever it served that day.
+  Fill SPDX's `<year>` / `<copyright holders>` placeholders from package metadata — rejected: that
+  invents a copyright holder. Leave the identifier-only rows as they were — rejected: the attribution
+  obligation attaches to the distributed binary regardless of how the upstream packaged its repo.
+- **Consequences:** the generation path must stay hermetic — **nothing in it may open a socket**, and
+  a new identifier needs a new checked-in text rather than a fetch. The generated file names the
+  packages it could not reproduce a text for, so the gap reports itself. A dependency whose license
+  is an `OR` expression must have its election recorded before it can be described accurately;
+  an unelected `OR` still passes the copyleft gate (a disjunction classifies as its best branch), so
+  the gate is not the thing that catches it — reading the artifact is. **Revisit** if the data
+  provider takes a dependency whose only permissive branch is GPL-incompatible, or if a shipped
+  product ever needs notices generated per-platform rather than from the Linux closure.
+- **Source:** code review of the AGPL relicense branch; `LICENSING.md`,
+  `.erb/scripts/license-texts/README.md`.
+
+## ADR-0021: The copyleft gate recognizes permissive licenses by allowlist, and reproduces a NOTICE only where the license requires it
+
+- **Date:** 2026-08-19
+- **Status:** Superseded by ADR-0023 (the allowlist moved to `notices-policy.json` and an unlisted
+  identifier now stops the run instead of warning; the membership-not-shape rule itself stands)
+- **Context:** The notices generator introduced in ADR-0020 classifies every production dependency
+  and fails the build on strong copyleft, so what it treats as permissive is the whole value of the
+  gate. It originally decided that by shape — anything matching `^[A-Za-z0-9.+-]+$` with no internal
+  spaces was read as an SPDX identifier and therefore permissive. `Proprietary`, `BUSL-1.1`,
+  `Elastic-2.0`, `CC-BY-NC-4.0` and `LicenseRef-Anything` all satisfy that pattern, so the licenses
+  the gate exists to catch were exactly the ones it waved through. Separately, several NuGet packages
+  ship an Apache-style `NOTICE` and no license file at all, which the generator did not look for.
+- **Decision:** Two rules, both recorded in [`LICENSING.md`](../../LICENSING.md):
+  1. **Permissive is a membership test, never a shape test.** `PERMISSIVE_SPDX` in
+     `generate-third-party-notices.util.js` is an explicit allowlist; everything not copyleft and not
+     on it classifies as `unknown`, which warns without failing the build. Copyleft is still matched
+     by prefix, and is tested first, so an unlisted GPL spelling blocks rather than warns.
+  2. **A `NOTICE` is reproduced when the package's own license requires it — Apache-2.0 section
+     4(d) — and is otherwise recorded by name.** Under MIT, BSD and ISC the obligation is that the
+     copyright and permission notice travel with copies, which the reproduced license text
+     discharges.
+- **Alternatives:** keep the shape test and add a denylist of known-restrictive identifiers —
+  rejected: it can only ever list terms somebody has already been bitten by, which is the wrong
+  direction for a gate. Reproduce every `NOTICE` unconditionally — rejected on measurement: the four
+  NOTICE files in the current NuGet closure are vendors' aggregate third-party notices totalling
+  ~15,000 lines describing *their* dependency closures, which would treble the artifact and bury the
+  repository's own disclosures without discharging any obligation.
+- **Consequences:** a new dependency under a permissive license nobody has listed produces one
+  warning line; the fix is to add the identifier to `PERMISSIVE_SPDX`, and suppressing it any other
+  way is a licensing decision, not a build fix. Elections (`ELECTED_LICENSES`,
+  `DOTNET_ELECTED_LICENSES`) are now validated against what the package currently declares and fail
+  the build when they go stale, because an election that silently outlives its expression makes the
+  artifact assert a grant that no longer exists.
+
+## ADR-0022: What ships is derived from production-source imports, not from `dependencies`
+
+- **Date:** 2026-08-19
+- **Status:** Superseded by ADR-0023 (the derivation moved from a regex import scan to webpack's own
+  module manifests, which this entry had rejected; the rule that sections do not decide notices
+  stands)
+- **Context:** ADR-0019 established that the licensing boundary "must not depend on" which
+  `package.json` section declares a package. The notices generator nonetheless derived its npm
+  section from `npm ls --omit=dev`, which is exactly that section — so the two were only reconciled
+  by hand-moving each bundled package into `dependencies` as it was noticed. That contradicts the
+  repository's own convention (`Code-Style-Guide.md`: bundled deps belong in `devDependencies`,
+  because webpack compiles them in at build time), and it failed silently in both directions: a
+  bundled package left in `devDependencies` shipped with no notice at all, and a manifest edit that
+  correctly moved one back would have deleted its notice. `react-reverse-portal` is the live case —
+  imported by `platform-scripture-editor`'s web view, externalized by nothing, and absent from the
+  generated file entirely.
+- **Decision:** The npm section is the **union** of two independently-derived sets:
+  1. the `npm ls --omit=dev` production closure, and
+  2. every package imported by production source (`src/{main,renderer,extension-host,shared,node}`,
+     `extensions/src/*/src`) that the relevant bundle does not externalize, plus its transitive
+     dependencies resolved from the lockfile — `collectBundledPackages` in
+     `generate-third-party-notices.js`. **Stylesheets are scanned too**, because webpack resolves a
+     bare specifier in a CSS `@import` through `node_modules` and inlines the result; every
+     extension's `tailwind.css` embeds a typeface that way. A package reached only from a stylesheet
+     is listed as a leaf, without its dependency closure: what ships is its CSS and the assets that
+     CSS references, not the build-time toolchain behind it — walking `@import 'tailwindcss'` into
+     its dependencies would assert that some three hundred build-only packages are incorporated.
+
+  The bundled dependencies moved into `dependencies` by the relicense work are moved back to
+  `devDependencies`, restoring the `Code-Style-Guide.md` convention. The scan is unioned and never
+  subtracted: a package named in error costs one row, a package missed costs a disclosure.
+- **Alternatives:** keep hand-moving bundled packages into `dependencies` — rejected: it makes a
+  legal artifact depend on a convention it explicitly must not depend on, contradicts the style
+  guide, and fails silently. Read webpack's own module list from a real build — rejected for the
+  notices path, which must stay a fast, hermetic script that CI can run on every pull request
+  without building. Add a CI check that asserts every bundled import is declared in `dependencies` —
+  rejected: it enforces the contradiction rather than removing it.
+- **Consequences:** which section declares a package no longer affects its notice, so
+  `Code-Style-Guide.md` and licensing coverage stop pointing in opposite directions. The externals
+  lists in `.erb/configs/webpack.config.base.ts` and `extensions/webpack/webpack.config.base.ts` are
+  now load-bearing for licensing: removing a module from one starts shipping it, and the scan picks
+  it up. `bundleSources` mirrors the extension externals list and must be kept in step with it —
+  a stale copy over-reports, which is the safe direction.
+
+## ADR-0023: The notices generator is replaced by a fail-closed pipeline over webpack's module graph, licensee, and a policy file
+
+- **Date:** 2026-08-20
+- **Status:** Accepted
+- **Context:** The generator ADRs 0015-0017 describe had grown to about 960 lines carrying its own
+  license classifier, its own regex import scan, its own SPDX text store, and five hand-maintained
+  tables. Three of its mechanisms were unsound rather than merely large. Its npm set unioned a
+  repo-root `npm ls --omit=dev` closure that has **no packaging basis** — `electron-builder.json5`
+  points `directories.app` at `release/app`, so electron-builder never packs the root closure — which
+  over-reported by 46 packages here (`@types/*`, an `electron-updater` subtree reached only from a
+  commented-out import, a second `tailwindcss`). Its license identification was a regex signature
+  matcher over license text. And an unrecognized license warned and exited 0, so the artifact could
+  ship with a package nobody had ruled on.
+- **Decision:** Replace it with nine small modules under `.erb/scripts/third-party-notices/`, wired
+  by `main.js`:
+  1. **What ships** comes from webpack's own module manifests (`.notices/modules/*.json`, emitted by
+     a compiler plugin), unioned with a stylesheet scan and `release/app`'s unbundled closure
+     (`shipping-set.js`). The stylesheet scan is not redundant: Tailwind's own bundler resolves and
+     inlines `@import 'tailwindcss'`, `tw-animate-css`, `shadcn` and
+     `@fontsource-variable/ibm-plex-sans` **before** webpack starts, so those four never become
+     webpack modules. The NuGet set is the union of the restore closure for all four published
+     runtime identifiers (`nuget-set.js`), not one platform's.
+  2. **What a package is licensed under** comes from two independent signals — the manifest's
+     declared expression, parsed with `spdx-expression-parse`, and the license text on disk,
+     identified by `licensee` — reconciled by `policy.js`. Because neither derives from the other, a
+     disagreement is real information: `quill-delta@5.1.0` declares MIT and ships a BSD-3-Clause
+     LICENSE, which the old generator could not have seen. The reconciliation is
+     **ecosystem-independent** and turns on three cases, not two: a license file that identifies must
+     agree with the declaration; a license file that exists but does NOT identify blocks for review
+     (`jszip`'s concatenates the full MIT and GPLv3 texts); and **no license file at all resolves on
+     the declaration**, with the canonical SPDX text reproduced on the package's behalf. That last
+     case is normal rather than a missing signal — monorepo-published families such as `@radix-ui/*`
+     publish dozens of packages against one root license, and every NuGet package is metadata-only.
+     An earlier draft of this rule required identified text for every npm verdict, which left 14
+     shipped packages that no instrument could clear: an exception is refused unless it is pinned to
+     a text hash, and an override applies only where nothing parseable is declared.
+  3. **Every repository-specific licensing decision** lives in `notices-policy.json`: the allowlist,
+     the copyleft list, the elections, reviewed exceptions, the two `@eten-tech-foundation` copyright
+     notices, and the curated NuGet overrides. An override is applied only where the package
+     establishes nothing itself, so it can never mask a license a package actually declares.
+  4. **The gate fails closed.** A package that cannot be cleared stops the run and nothing is
+     written; the message carries both signals and the exact JSON to paste. `THIRD-PARTY-NOTICES.md`
+     is never produced from an incomplete set.
+  5. **A committed lock sidecar** (`THIRD-PARTY-NOTICES.lock.json`) records each package's SPDX id,
+     matched file and text hash, plus the licensee and SPDX-corpus versions, so a license text
+     changing under an unchanged version — the drift a human would never think to re-check — is
+     detectable, and `--verify` can check another platform against it.
+- **Alternatives:** keep extending the single script — rejected: its own tables were the failure mode
+  (two of the five were nearly lost in this replacement, one of them the only thing listing a shipped
+  Windows dependency). Keep the regex import scan — rejected: for JS/TS it inferred from source text
+  what the compiler already reports exactly. Keep warning on unknown licenses — rejected: a legal
+  artifact that ships with an unruled package is the failure this tooling exists to prevent, and a
+  warning in CI output is not a decision.
+- **Consequences:** the generator now requires a completed `npm run build` (it reads what webpack
+  compiled) and performs four `dotnet restore` runs, so it is no longer a fast standalone script —
+  that cost buys a shipping set derived from the build rather than inferred from it. **A NuGet
+  package's LICENSE is CLASSIFIED from nuspec metadata but REPRODUCED from the file it bundles** —
+  two questions that look like one and are not. Classification has a single signal (`nuget-license`
+  reads the nuspec; there is no second source to reconcile against), but reproduction must still
+  prefer the package's own file, because a bundled licence carries its own copyright notice and that
+  is the notice MIT/BSD/ISC oblige to travel with copies. Reproducing canonical SPDX text in its
+  place would substitute the `<copyright holders>` placeholder for it: 58 packages in this closure
+  bundle the shared Microsoft `LICENSE.TXT` naming "Copyright (c) .NET Foundation and Contributors",
+  while their nuspecs name "© Microsoft Corporation. All rights reserved." — a different entity. An
+  interim version of this pipeline did exactly that and was corrected before the artifact was ever
+  regenerated; the canonical text is the FALLBACK for a package bundling nothing, never a
+  replacement. The four NuGet `NOTICE` files the old generator recorded by name are still no longer
+  enumerated, since `NOTICE` files are read only where a package directory is walked for them: that
+  narrowing is deliberate but is a real reduction, worth revisiting if a NuGet dependency under
+  Apache-2.0 ever ships one (none in the current closure does, and section 4(d) would then oblige
+  reproducing it). npm `NOTICE` files are still read and reproduced. **Revisit** if the build cost
+  becomes a problem for pull-request CI.
+- **Source:** the third-party-notices tooling replacement (`.superpowers/sdd/`
+  `2026-08-20-third-party-notices-tooling/`); `LICENSING.md`.
+
+## ADR-0024: Per-platform notices verification splits into a full check (Linux) and an npm-shipping-set-only check (Windows/macOS)
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Context:** Task 11 packages `THIRD-PARTY-NOTICES.md` and `LICENSE` into every platform's
+  installer (`electron-builder.json5` `extraResources`), which makes the Linux-generated document a
+  claim carried by Windows and macOS binaries too. The task's own plan
+  (`docs/superpowers/plans/2026-08-20-third-party-notices-tooling.md`, and the Task 11 brief it was
+  drawn from) called for the non-Linux CI legs to run `npm run verify:third-party-notices` -
+  `main.js --verify`, which calls `buildReport()` in full. That cannot work as specified: `buildReport`
+  shells out to `bundle exec ruby detect.rb` for licence identification, and Ruby is deliberately
+  installed on the Linux CI leg only (`.github/workflows/test.yml`); it also runs four
+  `dotnet restore` passes plus `nuget-license` against an internal SIL feed. The step would fail on
+  the exact legs it exists to protect.
+- **Decision:** Split verification into two modes, both in `main.js`:
+  1. **`--verify`** (unchanged) - the full check: re-derive every verdict (`buildReport`) and diff
+     the whole lock (`diffLock`). Needs Ruby and dotnet; not wired into non-Linux CI.
+  2. **`--verify-shipping-set`** (new; `npm run verify:third-party-notices:shipping-set`) - compares
+     ONLY the current platform's resolved npm packages, by `name@version`, against the npm half of
+     the committed lock (`diffShippingSet`, `lock.js`). No licence identification, no NuGet, no
+     Ruby, no dotnet, no network - it calls only `collectShippedPackages` (webpack's module
+     manifests, the stylesheet leaf scan, `release/app`'s closure).
+
+  This is sound, not merely convenient, because the two things `--verify-shipping-set` skips are
+  each already covered elsewhere: licence identification is platform-invariant (the same files,
+  matched by the same pinned licensee version, identify the same way on every OS - there is no
+  "Windows licence" for a package's LICENSE file), and the NuGet closure is already made
+  platform-complete FROM Linux by the four-RID union (`nuget-set.js`; ADR-0023), which Task 6
+  measured as producing identical sets across all four RIDs. The one thing that genuinely varies by
+  platform is the npm closure: npm installs an optional dependency only where its `os`/`cpu`
+  constraints match, so a tree resolved on Windows or macOS can hold packages a Linux-resolved tree
+  does not, or vice versa - and that is exactly, and only, what `--verify-shipping-set` checks. The
+  Windows and macOS CI legs (`.github/workflows/test.yml`) run it after their own `npm run build`;
+  the Linux leg keeps regenerating the artifact for real
+  (`npm run build:third-party-notices` followed by the generic changed-files check), which is a
+  strictly stronger check than `--verify` would add on top.
+- **Alternatives:** Install Ruby and a `dotnet restore`-capable feed on every CI leg so the full
+  `--verify` could run everywhere - rejected: it buys nothing (licence identification and the NuGet
+  closure do not vary by platform) at real cost (three-platform Ruby provisioning, and network
+  access to an internal feed from public CI runners, which may not even be reachable). Skip
+  per-platform verification entirely and rely on the Linux artifact - rejected: it is exactly the
+  gap Task 11 exists to close, since npm's `os`/`cpu`-conditional optional dependencies mean a
+  Windows or macOS install can genuinely differ from what Linux resolved.
+- **Consequences:** a genuine npm divergence on Windows or macOS now fails that platform's CI leg
+  and names the package(s) (`added:`/`removed:` in the drift output), instead of shipping silently.
+  A future change to what varies by platform (e.g., if the NuGet RID union stops being exhaustive)
+  would need a new field in `--verify-shipping-set`'s comparison, not a reversion to running the full
+  `--verify` per platform.
+- **Source:** Task 11 of the third-party-notices tooling replacement
+  (`.superpowers/sdd/2026-08-20-third-party-notices-tooling/task-11-brief.md`); `lock.js`
+  (`diffShippingSet`); `main.js` (`verifyNpmShippingSet`); `LICENSING.md`.
+
+## ADR-0025: A `yalc` dev-linked package is described from `package-lock.json`, not from its on-disk directory
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Context:** `postinstall` (`package.json`) always runs `link-dev-packages`
+  (`.erb/scripts/link-dev-packages.ts`), which clones the repository named in `dev-packages.json` at
+  a BRANCH (today, `eten-tech-foundation/scripture-editors@platform-yalc`) and `yalc`-links the
+  packages it publishes over the installed copies in `node_modules`. `postinstall` runs on every
+  `npm ci`/`npm install`, so CI is yalc-linked too, not only developer machines. Because the linked
+  branch is a moving target, describing a shipped package from what is on disk would make the
+  committed legal artifact a function of another repository's latest push: this moved mid-development
+  of this tooling, when `.yalc` held `@eten-tech-foundation/platform-editor` 0.8.15 while
+  `package-lock.json` pinned 0.8.14. A link also takes its own nested `node_modules` with it when it
+  replaces `node_modules/<name>` with a symlink, so a dependency the lockfile NESTS under the linked
+  package (`@xmldom/xmldom` 0.9.10 nested under `scripture-utilities`) is missing from the linked tree
+  entirely, and webpack silently resolves the hoisted copy instead (0.8.13) - so a linked developer's
+  tree and CI's tree can genuinely disagree about which copy of a transitive dependency ships, from
+  the same commit.
+- **Decision:** A resolved package directory reached through `.yalc` (detected by testing the REAL
+  path via `fs.realpathSync`, since yalc installs as a symlink and the path webpack reports names
+  only `node_modules`) is described from `package-lock.json` - the version and license declaration
+  this repository pins - and nothing is read from its on-disk directory; its copyright notice comes
+  from a dedicated `copyrightNotices` table in `notices-policy.json` instead of a reproduced license
+  text, because the published tarball is never unpacked to read one from (`shipping-set.js`
+  `DEV_LINK` / `isDevLinked` / `describePackage`). Separately, every package the linked directory's
+  disappearance NESTED elsewhere in the lockfile is re-described from the lockfile too
+  (`correctLinkDistortedResolutions`), narrowly: only when the hoisted copy is what is on disk, some
+  linked package's lockfile entry names a different nested copy, and no other non-linked shipped
+  package also resolves the hoisted copy - re-describing only, never adding or dropping a package, so
+  this stays subordinate to ADR-0023's "shipping set comes from webpack's module graph" rule rather
+  than reintroducing a lockfile walk.
+- **Alternatives:** Read the license from the linked directory on disk - rejected: it is what the
+  deleted generator's own `YALC_RESOLUTION` guard already existed to prevent, and dropping it would
+  again make a developer's link state and CI's answer diverge for the same commit. Ignore the
+  nested-dependency displacement and accept whichever copy is on disk - rejected: measured against
+  the live case, an unlinked tree and a linked tree would commit different artifacts from an
+  identical `package-lock.json`, which is exactly the non-determinism a committed legal artifact
+  cannot have. Walk the linked package's own lockfile closure to decide what it depends on -
+  rejected: that reintroduces what deriving the shipping set from webpack's module graph (ADR-0023)
+  exists to remove - dozens of declared-but-tree-shaken packages that never reach the bundle; only
+  WHICH COPY of what webpack actually compiled needed re-describing, not a new source of what ships.
+- **Consequences:** the generated artifact and lock are identical whether or not the generating
+  machine has run `link-dev-packages`, so a developer's local link state cannot produce a diff CI
+  would reject. `copyrightNotices` in `notices-policy.json` must be kept current for the dev-linked
+  packages specifically (verify an entry against the published tarball when its major version
+  changes, since the branch is otherwise unreviewable at generation time). Two linked packages that
+  need two different nested copies of the same name is treated as unresolvable and throws rather than
+  guessing (`shipping-set.js`), because guessing would put an unreproducible version into a legal
+  document.
+- **Source:** the third-party-notices tooling replacement (`.superpowers/sdd/`
+  `2026-08-20-third-party-notices-tooling/`); `shipping-set.js` (`DEV_LINK`, `isDevLinked`,
+  `describePackage`, `correctLinkDistortedResolutions`); `shipping-set.test.ts`; `notices-policy.json`
+  (`copyrightNotices`); `dev-packages.json`; `.erb/scripts/link-dev-packages.ts`.
+
+## ADR-0026: The notices lock's drift detection is a CI gate, run before regeneration
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Context:** `THIRD-PARTY-NOTICES.lock.json` records, per package, the licensee version, the
+  matched file, the SPDX id and a sha256 of the license TEXT, and ADR-0023's design states that a
+  license text changing under an unchanged `name@version` must block and require explicit
+  acknowledgment. `readLock`/`diffLock` implement exactly that - but they were reachable only under
+  `--verify`, and `npm run verify:third-party-notices` was referenced by nothing: not
+  `.github/workflows/test.yml`, not any other script. The write path overwrites the lock without
+  ever reading the committed one. So the mechanism existed, was tested, and ran nowhere. The
+  staleness check that DID run (`verify-changed-files`, after `npm run build:third-party-notices`)
+  can only report that some file changed; it cannot say which package's text moved, and the remedy it
+  offers - regenerate and commit - is precisely the action that erases the evidence.
+- **Decision:** the Linux CI leg runs `npm run verify:third-party-notices` BEFORE the regeneration
+  step. Ordering is load-bearing: regeneration overwrites the lock, so a check after it can only ever
+  compare a file against itself. A legitimate dependency bump now fails at that step with a per-package
+  diff ("license text changed under the same version and identifier ... Inspect LICENSE before
+  accepting"), and the failure message names the two commands that regenerate both files.
+- **Alternatives:** Leave `--verify` unreferenced and rely on `verify-changed-files` - rejected: it
+  reports a filename, not a licensing fact, so the one case the lock exists for (same package, same
+  version, same identifier, different text) is regenerated away without anyone reading it. Make the
+  WRITE path refuse when the committed lock disagrees - rejected: every legitimate dependency bump
+  would then need a flag to proceed, including on the developer machine doing the regeneration, which
+  converts a review prompt into a workflow obstacle and invites the flag becoming habitual. Run it on
+  all three legs - rejected for the reason ADR-0024 already gives: `--verify` needs Ruby and four
+  `dotnet restore` passes, which the Windows and macOS legs deliberately do not have.
+- **Consequences:** the Linux leg does the expensive notices work twice (measured at ~15s per pass in
+  this repository, four warm restores included), which is the price of the check. A dependency bump
+  fails CI one step earlier than before, with a more specific message. Anyone changing the CI steps
+  must keep `--verify` ahead of `build:third-party-notices`; reordering them silently disables the
+  gate again, which is how it came to be dead in the first place.
+- **Source:** final whole-branch review of the third-party-notices tooling replacement
+  (`.superpowers/sdd/2026-08-20-third-party-notices-tooling/`); `.github/workflows/test.yml`;
+  `main.js` (`--verify`); `lock.js` (`readLock`, `diffLock`); `degradation.test.ts`.
+
+## ADR-0027: A reviewed exception is bounded by the policy's own allow and copyleft lists
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Context:** `applyException` (`policy.js`) is the one instrument that clears a blocked verdict. It
+  is pinned to `name@version` AND to a sha256 of the license text, so a package changing its text
+  re-blocks - but the mechanism imposed no constraint on what the exception could clear TO. An entry
+  whose `spdx` named `AGPL-3.0-or-later` was accepted and returned `excepted AGPL-3.0-or-later`, with
+  every copyleft and allow-list gate in the file bypassed. The only thing standing against that was a
+  data-level test over the COMMITTED policy (`policy.test.ts`, "no reviewed exception admits a
+  copyleft license"), which by construction cannot cover an entry added in the same pull request as
+  the policy change that would accompany it - a green test on a red change.
+- **Decision:** at apply time, the exception's own `spdx` must parse as an SPDX expression and every
+  identifier in it must be on `allowed` and absent from `copyleft`; otherwise the exception does not
+  apply and the package stays blocked, with the reason naming the offending identifier. Conjunctions
+  are checked per operand rather than rejected, because a two-grant document is the truthful answer
+  for an exception even though it is unresolvable as a DECLARATION (`npm:chroma-js` is the live
+  case). The data-level test is kept: it is a cheaper, earlier signal over the shipped file.
+- **Alternatives:** Check copyleft only, leaving the allow list out - rejected: the two lists are
+  applied together on every other path in `policy.js`, and an unlisted identifier is exactly the
+  "neither vetted nor known-bad" case that the text-derived path already had to stop treating as
+  permission. Leave the bound to the data-level test - rejected for the same-pull-request hole above.
+  Allow free text in an exception's `spdx` - rejected: `overrides` is the instrument for a recorded
+  free-text determination, and it is deliberately narrower (it applies only where nothing parseable is
+  declared AND no text identified), so permitting free text here would route around that narrowing.
+- **Consequences:** an exception for a package whose licence is genuinely something the project has
+  not yet accepted requires adding that identifier to `allowed` first - a visible, reviewable line in
+  the policy rather than one buried in a per-package entry. All 16 exceptions in the committed policy
+  satisfy the bound unchanged, so the generated artifact is unaffected. `reason` is still free text
+  and is still what a reviewer reads; only the identifier is constrained.
+- **Source:** final whole-branch review of the third-party-notices tooling replacement
+  (`.superpowers/sdd/2026-08-20-third-party-notices-tooling/`); `policy.js` (`applyException`);
+  `policy.test.ts`; `notices-policy.json`; `LICENSING.md`.
+
+## ADR-0028: Distributed components outside the npm and NuGet graphs are disclosed in prose, not by silence
+
+- **Date:** 2026-08-21
+- **Status:** Accepted
+- **Context:** ADR-0023's pipeline derives what ships from webpack's module manifests and the NuGet
+  restore closure. Two things this repository distributes are in neither, so no scan it performs can
+  reach them: the UBS lexical database `platform-lexical-tools` downloads at install time (about
+  35 MiB, copied into every installer with the rest of that extension's assets), and the Ubuntu
+  shared libraries snapcraft stages inside the Linux `.snap` (`electron-builder.json5` →
+  `snap.stagePackages`). Neither appeared anywhere in `THIRD-PARTY-NOTICES.md`, whose scope
+  paragraph carefully justifies the one safe exclusion — build and test tooling, which is not
+  distributed — and said nothing about these two. A component that ships without a row is
+  indistinguishable from one nobody considered. Neither omission was harmless. The database is UBS
+  material: portions are under CC BY-SA 4.0, whose section 3(a)(1) requires the attribution and
+  licence notice to travel with the work, and the remainder is © United Bible Societies under no open
+  licence, distributable only under the permission UBS gave Paratext — which does not name
+  Platform.Bible, although the upstream `SOURCE.md` reads more broadly — and the
+  download fetched the archive and its checksum only, so neither the licence nor the attribution
+  reached the package. The staged set includes LGPL and MPL-2.0 libraries, which `LICENSING.md`
+  appeared to deny by asserting the scan "finds no GPL- or LGPL-only components" without saying which
+  graphs that sentence covered. Unpacking a released snap (paratext-10-studio 0.4.0-alpha.0) confirmed
+  both halves: the libraries are physically present, and not one of their
+  `usr/share/doc/<package>/copyright` files is.
+- **Decision:** Disclose both in prose sections written by `render.js`, rather than teaching the
+  shipping set to carry them. Three constraints shape how:
+  1. **The staged library list is read, not restated.** `main.js` parses `electron-builder.json5` and
+     passes `snapStagePackages` into `render`, so editing the packaging config changes the generated
+     document and ADR-0026's drift gate fails an un-regenerated one.
+  2. **The database's notices travel with the database.** `download-db.ts` fetches `LICENSE.md` and
+     `SOURCE.md` into the same directory as the DB, which is what puts them inside the installer;
+     those files are authoritative and the notices section summarizes them. A missing notice file
+     hard-fails the canonical org and warns a fork, matching the existing strict/lenient contract.
+  3. **The snap's missing copyright files are recorded, not fixed.** Both documents name the gap as
+     known and still open, and this entry is its record - there is no separate ticket. The fix is an
+     electron-builder packaging change whose only proof is a built snap, which does not belong in a
+     notices change.
+- **Alternatives:** Extend the shipping set to cover them — rejected: ADR-0023's verdicts come from
+  reconciling a declared expression against identified licence text, and a data file and a staged
+  `.deb` have neither, so they would enter as pseudo-packages whose verdicts nothing could check.
+  Treat both as out of scope and stay silent — rejected: that is the state this entry exists to end,
+  and silence reads as oversight rather than as a decision. Hardcode the staged list in prose —
+  rejected on ADR-0022's lesson that a legal artifact must not depend on a hand-maintained table.
+  Check the notice files into the extension instead of downloading them — rejected: they describe a
+  DB fetched at install time, and a committed copy goes stale against the data it describes.
+- **Consequences:** `THIRD-PARTY-NOTICES.md` now carries two sections no scan produces. The staged
+  list is derived and cannot drift, but the database section is curated prose and will not notice if
+  UBS revises `SOURCE.md` — the shipped `SOURCE.md` is authoritative and the section says so. **The
+  general gap remains:** any future bundled artifact that is not an npm or NuGet package — another
+  downloaded corpus, a font, a model file — is invisible to this pipeline and needs the same
+  deliberate treatment, which nothing will prompt. `LICENSING.md`'s copyleft claim is now scoped to
+  the two graphs it describes, and its statement that anyone may rebuild under the AGPL is carved out
+  for the database, whose closed portions a third party has no permission to redistribute.
+- **Open (this entry is the record):** closing the snap gap is an `electron-builder.json5` change -
+  carry each staged package's `usr/share/doc/<package>/copyright` into the artifact - verified by
+  building a snap and listing it. What the 0.4.0-alpha.0 snap actually contained, so the next person
+  does not have to re-derive it: **staged and present** - `libasound.so.2`, `libappindicator3.so.1`,
+  `libnss3.so`, `libnspr4.so`, `libdrm{,_amdgpu,_intel,_nouveau,_radeon}`, `libgbm`, `libglapi`,
+  `libGL`/`libGLX`/`libGLdispatch`/`libGLX_mesa`, `libXss.so.1`, `libtinfo.so.5`; **declared but
+  absent** - `libgtk-3-0` and `libsecret-1-0`, satisfied at runtime by the `gnome-*` content snap;
+  **copyright files present** - only `mercurial`, `mercurial-common`, `python2*` and `libpython2*`,
+  none of which is one of the staged libraries. Separately, that snap stages **Mercurial**, which is
+  GPL-2.0-or-later: its Debian copyright file IS present so attribution is satisfied, but GPLv2
+  section 3 also wants source or a written offer, and Mercurial is staged by Paratext 10 Studio's
+  packaging rather than this repository's - so it is a question for that team, not this one.
+- **Source:** scope review following the third-party-notices tooling replacement
+  (`.superpowers/sdd/2026-08-20-third-party-notices-tooling/`); `render.js`; `main.js`
+  (`snapStagePackages`); `extensions/src/platform-lexical-tools/lib/download-db.ts`;
+  `LICENSING.md`; <https://github.com/ubsicap/ubs-open-license>.

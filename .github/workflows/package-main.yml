@@ -121,6 +121,17 @@ jobs:
           npm ci
           npm run build
 
+      # See the matching step in publish.yml: `npm run build` builds the extensions in development
+      # mode, and electron-builder packs `extensions/dist/` as it finds it.
+      - name: Build extensions for production
+        run: npm run build:extensions:production
+
+      # See the matching step in publish.yml: the notices document is packaged into every artifact
+      # this job produces, and this is the cross-platform half of the check that it describes what
+      # is actually being packaged - which is why it runs after the production build above.
+      - name: Verify third-party notices describe what this build ships
+        run: npm run verify:third-party-notices:shipping-set
+
       - name: Publish releases - Windows
         if: ${{ matrix.os == env.OS_WINDOWS }}
         run: |

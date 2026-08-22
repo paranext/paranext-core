@@ -27,6 +27,20 @@ const DEPENDENCIES_BRANCH = 'main';
 /** Subdirectory within {@link DEPENDENCIES_REPO} that holds the DB and checksum files. */
 const DEPENDENCIES_SUBDIR = 'lexical-db';
 
+/**
+ * Notice files fetched alongside the DB and written beside it.
+ *
+ * The database is not our data. Portions of it are UBS material licensed under CC BY-SA 4.0, whose
+ * section 3(a)(1) requires the identification of the creator, the copyright notice, the licence
+ * notice and a link to the licence to travel with the work; the remaining portions are © United
+ * Bible Societies under no open licence at all, distributable only under the permission UBS granted
+ * Paratext. `SOURCE.md` carries both statements and `LICENSE.md` carries the CC BY-SA 4.0 text.
+ * Fetching them here is what puts them inside the packaged application: the extension's `assets`
+ * directory is copied wholesale into `extensions/dist` and from there into every installer, so a
+ * notice left behind in the dependencies repo never reaches a user.
+ */
+const NOTICE_FILENAMES = ['LICENSE.md', 'SOURCE.md'];
+
 /** Result of attempting to detect the GitHub organization. */
 export type OrgDetectionResult = { org: string } | { org: undefined; reason: string };
 
@@ -354,19 +368,22 @@ export interface RunDownloadOptions {
   localDbPath: string;
   dbFilename: string;
   checksumFilename: string;
+  noticeFilenames: string[];
 }
 
 /**
  * Orchestrates lexical DB download: discover org → compute URLs → fetch checksum → skip/download →
- * verify → extract. Applies strict-vs-lenient policy: when the detected org is exactly
- * {@link STRICT_ORG}, missing files (HTTP 404) hard-fail; for any other detected org they are logged
- * and skipped so forks don't break `npm install`. Failure to detect the org at all (no git repo,
- * unparseable origin, etc.) is treated as an unexpected configuration error and throws rather than
- * running leniently — a silent download skip from a weird git error would be worse than a loud
- * failure. See the README section "Lexical database downloads (forks)" for the contract.
+ * verify → extract → fetch the notice files that travel with the data. Applies strict-vs-lenient
+ * policy: when the detected org is exactly {@link STRICT_ORG}, missing files (HTTP 404) hard-fail;
+ * for any other detected org they are logged and skipped so forks don't break `npm install`.
+ * Failure to detect the org at all (no git repo, unparseable origin, etc.) is treated as an
+ * unexpected configuration error and throws rather than running leniently — a silent download skip
+ * from a weird git error would be worse than a loud failure. See the README section "Lexical
+ * database downloads (forks)" for the contract.
  */
 export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps): Promise<void> {
-  const { detection, localDbDir, localDbPath, dbFilename, checksumFilename } = opts;
+  const { detection, localDbDir, localDbPath, dbFilename, checksumFilename, noticeFilenames } =
+    opts;
 
   if (detection.org === undefined) {
     throw new Error(
@@ -440,6 +457,46 @@ export async function runDownload(opts: RunDownloadOptions, deps: DownloadDeps):
       }
     }
 
+    // Fetched after the DB rather than with it because they describe data that is now on disk. Any
+    // time the DB is re-fetched the notices are re-fetched with it, so a notice that changed
+    // upstream cannot go stale against the data it describes; otherwise only a missing one is
+    // fetched.
+    const noticesToFetch = noticeFilenames.filter(
+      (noticeFilename) => needsDownload || !deps.fileExists(path.join(localDbDir, noticeFilename)),
+    );
+    if (noticesToFetch.length > 0) {
+      // `allSettled`, not `all`: `all` rejects on the FIRST failure and abandons the other fetch
+      // still in flight, so a run where BOTH notices are missing reported only whichever URL
+      // happened to fail first, while telling the maintainer to publish both. Every fetch is now
+      // allowed to finish and every failure is reported.
+      const results = await Promise.allSettled(
+        noticesToFetch.map(async (noticeFilename) => {
+          deps.log(`Downloading ${noticeFilename}...`);
+          await deps.downloadFile(
+            `${rawBaseUrl}/${noticeFilename}`,
+            path.join(localDbDir, noticeFilename),
+          );
+        }),
+      );
+      const failures = results
+        .filter((result) => result.status === 'rejected')
+        .map((result) => result.reason);
+      // Handled here rather than by the outer handler, whose message reports a missing DB — the DB
+      // is on disk by this point, and saying otherwise would send a reader looking for the wrong
+      // problem. Strict mode fails: packaging the data without the attribution its licence
+      // requires is the defect this fetch exists to prevent. A fork is warned instead, because
+      // hard-failing its `npm install` over a file it never published is what lenient mode is
+      // for — but silence would let it ship the data bare, so the warning names the obligation.
+      const unexpected = failures.find((failure) => !(failure instanceof FileNotFoundError));
+      if (unexpected) throw unexpected;
+      if (failures.length > 0) {
+        if (isStrict) throw failures[0];
+        deps.warn(
+          `Lexical DB notice files not found at ${failures.map((failure) => failure.url).join(' and ')} — the DB will be packaged without the attribution and licence text its terms require. Publish ${noticeFilenames.join(' and ')} alongside the DB in your \`${DEPENDENCIES_REPO}\` repo.`,
+        );
+      }
+    }
+
     deps.log('DB file preparation complete.');
   } catch (error) {
     if (error instanceof FileNotFoundError) {
@@ -466,6 +523,7 @@ async function main(): Promise<void> {
         localDbPath: LOCAL_DB_PATH,
         dbFilename: DB_FILENAME,
         checksumFilename: CHECKSUM_FILENAME,
+        noticeFilenames: NOTICE_FILENAMES,
       },
       {
         fetchRemoteChecksum,

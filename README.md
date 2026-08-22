@@ -77,7 +77,17 @@ Set up pre-requisites, build, and run:
    # 8.0.412 (or similar 8.* version)
    ```
 
-3. Install [`gitleaks`](https://github.com/gitleaks/gitleaks). The pre-commit hook runs `gitleaks` on staged files to block accidental secret commits — without it, every `git commit` fails.
+3. **Ruby >= 3.2 and Bundler** - only needed to regenerate `THIRD-PARTY-NOTICES.md`, which is done
+   on Linux (see [Third-party notices](#third-party-notices)). Not needed to build or run the
+   application. On Ubuntu 22.04: `sudo snap install ruby --classic --channel=3.4/stable`. On 24.04+:
+   `sudo apt install ruby-full`. Then:
+
+   ```bash
+   gem install --user-install bundler
+   bundle install   # installs licensee, pinned in Gemfile.lock
+   ```
+
+4. Install [`gitleaks`](https://github.com/gitleaks/gitleaks). The pre-commit hook runs `gitleaks` on staged files to block accidental secret commits — without it, every `git commit` fails.
 
    - **macOS**: `brew install gitleaks`
    - **Windows**: `winget install Gitleaks.Gitleaks`
@@ -89,9 +99,9 @@ Set up pre-requisites, build, and run:
    gitleaks version
    ```
 
-4. Prerequisites for macOS or Linux (below).
+5. Prerequisites for macOS or Linux (below).
 
-5. Clone, install, build, and run (below).
+6. Clone, install, build, and run (below).
 
 ### Linux Development Pre-requisites
 
@@ -549,14 +559,70 @@ const papi = {
   myService,
 ```
 
+## Third-party notices
+
+`THIRD-PARTY-NOTICES.md` and its sidecar `THIRD-PARTY-NOTICES.lock.json` are generated, never edited
+by hand. They describe what the packaged application redistributes: the npm packages webpack
+compiled into `dist/`, the NuGet closure of the .NET data provider, and the components that belong
+to neither graph. The document ships inside every installer.
+
+**You do not need to regenerate them as part of ordinary work.** Building never touches them and
+never complains, whatever your webpack cache holds. Regenerate deliberately, when a **production**
+dependency changes - an npm package that reaches the bundle, or a NuGet version in
+`c-sharp/ParanextDataProvider.csproj`. If you forget, CI's Linux leg regenerates and fails on the
+diff, naming what moved.
+
+### Regenerating (Linux)
+
+The generator reads what webpack actually compiled, and a warm webpack filesystem cache can
+under-report modules that were served from cache instead of rebuilt - so it refuses to write from
+one. Start from a cold cache:
+
+```bash
+rm -rf node_modules/.cache/webpack-* .notices
+npm run build
+dotnet restore c-sharp/ParanextDataProvider.csproj
+npm run build:third-party-notices
+```
+
+Then read the diff and commit **both** files together; they are written as a pair.
+
+If a package cannot be cleared, the run stops and prints the package, both signals it read, and the
+exact policy entry to add to `.erb/scripts/third-party-notices/notices-policy.json`. Nothing is
+written from an incomplete set.
+
+If dependencies were genuinely removed and the npm set drops by more than 10%, the run refuses that
+too - the drop is otherwise indistinguishable from a broken tree. Acknowledge a real one explicitly:
+
+```bash
+NOTICES_ACCEPT_SHRINK=1 npm run build:third-party-notices
+```
+
+### Checking without regenerating
+
+| Command                                           | Answers                                                                                    | Needs                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------- |
+| `npm run verify:third-party-notices`              | Does the committed pair match what this tree derives, verdicts and licence texts included? | Linux, Ruby, `dotnet restore` |
+| `npm run verify:third-party-notices:shipping-set` | Does this platform ship the same npm packages the committed lock records?                  | Nothing beyond a build        |
+
+The second runs on every platform and is what the packaging and release workflows use. On a warm
+cache it cannot answer its question, so locally it says so and stops rather than failing your
+`npm run package`; in CI, where every build is cold, a warm stamp is a real anomaly and fails.
+
 ## Thanks
 
 Some important decisions in this project were inspired by the work done in [Visual Studio Code](https://code.visualstudio.com/api). Thanks VS Code developers for some great ideas!
 
 ## License
 
-This project is licensed under the [MIT License](./LICENSE).
-Copyright © 2017-2025 [SIL Global](https://www.sil.org/) and [United Bible Societies](https://unitedbiblesocieties.org/)
+This repository contains code under two licenses:
+
+- The core Platform.Bible application — the Electron client, extension host, .NET data provider, the bundled extensions, and the build- and lint-time packages `lib/papi-dts`, `lib/eslint-plugin-paranext`, and `lib/browserslist-config-detect-electron` — is licensed under the [GNU Affero General Public License v3.0 or later](./LICENSE) (`AGPL-3.0-or-later`).
+- The two developer libraries an extension links against at runtime — `platform-bible-react` and `platform-bible-utils`, both under [`lib/`](./lib/) — remain under the MIT License, so extensions built with them are not obligated to adopt the AGPL. Each carries its own `LICENSE` file. The boundary keys on runtime linkage, not on the `lib/` directory: three of the five packages there are AGPL.
+
+See [LICENSING.md](./LICENSING.md) for the authoritative path-by-path map and copyright attributions.
+
+Copyright © 2017-2026 [SIL Global](https://www.sil.org/) and [United Bible Societies](https://unitedbiblesocieties.org/)
 
 <!-- define variables used above -->
 

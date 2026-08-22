@@ -321,6 +321,99 @@ async function deleteUnusedPackageLockIfPresent(repoRootRelativePath: string): P
   }
 }
 
+/**
+ * The license every extension bundled in this repository carries.
+ *
+ * The upstream templates are MIT, because an extension built from one and shipped by somebody else
+ * should be free to choose its own terms. An extension bundled _here_ is part of Platform.Bible and
+ * is AGPL-3.0-or-later along with the rest of the application — so the license is stamped as part
+ * of adapting the template to this repository, alongside the path and type-name rewrites, rather
+ * than left for whoever creates the extension to remember. See LICENSING.md and ADR-0019.
+ */
+const BUNDLED_EXTENSION_LICENSE = 'AGPL-3.0-or-later';
+
+/** Sets `license` in a JSON file, keeping it beside `version` when the field is not there yet. */
+async function stampLicenseInJson(repoRootRelativePath: string): Promise<boolean> {
+  const file = path.join(repoRoot, repoRootRelativePath);
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(await fs.readFile(file, 'utf8'));
+  } catch (error: unknown) {
+    // Not every extension folder has every file; nothing to stamp is not a failure.
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return false;
+    throw error;
+  }
+  if (parsed.license === BUNDLED_EXTENSION_LICENSE) return false;
+  // An extension that has deliberately been given other terms is left alone; only a template's own
+  // value (or none) is overwritten.
+  if (parsed.license !== undefined && parsed.license !== 'MIT') return false;
+
+  const stamped: Record<string, unknown> = {};
+  Object.entries(parsed).forEach(([key, value]) => {
+    stamped[key] = key === 'license' ? BUNDLED_EXTENSION_LICENSE : value;
+    if (key === 'version' && parsed.license === undefined)
+      stamped.license = BUNDLED_EXTENSION_LICENSE;
+  });
+  if (stamped.license === undefined) stamped.license = BUNDLED_EXTENSION_LICENSE;
+
+  await fs.writeFile(file, `${JSON.stringify(stamped, undefined, 2)}\n`, 'utf8');
+  return true;
+}
+
+/**
+ * Gives an extension folder this repository's license: the `license` field in its `package.json`
+ * and `manifest.json`, and a copy of the AGPL text beside them.
+ *
+ * The text is copied rather than referenced because each extension is redistributed as its own
+ * folder, and a license field naming terms whose text is nowhere in the folder states an obligation
+ * without discharging it.
+ *
+ * The text is compared, not merely tested for presence. Copying it only when NO file existed left
+ * the one state that is worse than either: a merge from the MIT template reintroduces the
+ * template's own `LICENSE`, the JSON fields above are corrected to AGPL, and the folder then
+ * declares AGPL-3.0-or-later while shipping the text of a different licence. An extension whose
+ * `package.json` names other terms is left alone entirely - the stamping above already declined to
+ * change its field, and its own text is then the right one.
+ */
+async function stampExtensionLicense(extensionFolderPath: string): Promise<void> {
+  const stamped = await Promise.all([
+    stampLicenseInJson(`${extensionFolderPath}/package.json`),
+    stampLicenseInJson(`${extensionFolderPath}/manifest.json`),
+  ]);
+
+  let declared: unknown;
+  try {
+    declared = JSON.parse(
+      await fs.readFile(path.join(repoRoot, extensionFolderPath, 'package.json'), 'utf8'),
+    ).license;
+  } catch {
+    declared = undefined;
+  }
+
+  if (declared === BUNDLED_EXTENSION_LICENSE) {
+    const licenseFile = path.join(repoRoot, extensionFolderPath, 'LICENSE');
+    const canonical = await fs.readFile(path.join(repoRoot, subtreeRootFolder, 'LICENSE'), 'utf8');
+    let current: string | undefined;
+    try {
+      current = await fs.readFile(licenseFile, 'utf8');
+    } catch {
+      current = undefined;
+    }
+    if (current !== canonical) {
+      await fs.writeFile(licenseFile, canonical, 'utf8');
+      console.log(
+        current === undefined
+          ? `Added ${BUNDLED_EXTENSION_LICENSE} LICENSE to ${extensionFolderPath}`
+          : `Replaced the LICENSE in ${extensionFolderPath}: it did not match the ` +
+              `${BUNDLED_EXTENSION_LICENSE} text this extension declares`,
+      );
+    }
+  }
+
+  if (stamped.some(Boolean))
+    console.log(`Set license to ${BUNDLED_EXTENSION_LICENSE} in ${extensionFolderPath}`);
+}
+
 /** Format the `extensions/` root folder after a merge from the multi-extension template. */
 export async function formatExtensionsRoot() {
   // Delete `extensions/package-lock.json` if present — it is unused because `extensions/` is an npm
@@ -352,6 +445,11 @@ export async function formatExtensionFolder(extensionFolderPath: string) {
 
   // Delete package-lock.json if present — it is unused because this folder is an npm workspace
   await deleteUnusedPackageLockIfPresent(`${extensionFolderPath}/package-lock.json`);
+
+  // Stamp this repository's license over the template's. Done on every format pass, not only on
+  // creation, so a template merge that reintroduces the template's MIT value is corrected the same
+  // way a reintroduced `../paranext-core` path is.
+  await stampExtensionLicense(extensionFolderPath);
 
   // Get the basename of the extension folder for use in replacements
   const extensionName = path.basename(extensionFolderPath);
