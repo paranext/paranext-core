@@ -34,7 +34,17 @@ const INITIAL_READINESS_POLL_INTERVAL_MS = REQUEST_ATTEMPT_WAIT_TIME_MS;
  */
 const INITIAL_READINESS_POLL_ATTEMPTS = MAX_REQUEST_ATTEMPTS;
 
-/** Cadence (ms) for phase-2 probes once {@link INITIAL_READINESS_POLL_ATTEMPTS} is exhausted. */
+/**
+ * Cadence (ms) for phase-2 probes once {@link INITIAL_READINESS_POLL_ATTEMPTS} is exhausted.
+ *
+ * Numerically equal to `EXTENDED_RETRY_INTERVAL_MS` in `startup-tasks.ts`, and deliberately not
+ * shared with it for the same reason {@link STARTUP_SYNC_READINESS_BUDGET_MS} is not aliased to that
+ * file's budget: the two back off different waits — that one paces "how long until the S/R command
+ * registers", this one paces "how long until the workspace can list scripture projects" — and
+ * should stay free to be retuned apart. Unlike the `INITIAL_*` constants above, which alias shared
+ * `requestWithRetry` values and so cannot drift, this is the one number here that can silently
+ * drift from its sibling. That is accepted, not overlooked.
+ */
 const EXTENDED_READINESS_POLL_INTERVAL_MS = 2000;
 
 /**
@@ -48,6 +58,10 @@ const EXTENDED_READINESS_POLL_INTERVAL_MS = 2000;
  * generated `papi.d.ts` public surface permanently, and the two answer different questions (that
  * one is the picker's display filter; this one is a startup readiness gate). They coincide today;
  * nothing requires them to. If you change one, consider the other.
+ *
+ * The coupling is therefore intentionally left unenforced: no test asserts the two literals are
+ * equal, because they are allowed to diverge. The cross-reference comment on each is the whole
+ * mechanism, by design.
  */
 const SCRIPTURE_READINESS_PROJECT_INTERFACE = 'platformScripture.USJ_Chapter';
 
@@ -174,17 +188,57 @@ const FACTORY_NOT_REPORTING_PROJECTS_DETAIL =
   'the scripture project data provider factory registered but never reported any projects';
 
 /**
+ * What phase 1 concluded.
+ *
+ * Deliberately not {@link WorkspaceReadinessResult}: phase 1 has one answer the gate as a whole does
+ * not, `'inconclusive'` — it failed to learn anything, but the budget still has room, so giving up
+ * would be wrong.
+ *
+ * - `'registered'` — the factory network object is up; go on to phase 2.
+ * - `'inconclusive'` — the registration wait failed for a reason that is not budget exhaustion. Go on
+ *   to phase 2 anyway; see {@link waitForScriptureFactoryRegistration}.
+ * - `'stopped'` — the gate is finished, for better or worse; `result` is what to report.
+ */
+type FactoryRegistrationResult =
+  | { kind: 'registered' }
+  | { kind: 'inconclusive'; detail: string }
+  | { kind: 'stopped'; result: WorkspaceReadinessResult };
+
+/**
  * Phase 1: waits for the scripture PDP factory network object to register. This mirrors the wait
  * `getMetadataForProject` performs for a single project in `project-lookup.service-model.ts`, and
  * is the same factory registration the project picker ultimately depends on — but it is NOT the
  * picker's own call: the picker's list comes from `getMetadataForAllProjects`, which performs no
  * `waitForNetworkObject` at all and instead has its own grace loop bounded by
  * `LOAD_TIME_GRACE_PERIOD_MS`, measured from process start.
+ *
+ * A rejection here is NOT treated as the end of the gate unless the budget is actually spent.
+ * `waitForNetworkObject` rejects for two quite different reasons: its own `AsyncVariable` expiring
+ * at the remaining budget we handed it (genuine exhaustion — nothing left to spend), or the status
+ * service being unreachable, which `networkObjectStatusService.initialize()` surfaces as a throw.
+ * The second can land with almost the entire budget unspent, and treating it as terminal would
+ * collapse a 120 s gate into a few seconds and fire the whole-workspace sync early — reintroducing
+ * exactly the starvation this module exists to prevent, invisibly (the cause is logged at debug,
+ * and the caller's warn just says "syncing anyway").
+ *
+ * So a non-exhaustion rejection falls through to phase 2 instead. That is safe and cheap: phase 1
+ * is only a fast path, while phase 2 tests the STRONGER condition — that the factory actually
+ * answers, not merely that it registered — and already tolerates throws by retrying within the same
+ * budget. With no factory registered, phase 2 simply sees empty results, treats them as not-ready,
+ * and polls to the deadline, so the worst case degrades to the same `'timed-out'` it would have
+ * returned here, just having used the budget it was given.
+ *
+ * Note this path is currently unreachable from the main process, and the fall-through is insurance
+ * rather than a fix for an observed failure: the status service is hosted in main
+ * (`network-object-status.service-host.ts`), `main.ts` awaits `startNetworkObjectStatusService()`
+ * well before the startup tasks run, and a same-process `networkObjectService.get` returns the
+ * local proxy — so the call is a synchronous in-memory Map read with no RPC to fail. It is written
+ * this way so the guarantee does not quietly depend on that arrangement staying true.
  */
 async function waitForScriptureFactoryRegistration(
   deadline: number,
   abortSignal?: AbortSignal,
-): Promise<WorkspaceReadinessResult> {
+): Promise<FactoryRegistrationResult> {
   const remainingMs = Math.max(0, deadline - performance.now());
   // A zero (already-elapsed) budget must fail fast, not pass through: `AsyncVariable` only arms
   // its timeout for a strictly positive value (see `rejectIfNotSettledWithinMS > 0` in
@@ -194,7 +248,11 @@ async function waitForScriptureFactoryRegistration(
   // contract. `settleWithin` guards this too, but keeping the guard here documents the coupling at
   // the one call site that depends on it (`remainingMs` is also what we pass to
   // `waitForNetworkObject` as its own documented bound).
-  if (remainingMs <= 0) return { outcome: 'timed-out', detail: FACTORY_NOT_REGISTERED_DETAIL };
+  if (remainingMs <= 0)
+    return {
+      kind: 'stopped',
+      result: { outcome: 'timed-out', detail: FACTORY_NOT_REGISTERED_DETAIL },
+    };
   try {
     const settled = await settleWithin(
       networkObjectStatusService.waitForNetworkObject(
@@ -207,21 +265,31 @@ async function waitForScriptureFactoryRegistration(
       deadline,
       abortSignal,
     );
-    if (settled === ABORTED) return { outcome: 'aborted' };
+    if (settled === ABORTED) return { kind: 'stopped', result: { outcome: 'aborted' } };
     if (settled === TIMED_OUT)
-      return { outcome: 'timed-out', detail: FACTORY_NOT_REGISTERED_DETAIL };
-    return { outcome: 'ready' };
+      return {
+        kind: 'stopped',
+        result: { outcome: 'timed-out', detail: FACTORY_NOT_REGISTERED_DETAIL },
+      };
+    return { kind: 'registered' };
   } catch (e) {
     // Re-check abort FIRST: the gate settles on whichever outcome reaches it first, so a quit
     // landing in the same tick as the underlying rejection would otherwise be reported as
     // 'timed-out' — which makes the caller warn "syncing anyway" during shutdown.
-    if (abortSignal?.aborted) return { outcome: 'aborted' };
-    // Any rejection means the same thing to the caller — we could not confirm readiness — but the
-    // causes differ (budget elapsed vs. the status service itself being unreachable), so log the
-    // message rather than asserting which one it was.
+    if (abortSignal?.aborted) return { kind: 'stopped', result: { outcome: 'aborted' } };
+    // The causes differ (budget elapsed vs. the status service itself being unreachable), so log
+    // the message rather than asserting which one it was.
     const detail = `could not wait for the scripture project data provider factory: ${getErrorMessage(e)}`;
-    logger.debug(`Startup sync readiness: ${detail}`);
-    return { outcome: 'timed-out', detail };
+    // The budget, not the rejection, decides whether the gate is over. Checked AFTER the await, so
+    // it reflects the time the wait actually consumed rather than the time it started.
+    if (performance.now() >= deadline) {
+      logger.debug(`Startup sync readiness: ${detail}`);
+      return { kind: 'stopped', result: { outcome: 'timed-out', detail } };
+    }
+    logger.debug(
+      `Startup sync readiness: ${detail}; budget remains, so continuing to the metadata probe (which tests the stronger condition anyway)`,
+    );
+    return { kind: 'inconclusive', detail };
   }
 }
 
@@ -254,6 +322,15 @@ function shouldLogProbeAttempt(attempt: number): boolean {
  * no-op. When there genuinely are no local scripture projects, though, it typically has nothing to
  * do.
  *
+ * Uses the WITHOUT-RETRIES lookup even though its TSDoc names layering PDP factories as the
+ * intended caller and points most callers at `getMetadataForAllProjects`. That default is rejected
+ * here deliberately: the retrying variant absorbs startup unreadiness internally, on its own
+ * schedule and against `LOAD_TIME_GRACE_PERIOD_MS` measured from process start — which is the very
+ * thing this module has to observe and bound itself. Nesting that loop inside this one would make
+ * every probe a multi-second blocking call, blur the budget this module promises to keep, and hide
+ * the not-ready signal the loop exists to read. The retry policy lives here, in the bounded loop
+ * below, for the same reason the TSDoc gives layering factories: one retry loop, not two.
+ *
  * The polling itself is not free even in that case: `includeProjectInterfaces` is applied only
  * AFTER `getMetadataForAllProjectsWithoutRetries` fans out, so every probe still calls
  * `getAvailableProjects` on every registered factory. A workspace with no projects yet therefore
@@ -270,8 +347,12 @@ function shouldLogProbeAttempt(attempt: number): boolean {
  * fires anyway (the same fallback as any other unconfirmed readiness), and the same exposure the
  * project picker itself has via its own unscoped `getMetadataForAllProjects` call.
  *
- * The probe runs BEFORE the deadline check so it always gets at least one attempt, even if phase 1
- * consumed the entire budget.
+ * The loop issues its first probe BEFORE checking the deadline, so a factory that registered right
+ * at the deadline is still asked whether it can answer rather than being written off unasked. The
+ * guarantee is only that the request is ISSUED, though: if phase 1 consumed the whole budget,
+ * `settleWithin`'s own `remainingMs <= 0` guard returns `TIMED_OUT` at once and the in-flight
+ * result is discarded — the fan-out is paid for, but the answer cannot be used. The attempt is
+ * therefore decisive only while some budget remains.
  */
 async function pollUntilScriptureMetadataAnswers(
   deadline: number,
@@ -291,10 +372,14 @@ async function pollUntilScriptureMetadataAnswers(
       // eslint-disable-next-line no-await-in-loop
       const settled = await settleWithin(
         projectLookupService.getMetadataForAllProjectsWithoutRetries({
-          // Escaped because `includeProjectInterfaces` compiles to an unanchored `RegExp` matched
-          // with `.test()` — an unescaped literal would match as a wildcard/substring rather than
-          // exactly. Mirrors `getMetadataForProject`'s own `escapeStringRegexp` use for this same
-          // field, so both phases key off the same exact-match predicate.
+          // Escaped because `includeProjectInterfaces` compiles to UNANCHORED `RegExp`s applied
+          // with `.test()` (`areProjectInterfacesIncluded` in `project-lookup.service-model.ts`),
+          // so an unescaped literal would let each `.` match any character. Escaping buys a literal
+          // SUBSTRING match, not an exact one — a hypothetical `x.platformScripture.USJ_Chapter2`
+          // would still match. That is precise enough for a readiness probe, whose question is only
+          // "can anything scripture-shaped be listed yet", and it mirrors `getMetadataForProject`'s
+          // own `escapeStringRegexp` use on this same field, so both phases key off the same
+          // predicate.
           includeProjectInterfaces: [escapeStringRegexp(SCRIPTURE_READINESS_PROJECT_INTERFACE)],
         }),
         deadline,
@@ -352,6 +437,10 @@ async function pollUntilScriptureMetadataAnswers(
  *
  * Never throws and never waits unbounded. Callers treat `'timed-out'` as "proceed anyway"; its
  * `detail` names a short, log-safe cause (safe at info/warn, including in packaged builds).
+ *
+ * @param options Abort signal and budget override; see {@link WorkspaceReadinessOptions}. Both are
+ *   optional — with neither, the wait uses the default budget and cannot be aborted.
+ * @returns How the wait ended, plus a log-safe `detail` when the outcome is `'timed-out'`
  */
 export async function waitForScriptureWorkspaceReady(
   options: WorkspaceReadinessOptions = {},
@@ -364,7 +453,10 @@ export async function waitForScriptureWorkspaceReady(
   if (abortSignal?.aborted) return { outcome: 'aborted' };
 
   const registration = await waitForScriptureFactoryRegistration(deadline, abortSignal);
-  if (registration.outcome !== 'ready') return registration;
+  // 'registered' and 'inconclusive' both continue: the first because the fast path succeeded, the
+  // second because phase 1 could not tell us anything and phase 2 tests the stronger condition
+  // regardless. Only 'stopped' ends the gate here.
+  if (registration.kind === 'stopped') return registration.result;
 
   return pollUntilScriptureMetadataAnswers(deadline, abortSignal);
 }
