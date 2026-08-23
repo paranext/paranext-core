@@ -473,13 +473,157 @@ describe('performStartupTasks', () => {
       expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('quitting'));
     });
 
-    it('passes the abort signal through to the readiness wait', async () => {
+    it('falls back to the general abort signal when no readiness signal is supplied', async () => {
       stubSettings({ mode: 'simple', firstRunComplete: true });
       const abort = new AbortController();
 
       await performStartupTasks({ abortSignal: abort.signal });
 
-      expect(mockWaitForReady).toHaveBeenCalledWith({ abortSignal: abort.signal });
+      // By identity, for the same reason as the test below: structural comparison cannot tell two
+      // unaborted `AbortSignal`s apart, so it would also pass against `undefined`-turned-anything.
+      expect(mockWaitForReady.mock.calls[0]?.[0]?.abortSignal).toBe(abort.signal);
+    });
+
+    it('waits on the readiness signal rather than the general one when they differ', async () => {
+      // The two diverge on exactly one path: a macOS last-window close aborts the general signal
+      // (Power's loop must stop on every platform) while deliberately leaving the readiness wait
+      // running, because the app stays resident and the startup tasks run once per process. Waiting
+      // on the general signal here would collapse that distinction and drop the sync.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      const general = new AbortController();
+      const readiness = new AbortController();
+
+      await performStartupTasks({
+        abortSignal: general.signal,
+        readinessAbortSignal: readiness.signal,
+      });
+
+      // Asserted by IDENTITY, not with `toHaveBeenCalledWith`. That matcher compares structurally,
+      // and two unaborted `AbortSignal`s are structurally identical — so it would pass just as
+      // happily against the wrong signal, which is the entire thing this test exists to catch.
+      expect(mockWaitForReady.mock.calls[0]?.[0]?.abortSignal).toBe(readiness.signal);
+    });
+
+    it('still fires after a macOS window close once a window is back, though the general signal aborted', async () => {
+      // The exact combination production creates on a macOS last-window close, and the one that
+      // proves the carve-out is reachable at all: `isAppShuttingDown()` is true during that close
+      // (every tracked window is closing), so main aborts the GENERAL signal — while deliberately
+      // leaving the readiness signal alone. If this path also re-checked the general signal, the
+      // wait would survive the close only to be discarded as "quitting", and the readiness signal,
+      // the platform predicate, and the windowless guard could never change any outcome.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      const general = new AbortController();
+      general.abort();
+      mockWaitForReady.mockResolvedValue({ outcome: 'ready' });
+
+      await performStartupTasks({
+        abortSignal: general.signal,
+        readinessAbortSignal: new AbortController().signal,
+        // A dock reactivation brought a window back before readiness landed.
+        canFireStartupSync: () => true,
+      });
+
+      expect(mockSendCommand).toHaveBeenCalledWith(
+        'paratextBibleSendReceive.syncProjects',
+        undefined,
+      );
+    });
+
+    it('does not fire after a macOS window close while the app is still windowless', async () => {
+      // Same production combination, other branch: the wait outlived the close but nothing brought
+      // a window back, so the live guard — not the general signal — is what stops the sync.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      const general = new AbortController();
+      general.abort();
+      mockWaitForReady.mockResolvedValue({ outcome: 'ready' });
+
+      await performStartupTasks({
+        abortSignal: general.signal,
+        readinessAbortSignal: new AbortController().signal,
+        canFireStartupSync: () => false,
+      });
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('no window'));
+    });
+
+    it('does not fire the sync when the readiness signal itself aborted', async () => {
+      // A real quit, or a last-window close off macOS: main aborts the readiness signal too, and
+      // that is what this path treats as "the app is quitting".
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      const readinessAbort = new AbortController();
+      readinessAbort.abort();
+      mockWaitForReady.mockResolvedValue({ outcome: 'ready' });
+
+      await performStartupTasks({
+        abortSignal: new AbortController().signal,
+        readinessAbortSignal: readinessAbort.signal,
+        canFireStartupSync: () => true,
+      });
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('quitting'));
+    });
+
+    it('does not fire the sync into a resident app that has no windows', async () => {
+      // The hazard the surviving readiness wait would otherwise open: on macOS the wait can park
+      // for the whole readiness budget past a last-window close, then resolve into a process that
+      // is resident, not quitting, and windowless — where the shutdown sync has already run and
+      // there is no UI to report progress or failure into. Neither abort signal describes that
+      // state, so the sync would fire without this check.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      mockWaitForReady.mockResolvedValue({ outcome: 'ready' });
+
+      await performStartupTasks({ canFireStartupSync: () => false });
+
+      expect(mockSendCommand).not.toHaveBeenCalled();
+      expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('no window'));
+    });
+
+    it('fires the sync when a window is back by the time readiness resolves', async () => {
+      // The other half of the case above, and the whole reason the wait is allowed to survive a
+      // macOS last-window close: a dock reactivation brings a window back, so the startup sync that
+      // session never got still lands.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      mockWaitForReady.mockResolvedValue({ outcome: 'ready' });
+
+      await performStartupTasks({ canFireStartupSync: () => true });
+
+      expect(mockSendCommand).toHaveBeenCalledWith(
+        'paratextBibleSendReceive.syncProjects',
+        undefined,
+      );
+    });
+
+    it('asks whether it may fire only after readiness resolves, not before the wait', async () => {
+      // Order matters: asked up front, the answer describes the app at process start rather than
+      // whenever the wait finally lands, which is the moment the guard is about to authorize.
+      stubSettings({ mode: 'simple', firstRunComplete: true });
+      const callOrder: string[] = [];
+      mockWaitForReady.mockImplementation(async () => {
+        callOrder.push('readiness');
+        return { outcome: 'ready' };
+      });
+
+      await performStartupTasks({
+        canFireStartupSync: () => {
+          callOrder.push('canFire');
+          return true;
+        },
+      });
+
+      expect(callOrder).toEqual(['readiness', 'canFire']);
+    });
+
+    it('never consults the windowless guard in power mode', async () => {
+      // Power mode has no readiness wait to outlive a window close, so it must not inherit the
+      // guard that exists to contain one.
+      mockSettingsGet.mockResolvedValue('power');
+      const canFireStartupSync = vi.fn(() => true);
+
+      await performStartupTasks({ canFireStartupSync });
+
+      expect(canFireStartupSync).not.toHaveBeenCalled();
     });
 
     it('never consults readiness in power mode', async () => {
