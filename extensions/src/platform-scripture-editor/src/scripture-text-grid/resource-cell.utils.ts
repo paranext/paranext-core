@@ -11,10 +11,8 @@ import {
  * - `unavailable`: the resource's project could not be resolved (e.g., not installed or absent from
  *   the cached resource list). The cell shows a static "Resource unavailable" label.
  * - `downloading`: data is still loading — shows a spinner.
- * - `failed`: data loaded but returned a PlatformError — shows "Resource unavailable" + "Download
- *   failed".
- * - `bookNotAvailable`: the resource simply does not contain the current book. Distinct from `failed`
- *   because nothing went wrong and retrying a download cannot help.
+ * - `failed`: data loaded but returned a PlatformError — shows "Resource unavailable" + "No content
+ *   for this reference".
  * - `ready`: data is present — shows Editorial (or the empty-verse label when the slice is empty).
  */
 export type ResourceCellState =
