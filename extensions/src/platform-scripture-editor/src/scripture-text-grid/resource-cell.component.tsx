@@ -173,11 +173,10 @@ export function ResourceCell({
   // drops both — so today the plugin is silent in verse mode and this branch is unreachable. It is
   // kept because it costs nothing and is the right shape if slices ever become addressable. Don't
   // read it as evidence that a write-back currently happens; the next person to touch this should
-  // not reason from a mechanism that isn't there. Verified 2026-08-16 against platform-editor 0.8.15
-  // — both the published package and `dev-packages/scripture-editors`, which `postinstall` ->
-  // `link-dev-packages` yalc-links over `node_modules`. Read the LINKED build, not whatever
-  // `package-lock.json` names; a stale 0.8.14 tarball there is how this comment previously came to
-  // describe a chapter-1 write-back that cannot occur.
+  // not reason from a mechanism that isn't there. Holds against platform-editor 0.8.15 — both the
+  // published package and `dev-packages/scripture-editors`, which `postinstall` ->
+  // `link-dev-packages` yalc-links over `node_modules`. Read the LINKED build when checking this,
+  // not whatever version `package-lock.json` names; the two can disagree.
   //
   // The guard belongs here, not upstream in `ScriptureReferencePlugin`. Gating that plugin on
   // `isReadonly` would break the read-only surfaces that need it: it is bidirectional (it also moves

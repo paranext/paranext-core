@@ -160,8 +160,8 @@ function setUsjResult(value: unknown, isLoading = false) {
  * Serialized USJ most recently handed to the editor.
  *
  * Throws rather than returning '' when nothing was fed: an empty string silently satisfies every
- * `.not.toContain(...)`, which is how a vacuous assertion slipped in here once. If the editor was
- * never fed, assert `expect(setUsjSpy).not.toHaveBeenCalled()` instead of inspecting content.
+ * `.not.toContain(...)`, so a vacuous assertion would pass unnoticed. If the editor was never fed,
+ * assert `expect(setUsjSpy).not.toHaveBeenCalled()` instead of inspecting content.
  */
 function lastFedUsjText(): string {
   if (!setUsjSpy.mock.lastCall) throw new Error('setUsj was never called — nothing was fed');
@@ -277,7 +277,7 @@ describe('ResourceCell viewMode', () => {
     renderResourceCell({
       viewMode: 'verse',
       // A verse this resource does not have (the chapter stops at verse 2) — the genuinely-missing
-      // case, which keeps the ghost text. Verse 0 no longer reaches here; it falls forward below.
+      // case, which keeps the ghost text. Verse 0 does not reach here; it falls forward below.
       scrRef: { book: 'GEN', chapterNum: 1, verseNum: 99 },
       chapterUsj: twoVerseChapterUsj,
     });
@@ -289,7 +289,7 @@ describe('ResourceCell viewMode', () => {
 });
 
 // Verse 0 is everything preceding verse 1, which a one-verse-tall cell cannot render usefully, so a
-// verse-0 reference displays verse 1 (Paratext 9 parity — PT-3133).
+// verse-0 reference displays verse 1, matching Paratext 9.
 describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
   const verse0 = { book: 'GEN', chapterNum: 1, verseNum: 0 };
 
@@ -405,12 +405,12 @@ describe('ResourceCell verse-0 fall-forward (PT-3133)', () => {
     expect(setScrRef).toHaveBeenCalledWith(reported);
   });
 
-  // Leaving the empty state, which two tests enter but none previously left. `ResourceCellView`
-  // swaps the editor out entirely for the ghost-text label while `isVerseEmpty`, so `Editorial`
-  // unmounts and `editorRef.current` goes null; navigating to a verse the resource HAS remounts it
-  // and the effect must refeed. That only works because React assigns refs during commit, before
+  // Leaving the empty state, which the tests above only ever enter. `ResourceCellView` swaps the
+  // editor out entirely for the ghost-text label while `isVerseEmpty`, so `Editorial` unmounts
+  // and `editorRef.current` goes null; navigating to a verse the resource HAS remounts it and
+  // the effect must refeed. That only works because React assigns refs during commit, before
   // effects run — an ordering dependency nothing else here guards. Fall-forward makes this
-  // transition reachable at chapter boundaries more often than before.
+  // transition reachable at every chapter boundary, so the refeed matters.
   it('refeeds the slice when navigating out of the empty state into a verse that exists', async () => {
     setUsjResult(twoVerseChapterUsj, false);
     const { rerender } = render(

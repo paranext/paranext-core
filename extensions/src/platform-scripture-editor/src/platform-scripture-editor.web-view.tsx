@@ -1252,12 +1252,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      // Preserve versificationStr so the PDP selector doesn't change on every click. As of
-      // platform-editor 0.8.15 this fallback is a no-op: `positionToScrRef` rides the host's
-      // `versificationStr` along on every position report (a document states no versification of
-      // its own), and the sole caller of this handler is that plugin. Kept as a cheap belt-and-
-      // braces against the contract changing back. Do NOT cite it as evidence that the plugin
-      // strips versification — it did before 0.8.15, and that stale rationale was corrected here.
+      // Preserve versificationStr so the PDP selector doesn't change on every click. Against
+      // platform-editor 0.8.15 the fallback is a no-op: `positionToScrRef` carries the host's
+      // `versificationStr` on every position report (a document states no versification of its
+      // own), and that plugin is the sole caller of this handler. Kept as cheap insurance in case
+      // that contract changes — versions before 0.8.15 reported positions without it.
       const preservedLocation: SerializedVerseRef = {
         ...newVerseLocation,
         versificationStr: newVerseLocation.versificationStr ?? scrRef.versificationStr,

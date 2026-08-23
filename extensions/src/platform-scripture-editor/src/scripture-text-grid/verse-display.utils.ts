@@ -5,8 +5,9 @@ import { Usj, MarkerObject, MarkerContent } from '@eten-tech-foundation/scriptur
  * 1, everything else shows itself.
  *
  * Verse 0 is everything preceding verse 1 (intros, titles, Psalm superscriptions), which a
- * one-verse-tall cell cannot render usefully — so Paratext 9 shows verse 1 there and PT-3133 adopts
- * that. Display-only: callers must not write the resolved verse back to the scroll group.
+ * one-verse-tall cell cannot render usefully — so Paratext 9 shows verse 1 there and single-verse
+ * surfaces here match it. Display-only: callers must not write the resolved verse back to the
+ * scroll group.
  *
  * Chapter surfaces must NOT call this — they show verse-0 front matter directly. Full rationale and
  * rejected alternatives: ADR-0019.
