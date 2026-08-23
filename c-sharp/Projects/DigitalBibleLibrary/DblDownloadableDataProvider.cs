@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.Json;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
@@ -285,12 +285,23 @@ internal class DblResourcesDataProvider(
                 )
             );
 
-        // Note that we don't get any info telling if the installation succeeded or failed
+        // Install()'s return value is NOT a success flag: InstallableResource.InternalInstall
+        // returns `fontsFound` ("true if any fonts were copied"), so false is the normal return for
+        // a successful install of a resource that ships no fonts. Presence in the collection is the
+        // only usable signal, which is what we check below.
         installableResource.Install();
 
         ScrTextCollection.RefreshScrTexts();
 
-        if (!ScrTextCollection.IsPresent(installableResource.InstalledScrText))
+        // InstalledScrText is assigned only once InternalInstall completes, so it is still null when
+        // the install bailed out early (e.g. the DBL download failed). ScrTextCollection.IsPresent
+        // dereferences its argument, so a null check must come first — otherwise the very failure
+        // this guard exists to report surfaces as a NullReferenceException instead of the localized
+        // message below.
+        if (
+            installableResource.InstalledScrText == null
+            || !ScrTextCollection.IsPresent(installableResource.InstalledScrText)
+        )
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
