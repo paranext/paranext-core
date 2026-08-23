@@ -11,10 +11,13 @@ vi.mock('./downloaded-resources.utils', async (orig) => ({
   fetchDownloadedResources: vi.fn(),
 }));
 
+// Mocked module imports must follow vi.mock() calls so they receive the mocked implementation.
 // eslint-disable-next-line import/first
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+// Mocked module imports must follow vi.mock() calls so they receive the mocked implementation.
 // eslint-disable-next-line import/first
 import { fetchDownloadedResources } from './downloaded-resources.utils';
+// The module under test imports after mocks so its dependencies resolve to mocked versions.
 // eslint-disable-next-line import/first
 import { useResourcePickerResources } from './use-resource-picker-resources.hook';
 
