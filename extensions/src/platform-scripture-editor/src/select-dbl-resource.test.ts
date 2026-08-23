@@ -148,8 +148,7 @@ describe('selectDblResource', () => {
       const getUserList = vi.fn().mockResolvedValue({
         dataVersion: '1.0.0',
         items: [
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          { type: 'project' as never, name: 'VULGP83', id: 'VULGP83' },
+          { type: 'project', name: 'VULGP83', id: 'VULGP83' },
           { type: 'dblResource' as const, name: 'name-uid-a', id: 'uid-a' },
         ],
       });
