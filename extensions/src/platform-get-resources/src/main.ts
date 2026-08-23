@@ -7,7 +7,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import type { DblResourceData, ResourceType } from 'platform-bible-utils';
+import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
@@ -91,8 +91,10 @@ async function syncInstalledFlags(): Promise<void> {
       attempt < MAX_RETRIES && !localProjectMetadata.some((m) => m.isEditable === false);
       attempt++
     ) {
+      // Sequential retry: each attempt must wait for the previous result before retrying.
       // eslint-disable-next-line no-await-in-loop
       await wait(500);
+      // Sequential retry: each attempt must use the result of the previous fetch.
       // eslint-disable-next-line no-await-in-loop
       localProjectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platform.base'],
@@ -193,8 +195,10 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
       attempt < MAX_RETRIES && !allMetadata.some((m) => m.isEditable === false);
       attempt++
     ) {
+      // Sequential retry: each attempt must wait for the previous result before retrying.
       // eslint-disable-next-line no-await-in-loop
       await wait(500);
+      // Sequential retry: each attempt must use the result of the previous fetch.
       // eslint-disable-next-line no-await-in-loop
       allMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platform.base'],
@@ -238,7 +242,7 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
         displayName: m.name ?? m.id,
         fullName: m.fullName ?? m.name ?? m.id,
         bestLanguageName: m.language ?? '',
-        type: 'ScriptureResource' as ResourceType,
+        type: 'ScriptureResource',
         size: 0,
         installed: true,
         updateAvailable: false,
