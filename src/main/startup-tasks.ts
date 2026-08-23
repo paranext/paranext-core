@@ -324,9 +324,22 @@ type SimpleModeSyncGateResult = { run: true } | { run: false; reason: string };
  *   silently suppress a sync the user never actually declined). Logged as a warning.
  */
 async function evaluateSimpleModeSyncGates(): Promise<SimpleModeSyncGateResult> {
-  // Re-reads the mode even though the caller already read one to pick this branch. Not redundant:
-  // that read asks "which mode, and can we tell at all?", this one asks "is it STILL simple?" — and
-  // the post-wait call exists precisely because the answer can change while the gate is parked.
+  // Re-reads the mode even though the caller already read one to pick this branch. That earns its
+  // place in the POST-wait call and not the pre-wait one, and the asymmetry is deliberate rather
+  // than overlooked:
+  //
+  // - Post-wait, the caller's value is genuinely stale — the gate may have been parked for the
+  //   whole readiness budget, and catching a mode switch that happened while parked is the entire
+  //   reason this runs a second time. An unreadable mode there really does mean "we can no longer
+  //   tell", which must not fall through to Simple's sync-everything.
+  // - Pre-wait, nothing awaits between the caller's read and this one, so the answer cannot have
+  //   changed. This read's only new outcome is a transient failure turning into a skipped sync.
+  //
+  // That surplus failure path is accepted rather than engineered away. Removing it means threading
+  // the already-read mode in as a parameter, supplied pre-wait and omitted post-wait — and a
+  // parameter whose misuse is "pass the cached mode to the post-wait call" would silently defeat
+  // the mid-wait re-check above, which is one of the guarantees this function exists to provide.
+  // A negligible, logged skip is the better trade against a permanent footgun aimed at that.
   let interfaceMode: SettingTypes['platform.interfaceMode'] | undefined;
   try {
     interfaceMode = await settingsService.get('platform.interfaceMode');
