@@ -47,7 +47,12 @@ export function isAppShuttingDown(): boolean {
 }
 
 /**
- * Whether a window's `close` handler should stop the startup tasks' bounded waits.
+ * Whether a window's `close` handler should stop the Simple-mode startup-sync READINESS WAIT.
+ *
+ * Scoped to that one wait on purpose. Everything else the startup tasks are doing — notably Power
+ * mode's boot-race retry loop — is aborted unconditionally whenever the app starts going down, the
+ * behavior it has always had; `main.ts` keeps a separate signal for that. Widening this exception
+ * to cover both would silently change Power mode too, which nothing here intends.
  *
  * Aborting is right whenever the app is really going away: a startup sync firing after the shutdown
  * sync has already run would sync the same projects twice, and a late one can reach a network
@@ -58,6 +63,12 @@ export function isAppShuttingDown(): boolean {
  * run once per PROCESS — so aborting drops that session's startup sync for the rest of the
  * process's life. Hence the quit flag decides on macOS.
  *
+ * Letting the wait survive is NOT on its own a licence to fire: while the app sits resident with no
+ * windows, the shutdown sync has already run and there is no UI to report into. The wait continuing
+ * only buys the chance to fire if a dock reactivation brings a window back before readiness lands;
+ * `performStartupTasks` re-checks that immediately before it sends the command (its signals'
+ * `canFireStartupSync`), and skips when the app is windowless.
+ *
  * Every other platform quits once its last window closes, but `window-all-closed` calls
  * `app.quit()` only after the close handlers have already run — so the quit flag is still false
  * throughout the very window this guard protects. Off macOS the platform alone therefore decides,
@@ -65,9 +76,39 @@ export function isAppShuttingDown(): boolean {
  *
  * @param platform The OS platform, i.e. `process.platform`. A parameter rather than a direct read
  *   so both branches stay testable without stubbing the global.
+ * @returns `true` when the close should abort the readiness wait
  */
-export function shouldWindowCloseAbortStartupTasks(platform: typeof process.platform): boolean {
+export function shouldWindowCloseAbortReadinessWait(platform: typeof process.platform): boolean {
   return isAppQuitRequested() || platform !== 'darwin';
+}
+
+/**
+ * Whether the Simple-mode startup sync may still fire, asked immediately before the command goes
+ * out rather than when the wait started.
+ *
+ * The readiness wait can park for up to its whole budget, and
+ * {@link shouldWindowCloseAbortReadinessWait} deliberately lets it survive a macOS last-window
+ * close. That leaves a state no abort signal describes: resident, not quitting, and WINDOWLESS.
+ * Firing there would run a whole-workspace Send/Receive after the shutdown sync already ran, into a
+ * process with no UI to report progress or failure into.
+ *
+ * Windowless is only disqualifying once this process has actually had a window, though. No window
+ * YET is the app coming up, not going down — the same distinction {@link areAllWindowsClosing} draws
+ * for the same reason — and treating it as disqualifying would silently drop the startup sync of
+ * any boot whose readiness landed before the first window did. That is the invisible failure this
+ * whole gate is meant to avoid, so it is guarded explicitly rather than left to window-creation
+ * timing.
+ *
+ * @param windowCount How many live windows are tracked right now, i.e. `getWindows().length`
+ * @param hasCreatedWindowThisProcess Whether this process has ever created a window
+ * @returns `true` when the sync should be allowed to go out
+ */
+export function canStartupSyncFireNow(
+  windowCount: number,
+  hasCreatedWindowThisProcess: boolean,
+): boolean {
+  if (isAppShuttingDown()) return false;
+  return windowCount > 0 || !hasCreatedWindowThisProcess;
 }
 
 /**

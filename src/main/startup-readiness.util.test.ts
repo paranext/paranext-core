@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import { MAX_REQUEST_ATTEMPTS, REQUEST_ATTEMPT_WAIT_TIME_MS } from '@shared/data/rpc.model';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { logger } from '@shared/services/logger.service';
@@ -29,7 +30,11 @@ const mockLoggerDebug = vi.mocked(logger.debug);
  * never its contents, so the fields are deliberately empty rather than realistic — building a
  * lifelike project here would imply the probe inspects it.
  */
-const A_PROJECT = { id: 'PROJ1', projectInterfaces: [], pdpFactoryInfo: {} };
+const A_PROJECT = {
+  id: 'PROJ1',
+  projectInterfaces: [],
+  pdpFactoryInfo: {},
+} satisfies ProjectMetadata;
 
 /** The network object details `waitForNetworkObject` resolves with when the factory is up. */
 const FACTORY_DETAILS = {
@@ -97,17 +102,67 @@ describe('waitForScriptureWorkspaceReady', () => {
   });
 
   it('resolves "timed-out" when the factory never registers within the budget', async () => {
-    mockWaitForNetworkObject.mockRejectedValue(
-      new Error('Timeout reached when waiting for wait-for-net-obj to settle'),
-    );
-    await expect(waitForScriptureWorkspaceReady({ timeoutMs: 5_000 })).resolves.toEqual({
-      outcome: 'timed-out',
-      detail: expect.stringContaining(
-        'Timeout reached when waiting for wait-for-net-obj to settle',
-      ),
+    // Production shape: the same remaining budget is handed to `waitForNetworkObject`, so its own
+    // `AsyncVariable` expires at the deadline and it rejects having consumed everything. Rejecting
+    // INSTANTLY is a different case — budget left over — which is deliberately not terminal (see
+    // the two fall-through tests below).
+    //
+    // The surfaced detail is the generic one rather than the underlying timeout message, and that
+    // is correct: with the budget spent, `settleWithin` short-circuits on its own `remainingMs <= 0`
+    // guard and reports `TIMED_OUT` without ever observing the rejection. Asserting the underlying
+    // message here would be asserting a path production cannot take.
+    mockWaitForNetworkObject.mockImplementation(async () => {
+      vi.advanceTimersByTime(5_000);
+      throw new Error('Timeout reached when waiting for wait-for-net-obj to settle');
     });
-    // Phase 2 must not run once Phase 1 gave up — there is nothing to probe.
+
+    await withFakeTimers(async () => {
+      await expect(waitForScriptureWorkspaceReady({ timeoutMs: 5_000 })).resolves.toEqual({
+        outcome: 'timed-out',
+        detail:
+          'the scripture project data provider factory did not register within the readiness budget',
+      });
+    });
+
+    // Phase 2 must not run once the budget is genuinely spent — there is nothing left to probe with.
     expect(mockGetMetadata).not.toHaveBeenCalled();
+  });
+
+  it('continues to the metadata probe when the registration wait fails with budget remaining', async () => {
+    // A rejection is not the same thing as an exhausted budget. `waitForNetworkObject` also rejects
+    // when the status service is unreachable, which can land with nearly the whole budget unspent;
+    // treating that as terminal would collapse the gate and fire the whole-workspace sync early,
+    // reintroducing the starvation this module exists to prevent — and invisibly, since the cause
+    // is only logged at debug. Phase 2 tests the stronger condition anyway, so the gate goes on.
+    mockWaitForNetworkObject.mockRejectedValue(
+      new Error('NetworkObjectStatusService is not available as a network object'),
+    );
+    mockGetMetadata.mockResolvedValue([A_PROJECT]);
+
+    await expect(waitForScriptureWorkspaceReady({ timeoutMs: 5_000 })).resolves.toEqual({
+      outcome: 'ready',
+    });
+    expect(mockGetMetadata).toHaveBeenCalled();
+  });
+
+  it('still resolves "timed-out" when the registration wait fails and the probe cannot answer either', async () => {
+    // The other half of the fall-through: continuing past phase 1 must not turn a workspace that
+    // genuinely cannot list projects into a false 'ready'. The outcome degrades to the same
+    // 'timed-out' phase 1 would have returned, just after spending the budget it was given.
+    mockWaitForNetworkObject.mockRejectedValue(
+      new Error('NetworkObjectStatusService is not available as a network object'),
+    );
+    mockGetMetadata.mockResolvedValue([]);
+
+    await withFakeTimers(async () => {
+      const readinessPromise = waitForScriptureWorkspaceReady({ timeoutMs: 5_000 });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await expect(readinessPromise).resolves.toEqual({
+        outcome: 'timed-out',
+        detail: expect.any(String),
+      });
+    });
+    expect(mockGetMetadata).toHaveBeenCalled();
   });
 
   it('abandons a registration wait that never settles once the deadline passes, yielding "timed-out"', async () => {
@@ -133,20 +188,19 @@ describe('waitForScriptureWorkspaceReady', () => {
     expect(mockGetMetadata).not.toHaveBeenCalled();
   });
 
-  it('resolves "timed-out" and logs distinguishably when the status service itself is unavailable', async () => {
+  it('logs the real cause distinguishably when the status service itself is unavailable', async () => {
     // Not a timeout: `networkObjectStatusService.initialize()` throws when the status service
-    // network object cannot be reached. The outcome is the same (fire anyway) but the cause is
-    // different, so both the log and the returned detail must carry the real message — asserting
-    // only the shared "could not wait for..." prefix (common to both causes) would pass even if the
+    // network object cannot be reached. The cause has to survive into the log — asserting only the
+    // shared "could not wait for..." prefix (common to both causes) would pass even if the
     // distinguishing text were dropped, which is why this asserts on that text specifically.
+    // The OUTCOME is covered by the two fall-through tests above; this one is about the log.
     mockWaitForNetworkObject.mockRejectedValue(
       new Error('NetworkObjectStatusService is not available as a network object'),
     );
     const distinguishingText = 'NetworkObjectStatusService is not available as a network object';
-    await expect(waitForScriptureWorkspaceReady({ timeoutMs: 5_000 })).resolves.toEqual({
-      outcome: 'timed-out',
-      detail: expect.stringContaining(distinguishingText),
-    });
+
+    await waitForScriptureWorkspaceReady({ timeoutMs: 5_000 });
+
     expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining(distinguishingText));
   });
 
@@ -192,11 +246,11 @@ describe('waitForScriptureWorkspaceReady', () => {
   });
 
   it('resolves "aborted", not "timed-out", when a quit lands in the same tick as the registration promise rejecting', async () => {
-    // Exercises the catch's abort recheck: `Promise.race` settles on whichever settles first, so if
-    // the rejection is scheduled before the abort listener's resolution, the raw rejection wins the
-    // race and lands in the catch — which must still report 'aborted' when a quit landed in that
-    // same tick, not misreport 'timed-out' (which would make the caller warn "syncing anyway"
-    // during shutdown).
+    // Exercises the catch's abort recheck. `settleWithin`'s gate resolves on whichever outcome
+    // reaches it first, so if the rejection is scheduled before the abort listener's resolution the
+    // raw rejection wins that internal race and lands in the catch — which must still report
+    // 'aborted' when a quit landed in that same tick, not misreport 'timed-out' (which would make
+    // the caller warn "syncing anyway" during shutdown).
     const abort = new AbortController();
     const registration = deferred<typeof FACTORY_DETAILS>();
     mockWaitForNetworkObject.mockReturnValue(registration.promise);
@@ -344,5 +398,47 @@ describe('waitForScriptureWorkspaceReady', () => {
     });
 
     expect(mockGetMetadata).toHaveBeenCalledTimes(1);
+  });
+
+  it('pins the two-phase probe backoff and the attempt-log sampling', async () => {
+    // Poll cadence (see startup-readiness.util.ts): the first INITIAL_READINESS_POLL_ATTEMPTS waits
+    // are INITIAL_READINESS_POLL_INTERVAL_MS, every wait after that is
+    // EXTENDED_READINESS_POLL_INTERVAL_MS. Nothing else crosses that transition, so without this
+    // test dropping the backoff or inverting the two phases stays green. Mirrors the sibling
+    // Power-mode cadence test in `startup-tasks.test.ts`, including deriving the initial phase from
+    // the shared rpc.model constants this module aliases rather than re-typing the literals.
+    const INITIAL_POLL_ATTEMPTS = MAX_REQUEST_ATTEMPTS;
+    const INITIAL_POLL_INTERVAL_MS = REQUEST_ATTEMPT_WAIT_TIME_MS;
+    const EXTENDED_POLL_INTERVAL_MS = 2000;
+    // Answer on a deliberately NON-symmetric attempt so the two-phase cadence is observable: 10
+    // waits @1s + 4 waits @2s before the 15th probe = 18s. Flattening the backoff (all @1s = 14s)
+    // or inverting the phases (@2s then @1s = 22s) both change this elapsed time and fail below.
+    const ANSWER_ON_PROBE = 15;
+    const EXPECTED_ELAPSED_MS =
+      INITIAL_POLL_ATTEMPTS * INITIAL_POLL_INTERVAL_MS +
+      (ANSWER_ON_PROBE - 1 - INITIAL_POLL_ATTEMPTS) * EXTENDED_POLL_INTERVAL_MS; // 18_000
+    let probeCount = 0;
+    mockGetMetadata.mockImplementation(async () => {
+      probeCount += 1;
+      return probeCount < ANSWER_ON_PROBE ? [] : [A_PROJECT];
+    });
+
+    await withFakeTimers(async () => {
+      const readinessPromise = waitForScriptureWorkspaceReady();
+      // 1ms before the expected time the answering probe has not fired yet.
+      await vi.advanceTimersByTimeAsync(EXPECTED_ELAPSED_MS - 1);
+      expect(probeCount).toBe(ANSWER_ON_PROBE - 1);
+      // Crossing the expected elapsed time triggers exactly the answering probe.
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(readinessPromise).resolves.toEqual({ outcome: 'ready' });
+    });
+
+    expect(probeCount).toBe(ANSWER_ON_PROBE);
+    // Sampling: 14 empty probes, logged on the 1st and every 10th. The answering probe returns
+    // before it can log. Pinned to the literal attempt numbers so widening the sampling (or logging
+    // every attempt, which is what would bury the surrounding startup logs) fails here.
+    expect(mockLoggerDebug).toHaveBeenCalledTimes(2);
+    expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('(attempt 1)'));
+    expect(mockLoggerDebug).toHaveBeenCalledWith(expect.stringContaining('(attempt 10)'));
   });
 });

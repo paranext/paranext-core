@@ -72,25 +72,58 @@ const INITIAL_RETRY_ATTEMPTS = MAX_REQUEST_ATTEMPTS;
 const EXTENDED_RETRY_INTERVAL_MS = 2000;
 
 /**
- * Optional signals `performStartupTasks` receives from the main process. Both are omitted in unit
+ * Optional signals `performStartupTasks` receives from the main process. All are omitted in unit
  * tests that drive the sync logic directly, in which case behavior is unchanged (never aborts,
- * never goes stale). `getWindowInteractiveElapsedMs` only steers Power mode's freshness window —
- * Simple mode has no freshness concept — but `abortSignal` steers EITHER mode's wait.
+ * never goes stale, always allowed to fire). `getWindowInteractiveElapsedMs` steers only Power
+ * mode's freshness window — Simple mode has no freshness concept — and `readinessAbortSignal` and
+ * `canFireStartupSync` steer only Simple mode's readiness gate; `abortSignal` applies to both.
  */
 export interface StartupTasksSignals {
   /**
-   * Stops the wait once the app has begun quitting — either mode's:
+   * Stops the startup tasks once the app has begun going down by EITHER route — a quit, or the last
+   * window closing. Aborted unconditionally, which is the behavior this signal has always had.
    *
    * - The Power-mode boot-race retry loop. Stops it from (a) firing
    *   `runScheduledSessionSync('startup')` after `('shutdown')` already fired and (b) issuing a
    *   request that would resurrect the network connection `networkService.shutdown()` is tearing
-   *   down.
-   * - Simple mode's readiness wait ({@link waitForScriptureWorkspaceReady}). Stops it from firing a
-   *   no-ID `syncProjects` after shutdown has already begun, for the same two reasons.
+   *   down. Deliberately NOT consulted by Simple mode's post-readiness path. A macOS last-window
+   *   close makes `isAppShuttingDown()` true, so this signal aborts on exactly the close
+   *   {@link StartupTasksSignals.readinessAbortSignal} exists to survive; re-checking it after the
+   *   wait would make that carve-out unreachable. Simple mode's hard stop is
+   *   {@link StartupTasksSignals.canFireStartupSync}, evaluated live at fire time.
    *
    * Wired to `will-quit` and the window close in `main.ts`.
    */
   abortSignal?: AbortSignal;
+  /**
+   * Stops Simple mode's readiness wait ({@link waitForScriptureWorkspaceReady}) specifically.
+   *
+   * Separate from {@link StartupTasksSignals.abortSignal} because the two answer different
+   * questions. This one is aborted only when the app is really going away — on macOS, closing the
+   * last window leaves the app resident, and the startup tasks run once per PROCESS, so aborting
+   * there would drop the startup sync for the rest of the process's life even though a dock
+   * reactivation still wants it. See `shouldWindowCloseAbortReadinessWait` in
+   * `shutdown-latch.service.ts`. Keeping it separate is also what stops that macOS exception
+   * leaking into Power mode's loop, which must keep aborting on any shutdown.
+   *
+   * Omitted (or equal to {@link StartupTasksSignals.abortSignal}) is fine; it just means the wait
+   * has no separate escape hatch.
+   */
+  readinessAbortSignal?: AbortSignal;
+  /**
+   * Whether the app is still in a state where firing the Simple-mode startup sync makes sense,
+   * asked immediately before the command goes out.
+   *
+   * Needed because {@link StartupTasksSignals.readinessAbortSignal} deliberately survives a macOS
+   * last-window close: without this re-check, a wait parked for up to the readiness budget could
+   * resolve minutes later and fire a whole-workspace Send/Receive into a resident but WINDOWLESS
+   * app — after the shutdown sync already ran, with no UI to report progress or failure into. Main
+   * answers `false` in that state, so the sync survives only into a session that actually has a
+   * window (a dock reactivation), which is the only case the exception exists to serve.
+   *
+   * Omitted means "always allowed to fire", preserving today's behavior for tests.
+   */
+  canFireStartupSync?: () => boolean;
   /**
    * How long (ms) the main window has been interactive, or `undefined` if it has not been shown
    * yet. The freshness anchor for {@link STARTUP_SYNC_FRESHNESS_WINDOW_MS} — consulted only by Power
@@ -121,9 +154,12 @@ type StartupSyncTriggerOutcome = ScheduledSessionSyncResult | 'skipped-stale' | 
  * app. The wait exists because this sync saturates the .NET data provider and would otherwise
  * starve the very factory registration the project picker waits on, leaving the picker locked while
  * the rest of the UI looks loaded. On an exhausted readiness budget the sync still fires — it is
- * delayed, never suppressed. All errors are swallowed — the S/R extension may not be installed
- * (e.g. Platform.Bible), the command may not yet be registered, or the sync may fail. Startup must
- * never be blocked or visibly affected by this.
+ * delayed, never suppressed. The two exceptions are shutdown and a windowless app: a quit aborts
+ * the wait, and a wait that outlives a macOS last-window close (see
+ * {@link StartupTasksSignals.readinessAbortSignal}) is not allowed to fire into a resident app with
+ * no windows (see {@link StartupTasksSignals.canFireStartupSync}). All errors are swallowed — the
+ * S/R extension may not be installed (e.g. Platform.Bible), the command may not yet be registered,
+ * or the sync may fail. Startup must never be blocked or visibly affected by this.
  *
  * In Power mode: requests a sync of just the projects scheduled "On startup/shutdown" via the S/R
  * extension's `runScheduledSessionSync` command. Same error-swallowing contract as Simple mode — if
@@ -189,14 +225,29 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   // scripture editor needs the very factory this gate waits on, so readiness necessarily resolves
   // before the user can be editing, and dropping the sync outright would contradict this task's
   // contract that the startup sync is delayed but never suppressed.
-  const readiness = await waitForScriptureWorkspaceReady({ abortSignal: signals?.abortSignal });
+  //
+  // This path runs on `readinessAbortSignal` throughout — the wait below AND the abort check after
+  // it — falling back to `abortSignal` only when main supplies no separate signal (unit tests).
+  //
+  // It must NOT also consult `abortSignal`: a macOS last-window close makes `isAppShuttingDown()`
+  // true via `areAllWindowsClosing()`, so main aborts that signal on exactly the close the readiness
+  // carve-out exists for. Re-checking it here would make the carve-out unreachable — the wait would
+  // survive the close and then be discarded as "quitting" anyway, and `readinessAbortSignal` /
+  // `canFireStartupSync` could never change any outcome.
+  //
+  // Dropping that check costs nothing, because the hard stop moved somewhere strictly better:
+  // `canFireStartupSync` below is evaluated live at fire time and answers `false` for BOTH ways the
+  // app can be un-syncable — shutting down (quit requested, or every window closing) and resident
+  // but windowless. A latched signal can only report a moment that has already passed.
+  const readinessAbortSignal = signals?.readinessAbortSignal ?? signals?.abortSignal;
+  const readiness = await waitForScriptureWorkspaceReady({ abortSignal: readinessAbortSignal });
 
-  // Covers both a gate that reported 'aborted' and a quit that landed while it was still resolving
+  // Covers a gate that reported 'aborted' and a quit that landed while it was still resolving
   // (readiness settling with a non-'aborted' outcome does not guarantee the app wasn't already
   // quitting by the time it resolved — e.g. a quit landing while the readiness gate's own probe was
   // in flight). Ordered before the 'timed-out' warn below so a sync that is about to be skipped
   // never gets logged as "syncing anyway".
-  if (readiness.outcome === 'aborted' || signals?.abortSignal?.aborted) {
+  if (readiness.outcome === 'aborted' || readinessAbortSignal?.aborted) {
     logger.debug('Startup sync skipped: app is quitting');
     return;
   }
@@ -212,6 +263,17 @@ async function performStartupTasksInternal(signals?: StartupTasksSignals): Promi
   const gatesAfterWait = await evaluateSimpleModeSyncGates();
   if (!gatesAfterWait.run) {
     logger.debug(`Startup sync skipped after the readiness wait: ${gatesAfterWait.reason}`);
+    return;
+  }
+
+  // Last check before the command goes out: is there still an app to sync FOR? The readiness wait
+  // deliberately survives a macOS last-window close (see `readinessAbortSignal`), which leaves one
+  // state that signal cannot describe — resident, not quitting, no windows. Firing here
+  // would run a whole-workspace Send/Receive after the shutdown sync already ran, into a process
+  // with no UI to report progress or failure into. Skip instead; the surviving wait then pays off
+  // only when a dock reactivation has brought a window back, which is the case it exists for.
+  if (signals?.canFireStartupSync && !signals.canFireStartupSync()) {
+    logger.debug('Startup sync skipped: the app has no window to sync for');
     return;
   }
 
