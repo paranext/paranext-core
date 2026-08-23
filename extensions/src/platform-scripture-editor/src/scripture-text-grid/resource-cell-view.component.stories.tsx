@@ -114,8 +114,8 @@ export const Downloading: Story = {
 };
 
 /**
- * The chapter failed to download (e.g. offline) — the localized "Download failed" subtitle, no
- * Spinner.
+ * The chapter failed to download (e.g. offline) — the localized "No content for this reference"
+ * subtitle, no Spinner.
  */
 export const Failed: Story = {
   render: () => (
@@ -133,8 +133,8 @@ export const Failed: Story = {
 
 /**
  * The resource is not installed (or could not be resolved after installation) — shows "Resource not
- * installed." No spinner, no "Download failed" secondary line. Distinct from `Failed` so users can
- * tell whether they need to install the resource or retry a failed download.
+ * installed." No spinner, no "No content for this reference" secondary line. Distinct from `Failed`
+ * so users can tell whether they need to install the resource or retry a failed download.
  */
 export const NotInstalled: Story = {
   render: () => (
@@ -288,7 +288,10 @@ export const VerseDownloading: Story = {
   ),
 };
 
-/** Verse mode, failed — the inline name stays beside the "Download failed" placeholder. */
+/**
+ * Verse mode, failed — the inline name stays beside the "No content for this reference"
+ * placeholder.
+ */
 export const VerseFailed: Story = {
   render: () => (
     <CellBox>
@@ -380,8 +383,8 @@ export const VerseLongNameNarrowPaneRightToLeft: Story = {
 /**
  * Partial-failure row smoke: ready, failed, unavailable, and downloading cells side by side.
  * Neighbors stay independent — one non-ready cell does not blank its siblings. The `unavailable`
- * cell shows "Resource not installed" (not "Download failed") so the two failure modes are
- * distinguishable at a glance.
+ * cell shows "Resource not installed" (not "No content for this reference") so the two failure
+ * modes are distinguishable at a glance.
  */
 export const PartialFailureRow: Story = {
   render: () => (

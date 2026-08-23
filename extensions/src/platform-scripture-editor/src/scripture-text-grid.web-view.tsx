@@ -23,7 +23,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import type { DblResourceReference } from 'platform-scripture';
+import type { DblResourceReference, ProjectReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
 import {
@@ -418,11 +418,13 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       // Re-read after the await: the subscription may have advanced during the install.
       const { current } = sourcesRef;
       if (!current) return;
-      const reference: DblResourceReference = {
-        type: 'dblResource',
-        name: resource.displayName,
-        id: resource.dblEntryUid,
-      };
+      // Non-DBL locally-installed resources (e.g. TNN, TND) are returned by getLocalNonDblResources
+      // with dblEntryUid === projectId as a synthetic marker. Store them as ProjectReferences so
+      // toGridResources can resolve them directly by project ID without a DBL catalog lookup.
+      const isLocalOnly = resource.dblEntryUid === resource.projectId;
+      const reference: DblResourceReference | ProjectReference = isLocalOnly
+        ? { type: 'project', name: resource.displayName, id: resource.projectId }
+        : { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };
       persistUserAddition(textConnectionPdp, reference, current.userReferenced)?.catch((e) => {
         papi.notifications.send({ message: PERSIST_FAILED_KEY, severity: 'error' });
         logger.warn(`Failed to persist added resource: ${getErrorMessage(e)}`);
