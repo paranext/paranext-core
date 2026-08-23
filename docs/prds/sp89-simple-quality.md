@@ -8,7 +8,7 @@
 | **Epic Lead**                  | Todd Hoatson — runs the PRD (role change 14 Aug 2026)                                                                                               |
 | **Prepared by**                | Ira Hopkinson (Simple Engineering Lead)                                                                                                             |
 | **Implementation Owner**       | Katherine Jensen                                                                                                                                    |
-| **Status**                     | Draft 4 — PO decisions incorporated (open questions 1–3, 6, 7 resolved) — as of 2026-08-14                                                          |
+| **Status**                     | Draft 5 — NN-5 environment fence (Sebastian); #2425 entry gate answered (Tom) — as of 2026-08-25                                                    |
 | **Candidate gathering**        | [Discord: [Sp 89] Simple Quality Improvements](https://discord.com/channels/892072317436448768/1533668454421495909) (dev suggestions, 3–8 Aug 2026) |
 
 ## Problem
@@ -31,8 +31,11 @@ Implementation Owner's feasibility check (12 Aug 2026), NTH capacity is expected
 minimal — the NTH list is a prioritized menu, not committed scope.
 
 Commitment level (decided by the PO, 13 Aug 2026, resolving Open question 6): **5 NNs
-committed; the 6th is a stretch goal** — which NN takes the stretch slot is designated
-at sprint entry once the PR #2425 gate (Open question 4) is answered.
+committed; the 6th is a stretch goal**. Stretch slot designated by the Epic Lead
+(Todd, 25 Aug 2026): **NN-3** — it is sequenced last behind #2425's landing and
+verification; it loses the least user value if it slips (the underlying fixes ship via
+NN-4's landing of #2425 regardless); and NN-6's mitigation can run in parallel rather
+than sequentially, so it doesn't need the stretch slot's calendar tail.
 
 ## Success criteria
 
@@ -102,7 +105,7 @@ books that exist in a resource but not the project. This NN keeps the
 project-switch rerender cluster, and PT-4139's don't-rerender half. Re-check at Sp 88
 close: any unfinished Sp 88 NN5 messaging work re-enters this pool.
 
-### NN-3 · Mode switching never corrupts the layout or the project
+### NN-3 · Mode switching never corrupts the layout or the project (stretch goal, designated 25 Aug 2026)
 
 - **PT-4116 / PT-4297** — switching Simple ↔ Power can overwrite the Power layout with
   the 3-column Simple layout (Simple-only panels appear in Power; layout unrecoverable).
@@ -185,7 +188,14 @@ Today there are more selection surfaces than distinct jobs — duplicate compone
 several callable dialogs, including unused ones (the 2026-08-10 refine pass found more
 surfaces than TJ's original "two components + three dialogs" count). Scope:
 
-1. Fix the known selection bugs above.
+1. Fix the known selection bugs above. Environment fence (24 Aug 2026, answering
+   Sebastian's doc question): committed **in the environments the bugs were reported
+   in** — which includes the dev-server case ("not working on dev server" is one of the
+   cited bugs). General offline/disconnected selection reliability is **not** committed
+   this sprint: no sprint currently owns it (Sp 88 no-goed resource download/access
+   incl. dev server/offline), and its natural home is Sp 90's selector behavior
+   redesign — include it in the Sp 90 epic handover to Ian. Specific reproducible
+   offline/disconnected failures enter the candidate pool for prioritization.
 2. Converge the _accidental_ duplicates toward the outcome: **one implementation per
    distinct job; unused surfaces retired** (TJ's original ask, phrased as an outcome
    rather than exact counts).
@@ -343,14 +353,20 @@ Out of scope).
 3. **PT-1641 acceptance** — **Resolved (Ian, 12 Aug 2026):** mitigation shipped +
    diagnosis reported counts as done if the root cause remains unidentified within the
    time box.
-4. **What will it take to land PR #2425?** (Tom) — **sprint-entry gate, answer needed
-   before sprint start.** It has serious code-review feedback outstanding and both NN-3
-   (verify coverage, fix residuals) and NN-4 (startup follow-on; its other dependency,
-   paratext-10-studio #171, merged 12 Aug 2026) depend on it landing first — it is the
-   critical path for two of the six NNs. Need Tom's read on the remaining effort, any
-   blockers, and the viability of handing it to someone else to complete; if #2425
-   cannot plausibly land in week 1 of the sprint, define fallback scopes for NN-3/NN-4
-   up front rather than mid-sprint.
+4. **What will it take to land PR #2425?** (Tom) — **substantially answered (Tom,
+   25 Aug 2026, Sp 89 thread).** It is "very close": merge conflicts resolved locally
+   (push pending a check), then a batch of small/low-priority review cleanups (Matt
+   Lyons argues they stay in the PR; Claude can address them quickly). **Hand-off is
+   viable**: once Tom's conflict changes are pushed, anyone can shepherd the rest
+   through without deep context. Week-1 landing is plausible; fallback scopes stand
+   ready if that slips. One decision remains inside the PR: the merge intentionally
+   keeps both mode-switch guards (Tom's content-based + TJ's structural; ADR-0019 +
+   code TODO), with TJ's asserted to fully cover all scenarios. **Decided (ratified by
+   the Epic Lead, 25 Aug 2026): merge as-is; fold the redundant-guard deletion into
+   NN-3's verification step** — proving the structural guard alone covers each symptom
+   is exactly NN-3's "verify coverage" work, it keeps the critical-path PR from
+   growing, and the deletion is gated by the new regression test rather than ad-hoc
+   manual testing. With this, **no open questions remain**.
 5. **Sprint 88 overlap check** — **Resolved (13 Aug 2026)** against the Sp 88
    Trust-the-App PRD, with one live remainder: S/R feedback story → narrow scope is
    Sp 88 NN4; the fuller story's ownership is being decided in the

@@ -14,7 +14,7 @@
 | **Implementation Owner** | Katherine Jensen                                                                                                    |
 | **Appetite**             | 6 developer-weeks across 2 calendar weeks, immediately following Sp 88                                              |
 | **Timing**               | Sprint entry gated on the PR #2425 assessment and the Sp 88 close-out review                                        |
-| **Status**               | Draft 4 — as of 2026-08-14                                                                                          |
+| **Status**               | Draft 5 — as of 2026-08-25                                                                                          |
 
 ## 1. The Problem
 
@@ -29,7 +29,8 @@ functionality, just making what exists behave.
 ## 2. Appetite & Boundaries
 
 **Commitment (PO, 13 Aug 2026): 5 non-negotiables committed; the 6th is a stretch
-goal**, designated at sprint entry once the PR #2425 gate is answered. Unbounded items
+goal — designated 25 Aug 2026 by the Epic Lead: NN-3 is the stretch** (sequenced last
+behind #2425; its fixes ship via NN-4 regardless; NN-6 parallelizes). Unbounded items
 are time-boxed as "materially improve and report", not benchmark promises. NTH capacity
 is expected to be minimal (per the IO's feasibility check) — the NTH list is a
 prioritized menu, not committed scope.
@@ -49,8 +50,10 @@ prioritized menu, not committed scope.
    follow-on; verify the improved numbers (~12 s → target) in a packaged P10 build;
    adopt the string-utils rework (a verified ~1–2.5 s startup lever).
 5. **Project/resource selection works reliably** — fix the dead-end selection bugs
-   (can't download, missing projects, broken search, loading-vs-empty confusion).
-   Consolidation of the duplicate selection surfaces is Sp 90's.
+   (can't download, missing projects, broken search, loading-vs-empty confusion), in
+   the environments they were reported in (incl. the dev-server case). Consolidation
+   of the duplicate surfaces is Sp 90's; general offline/disconnected selection
+   reliability is not committed this sprint (input to Sp 90's redesign).
 6. **The app never dies silently** — diagnose the silent WebSocket disconnect
    (PT-1641); ship automatic reconnect or a visible "connection lost" state.
    Mitigation shipped + diagnosis reported = done (PO-ratified).
@@ -101,6 +104,7 @@ restructuring so Sp 90's consolidation isn't pre-empted.
 | NN-2   | "Broader re-rendering cluster" is unbounded                                                  | Commit only to ticketed/reproduced items; new finds go to the pool                                                          |
 | NN-3/4 | PR #2425 has unresolved review feedback; coverage of NN-3's bugs unverified                  | Sprint-entry gate: Tom's landing assessment; fallback scopes pre-defined if it can't land week 1                            |
 | NN-5   | Adopting the shared selector could become consolidation                                      | Verify the component's own bugs are fixed first; per-bug fix-in-place vs adopt-shared; consolidation stays Sp 90            |
+| NN-5   | "Reliably" implies an environment matrix (offline/disconnected/dev server)                   | Committed in reported environments only (incl. dev server); offline/disconnected reliability → pool / Sp 90 redesign        |
 | NN-6   | Reconnect is not a drop-in (server forgets registrations; data-provider exits on disconnect) | Mitigation-first acceptance ratified; time-boxed diagnosis                                                                  |
 | NTH-1  | The string concatenation couldn't be found in this codebase                                  | Verify against the packaged build before scoping                                                                            |
 
@@ -119,16 +123,19 @@ Systems touched: editor web view, pane/web-view data plumbing, mode-switch layou
 handling, startup path, selection components, WebSocket/RPC layer, S/R notifications.
 Detail and citations per item in the [plan](./sp89-simple-quality.md).
 
-**Open question (live):** what will it take to land PR #2425 (Tom) — sprint-entry
-gate; includes hand-off viability. All other questions are resolved and recorded in
-the plan (book list, PT-1641 acceptance, Sp 87 leftovers, Sp 88 overlap, commitment
-level, Sp 90 split).
+**Open questions: none remain.** The #2425 sprint-entry gate is answered (Tom,
+25 Aug: PR very close, hand-off viable once his conflict push lands), and the
+dual-guard decision is ratified (Epic Lead, 25 Aug: merge as-is; fold the
+redundant-guard deletion into NN-3's verification). All earlier questions are resolved
+and recorded in the plan (book list, PT-1641 acceptance, Sp 87 leftovers, Sp 88
+overlap, commitment level, Sp 90 split).
 
 ## Changelog
 
-| Date        | Change                                                                                                                                              |
-| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 10 Aug 2026 | Draft 1 — candidates gathered (Discord + Sp 87 leftovers + Jira sweep), prioritized 6 NN + 10 NTH                                                   |
-| 12 Aug 2026 | Draft 2 — two refine passes incorporated; IO feasibility check received                                                                             |
-| 13 Aug 2026 | Draft 3 — Sp 88 overlap resolved; PO decisions on book list, PT-1641, carve-out                                                                     |
-| 14 Aug 2026 | Draft 4 — PO decisions: 5+1 commitment, Sp 90 split; string-utils folded into NN-4 (release-build numbers); NN-1 repro status; this brief generated |
+| Date        | Change                                                                                                                                                                                                                                                                           |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 10 Aug 2026 | Draft 1 — candidates gathered (Discord + Sp 87 leftovers + Jira sweep), prioritized 6 NN + 10 NTH                                                                                                                                                                                |
+| 12 Aug 2026 | Draft 2 — two refine passes incorporated; IO feasibility check received                                                                                                                                                                                                          |
+| 13 Aug 2026 | Draft 3 — Sp 88 overlap resolved; PO decisions on book list, PT-1641, carve-out                                                                                                                                                                                                  |
+| 14 Aug 2026 | Draft 4 — PO decisions: 5+1 commitment, Sp 90 split; string-utils folded into NN-4 (release-build numbers); NN-1 repro status; this brief generated                                                                                                                              |
+| 25 Aug 2026 | Draft 5 — NN-5 environment fence added after Sebastian's doc question (reported environments only; offline/disconnected → pool / Sp 90); #2425 entry gate substantially answered by Tom, dual-guard (ADR-0019) decision recorded; stretch slot designated by the Epic Lead: NN-3 |
