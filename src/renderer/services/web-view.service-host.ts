@@ -1624,7 +1624,15 @@ async function runProjectBoundSimpleSwitch(projectId: string, generation: number
     const layoutToLoad =
       enabledEntries.length === 0
         ? projectBoundLayout
-        : mergeDefaultLayoutSupplement(projectBoundLayout, enabledEntries);
+        : mergeDefaultLayoutSupplement(
+            projectBoundLayout,
+            enabledEntries,
+            'simple',
+            (entry, message) =>
+              logger.warn(
+                `mergeDefaultLayoutSupplement: supplement tab '${entry.tab.id}': ${message}`,
+              ),
+          );
     // Re-check right before the mutating load: a newer switch (the user changing their mind) may
     // have started and become current during the awaits above. A superseded switch must never
     // reach `loadLayout` — that's what would let it persist stale data into the wrong slot (see
