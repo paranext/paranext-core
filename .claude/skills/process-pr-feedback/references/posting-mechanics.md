@@ -248,7 +248,9 @@ Write real patterns, one per line, prose after an em-dash:
 \bD[1-7]\b — our G1 decision numbers
 ```
 
-Schema-shaped entries (`2659-NN`, `R5-XX`, anything with `<…>` or `..`) are **rejected with a
-hard stop**. `2659-NN` is a literal: it matches the characters `NN`, so every real id passes the
+An entry is `<pattern> — <prose>` and a pattern contains **no whitespace**; anything else in the
+section is treated as prose, skipped, and printed so a real entry written in the wrong shape is
+visible rather than dropped. Schema-shaped entries (`2659-NN`, `R5-XX`, anything with `<…>` or
+`..`) are **rejected with a hard stop**. `2659-NN` is a literal: it matches the characters `NN`, so every real id passes the
 check and the dry run reports PASS having tested nothing. That failure is invisible from the
 output, which is why it is made loud at the point of transcription.

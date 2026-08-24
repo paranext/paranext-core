@@ -52,7 +52,7 @@ def internal_labels(packet):
     if not os.path.exists(path):
         sys.exit(f"STOP: {path} is missing. P2 writes it; it is the configuration for the "
                  f"internal-label check and must not be re-derived here.")
-    out, bad, in_internal = [], [], False
+    out, bad, skipped, in_internal = [], [], [], False
     for line in open(path, encoding="utf-8"):
         if re.match(r"^##\s+Internal", line, re.I):
             in_internal = True
@@ -62,8 +62,15 @@ def internal_labels(packet):
             continue
         if not (in_internal and line.strip()) or line.startswith(("#", ">")):
             continue
-        token = re.split(r"\s+—|\s+-\s", line, maxsplit=1)[0].strip()
-        if not token:
+        # An entry is `<pattern> — <prose>`, and a pattern contains no whitespace. Prose
+        # paragraphs inside the section are normal and must not be scraped as patterns: a
+        # sentence taken as a regex either throws or silently matches nothing, and either way it
+        # dilutes a deny-list whose whole job is to be exact. Skipped lines are printed so a real
+        # entry written in the wrong shape is visible rather than dropped.
+        parts = re.split(r"\s+—\s+|\s+-\s+", line.strip(), maxsplit=1)
+        token = parts[0].strip()
+        if not token or len(parts) < 2 or re.search(r"\s", token):
+            skipped.append(line.strip()[:70])
             continue
         if re.search(r"(NN|XX|nn|<[^>]*>|\.\.)", token):
             bad.append(token)
@@ -81,6 +88,8 @@ def internal_labels(packet):
                    "A literal placeholder matches no real id and the check would report PASS.")
     if not out:
         sys.exit(f"STOP: no entries parsed from the Internal section of {path}")
+    for sk in skipped:
+        print(f"[labels] not an entry, skipped: {sk!r}")
     print(f"[labels] transcribed {len(out)} internal patterns: {out}")
     return out
 

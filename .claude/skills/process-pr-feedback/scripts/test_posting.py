@@ -159,6 +159,16 @@ def test_internal_pattern_catches_a_real_id_in_link_text():
     assert hits, "a real packet id in link text was allowed"
 
 
+def test_prose_inside_the_internal_section_is_not_scraped_as_a_pattern():
+    """A sentence taken as a regex either throws or matches nothing; both dilute the deny-list."""
+    import tempfile
+    from check import internal_labels
+    d = _vocab(tempfile.mkdtemp(),
+               "Write real patterns, not schemas, or the check tests nothing.\n"
+               r"2659-\d\d — our packet item ids")
+    assert internal_labels(d) == [r"2659-\d\d"]
+
+
 def test_missing_vocabulary_file_is_a_hard_stop():
     import tempfile
     from check import internal_labels
