@@ -679,7 +679,7 @@ step, no automation. Just a record.
   `reloadWebView` when the value is present. Point (4) works because `reloadWebView` **remounts** the
   web view: it re-runs the provider's `getWebView`, and `srcNonce = newNonce()` is regenerated on every
   call and interpolated into the generated `content`
-  (`src/renderer/services/web-view.service-host.ts`), so `content` differs each time and the `srcDoc`
+  (`src/renderer/services/web-view.service-shard.ts`), so `content` differs each time and the `srcDoc`
   bound in `web-view.component.tsx` changes, reloading the iframe and recreating the React root. The
   mount-time initializers therefore see the new values with no re-apply machinery at all. Note the
   trap: `getWebViewNonce(id)` IS stable per id, but it is not the nonce that reaches `content`. Contextual inputs that can be derived — `projectId`, the
@@ -746,7 +746,7 @@ step, no automation. Just a record.
 - **Original status:** Accepted (supersedes ADR-0017's delivery mechanism)
 - **Context:** ADR-0017 rejected a launch token on the stated premise that force-calling
   `reloadWebView` re-triggers the launch. Code review traced the call and found the premise false.
-  `reloadWebView` -> `openOrReloadWebView` (`src/renderer/services/web-view.service-host.ts`) calls the
+  `reloadWebView` -> `openOrReloadWebView` (`src/renderer/services/web-view.service-shard.ts`) calls the
   provider's `getWebView` and saves the new state, but the iframe is **not** reloaded: the generated
   `content` string and per-id nonce are unchanged, so only `onDidUpdateWebView` fires
   (`src/renderer/components/web-view.component.tsx` re-sets `srcDoc` only when `content` changes). The
