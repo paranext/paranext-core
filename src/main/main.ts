@@ -80,6 +80,7 @@ import {
   announceRoutingTargetChange,
   countWindowsThatCouldBeTheLastOne,
   doesNavigationReplaceRendererRegistrations,
+  focusWindow,
   getFocusedWindowId,
   getTargetWindowId,
   getWindows,
@@ -527,18 +528,16 @@ async function main() {
     // so no window has OS focus and the fallback below is the ordinary path, not the edge case. It
     // asks where routed calls go, which is the window the user was last working in; the oldest
     // tracked window would be an arbitrary choice that also repoints routing there by focusing it.
-    const targetWindowId = getTargetWindowId();
-    const targetWindow =
-      targetWindowId === undefined
-        ? undefined
-        : (BrowserWindow.fromId(targetWindowId) ?? undefined);
-    const focusWindow = BrowserWindow.getFocusedWindow() ?? targetWindow;
-    // Restoring or focusing a window Electron has already destroyed throws, which would drop the
-    // URI before it is ever dispatched below
-    if (focusWindow && !focusWindow.isDestroyed()) {
-      if (focusWindow.isMinimized()) focusWindow.restore();
-      focusWindow.focus();
-    }
+    const windowIdToRaise = BrowserWindow.getFocusedWindow()?.id ?? getTargetWindowId();
+    // Deliberately NOT gated on `isApplicationFocused()` the way the in-app raises are. That gate
+    // exists to stop us pulling the app in front of whatever the user is working in; this path
+    // runs precisely when the app does not own the foreground, so the gate would suppress every
+    // raise it exists to perform — the user asked for this window by following the link. Raising
+    // through the service rather than the `BrowserWindow` directly is what earns the rest: it is a
+    // no-op instead of a throw on a window that has closed, so a raise can never drop the URI
+    // before it is dispatched below, and an activation the OS refuses leaves the taskbar flashing,
+    // which on this path is the whole signal the user gets that the link landed.
+    if (windowIdToRaise !== undefined) focusWindow(windowIdToRaise);
     logger.debug(`Main is handling uri ${uri}`);
     // need to use `new URL` instead of `URL.parse` because Node<22.1.0 doesn't have it. Can change
     // when we get there
