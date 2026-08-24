@@ -586,3 +586,315 @@ step, no automation. Just a record.
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
   branch diverged from ADR-0002 without recording why.
+
+## ADR-0016: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
+
+- **Date:** 2026-08-18
+- **Status:** Accepted
+- **Context:** PT-4111 needed a zero-state carrying a title, a description, and an optional action
+  button (the scripture editor's "this book is not in this project" state, whose Power-mode variant
+  offers a Manage Books button). Three candidate shapes already existed and nothing said which to
+  reach for. `EmptyState` (`lib/platform-bible-react/src/components/basics/empty-state.component.tsx`,
+  2 consumers) renders a single `role="status"` message and has no slot for a title or an action.
+  `InstallFailedView` (`extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`,
+  2 consumers) is genuinely "full-panel message + action button" but is scoped to DBL install
+  recovery. Neither is a general primitive, and the next three tickets in the same epic (PT-4132,
+  PT-4347, PT-4349) each need a zero-state too, so an ad-hoc fourth shape would have compounded.
+- **Decision:** Vendor shadcn's `empty` into `lib/platform-bible-react/src/components/shadcn-ui/` and
+  treat it as the primitive for any zero-state that needs more than a bare sentence — title,
+  description, media, or an action. `EmptyState` keeps its existing consumers and remains the
+  message-only case; it did NOT gain `title`/`icon`/`action` props. `InstallFailedView` stays local to
+  install recovery. Feature-specific zero-states compose `Empty` inside their own extension (see
+  `book-not-available-view.component.tsx`) rather than adding variants to the shared library.
+- **Alternatives:** **Extend `EmptyState` with optional `title`/`icon`/`action`** — rejected: it
+  changes a shared design-system component for the benefit of consumers that do not need the new
+  props, and still would not be the primitive UX specified. **Follow the `InstallFailedView` idiom
+  with a new local view** — rejected: cheapest for one ticket, but it is an install-recovery view by
+  intent, and copying its shape for a fourth time is exactly the drift ADR-0012 warns about; UX also
+  specified the shadcn primitive by name. **Hand-write an equivalent component** — rejected: forfeits
+  the upstream-diffable baseline that `/add-shadcn-component` exists to preserve.
+- **Consequences:** `empty.tsx` must keep its two-commit history (raw shadcn baseline, then the
+  standard `pr-twp`/TSDoc customizations) so future shadcn upgrades can diff generated against
+  customized — its PR must not be squash-merged. One upstream quirk was kept deliberately:
+  `EmptyDescription` is typed `React.ComponentProps<'p'>` but renders a `<div>`; do not "fix" it
+  locally, since that would diverge from the baseline for no behavioral gain. Adding a shadcn
+  component is its own PR with its own branch, so any feature depending on a not-yet-vendored
+  primitive stacks on that PR rather than bundling it — which is how PT-4111 shipped it: the vendoring
+  is PR #2690 and the feature PR #2691 is based on it, so squash-merging the feature cannot flatten the
+  baseline.
+
+  **Accessibility is the caller's job, and this decision is what makes it so.** `EmptyState` came with
+  `role="status"`; `Empty` sets no role, and `EmptyTitle` renders a `<div>` rather than a heading.
+  Choosing `Empty` therefore silently drops an announcement that the rejected component provided —
+  something this entry originally failed to record, and which a review caught only after the first
+  implementation shipped without it. Every `Empty` consumer must pass `role="status"` and nest its own
+  heading; a zero state that REPLACES focused content (as the editor canvas one does) must also move
+  focus into the region, guarded on the document already having focus. Recorded as a rule in
+  [Component-Selection-Quick-Reference.md](Component-Selection-Quick-Reference.md#zero-states-no-content-to-show).
+- **Source:** PT-4111 design + implementation. (The original design note lives under gitignored
+  `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
+  precisely because that path is not readable from the repo.)
+
+## ADR-0017: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
+
+- **Date:** 2026-08-18
+- **Status:** Accepted. (Briefly amended by ADR-0018, now withdrawn: ADR-0018 asserted that point (4)
+  rested on a false premise about `reloadWebView`. Tracing the nonce showed the opposite — the premise
+  here is correct and the mechanism is stronger than stated. Point (4)'s wording is corrected below to
+  say why the reload works, and the "a nonce or launch token — rejected" alternative stands.)
+- **Context:** Opening a tool web view sometimes needs a value that applies to *this* launch only —
+  text to pre-fill, a section to land on, a row to pre-select — as distinct from the durable state the
+  web view persists. The pattern existed in the codebase but was never written down: `openFind` takes
+  `selectedText` and threads it through `FindWebViewOptions.initialSearchText`, and two providers
+  force a transient key back to its inert value on every rebuild
+  (`platform-scripture-editor/src/main.ts` `isSyncBlocked: false`, and
+  `legacy-comment-manager/src/main.ts`, whose comment explicitly cites the former). Because it was
+  undocumented, PT-4111's first design independently invented a consume-once protocol plus a launch
+  token — machinery the existing pattern does not need — and only discarded it after reading the
+  precedents.
+- **Decision:** A one-shot launch parameter is (1) an **optional scalar** appended to the `open*`
+  command's signature — never a structured request object, and never a new sibling command; (2)
+  carried as a field on that web view's `*WebViewOptions`; (3) written into the web view's `state` in
+  `getWebView` by **unconditional assignment from the current options**, which is what scrubs a stale
+  value off a restored layout; and (4) delivered to an already-open instance by force-calling
+  `reloadWebView` when the value is present. Point (4) works because `reloadWebView` **remounts** the
+  web view: it re-runs the provider's `getWebView`, and `srcNonce = newNonce()` is regenerated on every
+  call and interpolated into the generated `content`
+  (`src/renderer/services/web-view.service-host.ts`), so `content` differs each time and the `srcDoc`
+  bound in `web-view.component.tsx` changes, reloading the iframe and recreating the React root. The
+  mount-time initializers therefore see the new values with no re-apply machinery at all. Note the
+  trap: `getWebViewNonce(id)` IS stable per id, but it is not the nonce that reaches `content`. Contextual inputs that can be derived — `projectId`, the
+  current reference, the current book — are resolved from the triggering web view's definition
+  (`getOpenWebViewDefinition`, `scrollGroupScrRef`), not added as parameters. Only the caller's
+  *intent* is passed, because intent is the one thing not derivable.
+- **Alternatives:** **A second command** (e.g. `openManageBooksToCreateBook`) — rejected: duplicates
+  the resolve-and-open body and grows the command surface for one flag. **A structured options object**
+  — rejected by the command-signature rule in `.claude/rules/architecture/extension-patterns.md`
+  absent a behavior the bare shape cannot express. **Consume-once in the web view** (read the value,
+  then clear the state slot) — rejected: the provider-side scrub already guarantees the value cannot
+  outlive its launch, so a second mechanism is redundant and gives two places to get it wrong.
+  **A nonce or launch token to make repeat launches re-trigger** — rejected: the force-reload already
+  does that. **Conditionally spreading the key only when present** — rejected, and this is the
+  subtle one: it reads as tidier but lets a stale value survive a layout restore, which is precisely
+  the bug the scrub prevents.
+- **Consequences:** Consumers read the value as ordinary mount-time state (a lazy `useState`
+  initializer), with no clearing logic and no re-apply effect — re-applying would override the user's
+  own in-dialog navigation. Two costs come with the remount that makes this work. First, it discards
+  the web view's transient UI state on every relaunch — for Manage Books that is attached import files,
+  filter text, presence filter, group-by, copy source and scroll position — which is accepted because a
+  relaunch is an explicit user action on a dialog they are choosing to re-target, but it should be
+  weighed for any tool a user may be mid-task in. Second, the mechanism rests on a nonce the service
+  host has a standing TODO to make stable; if that TODO is ever acted on, every consumer of this
+  pattern silently stops seeing new options, so that TODO is the place to look if a launch parameter
+  ever stops arriving. A one-shot scroll or other launch side effect must be owned ABOVE any
+  conditionally-rendered child that performs it — otherwise the child's own remount (a filter clearing,
+  say) re-fires it long after the launch. The scrub is easy to regress into a conditional spread, so it warrants a
+  test that fails when the assignment becomes conditional (see
+  `manage-books.web-view-provider.test.ts`). Note `useWebViewState` is per-`webViewId` and does not
+  survive close/reopen, which is why this pattern flows through provider options rather than relying
+  on persisted slots.
+- **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
+  transient-state scrubs.
+
+## ADR-0018: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
+
+- **Date:** 2026-08-18 (withdrawn 2026-08-19)
+- **Status:** **Withdrawn.** Its central factual claim is wrong, and the mechanism it introduced was
+  dead code. ADR-0017 stands unamended in substance. Kept rather than deleted because the *way* it was
+  wrong is the useful part: it is a worked example of a plausible mechanism claim that survived
+  implementation, five duplicated code comments and a passing test, and was caught only by tracing the
+  nonce to its use site.
+- **What was wrong:** it asserted "the generated `content` string and per-id nonce are unchanged." Two
+  nonces exist and they were conflated. `getWebViewNonce(id)` is indeed stable per id — but it never
+  enters `content`. `srcNonce = newNonce()` does, regenerating on every `getWebView` call and
+  interpolated throughout the generated document, so `content` differs on every reload,
+  `web-view.component.tsx`'s `srcDoc={content}` changes, the iframe reloads, and the React root IS
+  destroyed and recreated. The service host even carries a standing TODO saying so in as many words
+  ("Generating nonces every time causes webviews to rerender every time `getWebView` is used on an
+  existing webview").
+- **Consequences of the withdrawal:** the launch token could never have fired — every guard seeded its
+  ref from the incoming token at mount, so `launchToken === ref.current` was always true and no effect
+  body ever ran. The feature worked throughout because ADR-0017's lazy initializers were correct all
+  along. The token plumbing has been removed from all five files, and the inverted trade-off ADR-0018
+  claimed to avoid is recorded honestly in ADR-0017's consequences instead: the remount really does
+  discard in-dialog state, which is the cost of the mechanism rather than something a token avoided.
+  The sibling `projectId` bug ADR-0018 reported is likewise not a bug: a mount-only initializer is
+  correct precisely because the reload remounts.
+- **Process lesson:** a claim about platform behavior belongs in ONE place. This one was duplicated into
+  five code comments, and when it turned out false all five were wrong together — and their number read
+  as corroboration. Assert platform mechanics once, at the site that depends on them, and link to it.
+- **Superseded content follows, for the record.**
+- **Original status:** Accepted (supersedes ADR-0017's delivery mechanism)
+- **Context:** ADR-0017 rejected a launch token on the stated premise that force-calling
+  `reloadWebView` re-triggers the launch. Code review traced the call and found the premise false.
+  `reloadWebView` -> `openOrReloadWebView` (`src/renderer/services/web-view.service-host.ts`) calls the
+  provider's `getWebView` and saves the new state, but the iframe is **not** reloaded: the generated
+  `content` string and per-id nonce are unchanged, so only `onDidUpdateWebView` fires
+  (`src/renderer/components/web-view.component.tsx` re-sets `srcDoc` only when `content` changes). The
+  existing React root re-renders and never unmounts. `useWebViewState` does surface the new values, but
+  ADR-0017's prescribed consumer shape — a lazy `useState` initializer — does not re-run on re-render,
+  and a mount-only `useLayoutEffect([])` does not re-fire. Net user-visible effect for PT-4111: with
+  Manage Books already open, choosing "Manage books" from the not-available view fronted the tab but
+  left it on the previous section with no preselection and no scroll — the feature's core affordance
+  silently no-opped. Implementing the fix surfaced a second latent bug: a `useEffect` resetting
+  `selectionsByAction` on `projectId` also ran on mount, wiping the lazy-initialized preselection, so
+  even the *first*-launch case never worked.
+- **Decision:** Carry a monotonically increasing **launch token** in the web view's options alongside
+  the launch parameters, bumped on every `open*` invocation, scrubbed by the same unconditional
+  assignment ADR-0017 point (3) prescribes. Consumers apply launch parameters in an **effect keyed on
+  the token**, not in a lazy `useState` initializer. A token — rather than comparing the parameter
+  values — is required because two consecutive identical launches produce identical parameters and are
+  otherwise indistinguishable.
+- **Alternatives:** **Compare parameter values and re-apply on change** — rejected: cannot distinguish
+  a repeat launch with the same parameters, which is a normal case. **Remount via a `key` derived from
+  the token** — viable and simpler to reason about, but discards all unrelated in-dialog state (scroll,
+  other sections' selections) that the user may care about; the keyed effect preserves it. **Make
+  `reloadWebView` genuinely reload the iframe** — rejected as out of scope and far more disruptive: it
+  would change behavior for every existing caller.
+- **Consequences:** ADR-0017's "no re-apply effect" consequence is reversed; the re-apply is scoped so
+  it overrides only the launched-to section's selection and leaves the user's other in-dialog state
+  intact. The same token fixes the sibling case where `projectId` was seeded by a mount-only
+  initializer, so "reload updates the existing tab with the new project context" now holds. The
+  already-open relaunch path needs a test — it is invisible in the mount-only tests that previously
+  covered this feature (see `manage-books-dialog.component.test.tsx`). More generally: `reloadWebView`
+  should not be assumed to remount anything.
+- **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
+  `srcNonce` to its use site.
+
+## ADR-0019: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
+
+- **Date:** 2026-08-05
+- **Status:** Accepted
+- **Context:** A verse-0 reference means "everything preceding verse 1" — book/chapter intros,
+  titles, outlines, Psalm `\d` superscriptions. It is reachable three ways: placing the cursor in
+  pre-verse-1 editor content (`usj-reader-writer.ts` reports `verseNum: 0`); the toolbar
+  previous-verse button, which calls `getPreviousVerseRef` **without** `bounds`
+  (`book-chapter-control.navigation.ts`), so its no-versification branch floors at verse 0 in any
+  chapter, not just chapter 1; and typing a `C:0` reference. A one-verse-tall surface has no useful
+  way to render that content, so the Text Collection showed an empty cell at Luke 1:0 —
+  [PT-3133](https://paratextstudio.atlassian.net/browse/PT-3133). PT9's
+  Text Collection shows verse 1 there instead. A4/PT-4052 (PR #2509) shipped a "No text for this
+  verse" ghost-text state, contradicting PT-3133's written acceptance (display verse 1); the
+  divergence went unflagged until PT-4061.
+- **Decision:** Single-verse display surfaces resolve a verse-0 reference to verse 1 via
+  `resolveDisplayVerseNum` (`extensions/src/platform-scripture-editor/src/scripture-text-grid/verse-display.utils.ts`),
+  confirmed by Ian Hewerdine 2026-08-05. Three constraints make this safe:
+  - **Display-only, and it carries an explicit guard.** The resolved verse is never written back to
+    the scroll group — writing it back would yank the Scripture Editor off the intro the user came
+    from. `Editorial`'s `ScriptureReferencePlugin` mounts even when `isReadonly` is set (`Editor.tsx`
+    gates it on `scrRef && onScrRefChange` only) and reports a selection whose book, chapter, or
+    verse disagrees with `scrRef`, so `ResourceCell` swallows the echo.
+
+    **The guard is defense-in-depth, not a fix for a live report.** `$resolvePosition` refuses to
+    describe a position in a document with no `BookNode` and no `ChapterNode` (upstream invariant I5),
+    and `sliceUsjToVerse` drops both — so the plugin is silent in verse mode, and the
+    `viewMode === 'verse'` branch of `handleScrRefChange` is unreachable. It is kept because it costs
+    nothing and is the right shape if a future editor makes slices addressable; do not read it as
+    evidence that a write-back currently occurs.
+
+    Verified 2026-08-16 against `@eten-tech-foundation/platform-editor` **0.8.15**, in both places it
+    can be read: the published npm package, and `dev-packages/scripture-editors` `packages/platform`,
+    which `postinstall` → `link-dev-packages` builds and yalc-links over `node_modules`. They agree
+    on this mechanism (the vendored copy trails published 0.8.15 by one caret-placement line in
+    `$moveCaretToVerseStart`). **Verify against the linked build, not `package-lock.json`** — the lock
+    still named 0.8.14 when this was written, and reading that stale tarball is exactly how an earlier
+    draft of this ADR came to describe `$findAndSetChapterAndVerse` and its chapter-1 fallback as the
+    live mechanism. That was wrong; that plugin does not exist in 0.8.15. Corrected in review of
+    #2663.
+
+    **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
+    `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
+    **bidirectional** — `$moveCaretToVerseStart` applies `scrRef` to the caret, and `$resolvePosition`
+    → `onSelectionSettled` → `report` reports the caret back — and read-only surfaces need both
+    halves. Not mounting it when read-only would break navigation-to-verse in every read-only editor
+    and would break read-only click-to-sync, which **this grid's chapter mode and the Resource Viewer
+    rely on** — those feed a whole chapter, so the document carries the book and chapter nodes
+    `$resolvePosition` needs. (Scoped deliberately: click-to-sync is *not* load-bearing in verse mode,
+    where the slice is unaddressable and no click reports anything. That predates this decision —
+    `sliceUsjToVerse` has dropped chapter chrome since #2509 — and is not a lost capability, since a
+    verse cell holds only the verse you are already on and so has nowhere to sync TO. Deliberately
+    not filed.) `isReadonly` is therefore the wrong predicate: a read-only editor reporting its
+    caret position is correct behavior, not the bug. The bug is narrower and entirely host-made —
+    *we* hand the editor verse 1's USJ while telling it verse 0, so the only component that knows
+    the reference is a deliberate lie is the one that told it. Whoever creates the mismatch owns
+    swallowing it. The generalizable fix, if a third surface ever wants one, is not an `isReadonly`
+    gate but for the promoted helper to carry the guard with it (see Consequences) — the rule and
+    its guard are one unit.
+  - **Chapter surfaces are exempt.** Anything rendering a whole chapter shows verse-0 front matter
+    directly: the Text Collection's chapter mode, its chapter-context split, its single-resource
+    path (`ScriptureTextGrid` renders one shown resource as `viewMode="chapter"`, so verse-0
+    behavior differs between one and several resources), and the Resource Viewer
+    (`resource-text-panel.web-view.tsx`). Correct behavior, signed off by Ian on PT-3133.
+  - **Genuinely-missing verses keep the ghost text.** Fall-forward applies only to verse 0. A verse
+    absent from a resource (an NT-only resource at an OT reference, an untranslated verse) still
+    renders "No text for this verse".
+  Accessible names resolve the same way, so the announcement names the verse the cells display. It
+  names the row, not its contents: a resource lacking verse 1 shows the empty state under the same
+  label, and a combined opener renders a "1-3" verse number under a label saying "1".
+- **Alternatives:** (a) *Keep the ghost-text empty state* — rejected: it blanks every cell at once
+  exactly when the user crosses a chapter or book boundary, so the tool reads as broken at the
+  moment it should be most useful; it also contradicts PT-3133's written acceptance. (b) *Normalize
+  the reference — forbid verse 0 in the Text Collection, or write verse 1 back to the scroll group*
+  (Todd Hoatson's suggestion on PT-3133) — rejected: the scroll group is shared, so it would move
+  every other view off the intro. (c) *Put the rule inside `sliceUsjToVerse`* — rejected: the
+  decision is about the **reference**, not the USJ, and the accessible-name site needs it without
+  having any USJ; burying a copy there would centralize nothing while making
+  `sliceUsjToVerse(usj, 0)` silently return verse 1. (d) *Fall forward only when verse 0 has no
+  content of its own* — a content-aware rule (raised in review of #2663). The distinction it draws is
+  real in the source: a `\d` superscription is one short line that a one-verse-tall cell renders
+  fine, whereas book/chapter intros and outlines are what genuinely cannot be rendered there. Under
+  it, PT9 parity would hold where it actually matters (the intro case), `<` from Psalms verse 1 would
+  produce a visible change instead of a silent one, and no real Scripture would be hidden in verse
+  view. Rejected on cost and consistency: the helper would need the chapter USJ, and the
+  accessible-name site in `ScriptureTextGrid` has none — it names the row before any resource has
+  fetched anything — which is exactly why the rule is reference-only. Making it content-aware would
+  either force a USJ through the naming path or split the rule in two (a USJ-aware version for cells,
+  a reference-only version for labels), and per-resource content-awareness would make the *same*
+  reference fall forward in one cell and not in its neighbor, so a row of cells would disagree about
+  which verse they are showing. Worth revisiting if the superscription case draws real complaints,
+  since it is the one place this decision hides genuine content.
+- **Consequences:** verse-0 content is not shown in verse view — deliberately. It stays one click
+  away via the chapter-context split, which renders the chapter unsliced; that escape hatch is what
+  makes the trade acceptable, so **revisit if the chapter-context split is ever removed or made
+  non-obvious**. Verse 0 and verse 1 now render identically and carry the same accessible name, so
+  stepping backward across that boundary produces no visible or announced change **within the grid**
+  — accepted, since the alternative is a row of ghost text at every chapter boundary.
+
+  **Verse 0 becomes unobservable inside the Text Collection, including to assistive tech** (raised
+  in review of #2663). At a verse-0 reference the row label announces "MAT 5:1", the cells render
+  verse 1, and nothing in the grid states that the shared reference is actually 5:0 — so a
+  screen-reader user has no in-grid signal that they are at the boundary. This is a genuine accepted
+  cost of naming the row after what it displays, not an oversight: the alternative is a label that
+  announces a verse the cells demonstrably do not show, which is worse. Two things keep it from
+  being a true silent dead end, and both live outside the grid: the BCV control still displays the
+  real reference (`5:0`), and its **previous-verse button is disabled** at verse 0, which is an
+  announced state change rather than an inert control — `isNoOpNavigation` in
+  `book-chapter-control.navigation.ts` disables a step that would return the same ref, pinned by the
+  `'Is disabled when at verse 0'` test in `book-chapter-control.navigation.test.ts`. (An earlier
+  draft of this ADR called the button "inert" and claimed fall-forward removed its "last remaining
+  cue"; that was wrong on both counts and is corrected here.) What the button cannot do is roll
+  backward to the previous chapter's last verse: with no `bounds`, `getPreviousVerseRef` floors at
+  `{chapterNum, verseNum: 0}` in every chapter rather than only chapter 1, so the reference dead-ends
+  there. That pin predates this decision and is now tracked as
+  [PT-4379](https://paratextstudio.atlassian.net/browse/PT-4379) — out of scope here because the fix
+  is not passing an argument but threading an async, PAPI-built `ScriptureBounds` through a
+  `platform-bible-react` component into every consumer of the BCV control.
+
+  Any future single-verse surface must call `resolveDisplayVerseNum` — `sliceUsjToVerse` is
+  deliberately mechanical and slices a raw verse 0 to nothing (pinned by a test) — and must carry the
+  write-back guard with it. The helper is currently private to `platform-scripture-editor`, so a
+  surface in another extension cannot import it; **promote it to
+  `lib/platform-bible-utils/src/scripture/` (which already owns `getPreviousVerseRef`, the producer
+  of verse-0 refs) at the second consumer _of this rule_** rather than re-typing it. The qualifier is
+  load-bearing: "second consumer" counted as surfaces would be wrong, because other surfaces already
+  handle verse-0 references under deliberately different rules. The worked example is the
+  interlinearizer extension (`sillsdev/interlinearizer-extension`, `InterlinearizerLoader.tsx`, the
+  `activeScrRef` memo): it renders a whole chapter and treats verse 0 as tokenizable content, so it
+  **keeps** verse 0 whenever a segment covers it — its USJ extractor emits a synthetic verse-0 scope
+  with SID `"<book> <chapter>:0"` for pre-verse-1 content — and falls back to verse 1 only when the
+  loaded book has no verse-0 segment for that chapter. That is content-awareness this rule
+  deliberately rejects (alternative (d) above), affordable there precisely because the whole book is
+  already parsed into segments before a reference is resolved. A whole-chapter surface should look
+  like the chapter-surface exemption above, not like this rule. Promoting on a surface count would
+  turn a deliberate single-verse-vs-whole-chapter difference into apparent drift from a shared util.
+- **Source:** PT-4061 (B3), which resolves PT-3133; Ian Hewerdine confirmed parity 2026-08-05.

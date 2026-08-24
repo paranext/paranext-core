@@ -33,6 +33,7 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import {
   AlertEntry,
   EstherTemplate,
+  ManageBooksAction,
   ManageBooksCopyStrategy,
   ManageBooksCreateMethod,
   ManageBooksDialog,
@@ -313,6 +314,18 @@ global.webViewComponent = function ManageBooksWebView({
     initialProjectId ?? '',
   );
 
+  // Transient launch parameters from `openManageBooks(..., 'createMissingBook')`. The provider
+  // rebuilds these from the current open/reload options on every getWebView and scrubs them
+  // otherwise, so they are already guaranteed not to survive a layout restore — no clearing needed
+  // here. Read as ordinary mount-time values for the reason given on `projectId` below.
+  const [initialSection] = useWebViewState<ManageBooksAction | undefined>(
+    'initialSection',
+    undefined,
+  );
+  const [initialSelectedBooks] = useWebViewState<string[] | undefined>(
+    'initialSelectedBooks',
+    undefined,
+  );
   // The EXPLICIT open context wins over persisted state: the dialog is only
   // opened from a scripture editor's hamburger menu, so a fresh
   // `initialProjectId` means "the user asked to manage THIS
@@ -320,6 +333,13 @@ global.webViewComponent = function ManageBooksWebView({
   // a project id that no longer resolves) must not override it. Persistence
   // still covers dock-layout session restores, where the definition carries
   // no fresh option.
+  //
+  // A mount-only initializer is sufficient, including for a RELAUNCH onto an already-open dialog,
+  // because reloading a web view remounts it — every launch is a fresh mount. Do not add a re-apply
+  // effect on top of it. Why the reload remounts is stated once, in `openManageBooks`
+  // (`platform-scripture/src/main.ts`), and as a rule in `.claude/rules/architecture/react-patterns.md`;
+  // it is not restated here, because the previous version of this feature duplicated that claim into
+  // five comments and when it turned out to be wrong all five were wrong together.
   const [projectId, setProjectIdLocal] = useState<string>(
     () => initialProjectId || persistedProjectId || '',
   );
@@ -1055,6 +1075,8 @@ global.webViewComponent = function ManageBooksWebView({
       <ManageBooksDialog
         open
         projectId={projectId}
+        initialSection={initialSection}
+        initialSelectedBooks={initialSelectedBooks}
         onProjectIdChange={setProjectIdLocal}
         loadProjects={loadProjects}
         loadBooks={loadBooks}
