@@ -24,10 +24,12 @@
 > (two) and `check-aggregator.service.ts` (one).
 >
 > **Taken together, Tasks 13 through 18 are already done or superseded**, bar the single editor
-> call site in finding one. **Task 19 is the exception: test-mock migration is still live work.**
-> Seven sync references remain across five test files, and the plan's list of them is both
-> over-inclusive (`app.component.test.tsx` no longer references the API) and under-inclusive
-> (three service-router tests are missing from it). Each task below carries a verdict.
+> call site in finding one. **Task 19 is the exception, but not as written:** seven sync
+> references remain across five test files, and all seven are mocks of a factory the code
+> under test no longer calls — so the residue is dead stubs to delete, not emitters to
+> migrate. Its file list is also both over-inclusive (`app.component.test.tsx` references
+> nothing) and under-inclusive (three service-router tests are missing). Each task below
+> carries a verdict.
 >
 > Whether this plan should be fenced as a frozen record or retired is its owner's call; it is
 > annotated rather than retired here.
@@ -97,7 +99,7 @@
 - `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234` — 3 emitters  
   _Stale as of 2026-08-25: **four** emitters now. Three already use `createNetworkEventEmitterAsync`; `selectionChangedEventEmitter` is still on the deprecated sync `createNetworkEventEmitter`. **That one site is the only un-migrated PRODUCTION emitter left** — do not read the count mismatch as "already done". Test mocks are separate and still live; see Task 19._
 - 4 test files: `src/shared/services/shared-store.service.test.ts`, `src/renderer/app.component.test.tsx`, `src/renderer/hooks/use-project-picker-data.hook.test.ts`  
-  _Stale as of 2026-08-25: says four files but lists three, and `app.component.test.tsx` no longer references `createNetworkEventEmitter` at all._
+  _Stale as of 2026-08-25: says four files but lists three; `app.component.test.tsx` references nothing; `shared-store.service.test.ts` has two references, not three; and three service-router tests are missing from the list. All of them are dead mocks — see the Task 19 verdict._
 
 **Phase 5 — Docs**
 
@@ -1616,7 +1618,7 @@ git commit -m "refactor(experimental): migrate extension emitters to createNetwo
 
 ### Task 19: Migrate test files (4 test files)
 
-> **STILL LIVE WORK (verified 2026-08-25).** The only Phase 4 task with real work left: seven sync `createNetworkEventEmitter` references across five test files — `shared-store.service.test.ts` `:14,52`, `use-project-picker-data.hook.test.ts` `:20,22`, `usersnap.service-router.test.ts` `:45`, `book-chapter-control.service-router.test.ts` `:45`, `dialog.service-router.test.ts` `:48`. The file list below is both over- and under-inclusive.
+> **SUPERSEDED as written — the remaining work is deletion, not migration (verified 2026-08-25).** Seven sync `createNetworkEventEmitter` references survive across five test files — `shared-store.service.test.ts` `:14,52`, `use-project-picker-data.hook.test.ts` `:20,22`, `usersnap.service-router.test.ts` `:45`, `book-chapter-control.service-router.test.ts` `:45`, `dialog.service-router.test.ts` `:48` — but every one is a mock of a factory the code under test no longer calls. The three service-routers contain no emitter factory reference at all; `shared-store.service.ts` moved to `createCoreMultiSourceEventEmitter`, which its test already mocks alongside `…Async`. Step 1 below says to replace them with `await …Async`, which would swap one unused stub for another. **Delete the dead mock entries instead.** The file list is also both over-inclusive (`app.component.test.tsx` references nothing) and under-inclusive (the three service-router tests are missing).
 
 **Files:**
 

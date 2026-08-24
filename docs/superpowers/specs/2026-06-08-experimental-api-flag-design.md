@@ -389,8 +389,9 @@ The remaining 25 are user-level call sites that all migrate to the same `createN
 These live in `src/shared/services/*` and are emitted by every process that hosts the service. Their names are added to the closed `MultiSourceNetworkEvents` type alias in core declarations and to the `MULTI_SOURCE_EVENT_NAMES` runtime constant:
 
 - `src/shared/services/network-object.service.ts:124-127` — `onDidCreateNetworkObjectEmitter`. Every process emits when it creates a local network object.  
-  _Verified done 2026-08-25: both on `createCoreMultiSourceEventEmitter` (`:56`, `:77`)._
-- `src/shared/services/network-object.service.ts:142-144` — `onDidDisposeNetworkObjectEmitter`. Every process emits when it disposes a local network object (comment at lines 139-141 explicitly notes the multi-process intent).
+  _Verified done 2026-08-25: on `createCoreMultiSourceEventEmitter` (`:56`)._
+- `src/shared/services/network-object.service.ts:142-144` — `onDidDisposeNetworkObjectEmitter`. Every process emits when it disposes a local network object (comment at lines 139-141 explicitly notes the multi-process intent).  
+  _Verified done 2026-08-25: on `createCoreMultiSourceEventEmitter` (`:77`)._
 - `src/shared/services/shared-store.service.ts:84` — `storeChangeEmitter`. Every process emits when its local store changes.  
   _Verified done 2026-08-25: on `createCoreMultiSourceEventEmitter` (`:150`)._
 
