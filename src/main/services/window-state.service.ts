@@ -151,6 +151,25 @@ export function isWindowReady(windowId: number): boolean {
 }
 
 /**
+ * Whether a window's renderer has EVER registered its window service, whether or not it is
+ * registered now.
+ *
+ * This is the fact that tells two identical-looking empty answers apart. A window that was never
+ * ready genuinely had nothing open. One that was serving a moment ago may be holding editors with
+ * unsaved work, and its own services were the only thing that could have listed them — so a caller
+ * that answers "none" for both reports a window's contents as absent when what really happened is
+ * that nobody could ask.
+ *
+ * Stays true once set, including for a window that has been given up on: {@link isWindowAbandoned}
+ * is what separates "its answer is still coming" from "there will never be one".
+ *
+ * @param windowId Window to ask about
+ */
+export function wasWindowEverReady(windowId: number): boolean {
+  return everReadyWindowIds.has(windowId);
+}
+
+/**
  * Whether a navigation replaces the page a window's renderer registered its scoped services from,
  * so everything that window registered is gone until the new page registers again.
  *
