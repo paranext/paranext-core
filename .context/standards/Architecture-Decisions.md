@@ -20,23 +20,26 @@ step, no automation. Just a record.
   fold the rule into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
   `.claude/rules/` file — that is what the agents read and enforce on the next feature. This log
   keeps the rationale and history; the standards keep the current rule.
-- **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-NNNN` instead of deleting
-  it; add the new decision as a new entry.
-- **Append at the end**, newest last. Number entries `ADR-NNNN`.
-- **Numbers are claimed at merge, not at write.** Several branches in flight at once each append the
-  next free number as of the day they branched, so two unmerged branches routinely carry the SAME
-  number for different decisions — and because the file is append-only, nothing catches it: the
-  second merge simply leaves `main` with two identical headings. Before merging a PR that adds an
-  entry, re-read the last heading on `main` and renumber yours to follow it, updating any
-  cross-references. Whoever merges second does the renumbering.
+- **Don't rewrite history.** Mark a superseded decision `Superseded by <id>` instead of deleting it;
+  add the new decision as a new entry.
+- **Append at the end**, newest last.
+- **Name entries, don't number them.** A new entry's id is `ADR-<kebab-case-slug>` naming what the
+  decision is about — `ADR-node-dom-globals-polyfill`, not `ADR-0029`. Sequential numbers were
+  claimed at write time but only became unique at merge, so two branches in flight routinely picked
+  the same one, and an append-only file has nothing to catch the collision: the second merge just
+  left `main` with two identical headings. A slug is chosen from the decision itself, so it is
+  already unique and never needs renumbering on a rebase. Keep it short enough to read inline in a
+  code comment, and stable once merged — it is the reference other files use.
+- **Existing `ADR-NNNN` entries keep their numbers.** Renaming them would break every reference in
+  the codebase for no gain, and this log doesn't rewrite history. Expect both forms.
 
 ### Entry template
 
 ```markdown
-## ADR-NNNN: {short title}
+## ADR-{kebab-case-slug}: {short title}
 
 - **Date:** YYYY-MM-DD
-- **Status:** Proposed | Accepted | Superseded by ADR-NNNN
+- **Status:** Proposed | Accepted | Superseded by ADR-{slug}
 - **Context:** what situation forced a decision (with file:line / source where useful).
 - **Decision:** what we chose.
 - **Alternatives:** what we considered and why we rejected/deferred them.
@@ -1429,3 +1432,53 @@ step, no automation. Just a record.
   future reader.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
+
+## ADR-node-dom-globals-polyfill: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Context:** scripture-editors PR
+  [#541](https://github.com/eten-tech-foundation/scripture-editors/pull/541) drops `@xmldom/xmldom`
+  from `@eten-tech-foundation/scripture-utilities` (~89 KB off browser bundles) and makes the
+  USX⇔USJ converters use the platform's **native** `DOMParser`/`XMLSerializer`. Browsers and web
+  views have those; our extension host is plain Node and does not, so the converters throw. It
+  reaches them through `platform-scripture`'s finder and extender PDPEs — every scripture read and
+  write. There was no runtime DOM shim anywhere in `src/`; every `jsdom` reference was in tests.
+- **Decision:** paranext-core supplies the globals rather than waiting on the package.
+  `src/node/polyfills/dom-globals.polyfill.ts` installs them from `@xmldom/xmldom` (now a declared
+  root dependency; previously it reached us only transitively — a dev-only 0.8.x hoisted via `plist`
+  plus a non-dev 0.9.x nested under scripture-utilities), letting an existing global win so a real
+  DOM is never overridden. It is a **side-effect module** imported **first** by `extension-host.ts`
+  — see that module's docs for why a callable function would run too late. `vitest.setup.node.ts`
+  installs it too, because the `node`-environment test projects (`extensions`,
+  `lib/platform-bible-utils`) run the same converters and would otherwise fail outright; it is kept
+  out of the shared `vitest.setup.ts` so the jsdom projects, which already have a real DOM, do not
+  pull xmldom into all ~150 of their workers for nothing. The main
+  process is deliberately **not** polyfilled: it has no converter call sites.
+- **Alternatives:** **Let the package fall back to `@xmldom/xmldom` when no DOM is present** (what
+  scripture-editors issue #516 floated) — needs no core change, but it is a cross-repo change we do
+  not control and would have to land first. **Install from `global-this.model.ts` alongside
+  `polyfillLocalStorage()`** — matches the existing polyfill pattern, but that module already
+  transitively imports `platform-bible-utils`, so its graph is fully evaluated before the install
+  would run; the ordering guarantee would be accidental rather than structural. **Pin the root dep
+  to `^0.8.10`** to match the dev-only hoisted copy — rejected: scripture-utilities parses and
+  serializes with 0.9.x internally, and this code writes scripture to disk, so the extension host
+  should stay on the 0.9 line rather than drop to an older parser. Note this does not pin an exact
+  engine: declaring `^0.9.8` at the root dedupes the package's own nested 0.9.10 away, so the
+  converters now run on whatever 0.9.x resolves at the root (0.9.12 today).
+- **Consequences:** Two `@xmldom/xmldom` majors now live in the tree on purpose.
+  `platform-enhanced-resources` declares `^0.8.10` because `marble-converter.ts` passes
+  `errorHandler` as an object, which 0.9 rejects with a `TypeError`; that dependency was previously
+  undeclared and resolved to the hoisted copy, so the root declaration would otherwise have silently
+  upgraded it and broken every marble conversion. npm satisfies that range by hoisting 0.8.x to
+  `extensions/node_modules/`, which makes it the default for **every** package under
+  `extensions/src/*`, not just this one — `import/no-extraneous-dependencies` is off, so the next
+  extension to import `@xmldom/xmldom` binds to 0.8.x with no warning. Two follow-ups worth taking
+  together: `convertMarbleChapterXml` runs only in a web view, which already has a native
+  `DOMParser`, so dropping the dependency there would remove the pin, the version split, and this
+  paragraph at once. Separately, `@xmldom/xmldom` emits no `parsererror` element, so PR #541's
+  malformed-XML guard is inert under the shim; fatally malformed USX still throws (as a `ParseError`
+  from inside `parseFromString`, not the renderer's `Invalid USX:` error), but *recoverable* defects
+  are silently repaired rather than rejected — on the extension host that repaired form is what gets
+  written back to disk. Revisit if the package ever ships its own Node fallback.
+- **Source:** PT-4412.
