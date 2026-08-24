@@ -19,6 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  EmptyState,
   Spinner,
   usePromise,
   useExtraValidMarkers,
@@ -55,7 +56,7 @@ import {
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
-import { resolveResourceContentState } from './platform-scripture-editor.utils';
+import { isChapterBlank, resolveResourceContentState } from './platform-scripture-editor.utils';
 import {
   RESOURCE_PANEL_TYPED_STRING_KEYS,
   resolveResourcePanelStringKeys,
@@ -69,6 +70,11 @@ const DEFAULT_TEXT_DIRECTION = 'ltr';
 // given, so a hand-maintained second list is a silent hole: add a field to `ResourcePanelStringKeys`,
 // forget the array, and the render site reads `undefined` and announces an empty message.
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
+  // Shared with the model text panel's blank-chapter branch. Distinct from the editable
+  // `..._emptyChapter_message%`, which sits beside an "Add chapter number" action these read-only
+  // panels must not offer. The missing-book wording is per resource type and comes from
+  // `RESOURCE_PANEL_TYPED_STRING_KEYS` below; a blank chapter reads the same either way.
+  '%webView_platformScriptureEditor_emptyChapter_messageResource%',
   '%webView_resourcePanel_noProject%',
   '%webView_resourcePanel_installing%',
   '%webView_resourcePanel_selecting%',
@@ -413,7 +419,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // sliced by scripture-text-grid/verse-display.utils — slicing would blank the verse-0 front matter
   // (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve verse 0
   // to verse 1; whole-chapter surfaces like this one must not (see ADR-0019).
-  const [usjPossiblyError] = useProjectData(
+  const [usjPossiblyError, , isUsjLoading] = useProjectData(
     'platformScripture.USJ_Chapter',
     resourceProjectId,
   ).ChapterUSJ(
@@ -430,6 +436,16 @@ globalThis.webViewComponent = function ResourceTextPanel({
   );
 
   const usjFromPdp = !isPlatformError(usjPossiblyError) ? usjPossiblyError : undefined;
+
+  // A chapter the resource HAS but with nothing in it. Gated on the load having finished because
+  // `useProjectData`'s underlying `useData` hook doesn't reset to its default when the selector
+  // (here, `scrRef`) changes — it keeps the previous chapter's USJ until the new subscription's
+  // first update lands, and its default is `EMPTY_USJ`, which is itself blank. Without the gate the
+  // panel would claim "empty" over a chapter that is still arriving, and again on first mount.
+  const isBlankChapter = useMemo(
+    () => !isUsjLoading && usjFromPdp !== undefined && isChapterBlank(usjFromPdp),
+    [usjFromPdp, isUsjLoading],
+  );
 
   // #endregion
 
@@ -638,21 +654,39 @@ globalThis.webViewComponent = function ResourceTextPanel({
         downloadResourcesLabel={localizedStrings['%webView_resourcePanel_downloadResources%']}
       />
 
-      {/* Scripture content, or the reason there is none. The selector above stays mounted either
-        way: a resource missing a book has no remedy inside this panel, so the only thing the user
-        can do about it is switch to a text that has the book.
+      {/* Scripture content, or the reason there is none: the resource has no such book, or it has
+        the book but the chapter is blank. A blank chapter arrives as a successful, empty USJ rather
+        than as an error, so it is invisible to `contentState` and needs its own check; it is
+        ordered after the missing book because that is the more specific claim. Either message beats
+        letting `Editorial` render with no scripture set, which shows its "enter some Scripture"
+        prompt — an edit invitation in a text the reader cannot edit.
 
-        Only the editor gets `dir`. That is the RESOURCE's text direction, and the message is app
+        The selector above stays mounted either way: a resource missing a book has no remedy inside
+        this panel, so the only thing the user can do about it is switch to a text that has the book.
+
+        Only the editor gets `dir`. That is the RESOURCE's text direction, and the messages are app
         chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
         resource is RTL. */}
-      {contentState === 'bookNotAvailable' ? (
+      {contentState === 'bookNotAvailable' && (
         <div className="tw:flex-1 tw:overflow-auto">
           <ResourceBookNotAvailable
             message={localizedStrings[bookNotAvailableKey]}
             announcementKey={`${resourceProjectId}:${scrRef.book}`}
           />
         </div>
-      ) : (
+      )}
+      {contentState !== 'bookNotAvailable' && isBlankChapter && (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <EmptyState
+            id="resource-text-panel-empty-chapter"
+            className="tw:text-center"
+            message={
+              localizedStrings['%webView_platformScriptureEditor_emptyChapter_messageResource%']
+            }
+          />
+        </div>
+      )}
+      {contentState !== 'bookNotAvailable' && !isBlankChapter && (
         <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
           <Editorial
             ref={editorRef}

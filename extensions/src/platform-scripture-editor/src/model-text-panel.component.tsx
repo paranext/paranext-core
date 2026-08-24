@@ -8,6 +8,7 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
+  EmptyState,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -33,7 +34,11 @@ import { InstallFailedView, InstallingView } from './install-state-views.compone
 import { scrollToVerse } from './editor-dom.util';
 import { getRefLabel } from './resource-reference.utils';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
-import { isMissingBookError, isMissingBookOnScreen } from './platform-scripture-editor.utils';
+import {
+  isChapterBlank,
+  isMissingBookError,
+  isMissingBookOnScreen,
+} from './platform-scripture-editor.utils';
 import type {
   ModelTextPanelLocalizedStringKey,
   ModelTextPanelLocalizedStrings,
@@ -276,6 +281,14 @@ export function ModelTextPanel({
     // scrollToVerse is a stable module-level import — adding it as a dep would cause spurious re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usj, isUsjLoading, scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
+
+  // A chapter the resource HAS but with nothing in it. Gated on the load having finished because
+  // `usj` keeps the previous chapter's content until the new fetch lands — deriving this mid-load
+  // would paint the message over a chapter that is still arriving.
+  const isBlankChapter = useMemo(
+    () => !isUsjLoading && usj !== undefined && isChapterBlank(usj),
+    [usj, isUsjLoading],
+  );
 
   // --- Editor ---
 
@@ -529,14 +542,32 @@ export function ModelTextPanel({
         Only the editor gets `dir`. That is the RESOURCE's text direction, and the message is app
         chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
         model text is RTL. */}
-      {isBookMissing ? (
+      {isBookMissing && (
         <div className="tw:flex-1 tw:overflow-auto">
           <ResourceBookNotAvailable
             message={localize(localizedStrings, '%webView_modelTextPanel_bookNotAvailable%')}
             announcementKey={`${resourceProjectId}:${scrRef.book}`}
           />
         </div>
-      ) : (
+      )}
+      {/* A chapter the model text HAS but with nothing in it. Invisible to `isBookMissing`, which
+        keys off the fetch rejecting, so it needs its own check; ordered after the missing book
+        because that is the more specific claim. Without it the read-only editor renders with
+        nothing set and shows `Editorial`'s "enter some Scripture" prompt — an edit invitation in a
+        text the reader cannot edit. */}
+      {!isBookMissing && isBlankChapter && (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <EmptyState
+            id="model-text-panel-empty-chapter"
+            className="tw:text-center"
+            message={localize(
+              localizedStrings,
+              '%webView_platformScriptureEditor_emptyChapter_messageResource%',
+            )}
+          />
+        </div>
+      )}
+      {!isBookMissing && !isBlankChapter && (
         <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
           <Editorial
             ref={editorRef}

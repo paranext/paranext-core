@@ -38,6 +38,8 @@ const STRINGS = {
   '%webView_modelTextPanel_emptyState_prompt%': 'No model text selected.',
   '%webView_modelTextPanel_bookNotAvailable%':
     'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+  '%webView_platformScriptureEditor_emptyChapter_messageResource%':
+    'This chapter is empty in this resource.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -54,7 +56,26 @@ const INSTALLED_RESOURCE: DblResourceData = {
 
 const UNINSTALLED_RESOURCE: DblResourceData = { ...INSTALLED_RESOURCE, installed: false };
 
-const SAMPLE_USJ: Usj = { type: 'USJ', version: '3.1', content: [] };
+/**
+ * A chapter with content. It carries a chapter marker and a verse because the panel distinguishes a
+ * populated chapter from a blank one by those nodes — USJ with an empty `content` array is a
+ * _blank_ chapter, not a generic stand-in.
+ */
+const SAMPLE_USJ: Usj = {
+  type: 'USJ',
+  version: '3.1',
+  content: [
+    { type: 'chapter', marker: 'c', number: '1' },
+    {
+      type: 'para',
+      marker: 'p',
+      content: [{ type: 'verse', marker: 'v', number: '1' }, 'In the beginning'],
+    },
+  ],
+};
+
+/** A chapter the resource has, but with nothing in it — no chapter marker and no verses. */
+const BLANK_USJ: Usj = { type: 'USJ', version: '3.1', content: [] };
 
 /** An effective list with a single configured dblResource model text pointing at `dblEntryUid`. */
 function configuredModelText(dblEntryUid: string): EffectiveResourceReferenceList {
@@ -359,5 +380,98 @@ describe('ModelTextPanel', () => {
         'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
       ),
     ).not.toBeInTheDocument();
+  });
+
+  it('shows the empty-chapter message instead of the editor when the chapter has no content', async () => {
+    // A blank chapter arrives as a successful, empty USJ — not as an error — so the missing-book
+    // branch never sees it. Without its own branch the read-only editor renders with nothing set and
+    // shows `Editorial`'s "enter some Scripture" prompt: an edit invitation in a text the reader
+    // cannot edit.
+    const getResourceChapter = vi.fn(async () => ({ usj: BLANK_USJ, textDirection: 'ltr' }));
+    renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+    });
+
+    // `role="status"` asserted alongside the text because this region swaps in place as the user
+    // navigates, so the live region is what announces it instead of the model text going silent.
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'This chapter is empty in this resource.',
+    );
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+  });
+
+  it('distinguishes a blank chapter from a book the resource does not have', async () => {
+    // The two states have different causes and different wording; a blank chapter must not borrow
+    // the missing-book sentence, which would tell the reader the book is absent when it is present.
+    const getResourceChapter = vi.fn(async () => ({ usj: BLANK_USJ, textDirection: 'ltr' }));
+    renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+    });
+
+    await screen.findByText('This chapter is empty in this resource.');
+    expect(
+      screen.queryByText(
+        'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it('does not claim the chapter is empty while the next chapter is still loading', async () => {
+    // `usj` keeps the PREVIOUS chapter's content until the new load lands, so navigating away from a
+    // blank chapter would leave the message painted over a chapter that is still arriving. The
+    // blank-chapter branch has to be gated on the load having finished.
+    const getResourceChapter = vi.fn(async () => ({ usj: BLANK_USJ, textDirection: 'ltr' }));
+    const { rerender } = renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    });
+    await screen.findByText('This chapter is empty in this resource.');
+
+    // The next chapter's load never settles, so the in-flight state is observable.
+    const neverResolves = vi.fn(() => new Promise<never>(() => {}));
+    rerender(
+      <ModelTextPanel
+        {...makeProps({
+          effectiveModelTexts: configuredModelText('uid-web'),
+          dblResources: [INSTALLED_RESOURCE],
+          getResourceChapter: neverResolves,
+          scrRef: { book: 'GEN', chapterNum: 2, verseNum: 1 },
+        })}
+      />,
+    );
+    expect(screen.queryByText('This chapter is empty in this resource.')).not.toBeInTheDocument();
+  });
+
+  it('recovers to the editor when navigating from a blank chapter to one with content', async () => {
+    // The blank-chapter state is derived from the current USJ rather than latched, so a populated
+    // chapter must render the editor again instead of leaving the panel stuck on the message.
+    const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
+    getResourceChapter.mockResolvedValueOnce({ usj: BLANK_USJ, textDirection: 'ltr' });
+    const { rerender } = renderPanel({
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    });
+    expect(await screen.findByText('This chapter is empty in this resource.')).toBeInTheDocument();
+
+    rerender(
+      <ModelTextPanel
+        {...makeProps({
+          effectiveModelTexts: configuredModelText('uid-web'),
+          dblResources: [INSTALLED_RESOURCE],
+          getResourceChapter,
+          scrRef: { book: 'GEN', chapterNum: 2, verseNum: 1 },
+        })}
+      />,
+    );
+    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
+    expect(screen.queryByText('This chapter is empty in this resource.')).not.toBeInTheDocument();
   });
 });
