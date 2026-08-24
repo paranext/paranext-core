@@ -157,10 +157,10 @@ export function BookChapterControl({
 
   const activeBookIdSet = useMemo(() => new Set(activeBookIds), [activeBookIds]);
 
-  // getAdditionalBookIds is a public prop, so callers may hand back ids the project already has.
-  // Only the genuine difference is dimmed or gated behind the expansion.
-  const dimmedBookIdSet = useMemo(
-    () => new Set(additionalBookIds.filter((bookId) => !activeBookIdSet.has(bookId))),
+  // The ids the caller offered that the project lacks. Kept separate from the dimmed set below
+  // because the union needs it, and the dimmed set is derived FROM the union.
+  const extraBookIds = useMemo(
+    () => additionalBookIds.filter((bookId) => !activeBookIdSet.has(bookId)),
     [additionalBookIds, activeBookIdSet],
   );
 
@@ -168,10 +168,17 @@ export function BookChapterControl({
   // in neither the project nor any open resource is still visible rather than silently absent.
   // Canon-ordered so an extra book lands among its neighbours instead of after the project's books.
   const unionBookIds = useMemo(() => {
-    if (dimmedBookIdSet.size === 0 && activeBookIdSet.has(scrRef.book)) return activeBookIds;
-    const reachable = new Set([...activeBookIds, ...dimmedBookIdSet, scrRef.book]);
+    if (extraBookIds.length === 0 && activeBookIdSet.has(scrRef.book)) return activeBookIds;
+    const reachable = new Set([...activeBookIds, ...extraBookIds, scrRef.book]);
     return ALL_BOOK_IDS.filter((bookId) => reachable.has(bookId));
-  }, [activeBookIds, activeBookIdSet, dimmedBookIdSet, scrRef.book]);
+  }, [activeBookIds, activeBookIdSet, extraBookIds, scrRef.book]);
+
+  // Anything reachable but outside the project is greyed — the current reference's book included,
+  // so it is never shown as though the project had it.
+  const dimmedBookIdSet = useMemo(
+    () => new Set(unionBookIds.filter((bookId) => !activeBookIdSet.has(bookId))),
+    [unionBookIds, activeBookIdSet],
+  );
 
   const groupBooksBySection = useCallback((bookIds: string[]): Record<Section, string[]> => {
     return {

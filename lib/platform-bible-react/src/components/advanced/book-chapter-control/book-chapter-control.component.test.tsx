@@ -298,4 +298,22 @@ describe('BookChapterControl additional books', () => {
     const genesis = await screen.findByRole('option', { name: /Genesis/ });
     expect(genesis).not.toHaveClass('tw:text-muted-foreground/50');
   });
+
+  test('the current book is dimmed when the project lacks it, even with no additional books', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'REV', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={() => []}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    // Type a fragment matching several books so a top match does not replace the book list.
+    await userEvent.type(getSearchInput(), 'e');
+
+    const revelation = await screen.findByRole('option', { name: /Revelation/ });
+    expect(revelation).toHaveClass('tw:text-muted-foreground/50');
+  });
 });
