@@ -1176,11 +1176,25 @@ step, no automation. Just a record.
   success. Because this contract is demonstrably still moving — `syncingProjectIds` was added to it by
   this very work — the snapshot validator checks `resultStatus` for membership in the known union
   rather than merely for being a string, and a snapshot carrying an unrecognised status reports
-  `unknown` (yellow, honest) instead of a possibly-false `synced`. The cost is deliberate: a seventh
+  `unknown` instead of a possibly-false `synced`. `unknown` carries no icon and shares the plain
+  "Sync" label with `idle` — it is distinguished only in the popover text and the live region, which
+  is deliberate: a degraded read is not an error worth a persistent badge in the toolbar, and the
+  honest answer is available the moment the user asks for it. The cost is deliberate: a seventh
   status added upstream degrades this button to `unknown` until core's mirrored declaration is
   re-synced, which is the failure direction this whole entry chooses everywhere else.
 
-- **Follow-up (needs tickets under PT-4336, none filed as of this entry):** three items above are
+  **A pending Cancel cannot be settled by the project ids.** Upstream derives `syncingProjectIds`
+  from live, ref-counted per-project claims (`sync-state.ts` `initSyncState`), and a single
+  continuous `isSyncing: true` window spans however many overlapping claims the sync paths take out.
+  A project can therefore release and re-claim without a new sync having started, so "an id this
+  cancel did not cover" is not evidence of a different sync and cannot re-arm Cancel. The button
+  settles a pending cancel on the two signals that are sound — the status leaving `syncing`, and the
+  popover being reopened — and accepts the cost: a genuinely new overlapping sync keeps a dim
+  "Cancelling…" until the whole union goes idle. That is the safe half of the trade, since the
+  alternative offers a live Cancel while a cancel is still in flight. Settling this properly needs a
+  monotonic sync-episode identifier in `SyncState`, which is an upstream contract change.
+
+- **Follow-up (needs tickets under PT-4336, none filed as of this entry):** the items above are
   deliberately out of this decision's scope and will not happen on their own.
   1. *Close the Simple-mode startup-sync blind spot* — route `main/startup-tasks.ts` and the picker's
      `syncOnProjectSwitch` through a claiming wrapper, or land upstream PT-4214. Owner: core.
@@ -1190,5 +1204,26 @@ step, no automation. Just a record.
      Send/Receive declaration. Owner: whoever owns Studio's patch — this cannot be done from core.
   3. *Reconcile the two in-core cancel surfaces* — share one piece of cancel-requested state between
      this popover and `sync-blocked-banner.component.tsx`. Owner: core.
+  4. *Make a new sync episode provable* — add a monotonic episode id to `SyncState` so a pending
+     Cancel can be settled positively rather than waited out. Owner: upstream Send/Receive, then
+     core. Unblocks the "dim Cancelling…" cost recorded above.
+  5. *Validate the snapshot field-by-field rather than all-or-nothing* — `isValidSyncState` rejects a
+     whole snapshot for an unrecognised historical `resultStatus`, discarding live, well-formed
+     `isSyncing`/`syncingProjectIds` with it. Answer the completed-sync question with `unknown` and
+     keep the live fields. Owner: core.
+  6. *Close the remaining sync-status timing holes* — a newer sync starting before a finished sync's
+     follow-up read returns swallows that sync's `failed`; the first event ends the seed's retry
+     budget without the event path having a retry of its own; a cancel rejected just as the sync ends
+     can toast beside a popover that says it finished; a cancel accepted but not acted on leaves the
+     button wedged. All need a specific timing collision. Owner: core.
+  7. *Debounce the syncing-project metadata lookup* — it calls the retrying
+     `getMetadataForAllProjects` on every id-set change, including the transient blank each event
+     produces, and this component is mounted in every window's toolbar.
+     `use-project-picker-data.hook.ts` debounces the identical call. Owner: core.
+  8. *Resolve the shared-layout contradiction* — `shared-layout-receiver.model.ts` rests on
+     "`onSyncStateChanged` only fires for manual Send/Receives", while this work's declaration says
+     the state controller also covers `runScheduledSessionSync` and the auto-sync engine. Under the
+     new semantics a background sync raises the interactive "Apply now" prompt to someone who took no
+     action. This decision establishes the contradiction rather than causing it. Owner: core.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
-  the `lastRequestedProjectIds` contract.
+  the `lastRequestedProjectIds` and `syncingProjectIds` contracts.

@@ -430,8 +430,38 @@ describe('PlatformBibleToolbar — Sync button', () => {
       }) as any,
     );
 
-    // A sync that ENDED is only "Synced" if it succeeded, which the results are what establish.
-    mockSendCommand(true, {
+    // Seeded MID-SYNC, so the label has to change for this to pass: a seed that already said
+    // "Synced" would render the asserted label whether or not the event was ever delivered.
+    // `syncingProjectIds` absent on purpose: a build predating that field still reports a running
+    // sync, and the bare "Syncing" label it produces is all this test needs to change.
+    let syncState: unknown = { isSyncing: true, lastRequestedProjectIds: [] };
+    mockSendCommand(true, undefined);
+    vi.mocked(sendCommand).mockImplementation(
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      (async (commandName: string) => {
+        if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+        if (commandName === 'platform.getOSPlatform') return 'win32';
+        if (commandName === 'platform.isFullScreen') return false;
+        if (commandName === 'paratextBibleSendReceive.getSyncState') return syncState;
+        return undefined;
+        // sendCommand has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
+    render(<PlatformBibleToolbar />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Syncing' })).toBeInTheDocument();
+    });
+
+    expect(capturedSyncStateCallback).toBeDefined();
+    if (!capturedSyncStateCallback)
+      throw new Error('capturedSyncStateCallback was not set by mock');
+
+    // A sync that ENDED is only "Synced" if it succeeded, which the results are what establish. The
+    // event carries no outcome, so the follow-up read is what has to supply it.
+    syncState = {
       isSyncing: false,
       lastRequestedProjectIds: ['proj1'],
       syncingProjectIds: [],
@@ -439,17 +469,7 @@ describe('PlatformBibleToolbar — Sync button', () => {
         sendReceiveDate: '2026-08-19T00:00:00Z',
         resultsInfo: { proj1: { id: 'proj1', resultStatus: 'succeeded' } },
       },
-    });
-    render(<PlatformBibleToolbar />);
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
-    });
-
-    expect(capturedSyncStateCallback).toBeDefined();
-    if (!capturedSyncStateCallback)
-      throw new Error('capturedSyncStateCallback was not set by mock');
-
+    };
     const syncStateCallback = capturedSyncStateCallback;
     act(() => {
       syncStateCallback({ isSyncing: false });

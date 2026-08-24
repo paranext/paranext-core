@@ -324,8 +324,9 @@ declare module 'paratext-bible-send-receive' {
      *
      * Optional in core's copy only: it was added to the Send/Receive contract after the version
      * shipping in some builds, so a Paratext 10 Studio build predating that change answers
-     * `getSyncState` without it. Consumers must handle it being absent (fall back to a status that
-     * names no projects) rather than assuming an empty array means "nothing syncing".
+     * `getSyncState` without it. ABSENT means "this build cannot say" and consumers must handle it
+     * by falling back to a status that names no projects; PRESENT AND EMPTY means "nothing is
+     * syncing", per the invariant above. The two must not be conflated.
      */
     syncingProjectIds?: string[];
   };

@@ -1,6 +1,11 @@
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
+import {
+  SEND_RECEIVE_AVAILABILITY_RECHECK_WINDOW_MS,
+  UNSETTLED_RECHECK_INTERVAL_MS,
+} from '@renderer/hooks/use-send-receive-availability.hook';
+import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { getErrorMessage } from 'platform-bible-utils';
 import { useEvent, usePromise } from 'platform-bible-react';
@@ -60,13 +65,16 @@ const NO_PROJECT_IDS: readonly string[] = Object.freeze([]);
  * A read is not cheap to fail: an unregistered command rejects only after `requestWithRetry` has
  * retried it `MAX_REQUEST_ATTEMPTS` times at `REQUEST_ATTEMPT_WAIT_TIME_MS` apart (~9s), so each
  * attempt already spans most of the activation race on its own. The interval here spaces the
- * attempts that follow that; the window is sized to match
- * `SEND_RECEIVE_AVAILABILITY_RECHECK_WINDOW_MS`, since both bound the same thing — how long
- * send/receive may take to register its commands on a contended cold start.
+ * attempts that follow that.
+ *
+ * Both values are aliases of `use-send-receive-availability.hook.ts`'s rather than literals of
+ * their own, because both hooks are waiting out the same thing — how long send/receive may take to
+ * register its commands on a contended cold start. Restating them would let the two drift apart
+ * while every comment still claimed they matched.
  */
-export const SYNC_STATE_SEED_RETRY_INTERVAL_MS = 2000;
+export const SYNC_STATE_SEED_RETRY_INTERVAL_MS = UNSETTLED_RECHECK_INTERVAL_MS;
 /** See {@link SYNC_STATE_SEED_RETRY_INTERVAL_MS}. */
-export const SYNC_STATE_SEED_RETRY_WINDOW_MS = 60_000;
+export const SYNC_STATE_SEED_RETRY_WINDOW_MS = SEND_RECEIVE_AVAILABILITY_RECHECK_WINDOW_MS;
 
 /**
  * Whether two id sets are equal by value. The contract states `getSyncState` builds a fresh array
@@ -76,8 +84,10 @@ export const SYNC_STATE_SEED_RETRY_WINDOW_MS = 60_000;
  */
 function isSameProjectIdSet(a: readonly string[], b: readonly string[]): boolean {
   if (a.length !== b.length) return false;
-  const sortedA = [...a].sort();
-  const sortedB = [...b].sort();
+  // Normalized before comparing: project ids are case-insensitive, so an id that comes back in a
+  // different case names the same project and must not read as a set change.
+  const sortedA = a.map(normalizeProjectId).sort();
+  const sortedB = b.map(normalizeProjectId).sort();
   return sortedA.every((id, index) => id === sortedB[index]);
 }
 
@@ -85,8 +95,8 @@ function isSameProjectIdSet(a: readonly string[], b: readonly string[]): boolean
  * Every `ResultStatus` this hook knows how to read. Validated as membership rather than as a bare
  * string because the green check rests on the complement: `FAILED_RESULT_STATUSES` names the three
  * non-success values, so a value outside the union would fall through as a success. This contract
- * is demonstrably still moving — `syncingProjectIds` was just added to it — and a seventh status
- * arriving should report `unknown` (honest) rather than a possibly-false `synced`.
+ * is still moving, and a seventh status arriving should report `unknown` (honest) rather than a
+ * possibly-false `synced`.
  */
 const KNOWN_RESULT_STATUSES: ReadonlySet<string> = new Set<ResultStatus>([
   'succeeded',
@@ -112,9 +122,12 @@ const FAILED_RESULT_STATUSES: ReadonlySet<ResultStatus> = new Set<ResultStatus>(
 function didLastSyncSucceed(state: SyncState): boolean {
   const resultsInfo = state.lastResults?.resultsInfo;
   if (!resultsInfo) return false;
-  return Object.values(resultsInfo).every(
-    (result) => !FAILED_RESULT_STATUSES.has(result.resultStatus),
-  );
+  const results = Object.values(resultsInfo);
+  // A sync that produced no result entries is evidence of nothing, and `every` on an empty
+  // collection is vacuously true — which would put a green check on a sync that finished nothing.
+  // Reachable for a sync aborted or cancelled before its first project reported.
+  if (results.length === 0) return false;
+  return results.every((result) => !FAILED_RESULT_STATUSES.has(result.resultStatus));
 }
 
 /**
@@ -140,6 +153,12 @@ function deriveStatusFromSnapshot(state: SyncState): SyncStatus {
 function isValidSyncState(state: unknown): state is SyncState {
   if (typeof state !== 'object' || !state) return false;
   if (!('isSyncing' in state) || typeof state.isSyncing !== 'boolean') return false;
+  // Checked even though this hook never reads it: the predicate narrows to the WHOLE `SyncState`,
+  // so leaving it unvalidated would hand the next reader of that field an `undefined` the type says
+  // cannot happen.
+  if (!('lastRequestedProjectIds' in state) || !Array.isArray(state.lastRequestedProjectIds))
+    return false;
+  if (state.lastRequestedProjectIds.some((id: unknown) => typeof id !== 'string')) return false;
   // Absent is valid: a Send/Receive build predating `syncingProjectIds` answers without it.
   if ('syncingProjectIds' in state && state.syncingProjectIds !== undefined) {
     const { syncingProjectIds } = state;
@@ -200,7 +219,12 @@ function isValidSyncState(state: unknown): state is SyncState {
  * can't be fetched falls back to its id, so a partial failure loses precision but never a project.
  */
 export function useSyncStatus(): SyncStatusInfo {
-  const [status, setStatus] = useState<SyncStatus>('idle');
+  // Starts `unknown`, not `idle`: until the seed answers, nothing here knows whether a sync is
+  // running, and `idle` is the positive claim "nothing has synced" that the read has not earned.
+  // The button label is the same for both, so this changes only what the popover says while the
+  // seed is still in flight — from "No sync is running" to "The sync status isn't available right
+  // now," which is what is true during a cold start with a scheduled sync already under way.
+  const [status, setStatus] = useState<SyncStatus>('unknown');
   const [syncingProjectIds, setSyncingProjectIds] = useState<readonly string[]>(NO_PROJECT_IDS);
 
   /**
@@ -262,9 +286,10 @@ export function useSyncStatus(): SyncStatusInfo {
       if (hasAppliedEventRef.current) return;
 
       if (!state) {
-        if (Date.now() >= deadline) {
-          // Out of budget with no answer. Say so rather than leaving the initial `idle` standing,
-          // which would claim nothing has synced on the strength of a read that never succeeded.
+        if (performance.now() >= deadline) {
+          // Out of budget with no answer. Set explicitly rather than relying on the initial
+          // `unknown` still standing: an event may have moved the status on and then been
+          // superseded, and "we could not find out" is the only claim this path has earned.
           setStatus('unknown');
           return;
         }
@@ -280,7 +305,11 @@ export function useSyncStatus(): SyncStatusInfo {
       applySyncingProjectIds(state.syncingProjectIds ?? NO_PROJECT_IDS);
     };
 
-    seed(Date.now() + SYNC_STATE_SEED_RETRY_WINDOW_MS).catch((e: unknown) => {
+    // Monotonic, not wall-clock: this runs during startup, when the wall clock can be stepped. A
+    // step forward past the deadline would make the first failed read look out of budget and skip
+    // the entire retry apparatus in the one case it exists for. Same reasoning as
+    // `use-send-receive-availability.hook.ts`, which paces the same race.
+    seed(performance.now() + SYNC_STATE_SEED_RETRY_WINDOW_MS).catch((e: unknown) => {
       // readSyncState swallows its own failures, so reaching here means a bug in the code above
       // rather than an unavailable command — worth a log that says so.
       logger.warn(`Unexpected failure seeding sync status: ${getErrorMessage(e)}`);
@@ -355,7 +384,12 @@ export function useSyncStatus(): SyncStatusInfo {
         const metadata = await projectLookupService.getMetadataForAllProjects({
           includeProjectIds: [...projectIds],
         });
-        metadataById = new Map(metadata.map((m) => [m.id, m]));
+        // Keyed on the normalized id, and read the same way below. Project ids are
+        // case-insensitive, and `ProjectMetadata.id` keeps the casing of whichever factory reported
+        // the project first (see `project-lookup.service-model.ts`) while the ids in a sync state
+        // come from C#, which canonicalizes to upper case. Matching raw would miss silently and
+        // fall back to showing the id instead of the name.
+        metadataById = new Map(metadata.map((m) => [normalizeProjectId(m.id), m]));
       } catch (e) {
         // Every project falls back to its id below, so the popover still names the right number of
         // projects — it just names them less precisely.
@@ -371,7 +405,7 @@ export function useSyncStatus(): SyncStatusInfo {
             // present-but-empty name passes through: `use-project-picker-data.hook.ts` documents an
             // empty name as a real, deliberately-supported Paratext case, and this must label the
             // same project the same way the picker does.
-            name: metadataById.get(projectId)?.name ?? projectId,
+            name: metadataById.get(normalizeProjectId(projectId))?.name ?? projectId,
           }))
           // The contract says claim order carries no meaning and can differ between reads of the
           // same set, so sorting is what keeps an open popover from reshuffling under the user. Ties

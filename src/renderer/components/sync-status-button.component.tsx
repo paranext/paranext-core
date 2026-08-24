@@ -120,17 +120,6 @@ export function SyncStatusButton() {
   const statusRef = useRef(status);
   statusRef.current = status;
 
-  /** Mirrors the syncing project ids so {@link handleCancel} can latch them without taking a dep. */
-  const syncingProjectIdsRef = useRef<readonly string[]>([]);
-  syncingProjectIdsRef.current = syncingProjects.map((project) => project.projectId);
-
-  /**
-   * The syncing project ids a still-pending cancel was aimed at, or `undefined` when no cancel is
-   * pending. This is what tells "a sync this cancel was never aimed at is now running" apart from
-   * "the sync being cancelled re-reported itself", which the id set alone cannot distinguish.
-   */
-  const cancelledForIdsRef = useRef<readonly string[] | undefined>(undefined);
-
   const handleCancel = useCallback(async () => {
     // The editor's sync-blocked banner (`extensions/src/platform-scripture-editor/`) offers the same
     // cancel and can be on screen at the same time as this popover; neither observes the other's
@@ -143,9 +132,6 @@ export function SyncStatusButton() {
     // reporting `syncing` for a while yet. Saying "Cancelling…" is what distinguishes a request that
     // was accepted from a button that has merely gone dim.
     setIsCancelling(true);
-    // Latch what this cancel is aimed at, so the re-arm effect below can tell a genuinely new sync
-    // from this same one re-reporting itself.
-    cancelledForIdsRef.current = syncingProjectIdsRef.current;
     try {
       // No `notificationId` argument: the contract's optional parameter exists so a caller that
       // RAISED a sync notification can prove the cancel targets that same sync, and this button
@@ -159,7 +145,6 @@ export function SyncStatusButton() {
       logger.warn(`Toolbar could not cancel the running sync: ${getErrorMessage(e)}`);
       setIsCancelEnabled(true);
       setIsCancelling(false);
-      cancelledForIdsRef.current = undefined;
       // A rejected cancel does NOT prove the sync is still running — the declaration guarantees
       // nothing about why it rejected, and a sync that ended between render and click rejects too.
       // Telling the user the cancel failed while the popover beside it says the sync has finished
@@ -212,46 +197,21 @@ export function SyncStatusButton() {
     if (status !== 'syncing') {
       setIsCancelling(false);
       setIsCancelEnabled(true);
-      cancelledForIdsRef.current = undefined;
     }
   }, [status]);
 
-  /**
-   * Re-arm Cancel for a sync that took over from the one the last cancel was aimed at.
+  /*
+   * There is deliberately no id-set test for "a different sync has taken over" here.
    *
-   * The effect above can't cover this: overlapping syncs union, and `isSyncing: true` fires again
-   * when the set changes, so a new sync can begin without the status ever leaving `syncing`.
-   *
-   * The set merely CHANGING is not that signal, though. `useSyncStatus` blanks the ids before every
-   * follow-up read, so one `onSyncStateChanged` walks the set through `["a"] -> [] -> ["a"]`, and a
-   * project releasing from a still-running sync shrinks it — neither is a new sync, and both would
-   * wrongly revive a cancel that is still in flight. What does mean a different sync is running is
-   * an id that was NOT in the set this cancel was aimed at: a union with an overlapping sync adds
-   * one, while a shrink, a re-report, and the transient blank never do.
+   * `syncingProjectIds` is derived from send/receive's live, ref-counted per-project claims, and one
+   * continuous `isSyncing: true` window spans however many overlapping claims the sync paths take
+   * out. A project can therefore release and re-claim — appearing as an id that was absent when
+   * Cancel was clicked — without a new sync having started, so an id the cancel did not cover proves
+   * nothing. Cancel instead stays pending until the status leaves `syncing`, or until the popover is
+   * reopened. The trade is that a genuinely new overlapping sync keeps a dim "Cancelling…" until the
+   * whole union goes idle, which is the safe half: it can delay a live Cancel, but it can never
+   * offer one while a cancel is still in flight.
    */
-  const syncingProjectIdsKey = JSON.stringify(syncingProjects.map((project) => project.projectId));
-  useEffect(() => {
-    if (status !== 'syncing') return;
-    const currentIds = syncingProjectIdsRef.current;
-    // The blank between a clear and its follow-up read names nothing, so it cannot show a new sync.
-    if (currentIds.length === 0) return;
-    const cancelledForIds = cancelledForIdsRef.current;
-    // No cancel pending: nothing to re-arm, and nothing to compare against.
-    if (!cancelledForIds) return;
-    // A latch that names nothing cannot prove a different sync is running, for the same reason the
-    // blank set above cannot: a cancel clicked during that blank window latches `[]`, and every id
-    // in the next read would then look new. Staying pending until the status leaves `syncing` (the
-    // effect above) is the safe half of the trade — it can delay re-arming for a genuinely new
-    // overlapping sync, but it never shows a live "Cancel sync" while a cancel is in flight.
-    if (cancelledForIds.length === 0) return;
-    if (!currentIds.some((id) => !cancelledForIds.includes(id))) return;
-    setIsCancelling(false);
-    setIsCancelEnabled(true);
-    cancelledForIdsRef.current = undefined;
-    // Deliberately keyed on the id set rather than on `syncingProjects`, whose identity changes on
-    // every metadata read even when the same projects are syncing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncingProjectIdsKey, status]);
 
   // Re-arm Cancel each time the popover is reopened, so a rejected-then-abandoned attempt doesn't
   // leave the button dead for the rest of the session. Not while a cancel is still pending, though:
