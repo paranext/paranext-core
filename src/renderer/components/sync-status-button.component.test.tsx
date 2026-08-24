@@ -8,7 +8,12 @@ import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { notificationService } from '@shared/services/notification.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
-import type { ResultInfo, ResultStatus, SyncState } from 'paratext-bible-send-receive';
+import type {
+  ResultInfo,
+  ResultStatus,
+  SyncActivitySnapshot,
+  SyncState,
+} from 'paratext-bible-send-receive';
 import {
   SyncStatusButton,
   LOCALIZED_STRING_KEYS,
@@ -98,6 +103,30 @@ const resultsFor = (statusByProjectId: Record<string, ResultStatus>): SyncState[
   ),
 });
 
+/**
+ * A completed sync in which some project reports a `resultStatus` this build does not recognize — a
+ * status send/receive added after this build shipped, which `ResultStatus` cannot express by
+ * definition. Kept as its own helper so the widening lives in one place and the well-formed
+ * {@link completedState} stays fully typed.
+ */
+const completedStateWithUnknownStatus = (statusByProjectId: Record<string, string>): SyncState => ({
+  isSyncing: false,
+  lastResults: {
+    sendReceiveDate: '2026-08-19T00:00:00Z',
+    resultsInfo: Object.fromEntries(
+      Object.entries(statusByProjectId).map(([projectId, resultStatus]) => [
+        projectId,
+        // These tests exist to cover statuses outside `ResultStatus`, so the entry cannot be built
+        // to satisfy it; only `resultStatus` is read.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        { id: projectId, resultStatus } as unknown as ResultInfo,
+      ]),
+    ),
+  },
+  lastRequestedProjectIds: Object.keys(statusByProjectId),
+  syncingProjectIds: [],
+});
+
 /** A snapshot of a session whose last sync completed with the given per-project outcomes. */
 const completedState = (statusByProjectId: Record<string, ResultStatus>): SyncState => ({
   isSyncing: false,
@@ -114,6 +143,50 @@ const mockSyncState = (state: SyncState | Error | undefined) => {
       return state;
     },
   });
+};
+
+/**
+ * Answers `getSyncState` with `state` and `getSyncActivity` with `activity`, for the tests that
+ * drive the activity signal rather than the claim. The two are seeded together because the derived
+ * status is a union of both, so a test that pins one and leaves the other unmocked is really
+ * asserting against `undefined`.
+ */
+const mockSyncStateAndActivity = (state: SyncState, activity: SyncActivitySnapshot) => {
+  mockCommands({
+    'paratextBibleSendReceive.getSyncState': () => state,
+    'paratextBibleSendReceive.getSyncActivity': () => activity,
+  });
+};
+
+/**
+ * Captures the `onSyncActivityChanged` handler the component subscribes with, so a test can drive
+ * the activity-only path — the Simple-mode startup sync, which has no claim behind it. Returns a
+ * fire function; calling it before render throws rather than silently asserting nothing.
+ */
+const captureSyncActivityEvent = () => {
+  let handler: ((activity: SyncActivitySnapshot) => void) | undefined;
+  vi.mocked(getNetworkEvent).mockImplementation(
+    // `getNetworkEvent` is generic over the event payload, so a mock returning different subscribe
+    // functions per event name cannot be expressed in its signature.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+    ((eventName: string) => {
+      if (eventName === 'paratextBibleSendReceive.onSyncActivityChanged')
+        return vi.fn((cb: (activity: SyncActivitySnapshot) => void) => {
+          handler = cb;
+          return vi.fn();
+        });
+      return vi.fn(() => vi.fn());
+      // The assertion applies to the whole mock body above, so the directive has to sit here.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+    }) as any,
+  );
+  return (activity: SyncActivitySnapshot) => {
+    if (!handler) throw new Error('The component never subscribed to onSyncActivityChanged');
+    const fire = handler;
+    act(() => {
+      fire(activity);
+    });
+  };
 };
 
 /**
@@ -207,6 +280,22 @@ const mockProjectNames = (namesById: Record<string, string>) => {
  * `vi.clearAllMocks()` alone leaves the last test's implementation installed, so a suite that never
  * sets one up inherits whatever ran before it — and passes or fails for reasons it never states.
  */
+// Radix Tooltip uses ResizeObserver internally; jsdom doesn't provide it, so we stub a no-op
+// implementation. The methods intentionally don't use `this` since they're empty stubs.
+beforeAll(() => {
+  global.ResizeObserver = class {
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    observe() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    unobserve() {}
+    // jsdom stub: empty no-op intentionally has no `this` usage
+    // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+    disconnect() {}
+  };
+});
+
 beforeEach(() => {
   vi.resetAllMocks();
   mockNoSyncStateEvents();
@@ -450,6 +539,35 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Test Sync failed' })).toBeInTheDocument();
     });
+  });
+
+  // `failed` is defined as "at least one project did not succeed", so one project reporting a
+  // recognized failure is evidence enough on its own. A sibling carrying a status this build cannot
+  // classify says nothing about that project, and must not blank out what the failure does say —
+  // "Sync status unavailable" hides the View-details path the user actually needs here.
+  it('reports a failure even when a sibling project carries an unrecognized status', async () => {
+    mockSyncState(completedStateWithUnknownStatus({ a: 'failed', b: 'someFutureStatus' }));
+
+    render(<SyncStatusButton />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Sync failed' })).toBeInTheDocument();
+    });
+  });
+
+  // The reverse does not hold: `synced` needs every project evidenced, so one unclassifiable status
+  // is enough to withhold the green check.
+  it('does not claim success when one project carries an unrecognized status', async () => {
+    mockSyncState(completedStateWithUnknownStatus({ a: 'succeeded', b: 'someFutureStatus' }));
+
+    render(<SyncStatusButton />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Test Sync status unavailable' }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
   });
 
   it('still reports success when every project succeeded in any of the success forms', async () => {
@@ -1260,6 +1378,105 @@ describe('SyncStatusButton — popover and cancel', () => {
       expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('AAA');
     });
     expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+  });
+
+  // The activity signal reports a sync as running before the backend has resolved which projects it
+  // will touch, so `[] → ['proj1']` is one sync becoming knowable rather than a second sync taking
+  // over. This is the Simple-mode startup sync — the path with no claim behind it — and re-arming
+  // there would flip a pending "Cancelling…" back to an armed "Cancel sync" mid-request.
+  it('keeps Cancel pending when the activity signal resolves its merge set mid-sync', async () => {
+    const fireSyncActivityChanged = captureSyncActivityEvent();
+    mockSyncStateAndActivity(IDLE_STATE, { isSyncing: true, projectIds: [] });
+    mockProjectNames({ proj1: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    // The same sync, now naming the projects it resolved.
+    fireSyncActivityChanged({ isSyncing: true, projectIds: ['proj1'] });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('AAA');
+    });
+    const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveTextContent('Test Cancelling');
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  // The counterpart to the test above: once a set IS known, a project appearing is still the
+  // evidence that a different sync took over, and its Cancel has to go live again.
+  it('re-arms Cancel when a new project joins an already-named activity sync', async () => {
+    const fireSyncActivityChanged = captureSyncActivityEvent();
+    mockSyncStateAndActivity(IDLE_STATE, { isSyncing: true, projectIds: ['proj1'] });
+    mockProjectNames({ proj1: 'AAA', proj2: 'BBB' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    fireSyncActivityChanged({ isSyncing: true, projectIds: ['proj2'] });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent(
+        'Test Cancel sync',
+      );
+    });
+    expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveAttribute(
+      'aria-disabled',
+      'false',
+    );
+  });
+
+  // `useTruncationTooltip` opens the tooltip only when the label really is clipped, which jsdom
+  // never reports on its own — every element measures 0 wide. Stubbing the two measurements the hook
+  // reads is what lets the truncation path be exercised at all.
+  const stubLabelAsTruncated = (label: HTMLElement) => {
+    Object.defineProperty(label, 'scrollWidth', { configurable: true, value: 400 });
+    Object.defineProperty(label, 'clientWidth', { configurable: true, value: 100 });
+  };
+
+  // The tooltip is fully controlled, so Radix's own Escape handling never runs — without this the
+  // tooltip cannot be dismissed at all while the pointer rests on the label (WCAG 1.4.13).
+  it('closes the truncation tooltip on Escape and offers it again on a fresh hover', async () => {
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'A project with a very long name indeed' });
+    render(<SyncStatusButton />);
+
+    const button = await screen.findByTestId('toolbar-sync-button');
+    await waitFor(() => {
+      expect(button).toHaveTextContent('A project with a very long name indeed');
+    });
+    // The label span rather than the button: it is the node `useTruncationTooltip` measures, and its
+    // text carries bidi isolation marks that make a text matcher the wrong way to reach it.
+    const label = button.querySelector<HTMLElement>('span[class~="tw:truncate"]');
+    if (!label) throw new Error('The sync button rendered no truncating label span');
+    stubLabelAsTruncated(label);
+
+    fireEvent.pointerEnter(button);
+    await waitFor(() => {
+      expect(screen.getAllByRole('tooltip').length).toBeGreaterThan(0);
+    });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+
+    // Leaving and re-entering re-arms it, so Escape dismisses this reveal rather than the feature.
+    fireEvent.pointerLeave(button);
+    fireEvent.pointerEnter(button);
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('tooltip').length).toBeGreaterThan(0);
+    });
   });
 
   // The label carries a project name of any length, so the button has to be allowed to shrink and

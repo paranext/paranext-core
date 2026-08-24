@@ -135,6 +135,12 @@ function hasKnownResultStatus(result: unknown): result is { resultStatus: Result
  * needs evidence of success and claiming failure needs evidence of failure, so absent either the
  * caller is told it could not tell rather than being handed a guess.
  *
+ * The two verdicts need different amounts of evidence, because they are different claims.
+ * {@link SyncStatus.failed} is "at least one project did not succeed", so one recognized failure
+ * settles it however unreadable its siblings are — blanking that out to `unknown` would trade a
+ * true statement for "status unavailable" and hide the View-details path the user needs. `synced`
+ * is a claim about every project, so it needs every result readable.
+ *
  * A cancelled sync lands on `failed`: send/receive reports the projects it did not finish with a
  * non-success `resultStatus` rather than reporting the cancellation itself.
  */
@@ -143,10 +149,10 @@ function deriveOutcomeFromResults(resultsInfo: unknown): 'synced' | 'failed' | u
   const results: unknown[] = Object.values(resultsInfo);
   if (results.length === 0) return undefined;
   const knownResults = results.filter(hasKnownResultStatus);
+  if (knownResults.some((result) => FAILED_RESULT_STATUSES.has(result.resultStatus)))
+    return 'failed';
   if (knownResults.length !== results.length) return undefined;
-  return knownResults.every((result) => SUCCEEDED_RESULT_STATUSES.has(result.resultStatus))
-    ? 'synced'
-    : 'failed';
+  return 'synced';
 }
 
 /**
@@ -488,9 +494,13 @@ export function useSyncStatus(): SyncStatusInfo {
    * or a claim seed that gives up must not end the activity seed's retries, and vice versa.
    * {@link seedWithRetry} shares only the plumbing — it holds no state of its own.
    *
-   * No `onExhausted`: running out of budget leaves {@link activitySyncing} at its initial
-   * `undefined` — "could not tell", which the derived status already treats as "no input from this
-   * signal" rather than as a false claim in either direction.
+   * `onExhausted` puts {@link activitySyncing} back to `undefined` — "could not tell", which the
+   * derived status treats as "no input from this signal" rather than as a claim in either
+   * direction. On the very first mount that is already its value, but {@link seedGeneration} can
+   * restart this loop after an extension reload, and by then the value is whatever the last
+   * snapshot or event left behind. Send/receive going away in a reload while it last reported
+   * `isSyncing: true` would otherwise pin the union at `syncing` — a spinner and a live Cancel over
+   * a sync nothing can still see — for the life of the renderer.
    *
    * Unlike the claim's `SyncProgressEvent`, a `SyncActivitySnapshot` already carries `isSyncing`
    * AND `projectIds` together, so there is no follow-up read to sequence here — the snapshot (from
@@ -503,6 +513,10 @@ export function useSyncStatus(): SyncStatusInfo {
         apply: (activity) => {
           setActivitySyncing(activity.isSyncing);
           applyActivityProjectIds(activity.projectIds ?? NO_PROJECT_IDS);
+        },
+        onExhausted: () => {
+          setActivitySyncing(undefined);
+          applyActivityProjectIds(NO_PROJECT_IDS);
         },
         hasEventApplied: () => hasAppliedActivityEventRef.current,
         runRef: activityRunRef,

@@ -369,6 +369,18 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     ],
   },
   {
+    id: 'sync-status-dismiss-truncation-tooltip',
+    purpose:
+      'Dismiss the tooltip showing the sync button’s full label when its project name is clipped',
+    category: 'Menus',
+    // Listens on `window`, but only while that tooltip is open. The tooltip is fully controlled, so
+    // Radix's own Escape handling never runs and this supplies it (WCAG 1.4.13). A fresh hover
+    // offers the tooltip again.
+    context: 'Toolbar sync status button',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: ['src/renderer/components/sync-status-button.component.tsx'],
+  },
+  {
     id: 'menubar-close',
     purpose: 'Close the open application menu',
     category: 'Menus',

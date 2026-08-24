@@ -273,6 +273,19 @@ export function SyncStatusButton() {
     isCancellingRef.current = isCancelling;
   }, [isCancelling]);
 
+  /**
+   * Whether a non-empty syncing set has been recorded yet for the sync currently running. Until one
+   * has, there is no set to judge an arrival against: `getSyncActivity` reports a sync as running
+   * before the backend has resolved which projects it will touch, so the activity-only path's first
+   * named set arrives as `[] → ['proj1']` for one unchanged sync. Reset whenever the status leaves
+   * `syncing`, so the next sync is judged from nothing known rather than from its predecessor's
+   * set.
+   *
+   * Starts `false` even when a set is already known at mount: nothing has been cancelled yet, so
+   * the effect below has nothing to re-arm on its first run either way.
+   */
+  const hasKnownSyncingProjectIdsRef = useRef(false);
+
   // Whenever no sync is running, the pending cancel is settled — by completing, by being cancelled,
   // or by a different sync taking over. Re-arming here (rather than only on reopen) means a sync
   // starting while the popover is still open gets a live Cancel instead of a dead one.
@@ -287,6 +300,9 @@ export function SyncStatusButton() {
     setWasCancelRequested(isCancellingRef.current);
     setIsCancelling(false);
     setIsCancelEnabled(true);
+    // The next sync starts over with nothing known about which projects it will touch, so its own
+    // first named set must not be read as a takeover. See `hasKnownSyncingProjectIdsRef`.
+    hasKnownSyncingProjectIdsRef.current = false;
   }, [status]);
 
   /**
@@ -308,6 +324,10 @@ export function SyncStatusButton() {
   useEffect(() => {
     const currentIds = parseSyncingProjectIdsKey(syncingProjectIdsKey);
     const lastIds = lastSyncingProjectIdsRef.current;
+    // Nothing was known about this sync's projects until now, so this first named set is the same
+    // sync becoming knowable rather than a different one taking over.
+    const isFirstKnownSet = currentIds.length > 0 && !hasKnownSyncingProjectIdsRef.current;
+    if (currentIds.length > 0) hasKnownSyncingProjectIdsRef.current = true;
     // A project APPEARING is the evidence that a sync this cancel was never aimed at has taken over.
     // A project only leaving is not: the seam documents `isSyncing: true` firing again as the syncing
     // set SHRINKS, so one project of a multi-project sync finishing before the others would otherwise
@@ -322,7 +342,7 @@ export function SyncStatusButton() {
     // has resolved a merge set, so empty is that path's steady state and returning early would leave
     // this effect permanently silent for it.
     if (currentIds.length > 0) lastSyncingProjectIdsRef.current = new Set(currentIds);
-    if (!hasNewSyncingProject) return;
+    if (!hasNewSyncingProject || isFirstKnownSet) return;
     if (status === 'syncing') {
       setIsCancelling(false);
       setIsCancelEnabled(true);

@@ -735,6 +735,32 @@ describe('useSyncStatus', () => {
     expect(result.current.status).toBe('syncing');
   });
 
+  it('stops claiming a sync is running once the activity seed exhausts after a reload', async () => {
+    // On the first mount an exhausted activity seed leaves `activitySyncing` at its initial
+    // `undefined`, so there is nothing to unsay. A reload restarts the seed with whatever the last
+    // snapshot left behind — so send/receive going away while the activity signal last reported
+    // `isSyncing: true` would otherwise pin the union at `syncing`, spinner and live Cancel included,
+    // for the life of the renderer.
+    commands.mockGetSyncState({ isSyncing: false, lastRequestedProjectIds: [] });
+    commands.mockGetSyncActivity({ isSyncing: true, projectIds: [] });
+    const { emitExtensionsReloaded } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('syncing');
+
+    // Send/receive is gone after the reload: every read from here on rejects.
+    commands.mockGetSyncActivity(new Error('method not found'));
+    emitExtensionsReloaded();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_WINDOW_MS + SYNC_SEED_RETRY_INTERVAL_MS);
+    });
+
+    expect(result.current.status).not.toBe('syncing');
+  });
+
   it('honors isSyncing when the optional project id field arrives as null', async () => {
     // Several JSON serializers render an omitted optional as `null`. Rejecting the whole payload for
     // it discards a perfectly good `isSyncing` — and since every retry gets the same `null`, pins
