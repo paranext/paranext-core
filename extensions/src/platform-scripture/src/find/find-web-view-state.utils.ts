@@ -29,7 +29,7 @@ export function resolveFindScrollGroupScrRef(
  * supplies. Extracted from `FindWebViewProvider.getWebView` so this option→state mapping is
  * unit-testable without importing the WebView's `?inline` content.
  *
- * Two rules live here:
+ * Three rules live here:
  *
  * - `initialSearchText` (the selection forwarded by Ctrl+F) is written to `findSearchTerm` so the
  *   find panel pre-fills and searches it. An empty/absent value is intentionally NOT written, so an
@@ -39,6 +39,11 @@ export function resolveFindScrollGroupScrRef(
  *   Without that clear, a `??` would resurrect the editor id from a prior open-from-editor and
  *   re-point Find at the wrong (or a closed) editor. Content reload/restore sets neither, so the
  *   saved value is preserved there.
+ * - `shouldFocusSearch` is scrubbed unconditionally when the caller supplies nothing, rather than
+ *   falling back to the saved value. It is a one-shot request rather than durable state, and it
+ *   rides along in the persisted `state`, so carrying a saved `true` over would put the caret in
+ *   the search box on app start for an invoke that happened in a previous session. Only a caller
+ *   asking right now may set it.
  */
 export function buildFindWebViewState(
   savedWebView: SavedWebViewDefinition,
@@ -49,6 +54,7 @@ export function buildFindWebViewState(
     editorWebViewId: getWebViewOptions.clearEditorWebViewId
       ? undefined
       : (getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId),
+    shouldFocusSearch: getWebViewOptions.shouldFocusSearch ?? false,
     ...(getWebViewOptions.initialSearchText
       ? { findSearchTerm: getWebViewOptions.initialSearchText }
       : {}),

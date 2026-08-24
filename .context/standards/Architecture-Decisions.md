@@ -898,3 +898,94 @@ step, no automation. Just a record.
   like the chapter-surface exemption above, not like this rule. Promoting on a surface count would
   turn a deliberate single-verse-vs-whole-chapter difference into apparent drift from a shared util.
 - **Source:** PT-4061 (B3), which resolves PT-3133; Ian Hewerdine confirmed parity 2026-08-05.
+
+## ADR-0020: Find follows the editor onto read-only resources, with replace withheld
+
+- **Date:** 2026-08-17
+- **Status:** Accepted
+- **Context:** Simple mode's Column 3 panels follow the *active translation project*: the editor gates
+  `openOrUpdateRelatedPanels` on `projectForWebView.isEditable` precisely so that opening a published
+  resource in the editor column does not switch the related panels over to the resource. Making Find a
+  permanent Column 3 tab put it inside that contract for the first time, and it was the one panel
+  exempt from it — `openFind` took whatever project the triggering editor held, with no editability
+  check, so Ctrl+F on a resource re-pointed the always-visible Find tab at the resource while its
+  three siblings stayed on the translation project.
+- **Decision:** Find is deliberately *not* held to the follow-the-translation-project rule. It may
+  bind to a read-only resource, because searching a resource is a legitimate read operation and the
+  panel's whole purpose is search. What it may not do is offer edits the project will reject, so the
+  Find web view reads `platform.isEditable` for whatever project it is currently bound to
+  (`useProjectSetting` in `find.web-view.tsx`, failing closed while the read is in flight or if it
+  errors) and withholds Replace, Replace All, and the per-result replace affordances while it is
+  false. The per-result gate matters separately: each result's own Replace button and its Enter/Space
+  shortcut call `onReplace` directly and would otherwise bypass the disabled top-level buttons.
+  Separately, `platformScripture.updateFindProject` re-points an already-open Find from
+  `openOrUpdateRelatedPanels`, which is what returns Find to the translation project after a switch —
+  Find is the only Column 3 panel that command re-points without also being able to open it.
+- **Alternatives:** **Hold Find to the sibling contract** (refuse to follow a resource; keep the
+  current project and just bring the tab to front) — rejected: consistent with the other three panels,
+  but it makes resource text unsearchable from the panel built to search, for a data-safety benefit
+  already obtained by withholding replace. **Hide the replace UI entirely when read-only**, reusing
+  the `hideModeToggle` path Simple mode uses — rejected: it removes the control with no explanation;
+  a disabled control with a reason mirrors the nearest precedent (structure protection) and tells the
+  user why. **Thread the editor's already-resolved `state.isReadOnly` through `FindWebViewOptions`**
+  — rejected: it only answers for editor-triggered opens, so the seeded Column 3 tab (which exists
+  from startup with no triggering editor) would have no answer, and a Find bound to a project by any
+  other route would silently fall back to "writable".
+- **Consequences:** Find can search resources in both modes; only Power mode ever shows the withheld
+  replace controls, since Simple-mode Find has no replace UI at all. Editability is re-read per bound
+  project rather than latched, so it cannot go stale across a switch back to a translation project.
+  Column 3 now has one panel that can legitimately show a different project from its siblings;
+  anything that later assumes all four are on the same project must account for Find.
+- **Source:** Review of the `pt-4342-dock-find-in-simple` branch — merge-blocking findings on Find
+  re-binding to read-only resources and on Find not following project switches. Mechanism reconciled
+  with PT-4343's `platform.isEditable` read (ADR-0015's sibling work) when the branch rebased.
+
+## ADR-0021: Column 3 tab order is expressed as anchor + insert-before in the layout supplement, not as a pinning mechanism
+
+- **Date:** 2026-08-17
+- **Status:** Accepted
+- **Context:** Simple mode's Column 3 is assembled from two sources: `simple-layout.data.ts`, baked
+  into the build, and `default-layout-supplement.json`, whose entries are merged in afterward behind
+  feature flags. Making Find a permanent Column 3 tab meant Find had to sit *last* while Text
+  Collection — a supplement entry — had to land ahead of it, even though supplements merge in after
+  the static tabs exist. The PR asked the team to confirm this shape "versus a different way of
+  pinning a static tab last", which is the question this entry answers so it is not re-derived when
+  the next Column 3 tab is added.
+- **Decision:** Order stays a property of the supplement entry (`anchorWebViewType` plus optional
+  `insertBeforeWebViewType`), not a property of the static tab. A static tab does not declare "I am
+  last"; a supplement declares where it goes relative to tabs that already exist. Since the merge's
+  append fallback is indistinguishable from success once applied, an `insertBeforeWebViewType` that
+  does not resolve is now reported as a placement anomaly, and the shipped order is pinned by tests
+  that use the real layout data and the real supplement JSON together
+  (`shipped-simple-layout-order.test.ts`) rather than synthetic fixtures.
+
+  A **supplement entry is therefore scoped to Simple mode** in two of its properties, and the merge
+  takes the interface mode as a required argument rather than inferring it. The merge runs against
+  both modes' layouts — Simple mode's build-baked one and Power mode's persisted one — while
+  ordering and pinning only describe Simple mode's fixed columns. Applying an entry's
+  `insertBeforeWebViewType` in Power mode means logging a placement anomaly on every load of a
+  correct layout, because the target is a fixed-layout tab that mode does not have; applying its
+  `isClosable: false` means handing `getTabGroup` a pinned tab and getting back a column group
+  `getGroups` registers only in Simple mode, so the tab lands in rc-dock's unknown-group fallback
+  with no close button until the provider's async answer replaces it. Making the mode an argument is
+  what keeps a mode-agnostic mechanism from silently carrying mode-specific data across.
+- **Alternatives:** **An explicit `isPinnedLast` / sort-order field on the static tab** — rejected:
+  it splits ordering across two files, so reading either one alone tells you the wrong answer, and
+  two tabs both claiming last has no defined resolution. **Move Find into the supplement too, so all
+  of Column 3 is ordered in one place** — rejected: Find is not feature-flagged and ships in every
+  build; putting an unconditional tab behind the flag-gated merge path would make its presence depend
+  on machinery it has no reason to touch. **Sort Column 3 after merging, by a central ordered list of
+  webViewTypes** — rejected as premature for one constrained insert, though it becomes the better
+  shape if a third or fourth supplement entry ever needs ordering against each other rather than
+  against static tabs.
+- **Consequences:** Adding a Column 3 tab means deciding, in one place, which existing tab it goes
+  before. The static layout stays a plain ordered list. The ordering is only as good as the
+  `webViewType` strings on both sides, which core cannot type-check against the extensions that own
+  them — so a drift guard reads the extension sources and fails if a pinned `webViewType` stops being
+  declared in production code. Every future supplement property has to be classified as
+  mode-independent or Simple-mode-only, and a Simple-mode-only one needs a Power-mode test case —
+  both modes' behavior for the shipped entry is asserted, so a property that leaks across fails.
+  **Revisit** if supplement entries start needing to order against each other, which
+  anchor/insert-before cannot express.
+- **Source:** Review of the `pt-4342-dock-find-in-simple` branch — findings on the supplement's silent
+  append fallback and the untested shipped column order; open question raised in the PR body.
