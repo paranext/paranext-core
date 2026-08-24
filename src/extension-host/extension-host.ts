@@ -1,3 +1,5 @@
+// Keep first: installs DOM globals before any import can convert scripture. See the module's docs.
+import '@node/polyfills/dom-globals.polyfill';
 import '@extension-host/global-this.model';
 import '@node/utils/log-archiver.util';
 import { isClient } from '@shared/utils/internal-util';
