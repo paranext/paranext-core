@@ -1025,7 +1025,10 @@ step, no automation. Just a record.
 
   The message itself is `EmptyState`, per ADR-0016's reservation of that component for the
   bare-sentence case; `ResourceBookNotAvailable` contributes only panel-sized centring and the focus
-  target, and does not repeat the `role="status"` that `EmptyState` already sets.
+  target, and does not repeat the `role="status"` that `EmptyState` already sets. Every surface that
+  shows this sentence renders it through that one component — the two resource panels and the main
+  editor's `isResource` branch — so the wording, styling, live-region announcement, and focus repair
+  cannot drift apart between them.
 
   The message is shown only when the failure names BOTH the book and the project the view is
   displaying right now, compared in the RENDER BODY rather than latched when the failure arrived.

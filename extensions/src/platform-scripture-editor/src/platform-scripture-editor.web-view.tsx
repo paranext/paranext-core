@@ -103,6 +103,7 @@ import {
   BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
   type ManageBooksDisabledReason,
 } from './book-not-available-view.component';
+import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import {
   ShareLayoutButton,
   SHARE_LAYOUT_BUTTON_STRING_KEYS,
@@ -1295,8 +1296,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // project on screen, not by the failure's mere presence. The hook keeps serving the previous
   // selector's result until the new subscription's first update lands, so a bare predicate would
   // report a missing book for one committed render after the user navigates to a book the project
-  // does have. A book the project simply lacks is also ordinary navigation rather than a fault, so
-  // it is logged quietly while every other PDP failure stays an error.
+  // does have.
+  //
+  // A book the project simply lacks is ordinary navigation rather than a fault, so it is logged at
+  // `debug`, which packaged builds drop (`global-this.model.ts` runs at `info` when packaged). That
+  // is deliberate: it fires on every navigation into a missing book, and the quiet path is the
+  // CORRECT one — if detection ever broke, the same failure would fall to `error` and stay loud in
+  // production.
   const [usjFromPdp, bookExists] = useMemo(() => {
     if (!isPlatformError(usjFromPdpPossiblyError)) return [usjFromPdpPossiblyError, true];
 
@@ -1983,13 +1989,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // zero-state, with the Manage books button disabled and a tooltip saying the project is
       // read-only.
       if (isResource) {
+        // Same component the Bible texts, Commentaries, and Model text panels use, so one sentence is
+        // worded, styled, announced, and focus-repaired identically on every surface that can show it.
         return (
-          // TODO(PT-4416): Converge with `ResourceBookNotAvailable`. This is a third rendering of the
-          // same sentence, and the only one with no live region and no focus repair.
-          <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+          <>
             {workaround}
-            {localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']}
-          </div>
+            <ResourceBookNotAvailable
+              message={
+                localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
+              }
+              announcementKey={`${projectId}:${scrRef.book}`}
+            />
+          </>
         );
       }
       return (

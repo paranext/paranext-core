@@ -208,9 +208,12 @@ export function ModelTextPanel({
       setUsj(undefined);
       setFetchError(e);
       setIsUsjLoading(false);
-      // A missing book is explained on screen, so it is not a failure worth logging. Anything else
-      // still renders an editor with no content, which is undiagnosable without this. The main editor
-      // logs the same class of failure (`platform-scripture-editor.web-view.tsx`).
+      // A missing book is ordinary navigation, not a fault, and it is already explained on screen —
+      // so `debug`, which packaged builds drop entirely (`global-this.model.ts` runs at `info` when
+      // packaged). That is deliberate rather than a gap: this fires once per resource per navigation
+      // and the Scripture Text Grid can hit it for many cells at once, so `info` would be noise. It
+      // is also safe, because the quiet path is the CORRECT one — if detection ever broke, the same
+      // failure would fall to the `error` branch below and be loud in production, not silent.
       if (isMissingBookError(e))
         logger?.debug(`Book not found in model text: ${getErrorMessage(e)}`);
       else logger?.error(`Error getting model text chapter USJ: ${getErrorMessage(e)}`);
@@ -218,7 +221,9 @@ export function ModelTextPanel({
     return () => {
       isActive = false;
     };
-    // Intentionally excludes scrRef.verseNum: chapter data only changes with book or chapter, not verse.
+    // Intentionally excludes scrRef.verseNum: chapter data only changes with book or chapter, not
+    // verse. Also excludes `logger`, used in the catch above: it is a stable module object, so
+    // including it would only add a dep that never changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     resourceProjectId,
