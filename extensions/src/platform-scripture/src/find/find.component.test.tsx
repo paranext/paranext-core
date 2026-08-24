@@ -3,7 +3,7 @@
 import '@testing-library/jest-dom';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
 import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
@@ -681,5 +681,64 @@ describe('Find — clear search button', () => {
 
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
     expect(screen.getByText('Enter search text to find results')).toBeInTheDocument();
+  });
+});
+
+describe('Find — books-scope summary in the "Showing" trigger', () => {
+  // The real BooksPresent setting is one character per canon book. These tests pin their own
+  // full-length string so the expected summaries don't depend on buildProps' default.
+  const ALL_BOOKS_PRESENT = '1'.repeat(Canon.allBookIds.length);
+
+  // Deliberately NOT overridden per test: the localized strings come from buildProps' stub over the
+  // real FIND_LOCALIZED_STRING_KEYS, so a key the component reads but never declares resolves to
+  // `undefined` and these assertions fail — which is the regression a hand-built strings object
+  // hides, since it can supply a key `find.web-view.tsx` never requests.
+  const ALL_BOOKS_TEXT = '%webView_find_allBooks%';
+
+  function buildBooksScopeProps(selectedBookIds: string[]): FindProps {
+    return buildProps({
+      scope: 'selectedBooks',
+      booksPresent: ALL_BOOKS_PRESENT,
+      selectedBookIds,
+    });
+  }
+
+  it('summarizes a full selection as "All books" instead of listing every book', () => {
+    // Spelled out independently of the component's own decoder, so a decoder that stopped
+    // filtering obsolete books would fail here rather than agree with itself.
+    const everyNonObsoleteBookId = Canon.allBookIds.filter(
+      (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+    );
+    render(<Find {...buildBooksScopeProps(everyNonObsoleteBookId)} />);
+    expect(screen.getByText(ALL_BOOKS_TEXT)).toBeInTheDocument();
+    // The regression this guards: every id joined into the trigger, which overflowed the panel.
+    expect(screen.queryByText(/GEN, EXO, LEV/)).not.toBeInTheDocument();
+  });
+
+  it('does not claim "All books" when an available book is missing from the selection', () => {
+    const everyNonObsoleteBookId = Canon.allBookIds.filter(
+      (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+    );
+    render(<Find {...buildBooksScopeProps(everyNonObsoleteBookId.slice(0, -1))} />);
+    expect(screen.queryByText(ALL_BOOKS_TEXT)).not.toBeInTheDocument();
+  });
+
+  it('truncates to a canon-order first-last range when more than five books are selected', () => {
+    render(<Find {...buildBooksScopeProps(['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU'])} />);
+    // The regression this guards: every selected id joined into the trigger, which widened the
+    // "Showing" row until the whole panel grew a horizontal scrollbar.
+    expect(screen.getByText('GEN - MRK')).toBeInTheDocument();
+  });
+
+  it('lists the books individually when few enough are selected', () => {
+    render(<Find {...buildBooksScopeProps(['LEV', 'GEN', 'EXO'])} />);
+    expect(screen.getByText('GEN, EXO, LEV')).toBeInTheDocument();
+  });
+
+  it('opens the scope popover from the summarized trigger', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<Find {...buildBooksScopeProps(['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'MAT'])} />);
+    await user.click(screen.getByText('GEN - MRK'));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 });

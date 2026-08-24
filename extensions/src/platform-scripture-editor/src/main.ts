@@ -602,10 +602,34 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof SCRIPTURE_EDIT
       unformattedTitle,
     };
 
+    // Fold the Scripture-edit role check into the title's read-only computation only — `isReadOnly`
+    // itself must keep its narrower "opened as Resource Viewer" tab-identity meaning (see Section 2
+    // of the design spec). A lookup failure or a project that doesn't advertise
+    // `platformScripture.scriptureEditPermissions` fails open here (title stays whatever
+    // isReadOnly/markers already computed), matching the same fail-open convention the webview's
+    // own reactive `canUserEditScripture` signal uses — so the open-time label and the live gate
+    // never disagree about which direction an error should bias.
+    let isReadOnlyForTitle = isReadOnly || savedWebViewStateUpdated.viewType === 'markers';
+    if (!isReadOnlyForTitle && projectId) {
+      try {
+        const scriptureEditPermissionsPdp = await papi.projectDataProviders.get(
+          'platformScripture.scriptureEditPermissions',
+          projectId,
+        );
+        if (
+          scriptureEditPermissionsPdp &&
+          !(await scriptureEditPermissionsPdp.canUserEditScripture())
+        )
+          isReadOnlyForTitle = true;
+      } catch (e) {
+        logger.warn(`Error checking Scripture edit permission for title: ${getErrorMessage(e)}`);
+      }
+    }
+
     const title = await formatEditorTitle(
       unformattedTitle,
       projectId,
-      isReadOnly || savedWebViewStateUpdated.viewType === 'markers',
+      isReadOnlyForTitle,
       async (projectIdFormat) => {
         const pdp = await papi.projectDataProviders.get('platform.base', projectIdFormat);
         return (await pdp.getSetting('platform.name')) ?? projectIdFormat;
