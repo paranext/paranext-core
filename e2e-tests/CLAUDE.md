@@ -6,16 +6,22 @@
 |---|---|---|
 | Core happy path (app launch, basic nav) | `tests/smoke/` | `npm run test:e2e:smoke` (also CI) |
 | Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated all` (the bare form lists the subsets and exits 1) |
-| Tests needing real Marble resources | `tests/enhanced-resources/` | `npx playwright test --config e2e-tests/playwright.config.ts --project=enhanced-resources` |
+| Tests needing real Marble resources | `tests/enhanced-resources/` | app running, then `npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/` |
 
 On WSL2, prefix a suite that launches its own Electron with `e2e-tests/run-e2e-wsl.sh --wrap` to
 keep its windows off the Windows desktop — e.g.
 `e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated find`.
 
 This does nothing for suites built on `fixtures/cdp.fixture.ts`, which attach over port 9223 to an
-app you started separately: all of `tests/enhanced-resources/`, plus the `title-bar/` and
-`navigation-history/` isolated subsets. Start those with `./.erb/scripts/refresh.sh`, which on
-Linux already runs the app under its own Xvfb.
+app you started separately: all of `tests/enhanced-resources/`, `tests/manage-books/` and
+`tests/markers-checklist/`, plus the `title-bar/` and `navigation-history/` isolated subsets. Start
+the app with `./.erb/scripts/refresh.sh` — on Linux that already runs it under its own Xvfb — and
+run those suites through `playwright-cdp.config.ts`, which has no globalSetup.
+
+`title-bar/` and `navigation-history/` are the exception to the exception: they sit under
+`tests/isolated/`, which `playwright-cdp.config.ts` ignores, while the `isolated` project's
+globalSetup refuses to start while an app holds port 8876. Until they move or globalSetup gains an
+opt-out, there is no way to run them.
 
 **Feature-specific isolated tests belong in `tests/isolated/`** — not in their own directory.
 The `isolated` project covers the whole `tests/isolated/` tree, so a new spec file there is

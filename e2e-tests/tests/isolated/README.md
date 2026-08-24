@@ -1,7 +1,7 @@
 # isolated E2E Tests
 
-Feature and state-mutating E2E tests, most of which run against their own Electron instance. The
-exceptions are noted under "How to run" below.
+Feature and state-mutating E2E tests that do not share an Electron instance with other suites.
+How each subset gets its app differs — see "Subdirectories" below.
 
 ## What belongs here
 
@@ -12,9 +12,10 @@ exceptions are noted under "How to run" below.
 ## How to run
 
 ```bash
-# All isolated tests. Needs ./.erb/scripts/refresh.sh running first, because title-bar/ and
-# navigation-history/ attach over CDP. The bare form runs nothing: it lists the subsets and
-# exits 1.
+# Every subset. Does not currently pass end to end — title-bar/ and navigation-history/ attach
+# to a running app, which this project's global setup refuses to start alongside (it aborts when
+# port 8876 is bound). Run the other subsets individually.
+# The bare form runs nothing: it lists the subsets and exits 1.
 npm run test:e2e:isolated all
 
 # A single file
@@ -28,12 +29,12 @@ e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 
 ## Subdirectories
 
-- `comment-assignment/` — tests for assigning comments to users
-- `find/` — tests for the find/replace flow
+- `comment-assignment/` (one Electron per worker) — tests for assigning comments to users
+- `find/` (one Electron per worker) — tests for the find/replace flow
 - `first-run/` — tests for the first-run wizard (PT-4175 / PT-4179)
 - `multi-window/` — tests for multi-window lifecycle (second-window startup, focus routing, app-global service hosting takeover, single shutdown-task run on quit), window layout persistence (windows, layouts, and bounds surviving relaunches; a deliberately closed window staying closed; the pre-multi-window single-window upgrade path), and per-window UI isolation (overlays, dialogs, notifications, navigation targets, and web-view placement staying in their own window; scroll groups deliberately app-global)
-- `navigation-history/` — tests for back/forward reference history navigation
+- `navigation-history/` (attaches over CDP; see "How to run") — tests for back/forward reference history navigation
 - `overlay/` — tests for the project-switch transition overlay
 - `scroll-groups/` — tests for scroll-group synchronization between scripture editors
-- `title-bar/` — tests for title bar layout, e.g. reserved space for native window controls
-- `verse-navigation/` — tests for verse navigation keyboard shortcuts
+- `title-bar/` (attaches over CDP; see "How to run") — tests for title bar layout, e.g. reserved space for native window controls
+- `verse-navigation/` (one Electron per worker) — tests for verse navigation keyboard shortcuts
