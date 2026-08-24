@@ -141,6 +141,16 @@ jobs:
           npm run build:main
           npm run typecheck
 
+      # The repo's agent tooling under .claude/ is Python and shell, which no other job covers.
+      # Uses the runner's preinstalled python3 — the scripts are stdlib-only and parse under 3.9,
+      # so this needs no setup-python step, no config file and no new dependency.
+      - name: Agent script checks
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: |
+          python3 -m compileall -q .claude/skills/process-pr-feedback/scripts
+          python3 .claude/skills/process-pr-feedback/scripts/test_posting.py
+          for f in $(git ls-files '*.sh'); do bash -n "$f"; done
+
       - name: Build
         run: npm run build
 

@@ -1144,6 +1144,11 @@ review at once. Two things follow, and both are already available in this repo:
 - **The posting layer is executable files with tests** (`scripts/`, run `test_posting.py` before
   trusting a batch), not a template. Anything else in this skill that becomes load-bearing enough
   to have a failure mode belongs there too, not in a code fence.
+- **CI runs the tests.** `.github/workflows/test.yml` § *Agent script checks* compiles the
+  scripts, runs `test_posting.py`, and `bash -n`s every tracked `.sh` in the repo — Linux-only,
+  on the runner's preinstalled `python3`, with no config file and no new dependency, because the
+  scripts are stdlib-only and parse under 3.9. A test suite nothing runs is a suite that goes
+  green while rotting.
 - **The gated actions are gated by the harness, not only by this document.**
   `.claude/settings.json` already denies `git commit --no-verify` and `git push --force`/`-f` and
   asks on `--force-with-lease`, and `.claude/agents/*.md` restrict what a role can reach with
