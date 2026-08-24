@@ -12,7 +12,9 @@ exceptions are noted under "How to run" below.
 ## How to run
 
 ```bash
-# All isolated tests. The bare form runs nothing: it lists the subsets and exits 1.
+# All isolated tests. Needs ./.erb/scripts/refresh.sh running first, because title-bar/ and
+# navigation-history/ attach over CDP. The bare form runs nothing: it lists the subsets and
+# exits 1.
 npm run test:e2e:isolated all
 
 # A single file

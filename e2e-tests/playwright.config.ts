@@ -4,7 +4,9 @@ import { defineConfig } from '@playwright/test';
  * Playwright configuration for paranext-core E2E tests.
  *
  * - `smoke` (default): tests share a single Electron instance per worker — fast, for CI.
- * - `isolated`: each test gets a fresh Electron restart — for state-mutating tests.
+ * - `isolated`: most tests get a fresh Electron restart — for state-mutating tests. The `title-bar/`
+ *   and `navigation-history/` subsets are the exception: they use `fixtures/cdp.fixture.ts` and
+ *   attach to an app started separately.
  */
 const config = defineConfig({
   testDir: './tests',
@@ -46,6 +48,8 @@ const config = defineConfig({
       // The common set of locally-runnable tests, organized in subdirectories by feature.
       // `npm run test:e2e:isolated` (via e2e-tests/run-isolated.mjs) lists the subsets;
       // `npm run test:e2e:isolated <subset>` runs one; `... all` runs everything.
+      // `... all` needs the app already running (./.erb/scripts/refresh.sh): the `title-bar/`
+      // and `navigation-history/` subsets attach over CDP rather than launching Electron.
       name: 'isolated',
       testDir: './tests/isolated',
     },
