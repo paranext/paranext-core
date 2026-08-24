@@ -33,18 +33,17 @@ type BookItemProps = {
   /** When true, renders the item as disabled: suppresses onSelect and dims the visuals. */
   disabled?: boolean;
   /**
-   * When true, renders the item greyed but fully selectable — the state for an item that is
-   * reachable yet outside the current context (e.g. a book present in an open resource but not in
-   * the active project). Distinct from `disabled`, which also suppresses selection; `disabled`
-   * takes precedence when both are set.
+   * Localized explanation of why this item is greyed (e.g. "not in this project"). Passing a value
+   * renders the item greyed but fully selectable — the state for an item that is reachable yet
+   * outside the current context, such as a book present in an open resource but not in the active
+   * project.
+   *
+   * Distinct from `disabled`, which also suppresses selection; `disabled` takes precedence and a
+   * disabled item is never additionally dimmed. The reason is appended to the item's accessible
+   * name so the greying is never a colour-only signal — the state and its explanation are one prop
+   * precisely so they cannot drift apart.
    */
-  dimmed?: boolean;
-  /**
-   * Localized text appended to the item's accessible name while `dimmed` is true, explaining why it
-   * is greyed (e.g. "not in this project"). Required for the dimmed state to mean anything to a
-   * screen reader, since grey is a colour-only signal.
-   */
-  dimmedAriaLabelSuffix?: string;
+  dimmedReason?: string;
 };
 
 /**
@@ -68,8 +67,7 @@ export function BookItem({
   localizedBookNames,
   commandValue,
   disabled = false,
-  dimmed = false,
-  dimmedAriaLabelSuffix,
+  dimmedReason,
 }: BookItemProps) {
   const isMouseClick = useRef(false);
 
@@ -109,6 +107,9 @@ export function BookItem({
     [bookId, localizedBookNames],
   );
 
+  const isDimmed = !!dimmedReason && !disabled;
+  const baseAriaLabel = `${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`;
+
   return (
     <div
       className={cn(
@@ -129,18 +130,14 @@ export function BookItem({
         role="option"
         aria-selected={isSelected}
         aria-disabled={disabled || undefined}
-        aria-label={
-          dimmed && !disabled && dimmedAriaLabelSuffix
-            ? `${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()}), ${dimmedAriaLabelSuffix}`
-            : `${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`
-        }
+        aria-label={isDimmed ? `${baseAriaLabel}, ${dimmedReason}` : baseAriaLabel}
         disabled={disabled}
         className={cn(
           className,
           disabled && 'tw:cursor-not-allowed tw:opacity-50',
           // Mirrors NumberedItemGrid's dimmed-vs-disabled split: dimmed is presentation only, so it
           // never sets aria-disabled or blocks onSelect, and it yields to disabled.
-          dimmed && !disabled && 'tw:bg-muted/50 tw:text-muted-foreground/50',
+          isDimmed && 'tw:bg-muted/50 tw:text-muted-foreground/50',
         )}
       >
         {showCheck && (
