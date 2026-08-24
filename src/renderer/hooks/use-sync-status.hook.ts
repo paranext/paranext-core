@@ -130,6 +130,23 @@ function isValidSyncState(state: unknown): state is SyncState {
     if (!Array.isArray(syncingProjectIds)) return false;
     if (syncingProjectIds.some((id: unknown) => typeof id !== 'string')) return false;
   }
+  // Absent is valid — it just means nothing has synced yet. Present-but-malformed is not: the green
+  // check rests entirely on every entry's `resultStatus`, and `didLastSyncSucceed` reads a missing
+  // one as "not a failure", so an entry without it would report success on unreadable data. Failing
+  // the whole snapshot here reports `unknown` instead, which is what a snapshot we cannot read is.
+  if ('lastResults' in state && state.lastResults !== undefined) {
+    const { lastResults } = state;
+    if (typeof lastResults !== 'object' || !lastResults) return false;
+    if (!('resultsInfo' in lastResults)) return false;
+    const { resultsInfo } = lastResults;
+    if (typeof resultsInfo !== 'object' || !resultsInfo) return false;
+    const isValidResult = (result: unknown) =>
+      typeof result === 'object' &&
+      !!result &&
+      'resultStatus' in result &&
+      typeof result.resultStatus === 'string';
+    if (!Object.values(resultsInfo).every(isValidResult)) return false;
+  }
   return true;
 }
 
@@ -339,8 +356,10 @@ export function useSyncStatus(): SyncStatusInfo {
             name: metadataById.get(projectId)?.name ?? projectId,
           }))
           // The contract says claim order carries no meaning and can differ between reads of the
-          // same set, so sorting is what keeps an open popover from reshuffling under the user.
-          .sort((a, b) => a.name.localeCompare(b.name))
+          // same set, so sorting is what keeps an open popover from reshuffling under the user. Ties
+          // break on id, because two projects sharing a display name (or both falling back to their
+          // id) would otherwise be left in exactly the meaningless order the sort exists to remove.
+          .sort((a, b) => a.name.localeCompare(b.name) || a.projectId.localeCompare(b.projectId))
       );
     }, [syncingProjectIds]),
     NO_SYNCING_PROJECTS,

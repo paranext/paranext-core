@@ -12,6 +12,7 @@ import {
   SyncStatusButton,
   LOCALIZED_STRING_KEYS,
   SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
+  SYNC_UNAVAILABLE_MESSAGE_KEY,
 } from './sync-status-button.component';
 import { SYNC_STATE_SEED_RETRY_INTERVAL_MS } from '../hooks/use-sync-status.hook';
 
@@ -31,6 +32,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_status_syncing%': 'Test Syncing',
       '%toolbar_sync_status_syncing_project%': 'Test Syncing {projectName}',
       '%toolbar_sync_status_syncing_projects%': 'Test Syncing {count} projects',
+      '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
       '%toolbar_sync_view_details%': 'Test View sync details',
     },
   ]),
@@ -132,6 +134,13 @@ const deferredSyncState = () => {
   });
   return { promise, resolve: (state: SyncState) => resolveState(state) };
 };
+
+/** How many times the component has read the snapshot so far. */
+const countSyncStateReads = () =>
+  vi
+    .mocked(sendCommand)
+    .mock.calls.filter(([commandName]) => commandName === 'paratextBibleSendReceive.getSyncState')
+    .length;
 
 /** Subscribes nothing, for the tests that never fire a sync-state event. */
 const mockNoSyncStateEvents = () => {
@@ -356,6 +365,40 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
     expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
   });
 
+  // The green check rests entirely on every entry's `resultStatus`, and "not a failure" is how a
+  // MISSING one reads. A snapshot we cannot read reports `unknown`, never success.
+  it('reports unknown rather than synced when a result entry has no resultStatus', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['proj1'] },
+      {
+        isSyncing: false,
+        lastRequestedProjectIds: ['proj1'],
+        syncingProjectIds: [],
+        lastResults: {
+          sendReceiveDate: '2026-08-23T00:00:00Z',
+          // A result entry that arrived without `resultStatus`. The declaration says it is always
+          // there; this is wire data from another process, so the hook cannot take that on trust.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          resultsInfo: { proj1: { id: 'proj1' } as ResultInfo },
+        },
+      },
+    ]);
+    render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('Test Syncing');
+    });
+
+    fireSyncStateChanged(false);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('Sync');
+    });
+    expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('toolbar-sync-button'));
+    expect(await screen.findByText('Test status unavailable')).toBeInTheDocument();
+  });
+
   it('reports a failure when only one project of several did not succeed', async () => {
     mockSyncState(completedState({ ok1: 'succeeded', ok2: 'initialSend', bad: 'notUpgraded' }));
 
@@ -420,7 +463,11 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
   });
 
   it('points at the sync status view for the detail behind a failure', async () => {
-    mockSyncState(completedState({ proj1: 'failed' }));
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => completedState({ proj1: 'failed' }),
+      // The command answers with the id of the web view it opened.
+      'paratextBibleSendReceive.openSyncStatus': () => 'sync-status-web-view',
+    });
     render(<SyncStatusButton />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Test Sync failed' }));
@@ -431,6 +478,50 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
       expect(vi.mocked(sendCommand)).toHaveBeenCalledWith(
         'paratextBibleSendReceive.openSyncStatus',
       );
+    });
+    expect(vi.mocked(notificationService.send)).not.toHaveBeenCalled();
+  });
+
+  // Unlike the rest of the popover this click leaves the renderer, so it can fail — and it is the
+  // only route to the detail behind a failure. The popover has already closed by then, so failing
+  // silently would show the user nothing at all.
+  it('tells the user when the sync status view cannot be opened', async () => {
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => completedState({ proj1: 'failed' }),
+      'paratextBibleSendReceive.openSyncStatus': () => {
+        throw new Error('send/receive is not available');
+      },
+    });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Sync failed' }));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-view-details-button'));
+
+    await waitFor(() => {
+      expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith({
+        message: SYNC_UNAVAILABLE_MESSAGE_KEY,
+        severity: 'warning',
+      });
+    });
+  });
+
+  // The command's declared `undefined` means it did not create the web view — a resolved promise,
+  // but not a success, and just as invisible to the user as a rejection.
+  it('tells the user when the sync status view reports it was not created', async () => {
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => completedState({ proj1: 'failed' }),
+      'paratextBibleSendReceive.openSyncStatus': () => undefined,
+    });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Sync failed' }));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-view-details-button'));
+
+    await waitFor(() => {
+      expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith({
+        message: SYNC_UNAVAILABLE_MESSAGE_KEY,
+        severity: 'warning',
+      });
     });
   });
 });
@@ -452,6 +543,26 @@ describe('SyncStatusButton — project names', () => {
     // The name is wrapped in bidi isolates, so match on the text rather than the exact string: an
     // RTL project name interpolated bare would reorder the sentence around it.
     expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('HNF');
+  });
+
+  // Sorting by name is what stops an open popover reshuffling; two projects sharing a name would
+  // otherwise be left in the claim order the contract says carries no meaning.
+  it('breaks name ties on project id so the order is fully determined', async () => {
+    mockSyncState({
+      isSyncing: true,
+      lastRequestedProjectIds: [],
+      syncingProjectIds: ['zeta', 'alpha'],
+    });
+    mockProjectNames({ zeta: 'Shared Name', alpha: 'Shared Name' });
+
+    render(<SyncStatusButton />);
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+
+    const items = within(await screen.findByTestId('toolbar-sync-popover-projects')).getAllByRole(
+      'listitem',
+    );
+    // Same display name, so only the id decides: 'alpha' before 'zeta', not the claim order given.
+    expect(items.map((item) => item.getAttribute('data-project-id'))).toEqual(['alpha', 'zeta']);
   });
 
   it('isolates the project name so an RTL name cannot reorder the label around it', async () => {
@@ -966,6 +1077,64 @@ describe('SyncStatusButton — popover and cancel', () => {
     expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancel sync');
   });
 
+  // `useSyncStatus` blanks the ids before every follow-up read, so a single event walks the set
+  // through ['a','b','c'] -> [] -> ['a','b']. None of that is a new sync, and re-arming on it would
+  // hand the user an enabled "Cancel sync" for a cancel that is still in flight.
+  it('keeps Cancel pending when a project drops out of the sync it was aimed at', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a', 'b', 'c'] },
+      // One project finished; the other two are still going. Same sync, smaller set.
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a', 'b'] },
+    ]);
+    mockProjectNames({ a: 'AAA', b: 'BBB', c: 'CCC' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    fireSyncStateChanged(true);
+    await waitFor(() => {
+      expect(
+        within(screen.getByTestId('toolbar-sync-popover-projects')).getAllByRole('listitem'),
+      ).toHaveLength(2);
+    });
+
+    const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveTextContent('Test Cancelling');
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  // The same sync simply re-reporting itself is the other half of the same trap: the blank between
+  // the clear and the read is a set change, but it is not a different sync.
+  it('keeps Cancel pending when the same sync re-reports itself', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    const readsBefore = countSyncStateReads();
+    fireSyncStateChanged(true);
+    await waitFor(() => {
+      expect(countSyncStateReads()).toBeGreaterThan(readsBefore);
+    });
+    // Let the re-read's state updates land before asserting nothing changed.
+    await act(async () => {});
+
+    const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveTextContent('Test Cancelling');
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+  });
+
   // The label carries a project name of any length, so the button has to be allowed to shrink and
   // truncate: a toolbar item that grows without bound pushes its neighbours off the bar.
   it('lets the label truncate instead of growing the toolbar item', async () => {
@@ -1043,6 +1212,36 @@ describe('SyncStatusButton — accessibility', () => {
     expect(screen.getByRole('status')).toBeEmptyDOMElement();
   });
 
+  // A listener already told a sync started is left waiting forever if the sync ends unreadably and
+  // the region says nothing. `unknown` is the outcome there, so it has to be announced.
+  it('announces that the outcome is unavailable when a sync it reported ends unreadably', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] },
+      new Error('send/receive stopped answering'),
+    ]);
+    render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Syncing');
+    });
+
+    fireSyncStateChanged(false);
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Test Sync status unavailable');
+    });
+  });
+
+  // The same `unknown` at startup is nobody's pending question — the control simply hasn't been
+  // able to read anything yet, and announcing it would interrupt for no news.
+  it('stays silent when the status is unavailable from the start', async () => {
+    mockSyncState(new Error('send/receive is not available'));
+    render(<SyncStatusButton />);
+
+    await screen.findByRole('button', { name: 'Sync' });
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+  });
+
   // Tailwind's reset strips list semantics in Safari, so VoiceOver stops announcing the list.
   it('keeps list semantics on the syncing-project list', async () => {
     mockSyncState({ isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] });
@@ -1066,6 +1265,9 @@ describe('SyncStatusButton — localization', () => {
     // `PlatformNotification.message` is typed `string | LocalizeKey`, so a typo or a key later
     // renamed in en.json type-checks fine and reaches the user as literal `%key%` text in a toast.
     expect(readStrings('en.json')).toHaveProperty(SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY);
+    expect(readStrings('en.json')).toHaveProperty(SYNC_UNAVAILABLE_MESSAGE_KEY);
+    expect(readStrings('es.json')).toHaveProperty(SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY);
+    expect(readStrings('es.json')).toHaveProperty(SYNC_UNAVAILABLE_MESSAGE_KEY);
   });
 
   // Imported from the component rather than hand-copied: a duplicated list stops covering the

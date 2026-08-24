@@ -480,6 +480,7 @@
   "%toolbar_sync_popover_synced%": "The last sync finished.",
   "%toolbar_sync_popover_unknown%": "The sync status isn't available right now.",
   "%toolbar_sync_status_failed%": "Sync failed",
+  "%toolbar_sync_status_unknown%": "Sync status unavailable",
   "%toolbar_sync_status_synced%": "Synced",
   "%toolbar_sync_status_syncing%": "Syncing",
   "%toolbar_sync_status_syncing_project%": "Syncing {projectName}",
