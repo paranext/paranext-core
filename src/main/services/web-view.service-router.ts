@@ -17,7 +17,6 @@ import {
   getUnreachableWindowIds,
   isApplicationFocused,
   isWindowClosing,
-  isWindowReady,
   wasWindowEverReady,
 } from '@main/services/window-state.service';
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';

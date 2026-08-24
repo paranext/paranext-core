@@ -1142,6 +1142,7 @@ async function loadLayout(
       // A window created to receive one specific web view, routed separately, starts with nothing
       // else — skip the default-layout supplement entirely, without even fetching its flags.
       dockLayoutVar.loadLayout(layoutToLoad);
+      layoutLoadGenerationInDock = thisGeneration;
       emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
       return;
     }

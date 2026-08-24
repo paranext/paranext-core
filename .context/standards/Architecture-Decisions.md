@@ -2418,7 +2418,8 @@ step, no automation. Just a record.
   exactly one case — a dock reactivation brings a window back before readiness lands — which is the
   case it was added for.
 - **Source:** PT-4386.
-## ADR-0017: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
+
+## adr-multi-window-uses-real-browser-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
 - **Date:** 2026-08-11
 - **Status:** Accepted
