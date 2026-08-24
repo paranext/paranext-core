@@ -61,6 +61,7 @@ export function BookChapterControl({
   handleSubmit,
   className,
   getActiveBookIds,
+  getAdditionalBookIds,
   localizedBookNames,
   localizedStrings,
   recentSearches,
@@ -147,19 +148,59 @@ export function BookChapterControl({
     return getActiveBookIds ? getActiveBookIds() : ALL_BOOK_IDS;
   }, [getActiveBookIds]);
 
-  const availableBooksByType = useMemo(() => {
-    const grouped: Record<Section, string[]> = {
-      [Section.OT]: activeBookIds.filter((bookId) => Canon.isBookOT(bookId)),
-      [Section.NT]: activeBookIds.filter((bookId) => Canon.isBookNT(bookId)),
-      [Section.DC]: activeBookIds.filter((bookId) => Canon.isBookDC(bookId)),
-      [Section.Extra]: activeBookIds.filter((bookId) => Canon.extraBooks().includes(bookId)),
-    };
-    return grouped;
-  }, [activeBookIds]);
+  // Books offered beyond the active project. Ignored when there is no project list to be outside of
+  // (no getActiveBookIds means the control already offers the whole canon).
+  const additionalBookIds = useMemo(
+    () => (getActiveBookIds && getAdditionalBookIds ? getAdditionalBookIds() : []),
+    [getActiveBookIds, getAdditionalBookIds],
+  );
 
+  const activeBookIdSet = useMemo(() => new Set(activeBookIds), [activeBookIds]);
+
+  // getAdditionalBookIds is a public prop, so callers may hand back ids the project already has.
+  // Only the genuine difference is dimmed or gated behind the expansion.
+  const dimmedBookIdSet = useMemo(
+    () => new Set(additionalBookIds.filter((bookId) => !activeBookIdSet.has(bookId))),
+    [additionalBookIds, activeBookIdSet],
+  );
+
+  // Everything reachable: project books, the extras, and the current book — the last so a reference
+  // in neither the project nor any open resource is still visible rather than silently absent.
+  // Canon-ordered so an extra book lands among its neighbours instead of after the project's books.
+  const unionBookIds = useMemo(() => {
+    if (dimmedBookIdSet.size === 0 && activeBookIdSet.has(scrRef.book)) return activeBookIds;
+    const reachable = new Set([...activeBookIds, ...dimmedBookIdSet, scrRef.book]);
+    return ALL_BOOK_IDS.filter((bookId) => reachable.has(bookId));
+  }, [activeBookIds, activeBookIdSet, dimmedBookIdSet, scrRef.book]);
+
+  const groupBooksBySection = useCallback((bookIds: string[]): Record<Section, string[]> => {
+    return {
+      [Section.OT]: bookIds.filter((bookId) => Canon.isBookOT(bookId)),
+      [Section.NT]: bookIds.filter((bookId) => Canon.isBookNT(bookId)),
+      [Section.DC]: bookIds.filter((bookId) => Canon.isBookDC(bookId)),
+      [Section.Extra]: bookIds.filter((bookId) => Canon.extraBooks().includes(bookId)),
+    };
+  }, []);
+
+  const availableBooksByType = useMemo(
+    () => groupBooksBySection(activeBookIds),
+    [groupBooksBySection, activeBookIds],
+  );
+
+  // Searching always spans the union: the expansion control governs browsing only, so typing a
+  // resource-only book's name finds it without the user having to discover that control first.
+  const searchableBooksByType = useMemo(
+    () => groupBooksBySection(unionBookIds),
+    [groupBooksBySection, unionBookIds],
+  );
+
+  // calculateTopMatch and the quick-nav buttons search this, so typed references and book-boundary
+  // navigation reach the union too. Flattened from the grouped form so it stays limited to the four
+  // canon sections, leaving out peripheral ids (front matter, glossary, indexes) that no section
+  // claims.
   const availableBooks = useMemo(() => {
-    return Object.values(availableBooksByType).flat();
-  }, [availableBooksByType]);
+    return Object.values(searchableBooksByType).flat();
+  }, [searchableBooksByType]);
 
   // Filter books based on search input
   const filteredBooksByType = useMemo(() => {
@@ -174,13 +215,13 @@ export function BookChapterControl({
 
     const bookTypes: Section[] = [Section.OT, Section.NT, Section.DC, Section.Extra];
     bookTypes.forEach((type) => {
-      filteredBooks[type] = availableBooksByType[type].filter((bookId) => {
+      filteredBooks[type] = searchableBooksByType[type].filter((bookId) => {
         return doesBookMatchQuery(bookId, inputValue, localizedBookNames);
       });
     });
 
     return filteredBooks;
-  }, [availableBooksByType, inputValue, localizedBookNames]);
+  }, [availableBooksByType, searchableBooksByType, inputValue, localizedBookNames]);
 
   // Get the current top match
   const topMatch = useMemo(
@@ -482,6 +523,10 @@ export function BookChapterControl({
     localizedStrings?.['%webView_bookChapterControl_selectChapter%'] ?? 'Select Chapter';
   const selectVerseTitle =
     localizedStrings?.['%webView_bookChapterControl_selectVerse%'] ?? 'Select Verse';
+  // `||`, not `??`: this string is the sole screen-reader signal for a dimmed book, and `??` would
+  // pass an empty translation through, silently dropping the dimming.
+  const bookNotInProjectLabel =
+    localizedStrings?.['%webView_bookChapterControl_bookNotInProject%'] || 'not in this project';
 
   // #endregion
 
@@ -1099,6 +1144,9 @@ export function BookChapterControl({
                               ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
                               localizedBookNames={localizedBookNames}
                               disabled={isBookDisabled(bookId)}
+                              dimmedReason={
+                                dimmedBookIdSet.has(bookId) ? bookNotInProjectLabel : undefined
+                              }
                             />
                           ))}
                         </CommandGroup>

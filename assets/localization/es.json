@@ -619,6 +619,8 @@
   "%userProfile_networkSettings%": "Configuración de red",
   "%userProfile_networkSettings_2%": "Internet y conectividad",
   "%userProfile_profileAndRegistration%": "Perfil y registro",
+  "%webView_bookChapterControl_bookNotInProject%": "no está en este proyecto",
+  "%webView_bookChapterControl_showAllBooks%": "Mostrar todos los libros",
   "%webView_defaultTitle_webView%": "Vista Web",
   "%webView_edit%": "Editar",
   "%webView_error_dump_copied_message%": "Error copiado en el portapapeles",
