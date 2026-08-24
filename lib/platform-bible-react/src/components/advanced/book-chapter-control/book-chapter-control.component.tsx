@@ -165,6 +165,11 @@ export function BookChapterControl({
       [activeBookIds, additionalBookIds, scrRef.book],
     );
 
+  // Read through a ref so handleOpenChange keeps an empty dependency array: its identity feeds
+  // useImperativeHandle, and churning it would re-register the consumer's imperative handle.
+  const isCurrentBookOutsideProjectRef = useRef(false);
+  isCurrentBookOutsideProjectRef.current = booksOutsideProject.has(scrRef.book);
+
   // Filter books based on search input
   const filteredBooksByType = useMemo(() => {
     if (!inputValue.trim())
@@ -369,6 +374,9 @@ export function BookChapterControl({
       setSelectedBookForVersesView(undefined);
       setSelectedChapterForVersesView(undefined);
       setInputValue('');
+      // Seed, don't force: the list opens expanded when the current book is outside the project so
+      // that book is visible, and the toggle still collapses from there.
+      setIsShowingAllBooks(isCurrentBookOutsideProjectRef.current);
     }
   }, []);
 
