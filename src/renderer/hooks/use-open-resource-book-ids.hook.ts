@@ -91,9 +91,12 @@ export function useOpenResourceBookIds(activeProjectId: string | undefined): str
 
   // A membership fingerprint, so an unchanged set of ids is a stable dependency and an unrelated web
   // view event does not tear down and rebuild every subscription. Sorted because set equality, not
-  // order, is what matters; the separator is arbitrary since this value is only ever compared, never
-  // parsed back apart.
-  const openProjectIdsKey = useMemo(() => [...openProjectIds].sort().join(' '), [openProjectIds]);
+  // order, is what matters. NUL-separated so no pair of distinct id sets can collide into the same
+  // key — a space would let {'A B'} and {'A', 'B'} agree, silently suppressing a real change.
+  const openProjectIdsKey = useMemo(
+    () => [...openProjectIds].sort().join('\u0000'),
+    [openProjectIds],
+  );
 
   const [bookIdsByProjectId, setBookIdsByProjectId] = useState<Record<string, string[]>>({});
 
