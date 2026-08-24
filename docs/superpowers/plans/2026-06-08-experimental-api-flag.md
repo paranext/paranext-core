@@ -1626,7 +1626,7 @@ git commit -m "refactor(experimental): migrate extension emitters to createNetwo
 - Modify: `src/renderer/app.component.test.tsx`
 - Modify: `src/renderer/hooks/use-project-picker-data.hook.test.ts`
 
-(One of the 4 listed earlier — `shared-store.service.test.ts` — has 3 occurrences.)
+(`shared-store.service.test.ts` has two references, at `:14` and `:52` — see the verdict above.)
 
 > The corrections that used to sit here are now in the task verdict above, which also states why
 > these sites are deletions rather than migrations. Steps 1-3 below still describe the swap; treat
