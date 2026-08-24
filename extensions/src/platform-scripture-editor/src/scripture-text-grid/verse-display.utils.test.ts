@@ -1,6 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { usxStringToUsj, Usj, MarkerObject } from '@eten-tech-foundation/scripture-utilities';
-import { parseVerseRange, verseRangeIncludes, sliceUsjToVerse } from './verse-display.utils';
+import {
+  parseVerseRange,
+  verseRangeIncludes,
+  sliceUsjToVerse,
+  resolveDisplayVerseNum,
+} from './verse-display.utils';
+
+describe('resolveDisplayVerseNum', () => {
+  it('resolves verse 0 to verse 1 (PT-3133 / Paratext 9 parity)', () => {
+    expect(resolveDisplayVerseNum(0)).toBe(1);
+  });
+  it('leaves every other verse alone', () => {
+    expect(resolveDisplayVerseNum(1)).toBe(1);
+    expect(resolveDisplayVerseNum(5)).toBe(5);
+    expect(resolveDisplayVerseNum(176)).toBe(176);
+  });
+});
 
 describe('parseVerseRange', () => {
   it('parses a single verse number', () => {
@@ -223,7 +239,9 @@ describe('sliceUsjToVerse — boundaries and empty', () => {
     expect(paragraphs(usj).some((p) => p.text.includes('Genealogy'))).toBe(false);
   });
 
-  it('is empty for a verse-0 request with no renderable text (PT-3133)', () => {
+  // Load-bearing: resolveDisplayVerseNum exists because sliceUsjToVerse stays mechanical. If someone
+  // moves the fall-forward in here, callers double-apply it and this test is what catches them.
+  it('slices a raw verse 0 to nothing — the fall-forward rule lives in the caller, not here', () => {
     const { usj, isEmpty } = sliceUsjToVerse(usjHeading, 0);
     expect(isEmpty).toBe(true);
     expect(paragraphs(usj)).toEqual([]);
