@@ -13,3 +13,20 @@ declare module 'react' {
   // constrain SVG element tag names, so a record with the SVG keys is enough.
   type ReactSVG = Record<keyof React.JSX.IntrinsicElements, never>;
 }
+
+// `@dnd-kit/core@6.x` and `@dnd-kit/sortable@10.x` reference the global `JSX`
+// namespace (e.g. `JSX.Element`) which React 19 removed. Aliasing the global to
+// `React.JSX` makes the .d.ts files type-check without patching @dnd-kit.
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace JSX {
+    type Element = React.JSX.Element;
+    type IntrinsicElements = React.JSX.IntrinsicElements;
+    type ElementClass = React.JSX.ElementClass;
+    type ElementAttributesProperty = React.JSX.ElementAttributesProperty;
+    type ElementChildrenAttribute = React.JSX.ElementChildrenAttribute;
+    type LibraryManagedAttributes<C, P> = React.JSX.LibraryManagedAttributes<C, P>;
+    type IntrinsicAttributes = React.JSX.IntrinsicAttributes;
+    type IntrinsicClassAttributes<T> = React.JSX.IntrinsicClassAttributes<T>;
+  }
+}
