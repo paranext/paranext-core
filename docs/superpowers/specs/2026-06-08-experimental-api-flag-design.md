@@ -392,7 +392,8 @@ Single-source emitters. Names are added to the augmentable `NetworkEvents` inter
 - `extensions/src/hello-rock3/src/main.ts:462`
 - `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234`
 - `src/extension-host/services/extension.service.ts` (2 occurrences)
-- `src/main/services/scroll-group.service-host.ts` (1 emitter + 1 import line)
+- `src/main/services/scroll-group.service-host.ts` (1 emitter + 1 import line)  
+  _Stale as of 2026-08-25: this file now holds **two** emitters (lines 51 and 76), both already registered centrally via `createBufferedNetworkEventEmitter`. Verify the current shape before acting on the count or the prescribed migration._
 
 **Dynamic-name (type-assertion pattern)** — one site has a name that can't be a literal in the registry:
 
