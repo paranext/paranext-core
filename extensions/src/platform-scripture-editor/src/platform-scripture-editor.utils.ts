@@ -499,6 +499,15 @@ export const blockMarkerToBlockNames: Record<string, LocalizeKey> = {
  *   paragraph
  * @param notifyStructureProtected Callback to invoke when the user attempts a paragraph format
  *   while structure is protected
+ * @param restoreSelection Callback invoked immediately before `formatPara` to put the caret back
+ *   where the user last had it. Opening the dropdown's popover moves focus off the editor input,
+ *   and Lexical's blur processing can null the live selection outright — `formatPara` then has no
+ *   paragraph to retag and the pick silently does nothing. The caller supplies this rather than
+ *   this module doing the restore itself: the restore needs `restoreSelectionIfLost` and the
+ *   focus-out selection capture, both of which live in web-view-only code this
+ *   extension-host-reachable module may not import (see the note at the bottom of this file).
+ *   Omitting it leaves the retag exposed to the lost-caret failure, so callers that can lose focus
+ *   to the menu should always pass it.
  * @returns List of marker menu items to be used for the paragraph menu
  */
 export function generateParagraphMenuListItems(
@@ -506,6 +515,7 @@ export function generateParagraphMenuListItems(
   localizedStrings: LanguageStrings,
   isStructureProtected: boolean,
   notifyStructureProtected: () => void,
+  restoreSelection?: () => void,
 ): MarkerMenuItem[] {
   return Object.entries(blockMarkerToBlockNames).map(([marker, title]) => {
     const markerMenuItem: MarkerMenuItem = {
@@ -520,6 +530,11 @@ export function generateParagraphMenuListItems(
           notifyStructureProtected();
           return;
         }
+        // Restore the caret BEFORE applying, exactly as the `\` and Enter marker palettes do
+        // before their applies: this menu opens in a popover that takes focus off the editor
+        // input, so by the time an item is picked the live selection may already be gone, and
+        // `formatPara` refuses when there is no selection.
+        restoreSelection?.();
         editorRef.current?.formatPara(marker);
       },
     };

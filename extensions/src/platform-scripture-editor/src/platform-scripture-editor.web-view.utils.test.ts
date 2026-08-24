@@ -54,6 +54,7 @@ describe('generateInlineMarkerMenuListItems', () => {
       {},
       true,
       notify,
+      undefined,
       PARENT,
       BASE_STYLE_INFO,
     );
@@ -77,6 +78,7 @@ describe('generateInlineMarkerMenuListItems', () => {
       {},
       true,
       notify,
+      undefined,
       PARENT,
       BASE_STYLE_INFO,
     );
@@ -100,6 +102,7 @@ describe('generateInlineMarkerMenuListItems', () => {
       {},
       false,
       notify,
+      undefined,
       PARENT,
       BASE_STYLE_INFO,
     );
@@ -111,6 +114,51 @@ describe('generateInlineMarkerMenuListItems', () => {
     expect(insertMarker).toHaveBeenCalledTimes(items.length);
     items.forEach((item) => expect(insertMarker).toHaveBeenCalledWith(item.marker));
     expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('restores the caret before inserting, so a pick made after the menu took focus still lands', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      vi.fn(),
+      {},
+      false,
+      vi.fn(),
+      restoreSelection,
+      PARENT,
+      BASE_STYLE_INFO,
+    );
+
+    items[0].action?.();
+
+    expect(restoreSelection).toHaveBeenCalledTimes(1);
+    expect(insertMarker).toHaveBeenCalledWith(items[0].marker);
+    // Order is the whole point: this menu focuses its own search input on open, which can leave
+    // the editor with no selection — restoring after the insert would be too late to place it.
+    expect(restoreSelection.mock.invocationCallOrder[0]).toBeLessThan(
+      insertMarker.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('when protected: does not restore the caret either (nothing is inserted)', () => {
+    const { ref, insertMarker } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      vi.fn(),
+      {},
+      true,
+      vi.fn(),
+      restoreSelection,
+      PARENT,
+      BASE_STYLE_INFO,
+    );
+
+    items.find((item) => item.isDisallowed)?.action?.();
+
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(insertMarker).not.toHaveBeenCalled();
   });
 
   it('returns [] when there is no parent marker', () => {
@@ -126,6 +174,7 @@ describe('generateInlineMarkerMenuListItems', () => {
       {},
       false,
       vi.fn(),
+      undefined,
       PARENT,
       BASE_STYLE_INFO,
     );
@@ -148,6 +197,7 @@ describe('generateInlineMarkerMenuListItems', () => {
       { '%marker_nd_description%': 'For name of deity (localized)' },
       false,
       vi.fn(),
+      undefined,
       PARENT,
       withLocalizeKeyDescription,
     );
@@ -169,6 +219,7 @@ describe('generateInlineMarkerMenuListItems', () => {
       {},
       false,
       vi.fn(),
+      undefined,
       PARENT,
       withLocalizeKeyDescription,
     );
@@ -184,6 +235,7 @@ describe('generateInlineMarkerMenuListItems', () => {
       {},
       false,
       vi.fn(),
+      undefined,
       PARENT,
       BASE_STYLE_INFO,
     );
@@ -205,6 +257,7 @@ describe('generateInlineMarkerMenuListItems', () => {
       {},
       false,
       vi.fn(),
+      undefined,
       PARENT,
       withCustomMarker,
     );
@@ -214,7 +267,15 @@ describe('generateInlineMarkerMenuListItems', () => {
 
   it('falls back to the bundled default stylesheet when no project styleInfo is supplied', () => {
     const { ref } = makeMockEditorRef();
-    const items = generateInlineMarkerMenuListItems(ref, noop, {}, false, vi.fn(), PARENT);
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      {},
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+    );
 
     // The bundled usfm.sty defines far more inline/note markers under 'p' than the minimal test
     // fixture above, so this can only pass if the no-styleInfo path is actually wired up.

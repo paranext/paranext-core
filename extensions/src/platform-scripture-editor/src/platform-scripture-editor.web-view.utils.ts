@@ -59,6 +59,9 @@ function resolveMarkerMenuItemTitle(
  *   `notifyStructureProtected` instead of inserting
  * @param notifyStructureProtected Callback to invoke when the user attempts to insert a block-level
  *   marker while structure is protected
+ * @param restoreSelection Callback to put back the selection the editor had before this menu took
+ *   focus, run just before inserting. The menu focuses its own search input, so without this the
+ *   insert can find no selection to act on
  * @param parentMarker The current parent marker which is used to determine which markers to include
  * @param styleInfo The project's stylesheet data; falls back to the bundled default stylesheet when
  *   absent (e.g. no project stylesheet loaded yet)
@@ -71,6 +74,7 @@ export function generateInlineMarkerMenuListItems(
   localizedStrings: LanguageStrings,
   isStructureProtected: boolean,
   notifyStructureProtected: () => void,
+  restoreSelection?: () => void,
   parentMarker?: string,
   styleInfo?: StyleInfo,
 ): MarkerMenuItem[] {
@@ -100,6 +104,10 @@ export function generateInlineMarkerMenuListItems(
           closeMarkersMenu();
           return;
         }
+        // This menu focuses its own search input on open, which takes focus off `.editor-input` —
+        // and Lexical's blur processing can null the selection `insertMarker` needs, so the insert
+        // would land nowhere. Restore it first, as every other marker-apply surface does.
+        restoreSelection?.();
         editorRef.current?.insertMarker(item.marker);
         closeMarkersMenu();
       },

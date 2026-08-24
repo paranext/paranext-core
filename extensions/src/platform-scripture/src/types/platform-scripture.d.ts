@@ -1110,7 +1110,14 @@ declare module 'platform-scripture' {
     IProjectDataProvider<StyleInfoProjectInterfaceDataTypes> & {
       /** Gets the merged stylesheet (usfm.sty + custom.sty) for the book's stylesheet */
       getStyleInfo(bookNum: number): Promise<StyleInfo | undefined>;
-      /** Setting is not supported */
+      /**
+       * This data cannot be changed this way. The backend does not implement `setStyleInfo` at all
+       * (the C# project data provider registers only `getStyleInfo`), so every call rejects at
+       * runtime.
+       *
+       * Note: the merged stylesheet is derived from the project's `usfm.sty` + `custom.sty`, so
+       * change those files rather than writing through this setter.
+       */
       setStyleInfo(
         styleInfo: StyleInfo,
       ): Promise<DataProviderUpdateInstructions<StyleInfoProjectInterfaceDataTypes>>;

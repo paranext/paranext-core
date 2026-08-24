@@ -1079,6 +1079,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [localizedStrings],
   );
 
+  // Opening the paragraph switcher's Radix popover takes focus off `.editor-input`, where Lexical's
+  // blur processing can null the selection — and `formatPara` needs one, so the retag would refuse.
+  // The `\` and Enter palettes restore it the same way before they apply.
+  const restoreEditorSelection = useCallback(() => {
+    restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
+  }, []);
+
   const paragraphSwitcherMenuItems = useMemo(
     () =>
       generateParagraphMenuListItems(
@@ -1086,8 +1093,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         localizedStrings,
         isStructureProtected,
         notifyStructureProtected,
+        restoreEditorSelection,
       ),
-    [localizedStrings, isStructureProtected, notifyStructureProtected],
+    [localizedStrings, isStructureProtected, notifyStructureProtected, restoreEditorSelection],
   );
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
@@ -1615,10 +1623,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         localizedStrings,
         isStructureProtected,
         notifyStructureProtected,
+        restoreEditorSelection,
         contextMarker,
         styleInfo,
       ),
-    [contextMarker, localizedStrings, isStructureProtected, notifyStructureProtected, styleInfo],
+    [
+      contextMarker,
+      localizedStrings,
+      isStructureProtected,
+      notifyStructureProtected,
+      restoreEditorSelection,
+      styleInfo,
+    ],
   );
 
   // When the marker menu closes, should refocus the editor

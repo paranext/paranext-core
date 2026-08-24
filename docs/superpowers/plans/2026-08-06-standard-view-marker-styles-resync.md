@@ -32,6 +32,7 @@
 **PT9 reference (verified in `~/source/repos/Paratext`):** `ScriptureBase.css` `.marker { color: (theme marker_valid = #8c8c8c light / #b5b5b5 dark); font-size: 0.7em; unicode-bidi: isolate; }` — inherits font family/weight from the enclosing style; the verse NUMBER is styled by usfm.sty (superscript 66%), separate from the `\v` tag. Upstream's `rgba(140, 140, 140, 1)` ≈ PT9's `#8c8c8c`. Note an accepted P10 divergence: P10 bakes `\v 1` into one verse token styled by `usfm_v` (no separate small-gray `\v` tag) — upstream excluded `.verse`/`.chapter` from the gray treatment on purpose.
 
 **The deterministic gap** (prettier-normalized diff of upstream `usj-nodes.css` @ `1e9a0ac4` vs the fork body):
+
 1. **Missing: the Standard-view block** (upstream 2065–2151): gray + 0.7em rules for `.opening/.closing/.selfClosing/.marker`, the `.verse` badge-drop rule, scoped `.status_unknown`/`.status_invalid`. ← the reported bug.
 2. **Missing: cross-ref caller counter** (upstream commit `42af3eda`): `@counter-style cross-ref-callers`, `counter-reset: caller crossref`, footnote-vs-crossref selector split. The TS half (NoteNodePlugin) already ships in the yalc-linked editor build, so P10 currently numbers cross-ref callers on the footnote sequence.
 3. **Superseded in fork: unscoped `.status_unknown`/`.status_invalid`** ("Style statues" block) — upstream consolidated these into the scoped versions.
@@ -54,6 +55,7 @@ Not touched: `extensions/src/platform-enhanced-resources/src/_usj-nodes.scss` (s
 **Files:** none in-repo (worktree + environment setup)
 
 **Interfaces:**
+
 - Produces: worktree pair at `~/source/repos/workspaces/standard-view-marker-styles/{paranext-core,scripture-editors}`; core branch `standard-view-marker-styles`; recorded env vars `CORE_BASE`, `SE_PIN` (written to `.plan-pins` in the workspace root for later tasks); a paranext-core checkout able to run the extension's vitest suite.
 
 - [ ] **Step 1: Record base SHAs and verify the sync-source file is clean**
@@ -106,9 +108,11 @@ Expected: PASS (3 existing tests) — proves the environment can run the suite b
 ### Task 2: RED — presence pins for the Standard-view marker rules
 
 **Files:**
+
 - Modify: `extensions/src/platform-scripture-editor/src/usj-nodes-styles.test.ts`
 
 **Interfaces:**
+
 - Consumes: the existing `scss` string constant at the top of the describe block (reads `_usj-nodes.scss`).
 - Produces: four new tests inside a nested describe `'PT9 Standard-view marker glyph styling'` that Task 3 turns green.
 
@@ -125,37 +129,37 @@ Expected: upstream shows hits (~lines 2071+); fork prints `MISSING (expected)`. 
 - [ ] **Step 2: Append the failing tests** (inside the top-level describe, after the existing `it` blocks)
 
 ```ts
-  describe('PT9 Standard-view marker glyph styling', () => {
-    // Standard view renders marker glyphs as MarkerNode spans carrying marker-syntax classes
-    // (opening/closing/selfClosing) — not `marker`, which MarkerNode dropped upstream in #359.
-    // The PT9 look (small gray) must target those classes, scoped to
-    // `.formatted-font.marker-editable` so the Unformatted view keeps full-size plain markers.
-    it('grays the editable marker glyphs', () => {
-      expect(scss).toMatch(
-        /\.formatted-font\.marker-editable \.opening,[\s\S]{0,200}?\.formatted-font\.marker-editable \.marker \{\s*color: rgba\(140, 140, 140, 1\);\s*\}/,
-      );
-    });
-
-    it('shrinks the editable marker glyphs to 0.7em, chapter tokens excluded', () => {
-      expect(scss).toMatch(
-        /\.formatted-font\.marker-editable \.opening,[\s\S]{0,200}?\.formatted-font\.marker-editable \.marker:not\(\.chapter\) \{\s*font-size: 0\.7em;\s*\}/,
-      );
-    });
-
-    it('drops the verse badge background in Standard view (PT9 has no verse badge)', () => {
-      expect(scss).toMatch(
-        /\.formatted-font\.marker-editable \.verse \{[^}]*background-color: transparent;[^}]*\}/,
-      );
-    });
-
-    it('scopes marker validation status rules to editable marker modes', () => {
-      expect(scss).toMatch(/\.marker-editable \.status_unknown/);
-      expect(scss).toMatch(/\.marker-editable \.status_invalid/);
-      // The unscoped legacy rules were superseded by the scoped ones; they must not return.
-      expect(scss).not.toMatch(/^\.status_unknown/m);
-      expect(scss).not.toMatch(/^\.status_invalid/m);
-    });
+describe('PT9 Standard-view marker glyph styling', () => {
+  // Standard view renders marker glyphs as MarkerNode spans carrying marker-syntax classes
+  // (opening/closing/selfClosing) — not `marker`, which MarkerNode dropped upstream in #359.
+  // The PT9 look (small gray) must target those classes, scoped to
+  // `.formatted-font.marker-editable` so the Unformatted view keeps full-size plain markers.
+  it('grays the editable marker glyphs', () => {
+    expect(scss).toMatch(
+      /\.formatted-font\.marker-editable \.opening,[\s\S]{0,200}?\.formatted-font\.marker-editable \.marker \{\s*color: rgba\(140, 140, 140, 1\);\s*\}/,
+    );
   });
+
+  it('shrinks the editable marker glyphs to 0.7em, chapter tokens excluded', () => {
+    expect(scss).toMatch(
+      /\.formatted-font\.marker-editable \.opening,[\s\S]{0,200}?\.formatted-font\.marker-editable \.marker:not\(\.chapter\) \{\s*font-size: 0\.7em;\s*\}/,
+    );
+  });
+
+  it('drops the verse badge background in Standard view (PT9 has no verse badge)', () => {
+    expect(scss).toMatch(
+      /\.formatted-font\.marker-editable \.verse \{[^}]*background-color: transparent;[^}]*\}/,
+    );
+  });
+
+  it('scopes marker validation status rules to editable marker modes', () => {
+    expect(scss).toMatch(/\.marker-editable \.status_unknown/);
+    expect(scss).toMatch(/\.marker-editable \.status_invalid/);
+    // The unscoped legacy rules were superseded by the scoped ones; they must not return.
+    expect(scss).not.toMatch(/^\.status_unknown/m);
+    expect(scss).not.toMatch(/^\.status_invalid/m);
+  });
+});
 ```
 
 - [ ] **Step 3: Run to verify RED**
@@ -171,9 +175,11 @@ Expected: FAIL — the four new tests red (all four assertions unmet today, incl
 ### Task 3: GREEN — port the Standard-view block into the fork
 
 **Files:**
+
 - Modify: `extensions/src/platform-scripture-editor/src/_usj-nodes.scss`
 
 **Interfaces:**
+
 - Consumes: pinned upstream text (identical content is inlined below — no need to re-extract).
 - Produces: fork containing the `.formatted-font.marker-editable` rules Task 2 pins.
 
@@ -300,23 +306,25 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 The linked editor build already runs the NoteNodePlugin that assumes this CSS (upstream `42af3eda`); without it, cross-reference callers increment the footnote letter sequence. Same drift, same file — but it is caller behavior, not marker styling, so it is separable.
 
 **Files:**
+
 - Modify: `extensions/src/platform-scripture-editor/src/usj-nodes-styles.test.ts`
 - Modify: `extensions/src/platform-scripture-editor/src/_usj-nodes.scss` (note-caller region, ~line 2174–2196 pre-Task-3 numbering)
 
 **Interfaces:**
+
 - Consumes: the same `scss` constant; the fork's existing `@counter-style note-callers` block as the edit anchor.
 
 - [ ] **Step 1: RED — append inside the top-level describe**
 
 ```ts
-  describe('note caller sequences', () => {
-    it('gives cross-references their own caller counter so they do not consume footnote letters', () => {
-      expect(scss).toMatch(/@counter-style cross-ref-callers/);
-      expect(scss).toMatch(/counter-reset: caller crossref;/);
-      expect(scss).toMatch(/\.note\.usfm_x \.immutable-note-caller\[data-caller='\+'\]/);
-      expect(scss).toMatch(/counter\(crossref, cross-ref-callers\)/);
-    });
+describe('note caller sequences', () => {
+  it('gives cross-references their own caller counter so they do not consume footnote letters', () => {
+    expect(scss).toMatch(/@counter-style cross-ref-callers/);
+    expect(scss).toMatch(/counter-reset: caller crossref;/);
+    expect(scss).toMatch(/\.note\.usfm_x \.immutable-note-caller\[data-caller='\+'\]/);
+    expect(scss).toMatch(/counter\(crossref, cross-ref-callers\)/);
   });
+});
 ```
 
 Run `npx vitest run usj-nodes-styles.test.ts` → the new test FAILS, all others pass.
@@ -414,6 +422,13 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
 
 ### Task 6: Live-app visual verification
 
+> **DONE — verified by hand, 2026-08-20 (TJ).** The Standard-view marker glyphs render as intended
+> in the running app. This was the one check the headless suite provably could not answer: no
+> stylesheet is loaded in any test in this repo, so the unit pins can only assert the rules exist in
+> the file, never that they survive SCSS compilation, WebView style inlining, and the cascade against
+> the generated project stylesheet. Task 7 (the e2e computed-style pin, which would catch a future
+> regression automatically) is still outstanding.
+
 **Files:** none (uses the app-runner + visual-verification skills)
 
 The vendored SCSS is compiled into the extension bundle, so the running app needs the extension rebuilt (the dev watcher does this) and the yalc-linked Standard-view editor build (already in the shared yalc store from the live session's dev loop — we consume it, never rebuild it).
@@ -434,8 +449,9 @@ npm run build:data
   - CDP computed-style probe inside the editor iframe:
     ```js
     const el = document.querySelector('.editor-input.marker-editable span.opening[data-marker]');
-    const cs = getComputedStyle(el); const ps = getComputedStyle(el.parentElement);
-    ({ color: cs.color, ratio: parseFloat(cs.fontSize) / parseFloat(ps.fontSize) })
+    const cs = getComputedStyle(el);
+    const ps = getComputedStyle(el.parentElement);
+    ({ color: cs.color, ratio: parseFloat(cs.fontSize) / parseFloat(ps.fontSize) });
     ```
     Expected: `color: "rgb(140, 140, 140)"`, `ratio` ≈ 0.7 (±0.01).
   - If stale styles appear: the WebView inlines extension styles at construction — close and reopen the editor tab (or restart via refresh.sh) after the extension watcher rebuilds.
@@ -445,9 +461,11 @@ npm run build:data
 ### Task 7: E2E regression pin (computed style in a real browser)
 
 **Files:**
+
 - Create: `e2e-tests/tests/isolated/scripture-editor/standard-marker-glyph-styling.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `../../../fixtures/isolated.fixture` and `../../../fixtures/scripture-editor-helpers` exactly as `standard-default-power-mode.spec.ts` does (`makeSampleProjectEditable`, `navigateToolbarBcv`, `openEditableScriptureEditorForProject`, `SAMPLE_WEB_PROJECT_ID`, `waitForHomeTab`).
 
 - [ ] **Step 1: Write the spec** (ONE test per file — the isolated fixture's documented second-Electron-instance failure mode):
@@ -456,17 +474,17 @@ npm run build:data
 /**
  * Standard-view marker glyph styling e2e: inline marker glyphs (MarkerNode spans) render with the
  * PT9 look — small (0.7em of their context) and gray — via the vendored `_usj-nodes.scss` rules
- * scoped to `.formatted-font.marker-editable`. Guards the vendored stylesheet against drifting
- * away from the editor library again (the drift this pin was written for shipped full-size,
- * normal-color markers).
+ * scoped to `.formatted-font.marker-editable`. Guards the vendored stylesheet against drifting away
+ * from the editor library again (the drift this pin was written for shipped full-size, normal-color
+ * markers).
  *
- * Asserts COMPUTED style in the real renderer because the unit-level pins can only assert the
- * rules exist in the file, not that they survive SCSS compilation, webview style inlining, and
- * the cascade against the generated project stylesheet.
+ * Asserts COMPUTED style in the real renderer because the unit-level pins can only assert the rules
+ * exist in the file, not that they survive SCSS compilation, webview style inlining, and the
+ * cascade against the generated project stylesheet.
  *
  * ONE test() per spec file on purpose: the isolated fixture is test-scoped, and a SECOND Electron
- * instance against the shared webpack dev server has a documented failure mode where new dock
- * tabs never render (see isolated.fixture.ts).
+ * instance against the shared webpack dev server has a documented failure mode where new dock tabs
+ * never render (see isolated.fixture.ts).
  *
  * Runs against an isolated project root: `npm run test:e2e:isolated scripture-editor`.
  */

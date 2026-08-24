@@ -2447,8 +2447,35 @@ describe('generateParagraphMenuListItems', () => {
     expect(formatPara).toHaveBeenCalledWith(item.marker);
     expect(notify).not.toHaveBeenCalled();
   });
-});
 
+  it('restores the caret before formatting, so a pick made after the menu took focus still lands', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, false, vi.fn(), restoreSelection);
+
+    const item = items[0];
+    item.action?.();
+
+    expect(restoreSelection).toHaveBeenCalledTimes(1);
+    expect(formatPara).toHaveBeenCalledWith(item.marker);
+    // Order is the whole point: opening the menu can leave the editor with no selection, and
+    // `formatPara` has nothing to retag then — restoring after the apply would be too late.
+    expect(restoreSelection.mock.invocationCallOrder[0]).toBeLessThan(
+      formatPara.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('when protected: does not restore the caret either (nothing is applied)', () => {
+    const { ref, formatPara } = makeMockEditorRef();
+    const restoreSelection = vi.fn();
+    const items = generateParagraphMenuListItems(ref, {}, true, vi.fn(), restoreSelection);
+
+    items[0].action?.();
+
+    expect(restoreSelection).not.toHaveBeenCalled();
+    expect(formatPara).not.toHaveBeenCalled();
+  });
+});
 
 describe('isChapterBlank', () => {
   const emptyUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };

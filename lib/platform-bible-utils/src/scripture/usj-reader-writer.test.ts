@@ -11,6 +11,7 @@ import {
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import fs from 'fs';
 import path from 'path';
+import { vi } from 'vitest';
 import { usjMat1 } from './footnote-util-test.usj.data';
 import { USFM_MARKERS_MAP_PARATEXT as USFM_MARKERS_MAP_PARATEXT_3_0 } from './markers-maps/markers-map-3.0.model';
 import { USFM_MARKERS_MAP as USFM_MARKERS_MAP_3_1 } from './markers-maps/markers-map-3.1.model';
@@ -1972,6 +1973,58 @@ describe('toUsfm transforms USJ 3.0 to Paratext USFM 3.0', () => {
     expect(resultingUsfm).toBe('\\p \\f + \\fr 1:1 \\ft a \\fp b \\fp c\\f*\n');
     // The only newline is the paragraph terminator — nothing inside the note.
     expect(resultingUsfm.slice(0, -1)).not.toContain('\n');
+  });
+
+  // Pins the invariant behind the `\ca`-after-a-chapter-marker special case in
+  // `addMarkerUsfmToString`: the two-character "is the last marker `\c `?" probe and the backslash
+  // index it is taken from MUST be read from the SAME string. That string is the running
+  // `usfmOutput`, never the untouched `usfm` parameter, because branches earlier in the same call
+  // can shorten `usfmOutput` (both by calling `removeEndSpace` on it — the "closing marker is
+  // supposed to be empty" branch and the "marker output starts with a newline" branch). Once one
+  // of them fires the two strings are off by one character, and a probe sliced from `usfm` at an
+  // index computed against `usfmOutput` reads shifted bytes, so the `\c 1\n \ca ...` Standard
+  // View spelling gets emitted (or skipped) for the wrong reason.
+  //
+  // The document below is deliberately odd, because that is the only shape where reading the wrong
+  // string is observable. `removeEndSpace` drops the LAST character, so the mistake only changes
+  // the answer when the probe window straddles the dropped space — i.e. when the trimmed output
+  // ends in exactly `\c`. That takes both of these at once:
+  //   1. a chapter marker with no number, so the output so far is `\c ` rather than `\c 1 `; and
+  //   2. a `ca` marker whose USJ `type` disagrees with the markers map (which types `ca` as
+  //      `char`), sending the writer down its documented "mismatching marker type ... using the
+  //      type from the USJ content" fallback. `chapter` carries `hasNewlineBefore`, so `\ca`'s
+  //      output starts with a newline and the newline branch eats the trailing space first.
+  // Reading the probe from `usfm` then sees `'c '` where `usfmOutput` holds only `'c'`, and the
+  // writer inserts a spurious `\n ` (a line containing a lone space) before the `\ca`.
+  test('reads the last-marker probe from the same string as the index it uses, even after an earlier branch trims the output', () => {
+    const usjWithNumberlessChapterThenMistypedCa: Usj = {
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [
+        { type: 'chapter', marker: 'c' },
+        // Intentionally mistyped: the markers map types `ca` as `char`. See the comment above.
+        { type: 'chapter', marker: 'ca', content: ['2'] },
+      ],
+    };
+    // The mismatching type is the point of the fixture, so the writer's warning about it is
+    // expected. Silence it to keep the test output readable.
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    let resultingUsfm: string;
+    try {
+      const usjDoc = new UsjReaderWriter(
+        usjWithNumberlessChapterThenMistypedCa,
+        usjReaderWriterOptionsParatext3_0,
+      );
+      resultingUsfm = usjDoc.toUsfm();
+    } finally {
+      consoleWarnSpy.mockRestore();
+    }
+
+    expect(resultingUsfm).toBe('\\c\n\\ca 2\n');
+    // The failure this pins looks like `\c\n \n\ca 2\n`: a line holding nothing but a space,
+    // inserted because the probe answered about the wrong bytes.
+    expect(resultingUsfm).not.toContain('\n \n');
   });
 });
 
