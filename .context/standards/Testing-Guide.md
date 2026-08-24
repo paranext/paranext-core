@@ -841,6 +841,7 @@ describe('sharedStoreService', () => {
     // unavoidable: `PlatformEventEmitter` has private fields, so no object literal is assignable
     // to it and the mock will not typecheck without it.
     vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockReturnValue(
+      // Needed for testing
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       {
         emitter: mockEmitter,
