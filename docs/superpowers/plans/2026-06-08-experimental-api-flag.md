@@ -56,8 +56,10 @@
 - `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — 4 emitters (init refactor)
 - `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — 1 emitter (init refactor)
 - `extensions/src/hello-rock3/src/main.ts:462` — 1 emitter
-- `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234` — 3 emitters
-- 4 test files: `src/shared/services/shared-store.service.test.ts`, `src/renderer/app.component.test.tsx`, `src/renderer/hooks/use-project-picker-data.hook.test.ts`
+- `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234` — 3 emitters  
+  _Stale as of 2026-08-25: **four** emitters now. Three already use `createNetworkEventEmitterAsync`; `selectionChangedEventEmitter` is still on the deprecated sync `createNetworkEventEmitter`. **That one site is the only un-migrated emitter left in this inventory** — do not read the count mismatch as "already done"._
+- 4 test files: `src/shared/services/shared-store.service.test.ts`, `src/renderer/app.component.test.tsx`, `src/renderer/hooks/use-project-picker-data.hook.test.ts`  
+  _Stale as of 2026-08-25: says four files but lists three, and `app.component.test.tsx` no longer references `createNetworkEventEmitter` at all._
 
 **Phase 5 — Docs**
 
@@ -1324,6 +1326,14 @@ declare module 'papi-shared-types' {
 
 (Confirm the second extension-service event name by reading the file.)
 
+> **This block no longer compiles as written (noted 2026-08-25).** `NetworkEventTypes` is now
+> `type NetworkEventTypes = keyof NetworkEvents`, so it cannot be augmented as an interface — the
+> augmentable declarations are `NetworkEvents` and `MultiSourceNetworkEvents`. Both scroll-group
+> events are also already declared, under different names than this block uses:
+> `scrollGroup:onDidUpdateScrRef` and `scrollGroup:onDidChangeReferenceHistory`, the second of which
+> this step never mentions. The "other extension-service event" placeholder is the same phantom the
+> Step 3 note describes.
+
 - [ ] **Step 2: Migrate `extension.service.ts:1566`**
 
 ```typescript
@@ -1331,6 +1341,10 @@ reloadFinishedEventEmitter = await createNetworkEventEmitterAsync('platform.onDi
 ```
 
 (Replace `createNetworkEventEmitter` import with `createNetworkEventEmitterAsync` import.)
+
+> **Already applied (noted 2026-08-25).** This exact line is in `extension.service.ts`, and the file
+> imports `createNetworkEventEmitterAsync`. The box is left unticked because recording the step as
+> done is the plan owner's call.
 
 - [ ] **Step 3: Migrate the second `extension.service.ts` emitter**
 

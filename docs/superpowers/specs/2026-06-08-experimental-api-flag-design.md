@@ -390,7 +390,8 @@ Single-source emitters. Names are added to the augmentable `NetworkEvents` inter
 
 - All 4 test files: `src/shared/services/shared-store.service.test.ts`, `src/renderer/app.component.test.tsx`, `src/renderer/hooks/use-project-picker-data.hook.test.ts`
 - `extensions/src/hello-rock3/src/main.ts:462`
-- `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234`
+- `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234`  
+  _Stale as of 2026-08-25: four emitters now; one (`selectionChangedEventEmitter`) is still on the deprecated sync call._
 - `src/extension-host/services/extension.service.ts` (2 occurrences)  
   _Stale as of 2026-08-25: one emitter now, already using `createNetworkEventEmitterAsync`._
 - `src/main/services/scroll-group.service-host.ts` (1 emitter + 1 import line)  
