@@ -1284,8 +1284,10 @@ export function BookChapterControl({
           )}
 
           {/* Outside CommandList on purpose: inside it, cmdk would register this as an option —
-              arrow-navigable and matched by typing — instead of a control. */}
-          {viewMode === 'books' && booksOutsideProject.size > 0 && (
+              arrow-navigable and matched by typing — instead of a control. Hidden while a search is
+              active because searching already spans every reachable book, so the control would sit
+              there doing nothing. */}
+          {viewMode === 'books' && !inputValue.trim() && booksOutsideProject.size > 0 && (
             <div className="tw:border-t tw:p-1">
               <Button
                 variant="ghost"
