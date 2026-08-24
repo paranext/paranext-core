@@ -10,7 +10,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui/utils';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { IconSelector } from '@tabler/icons-react';
 import { formatScrRef, getSectionForBook, Section } from 'platform-bible-utils';
@@ -38,6 +38,7 @@ import { useQuickNavButtons } from './book-chapter-control.navigation';
 import { BookChapterControlProps, ViewMode } from './book-chapter-control.types';
 import {
   calculateTopMatch,
+  deriveBookChapterControlBookLists,
   fetchEndChapter,
   getKeyCharacterType,
   hasChapterVerseSeparator,
@@ -155,63 +156,15 @@ export function BookChapterControl({
     [getActiveBookIds, getAdditionalBookIds],
   );
 
-  const activeBookIdSet = useMemo(() => new Set(activeBookIds), [activeBookIds]);
-
-  // The ids the caller offered that the project lacks. Kept separate from the dimmed set below
-  // because the union needs it, and the dimmed set is derived FROM the union.
-  const extraBookIds = useMemo(
-    () => additionalBookIds.filter((bookId) => !activeBookIdSet.has(bookId)),
-    [additionalBookIds, activeBookIdSet],
-  );
-
-  // Everything reachable: project books, the extras, and the current book — the last so a reference
-  // in neither the project nor any open resource is still visible rather than silently absent.
-  // Canon-ordered so an extra book lands among its neighbours instead of after the project's books.
-  const unionBookIds = useMemo(() => {
-    if (extraBookIds.length === 0 && activeBookIdSet.has(scrRef.book)) return activeBookIds;
-    const reachable = new Set([...activeBookIds, ...extraBookIds, scrRef.book]);
-    return ALL_BOOK_IDS.filter((bookId) => reachable.has(bookId));
-  }, [activeBookIds, activeBookIdSet, extraBookIds, scrRef.book]);
-
-  // Anything reachable but outside the project is greyed — the current reference's book included,
-  // so it is never shown as though the project had it.
-  const dimmedBookIdSet = useMemo(
-    () => new Set(unionBookIds.filter((bookId) => !activeBookIdSet.has(bookId))),
-    [unionBookIds, activeBookIdSet],
-  );
-
-  const groupBooksBySection = useCallback((bookIds: string[]): Record<Section, string[]> => {
-    return {
-      [Section.OT]: bookIds.filter((bookId) => Canon.isBookOT(bookId)),
-      [Section.NT]: bookIds.filter((bookId) => Canon.isBookNT(bookId)),
-      [Section.DC]: bookIds.filter((bookId) => Canon.isBookDC(bookId)),
-      [Section.Extra]: bookIds.filter((bookId) => Canon.extraBooks().includes(bookId)),
-    };
-  }, []);
-
-  const availableBooksByType = useMemo(
-    () => groupBooksBySection(activeBookIds),
-    [groupBooksBySection, activeBookIds],
-  );
-
-  // Searching always spans the union: the expansion control governs browsing only, so typing a
-  // resource-only book's name finds it without the user having to discover that control first.
-  const searchableBooksByType = useMemo(
-    () => groupBooksBySection(unionBookIds),
-    [groupBooksBySection, unionBookIds],
-  );
-
-  // calculateTopMatch and the quick-nav buttons search this, so typed references and book-boundary
-  // navigation reach the union too. Flattened from the grouped form so it stays limited to the four
-  // canon sections, leaving out peripheral ids (front matter, glossary, indexes) that no section
-  // claims.
-  const availableBooks = useMemo(() => {
-    return Object.values(searchableBooksByType).flat();
-  }, [searchableBooksByType]);
+  const { projectBooksBySection, reachableBooksBySection, reachableBooks, booksOutsideProject } =
+    useMemo(
+      () => deriveBookChapterControlBookLists(activeBookIds, additionalBookIds, scrRef.book),
+      [activeBookIds, additionalBookIds, scrRef.book],
+    );
 
   // Filter books based on search input
   const filteredBooksByType = useMemo(() => {
-    if (!inputValue.trim()) return availableBooksByType;
+    if (!inputValue.trim()) return projectBooksBySection;
 
     const filteredBooks: Record<Section, string[]> = {
       [Section.OT]: [],
@@ -222,18 +175,18 @@ export function BookChapterControl({
 
     const bookTypes: Section[] = [Section.OT, Section.NT, Section.DC, Section.Extra];
     bookTypes.forEach((type) => {
-      filteredBooks[type] = searchableBooksByType[type].filter((bookId) => {
+      filteredBooks[type] = reachableBooksBySection[type].filter((bookId) => {
         return doesBookMatchQuery(bookId, inputValue, localizedBookNames);
       });
     });
 
     return filteredBooks;
-  }, [availableBooksByType, searchableBooksByType, inputValue, localizedBookNames]);
+  }, [projectBooksBySection, reachableBooksBySection, inputValue, localizedBookNames]);
 
   // Get the current top match
   const topMatch = useMemo(
-    () => calculateTopMatch(inputValue, availableBooks, localizedBookNames),
-    [inputValue, availableBooks, localizedBookNames],
+    () => calculateTopMatch(inputValue, reachableBooks, localizedBookNames),
+    [inputValue, reachableBooks, localizedBookNames],
   );
 
   // Surface open/close transitions to the parent. Fires only on the true boolean flip, not on
@@ -361,7 +314,7 @@ export function BookChapterControl({
   // #region Navigation and view changes
 
   // Hook that provides navigation buttons for quick chapter/verse navigation
-  const quickNavButtons = useQuickNavButtons(scrRef, availableBooks, direction, handleSubmit);
+  const quickNavButtons = useQuickNavButtons(scrRef, reachableBooks, direction, handleSubmit);
 
   const handleBackToBooks = useCallback(() => {
     setViewMode('books');
@@ -1152,7 +1105,7 @@ export function BookChapterControl({
                               localizedBookNames={localizedBookNames}
                               disabled={isBookDisabled(bookId)}
                               dimmedReason={
-                                dimmedBookIdSet.has(bookId) ? bookNotInProjectLabel : undefined
+                                booksOutsideProject.has(bookId) ? bookNotInProjectLabel : undefined
                               }
                             />
                           ))}
