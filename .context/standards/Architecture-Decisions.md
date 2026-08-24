@@ -265,7 +265,7 @@ step, no automation. Just a record.
   `network-object.service.ts`; see ADR-0009). A window-scoped service therefore has to tolerate its
   own registrations outliving its window for a moment, and consumers have to tolerate resolving one
   that is already gone. The scoped ids remain the registration name (`object:{id}.{method}` derives
-  from them) but are no longer how anything FINDS a window's implementation — see ADR-0013.
+  from them) but are no longer how anything FINDS a window's implementation — see ADR-0019.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
 ## ADR-0008: Generic-name service routers in main forward to the focused/owning window's scoped service
@@ -1278,7 +1278,7 @@ step, no automation. Just a record.
   answer would have wiped that selection permanently — `useProjectSetting` reports an error as
   loaded, so the error branch has to be recognized on its own.
 - **Source:** PT-3299, review of #2708.
-## ADR-0013: Service routers discover shards by network-object type, not by rebuilding the scoped name
+## ADR-0026: Service routers discover shards by network-object type, not by rebuilding the scoped name
 
 - **Date:** 2026-08-06
 - **Status:** Accepted
