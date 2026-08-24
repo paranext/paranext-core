@@ -32,6 +32,19 @@ type BookItemProps = {
   commandValue?: string;
   /** When true, renders the item as disabled: suppresses onSelect and dims the visuals. */
   disabled?: boolean;
+  /**
+   * When true, renders the item greyed but fully selectable — the state for an item that is
+   * reachable yet outside the current context (e.g. a book present in an open resource but not in
+   * the active project). Distinct from `disabled`, which also suppresses selection; `disabled`
+   * takes precedence when both are set.
+   */
+  dimmed?: boolean;
+  /**
+   * Localized text appended to the item's accessible name while `dimmed` is true, explaining why it
+   * is greyed (e.g. "not in this project"). Required for the dimmed state to mean anything to a
+   * screen reader, since grey is a colour-only signal.
+   */
+  dimmedAriaLabelSuffix?: string;
 };
 
 /**
@@ -55,6 +68,8 @@ export function BookItem({
   localizedBookNames,
   commandValue,
   disabled = false,
+  dimmed = false,
+  dimmedAriaLabelSuffix,
 }: BookItemProps) {
   const isMouseClick = useRef(false);
 
@@ -114,9 +129,19 @@ export function BookItem({
         role="option"
         aria-selected={isSelected}
         aria-disabled={disabled || undefined}
-        aria-label={`${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`}
+        aria-label={
+          dimmed && !disabled && dimmedAriaLabelSuffix
+            ? `${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()}), ${dimmedAriaLabelSuffix}`
+            : `${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`
+        }
         disabled={disabled}
-        className={cn(className, disabled && 'tw:cursor-not-allowed tw:opacity-50')}
+        className={cn(
+          className,
+          disabled && 'tw:cursor-not-allowed tw:opacity-50',
+          // Mirrors NumberedItemGrid's dimmed-vs-disabled split: dimmed is presentation only, so it
+          // never sets aria-disabled or blocks onSelect, and it yields to disabled.
+          dimmed && !disabled && 'tw:bg-muted/50 tw:text-muted-foreground/50',
+        )}
       >
         {showCheck && (
           <Check
