@@ -65,7 +65,7 @@ import {
   prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
-  shouldClearResultsForEmptyTerm,
+  shouldClearResultsForInvalidQuery,
 } from './find/find.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
@@ -1442,18 +1442,27 @@ global.webViewComponent = function FindWebView({
 
   // The debounced auto-search, plus the one way to call it off. See the hook's docs for why
   // deduplication has to cancel the queued search rather than flag the next one to stand down.
-  const { requestAutoSearch: requestDebouncedAutoSearch, cancelPendingAutoSearch } =
-    useAutoSearchDebounce(() => handleStartSearchRef.current(), SEARCH_DEBOUNCE_DELAY_MS);
+  const { requestAutoSearch, cancelPendingAutoSearch } = useAutoSearchDebounce(
+    () => handleStartSearchRef.current(),
+    SEARCH_DEBOUNCE_DELAY_MS,
+  );
 
   // Every search that does NOT come from the debounce goes through here, so a search already queued
   // for the same input is dropped instead of re-running the same search a moment later.
   const startSearchNow = useCallback(
     (isExplicitSearch = false) => {
+      // TODO(PT-4418): This cancels the debounce timer, but not an auto-search that
+      // `useRunWhenVisible` absorbed into its pending catch-up while the tab was hidden. Such a
+      // search still re-runs on activation. Needs a cancel on `useRunWhenVisible`.
       cancelPendingAutoSearch();
-      handleStartSearchRef.current(isExplicitSearch);
+      return handleStartSearchRef.current(isExplicitSearch);
     },
     [cancelPendingAutoSearch],
   );
+  // Ref so effects and async callbacks can call startSearchNow without listing it as a dep
+  // (same pattern as handleStartSearchRef above).
+  const startSearchNowRef = useRef(startSearchNow);
+  startSearchNowRef.current = startSearchNow;
 
   // Both no-user-input search triggers (project-switch rerun, restore-time fallback) live in this
   // hook so they can be tested across renders — see `use-find-search-triggers.hook.ts` for why that
@@ -1480,7 +1489,7 @@ global.webViewComponent = function FindWebView({
   // into one catch-up that runs when the tab is activated, so the tab still opens showing results for
   // where the user actually is.
   const isViewVisible = useViewVisibility();
-  const requestAutoSearch = useRunWhenVisible(isViewVisible, requestDebouncedAutoSearch);
+  const requestAutoSearchWhenVisible = useRunWhenVisible(isViewVisible, requestAutoSearch);
 
   // The refs need to start out with null for them to work as element refs
   // eslint-disable-next-line no-null/no-null
@@ -1508,7 +1517,7 @@ global.webViewComponent = function FindWebView({
       if (searchTerm.trim() === '') return undefined;
       initialSearchTriggeredRef.current = true;
     }
-    requestAutoSearch();
+    requestAutoSearchWhenVisible();
   }, [
     searchTerm,
     shouldMatchCase,
@@ -1516,7 +1525,7 @@ global.webViewComponent = function FindWebView({
     isRegexAllowed,
     searchTextType,
     relevantScopeKey,
-    requestAutoSearch,
+    requestAutoSearchWhenVisible,
   ]);
 
   // Readiness retry: if handleStartSearch bailed because findPdp wasn't available (mount-time race,
@@ -1531,23 +1540,35 @@ global.webViewComponent = function FindWebView({
     startSearchNow();
   }, [findPdp, clearPendingSearchTimeout, startSearchNow]);
 
-  // Emptying the search box clears the results area. This cannot ride on the auto-search path: an
-  // empty term is an invalid query, so the search it would start is gated off and the previous
-  // search's results would stay on screen with nothing in the box. Covers every route to an empty
-  // box — the clear button, select-all + delete, backspacing the last character.
+  // Making the query invalid clears the results area. This cannot ride on the auto-search path: the
+  // search an invalid query would start is gated off, so the previous search's results would stay
+  // on screen under a query that can no longer produce them. Covers every route to an invalid
+  // query — the clear button, select-all + delete, backspacing the last character, and deselecting
+  // the last book in the selectedBooks scope.
+  // One clear per trip into an invalid query. `handleStopSearch` sets status synchronously but
+  // abandons the job asynchronously, so a poll iteration already in flight can land afterward and
+  // set the status back to 'running', re-satisfying the predicate and clearing a second time.
+  // Re-armed by the query becoming valid again, which is derived from state on every render rather
+  // than set by an event, so it cannot stay armed against a later invalid query that does need
+  // clearing.
+  const hasClearedForInvalidQueryRef = useRef(false);
   useEffect(() => {
     if (
-      !shouldClearResultsForEmptyTerm({
-        searchTerm,
+      !shouldClearResultsForInvalidQuery({
+        isSearchQueryValid,
         hasResults: results.length > 0,
         searchStatus,
       })
-    )
+    ) {
+      if (isSearchQueryValid) hasClearedForInvalidQueryRef.current = false;
       return;
+    }
+    if (hasClearedForInvalidQueryRef.current) return;
+    hasClearedForInvalidQueryRef.current = true;
     handleStopSearchRef.current(true).catch((error) => {
-      logger.warn(`Find: failed to clear results for an empty term: ${getErrorMessage(error)}`);
+      logger.warn(`Find: failed to clear results for an invalid query: ${getErrorMessage(error)}`);
     });
-  }, [searchTerm, results.length, searchStatus]);
+  }, [isSearchQueryValid, results.length, searchStatus]);
 
   // Reset isPostReplaceSearch once the search finishes so a subsequent search in replace mode
   // (e.g. triggered by an external change) is not mistakenly treated as a post-replace search.
@@ -1566,7 +1587,7 @@ global.webViewComponent = function FindWebView({
 
     // External change detected — update baseline and re-run find to refresh positions
     scriptureDataBaselineRef.current = scriptureDataForChangeDetection;
-    handleStartSearchRef.current();
+    startSearchNowRef.current();
   }, [scriptureDataForChangeDetection, activeMode, isReplacing, searchStatus, monitoredScope]);
 
   // #endregion
@@ -1817,7 +1838,7 @@ global.webViewComponent = function FindWebView({
         // state so the existing results are still valid, and re-searching would cause a flicker.
         if (!(isCancelled && revertSucceeded)) {
           isPostReplaceSearchRef.current = true;
-          await handleStartSearchRef.current();
+          await startSearchNowRef.current();
         }
       } catch (error) {
         if (getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) {
@@ -2012,7 +2033,7 @@ global.webViewComponent = function FindWebView({
       // state so the existing results are still valid, and re-searching would cause a flicker.
       if (!(isCancelled && revertSucceeded)) {
         isPostReplaceSearchRef.current = true;
-        await handleStartSearchRef.current();
+        await startSearchNowRef.current();
       }
     } catch (error) {
       if (getErrorMessage(error).includes(STRUCTURE_PROTECTED_ERROR)) {
@@ -2065,6 +2086,7 @@ global.webViewComponent = function FindWebView({
   return (
     <Find
       searchInputRef={searchInputRef}
+      onFocusSearchInput={focusSearchInput}
       localizedStrings={localizedStrings}
       scopeSelectorLocalizedStrings={scopeSelectorLocalizedStrings}
       searchResultLocalizedStrings={searchResultLocalizedStrings}

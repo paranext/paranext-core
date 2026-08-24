@@ -627,3 +627,59 @@ describe('Find — permission-blocked Replace (per-result button)', () => {
 });
 
 // #endregion
+
+describe('Find — clear search button', () => {
+  it('empties the search term when clicked', async () => {
+    const user = setupUser();
+    const onSearchTermChange = vi.fn();
+    render(<Find {...buildLifecycleProps({ searchTerm: 'God', onSearchTermChange })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(onSearchTermChange).toHaveBeenCalledWith('');
+  });
+
+  // Emptying the term is the whole contract: the container's empty-term effect is what clears the
+  // results and abandons a running job. If this button stopped the search itself, the mouse route
+  // would clear results by a path the keyboard routes (select-all + delete, backspacing) do not
+  // have, which is the split this button's behavior was collapsed to avoid.
+  it('leaves stopping the search to the container rather than calling onStopSearch itself', async () => {
+    const user = setupUser();
+    const onStopSearch = vi.fn();
+    render(<Find {...buildLifecycleProps({ searchTerm: 'God', onStopSearch })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(onStopSearch).not.toHaveBeenCalled();
+  });
+
+  // The button only renders while there is a term to clear, so emptying the term unmounts the
+  // element the user just activated. Without an explicit focus return, focus falls to the document
+  // body and a keyboard user is left with nothing focused and no way back to the box but the mouse.
+  it('hands focus back to the search box, which clearing unmounts this button from', async () => {
+    const user = setupUser();
+    const onFocusSearchInput = vi.fn();
+    render(<Find {...buildLifecycleProps({ searchTerm: 'God', onFocusSearchInput })} />);
+
+    await user.click(screen.getByRole('button', { name: 'Clear search' }));
+
+    expect(onFocusSearchInput).toHaveBeenCalled();
+  });
+
+  // Falsifies the tests above: the same query finds nothing when the box is already empty, so
+  // they are detecting a real button rather than a name that never matches.
+  it('renders no clear button when the box is already empty', () => {
+    render(<Find {...buildLifecycleProps({ searchTerm: '' })} />);
+
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+  });
+
+  // A whitespace-only term is an invalid query, so the results area has already cleared back to the
+  // idle prompt. Offering a clear button next to it would name a term the panel treats as absent.
+  it('renders no clear button for a whitespace-only term, matching the cleared results area', () => {
+    render(<Find {...buildLifecycleProps({ searchTerm: '   ' })} />);
+
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
+    expect(screen.getByText('Enter search text to find results')).toBeInTheDocument();
+  });
+});

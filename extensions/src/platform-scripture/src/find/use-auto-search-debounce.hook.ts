@@ -20,11 +20,11 @@ export type AutoSearchDebounce = {
 /**
  * Owns the debounced auto-search and the one way to call it off.
  *
- * Deduplication has to be expressed as cancelling the queued search rather than as a flag telling
- * the next one to stand down: a flag can only be cleared by a search that actually arrives, so any
- * search starting with nothing queued leaves it armed to swallow a later, wanted search. Cancelling
- * can only affect a timer that is currently pending, which is exactly the redundant search and
- * nothing else.
+ * Deduplication must be expressed as cancelling the queued search, never as a flag telling the next
+ * search to stand down. Cancelling is scoped to what is pending at the instant it is called, so it
+ * can only ever suppress the genuinely redundant search. A flag is a message that travels forward
+ * in time until something consumes it: a search that starts with nothing queued leaves it armed,
+ * and the next search to arrive — one the user asked for — is the one that stands down.
  *
  * @param startSearch Starts a search. Always invoked at its latest identity, so callers need not
  *   memoize it.

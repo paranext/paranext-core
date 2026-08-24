@@ -220,6 +220,13 @@ export type FindProps = {
    * editor hands `MarkerMenu` its `searchRef`.
    */
   searchInputRef?: React.Ref<HTMLInputElement>;
+  /**
+   * Puts the caret back in the search box. Called after the clear button empties the term, because
+   * that button only renders while there is a term to clear: emptying it unmounts the element the
+   * user just activated, which would otherwise drop focus to the document body and strand a
+   * keyboard user with nothing focused.
+   */
+  onFocusSearchInput?: () => void;
   /** The current search term. */
   searchTerm: string;
   /** Recent search terms shown in the recent-searches dropdown. */
@@ -390,6 +397,7 @@ export function Find({
   onSelectProject,
   onOpenProjectInGroup,
   searchInputRef,
+  onFocusSearchInput,
   searchTerm,
   recentSearches,
   scope,
@@ -582,6 +590,11 @@ export function Find({
   // Storybook harness's copy and let impossible prop combinations exist in tests. Find already
   // receives every input the rule needs.
   const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+
+  // Keyed off the trimmed term so the clear button and the results area agree: a whitespace-only
+  // term is an invalid query, so the results are already cleared and the prompt asks for search
+  // text — offering a clear button beside that would name a term the panel is treating as absent.
+  const hasClearableTerm = searchTerm.trim() !== '';
 
   // Single source of truth for which (if any) results-area placeholder shows, so the four states
   // are mutually exclusive by construction instead of by four separately-maintained boolean
@@ -832,9 +845,9 @@ export function Find({
                 }
               }}
               placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-              className={`tw:w-full tw:min-w-16 tw:text-ellipsis tw:!pl-8 scripture-font ${searchTerm ? 'tw:!pe-8' : 'tw:!pr-4'}`}
+              className={`tw:w-full tw:min-w-16 tw:text-ellipsis tw:!pl-8 scripture-font ${hasClearableTerm ? 'tw:!pe-8' : 'tw:!pr-4'}`}
             />
-            {searchTerm && (
+            {hasClearableTerm && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -843,8 +856,12 @@ export function Find({
                       aria-label={localizedStrings['%webView_find_clearSearch%']}
                       // Emptying the term is itself what clears the results and abandons a running
                       // job, so every route to an empty box behaves the same — see the container's
-                      // empty-term effect.
-                      onClick={() => onSearchTermChange('')}
+                      // invalid-query effect. Focus is handed back to the search box because
+                      // emptying the term unmounts this button.
+                      onClick={() => {
+                        onSearchTermChange('');
+                        onFocusSearchInput?.();
+                      }}
                       className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground tw:hover:text-foreground tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer"
                     >
                       <X className="tw:h-4 tw:w-4" />

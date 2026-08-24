@@ -217,25 +217,27 @@ export function gateStartSearch(params: {
 }
 
 /**
- * Whether emptying the search box should clear the results area. Emptying the box is a request to
- * stop searching, but it is not a search the {@link gateStartSearch} path can express: an empty term
- * is an invalid query, so the auto-search it triggers is gated off and the previous search's
- * results would otherwise stay on screen with nothing in the box.
+ * Whether the query becoming invalid should clear the results area. Making the query invalid is a
+ * request to stop searching, but it is not a search the {@link gateStartSearch} path can express:
+ * the auto-search it triggers is gated off, so the previous search's results would otherwise stay
+ * on screen under a query that can no longer produce them. Covers every route to an invalid query —
+ * emptying the box (clear button, select-all + delete, backspacing) and deselecting the last book
+ * in the `selectedBooks` scope alike.
  *
  * Requires something to actually clear so mounting with an empty box (the common first-open case)
  * does not abandon a job that was never started.
  *
- * @param params.searchTerm The current search term; whitespace-only counts as emptied.
+ * @param params.isSearchQueryValid Whether the current query can run — see {@link isFindQueryValid}.
  * @param params.hasResults Whether any results are currently displayed.
  * @param params.searchStatus The current find-job status, or `undefined` when no search has run.
  * @returns `true` when the caller should clear results and abandon any running job.
  */
-export function shouldClearResultsForEmptyTerm(params: {
-  searchTerm: string;
+export function shouldClearResultsForInvalidQuery(params: {
+  isSearchQueryValid: boolean;
   hasResults: boolean;
   searchStatus: FindJobStatus | undefined;
 }): boolean {
-  if (params.searchTerm.trim() !== '') return false;
+  if (params.isSearchQueryValid) return false;
   return params.hasResults || params.searchStatus !== undefined;
 }
 

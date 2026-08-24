@@ -18,7 +18,7 @@ import {
   prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
-  shouldClearResultsForEmptyTerm,
+  shouldClearResultsForInvalidQuery,
 } from './find.utils';
 
 /** Default character categorizer matching the project-settings defaults used in production */
@@ -539,58 +539,79 @@ describe('gateStartSearch', () => {
   });
 });
 
-describe('shouldClearResultsForEmptyTerm', () => {
+describe('shouldClearResultsForInvalidQuery', () => {
   // THE REGRESSION THIS EXISTS FOR. Emptying the box with the keyboard (select-all + delete, or
   // backspacing) only changes the term: the auto-search that follows is gated off as an invalid
   // query, so the previous search's results stayed on screen with nothing in the box.
-  it('clears when the term is emptied while results are still showing', () => {
+  it('clears when the query goes invalid while results are still showing', () => {
     expect(
-      shouldClearResultsForEmptyTerm({
-        searchTerm: '',
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: false,
         hasResults: true,
-        searchStatus: 'finished',
+        searchStatus: 'completed',
       }),
     ).toBe(true);
   });
 
-  it('clears a search still in flight when the term is emptied', () => {
+  it('clears a search still in flight when the query goes invalid', () => {
     expect(
-      shouldClearResultsForEmptyTerm({
-        searchTerm: '',
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: false,
         hasResults: false,
         searchStatus: 'running',
       }),
     ).toBe(true);
   });
 
-  it('treats a term of only whitespace as emptied', () => {
+  it('does nothing on an invalid query with nothing to clear, so mount does not fire it', () => {
     expect(
-      shouldClearResultsForEmptyTerm({
-        searchTerm: '   ',
-        hasResults: true,
-        searchStatus: 'finished',
-      }),
-    ).toBe(true);
-  });
-
-  it('does nothing on an empty box with nothing to clear, so mount does not fire it', () => {
-    expect(
-      shouldClearResultsForEmptyTerm({
-        searchTerm: '',
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: false,
         hasResults: false,
         searchStatus: undefined,
       }),
     ).toBe(false);
   });
 
-  it('leaves results alone while a term is still present', () => {
+  it('leaves results alone while the query is still valid', () => {
     expect(
-      shouldClearResultsForEmptyTerm({
-        searchTerm: 'God',
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: true,
         hasResults: true,
-        searchStatus: 'finished',
+        searchStatus: 'completed',
       }),
     ).toBe(false);
+  });
+
+  // Every route into an invalid query has to clear, not just the emptied box. `isFindQueryValid`
+  // is what decides which routes those are (see its suite above); this pins down that both of its
+  // invalid cases reach the same clear, by feeding its real verdict in rather than a literal.
+  it('clears for a deselected-books query the same way it clears for an emptied box', () => {
+    const emptiedBox = isFindQueryValid({
+      searchTerm: '',
+      scope: 'selectedBooks',
+      selectedBookIds: ['GEN'],
+    });
+    const deselectedBooks = isFindQueryValid({
+      searchTerm: 'God',
+      scope: 'selectedBooks',
+      selectedBookIds: [],
+    });
+
+    expect(
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: emptiedBox,
+        hasResults: true,
+        searchStatus: 'completed',
+      }),
+    ).toBe(true);
+    expect(
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: deselectedBooks,
+        hasResults: true,
+        searchStatus: 'completed',
+      }),
+    ).toBe(true);
   });
 });
 
