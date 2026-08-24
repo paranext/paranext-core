@@ -8,11 +8,20 @@
 > Individual notes below mark what has been checked; **the absence of a note does not mean an entry
 > was verified.**
 >
-> The one durable finding worth acting on: a repo-wide search for the deprecated sync
-> `createNetworkEventEmitter` returns **exactly one** remaining call —
-> `extensions/src/platform-scripture-editor/src/main.ts` `selectionChangedEventEmitter`. Everything
-> else this plan set out to migrate is already on `createNetworkEventEmitterAsync` or on
-> `createBufferedNetworkEventEmitter`, which awaits it internally.
+> Two durable findings came out of the audit.
+>
+> **One:** a repo-wide search for the deprecated sync `createNetworkEventEmitter` returns **exactly
+> one** remaining PRODUCTION call — `extensions/src/platform-scripture-editor/src/main.ts` > `selectionChangedEventEmitter`. Every other production site is already on
+> `createNetworkEventEmitterAsync` or on `createBufferedNetworkEventEmitter`, which awaits it
+> internally. This does **not** cover test mocks: several test files still reference the sync
+> factory, and the plan's list of them is both over- and under-inclusive.
+>
+> **Two — do not execute the "init refactor" work at all.** Every site in that category is now a
+> buffered emitter created at module load deliberately, so that changes arriving before central
+> registration are held and flushed rather than thrown away. Moving them behind an accessor that
+> throws before initialization would reintroduce exactly the throw the buffering exists to prevent.
+> That covers `web-view.service-shard.ts` (four buffered emitters), `scroll-group.service-host.ts`
+> (two) and `check-aggregator.service.ts` (one).
 >
 > Whether this plan should be fenced as a frozen record or retired is its owner's call; it is
 > annotated rather than retired here.
@@ -70,7 +79,8 @@
   _Stale as of 2026-08-25: this file now holds **one** emitter, already created through `createNetworkEventEmitterAsync`. See the note on Task 14 Step 3._
 - `src/main/services/scroll-group.service-host.ts` — 1 emitter  
   _Stale as of 2026-08-25: this file now holds **two** emitters, both buffered. See the note on Task 14 Step 4._
-- `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — 4 emitters (init refactor)
+- `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — 4 emitters (init refactor)  
+  _Stale as of 2026-08-25: still four, but all `createBufferedNetworkEventEmitter`, now at `:128,147,165,184`. The init refactor is superseded — see finding two at the top._
 - `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — 1 emitter (init refactor)  
   _Stale as of 2026-08-25: already on `createBufferedNetworkEventEmitter`, now at `:394`. Nothing to do._
 - `extensions/src/hello-rock3/src/main.ts:462` — 1 emitter  
@@ -1595,6 +1605,9 @@ git commit -m "refactor(experimental): migrate extension emitters to createNetwo
 
 > **Check before starting (noted 2026-08-25).** "The 4 listed earlier" lists three, and
 > `app.component.test.tsx` no longer references `createNetworkEventEmitter` at all.
+> `shared-store.service.test.ts` has two sync references now, not three. The list is also
+> under-inclusive: `usersnap.service-router.test.ts`, `book-chapter-control.service-router.test.ts`
+> and `dialog.service-router.test.ts` all mock the sync factory and appear nowhere in it.
 
 - [ ] **Step 1: For each test file, replace `createNetworkEventEmitter` with `createNetworkEventEmitterAsync` and `await` in the surrounding async setup**
 
