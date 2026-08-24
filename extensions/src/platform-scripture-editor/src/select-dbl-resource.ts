@@ -4,7 +4,11 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { DblResourceData } from 'platform-bible-utils';
-import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
+import {
+  isDblResourceReference,
+  isNonDblResource,
+  isProjectReference,
+} from './resource-reference.utils';
 import { DEFAULT_RESOURCE_REFERENCE_LIST } from './resource-reference-list.const';
 
 /**
@@ -36,11 +40,7 @@ export async function selectTextConnection(
     }
   }
 
-  // Non-DBL locally-installed resources (e.g. VULGP83, TNN, TND, HBK) are returned by
-  // getLocalNonDblResources with dblEntryUid === projectId as a synthetic marker. They must be
-  // stored as ProjectReferences so the resource viewer can load them directly by project ID
-  // without needing a DBL catalog entry.
-  const isLocalOnly = resource.dblEntryUid === resource.projectId;
+  const isLocalOnly = isNonDblResource(resource);
   const newRef: DblResourceReference | ProjectReference = isLocalOnly
     ? { type: 'project', name: resource.displayName, id: resource.projectId }
     : { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };

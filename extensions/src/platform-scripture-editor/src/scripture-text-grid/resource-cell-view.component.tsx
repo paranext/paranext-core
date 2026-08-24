@@ -34,9 +34,21 @@ import {
   type ResourceCellLocalizedStrings,
 } from './resource-cell.const';
 
-// Re-exported from `resource-cell.const.ts` so importers keep reading these from the component while
-// a node-environment test can import the key list without a DOM.
-export {
+/**
+ * Localization keys for the ResourceCell's status and action labels. Import to resolve them via
+ * `useLocalizedStrings` (in the app) or `getLocalizedStrings` (in Storybook).
+ */
+export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
+export const NOT_INSTALLED_KEY = '%webView_scriptureTextGrid_cell_not_installed%';
+export const LOADING_KEY = '%webView_scriptureTextGrid_cell_status_loading%';
+export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_noContent%';
+export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
+export const ZOOM_IN_KEY = '%webView_scriptureTextGrid_cell_zoomIn%';
+export const ZOOM_OUT_KEY = '%webView_scriptureTextGrid_cell_zoomOut%';
+export const RESET_ZOOM_KEY = '%webView_scriptureTextGrid_cell_resetZoom%';
+export const ZOOM_OPTIONS_KEY = '%webView_scriptureTextGrid_cell_zoomOptions%';
+export const COPY_KEY = '%webView_scriptureTextGrid_cell_copy%';
+export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
   UNAVAILABLE_KEY,
   NOT_INSTALLED_KEY,
   LOADING_KEY,

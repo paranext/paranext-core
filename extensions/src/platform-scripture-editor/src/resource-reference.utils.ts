@@ -1,9 +1,18 @@
-import type {
-  DblResourceReference,
-  ProjectReference,
-  EffectiveResourceReference,
-} from 'platform-scripture';
+import type { DblResourceReference, ProjectReference, ResourceReference } from 'platform-scripture';
 import type { DblResourceData } from 'platform-bible-utils';
+
+/**
+ * Returns true if the {@link DblResourceData} entry was synthesized from a locally-installed non-DBL
+ * project (e.g. VULGP83, TNN, TND, HBK). Locally-installed non-DBL resources use `dblEntryUid ===
+ * projectId` as a synthetic marker set by `getLocalNonDblResources` so that callers can create a
+ * {@link ProjectReference} instead of a {@link DblResourceReference}.
+ *
+ * @param resource The DBL resource data entry to check
+ * @returns `true` if the entry is a locally-installed non-DBL resource
+ */
+export function isNonDblResource(resource: DblResourceData): boolean {
+  return resource.dblEntryUid === resource.projectId;
+}
 
 /**
  * Checks if a {@link ResourceReference} is a {@link DblResourceReference}.
@@ -49,10 +58,7 @@ export function isProjectReference(item: unknown): item is ProjectReference {
  *   {@link DblResourceReference}
  * @returns The display label for `ref`
  */
-export function getRefLabel(
-  ref: EffectiveResourceReference,
-  dblResourcesList: DblResourceData[],
-): string {
+export function getRefLabel(ref: ResourceReference, dblResourcesList: DblResourceData[]): string {
   if (isDblResourceReference(ref)) {
     const dblData = dblResourcesList.find((r) => r.dblEntryUid === ref.id);
     if (dblData) return `${dblData.fullName} (${dblData.displayName})`;
