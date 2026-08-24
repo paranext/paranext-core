@@ -15,8 +15,10 @@ Three rules earned the hard way:
    was missing is a round this example shipped broken.
 3. POSITIVE CONTROL, NOT AN EXIT CODE. Every gate proves it examined THIS file before it may pass.
    An exit code cannot do that: tsc reports nothing about a file it never loaded, and eslint exits
-   0 with only a warning when an explicitly-passed file matches an ignore pattern. Both were live
-   vacuous passes here before the controls went in.
+   0 with only a warning when an explicitly-passed file matches an ignore pattern. The tsc case was
+   a LIVE vacuous pass here — an earlier version reported "compiles and passes" with a dead tsc. The
+   eslint case is LATENT: nothing in .eslintignore matches TEMP today, but any ignore rule that
+   caught it, or a relocation of TEMP, would reproduce it silently.
 
 Usage:  npm run verify:testing-guide
 Exit 0 = the example compiles, lints and passes as printed.
@@ -89,9 +91,8 @@ try:
         print(f"  CONTROL FAILED: eslint {why} — nothing was linted")
     elif entry.get('errorCount', 0) > 0:
         failures.append('lint')
-        for m in entry['messages'][:5]:
-            if m.get('severity') == 2:
-                print(f"  {m.get('line')}:{m.get('column')}  {m.get('message')}  [{m.get('ruleId')}]")
+        for m in [m for m in entry['messages'] if m.get('severity') == 2][:5]:
+            print(f"  {m.get('line')}:{m.get('column')}  {m.get('message')}  [{m.get('ruleId')}]")
     else:
         print("  linted, no errors in the extracted example")
 
