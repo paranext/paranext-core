@@ -796,10 +796,10 @@ internal class DummyPapiClient : PapiClient
 
 ### TypeScript: Service Testing with Mocks
 
-> This example is executable and is meant to stay that way — it shipped broken three times while
-> being corrected by eye. After editing it, run
-> `python3 .claude/scripts/verify-testing-guide-example.py`, which extracts the fence **verbatim**
-> and runs it.
+> This example is executable and is meant to stay that way — it shipped broken four times while
+> being corrected by eye. `npm run verify:testing-guide` extracts the fence **verbatim** and both
+> typechecks and runs it; lint-staged runs it automatically whenever this file is staged, so it
+> does not depend on anyone remembering.
 
 ```typescript
 import { vi, describe, it, expect, beforeEach } from 'vitest';
@@ -837,11 +837,16 @@ describe('sharedStoreService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     // The factory returns the emitter alongside a promise for its central registration; the
-    // service consumes that promise in the background, so a mock must supply both.
-    vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockReturnValue({
-      emitter: mockEmitter,
-      registeredEmitterPromise: Promise.resolve(mockEmitter),
-    });
+    // service consumes that promise in the background, so a mock must supply both. The cast is
+    // unavoidable: `PlatformEventEmitter` has private fields, so no object literal is assignable
+    // to it and the mock will not typecheck without it.
+    vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockReturnValue(
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      {
+        emitter: mockEmitter,
+        registeredEmitterPromise: Promise.resolve(mockEmitter),
+      } as unknown as ReturnType<typeof networkService.createCoreMultiSourceEventEmitter>,
+    );
   });
 
   it('should initialize with network event emitter', async () => {
