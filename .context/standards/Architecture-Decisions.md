@@ -33,7 +33,6 @@ step, no automation. Just a record.
 ### Entry template
 
 ```markdown
-
 ## ADR-NNNN: {short title}
 
 - **Date:** YYYY-MM-DD
@@ -1034,17 +1033,16 @@ step, no automation. Just a record.
   pattern is available the next time core needs to consume an upstream contract addition ahead of its
   release. `getSyncState` reflects only syncs run through the Send/Receive extension's own wrappers —
   callers reaching the dotnet commands directly stay invisible (upstream PT-4214) — so this status is
-  best-effort, not ground truth. **Corrected 2026-08-17, after this decision was first written:** an
-  earlier draft of this entry claimed core's startup syncs were unaffected because they route through
-  `runScheduledSessionSync`. That holds for Power mode only. In Simple mode — the only mode this
+  best-effort, not ground truth. Routing through `runScheduledSessionSync` leaves core's startup syncs
+  unaffected in Power mode only. In Simple mode — the only mode this
   button renders in — `main/startup-tasks.ts` calls the dotnet `syncProjects` command directly, and
   the picker's `syncOnProjectSwitch` (`platform-scripture-editor`) does the same, so neither raises a
   claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: the requirement's "status is
   correct from app startup" is met for manual and scheduled syncs, but the Simple-mode startup sync
   still shows no status. Closing that needs either PT-4214 or routing those two call sites through a
   claiming wrapper (e.g. `runManualSync`); this decision deliberately does neither, since both are
-  changes to sync behavior rather than to how status is reported. **Corrected 2026-08-20, after this
-  decision was first written:** PT-4214 is Done, but it does not close this gap — it shipped a
+  changes to sync behavior rather than to how status is reported. PT-4214 is Done, but it does not
+  close this gap — it shipped a
   _gate_-derived signal (`paratextBibleSendReceive.onSyncWriteLockChanged`, backed by
   `SendReceiveWriteLock`), not a signal derived from the sync run itself, and the gate cannot see the
   window this paragraph is about. Studio's patch deliberately suppresses the gate's initial arm on the
@@ -1154,6 +1152,17 @@ step, no automation. Just a record.
   two are never merged into one shared piece of state — each seeds and retries independently on its
   own effect, so neither claim's clear-then-reread window can race the other's write.
 
+  The union is deliberately asymmetric on OUTCOME. The activity signal reports only that a sync is
+  running, never how one finished, so a sync only it could see has no verdict to be had — and the
+  claim's last verdict describes a different sync entirely. That case reports `unknown` rather than
+  inheriting it: `unknown` exists precisely to say "a sync happened and how it went is not knowable",
+  and inheriting would put an unrelated sync's green check on it (or hide that this one failed). The
+  reverse direction is NOT wired: the activity signal reporting `isSyncing: false` does not clear a
+  claim that says `syncing`. The two disagree that way for an ordinary reason — a claim event can
+  arrive before the backend's run marker is set — so treating the disagreement as a stranded claim
+  would flicker every normal sync through a wrong state at its start. Distinguishing a stranded claim
+  from that skew needs a signal neither input carries today.
+
   Each interface mode keeps **exactly one** persistent sync surface: Simple mode → the toolbar
   indicator; Power mode → the C# toast. This is not symmetric by default — the indicator is rendered
   only `!isPowerMode`, so gating the toast off in Power mode as well would leave Power mode with no
@@ -1162,26 +1171,21 @@ step, no automation. Just a record.
   ONE of them:
   - `ShowSyncNotification` — the persistent, cancellable in-progress toast. **Gated off** in Simple
     mode, because it is the one the indicator's `syncing` state and popover Cancel already cover. The
-    gate for this surface is placed **inside** `ShowSyncNotification` itself rather than at its call
-    sites, which is what makes it cover every caller including the wrapper-less ones: `SyncProjects`
-    omits the `showNotification` argument entirely (defaulting it to `true`) and `SendReceiveProjects`
-    defaults its own `suppressNotification` to `false`, but neither caller needs to know the mode gate
-    exists, and `syncProjects` having no `suppressNotification` parameter at all stops mattering.
-  - `NotifyIfSyncFailed` — the plain-failure toast. **Kept** in both modes (see the 2026-08-21
-    correction below for why this reverses the original decision recorded here).
+    gate sits **inside** `ShowSyncNotification` rather than at its call sites, so it covers every
+    caller — including the ones that pass no notification argument at all — without any of them
+    needing to know the gate exists.
+  - `NotifyIfSyncFailed` — the plain-failure toast. **Kept** in both modes; see the first bullet
+    under Consequences for why it is not gated alongside `ShowSyncNotification`.
   - `NotifyIfRoleChanged` — **kept** in both modes; the indicator has no state for a role change.
   - The thrown-failure toast in the `catch` block, including its connection-failure variant —
     **kept** in both modes; the indicator has no state for a connection problem, and the requirement's
     "Connection problem" UX remains explicitly deferred (ADR-0022).
 
-  So one of the four surfaces is suppressed in Simple mode and three are kept; nothing is gated in
-  Power mode. Reading interface mode on the toast-gate path is a cached value
-  (seeded at startup, refreshed from `SettingsService`'s `onDidUpdate`) rather than a live round trip,
-  because `ShowSyncNotification` runs under the held sync semaphore and a blocking `GetSetting` call
-  there would compete with the same 10-second budget `WaitUntilAvailableAsync` already protects.
-
-  The non-negotiable's "Saroj (and Donna) can trust the app" wording stands on this one-surface-per-mode reading:
-  Donna (Power mode) is served by the toast, not the indicator, which never renders for her.
+  Interface mode is read on the toast-gate path from a cached value (seeded at startup, refreshed
+  from `SettingsService`'s `onDidUpdate`) rather than a live round trip, because `ShowSyncNotification`
+  runs under the held sync semaphore and a blocking `GetSetting` there would compete with the same
+  10-second budget `WaitUntilAvailableAsync` already protects. Donna, in Power mode, is served by the
+  toast rather than by the indicator, which never renders for her.
 - **Alternatives:**
   - **Gate-derived signal only (`onSyncWriteLockChanged`).** Rejected: silent through the scheduled
     path's resolution phase, i.e. broken at exactly the moment — app startup — the requirement cares most about.
@@ -1204,16 +1208,14 @@ step, no automation. Just a record.
     parameter today, so this would mean changing the C# signature, the extension's own `.d.ts`, core's
     mirrored `src/@types/paratext-bible-send-receive/index.d.ts`, and every call site — for a flag
     whose only job is "don't show this one toast in this one mode." Placing the mode check inside the
-    gated toast function itself — `ShowSyncNotification` (originally also `NotifyIfSyncFailed`; see
-    the 2026-08-21 correction under Consequences, below, for why that second gate was removed) —
+    gated toast function itself — `ShowSyncNotification` alone; see the first bullet under
+    Consequences, below, for why `NotifyIfSyncFailed` is not gated with it —
     achieves the same effect with none of that surface area, and no call site needs to change.
 - **Consequences:**
-  - **Corrected 2026-08-21, after this decision was first written:** the original text above gated
-    TWO of the four toast surfaces — `ShowSyncNotification` and `NotifyIfSyncFailed` — on
-    `ShouldShowPersistentSyncToast()`, on the theory that the toolbar indicator's `failed` state
-    (derived from `lastResults.resultsInfo`, ADR-0022) already covers a plain sync failure in Simple
-    mode. A whole-branch final review found that theory false for precisely the syncs this decision
-    exists to cover: `main/startup-tasks.ts` and the picker's `syncOnProjectSwitch` call the dotnet
+  - **Only ONE of the four toast surfaces is gated, not two.** Gating `NotifyIfSyncFailed` as well as
+    `ShowSyncNotification` on `ShouldShowPersistentSyncToast()` would rest on the toolbar indicator's
+    `failed` state (derived from `lastResults.resultsInfo`, ADR-0022) already covering a plain sync
+    failure in Simple mode. That is false for precisely the syncs this decision exists to cover: `main/startup-tasks.ts` and the picker's `syncOnProjectSwitch` call the dotnet
     commands directly, so the Send/Receive extension raises no claim and there is no `lastResults` for
     those syncs — the indicator's `failed` state cannot exist for them. The activity signal that DOES
     see those paths (this ADR's whole point) carries no outcome, only `{isSyncing, projectIds}`. So
@@ -1223,12 +1225,10 @@ step, no automation. Just a record.
     showing the toast on an unreadable interface mode (see the next bullet). `NotifyIfSyncFailed` is
     now **not** gated at all — it is one of the three kept surfaces, alongside role-change and
     thrown/connection-failure. The accepted cost: for a claim-VISIBLE failure (a manual sync through
-    the extension), Simple mode now shows both this toast and the indicator's `failed` state — a mild,
-    accepted duplication, since a terminal failure notification alongside a status badge is not the
-    same double-surface problem as two persistent, separately-cancellable in-progress surfaces. Only
-    `ShowSyncNotification` (the persistent in-progress toast) remains mode-gated; the choke-point
-    placement inside `ShowSyncNotification` itself is unchanged and still covers every wrapper-less
-    caller. `ShouldShowPersistentSyncToast()` now has exactly one call site.
+    the extension), Simple mode shows both this toast and the indicator's `failed` state — accepted,
+    since a terminal failure notification beside a status badge is not the double-surface problem two
+    persistent, separately-cancellable in-progress surfaces are. `ShouldShowPersistentSyncToast()`
+    therefore has exactly one call site.
   - **A cached-mode read and a fail-open renderer hook disagree by design on a failed settings read.**
     `useIsPowerMode` (`src/renderer/hooks/use-is-power-mode.hook.ts`) falls back to `false` (Simple)
     when reading the interface-mode setting fails, so the renderer renders the indicator in that case.
@@ -1236,21 +1236,21 @@ step, no automation. Just a record.
     "show the toast" on an unknown mode (see design rationale above; the gate lives in Studio's patch,
     outside this repo). The two sides are not required to agree, and on this one failure path they
     don't: a failed interface-mode read yields **both** surfaces at once rather than the intended one,
-    which is the exact duplicate-surface condition this work otherwise removes. This is the chosen
-    direction, not an oversight — the opposite default on either side risks combining with the other
-    side's own failure mode to leave the user with **no** sync feedback at all, which is worse than an
-    occasional duplicate. Anyone hardening this further should preserve "fail toward showing
-    something," not "fail toward showing exactly one thing."
-  - **Public Platform.Bible now runs two independent 60-second seed-retry loops instead of one.**
-    `useSyncStatus` seeds the claim (`getSyncState`) and the activity signal (`getSyncActivity`) in two
-    separate effects, each with its own `SYNC_SEED_RETRY_WINDOW_MS` (60s) retry budget, because
-    Ruling 3/1 (recorded in the hook's own comments) requires the two inputs to retry and clear
-    independently so neither can stall or race the other. On public Platform.Bible, which ships only
-    the Send/Receive stub, `getSyncActivity` never resolves — the command doesn't exist — so that
-    second loop runs its full 60-second retry budget on every mount regardless. The practical cost is
-    roughly double the cold-start warn-level log volume from this hook, not a behavior change: the
-    hook still degrades to exactly its pre-PT-4398 claim-only behavior once both loops give up, per the
-    seam's optional declaration.
+    which is the exact duplicate-surface condition this work otherwise removes — chosen deliberately,
+    because the opposite default on either side risks combining with the other side's failure mode to
+    leave the user with **no** sync feedback at all. Anyone hardening this further should preserve
+    "fail toward showing something," not "fail toward showing exactly one thing."
+  - **`useSyncStatus` now runs two independent seed-retry loops instead of one.** The claim
+    (`getSyncState`) and the activity signal (`getSyncActivity`) each seed in their own effect with
+    their own `SYNC_SEED_RETRY_WINDOW_MS` budget, because the two must retry and clear independently —
+    a claim event, or a claim seed that gives up, must not end the activity seed's retries, and vice
+    versa. A full budget is only actually spent on a Studio build predating `getSyncActivity`, where
+    the command rejects for the life of the hook while send/receive is otherwise present. Public
+    Platform.Bible pays far less: nothing there implements the command, so `isSendReceiveAvailable`
+    settles to a real `false` and the toolbar unmounts this control after
+    `SEND_RECEIVE_UNKNOWN_GRACE_MS`, tearing both loops down after three or four attempts. The cost is
+    cold-start warn-level log volume, not behavior — the hook degrades to claim-only once both loops
+    give up, per the seam's optional declaration.
   - **The two halves only compose in a real build.** The signal, the union, and the toast gate split
     across two repositories — core (the `useSyncStatus` union and the optional seam declaration in
     `src/@types/paratext-bible-send-receive/index.d.ts`) and Paratext 10 Studio's
