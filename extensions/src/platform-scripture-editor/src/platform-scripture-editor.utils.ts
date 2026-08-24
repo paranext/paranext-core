@@ -88,6 +88,7 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
 
 const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
 const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%';
+const READONLY_KEY = '%webView_platformScriptureEditor_title_readonly_indicator%';
 const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
 const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
@@ -105,17 +106,18 @@ export async function formatEditorTitle(
   }
   if (isLocalizeKey(title)) {
     const localizedStrings = await getLocalizedStrings({
-      localizeKeys: [EDITABLE_KEY, title],
+      localizeKeys: [EDITABLE_KEY, READONLY_KEY, title],
     });
     const localizedTitleFormatStr = localizedStrings[title];
     const localizedEditable = localizedStrings[EDITABLE_KEY];
+    const localizedReadonly = localizedStrings[READONLY_KEY];
 
     let projectName = projectId;
     if (projectId) projectName = await getProjectName(projectId);
 
     title = formatReplacementString(localizedTitleFormatStr, {
       projectId: projectName,
-      editable: isReadOnly ? '' : localizedEditable,
+      editable: isReadOnly ? localizedReadonly : localizedEditable,
     });
   }
 
