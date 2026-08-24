@@ -218,35 +218,38 @@ export function SelectBooksPicker({
           </div>
           <CommandList>
             <CommandEmpty>{noBookFoundText}</CommandEmpty>
-            {Object.values(Section).map((section, index) => {
-              const sectionBooks = filteredBooksBySection[section];
+            {Object.values(Section)
+              .filter((section) => filteredBooksBySection[section].length > 0)
+              .map((section, index) => {
+                const sectionBooks = filteredBooksBySection[section];
 
-              if (sectionBooks.length === 0) return undefined;
-
-              return (
-                <Fragment key={section}>
-                  <CommandGroup
-                    heading={getSectionLongName(section, otLong, ntLong, dcLong, extraLong)}
-                  >
-                    {sectionBooks.map((bookId) => (
-                      <BookItem
-                        key={bookId}
-                        bookId={bookId}
-                        isSelected={selectedBookIds.includes(bookId)}
-                        onSelect={() => handleKeyboardSelect(bookId)}
-                        onMouseDown={(event) => handleMouseDown(event, bookId)}
-                        section={getSectionForBook(bookId)}
-                        showCheck
-                        localizedBookNames={localizedBookNames}
-                        commandValue={generateCommandValue(bookId, localizedBookNames)}
-                        className="tw:flex tw:items-center"
-                      />
-                    ))}
-                  </CommandGroup>
-                  {index < Object.values(Section).length - 1 && <CommandSeparator />}
-                </Fragment>
-              );
-            })}
+                return (
+                  <Fragment key={section}>
+                    {/* Separator goes BEFORE each group but the first, counted over the sections
+                    actually rendered. Emitting it after each group instead would leave a dangling
+                    rule below the last one whenever a later section has no books. */}
+                    {index > 0 && <CommandSeparator />}
+                    <CommandGroup
+                      heading={getSectionLongName(section, otLong, ntLong, dcLong, extraLong)}
+                    >
+                      {sectionBooks.map((bookId) => (
+                        <BookItem
+                          key={bookId}
+                          bookId={bookId}
+                          isSelected={selectedBookIds.includes(bookId)}
+                          onSelect={() => handleKeyboardSelect(bookId)}
+                          onMouseDown={(event) => handleMouseDown(event, bookId)}
+                          section={getSectionForBook(bookId)}
+                          showCheck
+                          localizedBookNames={localizedBookNames}
+                          commandValue={generateCommandValue(bookId, localizedBookNames)}
+                          className="tw:flex tw:items-center"
+                        />
+                      ))}
+                    </CommandGroup>
+                  </Fragment>
+                );
+              })}
           </CommandList>
         </Command>
       </PopoverContent>

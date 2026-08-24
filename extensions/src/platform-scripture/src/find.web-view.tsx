@@ -11,7 +11,7 @@ import {
   useWebViewController,
 } from '@papi/frontend/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { Scope, SCOPE_SELECTOR_STRING_KEYS, sonner, usePromise } from 'platform-bible-react';
 import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
@@ -28,10 +28,7 @@ import {
   ScrollGroupId,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
-import {
-  BOOKS_PRESENT_DEFAULT,
-  getBookIdsFromBooksPresent,
-} from 'platform-bible-utils/experimental';
+import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
 import {
   FindJobStatus,
   FindJobStatusReport,
@@ -46,7 +43,7 @@ import {
   armBoundedWait,
   callControllerSafely,
   classifyPollAttempt,
-  excludeExtraMaterialBooks,
+  deriveFindBookLists,
   GIVE_UP_AFTER_MS,
   gateStartSearch,
   isDifferentProjectSelection,
@@ -660,23 +657,39 @@ global.webViewComponent = function FindWebView({
 
   // #region Get available books and their localizations
 
-  const [booksPresentPossiblyError] = useProjectSetting(
+  const [booksPresentPossiblyError, , , isBooksPresentLoading] = useProjectSetting(
     projectId,
     'platformScripture.booksPresent',
     BOOKS_PRESENT_DEFAULT,
   );
 
-  // Extra-scriptural books are excluded here, at the single point every consumer reads: both the
-  // `availableBooksIds` the search runs over and the `booksPresent` the scope selector builds its
-  // book picker from. Filtering one but not the other would let a user pick a book the search never
-  // covers.
-  const booksPresent: string = useMemo(() => {
+  // Extra-scriptural books are excluded inside `deriveFindBookLists`, which covers both book-list
+  // consumers at once: the `availableBooksIds` the search runs over and the `booksPresent` the scope
+  // selector builds its book picker from. Filtering one but not the other would let a user pick a
+  // book the search never covers.
+  //
+  // This does NOT cover the `book`/`chapter` scopes, which build `findScope` from
+  // `verseRefSetting.book` rather than from these lists. The navigation control offers every book the
+  // project has (`getActiveBookIds` in the toolbar is unfiltered), so with the current reference in
+  // a book of extra material those two scopes still search it and still report the useless
+  // reference this exclusion exists to hide. Closing that path means gating the scopes themselves
+  // on the current book being searchable; PT-4415 tracks it.
+  const bookLists = useMemo(() => {
     if (isPlatformError(booksPresentPossiblyError)) {
       logger.warn(`Error getting books present: ${getErrorMessage(booksPresentPossiblyError)}`);
-      return BOOKS_PRESENT_DEFAULT;
+      return deriveFindBookLists(BOOKS_PRESENT_DEFAULT);
     }
-    return excludeExtraMaterialBooks(booksPresentPossiblyError);
+    return deriveFindBookLists(booksPresentPossiblyError);
   }, [booksPresentPossiblyError]);
+
+  // `localizableBookIds` covers every book the project has, not just the searchable ones: the `book`
+  // and `chapter` scopes label themselves from the CURRENT reference, which can sit in a book of
+  // extra material, and a missing entry there degrades the scope label to a raw book id.
+  const {
+    searchableBooksPresent: booksPresent,
+    availableBookIds: availableBooksIds,
+    localizableBookIds,
+  } = bookLists;
 
   // Whether the project preserves invisible characters literally in USFM. Forwarded to the result
   // cards so the "Show invisible" preview renders the USFM tilde `~` as a literal tilde (true) vs. an
@@ -706,53 +719,52 @@ global.webViewComponent = function FindWebView({
   const isEditable: boolean =
     isEditableLoading || isPlatformError(isEditablePossiblyError) ? false : isEditablePossiblyError;
 
-  const availableBooksIds = useMemo(() => {
-    return getBookIdsFromBooksPresent(booksPresent).filter(
-      (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
-    );
-  }, [booksPresent]);
-
   // `selectedBookIds` is persisted per web view, so a project switch can leave it naming books the
   // NEW project doesn't have. The finder engine skips absent books gracefully (see
   // `isScriptureNotFoundError` in the finder PDPE), so this is not a crash — but with
   // `scope === 'selectedBooks'` the search would silently cover fewer books than the checkbox list
   // shows. Prune the selection to what the newly selected project actually has.
   //
-  // Guarded on a NON-EMPTY `availableBooksIds`: `booksPresent` sits at `BOOKS_PRESENT_DEFAULT` (all
-  // zeros — no books) while `useProjectSetting` resolves for the new project, and pruning against
-  // that transient empty set would wipe the entire selection instead of narrowing it. "Don't know
-  // the books yet" must not read as "the project has no books".
+  // "Don't know the books yet" must not read as "the project has no books", so the book list is
+  // withheld (passed as `undefined`) until the setting resolves rather than inferred from an empty
+  // list. `useProjectSetting` re-enters loading whenever the project changes, and holds the previous
+  // project's value in the meantime — so emptiness alone can't tell a pending read from a project
+  // that genuinely has nothing to search, which is a real case here because extra material is
+  // excluded above.
   //
   // Depends on `selectedBookIds` because `useWebViewState`'s setter takes a value, not an updater.
   // That is safe: `prunePresentBookIds` returns the original array reference when nothing needs
   // removing, so the identity check makes the write conditional and the effect converges after a
   // single prune instead of re-triggering itself.
   useEffect(() => {
-    const prunedBookIds = prunePresentBookIds(availableBooksIds, selectedBookIds);
+    const prunedBookIds = prunePresentBookIds(
+      isBooksPresentLoading ? undefined : availableBooksIds,
+      selectedBookIds,
+    );
     if (prunedBookIds !== selectedBookIds) setSelectedBookIds(prunedBookIds);
-  }, [availableBooksIds, selectedBookIds, setSelectedBookIds]);
+  }, [isBooksPresentLoading, availableBooksIds, selectedBookIds, setSelectedBookIds]);
 
   const availableBooksLocalizationKeys = useMemo(() => {
     const keys: `%${string}%`[] = [];
-    availableBooksIds.forEach((book) => {
+    localizableBookIds.forEach((book) => {
       keys.push(`%LocalizedId.${book}%` as const);
       keys.push(`%Book.${book}%` as const);
     });
     return keys;
-  }, [availableBooksIds]);
+  }, [localizableBookIds]);
 
   const [localizedBookIdsAndShortNames] = useLocalizedStrings(availableBooksLocalizationKeys);
 
   const localizedBookData = useMemo(() => {
     const data = new Map<string, LocalizedBookData>();
-    availableBooksIds.forEach((book) => {
+    localizableBookIds.forEach((book) => {
       data.set(book, {
         localizedId: localizedBookIdsAndShortNames[`%LocalizedId.${book}%` as const],
         localizedName: localizedBookIdsAndShortNames[`%Book.${book}%` as const],
       });
     });
     return data;
-  }, [availableBooksIds, localizedBookIdsAndShortNames]);
+  }, [localizableBookIds, localizedBookIdsAndShortNames]);
 
   const isReplacementStructureChanging = useMemo(
     () => replacementContainsStructuralMarker(replaceTerm),

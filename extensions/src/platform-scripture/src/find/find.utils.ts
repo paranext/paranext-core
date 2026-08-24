@@ -9,6 +9,7 @@ import {
   ScrollGroupId,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
+import { getBookIdsFromBooksPresent } from 'platform-bible-utils/experimental';
 import { FindJobStatusReport, FindOptions } from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
 
@@ -315,30 +316,98 @@ export function isDifferentProjectSelection(
 }
 
 /**
- * Clears the extra-scriptural books (GLO, FRT, INT, XXA, etc.) from a
- * `platformScripture.booksPresent` flag string so Find never offers them.
+ * Book numbers the canon classifies as extra material (GLO, FRT, INT, XXA, etc. — also called
+ * extra-scriptural books). Precomputed because the set is fixed for a given canon.
+ *
+ * Only book numbers within the canon are considered: `Canon.bookNumberToId` returns a placeholder
+ * id past the last canonical book, and `Canon.isExtraMaterial` is `false` for that placeholder, so
+ * an unbounded scan would treat out-of-canon positions as scriptural for the wrong reason.
+ */
+const EXTRA_MATERIAL_BOOK_NUMBERS: ReadonlySet<number> = new Set(
+  Canon.allBookIds
+    .map((_bookId, index) => index + 1)
+    .filter((bookNumber) => Canon.isExtraMaterial(Canon.bookNumberToId(bookNumber))),
+);
+
+/**
+ * Clears the extra material (GLO, FRT, INT, XXA, etc.) from a `platformScripture.booksPresent` flag
+ * string so Find never offers those books.
  *
  * Find resolves a result's location by walking the `\c` and `\v` markers of the book it matched in.
- * Extra-scriptural books are organized by paragraph markers rather than verses, so every match in
- * one resolves to the same reference, and there is no way to open such a book to act on the result
+ * Extra material is organized by paragraph markers rather than verses, so every match in one
+ * resolves to the same reference, and there is no way to open such a book to act on the result
  * anyway. Excluding them keeps Find honest until the platform can open and address them.
  *
  * Flags are cleared in place rather than removed: the flag string must keep its canonical length,
  * since consumers index into it by book number and reject a length that does not match the canon.
  *
- * Drop this exclusion once extra-scriptural books can be opened and addressed.
+ * This narrows what Find _searches_ and what its book picker _offers_. It does not reach the
+ * `book`/`chapter` scopes, which resolve from the current scripture reference rather than from this
+ * flag string; PT-4415 covers gating those.
+ *
+ * TODO(PT-4414): Drop this exclusion once extra material can be opened and addressed.
  *
  * @param booksPresent The `platformScripture.booksPresent` project setting value.
- * @returns The same flag string with every extra-scriptural book flagged absent.
+ * @returns The same flag string with every extra-material book flagged absent.
  */
 export function excludeExtraMaterialBooks(booksPresent: string): string {
   return Array.from(booksPresent, (flag, index) =>
-    // Flags past the last canonical book are meaningless (`bookNumberToId` returns a placeholder id
-    // there), so leave them as they are instead of asking whether they are extra material.
-    index < Canon.allBookIds.length && Canon.isExtraMaterial(Canon.bookNumberToId(index + 1))
-      ? '0'
-      : flag,
+    EXTRA_MATERIAL_BOOK_NUMBERS.has(index + 1) ? '0' : flag,
   ).join('');
+}
+
+/**
+ * Lists the books a `platformScripture.booksPresent` flag string marks present, dropping the ones
+ * the canon considers obsolete.
+ *
+ * Obsolete books are excluded because they have no localized names to display and cannot be
+ * navigated to, so offering them would only produce dead entries.
+ *
+ * @param booksPresent The `platformScripture.booksPresent` project setting value.
+ * @returns The ids of the non-obsolete books flagged present, in canonical order.
+ */
+export function getPresentBookIds(booksPresent: string): string[] {
+  return getBookIdsFromBooksPresent(booksPresent).filter(
+    (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+  );
+}
+
+/** The book lists Find derives from a project's `platformScripture.booksPresent` setting. */
+export type FindBookLists = {
+  /**
+   * `booksPresent` flags with extra material cleared. What the search runs over and what the scope
+   * selector builds its book picker from.
+   */
+  searchableBooksPresent: string;
+  /** Ids of the books the search covers and the book picker offers. */
+  availableBookIds: string[];
+  /**
+   * Ids of every book the project has, extra material included. Used only to localize book names,
+   * so a scope label reading from the current reference still has a name for a book the search
+   * itself excludes.
+   */
+  localizableBookIds: string[];
+};
+
+/**
+ * Derives every book list Find needs from a project's `platformScripture.booksPresent` setting.
+ *
+ * All of Find's book-list policy lives here rather than in the web view, so the exclusion is
+ * covered by tests instead of resting on a hook body.
+ *
+ * TODO(PT-4414): The `availableBookIds`/`localizableBookIds` split exists only to compensate for
+ * excluding extra material; collapse it back into one list when that exclusion goes away.
+ *
+ * @param booksPresent The `platformScripture.booksPresent` project setting value.
+ * @returns The searchable flag string and the book ids derived from it.
+ */
+export function deriveFindBookLists(booksPresent: string): FindBookLists {
+  const searchableBooksPresent = excludeExtraMaterialBooks(booksPresent);
+  return {
+    searchableBooksPresent,
+    availableBookIds: getPresentBookIds(searchableBooksPresent),
+    localizableBookIds: getPresentBookIds(booksPresent),
+  };
 }
 
 /**
@@ -349,22 +418,24 @@ export function excludeExtraMaterialBooks(booksPresent: string): string {
  * crash — but with the `selectedBooks` scope the search would silently cover fewer books than the
  * checkbox list shows.
  *
- * An EMPTY `availableBookIds` means "not known yet", NOT "the project has no books": `booksPresent`
- * sits at its all-zero default while the project setting resolves, and pruning against that
- * transient empty set would wipe the whole selection instead of narrowing it. In that case the
- * selection is returned untouched.
+ * Pass `undefined` for `availableBookIds` while the project's book list is still being read, and
+ * the selection is returned untouched: pruning against a not-yet-known list would wipe the whole
+ * selection instead of narrowing it. An EMPTY array is a real answer — a project with no searchable
+ * books — and does empty the selection. The distinction matters because Find excludes extra
+ * material, so a project holding nothing else genuinely has nothing to search, and treating that as
+ * "not known yet" would leave a stale selection live.
  *
- * @param availableBookIds Book ids the selected project has, or empty when not yet known.
+ * @param availableBookIds Book ids the selected project has, or `undefined` when not yet known.
  * @param selectedBookIds The currently selected book ids.
  * @returns The pruned ids, or the ORIGINAL `selectedBookIds` array reference when nothing needed
  *   removing — so callers can compare by identity to skip a redundant state write (which also keeps
  *   an effect that depends on this from re-triggering itself).
  */
 export function prunePresentBookIds(
-  availableBookIds: readonly string[],
+  availableBookIds: readonly string[] | undefined,
   selectedBookIds: string[],
 ): string[] {
-  if (availableBookIds.length === 0) return selectedBookIds;
+  if (!availableBookIds) return selectedBookIds;
   const availableBookIdSet = new Set(availableBookIds);
   const prunedBookIds = selectedBookIds.filter((bookId) => availableBookIdSet.has(bookId));
   return prunedBookIds.length === selectedBookIds.length ? selectedBookIds : prunedBookIds;

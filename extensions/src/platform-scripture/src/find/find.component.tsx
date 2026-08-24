@@ -48,6 +48,7 @@ import {
   LanguageStrings,
   LocalizedStringValue,
   ScrollGroupId,
+  Section,
 } from 'platform-bible-utils';
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import React, { useCallback, useMemo, useRef } from 'react';
@@ -85,6 +86,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_capitalization%',
   '%webView_find_clearSearch%',
   '%webView_find_errorOccurred%',
+  '%webView_find_extraMaterialNotSearched%',
   '%webView_find_findTab%',
   '%webView_find_matchCase%',
   '%webView_find_matchContentIn%',
@@ -613,6 +615,11 @@ export function Find({
     });
   }, [results, numberOfHiddenResults, totalNumberOfResults, searchStatus, localizedStrings]);
 
+  const extraMaterialNotSearchedExplanation = useMemo(
+    () => ({ [Section.Extra]: localizedStrings['%webView_find_extraMaterialNotSearched%'] }),
+    [localizedStrings],
+  );
+
   /** Text shown in the scope popover trigger, e.g. "Genesis 1" or "Genesis, Exodus, John" */
   const scopeDisplayText = useMemo(() => {
     switch (scope) {
@@ -1003,6 +1010,10 @@ export function Find({
                 onSelectedBookIdsChange={onSelectedBookIdsChange}
                 localizedStrings={scopeSelectorLocalizedStrings}
                 localizedBookNames={localizedBookData}
+                // Find withholds extra material from `availableBookInfo`, which leaves the Extra
+                // quick-select button permanently disabled. Say why, so it doesn't read as "this
+                // project has no extra material".
+                disabledSectionExplanations={extraMaterialNotSearchedExplanation}
               />
             </PopoverContent>
           </Popover>
