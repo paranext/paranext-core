@@ -167,6 +167,12 @@ export function BookChapterControl({
 
   // Read through a ref so handleOpenChange keeps an empty dependency array: its identity feeds
   // useImperativeHandle, and churning it would re-register the consumer's imperative handle.
+  //
+  // Writing a ref during render is safe here specifically because the write is idempotent (a pure
+  // function of the values above) and the value is never read during render — only from
+  // handleOpenChange, which runs from an event. An effect would be worse, not safer: effects run
+  // after commit, so an imperative open() firing in the same synchronous stretch as a reference
+  // change could read a stale value.
   const isCurrentBookOutsideProjectRef = useRef(false);
   isCurrentBookOutsideProjectRef.current = booksOutsideProject.has(scrRef.book);
 
