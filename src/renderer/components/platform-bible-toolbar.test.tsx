@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import React from 'react';
 import { useData, useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
+import { useOpenResourceBookIds } from '@renderer/hooks/use-open-resource-book-ids.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
@@ -72,6 +73,10 @@ vi.mock('@renderer/hooks/use-send-receive-availability.hook', async (importOrigi
     await importOriginal<typeof import('@renderer/hooks/use-send-receive-availability.hook')>();
   return { ...actual, useSendReceiveAvailability: vi.fn((): boolean | undefined => true) };
 });
+
+vi.mock('@renderer/hooks/use-open-resource-book-ids.hook', () => ({
+  useOpenResourceBookIds: vi.fn(() => ['REV']),
+}));
 
 vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
   useWindowControlsOverlay: vi.fn((): DOMRect | undefined => undefined),
@@ -174,11 +179,13 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       className,
       triggerVariant,
       showTriggerChevron,
+      getAdditionalBookIds,
     }: {
       disabled?: boolean;
       className?: string;
       triggerVariant?: string;
       showTriggerChevron?: boolean;
+      getAdditionalBookIds?: () => string[];
     }) => (
       <button
         type="button"
@@ -188,6 +195,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
         data-classname={className}
         data-trigger-variant={triggerVariant}
         data-show-chevron={showTriggerChevron}
+        data-additional-books={getAdditionalBookIds ? getAdditionalBookIds().join(',') : undefined}
       />
     ),
     ScrollGroupSelector: () => <div data-testid="scroll-group-selector" />,
@@ -225,6 +233,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 // Sync-button block last set would leak into every describe that follows.
 beforeEach(() => {
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
+  vi.mocked(useOpenResourceBookIds).mockReturnValue(['REV']);
 });
 
 const mockSendCommand = (
@@ -784,6 +793,26 @@ describe('PlatformBibleToolbar — top BCV and project selector styling by inter
         .querySelector('[data-select-trigger-classname]')
         ?.getAttribute('data-select-trigger-classname'),
     ).toContain('tw:border-0');
+  });
+});
+
+describe('PlatformBibleToolbar — books from open resources', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand(true);
+  });
+
+  it('offers books from open resources to the book chapter control', async () => {
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).toHaveAttribute('data-additional-books', 'REV');
+  });
+
+  it('passes no additional books callback when there are none', async () => {
+    vi.mocked(useOpenResourceBookIds).mockReturnValue([]);
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).not.toHaveAttribute('data-additional-books');
   });
 });
 
