@@ -50,7 +50,7 @@
 - `src/shared/services/shared-store.service.ts:84` — 1 emitter
 - `src/shared/services/data-provider.service.ts:817` — 1 emitter (type-assertion pattern)
 - `src/extension-host/services/extension.service.ts` — 2 emitters
-- `src/renderer/services/scroll-group.service-host.ts` — 1 emitter
+- `src/main/services/scroll-group.service-host.ts` — 1 emitter
 - `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — 4 emitters (init refactor)
 - `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — 1 emitter (init refactor)
 - `extensions/src/hello-rock3/src/main.ts:462` — 1 emitter
@@ -1300,7 +1300,7 @@ git commit -m "refactor(experimental): migrate shared platform events to createN
 **Files:**
 
 - Modify: `src/extension-host/services/extension.service.ts` (2 emitters)
-- Modify: `src/renderer/services/scroll-group.service-host.ts` (1 emitter)
+- Modify: `src/main/services/scroll-group.service-host.ts` (1 emitter)
 
 For each emitter, declare the event name in `NetworkEventTypes` (in `papi-shared-types.ts`) with its payload type, then replace the sync call with async + `await`.
 
@@ -1341,7 +1341,7 @@ The emitter is module-level; refactor into the service's init function with a `l
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/extension-host/services/extension.service.ts src/renderer/services/scroll-group.service-host.ts src/declarations/papi-shared-types.ts
+git add src/extension-host/services/extension.service.ts src/main/services/scroll-group.service-host.ts src/declarations/papi-shared-types.ts
 git commit -m "refactor(experimental): migrate single-process platform events to createNetworkEventEmitterAsync"
 ```
 
