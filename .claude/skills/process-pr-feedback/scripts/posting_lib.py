@@ -85,6 +85,19 @@ def unresolved_failures(rows):
             if len(r) > ITEM and r[STATUS] == "FAIL" and r[ITEM] not in succeeded]
 
 
+def describe_row(row):
+    """A log row rendered for a human, safe on a row of any width.
+
+    `unsettled_pendings` deliberately returns rows too short to name their item — a kill can
+    truncate a row mid-write, and that row is the whole point of the report. Every consumer that
+    renders one therefore has to survive it, so the rendering lives here rather than being
+    open-coded at each print site: guarding the call sites one at a time is what moved the crash
+    out of the library and into its caller last round.
+    """
+    item = row[ITEM] if len(row) > ITEM else "<truncated row>"
+    return f"{item} [{chr(9).join(row)!r}]"
+
+
 def code_spans(body):
     """(start, end) spans of fenced blocks and inline code spans."""
     spans = []

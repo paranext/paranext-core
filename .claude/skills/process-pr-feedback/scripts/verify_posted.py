@@ -13,7 +13,8 @@ import subprocess
 import sys
 from collections import defaultdict
 
-from posting_lib import parse_common_args, unresolved_failures, unsettled_pendings
+from posting_lib import (describe_row, parse_common_args, unresolved_failures,
+                         unsettled_pendings)
 
 
 def gh(endpoint, slug):
@@ -74,10 +75,10 @@ def main():
     failed = unresolved_failures(rows)
     print(f"token user: {who} · OK rows: {ok_rows}")
     for r in unknown:
-        print(f"  !! UNKNOWN OUTCOME: {r[1]} has a PENDING row with no OK or FAIL after it — "
-              f"a comment may be live. Resolve it before re-posting that item.")
+        print(f"  !! UNKNOWN OUTCOME: {describe_row(r)} has a PENDING row with no OK or FAIL "
+              f"after it — a comment may be live. Resolve it before re-posting that item.")
     for r in failed:
-        print(f"  NOTE failed and never re-posted: {chr(9).join(r)}")
+        print(f"  NOTE failed and never re-posted: {describe_row(r)}")
 
     fails = []
     for pr in sorted(logged):
@@ -125,7 +126,7 @@ def main():
         for f_ in fails:
             print("  - " + f_)
         for r in unknown:
-            print(f"  - {r[1]}: unresolved PENDING")
+            print(f"  - {describe_row(r)}: unresolved PENDING")
         for r in malformed:
             print(f"  - malformed log row: {r!r}")
         sys.exit(1)

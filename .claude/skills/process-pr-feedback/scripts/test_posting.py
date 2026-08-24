@@ -341,6 +341,52 @@ def test_a_truncated_pending_is_still_reported_not_swallowed():
     assert len(unsettled_pendings(rows)) == 1, "the unknown-outcome row was dropped"
 
 
+def test_every_row_a_walker_returns_can_be_rendered():
+    """The producer may return a row too short to name its item; the consumer must survive it.
+
+    Hardening the library alone moved the crash into `verify_posted.py`'s reporting loop, because
+    that loop indexed `r[1]` directly. This exercises the consumer contract, not just the producer.
+    """
+    from posting_lib import describe_row
+    for rows in ([["PENDING"]], [["PENDING"], ["OK", "X", "1", "r", "9", "u", "t"]], [[""]]):
+        for r in unsettled_pendings(rows) + unresolved_failures(rows):
+            assert isinstance(describe_row(r), str)
+
+
+def test_describe_row_names_a_truncated_row_without_indexing_past_it():
+    from posting_lib import describe_row
+    assert "<truncated row>" in describe_row(["PENDING"])
+    assert describe_row(["OK", "R5-01", "1", "r", "9", "u", "t"]).startswith("R5-01")
+
+
+def _labels(entry):
+    import tempfile
+    from check import internal_labels
+    return internal_labels(_vocab(tempfile.mkdtemp(), entry + "\n" + r"2659-\d\d — our ids"))
+
+
+def test_a_usable_pattern_needs_no_prose_half():
+    """Requiring `— prose` silently dropped a valid pattern, and the run still printed PASS."""
+    import tempfile
+    from check import internal_labels
+    assert internal_labels(_vocab(tempfile.mkdtemp(), r"2659-\d\d")) == [r"2659-\d\d"]
+
+
+def test_one_word_prose_before_an_em_dash_is_skipped_not_stopped():
+    """`Note — …` is a sentence. Stopping on it would suggest deny-listing an everyday word."""
+    assert _labels("Note — the reviewer never saw these ids.") == [r"2659-\d\d"]
+
+
+def test_an_id_shaped_bare_word_stops_rather_than_vanishing():
+    for entry in ("CODENAME — an internal codename", "feature-x — our codename"):
+        try:
+            _labels(entry)
+        except SystemExit as e:
+            assert "bare literal" in str(e)
+        else:
+            raise AssertionError(f"{entry!r} was accepted or silently skipped")
+
+
 def main():
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
@@ -352,10 +398,11 @@ def main():
         except AssertionError as e:
             failed.append((name, e))
             print(f"  FAIL  {name}: {e}")
-        except Exception as e:  # noqa: BLE001 - a crash is a failure, not a reason to stop
-            # Catch broadly and keep going. Letting an unexpected exception propagate ends the
-            # whole run, so one crashing test hides every result after it - and a run that dies
-            # with a traceback prints no tally at all, which reads like the suite never ran.
+        except BaseException as e:  # noqa: BLE001 - a crash is a failure, not a reason to stop
+            # BaseException, not Exception: every STOP in these scripts is a `sys.exit`, and
+            # SystemExit does not derive from Exception. Catching only Exception left the most
+            # likely crash in this suite - an unexpected STOP - ending the run with no tally,
+            # which is the exact failure this handler exists to prevent.
             failed.append((name, e))
             print(f"  ERROR {name}: {type(e).__name__}: {e}")
     print(f"\n{len(tests) - len(failed)}/{len(tests)} passed")

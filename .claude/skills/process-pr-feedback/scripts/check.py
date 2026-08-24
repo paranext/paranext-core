@@ -56,29 +56,45 @@ def internal_labels(packet):
         entry = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", line.strip())
         parts = re.split(r"\s+—\s+|\s+-\s+", entry, maxsplit=1)
         token = parts[0].strip()
-        # Prose: no `— prose` separator, or whitespace in the token. Skipped and printed.
-        if not token or len(parts) < 2 or re.search(r"\s", token):
+
+        # Classification, in this order. Every branch below is pinned by a test, because this
+        # rule has been got wrong in both directions: a version that stopped on prose, and a
+        # version that silently dropped a usable pattern.
+        #
+        #   token is empty or contains whitespace   -> prose      (skip + print)
+        #   token is a schema placeholder           -> bad        (hard stop)
+        #   token carries a metacharacter or digit  -> pattern    (transcribe; prose optional)
+        #   token is a bare word, id-shaped         -> bad        (hard stop)
+        #   token is a bare word, ordinary English  -> prose      (skip + print)
+        if not token or re.search(r"\s", token):
             skipped.append(line.strip()[:70])
             continue
-        # Shaped like an entry but the token is a bare literal word — an internal codename rather
-        # than a numbered id. This is NOT prose and must not be silently skipped: skipping it
-        # drops the label from the deny-list, the run reports PASS, and the very id it was written
-        # to catch goes public. Same asymmetry as the placeholder branch, so same hard stop.
-        if not re.search(r"[\\\[\](){}*+?|^$.\d]", token):
-            bad.append(f"{token} (a bare literal; write it as a pattern, e.g. \\b{token}\\b)")
-            continue
-        # Anchored on standalone uppercase runs and bracketed slots. An unanchored `nn`
-        # rejected legitimate patterns like `\bannotation-\d+\b`, hard-stopping a batch with a
-        # message telling the operator their entry is a placeholder when it is not.
+        # Anchored on standalone uppercase runs and bracketed slots. An unanchored `nn` rejected
+        # legitimate patterns like `\bannotation-\d+\b`.
         if re.search(r"(?<![A-Za-z])(NN+|XX+)(?![A-Za-z])|<[^>]*>|\.\.", token):
-            bad.append(token)
+            bad.append(f"{token} (a schema placeholder, not a pattern)")
             continue
         try:
             re.compile(token)
         except re.error as e:
             bad.append(f"{token} (not a valid regex: {e})")
             continue
-        out.append(token)
+        # A usable pattern needs no prose half. Requiring one silently dropped `2659-\d\d`
+        # written on its own, which takes the label out of the deny-list while the run prints
+        # PASS — the same "tested nothing" asymmetry the placeholder branch stops on.
+        if re.search(r"[\\\[\](){}*+?|^$.\d]", token):
+            out.append(token)
+            continue
+        # A bare word. Id-shaped ones (ALL-CAPS, or carrying `-`, `_`, `:`) are entries written
+        # wrong and must stop rather than vanish. An ordinary capitalised English word opening a
+        # sentence — "Note — the reviewer never saw these ids." — is prose; stopping on it would
+        # be worse than skipping, since the remedy it suggests (`\bNote\b`) would deny-list an
+        # everyday word and hard-FAIL any approved body containing it.
+        if token.isupper() or re.search(r"[-_:]", token):
+            bad.append(f"{token} (a bare literal; write it as a pattern, e.g. \\b{token}\\b)")
+        else:
+            skipped.append(line.strip()[:70])
+        continue
     for sk in skipped:
         print(f"[labels] not an entry, skipped: {sk!r}")
     if bad:

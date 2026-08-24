@@ -244,19 +244,29 @@ artifact under test cannot catch anything at all.
 
 ### What `shared-vocabulary.md`'s Internal list must look like
 
-`check.py` transcribes each Internal line's leading token and uses it **verbatim as a regex**.
-Write real patterns, one per line, prose after an em-dash:
+`check.py` transcribes each Internal line and uses the leading token **verbatim as a regex**. A
+markdown list marker is stripped first, and the `— prose` half is optional. Write real patterns:
 
 ```
 2659-\d\d — our packet item ids
 \bD[1-7]\b — our G1 decision numbers
 ```
 
-An entry is `<pattern> — <prose>` and a pattern contains **no whitespace**; anything else in the
-section is treated as prose, skipped, and printed so a real entry written in the wrong shape is
-visible rather than dropped. Schema-shaped entries (`2659-NN`, `R5-XX`, anything with `<…>`
-or `..`) are **rejected with a hard stop**: `2659-NN` is a literal that matches the characters
-`NN`, so every real id passes the check and the dry run reports PASS having tested nothing. That
-failure is invisible from the output, which is why it is made loud at the point of transcription.
+The classification, in order — every branch is pinned by a test, because this rule has been got
+wrong in both directions:
+
+| The leading token | Treated as | Why |
+|---|---|---|
+| empty, or contains whitespace | **prose** — skipped and printed | a sentence, not an entry |
+| a schema slot (`2659-NN`, `R5-XX`, `<…>`, `..`) | **hard stop** | a literal that matches no real id, so the run would report PASS having tested nothing |
+| not a valid regex | **hard stop** | it can only fail at match time |
+| carries a metacharacter or a digit | **pattern** — transcribed | usable as written, with or without prose |
+| a bare word, ALL-CAPS or carrying `-` `_` `:` | **hard stop** | an entry written wrong; skipping it drops the label and prints PASS |
+| a bare ordinary word (`Note — …`) | **prose** — skipped and printed | stopping would suggest deny-listing an everyday word, which would hard-FAIL any body containing it |
+
+Two asymmetries are deliberate. A usable pattern needs **no** prose half — requiring one silently
+dropped `2659-\d\d` written alone, which takes the label out of the deny-list while the run still
+prints PASS. And skipped lines are printed **before** every hard stop, so the operator sees what
+was dropped on exactly the path that explains why nothing parsed.
 A leading markdown list marker is accepted, and an entry must look like a pattern — carry a regex
 metacharacter or a digit — so a one-word prose opener is not transcribed as a literal.
