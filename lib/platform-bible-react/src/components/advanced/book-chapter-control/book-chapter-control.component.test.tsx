@@ -544,4 +544,104 @@ describe('BookChapterControl additional books', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
   });
+
+  test('opens expanded when the current book is outside the project', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'REV', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+  });
+
+  test('the seeded expansion can still be collapsed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'REV', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+
+    await user.click(toggle);
+
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument(),
+    );
+  });
+
+  test('opens collapsed when the current book is in the project', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+  });
+
+  test('shows the current book even when it is in neither the project nor the additional list', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'JUD', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    expect(await screen.findByRole('option', { name: /Jude/ })).toBeInTheDocument();
+  });
+
+  test('reopening resets the expansion to the seed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await user.click(await screen.findByRole('button', { name: 'Show all books' }));
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(getTrigger()).toHaveAttribute('aria-expanded', 'false'));
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'false'));
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+  });
 });
