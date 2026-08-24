@@ -25,7 +25,8 @@ describe('isNavigableProjectIds', () => {
     ['an array of numbers', [1, 2]],
     ['a mixed array', ['projectA', 3]],
     ['an object', { projectA: true }],
-    // eslint-disable-next-line no-null/no-null -- web view state is JSON, so null is a real value we must reject
+    // Web view state is JSON, so null is a real value the guard must reject.
+    // eslint-disable-next-line no-null/no-null
     ['null', null],
   ])('rejects %s', (_label, value) => {
     expect(isNavigableProjectIds(value)).toBe(false);
