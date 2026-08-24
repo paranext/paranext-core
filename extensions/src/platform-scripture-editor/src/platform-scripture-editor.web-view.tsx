@@ -131,6 +131,7 @@ import {
   isMissingBookError,
   isMissingBookOnScreen,
   openCommentListAndSelectThreadSafe,
+  parseMissingBookError,
   resolveAddChapterNumberClick,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
   selectCommentThreadInPanelSafe,
@@ -1307,13 +1308,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     if (!isPlatformError(usjFromPdpPossiblyError)) return [usjFromPdpPossiblyError, true];
 
     const errorMessage = getErrorMessage(usjFromPdpPossiblyError);
-    if (isMissingBookError(usjFromPdpPossiblyError))
-      logger.debug(`Book not found in project: ${errorMessage}`);
+    const isMissingBook = isMissingBookError(usjFromPdpPossiblyError);
+    if (isMissingBook) logger.debug(`Book not found in project: ${errorMessage}`);
     else logger.error(`Error getting USJ from PDP: ${errorMessage}`);
-    return [
-      defaultUsj,
-      !isMissingBookOnScreen({ error: usjFromPdpPossiblyError, currentBookNum, projectId }),
-    ];
+
+    // The comparison needs both identities parsed out of the message. If that wording ever drifts
+    // so they cannot be, fall back to detection alone rather than to `bookExists`: a STALE failure
+    // always parses — it names some other book or project — so an unparseable one cannot be stale.
+    // This gate has no neutral outcome, and the alternative is the worse one; `bookExists` true
+    // with USJ that never arrives leaves this editor on an indefinite spinner.
+    const isBookMissingHere =
+      isMissingBookOnScreen({ error: usjFromPdpPossiblyError, currentBookNum, projectId }) ||
+      (isMissingBook && !parseMissingBookError(usjFromPdpPossiblyError));
+    return [defaultUsj, !isBookMissingHere];
   }, [usjFromPdpPossiblyError, currentBookNum, projectId]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
@@ -2009,6 +2016,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           <BookNotAvailableView
             localizedStrings={localizedStrings}
             isPowerMode={isPowerMode}
+            announcementKey={`${projectId}:${scrRef.book}`}
             manageBooksDisabledReason={manageBooksDisabledReason}
             onOpenManageBooks={() => {
               papi.commands

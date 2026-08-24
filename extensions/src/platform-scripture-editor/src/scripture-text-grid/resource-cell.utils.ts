@@ -1,5 +1,5 @@
 import { isPlatformError } from 'platform-bible-utils';
-import { isMissingBookError } from '../platform-scripture-editor.utils';
+import { isMissingBookError, isMissingBookOnScreen } from '../platform-scripture-editor.utils';
 
 /**
  * The four visual states a ResourceCell can be in; only `ready` renders Editorial.
@@ -22,22 +22,38 @@ export type ResourceCellState =
 
 /**
  * Derives a cell's fetch state from observable data. The resource download/management flow owns the
- * actual download; this only visualizes it: a missing-book failure → `bookNotAvailable`; any other
- * PlatformError → `failed`; still loading / no value → `downloading`; else `ready`. The caller must
- * handle the `'unavailable'` state separately (when `projectId` is `undefined`) before calling this
- * function.
+ * actual download; this only visualizes it: a missing book in the resource on screen →
+ * `bookNotAvailable`; any other PlatformError → `failed`; still loading / no value → `downloading`;
+ * else `ready`. The caller must handle the `'unavailable'` state separately (when `projectId` is
+ * `undefined`) before calling this function.
  *
- * A cell is one verse tall and carries no reference of its own, so it reports the missing book
- * without the identity comparison the full-panel surfaces need: there is no in-cell navigation that
- * could leave a stale claim on screen.
+ * `bookNotAvailable` requires the failure to name BOTH the book and the resource the cell is
+ * showing right now. A cell re-keys its chapter subscription on the grid's shared reference, and a
+ * data hook keeps serving the PREVIOUS selector's result until the new subscription's first update
+ * lands — so navigating OUT of a missing book leaves an error in hand describing the book the user
+ * just left. Without the comparison, and with the failure branch taken ahead of `isLoading`, the
+ * cell would claim "not in this text" about a book the resource does have for the whole round
+ * trip.
+ *
+ * @param args.currentBookNum The book number the cell is displaying. 0 or less means the cell has
+ *   no book it can name, so no claim is made about one.
+ * @param args.projectId The resource's project id, or `undefined` if it has not resolved to one.
  */
 export function deriveCellState(args: {
   usjPossiblyError: unknown;
   isLoading: boolean;
+  currentBookNum: number;
+  projectId: string | undefined;
 }): 'downloading' | 'ready' | 'failed' | 'bookNotAvailable' {
-  const { usjPossiblyError, isLoading } = args;
-  if (isPlatformError(usjPossiblyError))
-    return isMissingBookError(usjPossiblyError) ? 'bookNotAvailable' : 'failed';
+  const { usjPossiblyError, isLoading, currentBookNum, projectId } = args;
+  if (isPlatformError(usjPossiblyError)) {
+    if (isMissingBookOnScreen({ error: usjPossiblyError, currentBookNum, projectId }))
+      return 'bookNotAvailable';
+    // A missing-book failure naming some other book or resource is the previous selector's result,
+    // held while the new subscription's first update is in flight — a spinner, not a fault.
+    if (isMissingBookError(usjPossiblyError)) return 'downloading';
+    return 'failed';
+  }
   if (isLoading || usjPossiblyError === undefined) return 'downloading';
   return 'ready';
 }

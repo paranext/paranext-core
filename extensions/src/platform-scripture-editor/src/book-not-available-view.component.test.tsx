@@ -178,6 +178,47 @@ describe('BookNotAvailableView', () => {
     expect(onOpenManageBooks).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['Simple', false],
+    ['Power', true],
+  ])(
+    're-announces in %s mode when announcementKey names a different missing book',
+    (_mode, isPowerMode) => {
+      // No arm's strings name the book, so GEN -> EXO in a project lacking both would otherwise
+      // leave a mounted region with byte-identical text: `aria-live` sees no change and the second
+      // book is silent. The key is what remounts the region and repairs focus for it.
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+
+      const { rerender } = render(
+        <BookNotAvailableView
+          localizedStrings={STRINGS}
+          isPowerMode={isPowerMode}
+          onOpenManageBooks={vi.fn()}
+          announcementKey="projA:GEN"
+        />,
+      );
+      const firstRegion = screen.getByRole('status');
+      expect(firstRegion).toHaveFocus();
+      // Focus is orphaned again, as it is when the content the user was in gets torn out.
+      firstRegion.blur();
+
+      rerender(
+        <BookNotAvailableView
+          localizedStrings={STRINGS}
+          isPowerMode={isPowerMode}
+          onOpenManageBooks={vi.fn()}
+          announcementKey="projA:EXO"
+        />,
+      );
+
+      // A NEW region in the DOM is what gives the live region something to announce, and focus has
+      // been repaired into it rather than left on the body.
+      const secondRegion = screen.getByRole('status');
+      expect(secondRegion).not.toBe(firstRegion);
+      expect(secondRegion).toHaveFocus();
+    },
+  );
+
   it('falls back to the raw key when a string is missing', () => {
     render(<BookNotAvailableView isPowerMode={false} onOpenManageBooks={vi.fn()} />);
 

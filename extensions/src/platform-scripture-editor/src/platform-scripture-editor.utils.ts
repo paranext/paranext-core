@@ -1209,10 +1209,13 @@ export function resolveAddChapterNumberClick(
  * `c-sharp-tests/MissingBookExceptionTests.cs` pins the exact wording so the two sides cannot drift
  * apart unnoticed.
  *
- * Deliberately matches on the invariant part of the sentence only. Detection has to succeed for any
- * message that names a missing book, because a caller that fails to detect one does not degrade to
- * a neutral state: the main editor treats a non-detection as "book exists" and waits forever for
- * USJ that will never arrive.
+ * Deliberately matches on the invariant part of the sentence only, so it still succeeds on a
+ * message whose two identities {@link MISSING_BOOK_IDENTITY_REGEX} cannot parse. That is what lets
+ * callers with no neutral outcome degrade safely: the main editor's gate is the identity
+ * comparison, and an unparseable message would otherwise leave it treating the failure as "book
+ * exists" and waiting for USJ that never arrives, so it falls back to this pattern instead.
+ * Detection also decides log level (ordinary navigation vs. a real fault) and tells a stale
+ * missing-book failure from a genuine error.
  */
 const MISSING_BOOK_MESSAGE_REGEX = /Book number \d+ not found in project/;
 

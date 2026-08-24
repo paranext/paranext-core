@@ -50,6 +50,13 @@ export type BookNotAvailableViewProps = {
   manageBooksDisabledReason?: ManageBooksDisabledReason;
   /** Invoked when the user clicks "Manage books". */
   onOpenManageBooks: () => void;
+  /**
+   * Identifies WHICH missing book and project this message is about, e.g. `${projectId}:${book}`.
+   * No arm's strings name the book, so moving between two books the project lacks leaves a mounted
+   * region with byte-identical text — which `aria-live` cannot see as a change. Changing this key
+   * remounts the region and repairs focus again, so the second missing book is not silent.
+   */
+  announcementKey?: string;
 };
 
 /**
@@ -64,7 +71,8 @@ export type BookNotAvailableViewProps = {
  * destroyed along with it. Both modes therefore mark the message region `role="status"`, and the
  * region takes focus on mount via {@link useFocusReplacedContent}, which repairs focus only when it
  * actually fell to the body — so navigating here from the toolbar's book/chapter control does not
- * yank focus out of the control the user is still using.
+ * yank focus out of the control the user is still using. Pass `announcementKey` so that moving from
+ * one missing book to another is not silent; see that prop.
  *
  * This deliberately diverges from the sibling `EmptyChapterView`, which keeps the editor
  * mounted-but-hidden and refocuses it: that view has a chapter to return to, whereas a book missing
@@ -75,12 +83,16 @@ export function BookNotAvailableView({
   isPowerMode,
   manageBooksDisabledReason,
   onOpenManageBooks,
+  announcementKey,
 }: BookNotAvailableViewProps) {
-  const regionRef = useFocusReplacedContent<HTMLDivElement>();
+  const regionRef = useFocusReplacedContent<HTMLDivElement>(announcementKey);
 
   if (!isPowerMode) {
     return (
+      // Keyed so a new subject remounts the live region. `aria-live` reports content that CHANGES;
+      // the same sentence about a different book is not a change it can see.
       <div
+        key={announcementKey}
         ref={regionRef}
         role="status"
         tabIndex={-1}
@@ -102,7 +114,15 @@ export function BookNotAvailableView({
   const manageBooksButtonLabel = localize(localizedStrings, MANAGE_BOOKS_BUTTON_KEY);
 
   return (
-    <Empty ref={regionRef} role="status" tabIndex={-1} className="tw:h-full tw:outline-none">
+    // Keyed for the same reason as the Simple branch above: neither the title nor the description
+    // names the book, so without a remount the region's text is identical for the next missing book.
+    <Empty
+      key={announcementKey}
+      ref={regionRef}
+      role="status"
+      tabIndex={-1}
+      className="tw:h-full tw:outline-none"
+    >
       <EmptyHeader>
         {/* `EmptyTitle` renders a `div`, not a heading. This zero-state is the entire content of the
           editor panel, so it needs a real heading for structure-based navigation — nesting one inside

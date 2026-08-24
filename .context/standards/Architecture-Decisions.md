@@ -1033,9 +1033,12 @@ step, no automation. Just a record.
   The message is shown only when the failure names BOTH the book and the project the view is
   displaying right now, compared in the RENDER BODY rather than latched when the failure arrived.
   `parseMissingBookError` returns the `bookNum` and `projectId` the C# `MissingBookException` message
-  carries, and `isMissingBookOnScreen` compares them against what is on screen. A data hook keeps
-  serving the previous selector's result until the new subscription's first update lands, so an error
-  in hand may describe a book the user has navigated away from or a resource they have switched off.
+  carries, and `isMissingBookOnScreen` compares them against what is on screen. Every surface that
+  can report a missing book goes through it — the main editor, both resource panels, and the
+  Scripture Text Grid's cells, which re-key their chapter subscription on the grid's shared
+  reference and so navigate exactly as the full-panel surfaces do. A data hook keeps serving the
+  previous selector's result until the new subscription's first update lands, so an error in hand may
+  describe a book the user has navigated away from or a resource they have switched off.
   Project ids are compared case-insensitively via `normalizeProjectId`: C# canonicalizes them to
   uppercase and reports that form, while a view's own id arrives verbatim from a resource reference,
   and the PDP lookup folds case — so a casing mismatch would be invisible everywhere except here.
@@ -1071,12 +1074,17 @@ step, no automation. Just a record.
   `MissingBookException` and every consumer silently reports "book present". `MissingBookExceptionTests`
   pins the exact wording on the C# side so that rewording fails a test rather than a user. Reordering
   or renaming its two interpolated values is also breaking, since the identity regex reads them
-  positionally. Detection and identity use two different patterns on purpose: detection matches only
-  the invariant part of the sentence, because a caller that fails to detect a missing book does not
-  degrade to a neutral state (the main editor waits forever for USJ that will never arrive), while the
-  identity pattern additionally captures the two values and so can fail on an unexpected message shape
-  — falling back to rendering the editor rather than making a false claim. The stale-content flash on
-  navigation is untouched and remains PT-4139's scope.
+  positionally. Detection and identity use two different patterns on purpose: the identity pattern
+  captures the two values and so can fail on an unexpected message shape, while detection matches only
+  the invariant part of the sentence and so still succeeds there. What a caller does with that gap
+  depends on whether it has a neutral outcome. The resource panels do: an identity failure renders the
+  editor, which shows no content, exactly as before this feature existed. The main editor does NOT —
+  its gate is the identity comparison, and a miss means `bookExists` stays true while no USJ ever
+  arrives, i.e. an indefinite spinner rather than the pre-feature book-not-available view. It
+  therefore falls back to detection alone when the identities cannot be parsed, which is sound
+  because a *stale* failure always parses (it names some other book or project), so an unparseable
+  message cannot be a stale one. The stale-content flash on navigation is untouched and remains
+  PT-4139's scope.
 
   The focus repair both book-not-available views perform lives in `useFocusReplacedContent`
   (`extensions/src/platform-scripture-editor/src/use-focus-replaced-content.hook.ts`). It requires
