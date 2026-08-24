@@ -38,12 +38,14 @@ const searchParams = new URLSearchParams(global.location.search);
 const { allowed: allowedLogLevels, default: defaultLogLevel } =
   URL_PARAMETERS[LOG_LEVEL_QUERY_PARAMETER];
 const requestedLogLevel = searchParams.get(LOG_LEVEL_QUERY_PARAMETER) ?? '';
-// eslint-disable-next-line no-type-assertion/no-type-assertion -- the value is one of the table's
-// own `allowed` entries or its `default`, which is where electron-log's LogLevel members are
-// mirrored; platform.data.test.ts pins that every enum entry declares both
-globalThis.logLevel = (
-  allowedLogLevels?.includes(requestedLogLevel) ? requestedLogLevel : defaultLogLevel
-) as LogLevel;
+const resolvedLogLevel = allowedLogLevels?.includes(requestedLogLevel)
+  ? requestedLogLevel
+  : defaultLogLevel;
+// The value is one of the table's own `allowed` entries or its `default`, and that table is where
+// electron-log's LogLevel members are mirrored, so this narrows a checked string rather than
+// asserting over an unchecked one. platform.data.test.ts pins that every enum entry declares both.
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+globalThis.logLevel = resolvedLogLevel as LogLevel;
 
 // Check if the main process indicated noisy dev mode is enabled
 // null is used in this API meaning the param is not present

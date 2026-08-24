@@ -35,12 +35,16 @@ describe('URL_PARAMETERS', () => {
     // A table with no enum entries would pass every assertion below without checking anything
     expect(enumEntries.length).toBeGreaterThan(0);
 
-    enumEntries.forEach(([name, spec]) => {
-      expect(spec.allowed, `${name} declares no allowed values`).toBeDefined();
-      expect(spec.default, `${name} declares no default`).toBeDefined();
-      expect(spec.allowed, `${name}'s default is not one of its allowed values`).toContain(
-        spec.default,
-      );
-    });
+    // Collected by name rather than asserted per entry, so a failure reports WHICH parameter is
+    // incomplete instead of only that something is
+    expect(enumEntries.filter(([, spec]) => !spec.allowed).map(([name]) => name)).toEqual([]);
+    expect(
+      enumEntries.filter(([, spec]) => spec.default === undefined).map(([name]) => name),
+    ).toEqual([]);
+    expect(
+      enumEntries
+        .filter(([, spec]) => !spec.allowed?.includes(spec.default ?? ''))
+        .map(([name]) => name),
+    ).toEqual([]);
   });
 });
