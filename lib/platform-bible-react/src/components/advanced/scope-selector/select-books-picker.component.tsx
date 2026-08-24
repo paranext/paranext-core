@@ -274,8 +274,13 @@ export function SelectBooksPicker({
                   <Fragment key={section}>
                     {/* Separator goes BEFORE each group but the first, counted over the sections
                     actually rendered. Emitting it after each group instead would leave a dangling
-                    rule below the last one whenever a later section has no books. */}
-                    {index > 0 && <CommandSeparator />}
+                    rule below the last one whenever a later section has no books.
+
+                    `alwaysRender` because cmdk hides a separator whenever its search box is
+                    non-empty, on the assumption that cmdk itself did the filtering. This picker sets
+                    `shouldFilter={false}` and filters into sections on its own, so the groups below
+                    are real and still need dividing. */}
+                    {index > 0 && <CommandSeparator alwaysRender />}
                     <CommandGroup
                       heading={getSectionLongName(section, otLong, ntLong, dcLong, extraLong)}
                     >

@@ -128,3 +128,31 @@ function booksPresentFor(bookIds: string[]): string {
   });
   return flags.join('');
 }
+
+describe('SelectBooksPicker — section separators', () => {
+  /** Counts the rules actually in the DOM. The popover portals out of the render container. */
+  function separatorCount() {
+    return document.body.querySelectorAll('[data-slot="command-separator"]').length;
+  }
+
+  test('Divides the rendered groups, and keeps doing so while the user is searching', async () => {
+    // Two sections with books, so exactly one interior separator is warranted in both states.
+    const { user } = await renderOpenPicker(booksPresentFor(['GEN', 'EXO', 'JHN', 'MRK']));
+
+    expect(separatorCount()).toBe(1);
+
+    // cmdk hides separators whenever its search box is non-empty, assuming cmdk did the filtering.
+    // This picker sets `shouldFilter={false}` and filters itself, so the groups survive the query
+    // and the rule between them has to survive with them.
+    await user.type(screen.getByPlaceholderText('Search books'), 'n');
+
+    expect(document.body.querySelectorAll('[cmdk-group]')).toHaveLength(2);
+    expect(separatorCount()).toBe(1);
+  });
+
+  test('Leaves no dangling rule when only one section has books', async () => {
+    await renderOpenPicker(booksPresentFor(['GEN', 'EXO']));
+
+    expect(separatorCount()).toBe(0);
+  });
+});
