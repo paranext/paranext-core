@@ -69,7 +69,7 @@ it('orders admin-locked rows first when adminLockedFirst is set', async () => {
         name: 'Admin',
         id: 'p-admin',
         source: 'admin',
-        isResourceShownByDefault: true,
+        isInTextCollection: true,
       },
     ]),
     false,
@@ -81,4 +81,25 @@ it('orders admin-locked rows first when adminLockedFirst is set', async () => {
   );
   await waitFor(() => expect(result.current[0]).toHaveLength(2));
   expect(result.current[0]?.[0]).toMatchObject({ isAdminLocked: true });
+});
+
+it('exposes isLoading=true while the downloaded resource fetch is in flight', async () => {
+  vi.mocked(useEffectiveResourceReferenceList).mockReturnValue([
+    effective([{ type: 'project', name: 'WEB', id: 'proj-web', source: 'admin' }]),
+    false,
+  ]);
+  let resolveDownloaded!: (v: Awaited<ReturnType<typeof fetchDownloadedResources>>) => void;
+  vi.mocked(fetchDownloadedResources).mockReturnValue(
+    new Promise((resolve) => {
+      resolveDownloaded = resolve;
+    }),
+  );
+
+  const { result } = renderHook(() =>
+    useResourcePickerResources('p1', { includeDownloaded: true }, []),
+  );
+
+  await waitFor(() => expect(result.current[1]).toBe(true));
+  resolveDownloaded([]);
+  await waitFor(() => expect(result.current[1]).toBe(false));
 });

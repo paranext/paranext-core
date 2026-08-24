@@ -53,6 +53,7 @@ import {
 } from './scripture-text-grid/scripture-text-grid.component';
 import { GridResource } from './scripture-text-grid/resource-cell.component';
 import { toGridResources } from './scripture-text-grid/grid-resources.utils';
+import { isNonDblResource } from './resource-reference.utils';
 import { buildChapterContextOpenedMessage } from './scripture-text-grid/announcements.utils';
 import { useResourceZoom } from './scripture-text-grid/use-resource-zoom.hook';
 import {
@@ -418,10 +419,7 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       // Re-read after the await: the subscription may have advanced during the install.
       const { current } = sourcesRef;
       if (!current) return;
-      // Non-DBL locally-installed resources (e.g. TNN, TND) are returned by getLocalNonDblResources
-      // with dblEntryUid === projectId as a synthetic marker. Store them as ProjectReferences so
-      // toGridResources can resolve them directly by project ID without a DBL catalog lookup.
-      const isLocalOnly = resource.dblEntryUid === resource.projectId;
+      const isLocalOnly = isNonDblResource(resource);
       const reference: DblResourceReference | ProjectReference = isLocalOnly
         ? { type: 'project', name: resource.displayName, id: resource.projectId }
         : { type: 'dblResource', name: resource.displayName, id: resource.dblEntryUid };

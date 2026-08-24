@@ -40,7 +40,7 @@ namespace Paranext.DataProvider.Projects;
 ///   <item><strong>Note-only project types</strong> (<c>ConsultantNotes</c>,
 ///     <c>GlobalConsultantNotes</c>, <c>GlobalAnthropologyNotes</c>): filtered out by the
 ///     <c>IsResourceProject</c> guard in <c>GetAllResourceScrTexts</c> (these project types
-///     are not resource projects). Not served by any factory today; out of scope for this PR.</item>
+///     are not resource projects). Not served by any factory today.</item>
 /// </list>
 ///
 /// <para>

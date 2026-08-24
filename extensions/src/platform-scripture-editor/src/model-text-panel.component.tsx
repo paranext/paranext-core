@@ -25,13 +25,16 @@ import type {
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
-import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
+import {
+  getRefLabel,
+  isDblResourceReference,
+  isProjectReference,
+} from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
 import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { scrollToVerse } from './editor-dom.util';
-import { getRefLabel } from './resource-reference.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 

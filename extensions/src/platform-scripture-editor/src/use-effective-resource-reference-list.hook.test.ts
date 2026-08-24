@@ -16,7 +16,7 @@ vi.mock('@papi/frontend/react', () => ({
 
 vi.mock('@papi/frontend', () => ({
   default: { network: { getNetworkEvent: vi.fn(() => 'event-token') } },
-  logger: { warn: vi.fn() },
+  logger: { warn: vi.fn(), error: vi.fn() },
 }));
 
 // Capture the re-arm handler so buffering can be exercised.

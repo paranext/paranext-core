@@ -9,6 +9,7 @@ import {
 } from '@papi/core';
 import type { DblResourceData } from 'platform-bible-utils';
 import { getErrorMessage, isString, Mutex, wait } from 'platform-bible-utils';
+import { buildLocalNonDblResources } from './get-local-non-dbl-resources.utils';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReact from './home.web-view?inline';
 import newTabReact from './new-tab.web-view?inline';
@@ -181,6 +182,11 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
  */
 async function getLocalNonDblResources(): Promise<DblResourceData[]> {
   try {
+    // Ensure the DBL catalog is loaded before filtering. Reading `cachedResources` directly risks
+    // an empty list during startup, which would let DBL-catalog resources slip through the exclusion
+    // filter and appear as duplicates in the picker alongside their catalog entry.
+    const dblCatalog = await getCachedResources();
+
     // Retry until at least one isEditable=false project appears — mirrors the reasoning in
     // fetchDownloadedResources (frontend): a call that resolves before the C# Paratext factory has
     // registered returns only TypeScript-only PDPFs and misses all C# resource projects. Capped at
@@ -205,50 +211,7 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
       });
     }
 
-    // Exclude any resource whose project ID matches a DBL catalog entry (by exact projectId or by
-    // the startsWith(dblEntryUid) convention Paratext uses when naming project directories).
-    // The startsWith match is guarded by r.installed: a DBL entry whose UID is only a prefix of
-    // the local project ID but is NOT itself installed is likely a stale or reassigned UID (e.g.
-    // DBL republished a resource under a new UID — the old UID is now in the catalog for a
-    // different resource, so a local project installed under the old UID would be falsely excluded).
-    const dblEntries = cachedResources ?? [];
-    const nonDblMetadata = allMetadata.filter((m) => {
-      if (m.isEditable !== false) return false;
-      const matchingDblEntry = dblEntries.find(
-        (r) =>
-          (r.projectId !== '' && r.projectId === m.id) ||
-          // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
-          // Guard against reassigned UIDs: only exclude via startsWith when the matched
-          // DBL entry is actually installed (r.installed), so a local project whose ID
-          // starts with a UID that now belongs to a DIFFERENT uninstalled resource is not
-          // incorrectly treated as a DBL duplicate and hidden from the picker.
-          (r.dblEntryUid !== '' &&
-            r.installed &&
-            m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
-      );
-      if (matchingDblEntry) return false;
-      return true;
-    });
-
-    // Use name/fullName/language from the project metadata directly — the C# factory populates
-    // these at enumeration time (same values as the platform.name/fullName/language settings),
-    // so no per-project PDP call is needed.
-    return nonDblMetadata.map(
-      (m): DblResourceData => ({
-        // Convention: dblEntryUid === projectId marks this as a non-DBL synthetic entry.
-        // selectTextConnection detects this and creates a ProjectReference instead of a
-        // DblResourceReference so the resource is resolvable without a catalog entry.
-        dblEntryUid: m.id,
-        displayName: m.name ?? m.id,
-        fullName: m.fullName ?? m.name ?? m.id,
-        bestLanguageName: m.language ?? '',
-        type: 'ScriptureResource',
-        size: 0,
-        installed: true,
-        updateAvailable: false,
-        projectId: m.id,
-      }),
-    );
+    return buildLocalNonDblResources(allMetadata, dblCatalog ?? []);
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
     return [];

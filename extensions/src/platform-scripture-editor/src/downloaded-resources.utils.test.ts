@@ -62,6 +62,16 @@ describe('matchesDownloaded', () => {
       }),
     ).toBe(false);
   });
+
+  it('does not match any project when the DblResourceReference id is empty', () => {
+    expect(
+      matchesDownloaded(downloaded({ projectId: 'proj-web' }), {
+        type: 'dblResource',
+        name: 'X',
+        id: '',
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('buildPickerResources', () => {
@@ -71,7 +81,7 @@ describe('buildPickerResources', () => {
       name: 'WEB',
       id: 'proj-web',
       source: 'admin',
-      isResourceShownByDefault: true,
+      isInTextCollection: true,
     },
   ];
 
@@ -112,7 +122,6 @@ describe('buildPickerResources', () => {
       type: 'enhancedResource',
       name: 'MyEnhanced',
       source: 'user',
-      isResourceShownByDefault: false,
     };
     const rows = buildPickerResources([enhancedRef], [], []);
     expect(rows).toHaveLength(1);
@@ -152,28 +161,23 @@ describe('buildPickerResources', () => {
 describe('fetchDownloadedResources', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('resolves names via the platform.base PDP for each non-editable (read-only) project', async () => {
+  it('resolves name, fullName, and language from metadata, excluding editable projects', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
       // `as never` is required because mockResolvedValue expects the full ProjectMetadata shape;
-      // a minimal stub suffices for this test and refactoring to match the full type adds no value.
+      // a minimal stub suffices for this test.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'proj-kjn', projectInterfaces: [], isEditable: false } as never,
+      {
+        id: 'proj-kjn',
+        projectInterfaces: [],
+        isEditable: false,
+        name: 'KJN',
+        fullName: 'King James New',
+        language: 'English',
+      } as never,
       // The user's own editable translation projects must be filtered out.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       { id: 'proj-editing', projectInterfaces: [], isEditable: true } as never,
     ]);
-    const getSetting = vi.fn(
-      async (key: string) =>
-        ({
-          'platform.fullName': 'King James New',
-          'platform.name': 'KJN',
-          'platform.language': 'English',
-        })[key],
-    );
-    // `as never` is required because mockResolvedValue expects the full IProjectDataProvider shape;
-    // a minimal stub with just getSetting suffices for this test.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    vi.mocked(papi.projectDataProviders.get).mockResolvedValue({ getSetting } as never);
 
     const result = await fetchDownloadedResources();
     expect(result).toEqual([
@@ -182,9 +186,8 @@ describe('fetchDownloadedResources', () => {
     expect(papi.projectLookup.getMetadataForAllProjects).toHaveBeenCalledWith({
       includeProjectInterfaces: ['platform.base'],
     });
-    // Only proj-kjn (isEditable: false) should be resolved; proj-editing (isEditable: true) is excluded.
-    expect(papi.projectDataProviders.get).toHaveBeenCalledTimes(1);
-    expect(papi.projectDataProviders.get).toHaveBeenCalledWith('platform.base', 'proj-kjn');
+    // Names come from metadata directly; no PDP call needed.
+    expect(papi.projectDataProviders.get).not.toHaveBeenCalled();
   });
 
   it('returns [] and warns when enumeration throws', async () => {
@@ -193,44 +196,17 @@ describe('fetchDownloadedResources', () => {
     expect(vi.mocked(logger.warn)).toHaveBeenCalled();
   });
 
-  it('keeps successful projects and warns when one PDP getSetting rejects', async () => {
+  it('falls back to project id when name and fullName are absent from metadata', async () => {
     vi.mocked(papi.projectLookup.getMetadataForAllProjects).mockResolvedValue([
       // `as never` is required: mockResolvedValue expects the full ProjectMetadata shape but a
       // minimal stub suffices for this test.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'proj-bad', projectInterfaces: [], isEditable: false } as never,
-      // `as never` is required: mockResolvedValue expects the full ProjectMetadata shape but a
-      // minimal stub suffices for this test.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'proj-ok', projectInterfaces: [], isEditable: false } as never,
+      { id: 'proj-unnamed', projectInterfaces: [], isEditable: false } as never,
     ]);
-
-    const getSettingOk = vi.fn(
-      async (key: string) =>
-        ({
-          'platform.fullName': 'Good Bible',
-          'platform.name': 'GB',
-          'platform.language': 'English',
-        })[key],
-    );
-
-    vi.mocked(papi.projectDataProviders.get).mockImplementation(async (_type, projectId) => {
-      if (projectId === 'proj-bad') {
-        // `as never` is required: the mock implementation returns a partial stub rather than the
-        // full IProjectDataProvider shape; the stub is sufficient for this error-path test.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        return { getSetting: vi.fn().mockRejectedValue(new Error('PDP failure')) } as never;
-      }
-      // `as never` is required: mock returns a partial stub rather than the full
-      // IProjectDataProvider shape; the stub is sufficient for the success-path.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      return { getSetting: getSettingOk } as never;
-    });
 
     const result = await fetchDownloadedResources();
     expect(result).toEqual([
-      { projectId: 'proj-ok', name: 'GB', fullName: 'Good Bible', language: 'English' },
+      { projectId: 'proj-unnamed', name: 'proj-unnamed', fullName: 'proj-unnamed', language: '' },
     ]);
-    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(expect.stringContaining('proj-bad'));
   });
 });

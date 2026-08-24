@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { logger } from '@papi/frontend';
 import { isPlatformError } from 'platform-bible-utils';
 import type {
   EffectiveResourceReference,
@@ -25,7 +26,7 @@ function getDeduplicationKey(item: ResourceReference): string | undefined {
   if ('id' in item && typeof item.id === 'string') return `id:${item.id}`;
   if ('name' in item && typeof item.name === 'string') return `name:${item.name}`;
   // Should never happen after upstream validation; discard rather than silently misidentify
-  console.error(`Resource reference of type '${item.type}' has no string name; discarding.`);
+  logger.error(`Resource reference of type '${item.type}' has no string name; discarding.`);
   return undefined;
 }
 
@@ -113,7 +114,7 @@ export function useEffectiveResourceReferenceList(
         return undefined;
       })
       .catch((err) => {
-        console.error(`Failed to subscribe to user text connection settings: ${err}`);
+        logger.error(`Failed to subscribe to user text connection settings: ${err}`);
       });
 
     return () => {
@@ -130,7 +131,7 @@ export function useEffectiveResourceReferenceList(
 
       return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
     }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]),
-    isProjectSettingLoading,
+    isProjectSettingLoading || (userPdp !== undefined && userResourceReferenceList === undefined),
   ];
 }
 
