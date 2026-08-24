@@ -2391,7 +2391,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                   localizedStrings={localizedStrings}
                 />
 
-                {blockMarker !== undefined && (
+                {/* Truthy, not just defined: an empty marker has nothing to put in the fixed
+                    marker slot, so the trigger would render a blank six-character box followed by
+                    a dangling " - " and the generic fallback description. No marker and no block
+                    are the same state to a user, so they read the same way. */}
+                {!!blockMarker && (
                   <DisabledActionTooltip
                     disabled={isStructureProtected}
                     tooltipText={
@@ -2399,14 +2403,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                         '%webView_platformScriptureEditor_paragraphSelection_protectedTooltip%'
                       ]
                     }
+                    // This wrapper div — not the Button inside it — is the toolbar zone's flex
+                    // item, so this is where the shrink floor has to be lifted. Without it the div
+                    // stays pinned at min-content and the Button's own `tw:min-w-0` can never come
+                    // into play, because the box around it never narrows.
+                    className="tw:min-w-0"
                   >
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button
-                          // `tw:min-w-0` lets the button shrink so its label can truncate rather
-                          // than push the end-zone buttons out of the clipped toolbar. The width
-                          // ceiling lives on the label itself (30 characters) so it is expressed in
-                          // the same units UX specified it in — see ParagraphStyleLabel.
+                          // `tw:min-w-0` lets the button shrink inside the wrapper so its label can
+                          // truncate rather than push the end-zone buttons out of the clipped
+                          // toolbar. It only bites because the wrapper above carries the same
+                          // floor-lift; on its own it would be inert. The width ceiling lives on
+                          // the label itself (30 characters) so it is expressed in the same units
+                          // UX specified it in — see ParagraphStyleLabel.
                           className="tw:h-8 tw:min-w-0"
                           aria-label="Paragraph Selection"
                           // No native `title` here. The label inside now raises its own tooltip

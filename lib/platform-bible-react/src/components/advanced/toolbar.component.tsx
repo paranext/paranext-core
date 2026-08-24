@@ -177,10 +177,17 @@ export function Toolbar({
           </div>
 
           {/* Content area — absorbing. Holds the project selector, reference-history buttons and
-            BookChapterControl, each of which has a shorter label form to fall back to. */}
+            BookChapterControl, each of which has a shorter label form to fall back to.
+            `tw:overflow-clip` is the same backstop every TabToolbar zone carries, and it is needed
+            for the same reason: these children have width floors of their own, so once the zone is
+            squeezed past their sum they overflow it. Sibling flex items do not clip each other and
+            the nearest clipping ancestor is the row edge, past the Configure area — so without it
+            the overrun paints on top of the Send/Receive, settings and profile buttons and makes
+            them partly un-clickable. Tooltips and popovers are portalled, so nothing that needs to
+            escape the box is clipped by this. */}
           <div
             data-testid="toolbar-content-area"
-            className="tw:flex tw:min-w-0 tw:shrink tw:items-center tw:gap-2 tw:px-2"
+            className="tw:flex tw:min-w-0 tw:shrink tw:items-center tw:gap-2 tw:overflow-clip tw:px-2"
             /* @ts-ignore Electron-only property */
             style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >

@@ -976,6 +976,35 @@ describe('PlatformBibleToolbar project selector label', () => {
     expect(narrowTrigger).not.toMatch(/(?:^|\s)tw:min-w-48(?:\s|$)/);
   });
 
+  it('re-enables pointer events on the label, which Radix SelectValue switches off for its whole subtree', async () => {
+    // Verified against the real Radix component: `SelectValue` renders
+    // `<span data-slot="select-value" style="pointer-events: none;">` and discards any className or
+    // style handed to it. Everything inside is then invisible to the pointer — no hover, so the
+    // abbreviated label's tooltip never opens and the error's native `title` never shows. The fix
+    // has to sit on the descendant, which is the one thing Radix does not control.
+    // (The mock above renders a plain span, so only the class can be checked here.)
+    renderAtStep(SHRINK_STEP.MINIMUM);
+
+    const label = screen.getByTestId('project-picker-value').firstElementChild;
+    expect(label?.className).toMatch(/(?:^|\s)tw:pointer-events-auto(?:\s|$)/);
+  });
+
+  it('re-enables pointer events on the error label too, so its title can be read', async () => {
+    const { useProjectPickerData } = await import('@renderer/hooks/use-project-picker-data.hook');
+    vi.mocked(useProjectPickerData).mockReturnValueOnce({
+      currentProject: { id: 'proj-1', fullName: 'Test Project', shortName: 'TP' },
+      recentProjects: [],
+      allProjects: [],
+      currentProjectError: 'Project failed to load',
+      isLoading: false,
+    });
+
+    renderAtStep(SHRINK_STEP.WIDE);
+
+    const errorLabel = screen.getByTitle('Project failed to load');
+    expect(errorLabel.className).toMatch(/(?:^|\s)tw:pointer-events-auto(?:\s|$)/);
+  });
+
   it('keeps an error visible at the narrowest step, where the project name would be dropped', async () => {
     // Routing the error through the label's droppable field would leave the user with a red short
     // name and no statement of what went wrong.

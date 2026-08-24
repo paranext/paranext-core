@@ -1485,9 +1485,14 @@ step, no automation. Just a record.
   hard-coded 4; deferred as a larger change than this ticket warranted. **Equal-thirds column
   weights** — rejected: it would give the editor 266px at the minimum window, below what its own
   toolbar needs, and would narrow the editor at every width, not just the smallest.
-- **Consequences:** No horizontal scrollbar at any supported window size, verified in the app. The
-  1:2:1 weighting is retained and pinned by a test, so the editor grows twice as fast as its
-  neighbours above the floor. Columns are proportional with no JS: rc-dock renders each as
+- **Consequences:** No horizontal scrollbar at any supported window size — predicted, not yet
+  observed. The prediction rests on rc-dock's own arithmetic (`Algorithm.js` sums child `minWidth`s
+  and then adds `(children - 1) * 4`), and that model reproduces the one measurement taken in a
+  running app, which was of the reverted clip implementation at floors 298 and 294. Nothing has
+  re-run at a 900px window since the floor became 297, and `simple-layout.data.test.ts` asserts only
+  the arithmetic the floor was derived from, so it cannot fail if the model is wrong. **Confirm once
+  in a running app at the minimum window before relying on this.** The 1:2:1 weighting is retained
+  and pinned by a test, so the editor grows twice as fast as its neighbours above the floor. Columns are proportional with no JS: rc-dock renders each as
   `flex: (size) (size × 1e6) (size)px`, so removing the floor is all that "proportional resize"
   required. The window minimum and the column floor are two constants in different files that must
   move together; the test cannot import the Electron-side value, so its comment says to change both.

@@ -95,6 +95,15 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 ];
 
 /**
+ * Radix's `SelectValue` hard-codes `style={{ pointerEvents: 'none' }}` on its span and discards any
+ * `className` or `style` passed to it, so anything rendered inside it is invisible to the pointer:
+ * no `:hover`, no pointer events, and a native `title` that can never open. `pointer-events` is
+ * inherited, so re-declaring `auto` on the descendant that needs it restores hit-testing for that
+ * subtree only. Presses still reach the trigger, which is an ancestor and gets the bubbled event.
+ */
+const POINTER_EVENTS_INSIDE_SELECT_VALUE = 'tw:pointer-events-auto';
+
+/**
  * The project selector's trigger label.
  *
  * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which `Toolbar`
@@ -119,7 +128,13 @@ function ProjectSelectorLabel({
   // leaving red text as the only signal that anything is wrong.
   if (errorMessage) {
     return (
-      <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-destructive" title={errorMessage}>
+      <span
+        className={cn(
+          'tw:min-w-0 tw:flex-1 tw:truncate tw:text-destructive',
+          POINTER_EVENTS_INSIDE_SELECT_VALUE,
+        )}
+        title={errorMessage}
+      >
         {errorMessage}
       </span>
     );
@@ -134,6 +149,7 @@ function ProjectSelectorLabel({
       secondaryFirst
       showSecondary={!isAtMinimum}
       fullText={`${fullName} (${shortName})`}
+      className={POINTER_EVENTS_INSIDE_SELECT_VALUE}
     />
   );
 }

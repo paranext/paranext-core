@@ -762,6 +762,7 @@ export function Toolbar(props: ToolbarProps) {
     onSearchChange,
     hasMatches,
     localizedStringsWithLoadingState,
+    shrinkStep,
   } = props;
 
   return (
@@ -790,6 +791,7 @@ export function Toolbar(props: ToolbarProps) {
         onSearchChange={onSearchChange}
         hasMatches={hasMatches}
         localizedStringsWithLoadingState={localizedStringsWithLoadingState}
+        shrinkStep={shrinkStep}
       />
     </div>
   );

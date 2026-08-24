@@ -927,8 +927,15 @@ export function BookChapterControl({
           role="combobox"
           aria-expanded={isCommandOpen}
           disabled={disabled}
+          // `tw:shrink` overrides the `tw:shrink-0` in the shadcn Button base, and it is what makes
+          // the abbreviation ladder above worth anything: `tw:w-full` gives this a flex base of the
+          // full container width, so while it is rigid the trigger holds a fixed slot (capped at
+          // `tw:max-w-48`) no matter which label form is inside it. Shortening `Genesis 1:1` to
+          // `GEN` then frees no room for its neighbours — it just leaves more empty space in a box
+          // of the same width, and the space they needed still comes out of somewhere else.
+          // `tw:min-w-16` remains the floor, so the trigger stays a usable click target.
           className={cn(
-            'tw:h-8 tw:w-full tw:min-w-16 tw:max-w-48 tw:overflow-hidden tw:px-1',
+            'tw:h-8 tw:w-full tw:min-w-16 tw:max-w-48 tw:shrink tw:overflow-hidden tw:px-1',
             className,
           )}
           onClick={(event) => {

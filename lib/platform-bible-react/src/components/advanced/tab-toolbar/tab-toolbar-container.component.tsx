@@ -1,5 +1,5 @@
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
-import React, { PropsWithChildren, ReactNode, useCallback, useState } from 'react';
+import React, { PropsWithChildren, ReactNode, useCallback, useRef, useState } from 'react';
 import { ShrinkStepContext } from '@/context/shrink-step.context';
 import { useShrinkStep } from '@/hooks/use-shrink-step.hook';
 import { SelectMenuItemHandler } from '../menus/platform-menubar.component';
@@ -82,18 +82,25 @@ export const TabToolbarContainer = React.forwardRef<HTMLDivElement, TabToolbarCo
     // forwarded ref is still populated alongside it so callers keep the node they expect.
     const [rootNode, setRootNode] = useState<HTMLDivElement | undefined>(undefined);
 
-    const attachRoot = useCallback(
-      (node: HTMLDivElement | null) => {
-        setRootNode(node ?? undefined);
-        if (typeof ref === 'function') ref(node);
-        // Writing `ref.current` IS how an object ref is populated — React itself does exactly this
-        // for a non-callback ref. There is no non-mutating alternative when forwarding one by hand,
-        // which this component must do because it also needs the node in state for the observer.
-        // eslint-disable-next-line no-param-reassign
-        else if (ref) ref.current = node;
-      },
-      [ref],
-    );
+    // The forwarded ref is read through a ref of its own so `attachRoot` can have a stable
+    // identity. Depending on `ref` directly would rebuild this callback whenever the caller passes
+    // an inline one — React then detaches the old callback ref with `null` and attaches the new one
+    // with the node on every render, and since each of those writes state, the render that follows
+    // rebuilds the callback again. That is a render loop, and it is invisible until some caller
+    // stops memoizing its ref.
+    const forwardedRef = useRef(ref);
+    forwardedRef.current = ref;
+
+    const attachRoot = useCallback((node: HTMLDivElement | null) => {
+      setRootNode(node ?? undefined);
+      const currentRef = forwardedRef.current;
+      if (typeof currentRef === 'function') currentRef(node);
+      // Writing `ref.current` IS how an object ref is populated — React itself does exactly this
+      // for a non-callback ref. There is no non-mutating alternative when forwarding one by hand,
+      // which this component must do because it also needs the node in state for the observer.
+      // eslint-disable-next-line no-param-reassign
+      else if (currentRef) currentRef.current = node;
+    }, []);
 
     const measuredShrinkStep = useShrinkStep(rootNode, TAB_TOOLBAR_SHRINK_THRESHOLDS_PX);
     const shrinkStep = shrinkStepOverride ?? measuredShrinkStep;

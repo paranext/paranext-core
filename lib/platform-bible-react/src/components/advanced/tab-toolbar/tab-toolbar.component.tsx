@@ -101,8 +101,15 @@ export function TabToolbar({
           {startAreaChildren}
         </div>
       )}
+      {/* Deliberately NOT `tw:min-w-0`, unlike the start zone. This zone's flex base is 0 below the
+          `@sm` container width, and a zero-basis item absorbs none of a deficit — its used size is
+          whatever its floor says. `min-width: auto` (min-content) is therefore the only thing
+          keeping its contents on screen at narrow widths; adding `tw:min-w-0` here would resolve
+          the zone to 0px and `tw:overflow-clip` would erase it outright. Center-zone content is
+          typically a single toggle with no shorter form, so that is the disappearing-item bug
+          rather than a graceful degradation. */}
       {centerAreaChildren && (
-        <div className="tw:flex tw:min-w-0 tw:shrink tw:grow-[1] tw:basis-0 tw:flex-row tw:flex-nowrap tw:items-start tw:justify-center tw:gap-x-1 tw:gap-y-2 tw:overflow-clip tw:@sm:basis-auto">
+        <div className="tw:flex tw:shrink tw:grow-[1] tw:basis-0 tw:flex-row tw:flex-nowrap tw:items-start tw:justify-center tw:gap-x-1 tw:gap-y-2 tw:overflow-clip tw:@sm:basis-auto">
           {centerAreaChildren}
         </div>
       )}

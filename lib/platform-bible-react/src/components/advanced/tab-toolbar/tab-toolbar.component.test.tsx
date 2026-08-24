@@ -49,24 +49,39 @@ describe('TabToolbar', () => {
     });
   });
 
-  it('lets the start and center zones shrink below their content width (tw:min-w-0), so the flex algorithm takes space from them instead of pushing the end zone out of the clipped container', () => {
+  it('lets the start zone shrink below its content width (tw:min-w-0), so the flex algorithm takes space from it instead of pushing the end zone out of the clipped container', () => {
     render(
       <TabToolbar
         onSelectProjectMenuItem={() => {}}
         onSelectViewInfoMenuItem={() => {}}
         startAreaChildren={<span data-testid="start-child">Start</span>}
-        centerAreaChildren={<span data-testid="center-child">Center</span>}
         endAreaChildren={<span data-testid="end-child">End</span>}
       />,
     );
 
     const startWrapper = screen.getByTestId('start-child').parentElement;
+
+    expect(startWrapper).not.toBeNull();
+    expect(startWrapper?.className).toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+  });
+
+  it('keeps the min-content floor on the zero-basis center zone, so its contents cannot resolve to zero width and be clipped away entirely', () => {
+    // `tw:basis-0` means this zone absorbs none of a deficit, so `min-width: auto` is the only
+    // thing sizing it at narrow widths. Pairing `tw:min-w-0` with `tw:basis-0` resolves the zone
+    // to 0px, and `tw:overflow-clip` then erases whatever is in it.
+    render(
+      <TabToolbar
+        onSelectProjectMenuItem={() => {}}
+        onSelectViewInfoMenuItem={() => {}}
+        centerAreaChildren={<span data-testid="center-child">Center</span>}
+      />,
+    );
+
     const centerWrapper = screen.getByTestId('center-child').parentElement;
 
-    [startWrapper, centerWrapper].forEach((wrapper) => {
-      expect(wrapper).not.toBeNull();
-      expect(wrapper?.className).toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
-    });
+    expect(centerWrapper).not.toBeNull();
+    expect(centerWrapper?.className).toMatch(/(?:^|\s)tw:basis-0(?:\s|$)/);
+    expect(centerWrapper?.className).not.toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
   });
 
   it('keeps the end zone rigid so the view-info menu and its icon buttons are never the ones squeezed out (they have no shorter form to fall back to)', () => {

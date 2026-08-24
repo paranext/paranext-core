@@ -2,7 +2,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
-import { beforeAll, describe, expect, test } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { ToolbarCompoundLabel } from './toolbar-compound-label.component';
 
 // jsdom doesn't ship ResizeObserver. Radix's Popper positioning (used by the Tooltip content here)
@@ -44,6 +44,13 @@ function setClipping(
 }
 
 describe('ToolbarCompoundLabel', () => {
+  beforeEach(() => {
+    // The component tracks input modality document-wide and deliberately lets it persist, which is
+    // right in an app and order-dependent in a file of tests: one test's click would otherwise
+    // decide whether the next test's focus reveals anything. Reset to keyboard before each.
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+  });
+
   test('shows both fields when the secondary field is shown', () => {
     render(<ToolbarCompoundLabel primary="GEN" secondary="1:1" fullText="Genesis 1:1" />);
 
@@ -267,5 +274,97 @@ describe('ToolbarCompoundLabel', () => {
     await userEvent.click(primary);
 
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  test('stays closed when a dismissed popover hands focus back, rather than only when focus is genuine', async () => {
+    // Radix refocuses its trigger on close (`onCloseAutoFocus` / `onUnmountAutoFocus`), so a
+    // pointer user who picks a menu item gets a real `focus` event they never asked for. Revealing
+    // there puts a tooltip over the toolbar with the pointer already elsewhere, and none of the
+    // pointer-leave handlers can close it.
+    render(
+      <button type="button">
+        <ToolbarCompoundLabel
+          primary="GEN"
+          secondary="1:1"
+          showSecondary={false}
+          fullText="Genesis 1:1"
+        />
+      </button>,
+    );
+    const button = screen.getByRole('button');
+
+    // jsdom ships no `PointerEvent` constructor; the tracker only reads the event's type.
+    document.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    button.focus();
+
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  });
+
+  test('shows the full text on hover once the primary field is clipped, not only the secondary', async () => {
+    // The secondary is weighted to give way first, so by the time the primary is clipping there is
+    // nothing left to sacrifice — which is exactly when the full text is most worth offering. A
+    // watcher on the secondary alone stays silent through that, because the secondary collapsed to
+    // zero width long before and reports no overflow.
+    render(
+      <ToolbarCompoundLabel
+        primary="Song of Solomon"
+        secondary="1:1"
+        fullText="Song of Solomon 1:1"
+      />,
+    );
+    setClipping(screen.getByText('Song of Solomon'), { scrollWidth: 200, clientWidth: 60 });
+    setClipping(screen.getByText('1:1'), { scrollWidth: 0, clientWidth: 0 });
+
+    await userEvent.hover(screen.getByText('Song of Solomon'));
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Song of Solomon 1:1');
+  });
+
+  test('drops a tooltip that is no longer telling the user anything once the label grows back to full', async () => {
+    // The open state is latched at hover time. Widening re-renders the label in full underneath a
+    // pointer that never moved, and without a reset the tooltip keeps sitting there repeating text
+    // that is now fully on screen.
+    const { rerender } = render(
+      <ToolbarCompoundLabel
+        primary="GEN"
+        secondary="1:1"
+        showSecondary={false}
+        fullText="Genesis 1:1"
+      />,
+    );
+
+    await userEvent.hover(screen.getByText('GEN'));
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+
+    rerender(<ToolbarCompoundLabel primary="Genesis" secondary="1:1" fullText="Genesis 1:1" />);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
+  });
+
+  test('routes a Radix-decided close back through its own state, so the tooltip is dismissable', async () => {
+    // A controlled `<Tooltip open>` with no `onOpenChange` cannot be closed by Radix at all: its
+    // Escape handler runs, calls the setter Radix owns, and nothing happens — while its dismissable
+    // layer has already called preventDefault on that keypress, eating it from whatever is below.
+    render(
+      <button type="button">
+        <ToolbarCompoundLabel
+          primary="GEN"
+          secondary="1:1"
+          showSecondary={false}
+          fullText="Genesis 1:1"
+        />
+      </button>,
+    );
+
+    await userEvent.hover(screen.getByText('GEN'));
+    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() => {
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    });
   });
 });
