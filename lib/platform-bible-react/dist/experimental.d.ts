@@ -21,7 +21,7 @@ type ClassProp = {
 type OmitUndefined<T> = T extends undefined ? never : T;
 type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
 declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | null | undefined;
+	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | "subtle" | null | undefined;
 	size?: "default" | "icon" | "xs" | "sm" | "lg" | "icon-xs" | "icon-sm" | "icon-lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 interface ButtonProps extends React$1.ComponentProps<"button">, VariantProps<typeof buttonVariants> {
@@ -176,6 +176,16 @@ type CommonProps = {
 	 * alphabetically by `versificationName`.
 	 */
 	priorityVersificationId?: string;
+	/**
+	 * When true, the funnel/filter menu next to the search box is not rendered. Defaults to `false`.
+	 *
+	 * For a picker whose rows are ALL open tabs (so "Group by open tabs" only toggles a section
+	 * heading over an otherwise identical list) and which is single-select (so "Show selected only"
+	 * never renders), the menu reduces to a control with no meaningful effect. Set this to drop the
+	 * affordance rather than present an inert one. Grouping still applies per
+	 * `defaultGroupByOpenTabs`; only the user-facing toggle goes away.
+	 */
+	hideFilterMenu?: boolean;
 };
 type ProjectSelectorProps = (CommonProps & {
 	mode: "project";

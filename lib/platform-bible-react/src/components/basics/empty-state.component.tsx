@@ -17,6 +17,10 @@ export type EmptyStateProps = {
  * A presentational empty-state message for a list, grid, or panel that currently has nothing to
  * show. Renders the localized `message` in a `role="status"` region so screen readers announce it
  * when the surrounding content becomes empty. Layout is left to the caller via `className`.
+ *
+ * For a richer zero-state that needs media, a heading, or an action, use the `Empty` composition
+ * (`Empty`, `EmptyHeader`, `EmptyMedia`, `EmptyTitle`, `EmptyDescription`, `EmptyContent`)
+ * instead.
  */
 export function EmptyState({ message, id, className }: EmptyStateProps) {
   return (

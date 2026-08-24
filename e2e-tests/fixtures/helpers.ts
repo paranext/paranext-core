@@ -164,7 +164,8 @@ export async function launchElectronApp(
     ...restEnv,
     NODE_ENV: 'development',
     // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
-    // Only set if not already defined, so other E2E suites can override.
+    // Only set if not already defined, so other E2E suites can override (e.g. a suite that needs a
+    // clean layout passes `envOverrides: { DEV_NOISY: 'false' }`, which is spread last below).
     DEV_NOISY: process.env.DEV_NOISY ?? 'true',
     // Placing the project root inside userDataDir means the existing teardown rmSync cleans it up.
     ...(opts.isolatedProjectRoot

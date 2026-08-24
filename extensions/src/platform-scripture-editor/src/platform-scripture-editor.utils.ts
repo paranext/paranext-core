@@ -770,8 +770,10 @@ export async function openDefaultActiveProjectIfApplicable(
   // start, picker fires inside `platformScriptureEditor.activate()` before `paratextBibleSendReceive`
   // registers commands) or isn't installed at all (Platform.Bible), this rejects and we return
   // `'no-send-receive'`. The driver's existing triggers handle the retry once S/R is ready — we
-  // do NOT block here. paratextBibleSendReceive does not register a network object, so PAPI's
-  // `waitForNetworkObject` is not a usable readiness signal. See PT-3958.
+  // do NOT block here. paratextBibleSendReceive registers commands but no network object of its
+  // own, so `papi.networkObjectStatus.waitForNetworkObject` has nothing to wait on; PAPI exposes no
+  // equivalent "is this command registered yet?" signal, which is why this probes and gives up
+  // rather than waiting.
   let sharedProjects: SharedProjectsInfo;
   try {
     sharedProjects = await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects');

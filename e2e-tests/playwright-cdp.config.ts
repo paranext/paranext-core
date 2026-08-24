@@ -11,7 +11,8 @@ const config = defineConfig({
   testDir: './tests',
   // Smoke and isolated tests use launch fixtures (app/papi/comment/isolated) that spawn their own
   // Electron instance; CDP tests connect to an already-running app. They cannot mix, so exclude
-  // both here — run the isolated suite via `npm run test:e2e:isolated`.
+  // both here — run the isolated suite (which includes the find tests under isolated/find) via
+  // `npm run test:e2e:isolated`.
   // _example/ contains reference templates, not runnable tests.
   testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**'],
   fullyParallel: false,

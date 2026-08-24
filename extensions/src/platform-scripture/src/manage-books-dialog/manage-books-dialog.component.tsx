@@ -262,6 +262,17 @@ export type ManageBooksDialogProps = {
    * fully-populated object sourced from `manageBooks_projectSelector_*` localize keys.
    */
   projectSelectorLocalizedStrings?: ProjectSelectorLocalizedStrings;
+
+  /**
+   * Section to open on. Defaults to `'view'`. Applied at mount ONLY — a later change to this prop
+   * is deliberately ignored, because the user's in-dialog navigation must not be overridden by a
+   * launch value. Mount-only is sufficient even for a relaunch onto an already-open dialog, because
+   * reloading a web view remounts it — see `openManageBooks` in `platform-scripture/src/main.ts`
+   * for why.
+   */
+  initialSection?: ManageBooksAction;
+  /** Book ids preselected for `initialSection`. Applied at mount only, same rationale. */
+  initialSelectedBooks?: string[];
 };
 
 // --------------------------------------------------------------------------
@@ -529,6 +540,8 @@ export function ManageBooksDialog({
   sidebarProjects = [],
   openTabs,
   projectSelectorLocalizedStrings,
+  initialSection,
+  initialSelectedBooks,
 }: ManageBooksDialogProps) {
   const allBooks = useMemo(() => bookIds ?? DEFAULT_BOOK_IDS, [bookIds]);
 
@@ -600,14 +613,41 @@ export function ManageBooksDialog({
   }, [open, projectId, refreshBooks]);
 
   // -- UI state ------------------------------------------------------------
-  const [action, setAction] = useState<ManageBooksAction>('view');
-  const [selectionsByAction, setSelectionsByAction] = useState<Record<string, Set<string>>>({});
+  // Lazy initializers, so the launch values seed the FIRST render only. Re-applying them on a later
+  // render would fight the user's own navigation and selection inside the dialog.
+  const [action, setAction] = useState<ManageBooksAction>(() => initialSection ?? 'view');
+  const [selectionsByAction, setSelectionsByAction] = useState<Record<string, Set<string>>>(() =>
+    initialSection && initialSelectedBooks?.length
+      ? { [initialSection]: new Set(initialSelectedBooks) }
+      : {},
+  );
+
+  /**
+   * Book the launch asked to scroll into view, or undefined once that has happened. Owned here
+   * rather than derived in the grid because the grid is conditionally rendered and unkeyed
+   * (filtering to nothing unmounts it), so a grid-mount-scoped one-shot would re-fire and yank the
+   * view back to the launched book every time the user cleared a filter. The grid reports back
+   * through `onScrolledToBook` only when it actually found and scrolled to the pill, so this also
+   * survives the grid mounting before the project's book list has loaded — it stays pending and the
+   * grid retries as its items arrive.
+   */
+  const [pendingScrollBook, setPendingScrollBook] = useState<string | undefined>(() =>
+    initialSection ? initialSelectedBooks?.[0] : undefined,
+  );
   const [filter, setFilter] = useState('');
   const [copySourceId, setCopySourceId] = useState<string | undefined>(undefined);
   // Default Create method is "Create based on" (FromTemplate): the prompt copy reads "Create based
   // on" rather than "Based on", and the most useful default for users is to start by picking a
   // reference project; they can switch to Empty or ChapterAndVerse if they prefer.
-  const [createMethod, setCreateMethod] = useState<ManageBooksCreateMethod>('fromTemplate');
+  //
+  // EXCEPT on a create-missing-book launch, which seeds `'empty'` instead. `fromTemplate` needs a
+  // reference project, and `canApply` below excludes `fromTemplate` with no `createReferenceId` —
+  // so landing on the default would hand the user a pre-ticked book above a greyed-out Apply with
+  // nothing saying what is missing. `empty` is immediately applicable, and the method picker is
+  // right there if they want a template after all.
+  const [createMethod, setCreateMethod] = useState<ManageBooksCreateMethod>(() =>
+    initialSection === 'create' && initialSelectedBooks?.length ? 'empty' : 'fromTemplate',
+  );
   const [createReferenceId, setCreateReferenceId] = useState<string | undefined>(undefined);
   const [importFiles, setImportFiles] = useState<Record<string, ManageBooksImportFile>>({});
   const [importConflict, setImportConflict] = useState<
@@ -830,10 +870,24 @@ export function ManageBooksDialog({
     [action],
   );
 
-  // Project change wipes selections; nothing carries across projects.
-  useEffect(() => setSelectionsByAction({}), [projectId]);
+  // Project change wipes selections; nothing carries across projects. Guarded by a ref rather than
+  // firing on the effect's first run: at mount there is nothing to carry across, and an unguarded
+  // wipe would immediately clear the launch preselection that `selectionsByAction`'s initializer
+  // just applied.
+  const selectionProjectIdRef = useRef(projectId);
+  useEffect(() => {
+    if (selectionProjectIdRef.current === projectId) return;
+    selectionProjectIdRef.current = projectId;
+    setSelectionsByAction({});
+  }, [projectId]);
 
   // Changing the copy source invalidates the copy selection (we re-seed it below with defaults).
+  //
+  // Note this ALSO runs on mount, so it would wipe a mount-seeded `copy` selection. Unreachable today —
+  // `openManageBooks` only ever sets `initialSection: 'create'` — but it is the trap waiting for the
+  // first launch that targets Copy (or Import, whose filter reset below is the same shape). A launch
+  // into either section must seed its selection in a way this mount pass cannot clear, or skip the
+  // first run of these effects.
   useEffect(() => {
     setSelectionsByAction((prev) => {
       if (!prev.copy) return prev;
@@ -2413,6 +2467,8 @@ export function ManageBooksDialog({
                       interactive={action !== 'view'}
                       localizedStrings={bookGridStrings}
                       getRowAriaLabel={gridRowAriaLabel}
+                      scrollToBook={pendingScrollBook}
+                      onScrolledToBook={() => setPendingScrollBook(undefined)}
                       // Leave BookGridSelector's default tw:p-1 in place so the
                       // first pill checkbox horizontally aligns with the
                       // toolbar's select-all checkbox. A `tw:px-0` override would

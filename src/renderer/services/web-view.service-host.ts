@@ -858,6 +858,46 @@ async function getEnabledSupplementEntries(): Promise<DefaultLayoutSupplementEnt
 let layoutLoadGeneration = 0;
 
 /**
+ * The {@link layoutLoadGeneration} of the load whose layout the dock actually holds. Set at each
+ * point {@link loadLayout} hands a layout to the dock, so while it trails `layoutLoadGeneration` a
+ * load is still on its way and the dock holds something OTHER than the layout this window should be
+ * showing. {@link saveLayout} holds its pushes until the two agree, because pushing what the dock
+ * holds in that stretch overwrites the user's real saved entry in the main process's structure.
+ *
+ * A load takes a while — it reads the interface mode, asks the main process for this window's saved
+ * layout (a round trip that retries, so seconds), and reads the supplement flags — and every
+ * ordinary layout change runs through `onLayoutChange` into `saveLayout` meanwhile: a web view
+ * writing state, focus moving into a tab, a tab being activated. Two loads leave the dock holding
+ * the wrong thing:
+ *
+ * - An INTERFACE-MODE SWITCH flips {@link currentInterfaceMode} the instant the setting changes (so a
+ *   `saveLayout` racing the switch cannot push under the mode the user just left) while the dock
+ *   still holds the OLD mode's layout. Going to simple that is harmless, since simple mode never
+ *   pushes. Going to POWER, a push would persist the static simple layout as this window's power
+ *   layout — permanently, since every later power-mode load restores that entry (headless columns
+ *   and all, so two of its tab groups would render with no tab bar in power mode) and the legacy
+ *   fallback is never consulted again.
+ * - The INITIAL LOAD in `registerDockLayout` starts with the dock on rc-dock's empty default rather
+ *   than anything of this window's. A push there would replace the saved entry with an empty layout
+ *   — and an entry that HAS a layout is not eligible for the legacy fallback either (see
+ *   `TrackedWindow.usesLegacyLayout` in `window-layout-persistence.service.ts`), so the window
+ *   would start empty from then on.
+ *
+ * Comparing generations rather than counting loads in flight is what keeps the hold matched to
+ * reality in both directions. A load that is superseded — or that throws — never marks itself
+ * landed, so it cannot lift the hold on a dock it never wrote; and it cannot extend the hold
+ * either, since the load that DOES reach the dock sets the marker to the current generation and
+ * pushes resume immediately, however long the abandoned one takes to settle.
+ *
+ * That holds only because EVERY site that writes the dock checks `isSuperseded()` first, so this
+ * can only ever move to the generation whose layout is actually in the dock — never backwards to a
+ * load a newer one already replaced. A write site without that check would regress the marker below
+ * `layoutLoadGeneration` and hold every push from then on, with nothing scheduled to reconcile the
+ * dock. Keep the checkpoint if you add another write site.
+ */
+let layoutLoadGenerationInDock = 0;
+
+/**
  * Loads layout information into the dock layout.
  *
  * @param layout If this parameter is provided, loads that layout information. If not provided, gets
@@ -874,13 +914,23 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   const webViewsBeforeLoad = dockLayoutVar.getAllWebViewDefinitions();
   if (layout) {
     // Explicit layout change. `loadLayout` doesn't run `onLayoutChange`, so run it manually.
-    // Applied unconditionally: the caller handed us the layout, so there is nothing here that a
-    // later load could make stale — and bumping the generation above is what lets this call cancel
-    // an in-flight no-argument load that would otherwise land on top of it.
+    // Bumping the generation above is what lets this call cancel an in-flight no-argument load that
+    // would otherwise land on top of it — when THIS is the newer load, the checkpoint below passes
+    // and the older one drops its answer instead.
     // NOTE: we intentionally do NOT apply the default-layout supplement here — a caller passing an
     // explicit layout owns its full contents. If a future "reset to default layout" path routes
     // through here and should include supplement tabs, merge `getEnabledSupplementEntries()` in too.
+    if (isSuperseded()) {
+      // The reverse ordering: a newer load reached the dock while this one was still awaiting it.
+      // Writing now would replace the dock with content the user has already moved past AND regress
+      // `layoutLoadGenerationInDock` below `layoutLoadGeneration`, which holds every subsequent
+      // push with nothing scheduled to reconcile the dock. The caller owning this layout does not
+      // make it current; only being the newest load does.
+      logger.debug('Dropping an explicit layout load that a newer one superseded');
+      return;
+    }
     dockLayoutVar.loadLayout(layout);
+    layoutLoadGenerationInDock = thisGeneration;
     emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layout);
     await onLayoutChange(layout);
     return;
@@ -940,6 +990,7 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   if (enabledEntries.length === 0) {
     // Nothing to merge (the common/vanilla case) — load the base layout directly and skip the clone.
     dockLayoutVar.loadLayout(layoutToLoad);
+    layoutLoadGenerationInDock = thisGeneration;
     emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, layoutToLoad);
     return;
   }
@@ -957,6 +1008,7 @@ async function loadLayout(layout?: LayoutInfo): Promise<void> {
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const supplementedLayoutInfo = supplementedLayout as unknown as LayoutInfo;
   dockLayoutVar.loadLayout(supplementedLayoutInfo);
+  layoutLoadGenerationInDock = thisGeneration;
   // Emit close events for pre-existing web views the (supplemented) layout dropped
   emitCloseEventsForWebViewsRemovedByLayoutLoad(webViewsBeforeLoad, supplementedLayoutInfo);
 }
@@ -1090,6 +1142,11 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
   const interfaceMode =
     currentInterfaceMode ?? (await settingsService.get('platform.interfaceMode'));
   if (interfaceMode === 'simple') return;
+  // A load is still on its way, so what the dock holds is not the layout this window should be
+  // showing — the layout of the mode the user just left, or rc-dock's empty default at startup.
+  // Persisting that would overwrite the real saved entry; see `layoutLoadGenerationInDock`. Nothing
+  // is lost by holding: the load on its way replaces the dock's whole contents anyway.
+  if (layoutLoadGenerationInDock !== layoutLoadGeneration) return;
   if (isRunningOnFallbackLayout) {
     // The dock holds a fallback, not the user's saved layout (see getPersistedLayout); pushing it
     // would replace the real saved entry in the main process's structure
@@ -1169,6 +1226,9 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
           // switch reads the new mode immediately (before `loadLayout`'s own read resolves).
           currentInterfaceMode = newMode;
           try {
+            // Layout pushes stay held until this load reaches the dock — until then the dock holds
+            // the old mode's layout, and persisting that under the new mode is what would destroy
+            // the saved power layout on a simple->power switch. See `layoutLoadGenerationInDock`.
             await loadLayout();
           } catch (err) {
             logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);

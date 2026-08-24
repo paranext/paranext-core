@@ -8,6 +8,10 @@ import {
 } from '@papi/core';
 import findWebView from './find.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
+import {
+  buildFindWebViewState,
+  resolveFindScrollGroupScrRef,
+} from './find/find-web-view-state.utils';
 
 export const findWebViewType = 'platformScripture.find';
 
@@ -19,6 +23,19 @@ export interface FindWebViewOptions extends OpenWebViewOptions {
    * `platformScriptureEditor.react`
    */
   editorWebViewId?: string;
+  /**
+   * Drop any editor id the Find WebView already holds instead of keeping it. Set by `openFind` when
+   * the trigger is not a Scripture editor, so a stale coupling from a prior open-from-editor cannot
+   * survive. A positive flag rather than "`editorWebViewId` present but `undefined`", because these
+   * options cross a process boundary and an explicit `true` cannot be lost the way an
+   * `undefined`-valued key can.
+   */
+  clearEditorWebViewId?: boolean;
+  /**
+   * Text to pre-fill in the search field when the Find WebView opens. If provided, the find panel
+   * will populate the search input with this text and immediately run a search.
+   */
+  initialSearchText?: string;
 }
 
 export class FindWebViewProvider implements IWebViewProvider {
@@ -35,17 +52,21 @@ export class FindWebViewProvider implements IWebViewProvider {
       localizeKey: '%webView_find_title%',
     });
 
+    // Re-read every call so mode changes are picked up at open/replace/restore time.
+    const interfaceMode = await papi.settings.get('platform.interfaceMode');
+
     return {
       ...savedWebView,
       title,
       projectId,
       content: findWebView,
       styles: tailwindStyles,
-      scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
-      state: {
-        ...savedWebView.state,
-        editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
-      },
+      scrollGroupScrRef: resolveFindScrollGroupScrRef(
+        interfaceMode,
+        savedWebView,
+        getWebViewOptions,
+      ),
+      state: buildFindWebViewState(savedWebView, getWebViewOptions),
     };
   }
 }

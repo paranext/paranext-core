@@ -34,7 +34,7 @@ type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | null | undefined;
+	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | "subtle" | null | undefined;
 	size?: "default" | "icon" | "xs" | "sm" | "lg" | "icon-xs" | "icon-sm" | "icon-lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
@@ -303,13 +303,17 @@ export interface RecentSearchesProps<T> {
 	 */
 	buttonClassName?: string;
 	/** Variant for the trigger button. Defaults to `"ghost"` */
-	buttonVariant?: "ghost" | "outline" | "default" | "destructive" | "secondary" | "link";
+	buttonVariant?: ButtonProps["variant"];
+	/** Controlled open state of the popover. If provided, the component becomes controlled. */
+	open?: boolean;
+	/** Called when the open state changes. Required when `open` is provided. */
+	onOpenChange?: (open: boolean) => void;
 }
 /**
  * Generic component that displays a button to show recent searches in a popover. Only renders if
  * there are recent searches available. Works with any data type T.
  */
-export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
+export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, open: openProp, onOpenChange, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
 /**
@@ -2533,6 +2537,10 @@ export type EmptyStateProps = {
  * A presentational empty-state message for a list, grid, or panel that currently has nothing to
  * show. Renders the localized `message` in a `role="status"` region so screen readers announce it
  * when the surrounding content becomes empty. Layout is left to the caller via `className`.
+ *
+ * For a richer zero-state that needs media, a heading, or an action, use the `Empty` composition
+ * (`Empty`, `EmptyHeader`, `EmptyMedia`, `EmptyTitle`, `EmptyDescription`, `EmptyContent`)
+ * instead.
  */
 export declare function EmptyState({ message, id, className }: EmptyStateProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
@@ -3025,6 +3033,60 @@ export declare function DropdownMenuSubTrigger({ className, inset, children, ...
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuSubContent({ className, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * The Empty component displays a centered zero-state message — typically a title, description, and
+ * an optional action — for when there is no content to show. The component is built and styled by
+ * Shadcn UI.
+ *
+ * Use this composition when the zero-state needs media, a heading, or an action. For a plain
+ * one-line "nothing to show" message inside a list, grid, or panel, use {@link EmptyState} instead —
+ * it takes a single localized `message` and renders it in a `role="status"` region. These
+ * primitives set no ARIA role, so pass `role="status"` yourself before the zero-state appears.
+ *
+ * Two things the caller controls: the root sets `border-dashed` but no border width —
+ * Platform.Bible's scoped Tailwind Preflight zeroes borders, so pass `className="tw:border"` to
+ * draw the dashed outline — and {@link EmptyTitle} renders a `<div>`, not a heading, so nest your
+ * own heading element inside it when the zero-state is a region's entire content.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function Empty({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the Empty component's icon/media, title, and description. The component is built
+ * and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+declare const emptyMediaVariants: (props?: ({
+	variant?: "default" | "icon" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Container for the Empty component's icon or other media, e.g. an illustration or avatar. The
+ * component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyMedia({ className, variant, ...props }: React$1.ComponentProps<"div"> & VariantProps<typeof emptyMediaVariants>): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component's title text. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyTitle({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component's description text. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyDescription({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the Empty component's main content, typically actions such as buttons. The
+ * component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyContent({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
  * Input component displays a form input field or a component that looks like an input field. Built
  * and styled with Shadcn UI.
  *
@@ -3415,6 +3477,12 @@ export declare function ToggleGroupItem({ className, children, variant, size, ..
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
  *
+ * Delivery is guarded per subscription: once the subscription is superseded (the `event` or
+ * `eventHandler` reference changed) or the component unmounts, an emission that still arrives from
+ * it — e.g. an emitter walking a snapshot of its handler list — is ignored rather than delivered to
+ * `eventHandler`. An unsubscriber that throws during cleanup is logged rather than thrown, since
+ * nothing can catch an error thrown from an effect cleanup.
+ *
  * @param event The event to subscribe to.
  *
  *   - If event is a `PlatformEvent`, that event will be used
@@ -3431,6 +3499,14 @@ export declare const useEvent: <T>(event: PlatformEvent<T> | undefined, eventHan
  * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
  * runs when the event is emitted. Use `papi.network.getNetworkEvent` to use a networked event with
  * this hook.
+ *
+ * Delivery is guarded per subscription: once a subscription is superseded (the `event` or
+ * `eventHandler` reference changed) or the component unmounts, an emission that still arrives from
+ * it — e.g. one already in flight over the network — is ignored rather than delivered to
+ * `eventHandler`. If the subscribe promise resolves only after the subscription was already
+ * superseded, the resolved unsubscriber is invoked immediately so the subscription does not leak.
+ * Subscribe and unsubscribe failures are logged rather than thrown — neither has a caller that
+ * could catch them. A failed unsubscribe is logged, not retried.
  *
  * @param event The asynchronously (un)subscribing event to subscribe to.
  *

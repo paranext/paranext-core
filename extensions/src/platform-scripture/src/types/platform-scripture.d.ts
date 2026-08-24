@@ -991,6 +991,40 @@ declare module 'platform-scripture' {
 
   // #endregion Scripture Edit Permissions Types
 
+  // #region Find History Types
+
+  /**
+   * Data types for the find history data provider. The selector for each data type is the project
+   * id the history belongs to, or `undefined` for history not associated with a project.
+   */
+  export type FindHistoryDataTypes = {
+    /** The user's recent find search history (most recent first) */
+    History: DataProviderDataType<string | undefined, string[], string[]>;
+    /** The find search term most recently used, restored when the find WebView reopens */
+    LastSearchTerm: DataProviderDataType<string | undefined, string, string>;
+  };
+
+  /**
+   * Provides the user's find search history and last search term, backed by user data storage.
+   * Subscribing through this data provider keeps every consumer's copy of the history in sync, so
+   * multiple find WebViews do not clobber each other's changes.
+   */
+  export type IFindHistoryDataProvider = IDataProvider<FindHistoryDataTypes> & {
+    /**
+     * Adds one item to the top of the find search history for a project. If the item is already in
+     * the history, it moves to the top instead of being duplicated. The history is capped at a
+     * maximum number of items, dropping the oldest. Prefer this over `setHistory` so the data
+     * provider manages ordering and deduplication consistently for all consumers.
+     *
+     * @param item The search term to add. Empty strings are ignored.
+     * @param projectId The project whose history to add to, or `undefined` for history not
+     *   associated with a project
+     */
+    addHistoryItem(item: string, projectId?: string): Promise<void>;
+  };
+
+  // #endregion Find History Types
+
   // #region Marker Types
 
   /** Provides information about markers */
@@ -2341,6 +2375,7 @@ declare module 'papi-shared-types' {
     CheckResultsInvalidated,
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
+    IFindHistoryDataProvider,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -2380,6 +2415,8 @@ declare module 'papi-shared-types' {
      * Simple interface. See {@link IRecentlyOpenedProjectsService}.
      */
     'platformScripture.recentlyOpenedProjects': IRecentlyOpenedProjectsService;
+    /** Data provider for the user's find search history and last search term */
+    'platformScripture.findHistory': IFindHistoryDataProvider;
   }
 
   export interface CommandHandlers {
@@ -2475,11 +2512,19 @@ declare module 'papi-shared-types' {
      * @param editorWebViewId Id of the triggering editor's web view — not a project id. The project
      *   and scroll group for the Find / Replace UI are resolved from it internally via
      *   `papi.webViews.getOpenWebViewDefinition`.
-     * @returns Id of the find web view (existing or newly opened), or `undefined` if no editor web
-     *   view id was provided or the web view has no project (nothing is opened in that case).
+     * @param selectedText Text to pre-fill the search box with (e.g. the editor's current selection
+     *   when invoked via Ctrl+F). Pass `undefined` to open without a pre-filled search.
+     * @param sourceProjectId Explicit project/resource id to search, overriding the project
+     *   resolved from `editorWebViewId`. Passed by resource panels (model text, Bible texts,
+     *   commentaries) whose displayed resource differs from the tab's own project.
+     * @returns Id of the find web view (existing or newly opened), or `undefined` when no project
+     *   can be resolved — no `sourceProjectId` was given and the triggering web view has no project
+     *   — in which case nothing is opened.
      */
     'platformScripture.openFind': (
       editorWebViewId?: string | undefined,
+      selectedText?: string | undefined,
+      sourceProjectId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
@@ -2518,12 +2563,15 @@ declare module 'papi-shared-types' {
      *   `papi.webViews.getOpenWebViewDefinition` — if it resolves to a web view with a project, the
      *   dialog opens pre-targeted at that project; otherwise the value itself is treated as the
      *   project id. Omit to open the dialog with the project picker visible.
+     * @param intent Pass `'createMissingBook'` to open the dialog on its Create-books section with
+     *   the calling editor's current book pre-selected, instead of the default view.
      * @returns Id of the Manage Books web view — the existing one if reused, or a newly opened one
      *   — or `undefined` if the provider did not create one.
      * @experimental
      */
     'platformScripture.openManageBooks': (
-      webViewIdOrProjectId?: string | undefined,
+      webViewIdOrProjectId?: string,
+      intent?: 'createMissingBook',
     ) => Promise<string | undefined>;
 
     /**

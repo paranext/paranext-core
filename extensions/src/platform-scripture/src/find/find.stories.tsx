@@ -2,6 +2,7 @@ import { Usj, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
 import { Scope, SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
+import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
   USFM_MARKERS_MAP_PARATEXT_3_0,
   UsjReaderWriter,
@@ -11,10 +12,17 @@ import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getLocalizedStrings } from '../../../../../.storybook/localization.utils';
 import { alertCommand } from '../../../../../.storybook/story.utils';
-import { Find, FIND_LOCALIZED_STRING_KEYS, type BookResultEntry } from './find.component';
+import {
+  Find,
+  FIND_LOCALIZED_STRING_KEYS,
+  type BookResultEntry,
+  type FindProject,
+} from './find.component';
 import { replacementContainsStructuralMarker } from './structure-protection.util';
+import { isFindQueryValid } from './find.utils';
 import { LocalizedBookData, SearchTextType } from './find-types';
 import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search-result.component';
+import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
 /**
  * `Find` is the find/replace UI for a Scripture project: a search input with recent searches, a
@@ -34,8 +42,29 @@ import { HidableFindResult, SEARCH_RESULT_LOCALIZED_STRING_KEYS } from './search
 const localizedStrings = getLocalizedStrings([...FIND_LOCALIZED_STRING_KEYS]);
 const scopeSelectorLocalizedStrings = getLocalizedStrings([...SCOPE_SELECTOR_STRING_KEYS]);
 const searchResultLocalizedStrings = getLocalizedStrings([...SEARCH_RESULT_LOCALIZED_STRING_KEYS]);
+// Owned by the webview container (WEB_VIEW_LOCALIZED_STRINGS in find.web-view.tsx), not the
+// presentational Find component, so it's resolved separately from the FIND_LOCALIZED_STRING_KEYS set.
+const searchInterruptedErrorString = getLocalizedStrings(['%webView_find_searchInterruptedError%'])[
+  '%webView_find_searchInterruptedError%'
+];
 
 const DEFAULT_SEARCH_TERM = 'God';
+
+/** Sample projects for the project selector — not wired to real search data. */
+const STORY_PROJECTS: FindProject[] = [
+  { id: 'web', shortName: 'WEB', fullName: 'World English Bible' },
+  { id: 'esv', shortName: 'ESV', fullName: 'English Standard Version' },
+];
+
+/**
+ * Sample open tabs — WEB is open in two scroll groups, demonstrating the picker's disambiguation
+ * between duplicate instances of the same project.
+ */
+const STORY_OPEN_TABS: ProjectSelectorOpenTab[] = [
+  { projectId: 'web', scrollGroupId: 0 },
+  { projectId: 'web', scrollGroupId: 1 },
+  { projectId: 'esv', scrollGroupId: 2 },
+];
 
 // Seed USX for the books we search across, so results can render verse context and the search
 // engine has real text to scan.
@@ -200,6 +229,12 @@ type HarnessConfig = {
   searchTerm?: string;
   /** Initial mode. */
   activeMode?: 'find' | 'replace';
+  /** Hide the find/replace toggle entirely (simple interface mode — find-only). */
+  hideModeToggle?: boolean;
+  /** Present the project picker as a flat list with no scroll-group letters (simple interface mode). */
+  hideScrollGroups?: boolean;
+  /** Initial replace-preview options (layout/shape/color/etc.); defaults to the standard defaults. */
+  previewOptions?: PreviewOptions;
   /** Initial scope. */
   scope?: Scope;
   /** Initial selected books for the `selectedBooks` scope. */
@@ -210,6 +245,10 @@ type HarnessConfig = {
   searchProgress?: number;
   /** Total results the job reports (fixed-state stories only). */
   totalNumberOfResults?: number;
+  /** The find-job error message (fixed-state stories only; requires `searchStatus: 'errored'`). */
+  searchError?: string;
+  /** Whether the active project can be edited. When false, Replace / Replace All are disabled. */
+  isEditable?: boolean;
   /** Start with every result already in the replaced state (the Replaced showcase). */
   initiallyReplacedAll?: boolean;
   /** Initial replace term (defaults to a sample word). */
@@ -219,6 +258,10 @@ type HarnessConfig = {
    * a paragraph/verse/chapter marker disables Replace with an explanatory tooltip.
    */
   isStructureProtected?: boolean;
+  /** Showcase the empty state when no scripture project is open anywhere. */
+  noOpenProjects?: boolean;
+  /** Showcase the project selector while the project metadata fetch is still in flight. */
+  isLoadingProjects?: boolean;
 };
 
 /**
@@ -233,6 +276,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
 
   const [searchTerm, setSearchTerm] = useState(config.searchTerm ?? DEFAULT_SEARCH_TERM);
   const [recentSearches, setRecentSearches] = useState<string[]>(['Lord', 'beginning']);
+  const [selectedProjectId, setSelectedProjectId] = useState('web');
+  const [selectedScrollGroupId, setSelectedScrollGroupId] = useState(0);
   const [scope, setScope] = useState<Scope>(config.scope ?? 'selectedBooks');
   const [selectedBookIds, setSelectedBookIds] = useState<string[]>(
     config.selectedBookIds ?? ['GEN', 'JHN'],
@@ -245,6 +290,9 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const [activeMode, setActiveMode] = useState<'find' | 'replace'>(config.activeMode ?? 'find');
   const [replaceTerm, setReplaceTerm] = useState(config.replaceTerm ?? 'Yahweh');
   const [preserveCase, setPreserveCase] = useState(false);
+  const [previewOptions, setPreviewOptions] = useState<PreviewOptions>(
+    config.previewOptions ?? DEFAULT_REPLACE_PREVIEW_OPTIONS,
+  );
 
   const [focusedResultIndex, setFocusedResultIndex] = useState<number | undefined>(undefined);
 
@@ -410,7 +458,12 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   }, []);
 
   const numberOfHiddenResults = hiddenKeys.size + committedKeys.size;
-  const liveSearchStatus: FindJobStatus | undefined = searchTerm.trim()
+  // Shares find.utils.ts's isFindQueryValid with the webview so the two can't silently diverge —
+  // this exact divergence (the harness's own copy dropped the empty-term check) shipped once
+  // already (see PT-4343 review) and made the NoBooksSelected story pass despite testing the wrong
+  // rule.
+  const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
+  const liveSearchStatus: FindJobStatus | undefined = isSearchQueryValid
     ? completedStatus
     : undefined;
   const searchStatus: FindJobStatus | undefined = isLive ? liveSearchStatus : config.searchStatus;
@@ -424,12 +477,31 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const isStructureProtected = config.isStructureProtected ?? false;
   const isReplacementStructureChanging =
     isStructureProtected && replacementContainsStructuralMarker(replaceTerm);
+  const isEditable = config.isEditable ?? true;
 
   return (
     <Find
       localizedStrings={localizedStrings}
       scopeSelectorLocalizedStrings={scopeSelectorLocalizedStrings}
       searchResultLocalizedStrings={searchResultLocalizedStrings}
+      projects={config.noOpenProjects ? [] : STORY_PROJECTS}
+      selectedProjectId={selectedProjectId}
+      selectedScrollGroupId={selectedScrollGroupId}
+      openTabs={config.noOpenProjects ? [] : STORY_OPEN_TABS}
+      isLoadingProjects={config.isLoadingProjects ?? false}
+      noOpenProjects={config.noOpenProjects ?? false}
+      onSelectProjectScrollGroup={(newProjectId, newScrollGroupId) => {
+        setSelectedProjectId(newProjectId);
+        setSelectedScrollGroupId(newScrollGroupId);
+      }}
+      onSelectProject={(newProjectId) => {
+        setSelectedProjectId(newProjectId);
+        // Stands in for the web view's `resolveSelectedProjectScrollGroup` call: the simple-mode
+        // picker reports no group, so the story targets the project's first open tab.
+        const tab = STORY_OPEN_TABS.find((openTab) => openTab.projectId === newProjectId);
+        if (tab) setSelectedScrollGroupId(tab.scrollGroupId);
+      }}
+      onOpenProjectInGroup={() => {}}
       searchTerm={searchTerm}
       recentSearches={recentSearches}
       scope={scope}
@@ -442,16 +514,21 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
       activeMode={activeMode}
+      hideModeToggle={config.hideModeToggle}
+      hideScrollGroups={config.hideScrollGroups}
+      previewOptions={previewOptions}
+      onPreviewOptionsChange={setPreviewOptions}
       replaceTerm={replaceTerm}
       preserveCase={preserveCase}
       isReplacing={false}
       isStructureProtected={isStructureProtected}
       isReplacementStructureChanging={isReplacementStructureChanging}
+      isEditable={isEditable}
       results={displayedResults}
       resultsByBook={resultsByBook}
       focusedResultIndex={focusedResultIndex}
       searchStatus={searchStatus}
-      searchError={undefined}
+      searchError={isLive ? undefined : config.searchError}
       searchProgress={config.searchProgress ?? 0}
       totalNumberOfResults={totalNumberOfResults}
       numberOfHiddenResults={numberOfHiddenResults}
@@ -512,6 +589,17 @@ export const ReplaceMode: Story = {
   decorators: [createDecorator({ activeMode: 'replace' })],
 };
 
+/**
+ * Simple interface mode. Replace is not offered, so the find/replace toggle is gone, and the
+ * project picker is a flat list with no scroll-group letters — simple mode hides
+ * `ScrollGroupSelector` from both toolbars, so a group letter would name something the user cannot
+ * see or change. Compare with the other stories, where `web` appears twice (groups A and B) and
+ * every row carries its group badge.
+ */
+export const SimpleMode: Story = {
+  decorators: [createDecorator({ hideModeToggle: true, hideScrollGroups: true })],
+};
+
 /** An in-progress search — the progress bar and Cancel button show while results stream in. */
 export const InProgress: Story = {
   decorators: [
@@ -555,4 +643,55 @@ export const StructureProtected: Story = {
   decorators: [
     createDecorator({ activeMode: 'replace', isStructureProtected: true, replaceTerm: '\\p text' }),
   ],
+};
+
+/**
+ * The active project is read-only (`platform.isEditable` is false). A persistent note explains why
+ * above the replace controls (not just a hover tooltip), and Replace / Replace All are disabled
+ * with the same explanation on hover, even though there's a focused result to replace. Find itself
+ * stays fully live and interactive since search never mutates the project.
+ */
+export const ReadOnly: Story = {
+  decorators: [createDecorator({ activeMode: 'replace', isEditable: false })],
+};
+
+/**
+ * `selectedBooks` scope with no books chosen: the search term is non-empty but the query can't run,
+ * so the results area shows a dedicated "select a book" placeholder rather than the generic idle
+ * prompt or a stuck loading spinner. Pick a book from the scope selector to see the search resume.
+ */
+export const NoBooksSelected: Story = {
+  decorators: [createDecorator({ scope: 'selectedBooks', selectedBookIds: [] })],
+};
+
+/**
+ * The find-job poll stalled (e.g. the data provider dropped during an extended idle period) and
+ * gave up after several seconds of retries — the status bar shows an error instead of leaving the
+ * last-seen progress bar frozen with no feedback.
+ */
+export const SearchInterrupted: Story = {
+  decorators: [
+    createDecorator({
+      live: false,
+      results: [],
+      searchStatus: 'errored',
+      searchError: searchInterruptedErrorString,
+    }),
+  ],
+};
+
+/**
+ * No scripture project is open anywhere. The project selector and the results area both show a "no
+ * open projects" placeholder instead of their normal content.
+ */
+export const NoOpenProjects: Story = {
+  decorators: [createDecorator({ live: false, results: [], noOpenProjects: true })],
+};
+
+/**
+ * The project metadata fetch is still in flight. `projects` is empty but tabs ARE open, so the
+ * selector shows a loading affordance rather than falsely claiming no projects are open.
+ */
+export const LoadingProjects: Story = {
+  decorators: [createDecorator({ live: false, results: [], isLoadingProjects: true })],
 };
