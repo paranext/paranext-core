@@ -27,6 +27,7 @@ import {
   isPlatformError,
   LanguageStrings,
   LocalizeKey,
+  normalizeProjectId,
   serialize,
   Unsubscriber,
   USFM_MARKERS_MAP_PARATEXT_3_0,
@@ -1194,9 +1195,10 @@ export function resolveAddChapterNumberClick(
 // #endregion Chapter Scaffold Helpers
 
 // #region Missing Book Detection
+// TODO(PT-4416): Move this region to its own module; this file is a grab-bag of unrelated helpers.
 
 /**
- * Captures the message thrown by C#'s `MissingBookException` (`c-sharp/MissingBookException.cs`),
+ * Matches the message thrown by C#'s `MissingBookException` (`c-sharp/MissingBookException.cs`),
  * which formats as `Book number {bookNum} not found in project {projectId}.` Unanchored because the
  * PDP layer prefixes its own context onto the message before it reaches a web view.
  *
@@ -1204,15 +1206,39 @@ export function resolveAddChapterNumberClick(
  * `PlatformError`/rejected promise carrying a string, with no structured code to key off. Keep this
  * in lockstep with the C# exception — if that message is ever reworded, every consumer of
  * {@link isMissingBookError} silently starts reporting "book present".
+ * `c-sharp-tests/MissingBookExceptionTests.cs` pins the exact wording so the two sides cannot drift
+ * apart unnoticed.
  *
- * The two capture groups matter as much as the match: knowing WHICH book and WHICH project the
- * failure describes is what lets a caller tell "the resource I am showing lacks the book I am
- * showing" from a leftover error about somewhere the user has already navigated away from. The
- * project group is lazy up to the trailing period, so a project id containing a period would be
- * truncated — {@link resolveResourceContentState} treats a non-comparing id as "not this project",
- * which falls back to rendering the editor rather than asserting something false.
+ * Deliberately matches on the invariant part of the sentence only. Detection has to succeed for any
+ * message that names a missing book, because a caller that fails to detect one does not degrade to
+ * a neutral state: the main editor treats a non-detection as "book exists" and waits forever for
+ * USJ that will never arrive.
  */
-const MISSING_BOOK_MESSAGE_REGEX = /Book number (\d+) not found in project (.+?)\./;
+const MISSING_BOOK_MESSAGE_REGEX = /Book number \d+ not found in project/;
+
+/**
+ * Captures which book and which project a missing-book message names, so a caller can tell "the
+ * resource I am showing lacks the book I am showing" from a leftover error about somewhere the user
+ * has already navigated away from.
+ *
+ * The project group is greedy up to the final period because the C# message always terminates with
+ * one, so the id runs to the LAST period rather than the first — a project id containing a period
+ * survives intact instead of being truncated into an id that compares unequal.
+ */
+const MISSING_BOOK_IDENTITY_REGEX = /Book number (\d+) not found in project (.+)\./;
+
+/**
+ * Reads a PDP failure's message, or `''` for anything that is not one.
+ *
+ * Structural gate for both predicates below rather than for their callers. `getErrorMessage` falls
+ * back to `JSON.stringify` for any object without a string `message`, so handing it a success value
+ * serializes the entire chapter USJ on every render and then matches the regex against the
+ * scripture text itself. Guarding here means no caller can reach that by passing a raw hook value.
+ */
+function getMissingBookCandidateMessage(error: unknown): string {
+  if (!isPlatformError(error) && !(error instanceof Error) && typeof error !== 'string') return '';
+  return getErrorMessage(error);
+}
 
 /** The book and project a `MissingBookException` names. */
 export type MissingBookErrorInfo = {
@@ -1224,7 +1250,7 @@ export type MissingBookErrorInfo = {
 
 /**
  * Reads the book and project out of a missing-book failure, or `undefined` if the failure is
- * something else.
+ * something else or the message does not carry both identities.
  *
  * Prefer this over {@link isMissingBookError} wherever the caller knows what it is currently
  * displaying: a bare boolean cannot distinguish a live failure from a stale one, because a data
@@ -1235,9 +1261,7 @@ export type MissingBookErrorInfo = {
  * @returns The book number and project id, or `undefined` for any other failure.
  */
 export function parseMissingBookError(error: unknown): MissingBookErrorInfo | undefined {
-  // No `undefined` guard needed: `getErrorMessage(undefined)` is `''`, which cannot match. That
-  // matters because callers pass a "not loaded yet" value straight through.
-  const match = MISSING_BOOK_MESSAGE_REGEX.exec(getErrorMessage(error));
+  const match = MISSING_BOOK_IDENTITY_REGEX.exec(getMissingBookCandidateMessage(error));
   if (!match) return undefined;
   return { bookNum: Number(match[1]), projectId: match[2] };
 }
@@ -1250,8 +1274,9 @@ export function parseMissingBookError(error: unknown): MissingBookErrorInfo | un
  * Accepts `unknown` so both shapes the error arrives in are covered: a `PlatformError` read off
  * `useProjectData` and a rejection thrown by an imperative `getChapterUSJ` call.
  *
- * This answers only "is it that kind of failure". A caller that renders a message about the book it
- * is currently showing should use {@link parseMissingBookError} and compare, so a leftover error
+ * This answers only "is it that kind of failure", and answers it for every missing-book message
+ * including one whose identities cannot be parsed. A caller that renders a message about the book
+ * it is currently showing should use {@link parseMissingBookError} and compare, so a leftover error
  * cannot be attributed to the wrong book.
  *
  * @param error The error or `PlatformError` to inspect.
@@ -1259,7 +1284,47 @@ export function parseMissingBookError(error: unknown): MissingBookErrorInfo | un
  *   including no error at all.
  */
 export function isMissingBookError(error: unknown): boolean {
-  return !!parseMissingBookError(error);
+  return MISSING_BOOK_MESSAGE_REGEX.test(getMissingBookCandidateMessage(error));
+}
+
+/**
+ * Whether a failure describes the book AND project a view is displaying right now, and so may be
+ * reported to the user as "this book is not in this text".
+ *
+ * This is the comparison every missing-book surface needs, and the reason a boolean latched when
+ * the failure arrived is not good enough. A flag set from an effect or a `catch` is always one
+ * render behind: the render that first pairs a new book (or a new project) with the previous result
+ * commits before the effect that would clear the flag runs, so that render asserts the message
+ * about a book the text does have. Deriving the answer from the failure's own identities makes the
+ * wrong frame unrepresentable rather than merely unlikely.
+ *
+ * Project ids are compared case-insensitively. C# canonicalizes them to uppercase and reports that
+ * form in the exception, while a view's own id arrives verbatim from a resource reference or web
+ * view state; the PDP lookup folds case, so a casing mismatch is invisible on the data path and
+ * would surface only here.
+ *
+ * @param options.error The value or rejection received from a scripture PDP.
+ * @param options.currentBookNum The book number the view is displaying. 0 or less means the view
+ *   has no book it can name, so no claim is made about one.
+ * @param options.projectId The project or resource id the view is reading from.
+ * @returns `true` only when the failure names both the book and the project currently on screen.
+ */
+export function isMissingBookOnScreen({
+  error,
+  currentBookNum,
+  projectId,
+}: {
+  error: unknown;
+  currentBookNum: number;
+  projectId: string | undefined;
+}): boolean {
+  if (!projectId || currentBookNum <= 0) return false;
+  const missingBook = parseMissingBookError(error);
+  return (
+    !!missingBook &&
+    missingBook.bookNum === currentBookNum &&
+    normalizeProjectId(missingBook.projectId) === normalizeProjectId(projectId)
+  );
 }
 
 /** What a resource panel (Model text, Bible texts, Commentaries) should show in its content area. */
@@ -1270,26 +1335,27 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'ready';
  *
  * The message is shown only when the failure names BOTH the book and the project the panel is
  * currently displaying. That identity check, rather than any timing signal, is what keeps a stale
- * error from being misattributed: `useProjectData` does not reset to its default when the selector
+ * error from being misattributed: a data hook does not reset to its default when the selector
  * changes — it keeps serving the PREVIOUS selector's result until the new subscription's first
  * update lands — so an error in hand may describe the book the user just left or the resource they
  * just switched away from. Reading it as current would flash "this book is not in this text" on the
  * way INTO a book the text does have, and on the way OUT of one it does not.
  *
- * An earlier revision gated on the hook's `isLoading` instead. That only covered the way in:
- * `isLoading` returns to `true` in the subscription cleanup, which runs AFTER the render in which
- * the selector changed, so one committed render still asserted the message about the wrong book.
- * Comparing identities has no such edge and needs no bookkeeping.
+ * The hook's `isLoading` flag cannot stand in for the comparison. It is raised by an effect keyed
+ * on the data provider and selector (`create-use-data-hook.util.ts`), and effects run after the
+ * commit, so the render that first pairs a new selector with the previous result still sees
+ * `isLoading` false. Comparing identities has no such edge and needs no bookkeeping.
  *
- * Non-`PlatformError` values are rejected structurally before the message is ever read. That is not
- * only tidiness: `getErrorMessage` falls back to `JSON.stringify` for any object without a string
- * `message`, so letting a success value through would serialize the entire chapter USJ on every
- * render and then match the regex against the scripture text itself.
+ * Project ids are compared case-insensitively. C# canonicalizes them to uppercase and reports that
+ * form in the exception, while a panel's own id arrives verbatim from a resource reference; the PDP
+ * lookup folds case, so a casing mismatch is invisible on the data path and would surface only
+ * here.
  *
  * @param options.resourceProjectId The project id the panel is reading from, or `undefined` if a
  *   resource has not resolved to one yet.
  * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet.
- * @param options.currentBookNum The book number the panel is currently displaying.
+ * @param options.currentBookNum The book number the panel is currently displaying. A value of 0 or
+ *   less means the panel has no book it can name, so no claim is made about one.
  * @returns Which of the three content states to render.
  */
 export function resolveResourceContentState({
@@ -1303,12 +1369,8 @@ export function resolveResourceContentState({
 }): ResourceContentState {
   if (!resourceProjectId || usjPossiblyError === undefined) return 'loading';
   if (!isPlatformError(usjPossiblyError)) return 'ready';
-
-  const missingBook = parseMissingBookError(usjPossiblyError);
   if (
-    missingBook &&
-    missingBook.bookNum === currentBookNum &&
-    missingBook.projectId === resourceProjectId
+    isMissingBookOnScreen({ error: usjPossiblyError, currentBookNum, projectId: resourceProjectId })
   )
     return 'bookNotAvailable';
 

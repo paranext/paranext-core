@@ -15,6 +15,16 @@ export type ResourceBookNotAvailableProps = {
    * zero-states.
    */
   message: string;
+  /**
+   * Identifies WHICH missing book in WHICH text this message is about — typically the project id
+   * and book number. When it changes while the message stays on screen, the live region is
+   * re-announced and focus repair is retried.
+   *
+   * Without it, moving from one missing book to another is silent: the component stays mounted at
+   * the same tree position with byte-identical text, so `aria-live` has nothing to report and a
+   * screen-reader user gets no confirmation that their selection applied at all.
+   */
+  announcementKey?: string;
 };
 
 /**
@@ -41,13 +51,20 @@ export type ResourceBookNotAvailableProps = {
  * Accessibility: this REPLACES the editor subtree, so its arrival is a content swap a screen-reader
  * user gets no other notice of, and the focused element inside the editor is destroyed along with
  * it. `EmptyState` marks the message `role="status"`; the wrapper deliberately does NOT repeat that
- * role, since nesting two status regions is worse than one. The wrapper is the focus target
- * instead, taking focus on mount via {@link useFocusReplacedContent} — which repairs focus only when
- * it actually fell to the body, so arriving here by picking a text from the panel's own selector
- * does not yank focus off that selector.
+ * role, since nesting two status regions is worse than one. `EmptyState` mounts that region
+ * together with its content, which several screen readers do not announce — the focus move below is
+ * what actually carries the message, and closing that gap belongs to the shared primitive
+ * (PT-4416). The wrapper is the focus target instead, taking focus on mount via
+ * {@link useFocusReplacedContent} — which repairs focus only when it actually fell to the body, so
+ * arriving here by picking a text from the panel's own selector does not yank focus off that
+ * selector. Pass `announcementKey` so that moving from one missing book to another is not silent;
+ * see that prop.
  */
-export function ResourceBookNotAvailable({ message }: ResourceBookNotAvailableProps) {
-  const regionRef = useFocusReplacedContent<HTMLDivElement>();
+export function ResourceBookNotAvailable({
+  message,
+  announcementKey,
+}: ResourceBookNotAvailableProps) {
+  const regionRef = useFocusReplacedContent<HTMLDivElement>(announcementKey);
 
   return (
     <div
@@ -56,7 +73,9 @@ export function ResourceBookNotAvailable({ message }: ResourceBookNotAvailablePr
       tabIndex={-1}
       className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4 tw:outline-none"
     >
-      <EmptyState message={message} className="tw:text-center" />
+      {/* Keyed so a new subject remounts the live region. `aria-live` reports content that CHANGES;
+          the same sentence about a different text is not a change it can see. */}
+      <EmptyState key={announcementKey} message={message} className="tw:text-center" />
     </div>
   );
 }

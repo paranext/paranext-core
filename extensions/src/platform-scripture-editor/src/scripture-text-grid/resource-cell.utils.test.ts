@@ -21,6 +21,20 @@ describe('deriveCellState', () => {
       }),
     ).toBe('downloading');
   });
+  it('is bookNotAvailable when the failure is a book the resource does not contain', () => {
+    // "Download failed" tells the user to retry a download that already succeeded. The book is
+    // simply not in this text, which is not a fault and has a different remedy.
+    expect(
+      deriveCellState({
+        usjPossiblyError: {
+          platformErrorVersion: 1,
+          message: 'Book number 3 not found in project abc123.',
+        },
+        isLoading: false,
+      }),
+    ).toBe('bookNotAvailable');
+  });
+
   it('is ready for a non-error USJ value', () => {
     expect(
       deriveCellState({

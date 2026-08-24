@@ -5,7 +5,7 @@ import {
   getDefaultViewOptions,
 } from '@eten-tech-foundation/platform-editor';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
   Spinner,
@@ -33,7 +33,7 @@ import { InstallFailedView, InstallingView } from './install-state-views.compone
 import { scrollToVerse } from './editor-dom.util';
 import { getRefLabel } from './resource-reference.utils';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
-import { isMissingBookError } from './platform-scripture-editor.utils';
+import { isMissingBookError, isMissingBookOnScreen } from './platform-scripture-editor.utils';
 import type {
   ModelTextPanelLocalizedStringKey,
   ModelTextPanelLocalizedStrings,
@@ -180,10 +180,10 @@ export function ModelTextPanel({
   const [textDirection, setTextDirection] = useState<string>(DEFAULT_TEXT_DIRECTION);
   // `undefined` means "not yet fetched" so we can show the loading state, matching the original.
   const [isUsjLoading, setIsUsjLoading] = useState(false);
-  // Distinguishes "this model text simply has no such book" from a genuine fetch failure. Both
-  // arrive as a rejection from `getResourceChapter`, and before this the catch collapsed them into
-  // "no USJ" — which rendered a blank editor with no explanation.
-  const [isBookMissing, setIsBookMissing] = useState(false);
+  // The rejection itself is kept, not a boolean derived from it. `isMissingBookOnScreen` then decides
+  // in the render body whether the failure still describes the book and model text on screen, so
+  // navigating to a book this text does have cannot commit one frame still asserting the message.
+  const [fetchError, setFetchError] = useState<unknown>(undefined);
 
   useEffect(() => {
     if (!resourceProjectId) {
@@ -192,8 +192,7 @@ export function ModelTextPanel({
     }
     let isActive = true;
     setIsUsjLoading(true);
-    // Cleared per fetch so a message for the book the user just left cannot outlive the navigation.
-    setIsBookMissing(false);
+    setFetchError(undefined);
     const load = async () => {
       const { usj: nextUsj, textDirection: nextTextDirection } = await getResourceChapter(
         resourceProjectId,
@@ -207,15 +206,14 @@ export function ModelTextPanel({
     load().catch((e) => {
       if (!isActive) return;
       setUsj(undefined);
-      const isMissingBook = isMissingBookError(e);
-      setIsBookMissing(isMissingBook);
+      setFetchError(e);
       setIsUsjLoading(false);
-      // A missing book is now explained on screen, so it is not a failure worth logging. Anything
-      // else still renders an editor with no content, which is undiagnosable without this — the same
-      // gap this panel's message closes for the missing-book case. The main editor logs the same
-      // class of failure (`platform-scripture-editor.web-view.tsx`).
-      if (!isMissingBook)
-        logger?.error(`Error getting model text chapter USJ: ${getErrorMessage(e)}`);
+      // A missing book is explained on screen, so it is not a failure worth logging. Anything else
+      // still renders an editor with no content, which is undiagnosable without this. The main editor
+      // logs the same class of failure (`platform-scripture-editor.web-view.tsx`).
+      if (isMissingBookError(e))
+        logger?.debug(`Book not found in model text: ${getErrorMessage(e)}`);
+      else logger?.error(`Error getting model text chapter USJ: ${getErrorMessage(e)}`);
     });
     return () => {
       isActive = false;
@@ -451,6 +449,14 @@ export function ModelTextPanel({
     return notFoundState;
   }
 
+  // Whether the failure in hand still describes what this panel is showing. Derived here rather than
+  // latched in the `catch` so it is accurate for the render it is used in.
+  const isBookMissing = isMissingBookOnScreen({
+    error: fetchError,
+    currentBookNum: Canon.bookIdToNumber(scrRef.book),
+    projectId: resourceProjectId,
+  });
+
   // Loading: USJ not yet fetched for the resolved resource.
   if (usj === undefined && isUsjLoading) {
     return (
@@ -522,6 +528,7 @@ export function ModelTextPanel({
         <div className="tw:flex-1 tw:overflow-auto">
           <ResourceBookNotAvailable
             message={localize(localizedStrings, '%webView_modelTextPanel_bookNotAvailable%')}
+            announcementKey={`${resourceProjectId}:${scrRef.book}`}
           />
         </div>
       ) : (

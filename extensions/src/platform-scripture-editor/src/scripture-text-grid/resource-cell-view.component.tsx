@@ -13,7 +13,7 @@ import {
   useTruncationTooltip,
 } from 'platform-bible-react';
 import { EllipsisVertical, GripVertical } from 'lucide-react';
-import { formatReplacementString, LocalizedStringValue } from 'platform-bible-utils';
+import { formatReplacementString } from 'platform-bible-utils';
 import {
   CSSProperties,
   ReactNode,
@@ -23,38 +23,34 @@ import {
   type MouseEvent,
 } from 'react';
 import { ResourceCellState } from './resource-cell.utils';
+import {
+  BOOK_NOT_AVAILABLE_KEY,
+  COPY_KEY,
+  EMPTY_KEY,
+  FAILED_KEY,
+  LOADING_KEY,
+  NOT_INSTALLED_KEY,
+  UNAVAILABLE_KEY,
+  type ResourceCellLocalizedStrings,
+} from './resource-cell.const';
 
-/**
- * Localization keys for the ResourceCell's status and action labels. Import to resolve them via
- * `useLocalizedStrings` (in the app) or `getLocalizedStrings` (in Storybook).
- */
-export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
-export const NOT_INSTALLED_KEY = '%webView_scriptureTextGrid_cell_not_installed%';
-export const LOADING_KEY = '%webView_scriptureTextGrid_cell_status_loading%';
-export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_failed%';
-export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
-export const ZOOM_IN_KEY = '%webView_scriptureTextGrid_cell_zoomIn%';
-export const ZOOM_OUT_KEY = '%webView_scriptureTextGrid_cell_zoomOut%';
-export const RESET_ZOOM_KEY = '%webView_scriptureTextGrid_cell_resetZoom%';
-export const ZOOM_OPTIONS_KEY = '%webView_scriptureTextGrid_cell_zoomOptions%';
-export const COPY_KEY = '%webView_scriptureTextGrid_cell_copy%';
-export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
+// Re-exported from `resource-cell.const.ts` so importers keep reading these from the component while
+// a node-environment test can import the key list without a DOM.
+export {
   UNAVAILABLE_KEY,
   NOT_INSTALLED_KEY,
   LOADING_KEY,
   FAILED_KEY,
+  BOOK_NOT_AVAILABLE_KEY,
   EMPTY_KEY,
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
   ZOOM_OPTIONS_KEY,
   COPY_KEY,
-] as const);
-
-type ResourceCellLocalizedStringKey = (typeof RESOURCE_CELL_STRING_KEYS)[number];
-export type ResourceCellLocalizedStrings = {
-  [key in ResourceCellLocalizedStringKey]?: LocalizedStringValue;
-};
+  RESOURCE_CELL_STRING_KEYS,
+  type ResourceCellLocalizedStrings,
+} from './resource-cell.const';
 
 /** How the cell shows its resource name: a hanging inline label, or a header band. */
 export type ResourceNameDisplay = 'inline' | 'header';
@@ -228,6 +224,14 @@ export function ResourceCellView({
   } else if (state === 'unavailable') {
     unavailableContent = (
       <span className="tw:font-medium">{localizedStrings[NOT_INSTALLED_KEY]}</span>
+    );
+  } else if (state === 'bookNotAvailable') {
+    // No "Resource unavailable" heading and no retry wording: the resource is present and working,
+    // it simply has no such book.
+    unavailableContent = (
+      <span className="tw:text-sm tw:text-muted-foreground">
+        {localizedStrings[BOOK_NOT_AVAILABLE_KEY]}
+      </span>
     );
   } else {
     unavailableContent = (

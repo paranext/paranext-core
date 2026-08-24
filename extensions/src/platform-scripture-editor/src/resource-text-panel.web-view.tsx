@@ -56,11 +56,18 @@ import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup
 import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { resolveResourceContentState } from './platform-scripture-editor.utils';
-import { resolveResourcePanelStringKeys } from './resource-panel-strings.utils';
+import {
+  RESOURCE_PANEL_TYPED_STRING_KEYS,
+  resolveResourcePanelStringKeys,
+} from './resource-panel-strings.utils';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
+// The per-resource-type keys come from `RESOURCE_PANEL_TYPED_STRING_KEYS` rather than being listed
+// again here. `useLocalizedStrings` seeds key-to-key defaults only for the keys in the array it is
+// given, so a hand-maintained second list is a silent hole: add a field to `ResourcePanelStringKeys`,
+// forget the array, and the render site reads `undefined` and announces an empty message.
 const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_noProject%',
   '%webView_resourcePanel_installing%',
@@ -69,16 +76,7 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_installFailedOffline%',
   '%webView_resourcePanel_retry%',
   '%webView_resourcePanel_downloadResources%',
-  '%webView_resourcePanel_bibleTexts_bookNotAvailable%',
-  '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
-  '%webView_resourcePanel_bibleTexts_pick%',
-  '%webView_resourcePanel_bibleTexts_title%',
-  '%webView_resourcePanel_bibleTexts_title_withResource%',
-  '%webView_resourcePanel_commentaries_bookNotAvailable%',
-  '%webView_resourcePanel_commentaries_emptyState_prompt%',
-  '%webView_resourcePanel_commentaries_pick%',
-  '%webView_resourcePanel_commentaries_title%',
-  '%webView_resourcePanel_commentaries_title_withResource%',
+  ...RESOURCE_PANEL_TYPED_STRING_KEYS,
 ];
 
 const BIBLE_TEXTS_ICON_URLS: TabIconUrls = {
@@ -649,7 +647,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
         resource is RTL. */}
       {contentState === 'bookNotAvailable' ? (
         <div className="tw:flex-1 tw:overflow-auto">
-          <ResourceBookNotAvailable message={localizedStrings[bookNotAvailableKey]} />
+          <ResourceBookNotAvailable
+            message={localizedStrings[bookNotAvailableKey]}
+            announcementKey={`${resourceProjectId}:${scrRef.book}`}
+          />
         </div>
       ) : (
         <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>

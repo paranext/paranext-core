@@ -16,8 +16,8 @@ describe('resolveResourcePanelStringKeys', () => {
   });
 
   it('names commentaries for a commentary resource', () => {
-    // The commentary arm is the one that was previously only exercised by reading the ternary — the
-    // panel renders Bible texts far more often, so a swapped pair would have shipped unnoticed.
+    // The commentary arm is the one a reader is least likely to check: the panel renders Bible texts
+    // far more often, so a swapped pair would ship unnoticed without this.
     expect(resolveResourcePanelStringKeys('CommentaryResource')).toEqual({
       titleKey: '%webView_resourcePanel_commentaries_title%',
       titleWithResourceKey: '%webView_resourcePanel_commentaries_title_withResource%',

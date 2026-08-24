@@ -33,17 +33,15 @@ const COMMENTARIES_KEYS: ResourcePanelStringKeys = {
 /**
  * Every localized string key the resource panel needs for one resource type.
  *
- * The panel previously chose each key with its own inline `resourceType === 'ScriptureResource'`
- * ternary — five of them, one per string. Collecting them here makes the pairing testable (a web
- * view is not: nothing under `extensions/` tests a `*.web-view.tsx`, because the module assigns
- * itself to `globalThis.webViewComponent`) and makes a half-added pair a visible hole rather than a
- * ternary someone forgot to write.
+ * Keeping the whole set in one place is what makes the pairing testable — a web view is not, since
+ * nothing under `extensions/` tests a `*.web-view.tsx` (the module assigns itself to
+ * `globalThis.webViewComponent`) — and makes a half-added pair a visible hole rather than a missing
+ * ternary.
  *
  * Only `ScriptureResource` gets the Bible-texts wording; every other `ResourceType` — including
  * `EnhancedResource`, `XmlResource`, and `SourceLanguageResource` — falls to the commentaries
- * wording. That is the behaviour of the five ternaries this replaced (each tested `===
- * 'ScriptureResource'`), preserved deliberately rather than narrowed, since changing which strings
- * an enhanced resource shows is a product decision and not a refactor.
+ * wording. Whether an enhanced resource SHOULD read as a commentary is a product question, not a
+ * refactor: this preserves the shipped behavior and pins it with a test. See PT-4416.
  *
  * @param resourceType Which kind of resource the panel is showing.
  * @returns The keys for that resource type.

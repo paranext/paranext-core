@@ -23,6 +23,7 @@ import {
   canAddChapterNumber,
   resolveAddChapterNumberClick,
   isMissingBookError,
+  isMissingBookOnScreen,
   parseMissingBookError,
   resolveResourceContentState,
 } from './platform-scripture-editor.utils';
@@ -2623,6 +2624,26 @@ describe('isMissingBookError', () => {
   it('returns false for undefined, so a missing error is never read as a missing book', () => {
     expect(isMissingBookError(undefined)).toBe(false);
   });
+
+  it('detects the failure even when the project id is not followed by a period', () => {
+    // Detection must not depend on the identity suffix. The main editor turns a non-detection into
+    // `bookExists === true`, which reaches `usjFromPdp === defaultUsj` and spins forever instead of
+    // showing the book-not-available view, so a stricter predicate here costs a hang.
+    expect(isMissingBookError(new Error('Book number 1 not found in project abc123'))).toBe(true);
+  });
+
+  it('never reads a message off a value that is not an error', () => {
+    // `getErrorMessage` falls back to `JSON.stringify` for an object with no string `message`, so an
+    // unguarded call serializes the whole chapter on every render and then matches the regex against
+    // the scripture text. The guard belongs here rather than in each caller.
+    expect(
+      isMissingBookError({
+        type: 'USJ',
+        version: '3.1',
+        content: ['Book number 1 not found in project abc123.'],
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('parseMissingBookError', () => {
@@ -2645,6 +2666,104 @@ describe('parseMissingBookError', () => {
 
   it('returns undefined for an unrelated failure, so callers cannot read identities off one', () => {
     expect(parseMissingBookError(new Error('Project abc123 is not available'))).toBeUndefined();
+  });
+
+  it('keeps a project id that contains periods intact', () => {
+    // The C# message always ends in a period, so the id runs to the LAST one. Stopping at the first
+    // would hand back a truncated id, which compares unequal and silently restores the blank editor.
+    expect(
+      parseMissingBookError(new Error('Book number 40 not found in project abc.123.def.')),
+    ).toEqual({ bookNum: 40, projectId: 'abc.123.def' });
+  });
+
+  it('returns undefined for a value that is not an error', () => {
+    expect(
+      parseMissingBookError({
+        type: 'USJ',
+        version: '3.1',
+        content: ['Book number 1 not found in project abc123.'],
+      }),
+    ).toBeUndefined();
+  });
+});
+
+describe('isMissingBookOnScreen', () => {
+  const PROJECT_ID = 'abc123';
+  const GENESIS = 1;
+  const MATTHEW = 40;
+  const missingBook = (bookNum: number, projectId = PROJECT_ID) =>
+    newPlatformError(new Error(`Book number ${bookNum} not found in project ${projectId}.`));
+
+  it('is true when the failure names the book and project on screen', () => {
+    expect(
+      isMissingBookOnScreen({
+        error: missingBook(GENESIS),
+        currentBookNum: GENESIS,
+        projectId: PROJECT_ID,
+      }),
+    ).toBe(true);
+  });
+
+  it('is false for a failure about the book the view has already left', () => {
+    // This is what makes the answer frame-accurate. A caller that instead latched a boolean when the
+    // failure arrived would still be asserting it on the first render after navigation, because the
+    // effect that clears such a flag runs after that render has already been committed.
+    expect(
+      isMissingBookOnScreen({
+        error: missingBook(MATTHEW),
+        currentBookNum: GENESIS,
+        projectId: PROJECT_ID,
+      }),
+    ).toBe(false);
+  });
+
+  it('is false for a failure about a project the view has already switched away from', () => {
+    expect(
+      isMissingBookOnScreen({
+        error: missingBook(GENESIS, 'someOtherProject'),
+        currentBookNum: GENESIS,
+        projectId: PROJECT_ID,
+      }),
+    ).toBe(false);
+  });
+
+  it('compares project ids case-insensitively', () => {
+    expect(
+      isMissingBookOnScreen({
+        error: missingBook(GENESIS, 'ABC123'),
+        currentBookNum: GENESIS,
+        projectId: 'abc123',
+      }),
+    ).toBe(true);
+  });
+
+  it('is false when there is no project to compare against', () => {
+    expect(
+      isMissingBookOnScreen({
+        error: missingBook(GENESIS),
+        currentBookNum: GENESIS,
+        projectId: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it('is false when the current book number is not a real book', () => {
+    expect(
+      isMissingBookOnScreen({ error: missingBook(0), currentBookNum: 0, projectId: PROJECT_ID }),
+    ).toBe(false);
+  });
+
+  it('is false for an unrelated failure and for no failure at all', () => {
+    expect(
+      isMissingBookOnScreen({
+        error: newPlatformError(new Error('Project abc123 is not available')),
+        currentBookNum: GENESIS,
+        projectId: PROJECT_ID,
+      }),
+    ).toBe(false);
+    expect(
+      isMissingBookOnScreen({ error: undefined, currentBookNum: GENESIS, projectId: PROJECT_ID }),
+    ).toBe(false);
   });
 });
 
@@ -2700,8 +2819,8 @@ describe('resolveResourceContentState', () => {
     // `useProjectData` keeps serving the PREVIOUS selector's result until the new subscription's
     // first update lands, so the error in hand may describe the book the user just left. Attributing
     // it to the current book would flash "not in this text" on the way INTO a book the text has —
-    // and, because `isLoading` only returns to `true` in the subscription cleanup that runs after
-    // the selector-change render, on the way OUT of one it does not.
+    // and, because the hook raises `isLoading` from an effect that runs after the commit, on the way
+    // OUT of one it does not.
     expect(
       resolveResourceContentState({
         resourceProjectId: PROJECT_ID,
@@ -2737,6 +2856,32 @@ describe('resolveResourceContentState', () => {
           content: [`Book number ${GENESIS} not found in project ${PROJECT_ID}.`],
         },
         currentBookNum: GENESIS,
+      }),
+    ).toBe('ready');
+  });
+
+  it('matches project ids case-insensitively', () => {
+    // C# stores and reports ids uppercased (`ProjectMetadata` calls `ToUpperInvariant`), while the
+    // panel's own id arrives verbatim from a resource reference. The PDP lookup folds case, so a
+    // mismatch is invisible on the data path and would surface only here — as a blank editor with
+    // no message and no log, the exact failure this state exists to remove.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: 'abc123',
+        usjPossiblyError: missingBook(GENESIS, 'ABC123'),
+        currentBookNum: GENESIS,
+      }),
+    ).toBe('bookNotAvailable');
+  });
+
+  it('returns "ready" when the current book number is not a real book', () => {
+    // `Canon.bookIdToNumber` answers 0 for an unrecognized id, and 0 === 0 would match a failure
+    // that also carried book 0 — asserting a specific claim about a book the panel cannot name.
+    expect(
+      resolveResourceContentState({
+        resourceProjectId: PROJECT_ID,
+        usjPossiblyError: missingBook(0),
+        currentBookNum: 0,
       }),
     ).toBe('ready');
   });

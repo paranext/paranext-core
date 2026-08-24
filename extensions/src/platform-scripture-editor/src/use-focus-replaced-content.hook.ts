@@ -8,23 +8,32 @@ import { useEffect, useRef } from 'react';
  *
  * Focus is repaired only when BOTH conditions hold:
  *
- * 1. `document.hasFocus()` — focus is somewhere in THIS document. When the user navigates here from
- *    the app's title-bar reference control, that control lives in a different document, so focus is
- *    not ours to touch.
- * 2. Focus has actually fallen to the document body. `hasFocus()` alone is not enough: a panel that
- *    keeps a header mounted alongside the swapped content (the Bible texts and Commentaries panel
- *    keeps its resource selector) has focusable siblings in the SAME document. Picking a text that
- *    lacks the current book leaves focus on the selector trigger, `hasFocus()` returns `true`, and
- *    focusing the message would yank focus out of the control the user is still operating — which
- *    is also the one control that can remedy the situation.
+ * 1. `document.hasFocus()` — this document is the focused one. It is `false` while the user is in
+ *    another window, another application, or a different iframe, and pulling focus into a region
+ *    the user is not looking at would both steal it from wherever they are working and scroll this
+ *    view.
+ * 2. Focus has actually fallen to the document body. `hasFocus()` alone is not enough, and this is the
+ *    condition that carries the real work: a view that keeps controls mounted alongside the swapped
+ *    content has focusable siblings in the SAME document — the Bible texts and Commentaries panel
+ *    keeps its resource selector, and the main editor keeps its reference control in its own
+ *    toolbar. Arriving at a missing book by using either of those leaves focus on that control with
+ *    `hasFocus()` true, and focusing the message would yank focus out of the control the user is
+ *    operating.
+ *
+ * The trade this makes deliberately: a user who reaches a missing book through a control that keeps
+ * focus gets no focus move, so the `role="status"` live region is the only announcement. Taking
+ * focus from a control mid-use is the worse of the two failures.
  *
  * Only content genuinely orphaned by the swap resolves to `body`, so the pair of checks admits
  * exactly the case this exists for.
  *
+ * @param resetKey Change this to repair focus again for a NEW message. The repair runs once per
+ *   distinct value, which is what lets a view whose message stays mounted but now describes a
+ *   different book or text re-announce instead of sitting silent.
  * @returns A ref to attach to the message region. The region must be focusable — give it
  *   `tabIndex={-1}`.
  */
-export function useFocusReplacedContent<T extends HTMLElement>() {
+export function useFocusReplacedContent<T extends HTMLElement>(resetKey?: unknown) {
   // Using null for React ref compatibility
   // eslint-disable-next-line no-null/no-null
   const regionRef = useRef<T>(null);
@@ -37,7 +46,7 @@ export function useFocusReplacedContent<T extends HTMLElement>() {
     const { activeElement } = document;
     if (activeElement && activeElement !== document.body) return;
     regionRef.current?.focus();
-  }, []);
+  }, [resetKey]);
 
   return regionRef;
 }

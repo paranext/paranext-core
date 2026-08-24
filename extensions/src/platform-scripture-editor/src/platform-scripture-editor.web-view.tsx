@@ -128,6 +128,7 @@ import {
   generateParagraphMenuListItems,
   isChapterBlank,
   isMissingBookError,
+  isMissingBookOnScreen,
   openCommentListAndSelectThreadSafe,
   resolveAddChapterNumberClick,
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -1288,14 +1289,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
     useMemo(() => ({ whichUpdates: '*' }), []),
   );
-  // Handle a PlatformError if one comes in instead of project text
+  // Handle a PlatformError if one comes in instead of project text.
+  //
+  // "Book not in this project" is decided by comparing what the failure NAMES against the book and
+  // project on screen, not by the failure's mere presence. The hook keeps serving the previous
+  // selector's result until the new subscription's first update lands, so a bare predicate would
+  // report a missing book for one committed render after the user navigates to a book the project
+  // does have. A book the project simply lacks is also ordinary navigation rather than a fault, so
+  // it is logged quietly while every other PDP failure stays an error.
   const [usjFromPdp, bookExists] = useMemo(() => {
     if (!isPlatformError(usjFromPdpPossiblyError)) return [usjFromPdpPossiblyError, true];
 
     const errorMessage = getErrorMessage(usjFromPdpPossiblyError);
-    logger.error(`Error getting USJ from PDP: ${errorMessage}`);
-    return [defaultUsj, !isMissingBookError(usjFromPdpPossiblyError)];
-  }, [usjFromPdpPossiblyError]);
+    if (isMissingBookError(usjFromPdpPossiblyError))
+      logger.debug(`Book not found in project: ${errorMessage}`);
+    else logger.error(`Error getting USJ from PDP: ${errorMessage}`);
+    return [
+      defaultUsj,
+      !isMissingBookOnScreen({ error: usjFromPdpPossiblyError, currentBookNum, projectId }),
+    ];
+  }, [usjFromPdpPossiblyError, currentBookNum, projectId]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
   // Updated in useEffect (which runs after all useLayoutEffects), so this ref is stable for the
@@ -1951,9 +1964,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       //     is wrong for someone: a resource reader would briefly get an add-this-book button, or a
       //     project owner would briefly be told their project is a resource.
       // Both hooks serve their default until the real value arrives, which makes the default
-      // indistinguishable from an answer — `isLoading` is the only thing that separates them. The code
-      // this replaced rendered one string for all of these cases, which is why the hazard is new here.
-      // Same class of problem this file guards `CharacterMarkerBarOverlay` against further down.
+      // indistinguishable from an answer — `isLoading` is the only thing that separates them. The
+      // hazard is specific to branching on a setting: a surface that renders one string for every
+      // case has nothing to get wrong while the settings load. Same class of problem this file guards
+      // `CharacterMarkerBarOverlay` against further down.
       if (isInterfaceModeLoading || isIsPublishedLoading) {
         return (
           <div className="tw:flex tw:items-center tw:justify-center tw:h-full">
@@ -1970,6 +1984,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // read-only.
       if (isResource) {
         return (
+          // TODO(PT-4416): Converge with `ResourceBookNotAvailable`. This is a third rendering of the
+          // same sentence, and the only one with no live region and no focus repair.
           <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
             {workaround}
             {localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']}

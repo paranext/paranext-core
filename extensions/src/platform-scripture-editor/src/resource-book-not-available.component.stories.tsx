@@ -9,7 +9,7 @@ import { ResourceBookNotAvailable } from './resource-book-not-available.componen
  * A project missing a book is actionable in Power mode — Manage Books can create it — but a
  * published resource cannot gain a book in either mode, so both arms would say the same thing. The
  * remedy lives outside this component: the panel keeps its resource selector mounted above, so
- * switching to a text that has the book is one click away. See ADR-0019.
+ * switching to a text that has the book is one click away. See ADR-0022.
  *
  * Each story shows the wording for one panel, because the caller resolves the message so it can
  * name the thing the user is actually looking at.
