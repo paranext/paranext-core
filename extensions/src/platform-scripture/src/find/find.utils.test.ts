@@ -18,6 +18,7 @@ import {
   prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
+  shouldClearResultsForEmptyTerm,
 } from './find.utils';
 
 /** Default character categorizer matching the project-settings defaults used in production */
@@ -535,6 +536,61 @@ describe('gateStartSearch', () => {
     expect(
       gateStartSearch({ isSearchQueryValid: true, hasPdp: false, isAlreadyStarting: false }),
     ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: true });
+  });
+});
+
+describe('shouldClearResultsForEmptyTerm', () => {
+  // THE REGRESSION THIS EXISTS FOR. Emptying the box with the keyboard (select-all + delete, or
+  // backspacing) only changes the term: the auto-search that follows is gated off as an invalid
+  // query, so the previous search's results stayed on screen with nothing in the box.
+  it('clears when the term is emptied while results are still showing', () => {
+    expect(
+      shouldClearResultsForEmptyTerm({
+        searchTerm: '',
+        hasResults: true,
+        searchStatus: 'finished',
+      }),
+    ).toBe(true);
+  });
+
+  it('clears a search still in flight when the term is emptied', () => {
+    expect(
+      shouldClearResultsForEmptyTerm({
+        searchTerm: '',
+        hasResults: false,
+        searchStatus: 'running',
+      }),
+    ).toBe(true);
+  });
+
+  it('treats a term of only whitespace as emptied', () => {
+    expect(
+      shouldClearResultsForEmptyTerm({
+        searchTerm: '   ',
+        hasResults: true,
+        searchStatus: 'finished',
+      }),
+    ).toBe(true);
+  });
+
+  it('does nothing on an empty box with nothing to clear, so mount does not fire it', () => {
+    expect(
+      shouldClearResultsForEmptyTerm({
+        searchTerm: '',
+        hasResults: false,
+        searchStatus: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it('leaves results alone while a term is still present', () => {
+    expect(
+      shouldClearResultsForEmptyTerm({
+        searchTerm: 'God',
+        hasResults: true,
+        searchStatus: 'finished',
+      }),
+    ).toBe(false);
   });
 });
 

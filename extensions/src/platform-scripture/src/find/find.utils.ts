@@ -8,7 +8,7 @@ import {
   ScrollGroupId,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
-import { FindJobStatusReport, FindOptions } from 'platform-scripture';
+import { FindJobStatus, FindJobStatusReport, FindOptions } from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
@@ -214,6 +214,29 @@ export function gateStartSearch(params: {
     return { action: 'skip', shouldRetryWhenPdpReady: true };
   }
   return { action: 'run' };
+}
+
+/**
+ * Whether emptying the search box should clear the results area. Emptying the box is a request to
+ * stop searching, but it is not a search the {@link gateStartSearch} path can express: an empty term
+ * is an invalid query, so the auto-search it triggers is gated off and the previous search's
+ * results would otherwise stay on screen with nothing in the box.
+ *
+ * Requires something to actually clear so mounting with an empty box (the common first-open case)
+ * does not abandon a job that was never started.
+ *
+ * @param params.searchTerm The current search term; whitespace-only counts as emptied.
+ * @param params.hasResults Whether any results are currently displayed.
+ * @param params.searchStatus The current find-job status, or `undefined` when no search has run.
+ * @returns `true` when the caller should clear results and abandon any running job.
+ */
+export function shouldClearResultsForEmptyTerm(params: {
+  searchTerm: string;
+  hasResults: boolean;
+  searchStatus: FindJobStatus | undefined;
+}): boolean {
+  if (params.searchTerm.trim() !== '') return false;
+  return params.hasResults || params.searchStatus !== undefined;
 }
 
 /**

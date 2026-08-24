@@ -21,7 +21,6 @@ function buildOptions(overrides: Overrides = {}): FindSearchTriggersOptions {
     searchTermRef: ref(''),
     pendingProjectSwitchRerunRef: ref(false),
     initialSearchTriggeredRef: ref(false),
-    explicitSearchPendingRef: ref(false),
     startSearch: vi.fn(),
     ...overrides,
   };

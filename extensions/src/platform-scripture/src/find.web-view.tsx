@@ -65,6 +65,7 @@ import {
   prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
+  shouldClearResultsForEmptyTerm,
 } from './find/find.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
@@ -79,6 +80,7 @@ import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
+import { useAutoSearchDebounce } from './find/use-auto-search-debounce.hook';
 
 // Strings used by the webview's own replace / version-history-commit / toast logic, in addition to
 // the strings the presentational Find component needs (FIND_LOCALIZED_STRING_KEYS).
@@ -1056,9 +1058,6 @@ global.webViewComponent = function FindWebView({
   const pendingReplaceRevertRef = useRef<{ cancel: () => void } | undefined>(undefined);
 
   const isStartingSearchRef = useRef(false);
-  // Set when the user explicitly starts a search (Enter/Find button) so the debounce timer that
-  // may still be pending from the same keystroke skips its redundant restart.
-  const explicitSearchPendingRef = useRef(false);
   // Tracks the index of the result that was just replaced so the auto-select effect can advance
   // focus to the next result instead of jumping back to the first.
   const pendingAdvanceIndexRef = useRef<number | undefined>(undefined);
@@ -1114,8 +1113,6 @@ global.webViewComponent = function FindWebView({
 
       const isPostReplace = isPostReplaceSearchRef.current;
       isPostReplaceSearchRef.current = false;
-
-      if (isExplicitSearch) explicitSearchPendingRef.current = true;
 
       // Set the flag to prevent concurrent calls
       // No mutex is needed here because we're fine throwing away concurrent calls instead of queuing
@@ -1208,6 +1205,11 @@ global.webViewComponent = function FindWebView({
     },
     [abandonFindJob, stopFindJob, editorWebViewController],
   );
+
+  // Kept in a ref so the empty-term effect below does not re-run just because this callback's
+  // identity changed.
+  const handleStopSearchRef = useRef(handleStopSearch);
+  handleStopSearchRef.current = handleStopSearch;
 
   const loadMoreResults = useCallback(async () => {
     try {
@@ -1437,14 +1439,20 @@ global.webViewComponent = function FindWebView({
   // memoized callback identity changed (it has many dependencies).
   const handleStartSearchRef = useRef(handleStartSearch);
   handleStartSearchRef.current = handleStartSearch;
-  const debouncedHandleStartSearch = useRef(
-    debounce(() => {
-      if (explicitSearchPendingRef.current) {
-        explicitSearchPendingRef.current = false;
-        return;
-      }
-      handleStartSearchRef.current();
-    }, SEARCH_DEBOUNCE_DELAY_MS),
+
+  // The debounced auto-search, plus the one way to call it off. See the hook's docs for why
+  // deduplication has to cancel the queued search rather than flag the next one to stand down.
+  const { requestAutoSearch: requestDebouncedAutoSearch, cancelPendingAutoSearch } =
+    useAutoSearchDebounce(() => handleStartSearchRef.current(), SEARCH_DEBOUNCE_DELAY_MS);
+
+  // Every search that does NOT come from the debounce goes through here, so a search already queued
+  // for the same input is dropped instead of re-running the same search a moment later.
+  const startSearchNow = useCallback(
+    (isExplicitSearch = false) => {
+      cancelPendingAutoSearch();
+      handleStartSearchRef.current(isExplicitSearch);
+    },
+    [cancelPendingAutoSearch],
   );
 
   // Both no-user-input search triggers (project-switch rerun, restore-time fallback) live in this
@@ -1458,10 +1466,7 @@ global.webViewComponent = function FindWebView({
     searchTermRef,
     pendingProjectSwitchRerunRef,
     initialSearchTriggeredRef,
-    explicitSearchPendingRef,
-    startSearch: useCallback((isExplicitSearch: boolean) => {
-      handleStartSearchRef.current(isExplicitSearch);
-    }, []),
+    startSearch: startSearchNow,
   });
 
   // Hidden case: auto-searches are deferred, not dropped. In Simple mode Find is a permanent tab
@@ -1475,9 +1480,7 @@ global.webViewComponent = function FindWebView({
   // into one catch-up that runs when the tab is activated, so the tab still opens showing results for
   // where the user actually is.
   const isViewVisible = useViewVisibility();
-  const requestAutoSearch = useRunWhenVisible(isViewVisible, () =>
-    debouncedHandleStartSearch.current(),
-  );
+  const requestAutoSearch = useRunWhenVisible(isViewVisible, requestDebouncedAutoSearch);
 
   // The refs need to start out with null for them to work as element refs
   // eslint-disable-next-line no-null/no-null
@@ -1520,15 +1523,31 @@ global.webViewComponent = function FindWebView({
   // or findPdp dropping later during a long idle period), retry as soon as it becomes available —
   // not just once at mount. Deliberately does NOT gate on searchStatus: pendingSearchDesiredRef is
   // only ever set after a search already ran once and bailed on !findPdp, so by definition any
-  // findPdp-driven auto-search debounce that could have raced this retry has already fired — there
-  // is nothing left to deduplicate against, so explicitSearchPendingRef is not set here either
-  // (setting it unconditionally previously risked swallowing the user's next legitimate keystroke).
+  // findPdp-driven auto-search debounce that could have raced this retry has already fired.
   useEffect(() => {
     if (!findPdp || !pendingSearchDesiredRef.current) return;
     pendingSearchDesiredRef.current = false;
     clearPendingSearchTimeout();
-    handleStartSearchRef.current();
-  }, [findPdp, clearPendingSearchTimeout]);
+    startSearchNow();
+  }, [findPdp, clearPendingSearchTimeout, startSearchNow]);
+
+  // Emptying the search box clears the results area. This cannot ride on the auto-search path: an
+  // empty term is an invalid query, so the search it would start is gated off and the previous
+  // search's results would stay on screen with nothing in the box. Covers every route to an empty
+  // box — the clear button, select-all + delete, backspacing the last character.
+  useEffect(() => {
+    if (
+      !shouldClearResultsForEmptyTerm({
+        searchTerm,
+        hasResults: results.length > 0,
+        searchStatus,
+      })
+    )
+      return;
+    handleStopSearchRef.current(true).catch((error) => {
+      logger.warn(`Find: failed to clear results for an empty term: ${getErrorMessage(error)}`);
+    });
+  }, [searchTerm, results.length, searchStatus]);
 
   // Reset isPostReplaceSearch once the search finishes so a subsequent search in replace mode
   // (e.g. triggered by an external change) is not mistakenly treated as a post-replace search.
@@ -2091,7 +2110,7 @@ global.webViewComponent = function FindWebView({
       numberOfHiddenResults={numberOfHiddenResults}
       isPostReplaceSearch={isPostReplaceSearch}
       onSearchTermChange={setSearchTerm}
-      onStartSearch={handleStartSearch}
+      onStartSearch={startSearchNow}
       onStopSearch={handleStopSearch}
       setScope={setScope}
       onSelectedBookIdsChange={setSelectedBookIds}

@@ -27,9 +27,10 @@ export type FindSearchTriggersOptions = {
   pendingProjectSwitchRerunRef: MutableRefObject<boolean>;
   /** Set once the initial auto-search has been attempted. */
   initialSearchTriggeredRef: MutableRefObject<boolean>;
-  /** Set so a still-pending debounce skips its redundant second call. */
-  explicitSearchPendingRef: MutableRefObject<boolean>;
-  /** Starts a find job. `isExplicitSearch` also writes the term to recent searches. */
+  /**
+   * Starts a find job, dropping any auto-search already queued for the same input so it cannot
+   * re-run this search a moment later. `isExplicitSearch` also writes the term to recent searches.
+   */
   startSearch: (isExplicitSearch: boolean) => void;
 };
 
@@ -52,7 +53,6 @@ export function useFindSearchTriggers({
   searchTermRef,
   pendingProjectSwitchRerunRef,
   initialSearchTriggeredRef,
-  explicitSearchPendingRef,
   startSearch,
 }: FindSearchTriggersOptions): void {
   // Re-run the current term against the project just switched to. `findPdp` only takes on the new
@@ -75,18 +75,10 @@ export function useFindSearchTriggers({
     }
     if (findPdpAvailability !== 'ready') return;
     pendingProjectSwitchRerunRef.current = false;
-    // Set directly so a pending debounce skips its redundant second call, but started as NON-explicit:
-    // a project switch is not a user search, and an explicit search also writes to recent searches.
-    explicitSearchPendingRef.current = true;
+    // Non-explicit: a project switch is not a user search, and an explicit search also writes to
+    // recent searches.
     startSearch(false);
-  }, [
-    findPdp,
-    findPdpAvailability,
-    pendingProjectSwitchRerunRef,
-    searchTermRef,
-    explicitSearchPendingRef,
-    startSearch,
-  ]);
+  }, [findPdp, findPdpAvailability, pendingProjectSwitchRerunRef, searchTermRef, startSearch]);
 
   // Restore-time fallback: when a persisted term is present but the provider was not usable at mount,
   // run the search as soon as it becomes usable. `findPdpAvailability` is required here for the same
@@ -100,9 +92,8 @@ export function useFindSearchTriggers({
       searchTerm.trim() === ''
     )
       return;
-    explicitSearchPendingRef.current = true;
-    // Non-explicit, matching the pre-extraction call: restoring a persisted term is not a fresh user
-    // search, so it must not write another recent-searches entry.
+    // Non-explicit: restoring a persisted term is not a fresh user search, so it must not write
+    // another recent-searches entry.
     startSearch(false);
   }, [
     findPdp,
@@ -110,7 +101,6 @@ export function useFindSearchTriggers({
     searchStatus,
     searchTerm,
     initialSearchTriggeredRef,
-    explicitSearchPendingRef,
     startSearch,
   ]);
 }

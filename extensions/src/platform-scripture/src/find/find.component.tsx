@@ -841,10 +841,10 @@ export function Find({
                     <button
                       type="button"
                       aria-label={localizedStrings['%webView_find_clearSearch%']}
-                      onClick={() => {
-                        onSearchTermChange('');
-                        onStopSearch(true);
-                      }}
+                      // Emptying the term is itself what clears the results and abandons a running
+                      // job, so every route to an empty box behaves the same — see the container's
+                      // empty-term effect.
+                      onClick={() => onSearchTermChange('')}
                       className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground tw:hover:text-foreground tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer"
                     >
                       <X className="tw:h-4 tw:w-4" />
