@@ -87,10 +87,16 @@ export interface CommentTestProject {
  * via `HexId.FromStr`. This avoids collisions with the real WEB project (or other test copies).
  *
  * @param users Usernames to add as project team members (e.g. ['Alice', 'Bob', 'Charlie'])
+ * @param shortNameSuffix Appended to the generated short name. Pass distinct values when one test
+ *   creates several projects, so their short names (and therefore their folders and dock tab
+ *   titles) stay distinct even when the copies are created within the same millisecond.
  * @returns Metadata about the created project
  */
-export async function createCommentTestProject(users: string[]): Promise<CommentTestProject> {
-  const shortName = `testComment_${Date.now()}`;
+export async function createCommentTestProject(
+  users: string[],
+  shortNameSuffix = '',
+): Promise<CommentTestProject> {
+  const shortName = `testComment_${Date.now()}${shortNameSuffix}`;
   const projectDir = path.join(PARATEXT_PROJECTS_ROOT, shortName);
 
   // 1. Copy the WEB project directory
