@@ -175,7 +175,8 @@ Report the counts and the verdict. "Posted successfully" without a read-back is 
 
 ## The scripts
 
-The posting layer is **five executable files**, not a template to retype:
+The posting layer is **a directory of scripts**, not a template to retype — five
+executables, the library they share, and the tests that pin the guards:
 
 ```
 <skill-dir>/scripts/

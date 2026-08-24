@@ -8,11 +8,12 @@ Exit 0 = PASS, 1 = FAIL (strays or misses, or an assert from section 7 failed),
 """
 import json
 import os
+import re
 import subprocess
 import sys
 from collections import defaultdict
 
-from posting_lib import unresolved_failures, unsettled_pendings
+from posting_lib import parse_common_args, unresolved_failures, unsettled_pendings
 
 
 def gh(endpoint, slug):
@@ -30,14 +31,16 @@ def gh(endpoint, slug):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if len(args) != 2:
+    args, slug = parse_common_args(sys.argv[1:], 2)
+    if args is None:
         sys.exit(__doc__)
     packet, window_start = os.path.abspath(args[0]), args[1]
-    slug = "paranext/paranext-core"
-    for a in sys.argv[1:]:
-        if a.startswith("--repo="):
-            slug = a.split("=", 1)[1]
+    # The window is compared lexicographically against GitHub's UTC `created_at`, so it must be
+    # in the same form. A local-time or offset-bearing string silently excludes everything the
+    # run posted and reports it all as missing.
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", window_start):
+        sys.exit(f"window start {window_start!r} must be UTC in GitHub's form, "
+                 f"e.g. 2026-08-24T17:02:00Z (the log's timestamps are written this way)")
 
     log = os.path.join(packet, "08-posting-log.txt")
     bodies = {i["item"]: i for i in
@@ -48,6 +51,11 @@ def main():
     rows = [ln.rstrip("\n").split("\t") for ln in open(log, encoding="utf-8") if ln.strip()]
     logged = defaultdict(lambda: {"review": set(), "issue": set()})
     ok_rows = 0
+    malformed = [r for r in rows if len(r) < 5]
+    rows = [r for r in rows if len(r) >= 5]
+    for r in malformed:
+        print(f"  !! MALFORMED log row, not verified: {r!r} — this script exists to run after a "
+              f"kill, and a truncated or hand-edited row is exactly what that leaves behind")
     for row in rows:
         status, item, pr, kind, cid = row[:5]
         # Touch the PR for EVERY row, including failures and pendings, so it enters the query set
@@ -101,12 +109,14 @@ def main():
             fails.append(f"{item}: nested under {c.get('in_reply_to_id')}, "
                          f"expected {it['comment_id']} — wrong thread, {c['html_url']}")
 
-    if fails or unknown:
+    if fails or unknown or malformed:
         print("POST-VERIFY: FAIL")
         for f_ in fails:
             print("  - " + f_)
         for r in unknown:
             print(f"  - {r[1]}: unresolved PENDING")
+        for r in malformed:
+            print(f"  - malformed log row: {r!r}")
         sys.exit(1)
     if failed:
         print(f"POST-VERIFY: PARTIAL — the {ok_rows} OK rows match live state and no strays were "

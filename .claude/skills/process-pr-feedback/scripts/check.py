@@ -13,7 +13,8 @@ import re
 import subprocess
 import sys
 
-from posting_lib import bad_control_chars, declared_prs, scan_denylist
+from posting_lib import (bad_control_chars, declared_prs, missing_fields,
+                         parse_common_args, scan_denylist)
 
 PLACEHOLDERS = [r"\bTODO\b", r"\bTBD\b", r"\bFIXME\b", r"\bXXX\b", r"\bPLACEHOLDER\b",
                 r"\bLOREM\b", r"<[A-Z][A-Z_ -]{2,}>", r"\{\{"]
@@ -72,7 +73,10 @@ def internal_labels(packet):
         if not token or len(parts) < 2 or re.search(r"\s", token):
             skipped.append(line.strip()[:70])
             continue
-        if re.search(r"(NN|XX|nn|<[^>]*>|\.\.)", token):
+        # Anchored on standalone uppercase runs and bracketed slots. An unanchored `nn`
+        # rejected legitimate patterns like `\bannotation-\d+\b`, hard-stopping a batch with a
+        # message telling the operator their entry is a placeholder when it is not.
+        if re.search(r"(?<![A-Za-z])(NN+|XX+)(?![A-Za-z])|<[^>]*>|\.\.", token):
             bad.append(token)
             continue
         try:
@@ -95,18 +99,21 @@ def internal_labels(packet):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if len(args) != 1:
+    args, slug = parse_common_args(sys.argv[1:], 1)
+    if args is None:
         sys.exit(__doc__)
     packet = os.path.abspath(args[0])
-    slug = "paranext/paranext-core"
-    for a in sys.argv[1:]:
-        if a.startswith("--repo="):
-            slug = a.split("=", 1)[1]
 
     items = json.load(open(os.path.join(packet, "bodies.json"), encoding="utf-8"))
+    fails_early = []
+    for it in items:
+        for gap in missing_fields(it):
+            # Reported, not raised. An unrecognised kind is the dangerous one: post.py used to
+            # treat anything that was not reply/inline as an issue comment, so a typo turned a
+            # threaded reply into a new top-level comment on the PR.
+            fails_early.append(f"{it.get('item', '<no item id>')}: {gap}")
     drafts_text = open(os.path.join(packet, "07-replies.md"), encoding="utf-8").read()
-    fails = []
+    fails = list(fails_early)
 
     # 1. counts and id set, derived from the DRAFTS file — the artifact G2 approved — and bound
     #    back to it by content. An id set cannot catch a truncated body no matter where the
@@ -151,10 +158,16 @@ def main():
                 fails.append(f"{it['item']}: opens with {m.group(0)!r} — lead with the verdict, "
                              f"not with agreement (reply-conventions.md § Tone)")
 
-        # 4 + 5. placeholders and this round's internal labels, skipping quoted code and URLs
-        for tok, at in scan_denylist(body, PLACEHOLDERS + labels):
-            ctx = body[max(0, at - 50): at + 50].replace("\n", " | ")
-            fails.append(f"{it['item']}: {tok!r} -> ...{ctx}...")
+        # 4. placeholders — quoted code is exempt, because a reply quoting a real source line is
+        #    the most likely body to contain TODO and the poster may not edit it to get past a check.
+        # 5. internal labels — quoted code is NOT exempt. posting-mechanics.md §4.5 grants these
+        #    the URL exemption and nothing else, and backticking an id is the most natural way to
+        #    write one in a reply, so a code-span exemption here would wave through the exact
+        #    thing the check exists to stop.
+        for pats, skip_code in ((PLACEHOLDERS, True), (labels, False)):
+            for tok, at in scan_denylist(body, pats, skip_code=skip_code):
+                ctx = body[max(0, at - 50): at + 50].replace("\n", " | ")
+                fails.append(f"{it['item']}: {tok!r} -> ...{ctx}...")
 
     # 6. targets resolve. The PR set comes from the packet's own directory name, not from
     # bodies.json — an expectation read off the artifact under test can never fail.

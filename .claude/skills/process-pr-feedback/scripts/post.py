@@ -14,26 +14,36 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 
-from posting_lib import guard_decision
+
+def _now():
+    """UTC in GitHub's own format.
+
+    The log is the packet's only recorded time, so it is the obvious source for
+    verify_posted.py's window start — which is compared against GitHub's UTC `created_at`. A
+    naive local timestamp is silently ahead of it by the local offset, filtering out every
+    comment the run just posted and reporting all of them as missing.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+from posting_lib import guard_decision, missing_fields, parse_common_args
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if len(args) != 2:
+    args, slug = parse_common_args(sys.argv[1:], 2)
+    if args is None:
         sys.exit(__doc__)
     packet, item_id = os.path.abspath(args[0]), args[1]
-    slug = "paranext/paranext-core"
-    for a in sys.argv[1:]:
-        if a.startswith("--repo="):
-            slug = a.split("=", 1)[1]
 
     bodies, log = os.path.join(packet, "bodies.json"), os.path.join(packet, "08-posting-log.txt")
     items = {i["item"]: i for i in json.load(open(bodies, encoding="utf-8"))}
     if item_id not in items:
         sys.exit(f"unknown item {item_id} in {bodies}")
     it = items[item_id]
+    gaps = missing_fields(it)
+    if gaps:
+        sys.exit(f"REFUSING: {item_id} is malformed: {'; '.join(gaps)}")
 
     # --- double-post guard: the log is the source of truth on what already went out ---
     prior = []
@@ -59,21 +69,25 @@ def main():
         endpoint = f"repos/{slug}/pulls/{it['pr']}/comments"
         payload = {"body": it["body"], "commit_id": heads[it["pr"]],
                    "path": it["path"], "line": it["line"], "side": it["side"]}
-    else:
+    elif it["kind"] == "issue":
         endpoint = f"repos/{slug}/issues/{it['pr']}/comments"
         payload = {"body": it["body"]}
+    else:
+        # Never a catch-all. Treating anything unrecognised as an issue comment turns a typo in
+        # `kind` into a new top-level comment on the PR instead of a threaded reply.
+        sys.exit(f"REFUSING: {item_id} has kind={it['kind']!r}")
 
     print(f"POST {endpoint}\n  item={item_id} kind={it['kind']} bodylen={len(it['body'])}")
 
     # --- write-ahead: log the INTENT before the call, so a hard kill still leaves a trace ---
     with open(log, "a", encoding="utf-8") as f:
         f.write(f"PENDING\t{item_id}\t{it['pr']}\t{it['kind']}\t-\t-\t"
-                f"{datetime.now().isoformat(timespec='seconds')}\n")
+                f"{_now()}\n")
 
     proc = subprocess.run(["gh", "api", "--method", "POST", endpoint, "--input", "-"],
                           input=json.dumps(payload), capture_output=True, text=True)
 
-    ts = datetime.now().isoformat(timespec="seconds")
+    ts = _now()
     if proc.returncode != 0:
         with open(log, "a", encoding="utf-8") as f:
             f.write(f"FAIL\t{item_id}\t{it['pr']}\t{it['kind']}\t-\t-\t{ts}\trc={proc.returncode}\n")

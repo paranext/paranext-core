@@ -9,6 +9,7 @@ that shipped before these scripts became files.
 import sys
 
 from posting_lib import (
+    added_lines,
     bad_control_chars,
     declared_prs,
     guard_decision,
@@ -215,28 +216,56 @@ def test_thanks_for_a_specific_thing_is_not_a_reflex():
     assert not _opens_badly("\U0001f916 Claude: Thanks for the repro — it saved a measurement.")
 
 
-def _added_lines(diff):
-    """The added-line parser from verify_anchors.py, exercised on a synthetic diff."""
-    import re
-    added, new_ln = set(), None
-    for dl in diff.split("\n"):
-        h = re.match(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", dl)
-        if h:
-            new_ln = int(h.group(1))
-        elif new_ln is None:
-            continue
-        elif dl.startswith("+"):
-            added.add(new_ln)
-            new_ln += 1
-        elif dl.startswith(" "):
-            new_ln += 1
-    return added
-
-
 def test_added_line_beginning_with_plus_plus_does_not_shift_later_line_numbers():
     """An added line whose text starts with `++` renders as `+++` in the diff."""
     diff = "--- a/f\n+++ b/f\n@@ -0,0 +1,3 @@\n+normal\n+++plus-prefixed\n+after\n"
-    assert _added_lines(diff) == {1, 2, 3}, f"line numbers shifted: {_added_lines(diff)}"
+    assert added_lines(diff) == {1, 2, 3}, f"line numbers shifted: {added_lines(diff)}"
+
+
+def test_unrecognised_kind_is_reported_not_treated_as_an_issue_comment():
+    """A typo in `kind` must not turn a threaded reply into a top-level PR comment."""
+    from posting_lib import missing_fields
+    gaps = missing_fields({"item": "X", "kind": "repy", "pr": 2659, "body": "b"})
+    assert gaps and "repy" in gaps[0]
+
+
+def test_missing_required_field_is_a_finding_not_a_traceback():
+    from posting_lib import missing_fields
+    assert missing_fields({"item": "X", "kind": "inline", "pr": 1, "body": "b"}) == [
+        "path", "line", "side", "anchor_line"]
+    assert missing_fields({"item": "X", "kind": "reply", "pr": 1, "comment_id": 2, "body": "b"}) == []
+
+
+def test_internal_label_in_backticks_is_still_caught():
+    """posting-mechanics grants internal labels the URL exemption ONLY, never quoted code."""
+    assert scan_denylist("see `2659-38` here", [r"2659-\d\d"], skip_code=False)
+    assert scan_denylist("```\n2659-38\n```", [r"2659-\d\d"], skip_code=False)
+
+
+def test_placeholder_rejector_accepts_a_real_regex_containing_nn():
+    import tempfile
+    from check import internal_labels
+    d = _vocab(tempfile.mkdtemp(), r"\bannotation-\d+\b — a real pattern that contains nn")
+    assert internal_labels(d) == [r"\bannotation-\d+\b"]
+
+
+def test_repo_flag_accepts_both_forms():
+    from posting_lib import parse_common_args
+    assert parse_common_args(["/p", "--repo", "a/b"], 1) == (["/p"], "a/b")
+    assert parse_common_args(["/p", "--repo=a/b"], 1) == (["/p"], "a/b")
+    assert parse_common_args(["/p"], 1)[1] == "paranext/paranext-core"
+
+
+def test_a_body_line_equal_to_a_sentinel_is_an_error_not_a_silent_truncation():
+    import extract_bodies
+    txt = ("## item: X\nkind: issue\npr: 2659\n--- body ---\nline one\n"
+           "--- end ---\nline two MUST NOT BE DISCARDED\n--- end ---\n")
+    try:
+        extract_bodies.parse(txt)
+    except SystemExit as e:
+        assert "stray content" in str(e)
+    else:
+        raise AssertionError("the body truncated silently")
 
 
 def main():

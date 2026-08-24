@@ -14,14 +14,15 @@ the wrong directory".
 """
 import json
 import os
-import re
 import subprocess
 import sys
 
+from posting_lib import added_lines, parse_common_args
+
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-    if len(args) != 2:
+    args, _slug = parse_common_args(sys.argv[1:], 2)
+    if args is None:
         sys.exit(__doc__)
     packet, root = os.path.abspath(args[0]), os.path.abspath(args[1])
 
@@ -30,10 +31,19 @@ def main():
     if not items:
         print("no inline items to verify")
         return
-    heads = {int(k): v for k, v in
-             json.load(open(os.path.join(packet, "heads.json"), encoding="utf-8")).items()}
-    bases = {int(k): v for k, v in
-             json.load(open(os.path.join(packet, "bases.json"), encoding="utf-8")).items()}
+    def load_map(name):
+        path = os.path.join(packet, name)
+        if not os.path.exists(path):
+            sys.exit(f"STOP: {path} is missing. Inline anchors need it; write it at posting time "
+                     f"from `gh pr view <n> --json headRefOid` / `--json baseRefName`.")
+        return {int(k): v for k, v in json.load(open(path, encoding="utf-8")).items()}
+
+    heads, bases = load_map("heads.json"), load_map("bases.json")
+    absent = sorted({i["pr"] for i in items} - (set(heads) & set(bases)))
+    if absent:
+        sys.exit(f"STOP: no head/base recorded for PR(s) {absent}. "
+                 f"heads.json has {sorted(heads)}, bases.json has {sorted(bases)}. "
+                 f"Re-derive them before verifying anchors.")
 
     def sh(*a, check=True):
         return subprocess.run(["git", "-C", root, *a],
@@ -70,22 +80,7 @@ def main():
             fails.append(f"{it['item']}: cannot diff origin/{bases[pr]}...{head[:11]} — is the "
                          f"base branch fetched?")
             continue
-        added, new_ln = set(), None
-        for dl in diff.split("\n"):
-            h = re.match(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", dl)
-            if h:
-                new_ln = int(h.group(1))
-            # `new_ln is None` covers the ---/+++ file headers, which always precede the first @@.
-            # Do NOT also skip on startswith("+++"): an added line whose own text begins with "++"
-            # renders as "+++…", and skipping it without advancing new_ln shifts every later line
-            # number in the file by one. That is reachable from any doc containing a diff snippet.
-            elif new_ln is None:
-                continue
-            elif dl.startswith("+"):
-                added.add(new_ln)
-                new_ln += 1
-            elif dl.startswith(" "):
-                new_ln += 1
+        added = added_lines(diff)
         if line not in added:
             fails.append(f"{it['item']}: {path}:{line} is not an ADDED line in PR #{pr}'s own diff")
 

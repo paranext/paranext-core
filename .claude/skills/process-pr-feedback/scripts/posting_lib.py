@@ -10,6 +10,13 @@ every decision.
 
 import re
 
+KINDS = ("reply", "inline", "issue")
+
+# Required fields per kind, checked before anything indexes them.
+REQUIRED = {"reply": ("pr", "comment_id", "body"),
+            "inline": ("pr", "path", "line", "side", "anchor_line", "body"),
+            "issue": ("pr", "body")}
+
 # A log row is: status, item, pr, kind, comment_id, url, timestamp [, extra]
 STATUS, ITEM = 0, 1
 
@@ -149,3 +156,70 @@ def declared_prs(packet_dir):
     if not m:
         return set()
     return {int(x) for x in m.group("prs").split("-")}
+
+
+def missing_fields(item):
+    """Fields this item's kind requires and does not have.
+
+    Checked up front rather than by indexing during the checks: a `KeyError` mid-loop aborts the
+    dry run, discards every finding already collected, and never prints the `DRY-RUN RESULT` line
+    that callers key on.
+    """
+    kind = item.get("kind")
+    if kind not in KINDS:
+        return [f"kind={kind!r} (expected one of {', '.join(KINDS)})"]
+    return [f for f in REQUIRED[kind] if f not in item]
+
+
+def added_lines(diff):
+    """Line numbers added by `diff`, in the new file's numbering.
+
+    Lives here rather than inline in `verify_anchors.py` so the test exercises the shipped
+    parser. A test that re-implements the logic it is testing pins the test file against itself
+    and cannot fail when the real parser regresses.
+    """
+    added, new_ln = set(), None
+    for dl in diff.split("\n"):
+        h = re.match(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", dl)
+        if h:
+            new_ln = int(h.group(1))
+        # `new_ln is None` covers the ---/+++ file headers, which always precede the first @@.
+        # Do NOT also skip on startswith("+++"): an added line whose own text begins with "++"
+        # renders as "+++…", and skipping it without advancing new_ln shifts every later line
+        # number in the file by one. That is reachable from any doc containing a diff snippet.
+        elif new_ln is None:
+            continue
+        elif dl.startswith("+"):
+            added.add(new_ln)
+            new_ln += 1
+        elif dl.startswith(" "):
+            new_ln += 1
+    return added
+
+
+def parse_common_args(argv, n_positional):
+    """Split argv into positionals and a repo slug, accepting both --repo forms.
+
+    Both `--repo owner/name` and `--repo=owner/name` work. Accepting only the `=` form while the
+    usage text advertises the other prints usage for a correct-looking command, and the natural
+    next move — dropping the flag — silently falls back to the default repository.
+    """
+    positional, slug, i = [], "paranext/paranext-core", 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--repo":
+            if i + 1 >= len(argv):
+                raise SystemExit("--repo needs an argument (owner/name)")
+            slug, i = argv[i + 1], i + 2
+            continue
+        if a.startswith("--repo="):
+            slug, i = a.split("=", 1)[1], i + 1
+            continue
+        if a.startswith("--"):
+            i += 1
+            continue
+        positional.append(a)
+        i += 1
+    if len(positional) != n_positional:
+        return None, slug
+    return positional, slug

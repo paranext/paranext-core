@@ -7,8 +7,11 @@ Reads <packet-dir>/07-replies.md and writes <packet-dir>/bodies.json.
 
 The drafts grammar is explicit because reply bodies are backtick-, pipe-, emoji- and
 arrow-heavy, and "parse the drafts file into a list of items" is not a specification anything
-can be held to. Body delimiters are line-anchored sentinels so nothing inside a body — fenced
-code, tables, ``` runs — can terminate it early:
+can be held to. Body delimiters are line-anchored sentinels, so fenced code, tables and ``` runs
+inside a body cannot terminate it early. The one sequence that can is a body line
+equal to a sentinel itself — reachable when a reply quotes this grammar — and that
+is detected rather than silently truncating: the remainder becomes stray content
+and is an error.
 
     ## item: R5-01
     kind: reply
@@ -42,6 +45,14 @@ def parse(text):
             body, in_body = [], False
             continue
         if cur is None:
+            # Content between items is a truncation signal, not noise. A body line that is
+            # itself `--- end ---` closes the item early and the remainder lands here; without
+            # this the rest is discarded silently, and check.py's verbatim binding still passes
+            # because the truncated body IS a substring of the drafts file.
+            if raw.strip():
+                sys.exit(f"stray content outside any item: {raw.strip()[:60]!r}\n"
+                         f"  A body line equal to '--- body ---' or '--- end ---' closes the item "
+                         f"early. Reply bodies that quote this grammar must indent or fence it.")
             continue
         if raw.strip() == "--- body ---":
             in_body = True
