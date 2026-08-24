@@ -11,7 +11,7 @@ import {
   useWebViewController,
 } from '@papi/frontend/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Scope,
   SCOPE_SELECTOR_STRING_KEYS,
@@ -21,7 +21,7 @@ import {
   useRunWhenVisible,
   useViewVisibility,
 } from 'platform-bible-react';
-import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
+import { getAvailableBookIds, ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
   debounce,
   DEBOUNCE_CANCELED_ERROR_MESSAGE,
@@ -36,10 +36,7 @@ import {
   ScrollGroupId,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
-import {
-  BOOKS_PRESENT_DEFAULT,
-  getBookIdsFromBooksPresent,
-} from 'platform-bible-utils/experimental';
+import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
 import {
   FindJobStatus,
   FindJobStatusReport,
@@ -712,11 +709,7 @@ global.webViewComponent = function FindWebView({
   const isEditable: boolean =
     isEditableLoading || isPlatformError(isEditablePossiblyError) ? false : isEditablePossiblyError;
 
-  const availableBooksIds = useMemo(() => {
-    return getBookIdsFromBooksPresent(booksPresent).filter(
-      (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
-    );
-  }, [booksPresent]);
+  const availableBooksIds = useMemo(() => getAvailableBookIds(booksPresent), [booksPresent]);
 
   // `selectedBookIds` is persisted per web view, so a project switch can leave it naming books the
   // NEW project doesn't have. The finder engine skips absent books gracefully (see
