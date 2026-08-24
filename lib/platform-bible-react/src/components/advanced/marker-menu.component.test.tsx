@@ -474,7 +474,7 @@ describe('MarkerMenu — row layout', () => {
     );
 
     // Two children — the marker slot and the title — with no empty third element where the detail
-    // would sit. The previous version of this only asserted text the row query already guaranteed.
+    // would sit.
     const row = screen.getByRole('option', { name: /Poetry line 1/ });
     const titleRow = screen.getByText('Poetry line 1').parentElement;
     expect(titleRow?.children).toHaveLength(1);
