@@ -796,10 +796,10 @@ internal class DummyPapiClient : PapiClient
 
 ### TypeScript: Service Testing with Mocks
 
-> This example is executable and is meant to stay that way — it shipped broken four times while
-> being corrected by eye. `npm run verify:testing-guide` extracts the fence **verbatim** and both
-> typechecks and runs it; lint-staged runs it automatically whenever this file is staged, so it
-> does not depend on anyone remembering.
+> This example is executable and is meant to stay that way — it has shipped broken repeatedly
+> while being corrected by eye. `npm run verify:testing-guide` extracts the fence **verbatim**
+> and typechecks, lints and runs it; lint-staged runs it automatically whenever this file is
+> staged, so it does not depend on anyone remembering.
 
 ```typescript
 import { vi, describe, it, expect, beforeEach } from 'vitest';

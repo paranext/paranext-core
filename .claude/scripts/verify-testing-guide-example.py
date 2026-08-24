@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Typecheck, lint and run the Testing-Guide's shared-store example, exactly as printed.
 
-Why this exists: that example shipped broken five times — wrong factory, a mock missing members the
-service calls, a missing import, code that ran but did not compile, and code that compiled but
+Why this exists: that example has shipped broken repeatedly — wrong factory, a mock missing members
+the service calls, a missing import, code that ran but did not compile, code that compiled but
 failed lint — because each correction was verified more narrowly than the claim made about it.
 
 Three rules earned the hard way:
@@ -13,14 +13,15 @@ Three rules earned the hard way:
 2. ALL THREE GATES. `vitest` strips types through esbuild, so a green run says nothing about `tsc`;
    and `tsc` says nothing about `paranext/require-disable-comment`, which CI runs. Each gate that
    was missing is a round this example shipped broken.
-3. POSITIVE CONTROL. An earlier version decided the typecheck gate purely on whether any output
-   line named the temp file, so a tsc that never ran at all — bad `-p` path, unresolvable binary,
-   OOM — produced no lines and was reported as "no errors". Every gate below proves it examined the
-   file before it is allowed to pass.
+3. POSITIVE CONTROL, NOT AN EXIT CODE. Every gate proves it examined THIS file before it may pass.
+   An exit code cannot do that: tsc reports nothing about a file it never loaded, and eslint exits
+   0 with only a warning when an explicitly-passed file matches an ignore pattern. Both were live
+   vacuous passes here before the controls went in.
 
 Usage:  npm run verify:testing-guide
 Exit 0 = the example compiles, lints and passes as printed.
 """
+import json
 import os
 import re
 import subprocess
@@ -32,6 +33,7 @@ os.chdir(REPO)
 
 GUIDE = '.context/standards/Testing-Guide.md'
 TEMP = 'src/shared/services/__testing-guide-example.test.ts'
+BASE = os.path.basename(TEMP)
 
 text = open(GUIDE, encoding='utf-8').read()
 blocks = re.findall(r'```(?:typescript|ts)\n(.*?)```', text, re.S)
@@ -51,36 +53,47 @@ def run(cmd):
 
 try:
     # --- Gate 1: typecheck -------------------------------------------------------------------
+    # One invocation does both jobs: --listFiles prints the program's files, so a bare line naming
+    # our file is the control, and a line naming it alongside "error TS" is the failure.
     print("[1/3] typecheck")
-    # Positive control FIRST: prove the file is actually in the program tsc will compile.
-    listed = run(['npx', 'tsc', '-p', 'tsconfig.json', '--listFilesOnly'])
-    if os.path.basename(TEMP) not in listed.stdout:
+    tsc = run(['npx', 'tsc', '--noEmit', '-p', 'tsconfig.json', '--listFiles'])
+    lines = (tsc.stdout + tsc.stderr).splitlines()
+    mine = [l for l in lines if BASE in l]
+    compiled = any(BASE in l and 'error TS' not in l for l in mine)
+    errors = [l for l in mine if 'error TS' in l]
+    if not compiled:
         failures.append('typecheck (file never reached tsc)')
         print("  CONTROL FAILED: the extracted file is not in tsc's program — nothing was checked")
-        print(f"  {(listed.stderr or listed.stdout).strip().splitlines()[:3]}")
+    elif errors:
+        failures.append('typecheck')
+        for line in errors[:5]:
+            print(f"  {line}")
     else:
-        tsc = run(['npx', 'tsc', '--noEmit', '-p', 'tsconfig.json'])
-        mine = [l for l in (tsc.stdout + tsc.stderr).splitlines() if os.path.basename(TEMP) in l]
-        if mine:
-            failures.append('typecheck')
-            for line in mine[:5]:
-                print(f"  {line}")
-        else:
-            print("  compiled, no errors in the extracted example")
+        print("  compiled, no errors in the extracted example")
 
     # --- Gate 2: lint ------------------------------------------------------------------------
+    # Exit code is not a control: eslint exits 0 for an explicitly-passed file that matches an
+    # ignore pattern, emitting only a "File ignored" warning. Read the JSON result instead.
     print("\n[2/3] lint")
-    es = run(['npx', 'eslint', TEMP])
-    out = es.stdout + es.stderr
-    if es.returncode not in (0, 1):
-        failures.append('lint (eslint failed to run)')
-        print(f"  CONTROL FAILED: eslint exited {es.returncode} without linting")
-    elif es.returncode == 1:
+    es = run(['npx', 'eslint', '-f', 'json', TEMP])
+    try:
+        results = json.loads(es.stdout or '[]')
+    except json.JSONDecodeError:
+        results = []
+    entry = next((r for r in results if BASE in r.get('filePath', '')), None)
+    ignored = entry and any('File ignored' in m.get('message', '')
+                            for m in entry.get('messages', []))
+    if entry is None or ignored:
+        failures.append('lint (file never linted)')
+        why = 'matched an ignore pattern' if ignored else 'produced no result entry'
+        print(f"  CONTROL FAILED: eslint {why} — nothing was linted")
+    elif entry.get('errorCount', 0) > 0:
         failures.append('lint')
-        for line in [l for l in out.splitlines() if 'error' in l][:5]:
-            print(f"  {line.strip()}")
+        for m in entry['messages'][:5]:
+            if m.get('severity') == 2:
+                print(f"  {m.get('line')}:{m.get('column')}  {m.get('message')}  [{m.get('ruleId')}]")
     else:
-        print("  no lint errors in the extracted example")
+        print("  linted, no errors in the extracted example")
 
     # --- Gate 3: run -------------------------------------------------------------------------
     print("\n[3/3] vitest")
