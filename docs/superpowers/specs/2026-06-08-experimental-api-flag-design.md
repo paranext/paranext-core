@@ -414,7 +414,7 @@ Single-source emitters. Names are added to the augmentable `NetworkEvents` inter
 
 **Trickier** — module-level `const` emitters that need lazy-init refactoring:
 
-- `src/renderer/services/web-view.service-host.ts:96,101,120,128` — four lifecycle emitters at module top level. Move into the existing service-host initialization function, store in `let` bindings, expose via accessor functions that throw with a descriptive error if invoked before initialization.
+- `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — four lifecycle emitters at module top level. Move into the existing service-host initialization function, store in `let` bindings, expose via accessor functions that throw with a descriptive error if invoked before initialization.
 - `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — same pattern.
 
 ### Foundational work (this design)
