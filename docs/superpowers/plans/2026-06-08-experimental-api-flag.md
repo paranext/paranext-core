@@ -51,7 +51,7 @@
 - `src/shared/services/data-provider.service.ts:817` — 1 emitter (type-assertion pattern)
 - `src/extension-host/services/extension.service.ts` — 2 emitters
 - `src/renderer/services/scroll-group.service-host.ts` — 1 emitter
-- `src/renderer/services/web-view.service-host.ts:96,101,120,128` — 4 emitters (init refactor)
+- `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — 4 emitters (init refactor)
 - `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — 1 emitter (init refactor)
 - `extensions/src/hello-rock3/src/main.ts:462` — 1 emitter
 - `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234` — 3 emitters
@@ -1351,7 +1351,7 @@ git commit -m "refactor(experimental): migrate single-process platform events to
 
 **Files:**
 
-- Modify: `src/renderer/services/web-view.service-host.ts:96,101,120,128`
+- Modify: `src/renderer/services/web-view.service-shard.ts:96,101,120,128`
 
 - [ ] **Step 1: Declare event types**
 
@@ -1383,7 +1383,7 @@ async function initialize() {
 }
 
 function getOnDidAddWebViewEmitter() {
-  if (!onDidAddWebViewEmitter) throw new Error('web-view.service-host not initialized');
+  if (!onDidAddWebViewEmitter) throw new Error('web-view.service-shard not initialized');
   return onDidAddWebViewEmitter;
 }
 ```
@@ -1397,7 +1397,7 @@ Run: `npm test -- src/renderer/services --run`
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/renderer/services/web-view.service-host.ts src/declarations/papi-shared-types.ts
+git add src/renderer/services/web-view.service-shard.ts src/declarations/papi-shared-types.ts
 git commit -m "refactor(experimental): migrate WebView lifecycle emitters with lazy-init pattern"
 ```
 
