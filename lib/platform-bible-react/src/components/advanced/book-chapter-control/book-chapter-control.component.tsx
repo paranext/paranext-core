@@ -103,6 +103,9 @@ export function BookChapterControl({
     number | undefined
   >(undefined);
   const [isCommandListHidden, setIsCommandListHidden] = useState(false);
+  // Whether the book list is expanded past the active project's books. Governs browsing only —
+  // searching always spans every reachable book.
+  const [isShowingAllBooks, setIsShowingAllBooks] = useState(false);
 
   // Reference to the PopoverTrigger button. Used by `onPointerDownOutside` to detect
   // clicks on our own trigger while the popover is open — see that handler for the full
@@ -164,7 +167,8 @@ export function BookChapterControl({
 
   // Filter books based on search input
   const filteredBooksByType = useMemo(() => {
-    if (!inputValue.trim()) return projectBooksBySection;
+    if (!inputValue.trim())
+      return isShowingAllBooks ? reachableBooksBySection : projectBooksBySection;
 
     const filteredBooks: Record<Section, string[]> = {
       [Section.OT]: [],
@@ -181,7 +185,13 @@ export function BookChapterControl({
     });
 
     return filteredBooks;
-  }, [projectBooksBySection, reachableBooksBySection, inputValue, localizedBookNames]);
+  }, [
+    projectBooksBySection,
+    reachableBooksBySection,
+    isShowingAllBooks,
+    inputValue,
+    localizedBookNames,
+  ]);
 
   // Get the current top match
   const topMatch = useMemo(
@@ -487,6 +497,10 @@ export function BookChapterControl({
   // pass an empty translation through, silently dropping the dimming.
   const bookNotInProjectLabel =
     localizedStrings?.['%webView_bookChapterControl_bookNotInProject%'] || 'not in this project';
+  // `||` for the same reason as bookNotInProjectLabel: an empty translation must not leave the
+  // toggle with a blank accessible name.
+  const showAllBooksLabel =
+    localizedStrings?.['%webView_bookChapterControl_showAllBooks%'] || 'Show all books';
 
   // #endregion
 
@@ -1227,6 +1241,22 @@ export function BookChapterControl({
                   />
                 )}
             </CommandList>
+          )}
+
+          {/* Outside CommandList on purpose: inside it, cmdk would register this as an option —
+              arrow-navigable and matched by typing — instead of a control. */}
+          {viewMode === 'books' && booksOutsideProject.size > 0 && (
+            <div className="tw:border-t tw:p-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="tw:w-full tw:justify-start tw:font-normal"
+                aria-pressed={isShowingAllBooks}
+                onClick={() => setIsShowingAllBooks((wasShowing) => !wasShowing)}
+              >
+                {showAllBooksLabel}
+              </Button>
+            </div>
           )}
         </Command>
       </PopoverContent>

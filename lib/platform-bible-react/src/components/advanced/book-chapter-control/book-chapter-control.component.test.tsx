@@ -316,4 +316,123 @@ describe('BookChapterControl additional books', () => {
     const revelation = await screen.findByRole('option', { name: /Revelation/ });
     expect(revelation).toHaveClass('tw:text-muted-foreground/50');
   });
+
+  test('the toggle is absent when there are no books outside the project', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={() => []}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show all books' })).not.toBeInTheDocument();
+  });
+
+  test('the toggle is absent when getActiveBookIds is not supplied', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show all books' })).not.toBeInTheDocument();
+  });
+
+  test('the toggle starts unpressed and reveals the extra book when pressed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+
+    await user.click(toggle);
+
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-pressed', 'true'));
+  });
+
+  test('a revealed book outside the project is dimmed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await user.click(await screen.findByRole('button', { name: 'Show all books' }));
+
+    const revelation = await screen.findByRole('option', { name: /Revelation/ });
+    expect(revelation).toHaveClass('tw:text-muted-foreground/50');
+  });
+
+  test('selecting a revealed book navigates to it', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const handleSubmit = vi.fn();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await user.click(await screen.findByRole('button', { name: 'Show all books' }));
+    await user.click(await screen.findByRole('option', { name: /Revelation/ }));
+    // Revelation has chapters, so the control advances to the chapter grid before submitting.
+    await user.click(await screen.findByRole('option', { name: '1' }));
+
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'REV', chapterNum: 1, verseNum: 1 }),
+    );
+  });
+
+  test('pressing the toggle a second time collapses the list', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    await user.click(toggle);
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+
+    await user.click(toggle);
+
+    await waitFor(() =>
+      expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument(),
+    );
+  });
 });
