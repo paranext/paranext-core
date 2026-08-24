@@ -708,7 +708,7 @@ step, no automation. Just a record.
   `reloadWebView` when the value is present. Point (4) works because `reloadWebView` **remounts** the
   web view: it re-runs the provider's `getWebView`, and `srcNonce = newNonce()` is regenerated on every
   call and interpolated into the generated `content`
-  (`src/renderer/services/web-view.service-host.ts`), so `content` differs each time and the `srcDoc`
+  (`src/renderer/services/web-view.service-shard.ts`), so `content` differs each time and the `srcDoc`
   bound in `web-view.component.tsx` changes, reloading the iframe and recreating the React root. The
   mount-time initializers therefore see the new values with no re-apply machinery at all. Note the
   trap: `getWebViewNonce(id)` IS stable per id, but it is not the nonce that reaches `content`. Contextual inputs that can be derived — `projectId`, the
