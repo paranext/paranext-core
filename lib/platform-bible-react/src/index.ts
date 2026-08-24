@@ -312,6 +312,7 @@ export type { UsePromiseOptions } from './hooks/use-promise.hook';
 export { useStylesheet } from './hooks/use-stylesheet.hook';
 export { useExtraValidMarkers } from './hooks/use-extra-valid-markers.hook';
 export { useViewVisibility } from './hooks/use-view-visibility.hook';
+export { useRunWhenVisible } from './hooks/use-run-when-visible.hook';
 export {
   pickTabIconUrl,
   useTabIconSelection,

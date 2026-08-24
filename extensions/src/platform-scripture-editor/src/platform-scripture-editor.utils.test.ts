@@ -9,6 +9,7 @@ import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture
 import {
   convertScriptureRangeToEditorRange,
   finalizeProjectSwitch,
+  formatEditorTitle,
   generateParagraphMenuListItems,
   generateInlineMarkerMenuListItems,
   openDefaultActiveProjectIfApplicable,
@@ -2702,5 +2703,37 @@ describe('resolveAddChapterNumberClick', () => {
 
   it('returns "insert" when not in flight and lastVerse is positive', () => {
     expect(resolveAddChapterNumberClick(false, 3)).toBe('insert');
+  });
+});
+
+describe('formatEditorTitle', () => {
+  const TITLE_FORMAT_KEY = '%webView_platformScriptureEditor_title_format%';
+  const mockGetProjectName = vi.fn().mockResolvedValue('My Project');
+  const mockGetLocalizedStrings = vi.fn().mockResolvedValue({
+    '%webView_platformScriptureEditor_title_editable_indicator%': '(Editable)',
+    '%webView_platformScriptureEditor_title_readonly_indicator%': '(Read-only)',
+    [TITLE_FORMAT_KEY]: '{projectId} {editable}',
+  });
+
+  it('renders the editable indicator when isReadOnly is false', async () => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      false,
+      mockGetProjectName,
+      mockGetLocalizedStrings,
+    );
+    expect(title).toBe('My Project (Editable)');
+  });
+
+  it('renders the read-only indicator when isReadOnly is true', async () => {
+    const title = await formatEditorTitle(
+      TITLE_FORMAT_KEY,
+      'project-1',
+      true,
+      mockGetProjectName,
+      mockGetLocalizedStrings,
+    );
+    expect(title).toBe('My Project (Read-only)');
   });
 });

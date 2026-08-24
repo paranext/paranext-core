@@ -37,11 +37,13 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import {
+  getAvailableBookIds,
   ProjectSelector,
   ProjectSelectorLocalizedStrings,
   ProjectSelectorOpenTab,
   ProjectSelectorProject,
   ScopeWithRange,
+  summarizeSelectedBooks,
 } from 'platform-bible-react/experimental';
 import {
   formatReplacementString,
@@ -78,6 +80,7 @@ const NO_OPEN_TABS: ProjectSelectorOpenTab[] = [];
 /** Localization keys used by the {@link Find} component itself (excludes child component keys). */
 export const FIND_LOCALIZED_STRING_KEYS = [
   '%general_countOfTotal%',
+  '%webView_find_allBooks%',
   '%webView_find_allText%',
   '%webView_find_allText_tooltip%',
   '%webView_find_allowRegex%',
@@ -214,6 +217,12 @@ export type FindProps = {
   onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
 
   // Search/replace input + filter state
+  /**
+   * Ref attached to the search box, so the web view can put the caret there when Find is invoked.
+   * Owned by the caller rather than exposed as an imperative handle, matching how the scripture
+   * editor hands `MarkerMenu` its `searchRef`.
+   */
+  searchInputRef?: React.Ref<HTMLInputElement>;
   /** The current search term. */
   searchTerm: string;
   /** Recent search terms shown in the recent-searches dropdown. */
@@ -383,6 +392,7 @@ export function Find({
   onSelectProjectScrollGroup,
   onSelectProject,
   onOpenProjectInGroup,
+  searchInputRef,
   searchTerm,
   recentSearches,
   scope,
@@ -576,8 +586,8 @@ export function Find({
   // receives every input the rule needs.
   const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
 
-  // Single source of truth for which (if any) results-area placeholder shows, so the three states
-  // are mutually exclusive by construction instead of by three separately-maintained boolean
+  // Single source of truth for which (if any) results-area placeholder shows, so the four states
+  // are mutually exclusive by construction instead of by four separately-maintained boolean
   // expressions. 'none' covers both "results are present" and "a search finished with 0 results" —
   // in the latter case the status bar's message (see resultsMessage) handles the feedback instead.
   // 'noOpenProjectsPrompt' is checked FIRST, ahead of even `results.length > 0`: with no project
@@ -613,7 +623,7 @@ export function Find({
     });
   }, [results, numberOfHiddenResults, totalNumberOfResults, searchStatus, localizedStrings]);
 
-  /** Text shown in the scope popover trigger, e.g. "Genesis 1" or "Genesis, Exodus, John" */
+  /** Text shown in the scope popover trigger, e.g. "GEN 1", "GEN, EXO, JHN", or "All books" */
   const scopeDisplayText = useMemo(() => {
     switch (scope) {
       case 'chapter': {
@@ -623,12 +633,21 @@ export function Find({
       case 'book':
         return localizedBookData.get(verseRef.book)?.localizedId ?? verseRef.book;
       case 'selectedBooks':
-        if (selectedBookIds.length === 0) return '…';
-        return selectedBookIds.map((id) => localizedBookData.get(id)?.localizedId ?? id).join(', ');
+        // Listing every book outgrows this row past a handful of books and forces a horizontal
+        // scrollbar on the whole panel, so the summary collapses to "All books" or to a canon-order
+        // range of its first and last books, e.g. "GEN - HOS".
+        return (
+          summarizeSelectedBooks(
+            selectedBookIds,
+            getAvailableBookIds(booksPresent),
+            localizedStrings['%webView_find_allBooks%'],
+            localizedBookData,
+          ) ?? '…'
+        );
       default:
         return '';
     }
-  }, [scope, selectedBookIds, verseRef, localizedBookData]);
+  }, [scope, selectedBookIds, verseRef, localizedBookData, booksPresent, localizedStrings]);
 
   // Configuration for the per-result replace preview. Present whenever in replace mode — including
   // an empty replacement term, so the "replace with nothing" (deletion) preview can render its
@@ -816,6 +835,7 @@ export function Find({
             <TextSearch className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:text-muted-foreground" />
             <Input
               id="search-term"
+              ref={searchInputRef}
               value={searchTerm}
               onChange={(e) => onSearchTermChange(e.target.value)}
               onKeyDown={(e) => {
@@ -970,23 +990,40 @@ export function Find({
           </>
         )}
 
-        {/* Scope selector row */}
-        <div className="tw:flex tw:items-center tw:justify-between">
+        {/* Scope selector row. The summary is short by construction, but a long localized book
+            name or an unresolved string can still outrun a narrow panel, so the trigger is built to
+            clip rather than widen the row: `tw:shrink` overrides the `tw:shrink-0` every shadcn
+            `Button` carries in its base class (without it `tw:min-w-0` is inert and the row grows a
+            horizontal scrollbar), and `tw:min-w-0` then lets the summary span's `tw:truncate`
+            actually clip. The label, chevron and the result-count block opposite keep their
+            intrinsic width so the summary is the only thing that gives. */}
+        <div className="tw:flex tw:min-w-0 tw:items-center tw:justify-between">
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className="tw:h-auto tw:gap-1 tw:px-2 tw:py-1 tw:font-normal"
+                className="tw:h-auto tw:min-w-0 tw:shrink tw:gap-1 tw:overflow-hidden tw:px-2 tw:py-1 tw:font-normal"
               >
-                <span className="tw:text-sm tw:text-muted-foreground">
+                <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
                   {localizedStrings['%webView_find_showing%']}
                 </span>
-                <span className="tw:text-sm tw:font-medium">{scopeDisplayText}</span>
-                <ChevronDown className="tw:h-3 tw:w-3 tw:text-muted-foreground" />
+                <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:font-medium">
+                  {scopeDisplayText}
+                </span>
+                <ChevronDown className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="tw:w-auto tw:p-3">
+            {/* Height-capped and scrollable for the same reason as the books picker inside it: in a
+                narrow panel this popover can flip above its trigger, and anything taller than the
+                space there is clipped off past the top of the web view's iframe. overflow-x-hidden
+                keeps the y-axis scroller from computing the x-axis to `auto` and adding a second,
+                horizontal scrollbar. */}
+            <PopoverContent
+              align="start"
+              className="tw:max-h-(--radix-popover-content-available-height) tw:w-auto tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
+              collisionPadding={8}
+            >
               <ScopeSelector
                 scope={scope}
                 availableScopes={['chapter', 'book', 'selectedBooks']}
@@ -1007,7 +1044,7 @@ export function Find({
             </PopoverContent>
           </Popover>
           {visibleResults.length > 0 && (
-            <div className="tw:flex tw:items-center tw:gap-1">
+            <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1">
               <span className="tw:text-sm tw:text-muted-foreground tw:tabular-nums">
                 {formatReplacementString(localizedStrings['%general_countOfTotal%'], {
                   count: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',

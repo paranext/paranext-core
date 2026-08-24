@@ -1,4 +1,4 @@
-import { deepClone } from 'platform-bible-utils';
+import { deepClone, type InterfaceMode } from 'platform-bible-utils';
 import type { BoxData, LayoutBase, PanelData, TabData } from 'rc-dock';
 import type { SavedTabInfo } from '@shared/models/docking-framework.model';
 import type { DefaultLayoutSupplementEntry } from './default-layout-supplement.model';
@@ -82,15 +82,63 @@ export async function filterEnabledSupplementEntries(
 }
 
 /**
- * Append each supplement entry's tab to the panel containing its `anchorWebViewType`. Pure and
- * idempotent: returns a deep clone, never mutates `baseLayout`, and skips entries whose id already
- * exists or whose anchor is absent. `entries` should already be filtered by any `flagSetting` (see
- * {@link filterEnabledSupplementEntries} and the caller in `web-view.service-host.ts`).
+ * The entry's tab as it should appear in `interfaceMode`'s layout, as far as pinning goes.
+ *
+ * An entry's `isClosable: false` declares "pinned into Simple mode's fixed layout" — the same thing
+ * every tab in `simple-layout.data.ts` declares, and load-bearing for the same two reasons:
+ * `loadWebViewTab` seeds `TabInfo.isClosable` from the saved data, and `getTabGroup` reads it to
+ * route the tab to its column's rc-dock group from the very first render rather than after the
+ * provider's async round-trip.
+ *
+ * Neither reason holds in Power mode, and carrying the value there is actively wrong: `getGroups`
+ * registers the column groups in Simple mode only, so a non-closable tab whose `webViewType` is in
+ * `FIXED_LAYOUT_WEBVIEW_GROUPS` would point at an unregistered group name — rc-dock's unknown-group
+ * fallback — until the provider's response replaced it, and it would render with no close button in
+ * a mode where every tab closes freely. So Power mode gets `true`, matching what every dual-mode
+ * provider computes for itself (`isClosable: interfaceMode === 'power'`).
+ *
+ * An entry that declares no `isClosable` at all is left untouched in both modes: it never asked to
+ * be pinned, and rc-dock already treats the absent value as closable.
+ */
+function withPinningForMode(tab: SavedTabInfo, isSimpleMode: boolean): SavedTabInfo {
+  // Tab data is `unknown` in the shared model; the supplement JSON stores a WebViewDefinition there.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const data = tab.data as { isClosable?: boolean } | undefined;
+  if (isSimpleMode || data?.isClosable === undefined) return tab;
+  return { ...tab, data: { ...data, isClosable: true } };
+}
+
+/**
+ * Add each supplement entry's tab to the panel containing its `anchorWebViewType` — appended last,
+ * or before the tab named by the entry's `insertBeforeWebViewType` when that tab is in the panel.
+ * Pure and idempotent: returns a deep clone, never mutates `baseLayout`, and skips entries whose id
+ * already exists or whose anchor is absent. `entries` should already be filtered by any
+ * `flagSetting` (see {@link filterEnabledSupplementEntries} and the caller in
+ * `web-view.service-host.ts`).
+ *
+ * `interfaceMode` is required rather than inferred because this merge runs against both modes'
+ * layouts — Simple mode's build-baked one and Power mode's persisted one — while a supplement entry
+ * describes a tab's place in Simple mode's fixed columns. Two of an entry's properties are
+ * therefore Simple-mode-only, and applying them to a Power-mode layout produces a tab in a group
+ * rc-dock never registered and a warning about an ordering that mode does not have:
+ * `insertBeforeWebViewType` (see {@link DefaultLayoutSupplementEntry.insertBeforeWebViewType}) and
+ * the tab's `isClosable: false` pin (see {@link withPinningForMode}).
+ *
+ * @param baseLayout Layout to merge into; never mutated.
+ * @param entries Supplement entries to merge, already filtered by `flagSetting`.
+ * @param interfaceMode Mode whose layout `baseLayout` is, which decides whether each entry's
+ *   Simple-mode-only ordering and pinning apply.
+ * @param onPlacementAnomaly Called when an entry's `insertBeforeWebViewType` could not be resolved
+ *   in Simple mode and the tab was appended instead. Never called in Power mode, where appending is
+ *   the documented behavior rather than a fallback.
  */
 export function mergeDefaultLayoutSupplement(
   baseLayout: LayoutBase,
   entries: DefaultLayoutSupplementEntry[],
+  interfaceMode: InterfaceMode,
+  onPlacementAnomaly?: (entry: DefaultLayoutSupplementEntry, message: string) => void,
 ): LayoutBase {
+  const isSimpleMode = interfaceMode === 'simple';
   const layout: LayoutBase = deepClone(baseLayout);
   if (!layout.dockbox) return layout;
   // dockbox is a BoxData at runtime; LayoutBase types it as the rc-dock union
@@ -110,9 +158,39 @@ export function mergeDefaultLayoutSupplement(
     if (existingIds.has(entry.tab.id)) return;
     const panel = findPanelByWebViewType(dockbox, entry.anchorWebViewType);
     if (!panel) return;
+    const tabs = panel.tabs ?? [];
+    // Simple mode is the only mode with an order to be relative to, so the request is only honored
+    // (and only reported on below) there. Leaving it at -1 in Power mode is the append path.
+    const insertAt =
+      isSimpleMode && entry.insertBeforeWebViewType
+        ? tabs.findIndex((t) => webViewTypeOf(t) === entry.insertBeforeWebViewType)
+        : -1;
     // Our SavedTabInfo satisfies rc-dock TabData at runtime; the generic union prevents direct assign
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    panel.tabs = [...(panel.tabs ?? []), entry.tab as unknown as TabData];
+    const tab = withPinningForMode(entry.tab, isSimpleMode) as unknown as TabData;
+    // Appending is the right fallback, but it is indistinguishable from a successful placement once
+    // it has happened, and the two ways to reach it are not equally benign. An entry that asked to
+    // be placed before a specific tab and did not find it has a stale or misspelled webViewType —
+    // the JSON is hand-edited and reaches this code as an untyped property access, so a typo
+    // compiles, lints, and silently reorders the column. Report it; "no request" stays silent, as
+    // does Power mode, where appending is what the contract says happens and a warning would fire on
+    // every load of a correct layout — noise in the channel that exists to surface the typo.
+    if (isSimpleMode && entry.insertBeforeWebViewType && insertAt < 0)
+      onPlacementAnomaly?.(
+        entry,
+        `insertBeforeWebViewType '${entry.insertBeforeWebViewType}' was not found in the panel anchored by '${entry.anchorWebViewType}'; appending '${webViewTypeOf(tab)}' last instead`,
+      );
+    // Inserting at the head would change which tab the column opens on, not just the order: rc-dock
+    // falls back to `tabs[0].id` for a panel with no `activeId` (Algorithm.js), and no panel in the
+    // Simple-mode layout sets one. Pin the incumbent first tab as `activeId` before it stops being
+    // first, so a supplement tab can take the leftmost position without also taking over as the
+    // column's default view — an entry that wants to be the default should say so, not acquire it as
+    // a side effect of ordering. Only the head insert can do this, so nothing else is touched.
+    if (insertAt === 0 && panel.activeId === undefined && tabs[0]?.id) panel.activeId = tabs[0].id;
+    // `findIndex` returning -1 covers both "no `insertBeforeWebViewType`" and "that tab isn't in this
+    // panel" — both mean append.
+    panel.tabs =
+      insertAt < 0 ? [...tabs, tab] : [...tabs.slice(0, insertAt), tab, ...tabs.slice(insertAt)];
     existingIds.add(entry.tab.id);
   });
 

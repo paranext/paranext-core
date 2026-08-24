@@ -1,5 +1,5 @@
 import { WebViewProps } from '@papi/core';
-import papi, { logger } from '@papi/frontend';
+import papi, { logger, network } from '@papi/frontend';
 import {
   useData,
   useDataProvider,
@@ -11,9 +11,17 @@ import {
   useWebViewController,
 } from '@papi/frontend/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { Scope, SCOPE_SELECTOR_STRING_KEYS, sonner, usePromise } from 'platform-bible-react';
-import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import {
+  Scope,
+  SCOPE_SELECTOR_STRING_KEYS,
+  sonner,
+  useEvent,
+  usePromise,
+  useRunWhenVisible,
+  useViewVisibility,
+} from 'platform-bible-react';
+import { getAvailableBookIds, ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
   debounce,
   DEBOUNCE_CANCELED_ERROR_MESSAGE,
@@ -28,10 +36,7 @@ import {
   ScrollGroupId,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
-import {
-  BOOKS_PRESENT_DEFAULT,
-  getBookIdsFromBooksPresent,
-} from 'platform-bible-utils/experimental';
+import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
 import {
   FindJobStatus,
   FindJobStatusReport,
@@ -41,6 +46,8 @@ import {
 } from 'platform-scripture';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Find, FIND_LOCALIZED_STRING_KEYS, FindProject } from './find/find.component';
+import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
+import { useFocusSearchOnInvoke } from './find/use-focus-search-on-invoke.hook';
 import {
   applyPreserveCase,
   armBoundedWait,
@@ -163,6 +170,7 @@ async function revertBookSnapshots(
 }
 
 global.webViewComponent = function FindWebView({
+  id: webViewId,
   projectId: webViewProjectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
@@ -701,11 +709,7 @@ global.webViewComponent = function FindWebView({
   const isEditable: boolean =
     isEditableLoading || isPlatformError(isEditablePossiblyError) ? false : isEditablePossiblyError;
 
-  const availableBooksIds = useMemo(() => {
-    return getBookIdsFromBooksPresent(booksPresent).filter(
-      (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
-    );
-  }, [booksPresent]);
+  const availableBooksIds = useMemo(() => getAvailableBookIds(booksPresent), [booksPresent]);
 
   // `selectedBookIds` is persisted per web view, so a project switch can leave it naming books the
   // NEW project doesn't have. The finder engine skips absent books gracefully (see
@@ -1453,6 +1457,38 @@ global.webViewComponent = function FindWebView({
     }, []),
   });
 
+  // Hidden case: auto-searches are deferred, not dropped. In Simple mode Find is a permanent tab
+  // bound to the editor's scroll group, so `relevantScopeKey` changes on every book the user moves
+  // to (and, under chapter scope, every chapter) whether or not the Find tab is on screen. Left
+  // unguarded, each of those launches a full find job into a `display: none` pane: uninterruptible
+  // once past its scope boundary, polled at ~10 Hz over JSON-RPC, and pulling a whole book's USJ
+  // into an iframe whose result cards then decline to render it (they gate on an
+  // `IntersectionObserver` that reports nothing intersecting while hidden). A permanent tab offers no
+  // way to opt out of that, either — there is nothing to close. Requests made while hidden collapse
+  // into one catch-up that runs when the tab is activated, so the tab still opens showing results for
+  // where the user actually is.
+  const isViewVisible = useViewVisibility();
+  const requestAutoSearch = useRunWhenVisible(isViewVisible, () =>
+    debouncedHandleStartSearch.current(),
+  );
+
+  // The refs need to start out with null for them to work as element refs
+  // eslint-disable-next-line no-null/no-null
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Invoking Find must land the caret in the search box; a plain tab click must not. The hook holds
+  // both delivery routes and the hidden-tab deferral — see its docs for why there are two routes and
+  // why neither can be a bare `.focus()`.
+  const [shouldFocusSearch] = useWebViewState<boolean>('shouldFocusSearch', false);
+  const focusSearchInput = useCallback(() => searchInputRef.current?.focus(), []);
+  const handleFocusSearchEvent = useFocusSearchOnInvoke({
+    webViewId,
+    shouldFocusSearch,
+    isViewVisible,
+    focusSearchInput,
+  });
+  useEvent(network.getNetworkEvent(FIND_FOCUS_SEARCH_EVENT), handleFocusSearchEvent);
+
   // Auto-search with debounce when the search term or any filter changes
   useEffect(() => {
     if (isInitialAutoSearchRef.current) {
@@ -1462,7 +1498,7 @@ global.webViewComponent = function FindWebView({
       if (searchTerm.trim() === '') return undefined;
       initialSearchTriggeredRef.current = true;
     }
-    debouncedHandleStartSearch.current();
+    requestAutoSearch();
   }, [
     searchTerm,
     shouldMatchCase,
@@ -1470,6 +1506,7 @@ global.webViewComponent = function FindWebView({
     isRegexAllowed,
     searchTextType,
     relevantScopeKey,
+    requestAutoSearch,
   ]);
 
   // Readiness retry: if handleStartSearch bailed because findPdp wasn't available (mount-time race,
@@ -2001,6 +2038,7 @@ global.webViewComponent = function FindWebView({
 
   return (
     <Find
+      searchInputRef={searchInputRef}
       localizedStrings={localizedStrings}
       scopeSelectorLocalizedStrings={scopeSelectorLocalizedStrings}
       searchResultLocalizedStrings={searchResultLocalizedStrings}

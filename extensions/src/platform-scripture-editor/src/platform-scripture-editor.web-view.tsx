@@ -423,6 +423,84 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
 
+  // The next two reactive signals gate whether the Scripture Editor is writable: whether the
+  // project itself is editable (`platform.isEditable`) and whether the current user has a
+  // non-Observer Scripture-edit role. Both fail OPEN below (return `true`, i.e. don't block
+  // editing) on a read error, because these are LIVE signals that self-correct on the next
+  // successful PAPI update — unlike the one-shot `CanUserEditScripture()` C# method and its
+  // `pdp.canUserEditScripture()` TS caller in this extension's utils.ts (used for the
+  // non-recoverable, one-time default-project-picker decision), which both fail closed instead.
+  const [isProjectEditablePossiblyError, , , isProjectEditableLoading] = useProjectSetting(
+    projectId,
+    'platform.isEditable',
+    true,
+  );
+
+  const isProjectEditable = useMemo(() => {
+    if (isPlatformError(isProjectEditablePossiblyError)) {
+      logger.warn(
+        `Error getting project editable setting: ${getErrorMessage(isProjectEditablePossiblyError)}`,
+      );
+      // Fail open — see comment above.
+      return true;
+    }
+    return isProjectEditablePossiblyError;
+  }, [isProjectEditablePossiblyError]);
+
+  const [canUserEditScripturePossiblyError, , canUserEditScriptureLoading] = useProjectData(
+    'platformScripture.scriptureEditPermissions',
+    projectId,
+  ).CanUserEditScripture(undefined, true);
+
+  const canUserEditScripture = useMemo(() => {
+    if (isPlatformError(canUserEditScripturePossiblyError)) {
+      logger.warn(
+        `Error getting Scripture edit permission: ${getErrorMessage(canUserEditScripturePossiblyError)}`,
+      );
+      // Fail open — see comment above.
+      return true;
+    }
+    return canUserEditScripturePossiblyError;
+  }, [canUserEditScripturePossiblyError]);
+
+  // `canUserEditScriptureLoading` above can never become `false` for a project whose PDP doesn't
+  // advertise `platformScripture.scriptureEditPermissions`: no subscription is ever created, so the
+  // hook's `isLoading` latches `true` forever (a `usePromise`/`useProjectDataProvider` limitation —
+  // `usePromise` has no rejection handling at all — not specific to this data type). Independently
+  // check whether the project actually supports the interface so "still resolving" can be told apart
+  // from "will never resolve", instead of treating the latter as a permanent loading state.
+  const checkScriptureEditPermissionsSupported = useCallback(async () => {
+    // No `projectId` means no project to check support for — and, like the catch below,
+    // `canUserEditScriptureLoading` can be permanently stuck in this case too (no `projectId` means
+    // no PDP source, so no subscription ever fires). Don't feed that back into "still resolving".
+    if (!projectId) return false;
+    try {
+      const matchingMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectIds: projectId,
+        includeProjectInterfaces: ['platformScripture.scriptureEditPermissions'],
+      });
+      return matchingMetadata.length > 0;
+    } catch (e) {
+      logger.warn(`Error checking Scripture edit permissions support: ${getErrorMessage(e)}`);
+      // Stop waiting rather than assume supported: returning `true` here would fall back to
+      // trusting `canUserEditScriptureLoading` directly — the exact signal this check exists to
+      // work around, which can be the same permanently-stuck state. This promise never rejects
+      // (we catch our own errors), so `usePromise` always resolves it promptly either way;
+      // returning `false` falls through to `canUserEditScripture`'s own fail-open default and
+      // self-corrects if the underlying subscription later resolves on its own.
+      return false;
+    }
+  }, [projectId]);
+  const [isScriptureEditPermissionsSupported] = usePromise(
+    checkScriptureEditPermissionsSupported,
+    true,
+  );
+
+  // Whether `canUserEditScripture` is genuinely still resolving, as opposed to latched because the
+  // project will never advertise the interface (see comment above).
+  const isCanUserEditScriptureUnresolved =
+    canUserEditScriptureLoading && isScriptureEditPermissionsSupported;
+
   const [interfaceModePossiblyError, , , isInterfaceModeLoading] = useSetting(
     'platform.interfaceMode',
     'simple',
@@ -498,43 +576,82 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [commentsPdp]);
   const [canUserCreateComments] = usePromise(fetchCanUserCreateComments, false);
 
-  const nodeOptions = useMemo<UsjNodeOptions>(
-    () => ({
-      // Also disabled while sync-blocked: opening a note caller can create/edit a note, which is a
-      // project write that must be frozen during an automatic Send/Receive.
-      noteCallerOnClick:
-        isReadOnly || isSyncBlocked
-          ? undefined
-          : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
-              if (!isCollapsed || editingNoteKey.current) return;
-
-              const noteOp = getNoteOps()?.at(0);
-              if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
-
-              const targetRect = event.currentTarget.getBoundingClientRect();
-              setNotePopoverAnchorX(targetRect.left);
-              setNotePopoverAnchorY(targetRect.top);
-              setNotePopoverAnchorHeight(targetRect.height);
-              editingNoteKey.current = noteNodeKey;
-              editingNoteOps.current = [noteOp];
-              setShowFootnoteEditor(true);
-            },
-    }),
-    [isReadOnly, isSyncBlocked, editingNoteKey],
-  );
-
   /**
-   * Whether the editor is effectively read-only, considering both the isReadOnly flag and the view
-   * type. This can probably be removed and replaced with `isReadOnly` once we allow editing in
-   * markers view
+   * Whether the editor is effectively read-only, considering the isReadOnly flag, the project's
+   * `platform.isEditable` setting, the user's Scripture-edit permission, sync-blocked state, and
+   * view type. The markers-view clause is the one placeholder piece here: once editing is allowed
+   * in markers view, that clause can be dropped, but the rest of this combination stays.
+   *
+   * Fails CLOSED (read-only) while `isProjectEditable`/`canUserEditScripture` are genuinely still
+   * resolving — see `isCanUserEditScriptureUnresolved` above — rather than relying on their
+   * fail-open default values during that window: a briefly-writable editor is worse than a
+   * briefly-read-only one.
    */
   const isReadOnlyEffective = useMemo(
     () =>
       isReadOnly ||
-      // An automatic Send/Receive is syncing this project — freeze editing until it finishes.
+      isProjectEditableLoading ||
+      !isProjectEditable ||
+      isCanUserEditScriptureUnresolved ||
+      !canUserEditScripture ||
       isSyncBlocked ||
       (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
-    [isReadOnly, isSyncBlocked, viewType],
+    [
+      isReadOnly,
+      isProjectEditableLoading,
+      isProjectEditable,
+      isCanUserEditScriptureUnresolved,
+      canUserEditScripture,
+      isSyncBlocked,
+      viewType,
+    ],
+  );
+
+  const nodeOptions = useMemo<UsjNodeOptions>(
+    () => ({
+      // Gated on isReadOnlyEffective (not the narrower isReadOnly) so an Observer on an otherwise-
+      // editable project can't open a note caller and attempt a note write the backend will reject.
+      // isReadOnlyEffective already includes isSyncBlocked, so no separate check is needed for that.
+      noteCallerOnClick: isReadOnlyEffective
+        ? undefined
+        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps) => {
+            if (!isCollapsed || editingNoteKey.current) return;
+
+            const noteOp = getNoteOps()?.at(0);
+            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) return;
+
+            const targetRect = event.currentTarget.getBoundingClientRect();
+            setNotePopoverAnchorX(targetRect.left);
+            setNotePopoverAnchorY(targetRect.top);
+            setNotePopoverAnchorHeight(targetRect.height);
+            editingNoteKey.current = noteNodeKey;
+            editingNoteOps.current = [noteOp];
+            setShowFootnoteEditor(true);
+          },
+    }),
+    [isReadOnlyEffective, editingNoteKey],
+  );
+
+  // The "durable" reasons the editor is read-only — excludes isSyncBlocked, a transient freeze
+  // during an automatic Send/Receive, not a real read-only state. Used for the title instead of
+  // isReadOnlyEffective so the tab doesn't relabel "(Read-only)" and back on every scheduled sync;
+  // SyncBlockedBanner already communicates that transient state.
+  const isDurablyReadOnly = useMemo(
+    () =>
+      isReadOnly ||
+      !isProjectEditable ||
+      !canUserEditScripture ||
+      (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
+    [isReadOnly, isProjectEditable, canUserEditScripture, viewType],
+  );
+
+  // `undefined` means isProjectEditable/canUserEditScripture are still genuinely resolving (not
+  // latched — see isCanUserEditScriptureUnresolved above). The title effect below skips its update
+  // in that case instead of pushing a title, so the previously-persisted title stays showing.
+  const isReadOnlyForTitle = useMemo(
+    () =>
+      isProjectEditableLoading || isCanUserEditScriptureUnresolved ? undefined : isDurablyReadOnly,
+    [isProjectEditableLoading, isCanUserEditScriptureUnresolved, isDurablyReadOnly],
   );
 
   /**
@@ -571,12 +688,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
     useCallback(async () => {
-      if (unformattedTitle === NO_UPDATE_TITLE || projectName === defaultProjectName)
+      if (
+        unformattedTitle === NO_UPDATE_TITLE ||
+        projectName === defaultProjectName ||
+        isReadOnlyForTitle === undefined
+      )
         return NO_UPDATE_TITLE;
       const updatedTitle = await formatEditorTitle(
         unformattedTitle,
         projectId,
-        isReadOnlyEffective,
+        isReadOnlyForTitle,
         async () => projectName,
         papi.localization.getLocalizedStrings,
       );
@@ -585,7 +706,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (updatedTitle === title) return NO_UPDATE_TITLE;
 
       return updatedTitle;
-    }, [isReadOnlyEffective, title, projectId, projectName, unformattedTitle]),
+    }, [isReadOnlyForTitle, title, projectId, projectName, unformattedTitle]),
     NO_UPDATE_TITLE,
   );
 
@@ -1252,9 +1373,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      // Preserve versificationStr: ScriptureReferencePlugin returns {book, chapterNum, verseNum}
-      // without versificationStr, so falling back to scrRef keeps the versification consistent and
-      // prevents the PDP selector from changing on every click.
+      // Preserve versificationStr so the PDP selector doesn't change on every click. Against
+      // platform-editor 0.8.15 the fallback is a no-op: `positionToScrRef` carries the host's
+      // `versificationStr` on every position report (a document states no versification of its
+      // own), and that plugin is the sole caller of this handler. Kept as cheap insurance in case
+      // that contract changes — versions before 0.8.15 reported positions without it.
       const preservedLocation: SerializedVerseRef = {
         ...newVerseLocation,
         versificationStr: newVerseLocation.versificationStr ?? scrRef.versificationStr,
@@ -2011,7 +2134,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onScrRefChange={setScrRefNoScroll}
             options={options}
             logger={logger}
-            onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+            onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
             onSelectionChange={handleSelectionChange}
             onStateChange={(state) => {
               setCanUndo(state.canUndo);

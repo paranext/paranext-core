@@ -761,7 +761,315 @@ step, no automation. Just a record.
 - **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
   `srcNonce` to its use site.
 
-## ADR-0019: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
+## ADR-0019: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
+
+- **Date:** 2026-08-05
+- **Status:** Accepted
+- **Context:** A verse-0 reference means "everything preceding verse 1" — book/chapter intros,
+  titles, outlines, Psalm `\d` superscriptions. It is reachable three ways: placing the cursor in
+  pre-verse-1 editor content (`usj-reader-writer.ts` reports `verseNum: 0`); the toolbar
+  previous-verse button, which calls `getPreviousVerseRef` **without** `bounds`
+  (`book-chapter-control.navigation.ts`), so its no-versification branch floors at verse 0 in any
+  chapter, not just chapter 1; and typing a `C:0` reference. A one-verse-tall surface has no useful
+  way to render that content, so the Text Collection showed an empty cell at Luke 1:0 —
+  [PT-3133](https://paratextstudio.atlassian.net/browse/PT-3133). PT9's
+  Text Collection shows verse 1 there instead. A4/PT-4052 (PR #2509) shipped a "No text for this
+  verse" ghost-text state, contradicting PT-3133's written acceptance (display verse 1); the
+  divergence went unflagged until PT-4061.
+- **Decision:** Single-verse display surfaces resolve a verse-0 reference to verse 1 via
+  `resolveDisplayVerseNum` (`extensions/src/platform-scripture-editor/src/scripture-text-grid/verse-display.utils.ts`),
+  confirmed by Ian Hewerdine 2026-08-05. Three constraints make this safe:
+  - **Display-only, and it carries an explicit guard.** The resolved verse is never written back to
+    the scroll group — writing it back would yank the Scripture Editor off the intro the user came
+    from. `Editorial`'s `ScriptureReferencePlugin` mounts even when `isReadonly` is set (`Editor.tsx`
+    gates it on `scrRef && onScrRefChange` only) and reports a selection whose book, chapter, or
+    verse disagrees with `scrRef`, so `ResourceCell` swallows the echo.
+
+    **The guard is defense-in-depth, not a fix for a live report.** `$resolvePosition` refuses to
+    describe a position in a document with no `BookNode` and no `ChapterNode` (upstream invariant I5),
+    and `sliceUsjToVerse` drops both — so the plugin is silent in verse mode, and the
+    `viewMode === 'verse'` branch of `handleScrRefChange` is unreachable. It is kept because it costs
+    nothing and is the right shape if a future editor makes slices addressable; do not read it as
+    evidence that a write-back currently occurs.
+
+    Verified 2026-08-16 against `@eten-tech-foundation/platform-editor` **0.8.15**, in both places it
+    can be read: the published npm package, and `dev-packages/scripture-editors` `packages/platform`,
+    which `postinstall` → `link-dev-packages` builds and yalc-links over `node_modules`. They agree
+    on this mechanism (the vendored copy trails published 0.8.15 by one caret-placement line in
+    `$moveCaretToVerseStart`). **Verify against the linked build, not `package-lock.json`** — the lock
+    still named 0.8.14 when this was written, and reading that stale tarball is exactly how an earlier
+    draft of this ADR came to describe `$findAndSetChapterAndVerse` and its chapter-1 fallback as the
+    live mechanism. That was wrong; that plugin does not exist in 0.8.15. Corrected in review of
+    #2663.
+
+    **The guard belongs in the consumer, not upstream in the plugin.** Gating the plugin on
+    `isReadonly` was considered and is rejected on the merits, not merely deferred: the plugin is
+    **bidirectional** — `$moveCaretToVerseStart` applies `scrRef` to the caret, and `$resolvePosition`
+    → `onSelectionSettled` → `report` reports the caret back — and read-only surfaces need both
+    halves. Not mounting it when read-only would break navigation-to-verse in every read-only editor
+    and would break read-only click-to-sync, which **this grid's chapter mode and the Resource Viewer
+    rely on** — those feed a whole chapter, so the document carries the book and chapter nodes
+    `$resolvePosition` needs. (Scoped deliberately: click-to-sync is *not* load-bearing in verse mode,
+    where the slice is unaddressable and no click reports anything. That predates this decision —
+    `sliceUsjToVerse` has dropped chapter chrome since #2509 — and is not a lost capability, since a
+    verse cell holds only the verse you are already on and so has nowhere to sync TO. Deliberately
+    not filed.) `isReadonly` is therefore the wrong predicate: a read-only editor reporting its
+    caret position is correct behavior, not the bug. The bug is narrower and entirely host-made —
+    *we* hand the editor verse 1's USJ while telling it verse 0, so the only component that knows
+    the reference is a deliberate lie is the one that told it. Whoever creates the mismatch owns
+    swallowing it. The generalizable fix, if a third surface ever wants one, is not an `isReadonly`
+    gate but for the promoted helper to carry the guard with it (see Consequences) — the rule and
+    its guard are one unit.
+  - **Chapter surfaces are exempt.** Anything rendering a whole chapter shows verse-0 front matter
+    directly: the Text Collection's chapter mode, its chapter-context split, its single-resource
+    path (`ScriptureTextGrid` renders one shown resource as `viewMode="chapter"`, so verse-0
+    behavior differs between one and several resources), and the Resource Viewer
+    (`resource-text-panel.web-view.tsx`). Correct behavior, signed off by Ian on PT-3133.
+  - **Genuinely-missing verses keep the ghost text.** Fall-forward applies only to verse 0. A verse
+    absent from a resource (an NT-only resource at an OT reference, an untranslated verse) still
+    renders "No text for this verse".
+  Accessible names resolve the same way, so the announcement names the verse the cells display. It
+  names the row, not its contents: a resource lacking verse 1 shows the empty state under the same
+  label, and a combined opener renders a "1-3" verse number under a label saying "1".
+- **Alternatives:** (a) *Keep the ghost-text empty state* — rejected: it blanks every cell at once
+  exactly when the user crosses a chapter or book boundary, so the tool reads as broken at the
+  moment it should be most useful; it also contradicts PT-3133's written acceptance. (b) *Normalize
+  the reference — forbid verse 0 in the Text Collection, or write verse 1 back to the scroll group*
+  (Todd Hoatson's suggestion on PT-3133) — rejected: the scroll group is shared, so it would move
+  every other view off the intro. (c) *Put the rule inside `sliceUsjToVerse`* — rejected: the
+  decision is about the **reference**, not the USJ, and the accessible-name site needs it without
+  having any USJ; burying a copy there would centralize nothing while making
+  `sliceUsjToVerse(usj, 0)` silently return verse 1. (d) *Fall forward only when verse 0 has no
+  content of its own* — a content-aware rule (raised in review of #2663). The distinction it draws is
+  real in the source: a `\d` superscription is one short line that a one-verse-tall cell renders
+  fine, whereas book/chapter intros and outlines are what genuinely cannot be rendered there. Under
+  it, PT9 parity would hold where it actually matters (the intro case), `<` from Psalms verse 1 would
+  produce a visible change instead of a silent one, and no real Scripture would be hidden in verse
+  view. Rejected on cost and consistency: the helper would need the chapter USJ, and the
+  accessible-name site in `ScriptureTextGrid` has none — it names the row before any resource has
+  fetched anything — which is exactly why the rule is reference-only. Making it content-aware would
+  either force a USJ through the naming path or split the rule in two (a USJ-aware version for cells,
+  a reference-only version for labels), and per-resource content-awareness would make the *same*
+  reference fall forward in one cell and not in its neighbor, so a row of cells would disagree about
+  which verse they are showing. Worth revisiting if the superscription case draws real complaints,
+  since it is the one place this decision hides genuine content.
+- **Consequences:** verse-0 content is not shown in verse view — deliberately. It stays one click
+  away via the chapter-context split, which renders the chapter unsliced; that escape hatch is what
+  makes the trade acceptable, so **revisit if the chapter-context split is ever removed or made
+  non-obvious**. Verse 0 and verse 1 now render identically and carry the same accessible name, so
+  stepping backward across that boundary produces no visible or announced change **within the grid**
+  — accepted, since the alternative is a row of ghost text at every chapter boundary.
+
+  **Verse 0 becomes unobservable inside the Text Collection, including to assistive tech** (raised
+  in review of #2663). At a verse-0 reference the row label announces "MAT 5:1", the cells render
+  verse 1, and nothing in the grid states that the shared reference is actually 5:0 — so a
+  screen-reader user has no in-grid signal that they are at the boundary. This is a genuine accepted
+  cost of naming the row after what it displays, not an oversight: the alternative is a label that
+  announces a verse the cells demonstrably do not show, which is worse. Two things keep it from
+  being a true silent dead end, and both live outside the grid: the BCV control still displays the
+  real reference (`5:0`), and its **previous-verse button is disabled** at verse 0, which is an
+  announced state change rather than an inert control — `isNoOpNavigation` in
+  `book-chapter-control.navigation.ts` disables a step that would return the same ref, pinned by the
+  `'Is disabled when at verse 0'` test in `book-chapter-control.navigation.test.ts`. (An earlier
+  draft of this ADR called the button "inert" and claimed fall-forward removed its "last remaining
+  cue"; that was wrong on both counts and is corrected here.) What the button cannot do is roll
+  backward to the previous chapter's last verse: with no `bounds`, `getPreviousVerseRef` floors at
+  `{chapterNum, verseNum: 0}` in every chapter rather than only chapter 1, so the reference dead-ends
+  there. That pin predates this decision and is now tracked as
+  [PT-4379](https://paratextstudio.atlassian.net/browse/PT-4379) — out of scope here because the fix
+  is not passing an argument but threading an async, PAPI-built `ScriptureBounds` through a
+  `platform-bible-react` component into every consumer of the BCV control.
+
+  Any future single-verse surface must call `resolveDisplayVerseNum` — `sliceUsjToVerse` is
+  deliberately mechanical and slices a raw verse 0 to nothing (pinned by a test) — and must carry the
+  write-back guard with it. The helper is currently private to `platform-scripture-editor`, so a
+  surface in another extension cannot import it; **promote it to
+  `lib/platform-bible-utils/src/scripture/` (which already owns `getPreviousVerseRef`, the producer
+  of verse-0 refs) at the second consumer _of this rule_** rather than re-typing it. The qualifier is
+  load-bearing: "second consumer" counted as surfaces would be wrong, because other surfaces already
+  handle verse-0 references under deliberately different rules. The worked example is the
+  interlinearizer extension (`sillsdev/interlinearizer-extension`, `InterlinearizerLoader.tsx`, the
+  `activeScrRef` memo): it renders a whole chapter and treats verse 0 as tokenizable content, so it
+  **keeps** verse 0 whenever a segment covers it — its USJ extractor emits a synthetic verse-0 scope
+  with SID `"<book> <chapter>:0"` for pre-verse-1 content — and falls back to verse 1 only when the
+  loaded book has no verse-0 segment for that chapter. That is content-awareness this rule
+  deliberately rejects (alternative (d) above), affordable there precisely because the whole book is
+  already parsed into segments before a reference is resolved. A whole-chapter surface should look
+  like the chapter-surface exemption above, not like this rule. Promoting on a surface count would
+  turn a deliberate single-verse-vs-whole-chapter difference into apparent drift from a shared util.
+- **Source:** PT-4061 (B3), which resolves PT-3133; Ian Hewerdine confirmed parity 2026-08-05.
+
+## ADR-0020: Find follows the editor onto read-only resources, with replace withheld
+
+- **Date:** 2026-08-17
+- **Status:** Accepted
+- **Context:** Simple mode's Column 3 panels follow the *active translation project*: the editor gates
+  `openOrUpdateRelatedPanels` on `projectForWebView.isEditable` precisely so that opening a published
+  resource in the editor column does not switch the related panels over to the resource. Making Find a
+  permanent Column 3 tab put it inside that contract for the first time, and it was the one panel
+  exempt from it — `openFind` took whatever project the triggering editor held, with no editability
+  check, so Ctrl+F on a resource re-pointed the always-visible Find tab at the resource while its
+  three siblings stayed on the translation project.
+- **Decision:** Find is deliberately *not* held to the follow-the-translation-project rule. It may
+  bind to a read-only resource, because searching a resource is a legitimate read operation and the
+  panel's whole purpose is search. What it may not do is offer edits the project will reject, so the
+  Find web view reads `platform.isEditable` for whatever project it is currently bound to
+  (`useProjectSetting` in `find.web-view.tsx`, failing closed while the read is in flight or if it
+  errors) and withholds Replace, Replace All, and the per-result replace affordances while it is
+  false. The per-result gate matters separately: each result's own Replace button and its Enter/Space
+  shortcut call `onReplace` directly and would otherwise bypass the disabled top-level buttons.
+  Separately, `platformScripture.updateFindProject` re-points an already-open Find from
+  `openOrUpdateRelatedPanels`, which is what returns Find to the translation project after a switch —
+  Find is the only Column 3 panel that command re-points without also being able to open it.
+- **Alternatives:** **Hold Find to the sibling contract** (refuse to follow a resource; keep the
+  current project and just bring the tab to front) — rejected: consistent with the other three panels,
+  but it makes resource text unsearchable from the panel built to search, for a data-safety benefit
+  already obtained by withholding replace. **Hide the replace UI entirely when read-only**, reusing
+  the `hideModeToggle` path Simple mode uses — rejected: it removes the control with no explanation;
+  a disabled control with a reason mirrors the nearest precedent (structure protection) and tells the
+  user why. **Thread the editor's already-resolved `state.isReadOnly` through `FindWebViewOptions`**
+  — rejected: it only answers for editor-triggered opens, so the seeded Column 3 tab (which exists
+  from startup with no triggering editor) would have no answer, and a Find bound to a project by any
+  other route would silently fall back to "writable".
+- **Consequences:** Find can search resources in both modes; only Power mode ever shows the withheld
+  replace controls, since Simple-mode Find has no replace UI at all. Editability is re-read per bound
+  project rather than latched, so it cannot go stale across a switch back to a translation project.
+  Column 3 now has one panel that can legitimately show a different project from its siblings;
+  anything that later assumes all four are on the same project must account for Find.
+- **Source:** Review of the `pt-4342-dock-find-in-simple` branch — merge-blocking findings on Find
+  re-binding to read-only resources and on Find not following project switches. Mechanism reconciled
+  with PT-4343's `platform.isEditable` read (ADR-0015's sibling work) when the branch rebased.
+
+## ADR-0021: Column 3 tab order is expressed as anchor + insert-before in the layout supplement, not as a pinning mechanism
+
+- **Date:** 2026-08-17
+- **Status:** Accepted
+- **Context:** Simple mode's Column 3 is assembled from two sources: `simple-layout.data.ts`, baked
+  into the build, and `default-layout-supplement.json`, whose entries are merged in afterward behind
+  feature flags. Making Find a permanent Column 3 tab meant Find had to sit *last* while Text
+  Collection — a supplement entry — had to land ahead of it, even though supplements merge in after
+  the static tabs exist. The PR asked the team to confirm this shape "versus a different way of
+  pinning a static tab last", which is the question this entry answers so it is not re-derived when
+  the next Column 3 tab is added.
+- **Decision:** Order stays a property of the supplement entry (`anchorWebViewType` plus optional
+  `insertBeforeWebViewType`), not a property of the static tab. A static tab does not declare "I am
+  last"; a supplement declares where it goes relative to tabs that already exist. Since the merge's
+  append fallback is indistinguishable from success once applied, an `insertBeforeWebViewType` that
+  does not resolve is now reported as a placement anomaly, and the shipped order is pinned by tests
+  that use the real layout data and the real supplement JSON together
+  (`shipped-simple-layout-order.test.ts`) rather than synthetic fixtures.
+
+  A **supplement entry is therefore scoped to Simple mode** in two of its properties, and the merge
+  takes the interface mode as a required argument rather than inferring it. The merge runs against
+  both modes' layouts — Simple mode's build-baked one and Power mode's persisted one — while
+  ordering and pinning only describe Simple mode's fixed columns. Applying an entry's
+  `insertBeforeWebViewType` in Power mode means logging a placement anomaly on every load of a
+  correct layout, because the target is a fixed-layout tab that mode does not have; applying its
+  `isClosable: false` means handing `getTabGroup` a pinned tab and getting back a column group
+  `getGroups` registers only in Simple mode, so the tab lands in rc-dock's unknown-group fallback
+  with no close button until the provider's async answer replaces it. Making the mode an argument is
+  what keeps a mode-agnostic mechanism from silently carrying mode-specific data across.
+- **Alternatives:** **An explicit `isPinnedLast` / sort-order field on the static tab** — rejected:
+  it splits ordering across two files, so reading either one alone tells you the wrong answer, and
+  two tabs both claiming last has no defined resolution. **Move Find into the supplement too, so all
+  of Column 3 is ordered in one place** — rejected: Find is not feature-flagged and ships in every
+  build; putting an unconditional tab behind the flag-gated merge path would make its presence depend
+  on machinery it has no reason to touch. **Sort Column 3 after merging, by a central ordered list of
+  webViewTypes** — rejected as premature for one constrained insert, though it becomes the better
+  shape if a third or fourth supplement entry ever needs ordering against each other rather than
+  against static tabs.
+- **Consequences:** Adding a Column 3 tab means deciding, in one place, which existing tab it goes
+  before. The static layout stays a plain ordered list. The ordering is only as good as the
+  `webViewType` strings on both sides, which core cannot type-check against the extensions that own
+  them — so a drift guard reads the extension sources and fails if a pinned `webViewType` stops being
+  declared in production code. Every future supplement property has to be classified as
+  mode-independent or Simple-mode-only, and a Simple-mode-only one needs a Power-mode test case —
+  both modes' behavior for the shipped entry is asserted, so a property that leaks across fails.
+  **Revisit** if supplement entries start needing to order against each other, which
+  anchor/insert-before cannot express.
+- **Source:** Review of the `pt-4342-dock-find-in-simple` branch — findings on the supplement's silent
+  append fallback and the untested shipped column order; open question raised in the PR body.
+
+## ADR-0022: A book selection is summarized, not listed, on a scope trigger; its details surface is the picker, not a tooltip
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** The Find panel's "Showing" row rendered a selected-books scope by joining every
+  selected book ID with commas. Past a handful of books the row outgrew the panel and forced a
+  horizontal scrollbar across the whole web view (PT-4092). Any fix has to answer two questions:
+  what short form replaces the full list, and where — if anywhere — a reader can still see the
+  books the short form drops.
+- **Decision:** `summarizeSelectedBooks`
+  (`lib/platform-bible-react/src/components/advanced/scope-selector/scope-selector.utils.ts`)
+  collapses a selection to one of three forms: the localized "All books" when the selection is
+  exactly the project's available books, the books listed individually at five or fewer, and a
+  canon-order `first - last` range beyond that. The dropped books get **no dedicated details
+  surface**: `Guidelines/Responsiveness` asks truncated text to be backed by "either a Tooltip or
+  any details view", and the details view already exists — the popover the trigger opens contains
+  the real selection as checkboxes and badges. The separator is ` - `, matching `formatScrRefRange`,
+  so `…` keeps its `Guidelines/Ellipses` meaning of "opens a dialog".
+- **Alternatives considered:**
+  - **A hover tooltip on the trigger carrying the full canon-ordered list.** Implemented first and
+    reverted. A full selection is ~570 characters against a `Guidelines/Tooltips` "avoid" example of
+    69, Radix opens tooltips on focus so every programmatic focus restore fired it uninvited, Radix
+    renders a visually-hidden duplicate so the payload also became an `aria-describedby` on the
+    combobox, and `TooltipContent` has no height cap — reintroducing the same clipping bug on the
+    surface meant to explain it.
+  - **`+N more` after the first five books,** matching `SelectBooks`' badge rule. Rejected: it tells
+    a reader how many books they cannot see rather than which range they picked, and the two
+    surfaces order their books differently (canon vs. click), so agreement would be cosmetic.
+  - **A separate expandable row under the trigger.** Rejected as more chrome than a scope line
+    warrants when opening the popover already shows the selection.
+- **Consequences:** The summary is deliberately lossy and there is no way to read the exact
+  selection without opening the popover — accepted, because opening it is one click and it is the
+  only surface where the selection can also be *changed*. A selection that is CSS-truncated inside a
+  narrow column (`GEN, EXO, LEV, NU…`) likewise has no tooltip; `useTruncationTooltip` exists if
+  that becomes a real complaint. **Revisit if a books-scope summary is ever needed somewhere the
+  reader cannot open the picker** — that surface would need its own details view.
+
+  Two known deferrals sit against this entry. First, the summary is applied only at Find's "Showing"
+  row: `ScopeSelector`'s `variant="dropdown"` trigger still joins every selected ID, so the original
+  overflow remains latent there. It has no consumer today (the one dropdown consumer does not offer
+  the `selectedBooks` scope) and `summarizeSelectedBooks` is exported for whoever adds one, so this
+  is a deliberate deferral rather than an oversight — a future dropdown consumer that offers
+  `selectedBooks` must adopt the summary. Second, the ` - ` separator is a fifth deliberate
+  divergence from Paratext 9's `BookSetX.Summary` (alongside the collapse threshold, short IDs vs.
+  localized full names, and the empty-selection placeholder); the whole set belongs to PT-3363's UX
+  owner rather than to this change.
+
+## ADR-0023: `BooksPresent` decoding degrades to a partial read; `platform-bible-utils` owns the wire format
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** `getAvailableBookIds` (platform-bible-react) threw when its input length did not
+  equal `Canon.allBookIds.length`. That input is the `platformScripture.booksPresent` project
+  setting, whose default is the empty string until the setting resolves — and which stays empty
+  permanently if the read returns a `PlatformError`. The throw therefore happened during render,
+  and with no error boundary above these components it tore down the whole web view. Separately,
+  `platform-bible-utils` already owned the same wire format in `getBookIdsFromBooksPresent`, which
+  clamps to the canon length rather than rejecting, so the two functions returned different answers
+  for the same string.
+- **Decision:** `platform-bible-utils`' `getBookIdsFromBooksPresent` is the single decoder for the
+  `booksPresent` flag string. `getAvailableBookIds` delegates to it and adds only the obsolete-book
+  filter its callers need, so a malformed or partial string yields the flags it does carry instead
+  of throwing or discarding the read. Neither function is on `platform-bible-react`'s stable root
+  export; both live behind the `experimental` entry point alongside their nearest relatives, so
+  folding them together later is not a breaking change.
+- **Alternatives considered:**
+  - **Keep throwing and add an error boundary.** Rejected for this change: an error boundary is a
+    larger platform decision, and an unresolved setting is an expected state, not an exception.
+  - **Thread the decoded `string[]` down as a prop** instead of passing the raw string to
+    `ScopeSelector`/`SelectBooks`/`SelectBooksPicker`. Rejected as a breaking prop change across
+    three public components for a decode that is microseconds and already memoized at each site.
+- **Consequences:** Degrading means callers must now handle "no books known" as a real state rather
+  than trusting the decode. Every control that acts on the whole list needs an explicit guard —
+  `SelectBooksPicker`'s "Select all" is disabled while the list is empty, because selecting all of
+  nothing would commit an empty array and silently wipe the user's existing selection. **Any new
+  control that maps over the available books must add the same guard**; the pattern to copy is
+  `SectionButton`'s `isDisabled`.
+- **Source:** PT-4092, review of #2699.
+
+## ADR-0024: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
 
 - **Date:** 2026-08-20
 - **Status:** Accepted (interim — retirement of the superseded guard is deferred, not decided against)
