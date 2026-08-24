@@ -271,6 +271,9 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         .filter((id): id is string => id !== undefined),
     [resources],
   );
+  const caretResourceProjectId = useFocusedResourceProjectId(displayedProjectIds);
+  useOpenFindShortcut(webViewId, caretResourceProjectId);
+
   // Declare the projects this view displays so global navigation UI can offer their books. The grid
   // is one web view hosting many projects, so nothing reading open web view definitions can see its
   // members otherwise. See NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY.
@@ -290,9 +293,6 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     // panes with display:none but leaves them mounted) and the declared ids stay current. There is
     // nothing to defer and nothing to catch up on activation.
   }, [displayedProjectIds, publishedNavigableProjectIds, setPublishedNavigableProjectIds]);
-
-  const caretResourceProjectId = useFocusedResourceProjectId(displayedProjectIds);
-  useOpenFindShortcut(webViewId, caretResourceProjectId);
 
   // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
   // one (e.g. clicking a verse in Chapter view) makes that resource the active editor. Never switch
