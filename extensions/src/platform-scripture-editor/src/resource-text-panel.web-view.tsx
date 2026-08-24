@@ -51,6 +51,7 @@ import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook'
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { useIsOnline } from './use-is-online.hook';
 import {
+  getRefLabel,
   isDblResourceReference,
   isProjectReference,
 } from './resource-reference.utils';
@@ -98,25 +99,14 @@ const COMMENTARIES_ICON_URLS: TabIconUrls = {
   lightUnselected: 'papi-extension://platformScriptureEditor/assets/file-text-unselected.svg',
 };
 
-function pickerRowId(row: PickerResource): string | undefined {
-  if (isDblResourceReference(row.reference) || isProjectReference(row.reference))
-    return row.reference.id;
-  return undefined;
-}
+const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
 
-function getPickerRefLabel(row: PickerResource, dblResourcesList: DblResourceData[]): string {
+function pickerRowId(row: PickerResource): string {
   const { reference } = row;
-  if (isDblResourceReference(reference)) {
-    const dblData = dblResourcesList.find((r) => r.dblEntryUid === reference.id);
-    if (dblData) return `${dblData.fullName} (${dblData.displayName})`;
-    return reference.name;
-  }
-  if (isProjectReference(reference)) {
-    return reference.name;
-  }
-  return '';
+  if (isDblResourceReference(reference) || isProjectReference(reference)) return reference.id;
+  const name = 'name' in reference && reference.name ? reference.name : '';
+  return `${reference.type}:${name || row.projectId || ''}`;
 }
-
 
 type ResourceSelectorDropdownProps = {
   filteredResources: PickerResource[];
@@ -144,7 +134,7 @@ function ResourceSelectorDropdown({
             className="tw:h-8 tw:w-full tw:justify-between tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap"
           >
             <span className="tw:overflow-hidden tw:text-ellipsis tw:whitespace-nowrap">
-              {selectedRef ? getPickerRefLabel(selectedRef, dblResources) : ''}
+              {selectedRef ? getRefLabel(selectedRef.reference, dblResources) : ''}
             </span>
             <ChevronDown className="tw:ml-1 tw:h-4 tw:w-4 tw:shrink-0" />
           </Button>
@@ -157,10 +147,11 @@ function ResourceSelectorDropdown({
                 key={refId}
                 checked={refId === (selectedRef ? pickerRowId(selectedRef) : undefined)}
                 onCheckedChange={() => {
-                  if (refId) onSelectResource(refId);
+                  if (isDblResourceReference(ref.reference) || isProjectReference(ref.reference))
+                    onSelectResource(refId);
                 }}
               >
-                {getPickerRefLabel(ref, dblResources)}
+                {getRefLabel(ref.reference, dblResources)}
               </DropdownMenuCheckboxItem>
             );
           })}
@@ -173,8 +164,6 @@ function ResourceSelectorDropdown({
     </div>
   );
 }
-
-const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
 
 globalThis.webViewComponent = function ResourceTextPanel({
   id: webViewId,
@@ -264,7 +253,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
         return Promise.resolve(undefined);
       }
 
-      return papi.commands.sendCommand('platformGetResources.getCachedResources');
+      const [cachedResources, localNonDblResources] = await Promise.all([
+        papi.commands.sendCommand('platformGetResources.getCachedResources'),
+        papi.commands.sendCommand('platformGetResources.getLocalNonDblResources'),
+      ]);
+      return [...(cachedResources ?? []), ...(localNonDblResources ?? [])];
     }, [fetchResources]),
     undefined,
   );
@@ -576,8 +569,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
     useMemo(
-      () => ({ selectedResourceIds: currentFilteredDblIds, isModal: true }),
-      [currentFilteredDblIds],
+      () => ({ selectedResourceIds: currentFilteredDblIds, isModal: true, resourceType }),
+      [currentFilteredDblIds, resourceType],
     ),
     useCallback(
       (resource: DblResourceData | undefined) => {

@@ -441,7 +441,7 @@ describe('getViewOptionsTexts', () => {
 
   it('does not append a downloaded project that is already an admin/user row', () => {
     const sources = makeSources({
-      adminReferenced: list([project('proj-web', { isResourceShownByDefault: true })]),
+      adminReferenced: list([project('proj-web', { isInTextCollection: true })]),
     });
     const downloaded: DownloadedResource[] = [
       { projectId: 'proj-web', name: 'WEB', fullName: 'World English Bible', language: 'English' },
@@ -453,7 +453,7 @@ describe('getViewOptionsTexts', () => {
 
   it('does not append a downloaded project whose ID starts with an existing DblResourceReference ID', () => {
     const sources = makeSources({
-      adminReferenced: list([dbl('dbl-uid-123', { isResourceShownByDefault: true })]),
+      adminReferenced: list([dbl('dbl-uid-123', { isInTextCollection: true })]),
     });
     const downloaded: DownloadedResource[] = [
       {
@@ -463,7 +463,7 @@ describe('getViewOptionsTexts', () => {
         language: 'English',
       },
     ];
-    const { top, bottom } = getViewOptionsTexts(sources, { downloaded });
+    const { top, bottom } = getViewOptionsTexts(sources, undefined, { downloaded });
     const duplicate = [...top, ...bottom].filter((r) => r.reference.id === 'dbl-uid-123extra');
     expect(duplicate).toHaveLength(0);
   });

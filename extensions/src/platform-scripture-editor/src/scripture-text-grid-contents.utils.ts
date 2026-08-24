@@ -173,6 +173,8 @@ export function getScriptureTextGridContents(sources: TextCollectionSources): Bi
  * user entry (admin precedence).
  *
  * @param sources Data sources for the current project.
+ * @param resolveLongName Optional resolver that maps an entry's reference to its long name for
+ *   display.
  * @param options.downloaded When provided, downloaded-but-unlisted projects are appended to
  *   `bottom` as unchecked, non-removable rows. Omit to skip — PT-4171 will wire this up.
  */
@@ -213,15 +215,16 @@ export function getViewOptionsTexts(
     });
   });
 
-  const allRows = [...top, ...bottom];
   (options?.downloaded ?? []).forEach((downloadedResource) => {
-    const alreadyListed = allRows.some((row) => {
+    const alreadyListed = [...top, ...bottom].some((row) => {
       if (isProjectReference(row.reference))
         return row.reference.id === downloadedResource.projectId;
       if (isDblResourceReference(row.reference))
-        return downloadedResource.projectId
-          .toLowerCase()
-          .startsWith(row.reference.id.toLowerCase());
+        // Guard against empty id: ''.startsWith('') is true for every string.
+        return (
+          row.reference.id !== '' &&
+          downloadedResource.projectId.toLowerCase().startsWith(row.reference.id.toLowerCase())
+        );
       return false;
     });
     if (alreadyListed) return;
@@ -234,6 +237,9 @@ export function getViewOptionsTexts(
       checked: false,
       isAdminLocked: false,
       isUserRemovable: false,
+      ...(downloadedResource.fullName !== downloadedResource.name
+        ? { longName: downloadedResource.fullName }
+        : {}),
     });
   });
 

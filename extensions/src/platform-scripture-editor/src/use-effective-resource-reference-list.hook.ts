@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { logger } from '@papi/frontend';
+import { isPlatformError } from 'platform-bible-utils';
 import type {
   EffectiveResourceReference,
   EffectiveResourceReferenceList,
@@ -26,7 +27,7 @@ function getDeduplicationKey(item: ResourceReference): string | undefined {
   if ('id' in item && typeof item.id === 'string') return `id:${item.id}`;
   if ('name' in item && typeof item.name === 'string') return `name:${item.name}`;
   // Should never happen after upstream validation; discard rather than silently misidentify
-  logger.warn(`Resource reference of type '${item.type}' has no string name; discarding.`);
+  logger.error(`Resource reference of type '${item.type}' has no string name; discarding.`);
   return undefined;
 }
 
@@ -133,13 +134,7 @@ export function useEffectiveResourceReferenceList(
         return undefined;
       })
       .catch((err) => {
-        logger.error(
-          `Failed to subscribe to user text connection settings: ${getErrorMessage(err)}`,
-        );
-        // Fall back to an empty user layer so the merged list still resolves. Leaving it
-        // `undefined` reported `loading` forever — an unresolvable spinner — and contradicted this
-        // hook's own contract, which promises the project-level items in this case.
-        if (!disposed) setUserResourceReferenceList(DEFAULT_LIST);
+        logger.error(`Failed to subscribe to user text connection settings: ${err}`);
       });
 
     return () => {
@@ -156,24 +151,10 @@ export function useEffectiveResourceReferenceList(
     // than `loading` is what let panels render a premature empty state.
     if (isProjectSettingLoading) return { status: 'loading' };
 
-    // `projectSettingError` is the live read failure; `projectResourceReferenceList` is only itself
-    // an error when the very first read failed. Both mean the same thing to a panel: the answer is
-    // unknown, so it must not render either a spinner or an empty prompt.
-    if (projectSettingError || isPlatformError(projectResourceReferenceList))
-      return { status: 'error' };
-
-    if (userResourceReferenceList === undefined) return { status: 'loading' };
-
-    return {
-      status: 'ready',
-      list: mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList),
-    };
-  }, [
-    isProjectSettingLoading,
-    projectSettingError,
-    projectResourceReferenceList,
-    userResourceReferenceList,
-  ]);
+      return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
+    }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]),
+    isProjectSettingLoading || (userPdp !== undefined && userResourceReferenceList === undefined),
+  ];
 }
 
 export default useEffectiveResourceReferenceList;

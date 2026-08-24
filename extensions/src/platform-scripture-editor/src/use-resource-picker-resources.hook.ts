@@ -25,22 +25,31 @@ export function useResourcePickerResources(
   );
 
   const [downloaded, setDownloaded] = useState<DownloadedResource[]>([]);
+  const [isDownloadedLoading, setIsDownloadedLoading] = useState(false);
 
-  // TODO(PT-4059): papi.projectLookup has no onDidChange event yet; the downloaded list will be
-  // stale if a project is installed while this panel is open. Re-fetch when that event exists.
+  // TODO: papi.projectLookup has no onDidChange event yet; the downloaded list will be stale if
+  // a project is installed while this panel is open. Re-fetch when that event exists.
   useEffect(() => {
     if (!includeDownloaded) {
       setDownloaded([]);
+      setIsDownloadedLoading(false);
       return undefined;
     }
+    setIsDownloadedLoading(true);
     let current = true;
     fetchDownloadedResources()
       .then((result) => {
-        if (current) setDownloaded(result);
+        if (current) {
+          setDownloaded(result);
+          setIsDownloadedLoading(false);
+        }
         return undefined;
       })
       .catch(() => {
-        if (current) setDownloaded([]);
+        if (current) {
+          setDownloaded([]);
+          setIsDownloadedLoading(false);
+        }
       });
     return () => {
       current = false;
@@ -54,5 +63,5 @@ export function useResourcePickerResources(
     return [...built].sort((a, b) => Number(b.isAdminLocked) - Number(a.isAdminLocked));
   }, [effectiveResources, downloaded, dblResources, adminLockedFirst]);
 
-  return [rows, isEffectiveLoading];
+  return [rows, isEffectiveLoading || isDownloadedLoading];
 }

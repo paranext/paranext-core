@@ -57,28 +57,12 @@ export async function fetchDownloadedResources(): Promise<DownloadedResource[]> 
       includeProjectInterfaces: ['platform.base'],
     });
     const metadata = allMetadata.filter((m) => m.isEditable === false);
-    const results = await Promise.allSettled(
-      metadata.map(async (data) => {
-        const pdp = await papi.projectDataProviders.get('platform.base', data.id);
-        return {
-          projectId: data.id,
-          name: await pdp.getSetting('platform.name'),
-          fullName: await pdp.getSetting('platform.fullName'),
-          language: await pdp.getSetting('platform.language'),
-        };
-      }),
-    );
-    const resolved: DownloadedResource[] = [];
-    results.forEach((result, i) => {
-      if (result.status === 'fulfilled') {
-        resolved.push(result.value);
-      } else {
-        logger.warn(
-          `fetchDownloadedResources: failed to resolve project '${metadata[i].id}': ${getErrorMessage(result.reason)}`,
-        );
-      }
-    });
-    return resolved;
+    return metadata.map((data) => ({
+      projectId: data.id,
+      name: data.name ?? data.id,
+      fullName: data.fullName ?? data.name ?? data.id,
+      language: data.language ?? '',
+    }));
   } catch (e) {
     logger.warn(`fetchDownloadedResources failed: ${getErrorMessage(e)}`);
     return [];
@@ -96,7 +80,9 @@ export function matchesDownloaded(
 ): boolean {
   if (isProjectReference(reference)) return reference.id === project.projectId;
   if (isDblResourceReference(reference))
-    return project.projectId.toLowerCase().startsWith(reference.id.toLowerCase());
+    return (
+      reference.id !== '' && project.projectId.toLowerCase().startsWith(reference.id.toLowerCase())
+    );
   return false;
 }
 
@@ -105,7 +91,8 @@ function resolveReferenced(
   item: EffectiveResourceReference,
   dblResources: DblResourceData[],
 ): PickerResource {
-  const isAdminLocked = !!item.isResourceShownByDefault;
+  const isAdminLocked =
+    (isProjectReference(item) || isDblResourceReference(item)) && !!item.isInTextCollection;
   if (isDblResourceReference(item)) {
     const dbl = dblResources.find((r) => r.dblEntryUid === item.id);
     return {
@@ -117,13 +104,14 @@ function resolveReferenced(
       projectId: dbl?.installed ? dbl.projectId : undefined,
     };
   }
-  // ProjectReference (and any other known reference) renders as scripture.
+  // ProjectReference — look up type in the DBL catalog in case the project is a DBL-backed resource.
   const isProject = isProjectReference(item);
+  const dblByProjectId = isProject ? dblResources.find((r) => r.projectId === item.id) : undefined;
   return {
     reference: item,
     source: item.source,
     isAdminLocked,
-    type: 'ScriptureResource',
+    type: dblByProjectId?.type ?? 'ScriptureResource',
     installed: isProject,
     projectId: isProject ? item.id : undefined,
   };
@@ -140,7 +128,8 @@ function downloadedToRow(
       // The second branch matches a DBL entry whose cache row is not yet flagged installed (e.g.
       // the flag lags an update), but the local project exists on disk — installed: true is still
       // correct because the local project file is present.
-      project.projectId.toLowerCase().startsWith(r.dblEntryUid.toLowerCase()),
+      (r.dblEntryUid !== '' &&
+        project.projectId.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
   );
   if (dbl) {
     const reference: DblResourceReference = {

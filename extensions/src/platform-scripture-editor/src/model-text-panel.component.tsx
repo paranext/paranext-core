@@ -24,7 +24,11 @@ import type {
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { selectTextConnection } from './select-dbl-resource';
-import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
+import {
+  getRefLabel,
+  isDblResourceReference,
+  isProjectReference,
+} from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
@@ -33,18 +37,6 @@ import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { scrollToVerse } from './editor-dom.util';
-import { ResourceBookNotAvailable } from './resource-book-not-available.component';
-import { ResourceBlankChapter } from './resource-blank-chapter.component';
-import { ResourceTextUnavailable } from './resource-text-unavailable.component';
-import {
-  isBlankChapterOnScreen,
-  isMissingBookError,
-  isMissingBookOnScreen,
-} from './platform-scripture-editor.utils';
-import type {
-  ModelTextPanelLocalizedStringKey,
-  ModelTextPanelLocalizedStrings,
-} from './model-text-panel.const';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
