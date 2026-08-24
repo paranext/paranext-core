@@ -166,6 +166,16 @@ vi.mock('@shared/services/command.service', () => ({
   sendCommand: sendCommandMock,
 }));
 
+// Spies on the real `newNonce` (rather than replacing it) so minted nonces stay realistic random
+// strings, while letting the `isWebViewNonceCorrect` tests below assert on call count — the
+// behavior under test is whether *checking* a nonce ever mints one as a side effect.
+const { newNonceMock } = vi.hoisted(() => ({ newNonceMock: vi.fn() }));
+vi.mock('@shared/utils/util', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shared/utils/util')>();
+  newNonceMock.mockImplementation(actual.newNonce);
+  return { ...actual, newNonce: newNonceMock };
+});
+
 // Capturing `buildSimpleLayoutForProject`'s `projectId` argument is the primary assertion point
 // below. `SIMPLE_LAYOUT_TAB_IDS` is mocked to `[]` so the (real, separately-tested) tabs-resolved
 // tracker resolves immediately instead of waiting on webview open/update events that never fire in
@@ -1708,5 +1718,84 @@ describe('saveLayout pushes this window’s layout to the main process', () => {
 
     // Keep the dangling dock-layout registration from leaking into the next test
     dockLayout.onLayoutChangeRef.current = undefined;
+  });
+});
+
+describe('isWebViewNonceCorrect', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    newNonceMock.mockClear();
+  });
+
+  it('returns false for a web view that was never minted a nonce, without minting one as a side effect', async () => {
+    const host = await importHost();
+
+    expect(host.isWebViewNonceCorrect('never-opened', 'guessed-nonce')).toBe(false);
+
+    // The regression this guards: `isWebViewNonceCorrect` must be a pure read of the nonce map, not
+    // a call through the mint-if-absent `getWebViewNonce` — minting here would leave an
+    // unbounded-lifetime map entry for an id nothing will ever legitimately open or close.
+    expect(newNonceMock).not.toHaveBeenCalled();
+  });
+
+  it('returns true for the nonce legitimately minted when the web view was opened, and false for any other value', async () => {
+    const host = await importHost();
+    host.registerDockLayout(createFakeDockLayout());
+    const webViewId = 'nonce-test-tab';
+    let mintedNonce: string | undefined;
+    getWebViewProviderMock.mockResolvedValue({
+      getWebView: vi.fn(async (_savedDefinition: unknown, _options: unknown, nonce: string) => {
+        mintedNonce = nonce;
+        return { id: webViewId, webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE, content: '' };
+      }),
+    });
+
+    await host.openOrReloadWebView(
+      { id: webViewId, webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE },
+      { type: 'tab' },
+      {},
+    );
+
+    if (!mintedNonce) throw new Error('getWebView was never called with a nonce');
+    expect(host.isWebViewNonceCorrect(webViewId, mintedNonce)).toBe(true);
+    expect(host.isWebViewNonceCorrect(webViewId, 'some-other-guess')).toBe(false);
+  });
+});
+
+describe('registerDockLayout unregister', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    settingsGetMock.mockReset();
+    settingsGetMock.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+    settingsSubscribeMock.mockReset();
+  });
+
+  it('logs a warning rather than throwing when the platform.interfaceMode unsubscriber rejects', async () => {
+    const rejectingUnsub = vi.fn(async () => {
+      throw new Error('unsub failed');
+    });
+    settingsSubscribeMock.mockImplementation(async () => rejectingUnsub);
+    const host = await importHost();
+    const { logger } = await import('@shared/services/logger.service');
+
+    const unregister = host.registerDockLayout(createFakeDockLayout());
+    // Let `subscribeToInterfaceMode`'s single `await settingsService.subscribe(...)` resolve and
+    // assign `unsubscribeInterfaceMode` before tearing down, so `unregister()` below exercises the
+    // already-subscribed teardown path (`runUnsubscribe`) rather than the early
+    // `unsubscribeRequested` race that tears down inside the subscribe call itself.
+    await vi.waitFor(() => expect(settingsSubscribeMock).toHaveBeenCalled());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    unregister();
+
+    await vi.waitFor(() => expect(rejectingUnsub).toHaveBeenCalled());
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining(
+        'Dock layout failed to unsubscribe from platform.interfaceMode: unsub failed',
+      ),
+    );
   });
 });

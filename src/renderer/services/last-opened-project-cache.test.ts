@@ -36,38 +36,23 @@ describe('last-opened-project-cache', () => {
     });
 
     it('returns undefined when id is missing', () => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ name: 'Some Name' }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({}));
       expect(getLastOpenedProject()).toBeUndefined();
     });
 
     it('returns undefined when id is empty string', () => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: '', name: 'Some Name' }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: '' }));
       expect(getLastOpenedProject()).toBeUndefined();
     });
 
     it('returns undefined when id is not a string', () => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 42, name: 'Some Name' }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 42 }));
       expect(getLastOpenedProject()).toBeUndefined();
     });
 
-    it('returns { id, name } when both are valid non-empty strings', () => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 'proj-1', name: 'My Project' }));
-      expect(getLastOpenedProject()).toEqual({ id: 'proj-1', name: 'My Project' });
-    });
-
-    it('returns { id } (name undefined) when name is missing', () => {
+    it('returns { id } when id is a valid non-empty string', () => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 'proj-1' }));
-      expect(getLastOpenedProject()).toEqual({ id: 'proj-1', name: undefined });
-    });
-
-    it('returns { id } (name undefined) when name is empty string', () => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 'proj-1', name: '' }));
-      expect(getLastOpenedProject()).toEqual({ id: 'proj-1', name: undefined });
-    });
-
-    it('returns { id } (name undefined) when name is not a string', () => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 'proj-1', name: 123 }));
-      expect(getLastOpenedProject()).toEqual({ id: 'proj-1', name: undefined });
+      expect(getLastOpenedProject()).toEqual({ id: 'proj-1' });
     });
 
     it('swallows localStorage read errors and returns undefined', () => {
@@ -77,22 +62,17 @@ describe('last-opened-project-cache', () => {
       expect(getLastOpenedProject()).toBeUndefined();
     });
 
-    it('ignores an unrecognized isEditable key left over from an older cache entry', () => {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ id: 'proj-1', isEditable: false }));
+    it('ignores unrecognized keys left over from an older cache shape (e.g. isEditable, name)', () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ id: 'proj-1', isEditable: false, name: 'Some Name' }),
+      );
       expect(getLastOpenedProject()).toEqual({ id: 'proj-1' });
-      expect(getLastOpenedProject()).not.toHaveProperty('isEditable');
     });
   });
 
   describe('setLastOpenedProject', () => {
-    it('writes id+name to storage under the expected key', () => {
-      setLastOpenedProject({ id: 'proj-1', name: 'My Project' });
-      const raw = localStorage.getItem(STORAGE_KEY);
-      expect(raw).not.toBeNull();
-      expect(JSON.parse(raw ?? '{}')).toEqual({ id: 'proj-1', name: 'My Project' });
-    });
-
-    it('writes id when name is omitted', () => {
+    it('writes id to storage under the expected key', () => {
       setLastOpenedProject({ id: 'proj-1' });
       const raw = localStorage.getItem(STORAGE_KEY);
       expect(raw).not.toBeNull();
@@ -100,7 +80,7 @@ describe('last-opened-project-cache', () => {
     });
 
     it('no-ops when id is empty', () => {
-      setLastOpenedProject({ id: '', name: 'My Project' });
+      setLastOpenedProject({ id: '' });
       expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
     });
 
@@ -108,19 +88,14 @@ describe('last-opened-project-cache', () => {
       vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
         throw new Error('quota exceeded');
       });
-      expect(() => setLastOpenedProject({ id: 'proj-1', name: 'My Project' })).not.toThrow();
+      expect(() => setLastOpenedProject({ id: 'proj-1' })).not.toThrow();
     });
   });
 
   describe('round-trip', () => {
-    it('set → get returns the same shape (id + name)', () => {
-      setLastOpenedProject({ id: 'proj-1', name: 'My Project' });
-      expect(getLastOpenedProject()).toEqual({ id: 'proj-1', name: 'My Project' });
-    });
-
-    it('set with only id → get returns { id, name: undefined }', () => {
+    it('set → get returns the same shape', () => {
       setLastOpenedProject({ id: 'proj-1' });
-      expect(getLastOpenedProject()).toEqual({ id: 'proj-1', name: undefined });
+      expect(getLastOpenedProject()).toEqual({ id: 'proj-1' });
     });
   });
 });

@@ -1410,13 +1410,17 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
         try {
           await unsub();
         } catch (err) {
-          logger.warn(`Dock layout failed to unsubscribe from platform.interfaceMode: ${err}`);
+          logger.warn(
+            `Dock layout failed to unsubscribe from platform.interfaceMode: ${getErrorMessage(err)}`,
+          );
         }
       } else {
         unsubscribeInterfaceMode = unsub;
       }
     } catch (err) {
-      logger.warn(`Dock layout failed to subscribe to platform.interfaceMode: ${err}`);
+      logger.warn(
+        `Dock layout failed to subscribe to platform.interfaceMode: ${getErrorMessage(err)}`,
+      );
     }
   };
   subscribeToInterfaceMode();
@@ -1439,7 +1443,9 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
         try {
           await unsub();
         } catch (err) {
-          logger.warn(`Dock layout failed to unsubscribe from platform.interfaceMode: ${err}`);
+          logger.warn(
+            `Dock layout failed to unsubscribe from platform.interfaceMode: ${getErrorMessage(err)}`,
+          );
         }
       };
       runUnsubscribe();
@@ -1603,7 +1609,9 @@ async function loadLayoutWithWarning(generation: number): Promise<void> {
   try {
     await loadLayout();
   } catch (err) {
-    logger.warn(`Dock layout failed to reload after interface mode change: ${err}`);
+    logger.warn(
+      `Dock layout failed to reload after interface mode change: ${getErrorMessage(err)}`,
+    );
   }
 }
 
@@ -1672,7 +1680,7 @@ async function runProjectBoundSimpleSwitch(projectId: string, generation: number
     }
   } catch (err) {
     logger.warn(
-      `Dock layout failed to load project-bound Simple-mode layout for project ${projectId}: ${err}`,
+      `Dock layout failed to load project-bound Simple-mode layout for project ${projectId}: ${getErrorMessage(err)}`,
     );
     // Rethrow so the caller (`handleSwitchToSimpleMode`) can fall back to the bare layout instead
     // of silently leaving the dock on whatever it showed when this failed.
@@ -2221,13 +2229,18 @@ function getWebViewNonce(id: WebViewId) {
 /**
  * Determine whether a nonce is valid for a specific web view
  *
+ * Reads {@link webViewNoncesById} directly rather than going through {@link getWebViewNonce} —
+ * validation must not mint a nonce as a side effect. A closed web view has no entry (see
+ * {@link deleteWebViewNonce}), and minting one here for a stray/late check on a closed id would
+ * leave an unbounded-lifetime entry that nothing ever deletes.
+ *
  * @param id Id of the web view whose nonce to check against
  * @param webViewNonce Nonce to test against the real web view nonce. See {@link webViewNoncesById}
  *   for more info.
  * @returns `true` if the provided `webViewNonce` is correct and valid; `false` otherwise
  */
 export function isWebViewNonceCorrect(id: WebViewId, webViewNonce: string) {
-  return webViewNonce === getWebViewNonce(id);
+  return webViewNonce === webViewNoncesById.get(id);
 }
 
 /**

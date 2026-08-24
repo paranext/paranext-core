@@ -1,29 +1,37 @@
-import cloneDeep from 'lodash/cloneDeep';
+import { deepClone } from 'platform-bible-utils';
 import { BoxBase, LayoutBase, PanelBase } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { simpleLayout } from './simple-layout.data';
 
 /**
- * Depth-first walk of every panel in a LayoutBase's dockbox. The one recursive box/panel traversal
- * both {@link visitTabs} (production) and the test file's `panelTabCounts` build on, so the
- * recursion exists in exactly one place. Exported for the test file's reuse — see
- * `simple-layout.builder.test.ts`.
+ * Depth-first walk of every panel in a LayoutBase — its `dockbox`, and its `floatbox`/`windowbox`/
+ * `maxbox` when present (rc-dock keeps floated/windowed/maximized tabs in these sibling boxes, not
+ * `dockbox`). The one recursive box/panel traversal both {@link visitTabs} (production) and the test
+ * file's `panelTabCounts` build on, so the recursion exists in exactly one place. Exported for the
+ * test file's reuse — see `simple-layout.builder.test.ts`.
  */
 export function visitPanels(layout: LayoutBase, visit: (panel: PanelBase) => void): void {
   const isBoxBase = (node: BoxBase | PanelBase): node is BoxBase => 'children' in node;
   const isPanelBase = (node: BoxBase | PanelBase): node is PanelBase => 'tabs' in node;
   const visitNode = (node: BoxBase | PanelBase) => {
+    // Not `else if`: a well-formed node is one or the other, but a corrupted/hand-edited saved
+    // layout could carry both `children` and `tabs` on one node, and silently picking only the box
+    // branch would drop that node's tabs from the walk entirely.
     if (isBoxBase(node)) node.children.forEach(visitNode);
-    else if (isPanelBase(node)) visit(node);
+    if (isPanelBase(node)) visit(node);
   };
-  if (layout.dockbox) visitNode(layout.dockbox);
+  [layout.dockbox, layout.floatbox, layout.windowbox, layout.maxbox].forEach((box) => {
+    if (box) visitNode(box);
+  });
 }
 
 /**
  * Walk every tab in a LayoutBase. The tabs in {@link simpleLayout} are created as `SavedTabInfo`
  * shapes and then narrowed to rc-dock's `TabBase` at the layout boundary; we recover the original
  * shape here so callers can read/write the `data` payload (`projectId`, `state`, `webViewType`).
+ *
+ * Exported for the test file's reuse — see `simple-layout.builder.test.ts`.
  */
 export function visitTabs(layout: LayoutBase, visit: (tab: SavedTabInfo) => void): void {
   visitPanels(layout, (panel) => {
@@ -102,7 +110,7 @@ export const SIMPLE_LAYOUT_EDITOR_TAB_ID: string = (() => {
 
 /** Narrows a tab's `data`/`state` payload (typed `unknown` on `TabBase`) to a writable record. */
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object';
+  return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 /**
@@ -118,7 +126,7 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
  * Scripture Editor placeholder after the layout swap (the slower path, but a valid fallback).
  */
 export function buildSimpleLayoutForProject(projectId: string): LayoutBase {
-  const cloned = cloneDeep(simpleLayout);
+  const cloned = deepClone(simpleLayout);
   visitTabs(cloned, (tab) => {
     if (!isObjectRecord(tab.data)) return;
     tab.data.projectId = projectId;
