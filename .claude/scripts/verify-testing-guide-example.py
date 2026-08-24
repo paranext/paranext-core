@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Run the Testing-Guide's shared-store mocking example exactly as printed.
+"""Run AND typecheck the Testing-Guide's shared-store mocking example, exactly as printed.
 
-Why this exists: that example shipped broken three times — wrong factory, then a mock missing
-members the service calls, then a missing import — because each correction was read rather than
-executed. It is derived from a test that genuinely passes, so it can simply be run.
+Why this exists: that example shipped broken four times — wrong factory, then a mock missing
+members the service calls, then a missing import, then code that ran but did not compile — because
+each correction was verified more narrowly than the claim made about it.
 
-The one rule that makes this worth having: the fence is extracted VERBATIM. An earlier version
-supplied the missing `initializeSharedStore` import itself, so it reported success for code that
-differed from what a reader would copy. A check that repairs its input cannot detect the defect it
-exists to catch.
+Two rules make this worth having:
+
+1. The fence is extracted VERBATIM. An early version supplied the example's missing import itself,
+   so it reported success for code that differed from what a reader would copy. A check that
+   repairs its input cannot find the defect it exists to catch.
+2. It runs BOTH vitest and tsc. `vitest` strips types through esbuild, so a green run says nothing
+   about whether a reader copying the fence survives `npm run typecheck` — and test files under
+   `src/` are in that scope, because tsconfig `include` does not support `!` negation.
 
 Usage:  python3 .claude/scripts/verify-testing-guide-example.py
-Exit 0 = the example runs as printed.
+Exit 0 = the example both compiles and passes as printed.
 """
 import os
 import re
@@ -31,24 +35,38 @@ example = next((b for b in blocks if 'initializeSharedStore' in b and 'vi.mock' 
 if not example:
     sys.exit(f"could not find the shared-store example in {GUIDE}")
 
-# Verbatim. Nothing added, nothing repaired.
-open(TEMP, 'w', encoding='utf-8').write(example)
+open(TEMP, 'w', encoding='utf-8').write(example)  # verbatim; nothing added, nothing repaired
 print(f"extracted verbatim -> {TEMP}")
 
+failures = []
 try:
-    # --maxWorkers is not optional here: an uncapped vitest run on this repo can exhaust WSL memory.
-    result = subprocess.run(
-        ['npx', 'vitest', 'run', TEMP, '--reporter=basic', '--maxWorkers=2'],
-        capture_output=True, text=True)
-    output = (result.stdout + result.stderr)
-    for line in output.strip().splitlines()[-12:]:
-        print(line)
-    print(f"\nvitest exit: {result.returncode}")
-    if result.returncode != 0:
-        print("\nThe example as printed does not run. Fix the fence, not this script.")
+    print("\n[1/2] typecheck")
+    tsc = subprocess.run(['npx', 'tsc', '--noEmit', '-p', 'tsconfig.json'],
+                         capture_output=True, text=True)
+    errors = [l for l in (tsc.stdout + tsc.stderr).splitlines()
+              if '__testing-guide-example' in l]
+    if errors:
+        failures.append('typecheck')
+        for line in errors[:6]:
+            print(f"  {line}")
+    else:
+        print("  no errors in the extracted example")
+
+    print("\n[2/2] vitest")
+    # --maxWorkers is not optional: an uncapped vitest run on this repo can exhaust WSL memory.
+    vt = subprocess.run(['npx', 'vitest', 'run', TEMP, '--reporter=basic', '--maxWorkers=2'],
+                        capture_output=True, text=True)
+    print(f"  vitest exit: {vt.returncode}")
+    if vt.returncode != 0:
+        failures.append('vitest')
+        for line in (vt.stdout + vt.stderr).strip().splitlines()[-10:]:
+            print(f"  {line}")
 finally:
     if os.path.exists(TEMP):
         os.remove(TEMP)
-        print(f"removed {TEMP}")
 
-sys.exit(result.returncode)
+if failures:
+    print(f"\nFAILED: {', '.join(failures)}. The example as printed is broken — fix the fence.")
+    sys.exit(1)
+print("\nOK: the example compiles and passes exactly as printed.")
+sys.exit(0)
