@@ -1,5 +1,22 @@
 # Experimental API Flag Implementation Plan
 
+> **Substantially overtaken by the code — verify every step before executing it (audited 2026-08-25).**
+> This plan predates a large amount of movement in the event APIs and in the files it cites, and the
+> drift is pervasive rather than isolated: of the nine Phase 4 inventory entries, three have the wrong
+> emitter count and several more cite line numbers that have moved, while every step of Task 14 and
+> parts of Tasks 18 and 19 describe work that is already done or that no longer compiles as written.
+> Individual notes below mark what has been checked; **the absence of a note does not mean an entry
+> was verified.**
+>
+> The one durable finding worth acting on: a repo-wide search for the deprecated sync
+> `createNetworkEventEmitter` returns **exactly one** remaining call —
+> `extensions/src/platform-scripture-editor/src/main.ts` `selectionChangedEventEmitter`. Everything
+> else this plan set out to migrate is already on `createNetworkEventEmitterAsync` or on
+> `createBufferedNetworkEventEmitter`, which awaits it internally.
+>
+> Whether this plan should be fenced as a frozen record or retired is its owner's call; it is
+> annotated rather than retired here.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Introduce a uniform `experimental` marker across PAPI surfaces (TypeScript types + live OpenRPC document), and as a side-benefit add central registration for network events with shared/exclusive semantics.
@@ -54,8 +71,10 @@
 - `src/main/services/scroll-group.service-host.ts` — 1 emitter  
   _Stale as of 2026-08-25: this file now holds **two** emitters, both buffered. See the note on Task 14 Step 4._
 - `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — 4 emitters (init refactor)
-- `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — 1 emitter (init refactor)
-- `extensions/src/hello-rock3/src/main.ts:462` — 1 emitter
+- `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — 1 emitter (init refactor)  
+  _Stale as of 2026-08-25: already on `createBufferedNetworkEventEmitter`, now at `:394`. Nothing to do._
+- `extensions/src/hello-rock3/src/main.ts:462` — 1 emitter  
+  _Stale as of 2026-08-25: already on `createBufferedNetworkEventEmitter`, now at `:470`. Nothing to do._
 - `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234` — 3 emitters  
   _Stale as of 2026-08-25: **four** emitters now. Three already use `createNetworkEventEmitterAsync`; `selectionChangedEventEmitter` is still on the deprecated sync `createNetworkEventEmitter`. **That one site is the only un-migrated emitter left in this inventory** — do not read the count mismatch as "already done"._
 - 4 test files: `src/shared/services/shared-store.service.test.ts`, `src/renderer/app.component.test.tsx`, `src/renderer/hooks/use-project-picker-data.hook.test.ts`  
@@ -1334,7 +1353,7 @@ declare module 'papi-shared-types' {
 > this step never mentions. The "other extension-service event" placeholder is the same phantom the
 > Step 3 note describes.
 
-- [ ] **Step 2: Migrate `extension.service.ts:1566`**
+- [ ] **Step 2: Migrate `extension.service.ts:1566`** (the line is now `:1586`)
 
 ```typescript
 reloadFinishedEventEmitter = await createNetworkEventEmitterAsync('platform.onDidReloadExtensions');
@@ -1518,6 +1537,13 @@ git commit -m "refactor(experimental): migrate data-provider per-instance emitte
 
 For each: declare the event in the extension's `.d.ts` augmentation, then `await createNetworkEventEmitterAsync(...)` in the existing async `activate`/lifecycle function.
 
+> **Mostly already done (noted 2026-08-25).** hello-rock3 is on `createBufferedNetworkEventEmitter`
+> and needs nothing. In the editor, only `selectionChangedEventEmitter` is still on the sync call —
+> not the four this task's Step 2 describes. Step 1's augmentation block has the same problem as
+> Task 14 Step 1 (`NetworkEventTypes` is a type alias now; augment `NetworkEvents`), and the event
+> names it prescribes are not the live ones: the extension's `.d.ts` already declares
+> `platformScriptureEditor.onDidSelectionChange`, `.onWillSwitchProject` and `.onDidSwitchProject`.
+
 - [ ] **Step 1: Declare event types in each extension's `.d.ts`**
 
 For hello-rock3:
@@ -1566,6 +1592,9 @@ git commit -m "refactor(experimental): migrate extension emitters to createNetwo
 - Modify: `src/renderer/hooks/use-project-picker-data.hook.test.ts`
 
 (One of the 4 listed earlier — `shared-store.service.test.ts` — has 3 occurrences. Migrate each.)
+
+> **Check before starting (noted 2026-08-25).** "The 4 listed earlier" lists three, and
+> `app.component.test.tsx` no longer references `createNetworkEventEmitter` at all.
 
 - [ ] **Step 1: For each test file, replace `createNetworkEventEmitter` with `createNetworkEventEmitterAsync` and `await` in the surrounding async setup**
 
