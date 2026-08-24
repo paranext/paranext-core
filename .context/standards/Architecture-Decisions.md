@@ -288,13 +288,13 @@ step, no automation. Just a record.
   determinable (e.g. a command that names a web view routes to the window that owns that web view),
   otherwise the routing target (ADR-0010). A few read-only queries fan out and merge across all
   windows instead, where a merged view is the meaningful answer.
-- **Amended 2026-08-07 (ADR-0016):** the original decision also included
+- **Amended 2026-08-07 (ADR-0022):** the original decision also included
   `command.service-router.ts`, a transitional router that forwarded a list of generic COMMAND names
   to per-window scoped command names (`platform.about` → `platform.about-1`). That module is gone.
   Commands are no longer forwarded name-to-name at all: each is registered by the router for its own
   service and calls a method on a window's shard. What remains of this ADR is the routers for
   network-object services, which is what it was always about — the command list was the part that
-  needed a name-keeping mechanism, and that is what ADR-0016 removes.
+  needed a name-keeping mechanism, and that is what ADR-0022 removes.
 - **Alternatives:** Push a window-id argument onto every external caller — rejected: breaks every
   existing extension/PAPI consumer and the documented `papi.d.ts` signatures. Always fan out to every
   window — rejected as the general answer: most of these calls are single-target actions where
@@ -324,7 +324,7 @@ step, no automation. Just a record.
   `.claude/agents/pt10-reuse-scout.md` — surfaces as reusable prior art. Deleting it rather than
   marking it superseded is the carve-out described under "Don't rewrite history" above. Git history
   keeps the text.
-- **What covers this ground instead:** ADR-0014 (the scroll group service) and ADR-0015 (the theme
+- **What covers this ground instead:** ADR-0020 (the scroll group service) and ADR-0021 (the theme
   service).
 
 ## ADR-0010: Window readiness is tracked in main via window-service registration, used to pick routing targets
@@ -1309,7 +1309,7 @@ step, no automation. Just a record.
   and still builds `${name}-${targetWindowId}` strings; it keeps no index. That module is
   transitional — each of its commands moves into the router for its own service — so it is expected
   to go away rather than to be converted.
-- **Amended 2026-08-07 (ADR-0016):** `command.service-router.ts` is gone, so the exception above is
+- **Amended 2026-08-07 (ADR-0022):** `command.service-router.ts` is gone, so the exception above is
   spent — every ROUTER now discovers its shards through an index. The index also answers with the id
   a shard ANNOUNCED (`getShardNetworkObjectId`), which is what lets a router name one of a shard's
   methods — `object:{id}.{method}`, for a request timeout — without that being a second rebuild of
@@ -1328,7 +1328,7 @@ step, no automation. Just a record.
   startup, teardown and quit. That is its own change with its own tests, not a rename.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
 
-## ADR-0014: The scroll group service is hosted in main, and each renderer keeps a predicting cache
+## ADR-0020: The scroll group service is hosted in main, and each renderer keeps a predicting cache
 
 - **Date:** 2026-08-07
 - **Status:** Accepted
@@ -1395,11 +1395,11 @@ step, no automation. Just a record.
   replays that URL, and the pre-host store a reloaded document would otherwise fall back to has been
   handed over by then, so a URL left as old as the window would put a reloaded window
   back on the reference it opened on — which for a restored Scripture editor is the extra chapter
-  load the seed exists to avoid. The theme service is hosted the same way in ADR-0015.
+  load the seed exists to avoid. The theme service is hosted the same way in ADR-0021.
 - **Source:** PT-4275 epic (multi-window architecture plan §6).
 
 
-## ADR-0015: The theme service is hosted in main, and each window caches the current theme
+## ADR-0021: The theme service is hosted in main, and each window caches the current theme
 
 - **Date:** 2026-08-07
 - **Status:** Accepted
@@ -1422,7 +1422,7 @@ step, no automation. Just a record.
   answer. Main's own consumer (the Windows title-bar overlay colours) reads and subscribes locally
   rather than through the provider its own process registers.
 - **Alternatives:** (a) Leave the engine in a renderer and give the app a way to move it to another
-  window when that one closes — rejected for the same reason as in ADR-0014, and the theme would
+  window when that one closes — rejected for the same reason as in ADR-0020, and the theme would
   have been the second service to need that machinery, which is what made hosting both in main
   better than building it once. (b) Fix the §9.2 staleness in place and leave the engine in a
   renderer — rejected: it treats the symptom of state living somewhere closable. (c) Keep the OS
@@ -1439,7 +1439,7 @@ step, no automation. Just a record.
   leave it for another window to claim. A window that is RELOADED replays the URL main built when the
   window was created, whose theme would otherwise be as old as the window, so the renderer rewrites
   its own query parameter on every change — the same
-  mechanism the scroll group uses (ADR-0014), rather than a second seed source and a navigation-type
+  mechanism the scroll group uses (ADR-0020), rather than a second seed source and a navigation-type
   sniff to choose between them. `shouldMatchSystem` is computed in main only; a renderer that starts
   applying its own `matchMedia` would double-apply it. `hasOwnThemeState` — what makes the host
   refuse a migration offer — is seeded from a DEDICATED marker key that only the three public
@@ -1473,7 +1473,7 @@ step, no automation. Just a record.
 - **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
   closes).
 
-## ADR-0016: Renderer platform code registers no command or request names; routers call shard methods
+## ADR-0022: Renderer platform code registers no command or request names; routers call shard methods
 
 - **Date:** 2026-08-07
 - **Status:** Accepted
@@ -1521,12 +1521,20 @@ step, no automation. Just a record.
   unreachable window the same way — by throwing at call time, as the transitional router did — which
   the eight navigation commands need stating explicitly because they resolve a value: a go-to
   resolves `undefined` and a history command resolves a boolean, so `false` means "nothing to move
-  to" and never "this could not run". Two behavior changes. The navigation mutex was per-renderer
-  and is now app-global, since the handler runs in main: two windows driving one scroll group are
-  serialized against each other, which a per-renderer lock could not do, at the cost of a slow
-  window being able to delay another window's navigation — so the round trip that asks a window what
-  to navigate is deliberately outside the lock, leaving only main's own read-compute-write inside
-  it. And a go-to now steps from the reference main holds rather than from the asking window's
+  to" and never "this could not run". Two behavior changes. The navigation
+  commands are serialized by two locks, not one. The per-renderer mutex became app-global, since the
+  handler runs in main: two windows driving one scroll group are serialized against each other,
+  which a per-renderer lock could not do. That lock holds main's own read-compute-write plus the
+  versification-bounds fetch and the `availableBooks` await, so everything the write depends on is
+  decided inside it. Outside it, a second mutex keyed per WINDOW
+  (`navigationCommandMutexesByWindowId`) wraps the whole handler, including the round trip that asks
+  a window what to navigate. That ask has to be inside a lock because for a detached
+  target it IS the read: overlapping runs that each ask before taking the inner lock all compute
+  from the same reference, so a held key — one fire-and-forget command per OS auto-repeat — advanced
+  one verse N times instead of N verses. It is keyed by window rather than app-global because the
+  ask is a request to another process, and a window that has stopped answering takes the whole
+  request timeout to say so; behind one shared lock that wait would stall every other window's
+  navigation for its duration. And a go-to now steps from the reference main holds rather than from the asking window's
   predicting cache, which is what keeps a held key advancing one step per repeat; a navigation the
   window itself just made reaches main one hop later. Cross-window navigation ordering beyond this
   is PT-4270. Registering three routers plus the navigation commands adds four entries to main's
