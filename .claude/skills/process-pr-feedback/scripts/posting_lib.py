@@ -57,9 +57,16 @@ def unsettled_pendings(rows):
     """
     out = []
     for i, row in enumerate(rows):
-        if row[STATUS] != "PENDING":
+        # A kill can truncate a row mid-write, which is exactly when this function is consulted,
+        # so every index here is guarded rather than assumed. A row too short to name its item
+        # cannot be paired with a settlement, so it is reported as unsettled on its own terms.
+        if len(row) <= STATUS or row[STATUS] != "PENDING":
             continue
-        later = [r for r in rows[i + 1:] if r[ITEM] == row[ITEM] and r[STATUS] in ("OK", "FAIL")]
+        if len(row) <= ITEM:
+            out.append(row)
+            continue
+        later = [r for r in rows[i + 1:]
+                 if len(r) > ITEM and r[ITEM] == row[ITEM] and r[STATUS] in ("OK", "FAIL")]
         if not later:
             out.append(row)
     return out
@@ -73,8 +80,9 @@ def unresolved_failures(rows):
     PARTIAL forever, so the phase-complete marker is never written and every later `--resume`
     re-enters the push-and-post phase.
     """
-    succeeded = {r[ITEM] for r in rows if r[STATUS] == "OK"}
-    return [r for r in rows if r[STATUS] == "FAIL" and r[ITEM] not in succeeded]
+    succeeded = {r[ITEM] for r in rows if len(r) > ITEM and r[STATUS] == "OK"}
+    return [r for r in rows
+            if len(r) > ITEM and r[STATUS] == "FAIL" and r[ITEM] not in succeeded]
 
 
 def code_spans(body):

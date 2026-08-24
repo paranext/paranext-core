@@ -145,7 +145,7 @@ def test_schema_shaped_internal_entry_is_rejected_not_silently_escaped():
     try:
         internal_labels(d)
     except SystemExit as e:
-        assert "placeholders, not patterns" in str(e)
+        assert "not usable patterns" in str(e) and "2659-NN" in str(e)
     else:
         raise AssertionError("a placeholder entry was accepted")
 
@@ -265,12 +265,30 @@ def test_vocabulary_entry_may_be_a_markdown_bullet():
     assert internal_labels(d) == [r"2659-\d\d"]
 
 
-def test_one_word_prose_is_not_transcribed_as_a_pattern():
-    """`Note` as a literal pattern would hard-FAIL any approved body containing the word."""
+def test_bare_literal_entry_hard_stops_rather_than_being_dropped():
+    """A one-token entry with no regex character is unusable, and dropping it reports PASS.
+
+    Silently skipping it removes the label from the deny-list and the id it was written to catch
+    goes public — the same "PASS having tested nothing" asymmetry the placeholder branch treats
+    as a stop, so this is a stop too.
+    """
+    import tempfile
+    from check import internal_labels
+    d = _vocab(tempfile.mkdtemp(), "CODENAME — an internal codename")
+    try:
+        internal_labels(d)
+    except SystemExit as e:
+        assert "bare literal" in str(e) and r"\bCODENAME\b" in str(e)
+    else:
+        raise AssertionError("a bare literal entry was accepted or silently skipped")
+
+
+def test_prose_without_a_separator_is_skipped_not_stopped():
+    """Real prose has no `— prose` half to sit after, so it is skipped and printed."""
     import tempfile
     from check import internal_labels
     d = _vocab(tempfile.mkdtemp(),
-               "Note — the reviewer never saw these ids.\n" + r"2659-\d\d — our ids")
+               "The reviewer never saw these ids.\n" + r"2659-\d\d — our ids")
     assert internal_labels(d) == [r"2659-\d\d"]
 
 
@@ -307,6 +325,22 @@ def test_a_body_line_equal_to_a_sentinel_is_an_error_not_a_silent_truncation():
         raise AssertionError("the body truncated silently")
 
 
+def test_short_log_rows_never_crash_a_row_walker():
+    """A kill truncates a row mid-write, which is exactly when these functions are consulted."""
+    shapes = [[["PENDING"], ["OK", "X", "1", "r", "9", "u", "t"]],
+              [["OK", "X", "1"]],
+              [[""], ["PENDING", "X", "1", "r", "-", "-", "t"]]]
+    for rows in shapes:
+        unsettled_pendings(rows)
+        unresolved_failures(rows)
+        guard_decision(rows, "X")
+
+
+def test_a_truncated_pending_is_still_reported_not_swallowed():
+    rows = [["PENDING"], ["OK", "X", "1", "r", "9", "u", "t"]]
+    assert len(unsettled_pendings(rows)) == 1, "the unknown-outcome row was dropped"
+
+
 def main():
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
@@ -318,6 +352,12 @@ def main():
         except AssertionError as e:
             failed.append((name, e))
             print(f"  FAIL  {name}: {e}")
+        except Exception as e:  # noqa: BLE001 - a crash is a failure, not a reason to stop
+            # Catch broadly and keep going. Letting an unexpected exception propagate ends the
+            # whole run, so one crashing test hides every result after it - and a run that dies
+            # with a traceback prints no tally at all, which reads like the suite never ran.
+            failed.append((name, e))
+            print(f"  ERROR {name}: {type(e).__name__}: {e}")
     print(f"\n{len(tests) - len(failed)}/{len(tests)} passed")
     return 1 if failed else 0
 

@@ -56,12 +56,16 @@ def internal_labels(packet):
         entry = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", line.strip())
         parts = re.split(r"\s+—\s+|\s+-\s+", entry, maxsplit=1)
         token = parts[0].strip()
-        # A pattern has no whitespace AND looks like one — it carries a regex metacharacter or a
-        # digit. Without the second test a one-word prose opener ("Note — the reviewer never saw
-        # these ids.") transcribes as the literal pattern `Note`, which then hard-FAILs any
-        # approved body containing that word, with no permitted remedy.
-        if not token or re.search(r"\s", token) or not re.search(r"[\\\[\](){}*+?|^$.\d]", token):
+        # Prose: no `— prose` separator, or whitespace in the token. Skipped and printed.
+        if not token or len(parts) < 2 or re.search(r"\s", token):
             skipped.append(line.strip()[:70])
+            continue
+        # Shaped like an entry but the token is a bare literal word — an internal codename rather
+        # than a numbered id. This is NOT prose and must not be silently skipped: skipping it
+        # drops the label from the deny-list, the run reports PASS, and the very id it was written
+        # to catch goes public. Same asymmetry as the placeholder branch, so same hard stop.
+        if not re.search(r"[\\\[\](){}*+?|^$.\d]", token):
+            bad.append(f"{token} (a bare literal; write it as a pattern, e.g. \\b{token}\\b)")
             continue
         # Anchored on standalone uppercase runs and bracketed slots. An unanchored `nn`
         # rejected legitimate patterns like `\bannotation-\d+\b`, hard-stopping a batch with a
@@ -78,10 +82,11 @@ def internal_labels(packet):
     for sk in skipped:
         print(f"[labels] not an entry, skipped: {sk!r}")
     if bad:
-        sys.exit("STOP: shared-vocabulary.md Internal entries are placeholders, not patterns:\n"
+        sys.exit("STOP: shared-vocabulary.md Internal entries are not usable patterns:\n"
                  + "\n".join(f"  - {b}" for b in bad)
-                 + "\n  Write a real regex per line, e.g. `2659-\\d\\d` not `2659-NN`. "
-                   "A literal placeholder matches no real id and the check would report PASS.")
+                 + "\n  Each must be a real regex, e.g. `2659-\\d\\d` not `2659-NN`. An entry "
+                   "that matches nothing lets the check report PASS having tested nothing, which "
+                   "is why this is a stop rather than a skip.")
     if not out:
         sys.exit(f"STOP: no entries parsed from the Internal section of {path}")
     print(f"[labels] transcribed {len(out)} internal patterns: {out}")
@@ -112,18 +117,23 @@ def main():
     # 1. counts and id set, derived from the DRAFTS file — the artifact G2 approved — and bound
     #    back to it by content. An id set cannot catch a truncated body no matter where the
     #    expectation comes from, so each body must also appear verbatim in the drafts.
+    # Run the id-set and verbatim checks over the well-formed items only. `body` is required for
+    # every kind, so an item reported for a missing body would otherwise trade its finding for a
+    # KeyError six lines below the guard that exists to prevent exactly that.
+    clean = [it for it in items if it.get("item") not in malformed]
     expected = set(re.findall(r"^## item:\s*(\S+)", drafts_text, re.M))
-    got = {i["item"] for i in items}
+    got = {i["item"] for i in clean}
     if got != expected:
         fails.append(f"id set mismatch vs drafts: missing={expected - got} extra={got - expected}")
-    if len(items) != len(got):
+    if len(clean) != len(got):
         fails.append(f"duplicate item ids in bodies.json: "
-                     f"{sorted(i for i in got if sum(x['item'] == i for x in items) > 1)}")
-    for it in items:
+                     f"{sorted(i for i in got if sum(x['item'] == i for x in clean) > 1)}")
+    for it in clean:
         if it["body"] not in drafts_text:
             fails.append(f"{it['item']}: body is not present verbatim in 07-replies.md — "
                          f"extraction altered or truncated the approved text")
-    print(f"[count] total={len(items)} unique={len(got)} ids={sorted(got)}")
+    print(f"[count] total={len(items)} well-formed={len(clean)} unique={len(got)} "
+          f"ids={sorted(got)}")
 
     labels = internal_labels(packet)
     for it in items:

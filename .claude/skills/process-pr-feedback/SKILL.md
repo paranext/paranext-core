@@ -79,7 +79,8 @@ Every run writes one packet, and **never reuses another run's**:
   06-evidence/           P5   optional screenshots from live verification (embed candidates)
   07-replies.d/          P6   parts directory (conf.d-style): one file per reply-drafter agent
   07-replies.md          P6   the assembled drafts — orchestrator concatenates 07-replies.d/
-  g2-approval.md         G2   the user's approval, verbatim and dated — what P7 is allowed to do
+  g2-approval.md         G2   the user's approval, verbatim and dated — what P7 is allowed to
+                              do, and whether P8 may resolve our own answered threads
   bodies.json            P6   provisional, for the anchor pass (pr-thread-conversion.md); then
                          P7   re-extracted from the approved drafts — the exact bytes that will post
   heads.json             P7   {"<pr>": "<head sha>"} re-derived at posting time; bases.json beside
@@ -408,6 +409,18 @@ a source to read, never a step to run.
 
 Keep that node `id` in the inventory. It is what P8 needs to resolve the thread after replying,
 and it cannot be recovered from a REST comment id without re-querying.
+
+**Capture the root comment's author with it.** P8's resolve step turns on one question — did *we*
+open this thread, or did the reviewer — and the query above returns no login anywhere, so a run
+that does not record it must re-query GitHub at P8 or fall back on memory of who drafted what.
+Widen the thread query's comment selection to carry it:
+
+```graphql
+comments(first: 50) { nodes { databaseId author { login } } }
+```
+
+and record the first node's `author.login` per thread as the **root-comment author**. P8 reads
+that recorded value; it does not re-derive it.
 
 Record for each item whether an inline thread exists, and whether it is outdated. The first fact
 decides where its reply can go later (threaded reply vs. issue comment) and is expensive to
@@ -999,8 +1012,9 @@ Present and stop. Nothing is pushed and nothing is posted in this turn. Present:
 - anything a reviewer is owed a correction on.
 
 Most of that is evidence, not a question, and it belongs under **"No decision needed — FYI"**.
-The **decisions** G2 actually asks for — push or hold, post or hold, and every flagged reply the
-user may want changed — are written per *Presenting a gate*: context, an explicit question,
+The **decisions** G2 actually asks for — push or hold, post or hold, **resolve our own answered
+question threads or leave them**, and every flagged reply the user may want changed — are written
+per *Presenting a gate*: context, an explicit question,
 lettered options, a recommendation. A reply the user is expected to weigh in on needs its own
 item saying what the reviewer claimed and what the draft says back; the draft text alone is not
 a question, and burying it in a wall of results is how a confrontational reply gets approved
@@ -1053,13 +1067,15 @@ landed locally without citing an unpushed SHA.
 
 ### P8 — Record
 
-**In:** `08-posting-log.txt`.
+**In:** `08-posting-log.txt`; `00-inventory.md` for the thread node ids and their root-comment
+authors; `g2-approval.md`, since resolution runs only under an approval that covered it.
 **Out:** `09-record.md`.
 
 - Mark every draft POSTED with its comment id and URL. A draft with no id did not post.
 - **Resolve only the threads we opened ourselves — never the reviewer's.** The two kinds look
   identical in the API and are governed by opposite rules, so the discriminator is mechanical:
-  **who authored the thread's root comment.**
+  **the root-comment author P0 recorded** (see P0 — the thread query carries `author { login }`
+  for exactly this). Read the recorded value; do not re-derive it here.
 
   - **Root comment is ours** — the anchored question threads `references/pr-thread-conversion.md`
     has us open, plus any thread we started. Once the reviewer has answered and we have replied,
@@ -1074,9 +1090,13 @@ landed locally without citing an unpushed SHA.
   own comments, and its next lines already contemplate the other direction (*"Set status to
   **Discussing** for optional/non-blocking items (allows authors to self-resolve)"*).
 
-  `.claude/commands/triage-feedback.md` holds the mutation and the house rule that governs it:
-  **never resolve a thread without first posting a visible reply** — the reply is the audit trail,
-  resolution is the state.
+  `.claude/commands/triage-feedback.md` holds the `resolveReviewThread` mutation and the house
+  rule that governs it: **never resolve a thread without first posting a visible reply** — the
+  reply is the audit trail, resolution is the state. Take those two things from it and nothing
+  else: its own Step 6.5 resolves the **reviewer's** no-action threads, ungated, which is exactly
+  the scope this phase forbids. That divergence is deliberate — the standard is the authority —
+  and it is recorded here so the next person reconciling the two files does not read the worked
+  example as the rule.
 
   **Resolution is a reviewer-visible mutation, so it is gated exactly like posting.** It runs only
   under a G2 approval that covered it, and `g2-approval.md` must say so; an approval that covered

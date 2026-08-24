@@ -96,7 +96,7 @@ def main():
 
     # Section 7's two asserts. They live here as well as in post.py because this is the script
     # that runs after a crash — exactly the case in which post.py did not reach them.
-    for row in rows:
+    for row in unpackable:
         if row[0] != "OK":
             continue
         item, cid = row[1], int(row[4])

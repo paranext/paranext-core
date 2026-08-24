@@ -149,13 +149,24 @@ jobs:
         run: |
           # Discover rather than hardcode: a script added elsewhere under .claude/ should be
           # covered the day it lands, not the day someone remembers to edit this list.
-          git ls-files '*.py' | xargs -r python3 -m py_compile
+          # ast.parse rather than py_compile: py_compile writes bytecode by design (and
+          # PYTHONDONTWRITEBYTECODE does not stop it), which would drop untracked __pycache__
+          # beside each source for the later "Verify no files changed after build" step to find.
+          git ls-files -z '*.py' | xargs -0 -r python3 -c '
+          import ast, sys
+          for f in sys.argv[1:]:
+              ast.parse(open(f, encoding="utf-8").read(), filename=f)
+          print(f"syntax OK: {len(sys.argv) - 1} python file(s)")'
           python3 .claude/skills/process-pr-feedback/scripts/test_posting.py
           # `*.sh` misses tracked shell scripts with no extension - .husky/pre-commit among them,
           # the one whose syntax failing would break every commit - so match on the shebang too.
-          for f in $(git ls-files); do
-            if [ "${f##*.}" = "sh" ] || head -c 40 "$f" 2>/dev/null | grep -qE '^#!.*\b(ba)?sh\b'; then
-              bash -n "$f" || exit 1
+          # NUL-delimited: a tracked path with a space (assets/ has them) would otherwise
+          # word-split into nonexistent paths and be skipped by the gate rather than checked.
+          # The shebang test reads the FIRST LINE only, so a fenced snippet inside a doc cannot
+          # make it look executable.
+          git ls-files -z | while IFS= read -r -d '' f; do
+            if [ "${f##*.}" = "sh" ] || head -n 1 -- "$f" 2>/dev/null | grep -qE '^#!.*\b(ba)?sh\b'; then
+              bash -n -- "$f" || exit 1
             fi
           done
 
