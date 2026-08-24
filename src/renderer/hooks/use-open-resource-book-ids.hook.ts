@@ -9,7 +9,7 @@ import {
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 } from '@shared/services/web-view.service-model';
 import { useEvent } from 'platform-bible-react';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError, UnsubscriberAsyncList } from 'platform-bible-utils';
 import {
   getBookIdsFromBooksPresent,
   isNavigableProjectIds,
@@ -98,6 +98,10 @@ export function useOpenResourceBookIds(activeProjectId: string | undefined): str
     [openProjectIds],
   );
 
+  // Entries persist for projects that have since closed rather than being pruned as each project
+  // closes; the final useMemo below filters them out by membership at read time. This is fine
+  // because entries are small and the number of distinct projects a session opens is bounded, and
+  // the map is cleared in full once the open set becomes empty.
   const [bookIdsByProjectId, setBookIdsByProjectId] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
@@ -107,8 +111,12 @@ export function useOpenResourceBookIds(activeProjectId: string | undefined): str
       return undefined;
     }
 
+    // Guards only the setBookIdsByProjectId calls below: subscribeSetting invokes its callback with
+    // the current value as soon as it subscribes, so a callback can still land around teardown, and
+    // this flag skips the resulting pointless state update after unmount. Unsubscription itself is
+    // handled by `unsubscribers` sealing once runAllUnsubscribers starts, below.
     let disposed = false;
-    const unsubscribers: Array<() => Promise<boolean>> = [];
+    const unsubscribers = new UnsubscriberAsyncList('Open resource book ids');
 
     projectIds.forEach((projectId) => {
       papiFrontendProjectDataProviderService
@@ -129,11 +137,7 @@ export function useOpenResourceBookIds(activeProjectId: string | undefined): str
             }));
           }),
         )
-        .then((unsubscribe) => {
-          if (disposed) unsubscribe();
-          else unsubscribers.push(unsubscribe);
-          return undefined;
-        })
+        .then((unsubscribe) => unsubscribers.add(unsubscribe))
         .catch((e) => {
           // A provider that cannot serve booksPresent contributes nothing, which is also what makes
           // this forward-compatible with resource providers that gain the setting later.
@@ -145,7 +149,7 @@ export function useOpenResourceBookIds(activeProjectId: string | undefined): str
 
     return () => {
       disposed = true;
-      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      unsubscribers.runAllUnsubscribers();
     };
     // openProjectIdsKey is the real dependency: it is openProjectIds' membership fingerprint, so
     // depending on the array itself would rebuild every subscription whenever an unrelated web view
