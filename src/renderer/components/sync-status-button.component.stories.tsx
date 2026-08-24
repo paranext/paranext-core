@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
-import { type ComponentType } from 'react';
+import { type ComponentType, useEffect, useMemo, useState } from 'react';
 import { userEvent, within } from 'storybook/test';
 import { SyncStatusButton } from './sync-status-button.component';
 // Deep relative (not aliased) so the story drives the webpack-aliased `useSyncStatus` mock without
@@ -36,6 +36,39 @@ const LONG_NAME_PROJECT = [
  */
 function withSyncStatus(mock: SyncStatusMock) {
   return function StoryDecorator(Story: ComponentType) {
+    return (
+      <SyncStatusMockContext.Provider value={mock}>
+        <Story />
+      </SyncStatusMockContext.Provider>
+    );
+  };
+}
+
+/** How long the story below leaves the sync running after Cancel is clicked. */
+const CANCEL_TAKES_EFFECT_MS = 600;
+
+/**
+ * Drives the one sequence a fixed mock cannot express: a sync that is running, then ends as a
+ * non-success once the cancel takes effect. The button reads the two together — its own pending
+ * request plus the non-success outcome — to report a cancellation rather than a failure, so both
+ * halves have to happen in order for that state to exist.
+ */
+function withSyncEndingAfterCancel(syncingProjects: SyncStatusMock['syncingProjects']) {
+  return function StoryDecorator(Story: ComponentType) {
+    const [hasEnded, setHasEnded] = useState(false);
+    useEffect(() => {
+      const timeout = setTimeout(() => setHasEnded(true), CANCEL_TAKES_EFFECT_MS);
+      return () => clearTimeout(timeout);
+    }, []);
+    const mock = useMemo<SyncStatusMock>(
+      () =>
+        hasEnded
+          ? { status: 'failed', syncingProjects: [] }
+          : { status: 'syncing', syncingProjects },
+      // `syncingProjects` is the decorator factory's own argument, fixed for the story's lifetime.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      [hasEnded],
+    );
     return (
       <SyncStatusMockContext.Provider value={mock}>
         <Story />
@@ -101,12 +134,28 @@ export const Synced: Story = {
 };
 
 /**
- * The last sync finished with at least one project that did not succeed — which is also how a
- * user-cancelled sync is reported, since Send/Receive gives its unfinished projects a non-success
- * result rather than reporting the cancellation itself.
+ * The last sync finished with at least one project that did not succeed, and nobody asked for it to
+ * stop. Send/Receive reports a user-cancelled sync the same way — its unfinished projects get a
+ * non-success result rather than a cancellation of their own — so `Cancelled` below is this state
+ * plus the button's own knowledge that it made the request.
  */
 export const Failed: Story = {
   decorators: [withSyncStatus({ status: 'failed', syncingProjects: [] })],
+};
+
+/**
+ * The sync the user cancelled has now stopped. Reported as a cancellation, muted rather than in
+ * destructive red: the sync did not go wrong, it was stopped on request, and colouring it as an
+ * error reports the user's own click back to them as a fault. Send/Receive carries no `cancelled`
+ * result status, so this control's pending request is the only thing separating the two.
+ */
+export const Cancelled: Story = {
+  decorators: [withSyncEndingAfterCancel(ONE_PROJECT)],
+  play: async (context) => {
+    await openPopover(context);
+    // Radix portals the popover content to `document.body`, so it is outside the story canvas.
+    await userEvent.click(within(document.body).getByTestId('toolbar-sync-cancel-button'));
+  },
 };
 
 /**

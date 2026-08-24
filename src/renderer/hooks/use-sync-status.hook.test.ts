@@ -54,6 +54,11 @@ function captureEventCallbacks() {
       if (!cb) throw new Error('onSyncActivityChanged callback was not captured');
       act(() => cb(payload));
     },
+    emitExtensionsReloaded: () => {
+      const cb = callbacks.get('platform.onDidReloadExtensions');
+      if (!cb) throw new Error('onDidReloadExtensions callback was not captured');
+      act(() => cb(undefined));
+    },
   };
 }
 
@@ -130,6 +135,36 @@ function mockProjectNames(namesById: Record<string, string>) {
 
 function mockProjectName(projectId: string, name: string) {
   mockProjectNames({ [projectId]: name });
+}
+
+/**
+ * A snapshot of a session whose last sync has finished, carrying `resultsInfo` verbatim so a test
+ * can hand the hook the malformed shapes it has to survive as well as well-formed ones.
+ */
+function completedStateWithResults(resultsInfo: unknown): Partial<SyncState> {
+  return {
+    isSyncing: false,
+    lastRequestedProjectIds: [],
+    // `resultsInfo` is deliberately typed `unknown` here: these tests cover what the hook does with
+    // wire data that does NOT match the declared shape, which is unexpressible through `ResultsData`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    lastResults: {
+      sendReceiveDate: '2026-08-24T00:00:00Z',
+      resultsInfo,
+    } as SyncState['lastResults'],
+  };
+}
+
+/** A completed sync in which each project reported the given `resultStatus`. */
+function completedStateFor(statusByProjectId: Record<string, string>): Partial<SyncState> {
+  return completedStateWithResults(
+    Object.fromEntries(
+      Object.entries(statusByProjectId).map(([projectId, resultStatus]) => [
+        projectId,
+        { id: projectId, resultStatus },
+      ]),
+    ),
+  );
 }
 
 describe('useSyncStatus', () => {
@@ -511,5 +546,212 @@ describe('useSyncStatus', () => {
 
     expect(result.current.status).toBe('syncing');
     expect(result.current.syncingProjects).toEqual([{ projectId: 'PROJ1', name: 'HNF' }]);
+  });
+
+  // --- What a completed sync's results are allowed to claim ---
+
+  it('reports synced when every project in the last sync reported a success status', async () => {
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded', PROJ2: 'initialSend' }));
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('synced');
+  });
+
+  it('reports failed when any project in the last sync did not succeed', async () => {
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded', PROJ2: 'failed' }));
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('failed');
+  });
+
+  it('reports unknown for a completed sync that carries no per-project outcomes', async () => {
+    // An empty results map satisfies `every` vacuously, so reading it as a success would put a green
+    // check on a sync that reported nothing whatsoever about what happened to any project.
+    commands.mockGetSyncState(completedStateWithResults({}));
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unknown');
+  });
+
+  it('reports unknown for a completed sync whose results are not a readable map', async () => {
+    commands.mockGetSyncState(completedStateWithResults('garbage'));
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unknown');
+  });
+
+  it('reports unknown for a result status this build does not recognize', async () => {
+    // Send/receive may add statuses. Treating an unclassifiable one as a success by omission — which
+    // is what checking only a known-FAILURE set does — reports a success on no evidence at all.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'cancelled' }));
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unknown');
+  });
+
+  it('reports unknown for a result carrying no resultStatus at all', async () => {
+    commands.mockGetSyncState(completedStateWithResults({ PROJ1: { id: 'PROJ1' } }));
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unknown');
+  });
+
+  // --- Which sync a verdict is allowed to describe ---
+
+  it('does not present the claim’s earlier verdict as the outcome of an activity-only sync', async () => {
+    // The Simple-mode startup sync is invisible to the claim, so when it ends the claim's `synced`
+    // describes an earlier, unrelated sync. Inheriting it would decorate this sync with a green
+    // check — and would do so even if this sync had failed. The activity signal reports only that a
+    // sync is running, never how one finished, so `unknown` is the whole of what is knowable.
+    commands.mockGetSyncState(completedStateFor({ PROJ1: 'succeeded' }));
+    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
+    const { emitSyncActivityChanged } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('synced');
+
+    emitSyncActivityChanged({ isSyncing: true, projectIds: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('syncing');
+
+    emitSyncActivityChanged({ isSyncing: false, projectIds: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('unknown');
+  });
+
+  it('keeps the claim’s verdict for a sync the claim saw as well', async () => {
+    // The other half: when the claim saw the sync too, its verdict describes THAT sync, so the
+    // suppression above must not reach it — otherwise every ordinary sync would end in `unknown`.
+    commands.mockGetSyncState(
+      { isSyncing: true, syncingProjectIds: ['PROJ1'], lastRequestedProjectIds: [] },
+      completedStateFor({ PROJ1: 'succeeded' }),
+    );
+    commands.mockGetSyncActivity({ isSyncing: true, projectIds: ['PROJ1'] });
+    const { emitSyncStateChanged, emitSyncActivityChanged } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('syncing');
+
+    emitSyncStateChanged({ isSyncing: false });
+    emitSyncActivityChanged({ isSyncing: false, projectIds: [] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('synced');
+  });
+
+  // --- Recovering from a read that could not answer ---
+
+  it('keeps the claim seed retrying after an event whose own read failed', async () => {
+    // The event applied nothing: its read failed, so the `unknown` it produced came from the failure
+    // rather than from a snapshot. Ending the seed there — which treating the event's ARRIVAL as
+    // "state applied" does — strands that `unknown` for the session while the seed still had budget
+    // to get a real answer.
+    commands.mockGetSyncState(
+      new Error('extension host not ready'),
+      new Error('extension host not ready'),
+      { isSyncing: false, lastRequestedProjectIds: [] },
+    );
+    const { emitSyncStateChanged } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('idle');
+
+    emitSyncStateChanged({ isSyncing: false });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('unknown');
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS);
+    });
+
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('re-seeds when extensions reload, so an exhausted retry window is not permanent', async () => {
+    // Nothing fires between syncs, so a status pinned at `unknown` by an exhausted window has no
+    // other way back — a send/receive installed or restarted mid-session would go unnoticed until
+    // the renderer reloaded.
+    commands.mockGetSyncState(new Error('extension host not ready'));
+    const { emitExtensionsReloaded } = captureEventCallbacks();
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_WINDOW_MS + SYNC_SEED_RETRY_INTERVAL_MS);
+    });
+    expect(result.current.status).toBe('unknown');
+
+    commands.mockGetSyncState({
+      isSyncing: true,
+      syncingProjectIds: [],
+      lastRequestedProjectIds: [],
+    });
+    emitExtensionsReloaded();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('syncing');
+  });
+
+  it('honors isSyncing when the optional project id field arrives as null', async () => {
+    // Several JSON serializers render an omitted optional as `null`. Rejecting the whole payload for
+    // it discards a perfectly good `isSyncing` — and since every retry gets the same `null`, pins
+    // the status at `unknown` for a build that was reporting the sync correctly all along.
+    // Parsed from JSON rather than written as a literal, which is both how the payload really reaches
+    // the hook and the only way to express a `null` that `SyncState` does not declare.
+    commands.mockGetSyncState(
+      JSON.parse('{"isSyncing":true,"syncingProjectIds":null,"lastRequestedProjectIds":[]}'),
+    );
+    commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
+
+    const { result } = renderHook(() => useSyncStatus());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('syncing');
+    expect(result.current.syncingProjects).toEqual([]);
   });
 });

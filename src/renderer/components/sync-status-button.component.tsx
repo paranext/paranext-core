@@ -1,5 +1,6 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { useSyncStatus } from '@renderer/hooks/use-sync-status.hook';
+import { SyncingProject, useSyncStatus } from '@renderer/hooks/use-sync-status.hook';
+import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
@@ -26,10 +27,31 @@ import {
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-const TOOLTIP_DELAY = 300;
+/**
+ * Joins normalized project ids into one comparable key. A `\0` cannot appear in a project id, so no
+ * two different sets can produce the same key.
+ */
+const PROJECT_ID_KEY_SEPARATOR = '\0';
 
-/** What the syncing-project id key below is while no project is named. */
-const NO_SYNCING_PROJECT_IDS_KEY = JSON.stringify([]);
+/**
+ * The order- and casing-independent identity of the set of projects syncing right now.
+ *
+ * Normalized because the two signals `useSyncStatus` unions can report the same project in
+ * different casing, and sorted because the list this reads comes ordered by NAME — so a name
+ * resolving late reorders it while the set itself has not changed. Either would otherwise read as a
+ * different sync.
+ */
+function getSyncingProjectIdsKey(projects: readonly SyncingProject[]): string {
+  return projects
+    .map((project) => normalizeProjectId(project.projectId))
+    .sort()
+    .join(PROJECT_ID_KEY_SEPARATOR);
+}
+
+/** Splits a {@link getSyncingProjectIdsKey} key back into the ids it was built from. */
+function parseSyncingProjectIdsKey(key: string): string[] {
+  return key === '' ? [] : key.split(PROJECT_ID_KEY_SEPARATOR);
+}
 
 /**
  * Message shown when Cancel is clicked but send/receive can't answer. Declared here rather than
@@ -54,26 +76,38 @@ export const SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY: LocalizeKey =
 const SYNC_VIEW_DETAILS_UNAVAILABLE_NOTIFICATION_ID = 'toolbar-sync-view-details-unavailable';
 
 /**
- * Every key this component renders, plus {@link SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY} — listed
- * through its constant so the key is still spelled once — so the en/es localization-parity tests
- * cover it too. Exported so those tests assert against the list the component actually reads,
- * rather than a hand-copied duplicate that silently stops matching the moment a key is added here.
+ * Shared by every "couldn't cancel" toast, for the same reason as
+ * {@link SYNC_VIEW_DETAILS_UNAVAILABLE_NOTIFICATION_ID}: a rejected cancel re-enables the button, so
+ * a user clicking it repeatedly against an unresponsive send/receive would otherwise collect one
+ * toast per click.
+ */
+const SYNC_CANCEL_UNAVAILABLE_NOTIFICATION_ID = 'toolbar-sync-cancel-unavailable';
+
+/**
+ * Every key this component renders, plus the two toast messages — listed through their constants so
+ * each key is still spelled once — so the en/es localization-parity tests cover them too. Exported
+ * so those tests assert against the list the component actually reads, rather than a hand-copied
+ * duplicate that silently stops matching the moment a key is added here.
  */
 export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_sync%',
   '%toolbar_sync_cancel%',
   '%toolbar_sync_cancelling%',
   '%toolbar_sync_open_status%',
+  '%toolbar_sync_popover_cancelled%',
   '%toolbar_sync_popover_failed%',
   '%toolbar_sync_popover_idle%',
   '%toolbar_sync_popover_synced%',
   '%toolbar_sync_popover_unknown%',
+  '%toolbar_sync_status_cancelled%',
   '%toolbar_sync_status_failed%',
   '%toolbar_sync_status_synced%',
   '%toolbar_sync_status_syncing%',
   '%toolbar_sync_status_syncing_project%',
   '%toolbar_sync_status_syncing_projects%',
+  '%toolbar_sync_status_unknown%',
   '%toolbar_sync_view_details%',
+  SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
   SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
 ];
 
@@ -97,6 +131,13 @@ export function SyncStatusButton() {
   const [isCancelEnabled, setIsCancelEnabled] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
   /**
+   * Whether the sync that has just finished is one this control asked to cancel. Send/receive
+   * reports a cancelled sync as a non-success result rather than as an outcome of its own, so
+   * without this the user who clicked Cancel is answered with "Sync failed" in red — reporting
+   * their own request back to them as an error.
+   */
+  const [wasCancelRequested, setWasCancelRequested] = useState(false);
+  /**
    * The popover's rendered content node. Radix portals it to `document.body`, so it is NOT a
    * descendant of the trigger — which is why {@link handleWindowBlur} measures containment against
    * this rather than against the trigger.
@@ -106,10 +147,26 @@ export function SyncStatusButton() {
   const popoverContentRef = useRef<HTMLDivElement>(null);
   const {
     ref: labelRef,
-    open: isTooltipOpen,
+    open: isTooltipTruncated,
     onPointerEnter: handleLabelPointerEnter,
     onPointerLeave: handleLabelPointerLeave,
   } = useTruncationTooltip<HTMLSpanElement>();
+  /**
+   * Whether the user has pressed Escape to dismiss the truncation tooltip. Held here rather than in
+   * `useTruncationTooltip`, which exposes `open` and the two pointer handlers but no way to force
+   * the tooltip closed — so Escape has to be honoured by withholding `open` from Radix.
+   *
+   * WCAG 1.4.13 requires content shown on hover to be dismissable without moving the pointer, and
+   * this tooltip is fully controlled, which leaves Radix's own Escape handling inert.
+   *
+   * Not fixed here: `useTruncationTooltip` offers only pointer handlers, so a keyboard user who
+   * tabs to this button — a real toolbar Tab stop — still cannot REVEAL a clipped project name.
+   * That needs focus handlers on the shared hook, which every other consumer would inherit.
+   * Screen-reader users are unaffected either way: the accessible name carries the full text,
+   * untruncated.
+   */
+  const [isTooltipDismissed, setIsTooltipDismissed] = useState(false);
+  const isTooltipOpen = isTooltipTruncated && !isTooltipDismissed;
 
   /**
    * Mirrors `status` for {@link handleCancel}, which must not re-create itself when the status
@@ -155,6 +212,7 @@ export function SyncStatusButton() {
         await notificationService.send({
           message: SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
           severity: 'warning',
+          notificationId: SYNC_CANCEL_UNAVAILABLE_NOTIFICATION_ID,
         });
       } catch (notificationError) {
         logger.warn(
@@ -187,14 +245,48 @@ export function SyncStatusButton() {
     }
   }, []);
 
+  /**
+   * Escape closes the truncation tooltip; a fresh hover offers it again. See
+   * {@link isTooltipDismissed}.
+   */
+  useEffect(() => {
+    if (!isTooltipOpen) return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsTooltipDismissed(true);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isTooltipOpen]);
+
+  const handleLabelPointerLeaveAndRearmTooltip = useCallback(() => {
+    setIsTooltipDismissed(false);
+    handleLabelPointerLeave();
+  }, [handleLabelPointerLeave]);
+
+  /**
+   * Mirrors `isCancelling` for the settle effect below, which must read the value as of the moment
+   * the sync ended without re-running every time the flag itself changes — re-running is what would
+   * immediately overwrite the answer it just recorded.
+   */
+  const isCancellingRef = useRef(isCancelling);
+  useEffect(() => {
+    isCancellingRef.current = isCancelling;
+  }, [isCancelling]);
+
   // Whenever no sync is running, the pending cancel is settled — by completing, by being cancelled,
   // or by a different sync taking over. Re-arming here (rather than only on reopen) means a sync
   // starting while the popover is still open gets a live Cancel instead of a dead one.
   useEffect(() => {
-    if (status !== 'syncing') {
-      setIsCancelling(false);
-      setIsCancelEnabled(true);
+    if (status === 'syncing') {
+      // A running sync has no settled outcome to attribute to a cancel yet.
+      setWasCancelRequested(false);
+      return;
     }
+    // Recorded before `isCancelling` is cleared, because it is the only evidence that the non-success
+    // outcome now being reported is one the user asked for.
+    setWasCancelRequested(isCancellingRef.current);
+    setIsCancelling(false);
+    setIsCancelEnabled(true);
   }, [status]);
 
   /**
@@ -205,25 +297,32 @@ export function SyncStatusButton() {
    * syncing set changing is the only signal that happened, so that is what this keys on — a spent
    * Cancel would otherwise stay dead and mislabelled for a sync it was never aimed at.
    */
-  const syncingProjectIdsKey = JSON.stringify(syncingProjects.map((project) => project.projectId));
+  const syncingProjectIdsKey = getSyncingProjectIdsKey(syncingProjects);
   /**
-   * The last id set this effect judged against — the previous NON-EMPTY one, so the clear-then-read
-   * dip below cannot be mistaken for a change.
+   * The ids this effect last judged against. Only non-empty sets are recorded, so the
+   * clear-then-read dip described below cannot be mistaken for a set change in either direction.
    */
-  const lastSyncingProjectIdsKeyRef = useRef(syncingProjectIdsKey);
+  const lastSyncingProjectIdsRef = useRef<ReadonlySet<string>>(
+    new Set(parseSyncingProjectIdsKey(syncingProjectIdsKey)),
+  );
   useEffect(() => {
-    // `useSyncStatus` drops the syncing set before every follow-up read (a project that has stopped
-    // must not stay named while the read is in flight) and re-applies the ids when it answers, so a
-    // sync-state event for the SAME sync produces `[a,b] → [] → [a,b]`. Both of those transitions
-    // reach this effect. Treating either as a new sync would flip a pending "Cancelling…" back to an
-    // enabled "Cancel sync" while the original request is still in flight — so the empty dip is
-    // ignored, and only a non-empty set differing from the last non-empty one is evidence that a
-    // different sync has taken over.
-    if (syncingProjectIdsKey === NO_SYNCING_PROJECT_IDS_KEY) return;
-    const hasSyncingProjectSetChanged =
-      syncingProjectIdsKey !== lastSyncingProjectIdsKeyRef.current;
-    lastSyncingProjectIdsKeyRef.current = syncingProjectIdsKey;
-    if (!hasSyncingProjectSetChanged) return;
+    const currentIds = parseSyncingProjectIdsKey(syncingProjectIdsKey);
+    const lastIds = lastSyncingProjectIdsRef.current;
+    // A project APPEARING is the evidence that a sync this cancel was never aimed at has taken over.
+    // A project only leaving is not: the seam documents `isSyncing: true` firing again as the syncing
+    // set SHRINKS, so one project of a multi-project sync finishing before the others would otherwise
+    // flip a pending "Cancelling…" back to an armed "Cancel sync" mid-request — and a second click
+    // would fire a second `cancelSync`. `useSyncStatus` also drops the whole set before every
+    // follow-up read and re-applies it when the read answers, producing `[a,b] → [] → [a,b]` for one
+    // unchanged sync; both of those transitions reach this effect and neither adds a project.
+    const hasNewSyncingProject = currentIds.some((projectId) => !lastIds.has(projectId));
+    // The empty dip is not recorded, so the ids coming BACK is not read as an arrival either. An
+    // empty set is otherwise an ordinary state here rather than something to skip over: on the
+    // activity-only path (the Simple-mode startup sync) the backend reports a sync running before it
+    // has resolved a merge set, so empty is that path's steady state and returning early would leave
+    // this effect permanently silent for it.
+    if (currentIds.length > 0) lastSyncingProjectIdsRef.current = new Set(currentIds);
+    if (!hasNewSyncingProject) return;
     if (status === 'syncing') {
       setIsCancelling(false);
       setIsCancelEnabled(true);
@@ -251,6 +350,13 @@ export function SyncStatusButton() {
    * focus restore — rather than tearing the surface down behind its back. See the
    * `Guidelines/Dismissal Patterns` Storybook page; no shared hook for this exists yet, so each
    * Click-away surface implements it itself.
+   *
+   * What the tests here pin is this handler's logic given the values it reads, by spying
+   * `document.activeElement` rather than moving focus into a real cross-origin iframe — which jsdom
+   * has no way to reproduce. So the load-bearing assumption, that Electron has already moved focus
+   * to the `<iframe>` element by the time `blur` fires on this window, is asserted from the spec
+   * and not observed. It needs one manual pass in a Studio build with a scripture-editor WebView
+   * open.
    */
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -290,12 +396,31 @@ export function SyncStatusButton() {
    * fallback is indistinguishable from "not loaded yet" from a caller's point of view, and both are
    * cases the live region below must stay silent for. Testing the value covers both with one
    * check.
+   *
+   * Only the live region is guarded by this. The VISIBLE surfaces render whatever the hook returns,
+   * so a localization `PlatformError` shows literal `%toolbar_sync%` text — which is how every
+   * localized surface in this repo behaves, not something this control introduces, and there is no
+   * localized fallback to substitute. Diverging here alone would make this the one component that
+   * hides its own labels. The live region is the exception because a raw `%key%` SPOKEN aloud is a
+   * different order of failure from one seen briefly on screen.
    */
   const areStringsLoaded = localizedStrings['%toolbar_sync%'] !== '%toolbar_sync%';
 
+  /**
+   * Whether the settled non-success outcome is one the user asked for. Reported as a cancellation
+   * rather than as a failure: the sync did not go wrong, it was stopped on request. Send/receive
+   * carries no `cancelled` result status, so this control's own pending request is the only
+   * evidence that separates the two.
+   */
+  const wasCancelled = status === 'failed' && wasCancelRequested;
+
   const buttonLabel = (() => {
+    if (wasCancelled) return localizedStrings['%toolbar_sync_status_cancelled%'];
     if (status === 'synced') return localizedStrings['%toolbar_sync_status_synced%'];
     if (status === 'failed') return localizedStrings['%toolbar_sync_status_failed%'];
+    // `unknown` says so in the button's accessible name instead (see `buttonAccessibleName`): the
+    // visible label is capped and truncates, so it carries the control's identity rather than its
+    // status, and the icon carries the distinction visually.
     if (status !== 'syncing') return localizedStrings['%toolbar_sync%'];
     // Names are unknown for a Send/Receive build predating `syncingProjectIds`, or when the state
     // read failed. The bare "Syncing" is the honest label then — never a guessed project.
@@ -319,13 +444,25 @@ export function SyncStatusButton() {
     if (!areStringsLoaded) return '';
     if (status === 'syncing') return localizedStrings['%toolbar_sync_status_syncing%'];
     if (status === 'synced') return localizedStrings['%toolbar_sync_status_synced%'];
+    if (wasCancelled) return localizedStrings['%toolbar_sync_status_cancelled%'];
     if (status === 'failed') return localizedStrings['%toolbar_sync_status_failed%'];
     // `idle` and `unknown` are not transitions worth interrupting a screen reader for.
     return '';
   })();
 
+  /**
+   * The button's accessible name. `idle` and `unknown` share one visible label — the label is
+   * capped and truncates, so it names the control rather than the status — which would otherwise
+   * leave the difference between them carried only by an `aria-hidden` icon, and a screen-reader
+   * user hearing "Sync, button" for both. That collapses the very distinction `unknown` exists to
+   * draw.
+   */
+  const buttonAccessibleName =
+    status === 'unknown' ? localizedStrings['%toolbar_sync_status_unknown%'] : undefined;
+
   const popoverStatusMessage = (() => {
     if (status === 'synced') return localizedStrings['%toolbar_sync_popover_synced%'];
+    if (wasCancelled) return localizedStrings['%toolbar_sync_popover_cancelled%'];
     if (status === 'failed') return localizedStrings['%toolbar_sync_popover_failed%'];
     // `unknown` means the read didn't answer, so "no sync is running" would be a positive claim with
     // nothing behind it.
@@ -348,7 +485,11 @@ export function SyncStatusButton() {
         {announcement}
       </span>
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
-        <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+        {/*
+         * No `delayDuration`: the tooltip's `open` is fully controlled by `useTruncationTooltip`, so
+         * Radix's own hover timing never runs.
+         */}
+        <TooltipProvider>
           {/*
            * Controlled, and open only while the label is actually clipped: an unconditional tooltip
            * would repeat the button's own accessible name back to it (Radix wires
@@ -369,8 +510,9 @@ export function SyncStatusButton() {
                   variant="ghost"
                   size="sm"
                   className="pr-twp tw:h-8 tw:max-w-[180px] tw:min-w-0 tw:shrink"
+                  aria-label={buttonAccessibleName}
                   onPointerEnter={handleLabelPointerEnter}
-                  onPointerLeave={handleLabelPointerLeave}
+                  onPointerLeave={handleLabelPointerLeaveAndRearmTooltip}
                 >
                   {status === 'syncing' && (
                     <Spinner className="tw:h-4 tw:w-4 tw:shrink-0" aria-hidden />
@@ -382,8 +524,15 @@ export function SyncStatusButton() {
                     />
                   )}
                   {status === 'failed' && (
+                    // Muted rather than destructive when the user asked for the cancel: a stopped
+                    // sync is not an error, and colouring it as one reports their own request back
+                    // to them as a fault.
                     <CircleAlert
-                      className="tw:h-4 tw:w-4 tw:shrink-0 tw:text-destructive"
+                      className={
+                        wasCancelled
+                          ? 'tw:h-4 tw:w-4 tw:shrink-0 tw:text-muted-foreground'
+                          : 'tw:h-4 tw:w-4 tw:shrink-0 tw:text-destructive'
+                      }
                       aria-hidden
                     />
                   )}
@@ -415,7 +564,18 @@ export function SyncStatusButton() {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        <PopoverContent align="end" ref={popoverContentRef}>
+        {/*
+         * `aria-label` because this content is a `role="dialog"` and would otherwise have no
+         * accessible name: `PopoverTitle` renders a plain `<div>` with no `id`, and `PopoverContent`
+         * wires no `aria-labelledby` to it, so a screen-reader user tabbing in hears "dialog" and
+         * nothing else — on the surface that holds a live Cancel button (WCAG 4.1.2). Labelled here
+         * rather than in the shared component, which every other popover in the app also relies on.
+         */}
+        <PopoverContent
+          align="end"
+          ref={popoverContentRef}
+          aria-label={localizedStrings['%toolbar_sync_open_status%']}
+        >
           <PopoverHeader className="tw:gap-0 tw:px-2">
             <PopoverTitle className="tw:text-xs tw:font-bold">
               {localizedStrings['%toolbar_sync_open_status%']}

@@ -317,6 +317,15 @@ export function PlatformBibleToolbar() {
               // view. Fail open on availability: `undefined` means not known yet (the extension
               // host is busy, or send/receive is still activating), and the button must not hinge
               // on that resolving. Only a settled `false` hides it.
+              //
+              // The cost of failing open is that mounting starts two seed-retry loops in builds with
+              // no send/receive at all, and each toggle between Simple and Power mode unmounts and
+              // remounts this, discarding seeded state and restarting them. Availability settles to
+              // `false` within `SEND_RECEIVE_UNKNOWN_GRACE_MS` there, so it costs a few failed round
+              // trips rather than a full retry window — but a one-shot capability probe would fit a
+              // permanently-absent command better than a retry loop does.
+              // TODO(PT-4233): Revisit once the companion Send/Receive PR lands and this command is
+              // implemented somewhere, which is what makes the retry loop worth its cost.
               <SyncStatusButton />
             )}
             {marketingVersion !== '' && (

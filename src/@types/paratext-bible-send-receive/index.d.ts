@@ -17,6 +17,7 @@
 // it required again turns each consumer's `?? fallback` into a lint-flagged unnecessary coalesce,
 // and removing that coalesce crashes an older Studio build on the missing value:
 //   * `SyncState.syncingProjectIds`
+//   * `SyncActivitySnapshot.projectIds`
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
@@ -357,8 +358,11 @@ declare module 'paratext-bible-send-receive' {
    * (`main/startup-tasks.ts` and `syncOnProjectSwitch`). That is what makes a Simple-mode startup
    * sync visible.
    *
-   * Only a Paratext 10 Studio build emits this; public Platform.Bible ships the S/R stub, so both
-   * surfaces are absent there and a consumer must fall back rather than assume idle.
+   * Only a Paratext 10 Studio build emits this. Public Platform.Bible carries this declaration but
+   * no implementation behind it, so both surfaces are absent there and a consumer must fall back
+   * rather than assume idle.
+   *
+   * @experimental This type is unstable and may change shape or disappear without notice
    */
   export type SyncActivitySnapshot = {
     /** Whether a sync run currently owns the backend's exclusive-sync state. */
@@ -370,8 +374,13 @@ declare module 'paratext-bible-send-receive' {
      * set — the set is genuinely not yet determined, so a consumer must render "syncing, projects
      * unknown" rather than reading empty as "nothing is syncing". Always empty when `isSyncing` is
      * `false`.
+     *
+     * Optional for the same reason as {@link SyncState.syncingProjectIds}: a build predating the
+     * field answers without it, so a consumer that treats an absent value as "not yet known" reads
+     * every build correctly, while one that requires it gets `undefined` where its types promised
+     * an array. See the DELIBERATE DIVERGENCE note at the top of this file.
      */
-    projectIds: string[];
+    projectIds?: string[];
   };
 
   /**
@@ -467,6 +476,9 @@ declare module 'papi-shared-types' {
      *   Studio build predating that field answers without it, so treat missing as "the syncing
      *   projects are unknown" rather than as "nothing is syncing" — `isSyncing` is what answers the
      *   latter.
+     * @throws `PlatformUnimplementedException` when the Send/Receive extension is not part of this
+     *   build, which is the case for public Platform.Bible.
+     * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncState': () => Promise<SyncState>;
 
@@ -481,6 +493,10 @@ declare module 'papi-shared-types' {
      * 10 Studio). Callers should keep their existing state on failure rather than assuming idle.
      *
      * @returns The current {@link SyncActivitySnapshot}
+     * @throws `PlatformUnimplementedException` when nothing in this build implements the command —
+     *   public Platform.Bible, or a Paratext 10 Studio build predating this signal. An extension
+     *   author must handle the rejection rather than reading it as "no sync is running".
+     * @experimental This command is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.getSyncActivity': () => Promise<SyncActivitySnapshot>;
 
@@ -638,8 +654,11 @@ declare module 'papi-shared-types' {
      * `onSyncStateChanged`, this covers syncs that reach the dotnet `syncProjects`/
      * `sendReceiveProjects` commands directly and raise no Send/Receive extension claim.
      *
-     * Only emitted by Paratext 10 Studio builds; plain Platform.Bible ships the S/R stub, so
-     * consumers must handle the command rejection at runtime.
+     * Only emitted by Paratext 10 Studio builds. Nothing in public Platform.Bible emits it, so a
+     * subscriber there simply never hears from it and must not read that silence as "no sync is
+     * running".
+     *
+     * @experimental This event is unstable and may change or disappear without notice
      */
     'paratextBibleSendReceive.onSyncActivityChanged': SyncActivitySnapshot;
   }

@@ -14,6 +14,14 @@
  *   `onSync`.)
  * - `openSyncStatus` resolves, so "View sync details" closes the popover as it does in the app rather
  *   than raising an "unavailable" toast about a web view Storybook could never open.
+ *
+ * Both overrides are GLOBAL to the whole Storybook build, unlike the `useSyncStatus` mock beside
+ * them in `.storybook/mocks/`, which is scoped per story through a React context. Any future story
+ * that fires the same commands inherits this behavior whether it wants it or not — most obviously a
+ * story for `sync-blocked-banner.component.tsx`, which fires the identical `cancelSync` and would
+ * get a never-settling promise where every other command gets an inert rejection. Prefer scoping a
+ * new override through the mocks directory; add one here only when it must hold for every story,
+ * and say so when you do.
  */
 import * as realCommandService from '../../src/shared/services/command.service';
 

@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import { sendCommand } from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { notificationService } from '@shared/services/notification.service';
 import { projectLookupService } from '@shared/services/project-lookup.service';
@@ -14,7 +15,10 @@ import {
   SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
   SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
 } from './sync-status-button.component';
-import { SYNC_SEED_RETRY_INTERVAL_MS } from '../hooks/use-sync-status.hook';
+import {
+  SYNC_SEED_RETRY_INTERVAL_MS,
+  SYNC_SEED_RETRY_WINDOW_MS,
+} from '../hooks/use-sync-status.hook';
 
 vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
@@ -23,11 +27,14 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%toolbar_sync_cancel%': 'Test Cancel sync',
       '%toolbar_sync_cancelling%': 'Test Cancelling',
       '%toolbar_sync_open_status%': 'Test Sync status',
+      '%toolbar_sync_popover_cancelled%': 'Test The last sync was cancelled.',
       '%toolbar_sync_popover_failed%': 'Test last sync did not finish',
       '%toolbar_sync_popover_idle%': 'Test no sync running',
       '%toolbar_sync_popover_synced%': 'Test last sync finished',
       '%toolbar_sync_popover_unknown%': 'Test status unavailable',
+      '%toolbar_sync_status_cancelled%': 'Test Sync cancelled',
       '%toolbar_sync_status_failed%': 'Test Sync failed',
+      '%toolbar_sync_status_unknown%': 'Test Sync status unavailable',
       '%toolbar_sync_status_synced%': 'Test Synced',
       '%toolbar_sync_status_syncing%': 'Test Syncing',
       '%toolbar_sync_status_syncing_project%': 'Test Syncing {projectName}',
@@ -311,7 +318,9 @@ describe('SyncStatusButton — startup read retries', () => {
       await vi.advanceTimersByTimeAsync(70_000);
     });
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Sync' }));
+    // Named for the unreadable status, not "Sync": the accessible name is what distinguishes this
+    // state from `idle`, whose icon is the only other difference and is `aria-hidden`.
+    fireEvent.click(await screen.findByRole('button', { name: 'Test Sync status unavailable' }));
 
     // "No sync is running" would be a positive claim resting on a read that never answered.
     await waitFor(() => {
@@ -351,6 +360,22 @@ describe('SyncStatusButton — startup read retries', () => {
     expect(countSyncStateCalls()).toBe(callsAfterEvent);
     expect(callsAfterEvent).toBeGreaterThan(callsBeforeEvent);
   });
+
+  // `idle` and `unknown` share one visible label, and both icons are `aria-hidden`, so without a
+  // distinct accessible name a screen-reader user hears "Sync, button" for both — collapsing the one
+  // distinction `unknown` exists to draw.
+  it('distinguishes an unreadable status from idle in the accessible name', async () => {
+    mockSyncStateSequence([new Error('send/receive is not answering')]);
+    render(<SyncStatusButton />);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_WINDOW_MS + SYNC_SEED_RETRY_INTERVAL_MS);
+    });
+
+    expect(
+      screen.getByRole('button', { name: 'Test Sync status unavailable' }),
+    ).toBeInTheDocument();
+  });
 });
 
 // The sharpest case: a user clicks Cancel and is told "Synced" with a green check. Claiming success
@@ -365,6 +390,56 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
       expect(screen.getByRole('button', { name: 'Test Sync failed' })).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
+  });
+
+  // Send/receive reports a cancelled sync as a non-success result rather than as an outcome of its
+  // own, so a user who clicked Cancel is otherwise answered with "Sync failed" in red — their own
+  // request reported back to them as an error.
+  it('reports a sync the user cancelled as cancelled rather than failed', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] },
+      completedState({ a: 'failed' }),
+    ]);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    // The cancel takes effect: send/receive reports the project it did not finish as `failed`.
+    fireSyncStateChanged(false);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Sync cancelled' })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'Test Sync failed' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('toolbar-sync-popover-status')).toHaveTextContent(
+      'Test The last sync was cancelled.',
+    );
+  });
+
+  // The other half: a failure nobody asked for is still reported as a failure.
+  it('still reports a failure the user did not ask for as failed', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] },
+      completedState({ a: 'failed' }),
+    ]);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('AAA');
+    });
+
+    fireSyncStateChanged(false);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Test Sync failed' })).toBeInTheDocument();
+    });
   });
 
   it('reports a failure when only one project of several did not succeed', async () => {
@@ -425,7 +500,9 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
 
     // Not "Synced": nothing came back to justify a success claim.
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Test Sync status unavailable' }),
+      ).toBeInTheDocument();
     });
     expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
   });
@@ -911,6 +988,9 @@ describe('SyncStatusButton — popover and cancel', () => {
       expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith({
         message: SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
         severity: 'warning',
+        // A shared id, so repeat clicks against an unresponsive send/receive replace the toast
+        // rather than stacking one per click.
+        notificationId: expect.any(String),
       });
     });
     expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveAttribute(
@@ -919,11 +999,45 @@ describe('SyncStatusButton — popover and cancel', () => {
     );
   });
 
+  // The re-enabled button above is what makes this reachable: without a shared id, a user clicking
+  // Cancel repeatedly against an unresponsive send/receive collects one toast per click.
+  it('reuses one notification id for repeated rejected cancels', async () => {
+    mockCommands({
+      'paratextBibleSendReceive.getSyncState': () => ({
+        isSyncing: true,
+        lastRequestedProjectIds: [],
+        syncingProjectIds: ['a'],
+      }),
+      'paratextBibleSendReceive.cancelSync': () => {
+        throw new Error('send/receive is not answering');
+      },
+    });
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(vi.mocked(notificationService.send)).toHaveBeenCalledTimes(1);
+    });
+    fireEvent.click(screen.getByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(vi.mocked(notificationService.send)).toHaveBeenCalledTimes(2);
+    });
+
+    const [[first], [second]] = vi.mocked(notificationService.send).mock.calls;
+    expect(first.notificationId).toBeDefined();
+    expect(second.notificationId).toBe(first.notificationId);
+  });
+
   // A rejection does not prove the sync is still running: a sync that ended between render and click
   // rejects too. Saying "couldn't cancel" beside "the last sync finished" is the confusing pair.
   it('does not warn about a failed cancel when the sync has already finished', async () => {
     const fireSyncStateChanged = captureSyncStateEvent();
     let getSyncStateCalls = 0;
+    // Held open so the sync can finish BETWEEN the click and the rejection, which is the whole
+    // scenario: a cancel that rejects because there is no longer anything to cancel.
+    let rejectCancel: ((reason: Error) => void) | undefined;
     mockCommands({
       'paratextBibleSendReceive.getSyncState': () => {
         getSyncStateCalls += 1;
@@ -931,21 +1045,34 @@ describe('SyncStatusButton — popover and cancel', () => {
           return { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] };
         return completedState({ a: 'succeeded' });
       },
-      'paratextBibleSendReceive.cancelSync': () => {
-        throw new Error('there is no sync to cancel');
-      },
+      'paratextBibleSendReceive.cancelSync': () =>
+        new Promise((_resolve, reject) => {
+          rejectCancel = reject;
+        }),
     });
     mockProjectNames({ a: 'AAA' });
     render(<SyncStatusButton />);
     fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
-    await screen.findByTestId('toolbar-sync-cancel-button');
 
-    // The sync finishes, then the (now pointless) cancel click is delivered.
+    // The cancel is really requested — the guard under test only runs on the rejection path.
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    // The sync finishes on its own, and only then does the cancel request come back rejected.
     fireSyncStateChanged(false);
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Test Synced' })).toBeInTheDocument();
     });
+    if (!rejectCancel) throw new Error('cancelSync was never called');
+    rejectCancel(new Error('there is no sync to cancel'));
 
+    await waitFor(() => {
+      expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+        expect.stringContaining('could not cancel'),
+      );
+    });
     expect(vi.mocked(notificationService.send)).not.toHaveBeenCalled();
   });
 
@@ -1080,6 +1207,61 @@ describe('SyncStatusButton — popover and cancel', () => {
     );
   });
 
+  // `isSyncing: true` fires again as the syncing set SHRINKS, so one project of a multi-project sync
+  // finishing before the others is not a new sync — it is the same one, still running. Re-arming
+  // there flips a pending "Cancelling…" back to an armed "Cancel sync" mid-request, and a second
+  // click fires a second `cancelSync`.
+  it('keeps Cancel pending when a multi-project sync loses one of its projects', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a', 'b'] },
+      // Project A finished; B is still going. The same sync, with a smaller set.
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['b'] },
+    ]);
+    mockProjectNames({ a: 'AAA', b: 'BBB' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    fireSyncStateChanged(true);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('BBB');
+    });
+    const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveTextContent('Test Cancelling');
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  // The two signals `useSyncStatus` unions can report the same project in different casing, so a
+  // casing flip is not a set change — and must not be read as a different sync taking over.
+  it('keeps Cancel pending when the same project is re-reported in another casing', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['proj1'] },
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['PROJ1'] },
+    ]);
+    mockProjectNames({ proj1: 'AAA', PROJ1: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    fireSyncStateChanged(true);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('AAA');
+    });
+    expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+  });
+
   // The label carries a project name of any length, so the button has to be allowed to shrink and
   // truncate: a toolbar item that grows without bound pushes its neighbours off the bar.
   it('lets the label truncate instead of growing the toolbar item', async () => {
@@ -1185,6 +1367,25 @@ describe('SyncStatusButton — dismissal across a WebView boundary', () => {
 });
 
 describe('SyncStatusButton — accessibility', () => {
+  // The popover holds a live Cancel button, and `PopoverTitle` renders a plain `<div>` with no `id`
+  // for `PopoverContent` to point `aria-labelledby` at — so without a label of its own a screen
+  // reader announces "dialog" and nothing else (WCAG 4.1.2).
+  it('gives the popover an accessible name', async () => {
+    mockSyncState(IDLE_STATE);
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+
+    expect(await screen.findByRole('dialog', { name: 'Test Sync status' })).toBeInTheDocument();
+  });
+
+  it('leaves the idle button named for the control rather than for a status', async () => {
+    mockSyncState(IDLE_STATE);
+    render(<SyncStatusButton />);
+
+    expect(await screen.findByRole('button', { name: 'Sync' })).toBeInTheDocument();
+  });
+
   // The status changes on its own, so without a live region a screen reader user learns nothing
   // unless they happen to focus the button.
   it('announces the status through a live region', async () => {
