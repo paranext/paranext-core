@@ -687,7 +687,7 @@ describe('saveLayout pushes this window’s layout to the main process', () => {
     // empty from then on.
     const heldGet = holdGetLayout();
 
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(heldGet.hasRequest()).toBe(true));
@@ -808,7 +808,7 @@ describe('saveLayout pushes this window’s layout to the main process', () => {
     );
     // The initial power load parks on a saved-layout request that never comes back
     const abandonedGet = holdGetLayout();
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(abandonedGet.hasRequest()).toBe(true));

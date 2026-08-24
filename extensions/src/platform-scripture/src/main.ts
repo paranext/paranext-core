@@ -350,7 +350,7 @@ async function openManageBooksUnserialized(
     // Reloading DOES remount the dialog, which is what makes the launch parameters take effect
     // without any re-apply machinery: `reloadWebView` re-runs the provider's `getWebView`, and the
     // per-call `srcNonce = newNonce()` that gets interpolated into the generated `content`
-    // (`web-view.service-host.ts`) makes `content` differ every time, so the `srcDoc` bound in
+    // (`web-view.service-shard.ts`) makes `content` differ every time, so the `srcDoc` bound in
     // `web-view.component.tsx` changes and the iframe reloads. The dialog therefore reads the new
     // values in its ordinary mount-time initializers. There is a standing TODO on that nonce asking
     // whether it should be stable per web view; if it ever becomes stable, this path stops working
