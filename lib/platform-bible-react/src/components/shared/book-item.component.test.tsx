@@ -54,8 +54,8 @@ describe('BookItem dimmed state', () => {
     expect(screen.getByRole('option')).not.toHaveClass('tw:text-muted-foreground/50');
   });
 
-  test('applies the muted classes when dimmed', () => {
-    renderBookItem({ dimmed: true });
+  test('applies the muted classes when a dimmed reason is given', () => {
+    renderBookItem({ dimmedReason: 'not in this project' });
     const option = screen.getByRole('option');
     expect(option).toHaveClass('tw:bg-muted/50');
     expect(option).toHaveClass('tw:text-muted-foreground/50');
@@ -63,7 +63,7 @@ describe('BookItem dimmed state', () => {
 
   test('a dimmed item is still selectable', async () => {
     const onSelect = vi.fn();
-    renderBookItem({ dimmed: true, onSelect });
+    renderBookItem({ dimmedReason: 'not in this project', onSelect });
 
     await userEvent.click(screen.getByRole('option'));
 
@@ -71,7 +71,7 @@ describe('BookItem dimmed state', () => {
   });
 
   test('a dimmed item is not marked disabled to assistive tech', () => {
-    renderBookItem({ dimmed: true });
+    renderBookItem({ dimmedReason: 'not in this project' });
     // cmdk's CommandPrimitive.Item always renders an explicit aria-disabled="true"/"false"
     // reflecting the `disabled` prop, regardless of what BookItem passes through — even the
     // plain, non-dimmed case renders aria-disabled="false" rather than omitting the attribute.
@@ -80,26 +80,31 @@ describe('BookItem dimmed state', () => {
   });
 
   test('dimmed does not apply the disabled cursor', () => {
-    renderBookItem({ dimmed: true });
+    renderBookItem({ dimmedReason: 'not in this project' });
     expect(screen.getByRole('option')).not.toHaveClass('tw:cursor-not-allowed');
   });
 
   test('disabled wins over dimmed so the two styles do not stack', () => {
-    renderBookItem({ dimmed: true, disabled: true });
+    renderBookItem({ dimmedReason: 'not in this project', disabled: true });
     const option = screen.getByRole('option');
     expect(option).toHaveClass('tw:cursor-not-allowed');
     expect(option).not.toHaveClass('tw:bg-muted/50');
   });
 
-  test('appends the dimmed suffix to the accessible name', () => {
-    renderBookItem({ dimmed: true, dimmedAriaLabelSuffix: 'not in this project' });
+  test('appends the dimmed reason to the accessible name', () => {
+    renderBookItem({ dimmedReason: 'not in this project' });
     expect(
       screen.getByRole('option', { name: 'Revelation (REV), not in this project' }),
     ).toBeInTheDocument();
   });
 
-  test('omits the suffix when the item is not dimmed', () => {
-    renderBookItem({ dimmedAriaLabelSuffix: 'not in this project' });
+  test('omits the reason when no dimmed reason is given', () => {
+    renderBookItem();
+    expect(screen.getByRole('option', { name: 'Revelation (REV)' })).toBeInTheDocument();
+  });
+
+  test('a disabled item does not announce the dimmed reason', () => {
+    renderBookItem({ dimmedReason: 'not in this project', disabled: true });
     expect(screen.getByRole('option', { name: 'Revelation (REV)' })).toBeInTheDocument();
   });
 });
