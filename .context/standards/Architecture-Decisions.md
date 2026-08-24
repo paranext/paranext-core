@@ -1027,6 +1027,16 @@ step, no automation. Just a record.
   that becomes a real complaint. **Revisit if a books-scope summary is ever needed somewhere the
   reader cannot open the picker** — that surface would need its own details view.
 
+  Two known deferrals sit against this entry. First, the summary is applied only at Find's "Showing"
+  row: `ScopeSelector`'s `variant="dropdown"` trigger still joins every selected ID, so the original
+  overflow remains latent there. It has no consumer today (the one dropdown consumer does not offer
+  the `selectedBooks` scope) and `summarizeSelectedBooks` is exported for whoever adds one, so this
+  is a deliberate deferral rather than an oversight — a future dropdown consumer that offers
+  `selectedBooks` must adopt the summary. Second, the ` - ` separator is a fifth deliberate
+  divergence from Paratext 9's `BookSetX.Summary` (alongside the collapse threshold, short IDs vs.
+  localized full names, and the empty-selection placeholder); the whole set belongs to PT-3363's UX
+  owner rather than to this change.
+
 ## ADR-0023: `BooksPresent` decoding degrades to a partial read; `platform-bible-utils` owns the wire format
 
 - **Date:** 2026-08-24

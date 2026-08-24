@@ -1,10 +1,10 @@
 {
   "metadata": {
+    "%webView_find_allBooks%": {
+      "fallbackKey": "%comment_filter_scope_all_books%"
+    },
     "%webView_find_projectFilter_noProjectsFound%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_noProjectsFound%"
-    },
-    "%webView_scope_selector_all_books%": {
-      "fallbackKey": "%comment_filter_scope_all_books%"
     },
     "%webView_find_projectSelector_label%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
@@ -434,6 +434,7 @@
       "%webView_configureChecks_checks%": "Checks",
       "%webView_configureChecks_loadingChecks%": "Loading checks",
       "%webView_configureChecks_title%": "Configure Checks: {projectName}",
+      "%webView_find_allBooks%": "All books",
       "%webView_find_allowRegex%": "Allow regex",
       "%webView_find_cancelSearch%": "Cancel search",
       "%webView_find_clearSearchResults%": "Clear search results",
@@ -556,7 +557,6 @@
       "%webView_platformScripture_tools%": "Tools",
       "%webView_punctuationInventory_title%": "Punctuation Inventory: {projectName}",
       "%webView_repeatedWordsInventory_title%": "Repeated Words Inventory: {projectName}",
-      "%webView_scope_selector_all_books%": "All books",
       "%webView_scope_selector_book%": "Book",
       "%webView_scope_selector_cancel%": "Cancel",
       "%webView_scope_selector_chapter%": "Chapter",

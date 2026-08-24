@@ -633,15 +633,17 @@ describe('Find — books-scope summary in the "Showing" trigger', () => {
   // full-length string so the expected summaries don't depend on buildProps' default.
   const ALL_BOOKS_PRESENT = '1'.repeat(Canon.allBookIds.length);
 
+  // Deliberately NOT overridden per test: the localized strings come from buildProps' stub over the
+  // real FIND_LOCALIZED_STRING_KEYS, so a key the component reads but never declares resolves to
+  // `undefined` and these assertions fail — which is the regression a hand-built strings object
+  // hides, since it can supply a key `find.web-view.tsx` never requests.
+  const ALL_BOOKS_TEXT = '%webView_find_allBooks%';
+
   function buildBooksScopeProps(selectedBookIds: string[]): FindProps {
     return buildProps({
       scope: 'selectedBooks',
       booksPresent: ALL_BOOKS_PRESENT,
       selectedBookIds,
-      scopeSelectorLocalizedStrings: {
-        '%webView_scope_selector_all_books%': 'All books',
-        '%webView_book_selector_more%': 'more',
-      },
     });
   }
 
@@ -652,7 +654,7 @@ describe('Find — books-scope summary in the "Showing" trigger', () => {
       (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
     );
     render(<Find {...buildBooksScopeProps(everyNonObsoleteBookId)} />);
-    expect(screen.getByText('All books')).toBeInTheDocument();
+    expect(screen.getByText(ALL_BOOKS_TEXT)).toBeInTheDocument();
     // The regression this guards: every id joined into the trigger, which overflowed the panel.
     expect(screen.queryByText(/GEN, EXO, LEV/)).not.toBeInTheDocument();
   });
@@ -662,7 +664,7 @@ describe('Find — books-scope summary in the "Showing" trigger', () => {
       (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
     );
     render(<Find {...buildBooksScopeProps(everyNonObsoleteBookId.slice(0, -1))} />);
-    expect(screen.queryByText('All books')).not.toBeInTheDocument();
+    expect(screen.queryByText(ALL_BOOKS_TEXT)).not.toBeInTheDocument();
   });
 
   it('truncates to a canon-order first-last range when more than five books are selected', () => {

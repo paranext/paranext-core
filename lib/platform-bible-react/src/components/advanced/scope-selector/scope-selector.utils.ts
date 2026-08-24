@@ -138,6 +138,11 @@ export function summarizeSelectedBooks(
   // present says "All books" once every NT book is selected. Matched as set equality (not
   // containment) in both directions, so neither a selection missing an available book nor one
   // carrying an extra book the project does not have can claim to be every book.
+  //
+  // Unrecognized IDs count here but are dropped by the range form below, so a selection of every
+  // available book plus a junk ID falls through to `GEN - REV` rather than "All books". That
+  // asymmetry is deliberate: an unrecognized ID means the selection is not understood, and the
+  // range at least shows something true about the part that is.
   const selectedSet = new Set(selectedBookIds.map((bookId) => bookId.toUpperCase()));
   const availableSet = new Set(availableBookIds.map((bookId) => bookId.toUpperCase()));
   if (

@@ -80,6 +80,7 @@ const NO_OPEN_TABS: ProjectSelectorOpenTab[] = [];
 /** Localization keys used by the {@link Find} component itself (excludes child component keys). */
 export const FIND_LOCALIZED_STRING_KEYS = [
   '%general_countOfTotal%',
+  '%webView_find_allBooks%',
   '%webView_find_allText%',
   '%webView_find_allText_tooltip%',
   '%webView_find_allowRegex%',
@@ -639,22 +640,14 @@ export function Find({
           summarizeSelectedBooks(
             selectedBookIds,
             getAvailableBookIds(booksPresent),
-            scopeSelectorLocalizedStrings['%webView_scope_selector_all_books%'] ??
-              '%webView_scope_selector_all_books%',
+            localizedStrings['%webView_find_allBooks%'],
             localizedBookData,
           ) ?? '…'
         );
       default:
         return '';
     }
-  }, [
-    scope,
-    selectedBookIds,
-    verseRef,
-    localizedBookData,
-    booksPresent,
-    scopeSelectorLocalizedStrings,
-  ]);
+  }, [scope, selectedBookIds, verseRef, localizedBookData, booksPresent, localizedStrings]);
 
   // Configuration for the per-result replace preview. Present whenever in replace mode — including
   // an empty replacement term, so the "replace with nothing" (deletion) preview can render its
@@ -997,21 +990,27 @@ export function Find({
           </>
         )}
 
-        {/* Scope selector row. min-w-0 on both children lets the scope trigger truncate rather
-            than push the row wider than the panel — the summary is short by construction, but it
-            falls back to the raw localization key while the strings are still resolving. */}
+        {/* Scope selector row. The summary is short by construction, but a long localized book
+            name or an unresolved string can still outrun a narrow panel, so the trigger is built to
+            clip rather than widen the row: `tw:shrink` overrides the `tw:shrink-0` every shadcn
+            `Button` carries in its base class (without it `tw:min-w-0` is inert and the row grows a
+            horizontal scrollbar), and `tw:min-w-0` then lets the summary span's `tw:truncate`
+            actually clip. The label, chevron and the result-count block opposite keep their
+            intrinsic width so the summary is the only thing that gives. */}
         <div className="tw:flex tw:min-w-0 tw:items-center tw:justify-between">
           <Popover>
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
                 size="sm"
-                className="tw:h-auto tw:min-w-0 tw:gap-1 tw:px-2 tw:py-1 tw:font-normal"
+                className="tw:h-auto tw:min-w-0 tw:shrink tw:gap-1 tw:overflow-hidden tw:px-2 tw:py-1 tw:font-normal"
               >
                 <span className="tw:shrink-0 tw:text-sm tw:text-muted-foreground">
                   {localizedStrings['%webView_find_showing%']}
                 </span>
-                <span className="tw:truncate tw:text-sm tw:font-medium">{scopeDisplayText}</span>
+                <span className="tw:min-w-0 tw:flex-1 tw:truncate tw:text-sm tw:font-medium">
+                  {scopeDisplayText}
+                </span>
                 <ChevronDown className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
               </Button>
             </PopoverTrigger>
@@ -1045,7 +1044,7 @@ export function Find({
             </PopoverContent>
           </Popover>
           {visibleResults.length > 0 && (
-            <div className="tw:flex tw:items-center tw:gap-1">
+            <div className="tw:flex tw:shrink-0 tw:items-center tw:gap-1">
               <span className="tw:text-sm tw:text-muted-foreground tw:tabular-nums">
                 {formatReplacementString(localizedStrings['%general_countOfTotal%'], {
                   count: focusedVisibleIndex >= 0 ? String(focusedVisibleIndex + 1) : '–',
