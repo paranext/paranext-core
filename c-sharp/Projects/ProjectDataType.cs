@@ -28,5 +28,5 @@ public static class ProjectDataType
     // platformScripture.Pt9Interlinear projectInterface. Kept for parity with the other data-type
     // constants and for possible future change-event use; unreferenced today (no events emitted).
     public const string PT9_INTERLINEAR_MANIFEST = "Pt9InterlinearManifest";
-    public const string PT9_INTERLINEAR_FILES = "Pt9InterlinearFiles";
+    public const string PT9_INTERLINEAR_DATA = "Pt9InterlinearData";
 }
