@@ -1318,3 +1318,53 @@ step, no automation. Just a record.
   not be run in this development environment, and `test:e2e:isolated` (the only runner that reaches
   `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
   a manual pass rather than by automation.
+
+## ADR-0027: Node processes install `@xmldom/xmldom` DOM globals; the extension host does it in a first-import side-effect module
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Context:** scripture-editors PR
+  [#541](https://github.com/eten-tech-foundation/scripture-editors/pull/541) drops `@xmldom/xmldom`
+  from `@eten-tech-foundation/scripture-utilities` (~89 KB off browser bundles) and makes the
+  USX⇔USJ converters use the platform's **native** `DOMParser`/`XMLSerializer`. Browsers and web
+  views have those; our extension host is plain Node and does not, so the converters throw. It
+  reaches them through `platform-scripture`'s finder and extender PDPEs — every scripture read and
+  write. There was no runtime DOM shim anywhere in `src/`; every `jsdom` reference was in tests.
+- **Decision:** paranext-core supplies the globals rather than waiting on the package.
+  `src/node/polyfills/dom-globals.polyfill.ts` installs them from `@xmldom/xmldom` (now a declared
+  root dependency; previously it reached us only transitively — a dev-only 0.8.x hoisted via `plist`
+  plus a non-dev 0.9.x nested under scripture-utilities), letting an existing global win so a real
+  DOM is never overridden. It is a **side-effect module** imported **first** by `extension-host.ts`
+  — see that module's docs for why a callable function would run too late. `vitest.setup.node.ts`
+  installs it too, because the `node`-environment test projects (`extensions`,
+  `lib/platform-bible-utils`) run the same converters and would otherwise fail outright; it is kept
+  out of the shared `vitest.setup.ts` so the jsdom projects, which already have a real DOM, do not
+  pull xmldom into all ~150 of their workers for nothing. The main
+  process is deliberately **not** polyfilled: it has no converter call sites.
+- **Alternatives:** **Let the package fall back to `@xmldom/xmldom` when no DOM is present** (what
+  scripture-editors issue #516 floated) — needs no core change, but it is a cross-repo change we do
+  not control and would have to land first. **Install from `global-this.model.ts` alongside
+  `polyfillLocalStorage()`** — matches the existing polyfill pattern, but that module already
+  transitively imports `platform-bible-utils`, so its graph is fully evaluated before the install
+  would run; the ordering guarantee would be accidental rather than structural. **Pin the root dep
+  to `^0.8.10`** to match the dev-only hoisted copy — rejected: scripture-utilities parses and
+  serializes with 0.9.x internally, and this code writes scripture to disk, so the extension host
+  should stay on the 0.9 line rather than drop to an older parser. Note this does not pin an exact
+  engine: declaring `^0.9.8` at the root dedupes the package's own nested 0.9.10 away, so the
+  converters now run on whatever 0.9.x resolves at the root (0.9.12 today).
+- **Consequences:** Two `@xmldom/xmldom` majors now live in the tree on purpose.
+  `platform-enhanced-resources` declares `^0.8.10` because `marble-converter.ts` passes
+  `errorHandler` as an object, which 0.9 rejects with a `TypeError`; that dependency was previously
+  undeclared and resolved to the hoisted copy, so the root declaration would otherwise have silently
+  upgraded it and broken every marble conversion. npm satisfies that range by hoisting 0.8.x to
+  `extensions/node_modules/`, which makes it the default for **every** package under
+  `extensions/src/*`, not just this one — `import/no-extraneous-dependencies` is off, so the next
+  extension to import `@xmldom/xmldom` binds to 0.8.x with no warning. Two follow-ups worth taking
+  together: `convertMarbleChapterXml` runs only in a web view, which already has a native
+  `DOMParser`, so dropping the dependency there would remove the pin, the version split, and this
+  paragraph at once. Separately, `@xmldom/xmldom` emits no `parsererror` element, so PR #541's
+  malformed-XML guard is inert under the shim; fatally malformed USX still throws (as a `ParseError`
+  from inside `parseFromString`, not the renderer's `Invalid USX:` error), but *recoverable* defects
+  are silently repaired rather than rejected — on the extension host that repaired form is what gets
+  written back to disk. Revisit if the package ever ships its own Node fallback.
+- **Source:** PT-4412.
