@@ -706,10 +706,10 @@ describe('web view service router', () => {
       expect(mocks.focusWindow).not.toHaveBeenCalled();
     });
 
-    test('does not take focus from another application', async () => {
-      // An open routed here is not necessarily something the user just asked for — an extension can
-      // re-open a web view by id at any moment — so with the app in the background, raising a
-      // window would pull it in front of whatever the user is actually working in
+    test('does not raise before any window has been focused', async () => {
+      // What this pins is the latch on first focus: until some window has been focused, a raise is
+      // suppressed, which is what keeps one from firing during startup. It does not establish that
+      // the app holds focus now — see the raise doc on openWebViewInOwningWindow
       mocks.getFocusedWindowId.mockReturnValue(undefined);
       withWindows({ 1: windowShard([]), 2: windowShard(['existing-view']) });
       const router = await getRouter();
