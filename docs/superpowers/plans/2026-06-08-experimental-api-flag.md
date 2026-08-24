@@ -11,7 +11,7 @@
 > Two durable findings came out of the audit.
 >
 > **One:** a repo-wide search for the deprecated sync `createNetworkEventEmitter` returns **exactly
-> one** remaining PRODUCTION call — `extensions/src/platform-scripture-editor/src/main.ts` > `selectionChangedEventEmitter`. Every other production site is already on
+> one** remaining PRODUCTION call — `extensions/src/platform-scripture-editor/src/main.ts`, `selectionChangedEventEmitter`. Every other production site is already on
 > `createNetworkEventEmitterAsync` or on `createBufferedNetworkEventEmitter`, which awaits it
 > internally. This does **not** cover test mocks: several test files still reference the sync
 > factory, and the plan's list of them is both over- and under-inclusive.
@@ -22,6 +22,9 @@
 > throws before initialization would reintroduce exactly the throw the buffering exists to prevent.
 > That covers `web-view.service-shard.ts` (four buffered emitters), `scroll-group.service-host.ts`
 > (two) and `check-aggregator.service.ts` (one).
+>
+> **Taken together, the whole of Phase 4 — Tasks 13 through 19 — is already done or superseded**,
+> with the single exception named in finding one. Each task below carries a note saying which.
 >
 > Whether this plan should be fenced as a frozen record or retired is its owner's call; it is
 > annotated rather than retired here.
@@ -82,7 +85,7 @@
 - `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — 4 emitters (init refactor)  
   _Stale as of 2026-08-25: still four, but all `createBufferedNetworkEventEmitter`, now at `:128,147,165,184`. The init refactor is superseded — see finding two at the top._
 - `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — 1 emitter (init refactor)  
-  _Stale as of 2026-08-25: already on `createBufferedNetworkEventEmitter`, now at `:394`. Nothing to do._
+  _Stale as of 2026-08-25: already on `createBufferedNetworkEventEmitter`, now at `:394`. Nothing to do, and the refactor in Task 16 is superseded._
 - `extensions/src/hello-rock3/src/main.ts:462` — 1 emitter  
   _Stale as of 2026-08-25: already on `createBufferedNetworkEventEmitter`, now at `:470`. Nothing to do._
 - `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234` — 3 emitters  
@@ -1263,6 +1266,8 @@ git commit -m "feat(experimental): add attributes, documentation, and factory re
 
 ### Task 13: Migrate the 3 shared platform events (network-object lifecycle + shared-store change)
 
+> **Already done, differently (verified 2026-08-25).** All three are on `createCoreMultiSourceEventEmitter` — `network-object.service.ts` `:56` and `:77`, `shared-store.service.ts` `:150`. Nothing to migrate.
+
 **Files:**
 
 - Modify: `src/shared/services/network-object.service.ts:124-127, 142-144`
@@ -1417,6 +1422,8 @@ git commit -m "refactor(experimental): migrate single-process platform events to
 
 ### Task 15: Migrate WebView lifecycle emitters (4 emitters, init refactor)
 
+> **SUPERSEDED — do not perform this task (verified 2026-08-25).** All four emitters are `createBufferedNetworkEventEmitter` at `:128,147,165,184`, created at module load on purpose. Step 2's `let` binding plus an accessor that throws before initialization would reintroduce exactly the throw the buffering exists to prevent. See finding two at the top.
+
 **Files:**
 
 - Modify: `src/renderer/services/web-view.service-shard.ts:96,101,120,128`
@@ -1473,6 +1480,8 @@ git commit -m "refactor(experimental): migrate WebView lifecycle emitters with l
 
 ### Task 16: Migrate `check-aggregator.service.ts` emitter (init refactor)
 
+> **SUPERSEDED — do not perform this task (verified 2026-08-25).** The emitter is `createBufferedNetworkEventEmitter` at `:394`, not `:410`. Same reason as Task 15.
+
 **Files:**
 
 - Modify: `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410`
@@ -1507,6 +1516,8 @@ git commit -m "refactor(experimental): migrate check-aggregator emitter to async
 ---
 
 ### Task 17: Migrate data-provider per-instance emitter (type-assertion pattern)
+
+> **Already done (verified 2026-08-25).** `data-provider.service.ts:854` is already on `createNetworkEventEmitterAsync`.
 
 **Files:**
 
