@@ -84,11 +84,15 @@ role 4:
   with no file loses the phase when the session dies. (The general "no report files" instinct is
   right about *ad-hoc* reports nobody asked for — it does not apply to the packet paths named
   here, which are this skill's persistence layer.)
-- **Read `<repo-root>/.claude/rules/grep-safety-net.md` and follow it** for every large-list
-  judgment scan. It is singled out among the repo's unconditional rules because these roles are
-  built on exactly the scan it governs - "every item in the inventory", "every usage of this
-  symbol" - and because a brief cannot assume its own agent inherited the repo's rule set.
-  Follow the file; it is not restated here.
+- **`<repo-root>/.claude/rules/grep-safety-net.md` already applies to you** — a non-fork subagent
+  inherits every level of the CLAUDE.md hierarchy the main conversation loads, project rules
+  included, and that rule has no `paths:` frontmatter so it loads unconditionally. It is named
+  here as a pointer, not restated, because these roles are built on exactly the scan it governs:
+  "every item in the inventory", "every usage of this symbol".
+
+  The one exception is the built-in **Explore** and **Plan** agents, which skip CLAUDE.md files
+  and project rules entirely. Do not use them for a phase whose correctness depends on a repo
+  rule; the roles below are custom agents and inherit normally.
 
 ---
 

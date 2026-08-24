@@ -32,13 +32,24 @@ npm run test:e2e:isolated <subset> -- --workers=1
 an unknown name instead of a silent "no tests found". Use it rather than reconstructing the
 command.
 
-`--project=isolated` matters because `e2e-tests/playwright.config.ts` defines three projects —
-`smoke`, `isolated` and `enhanced-resources` — as plain `testDir` splits. Omitting it runs all
-three, including `enhanced-resources`, which needs real Marble resources that are not present
-locally or in CI. Neither config declares a `webServer`, so a failure to connect is about which
-projects ran and whether the app is up, not about a dev server that did not start;
-`.context/standards/Testing-Guide.md` § Running E2E Tests attributes *that* symptom to a missing
-`--config`, which is a different flag and a different failure. Do not conflate them.
+**The two flags fail in different ways, and conflating them is how the wrong one gets blamed.**
+Measured on this repo 2026-08-25:
+
+- **`--config` is what starts the renderer dev server.** `e2e-tests/playwright.config.ts` declares
+  `globalSetup`, and that setup is what spawns `start:renderer` on port 1212 and waits for it.
+  There is no `webServer` key — `globalSetup` is the equivalent. Drop `--config` and no setup runs,
+  so Electron loads `chrome-error://chromewebdata/` and every test fails with
+  *"Target page, context or browser has been closed"*. Drop `--config` **and** the test path and it
+  never gets that far: Playwright's default discovery picks up vitest `.test.ts` files and dies on
+  `ReferenceError: describe is not defined`. This is the failure
+  `.context/standards/Testing-Guide.md` § Running E2E Tests describes, and it is correct.
+- **`--project=isolated` only selects which tests run.** The config defines three projects as plain
+  `testDir` splits. With `--config` but no `--project`, setup still runs and the suite is
+  **193 tests across all three projects** instead of the 22 in `isolated` — including 158
+  `enhanced-resources` tests that need real Marble resources and will fail locally and in CI.
+
+So: omitting `--config` breaks the environment; omitting `--project` runs the wrong tests. Both are
+required, for different reasons.
 
 The raw form, for when a flag the wrapper does not pass through is needed:
 `npx playwright test --config e2e-tests/playwright.config.ts --project=isolated <suite-path> --workers=1`
