@@ -2,7 +2,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
-import { beforeAll, describe, expect, test } from 'vitest';
+import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import { BookChapterControl } from './book-chapter-control.component';
 import { BookChapterControlHandle } from './book-chapter-control.types';
@@ -261,5 +261,102 @@ describe('BookChapterControl trigger shrink ladder', () => {
     );
 
     expect(screen.getByRole('combobox')).toHaveTextContent('GN');
+  });
+});
+
+describe('BookChapterControl additional books', () => {
+  const PROJECT_BOOKS = ['GEN', 'MAT'];
+  const getProjectBooks = () => PROJECT_BOOKS;
+  const getExtraBooks = () => ['REV'];
+
+  /** The trigger button and the search input are both comboboxes; only the trigger is named. */
+  const getTrigger = () => screen.getByRole('combobox', { name: 'book-chapter-trigger' });
+  const getSearchInput = () => screen.getByRole('combobox', { name: '' });
+
+  test('an additional book is absent from the collapsed list', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+  });
+
+  test('typing finds an additional book while the list is collapsed', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    await userEvent.type(getSearchInput(), 'Revelation');
+
+    expect(await screen.findByText(/REV/)).toBeInTheDocument();
+  });
+
+  test('a typed reference to an additional book submits', async () => {
+    const handleSubmit = vi.fn();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    await userEvent.type(getSearchInput(), 'rev 3:4{Enter}');
+
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'REV', chapterNum: 3, verseNum: 4 }),
+    );
+  });
+
+  test('a book outside the project renders dimmed with a spoken reason', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    // A query several books match keeps the list rendered; a single match collapses to a top match.
+    await userEvent.type(getSearchInput(), 'e');
+
+    const revelation = await screen.findByRole('option', {
+      name: /Revelation \(REV\), not in this project/,
+    });
+    expect(revelation).toHaveClass('tw:text-muted-foreground/50');
+  });
+
+  test('additional ids already in the project are not dimmed', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={() => ['GEN']}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+
+    const genesis = await screen.findByRole('option', { name: /Genesis/ });
+    expect(genesis).not.toHaveClass('tw:text-muted-foreground/50');
   });
 });
