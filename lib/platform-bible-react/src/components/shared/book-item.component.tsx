@@ -42,6 +42,10 @@ type BookItemProps = {
    * disabled item is never additionally dimmed. The reason is appended to the item's accessible
    * name so the greying is never a colour-only signal — the state and its explanation are one prop
    * precisely so they cannot drift apart.
+   *
+   * An empty string counts as no reason, so the item renders undimmed. Callers resolving this from
+   * a localized string should fall back with `||` rather than `??`, since `??` passes an empty
+   * translation through and would silently drop the dimming.
    */
   dimmedReason?: string;
 };
