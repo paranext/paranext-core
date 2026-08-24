@@ -23,6 +23,10 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
+import {
+  isNavigableProjectIds,
+  NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
+} from 'platform-bible-utils/experimental';
 import type { DblResourceReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
@@ -42,6 +46,7 @@ import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { resolveTextCollectionProjectId } from './scripture-text-grid-project.utils';
+import { getNavigableProjectIdsToPublish } from './scripture-text-grid-navigable-ids.utils';
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
@@ -266,6 +271,26 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
         .filter((id): id is string => id !== undefined),
     [resources],
   );
+  // Declare the projects this view displays so global navigation UI can offer their books. The grid
+  // is one web view hosting many projects, so nothing reading open web view definitions can see its
+  // members otherwise. See NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY.
+  const [publishedNavigableProjectIds, setPublishedNavigableProjectIds] = useWebViewState<string[]>(
+    NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
+    [],
+  );
+  useEffect(() => {
+    // Persisted state can come back from an older build or a bad write; treat it as unknown.
+    const published = isNavigableProjectIds(publishedNavigableProjectIds)
+      ? publishedNavigableProjectIds
+      : [];
+    const toPublish = getNavigableProjectIdsToPublish(displayedProjectIds, published);
+    if (toPublish) setPublishedNavigableProjectIds(toPublish);
+    // Hidden case: intentionally handled by doing nothing special. This publishing is data-driven,
+    // not geometry-driven, so the effect keeps running while this tab is inactive (rc-dock hides
+    // panes with display:none but leaves them mounted) and the declared ids stay current. There is
+    // nothing to defer and nothing to catch up on activation.
+  }, [displayedProjectIds, publishedNavigableProjectIds, setPublishedNavigableProjectIds]);
+
   const caretResourceProjectId = useFocusedResourceProjectId(displayedProjectIds);
   useOpenFindShortcut(webViewId, caretResourceProjectId);
 
