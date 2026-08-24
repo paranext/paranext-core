@@ -132,8 +132,7 @@ describe('InternetAccessOptionList', () => {
 
   // The standalone panel focuses the checked radio when its fetch resolves. Radix opens a tooltip on
   // any focus, so without the trigger's focus guard that would pop a description open unprompted
-  // every time the panel loads. (jsdom never reports :focus-visible, so the positive keyboard case
-  // lives in the Storybook browser story instead.)
+  // every time the panel loads.
   test('programmatic focus on a radio does not reveal a tooltip', async () => {
     renderList({ value: 'VpnRequired' });
 
@@ -146,6 +145,34 @@ describe('InternetAccessOptionList', () => {
     renderList({ showFooter: false });
     expect(screen.queryByText('Footer text sentinel')).not.toBeInTheDocument();
     expect(screen.getAllByText('Coming soon')).toHaveLength(3);
+  });
+
+  // The other half of the guard: a focus the user actually drove must still reveal the description.
+  // Both directions are assertable here because the trigger keys off the last input modality rather
+  // than `:focus-visible`, which jsdom always reports as false.
+  test('tabbing to a radio reveals its tooltip', async () => {
+    const user = userEvent.setup();
+    renderList({ value: 'Enabled' });
+    expect(visibleTooltips()).toHaveLength(0);
+
+    // Roving tabindex puts the single tab stop on the checked radio.
+    await user.tab();
+    expect(screen.getByLabelText('Unrestricted')).toHaveFocus();
+
+    await waitFor(() => expect(visibleTooltips()).toHaveLength(1));
+    expect(visibleTooltips()[0]).toHaveTextContent('Desc Enabled sentinel');
+  });
+
+  // A click also focuses the radio, but the pointer already revealed the description on hover — so
+  // the focus that follows the click must not be treated as a keyboard gesture.
+  test('clicking a row does not leave a focus-driven tooltip behind', async () => {
+    const user = userEvent.setup();
+    renderList({ value: 'VpnRequired' });
+
+    await user.click(screen.getByLabelText('Unrestricted'));
+    await user.unhover(rowFor('Unrestricted'));
+
+    await waitFor(() => expect(visibleTooltips()).toHaveLength(0));
   });
 
   test('clicking an active option calls onChange with the correct value', () => {

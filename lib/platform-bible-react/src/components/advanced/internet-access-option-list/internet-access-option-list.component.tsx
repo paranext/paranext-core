@@ -9,7 +9,7 @@ import {
 } from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
 import type { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
-import { useId, type FocusEvent } from 'react';
+import { useEffect, useId, useRef } from 'react';
 
 // Local alias — identical string literals to the extension's InternetUse type.
 // Defined here so platform-bible-react does not depend on the paratext-registration
@@ -39,17 +39,40 @@ type OptionRow = {
 const TOOLTIP_DELAY_MS = 300;
 
 /**
- * Radix opens a tooltip on _any_ focus, including the programmatic focus the standalone settings
- * panel puts on the checked radio once its fetch resolves — which pops a description open with no
- * user gesture. `preventDefault()` on the trigger's `onFocus` suppresses Radix's own handler, so
- * only keyboard focus reveals the description.
+ * Tracks whether the last user input was a key press, so a focus handler can tell a keyboard focus
+ * from a programmatic one.
  *
- * The keyboard path is covered by the Storybook browser story
- * (`DescriptionTooltipOnKeyboardFocus`), not a vitest test — jsdom always reports `:focus-visible`
- * as false.
+ * Radix opens a tooltip on _any_ focus, including the programmatic focus the standalone settings
+ * panel puts on the checked radio once its fetch resolves — which would pop a description open with
+ * no user gesture. `:focus-visible` cannot separate the two: Chromium reports it as true for a
+ * programmatic `.focus()` in a document that has seen no pointer input, which is exactly the
+ * panel's situation, because the click that opened the panel landed in the host document rather
+ * than the panel's own iframe.
+ *
+ * Listens on the document in the capture phase, since a Tab press that moves focus _into_ this list
+ * fires its keydown on whatever held focus before — usually something outside the list. One gap
+ * follows from that: tabbing straight from the host document into the panel's iframe fires its
+ * keydown in a document this listener cannot see, so the first row focused that way reveals no
+ * tooltip until the next key press. Screen readers are unaffected — they read the `sr-only`
+ * description wired to each radio via `aria-describedby`, not the tooltip.
  */
-function suppressTooltipOnNonKeyboardFocus(event: FocusEvent<HTMLElement>) {
-  if (!event.target.matches(':focus-visible')) event.preventDefault();
+function useLastInputWasKeyboardRef() {
+  const lastInputWasKeyboard = useRef(false);
+  useEffect(() => {
+    const onKeyDown = () => {
+      lastInputWasKeyboard.current = true;
+    };
+    const onPointerDown = () => {
+      lastInputWasKeyboard.current = false;
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+    };
+  }, []);
+  return lastInputWasKeyboard;
 }
 
 const OPTION_ROWS: OptionRow[] = [
@@ -132,6 +155,7 @@ export function InternetAccessOptionList({
   const idPrefix = useId();
   const radioId = (optionValue: OptionRow['value']) => `${idPrefix}-${optionValue}`;
   const descriptionId = (optionValue: OptionRow['value']) => `${radioId(optionValue)}-description`;
+  const lastInputWasKeyboard = useLastInputWasKeyboardRef();
 
   return (
     <div className="tw:flex tw:flex-col tw:gap-1">
@@ -150,7 +174,14 @@ export function InternetAccessOptionList({
             // which bubbles up from the radio. No tabIndex here; that would add a second tab stop
             // in front of every radio.
             <Tooltip key={row.value}>
-              <TooltipTrigger asChild onFocus={suppressTooltipOnNonKeyboardFocus}>
+              <TooltipTrigger
+                asChild
+                onFocus={(event) => {
+                  // Suppresses Radix's own focus handler, leaving hover and keyboard focus as the
+                  // only ways in. See useLastInputWasKeyboardRef for why the modality is tracked.
+                  if (!lastInputWasKeyboard.current) event.preventDefault();
+                }}
+              >
                 <div
                   className={cn(
                     'tw:flex tw:w-full tw:items-start tw:gap-2 tw:rounded tw:px-2 tw:py-1.5',
@@ -176,7 +207,7 @@ export function InternetAccessOptionList({
                         htmlFor={radioId(row.value)}
                         aria-disabled={!row.isEnabled || undefined}
                         className={cn(
-                          'tw:flex tw:flex-1 tw:items-center tw:gap-1.5 tw:text-sm tw:font-medium',
+                          'tw:flex-1 tw:text-sm tw:font-medium',
                           row.isEnabled && !disabled
                             ? 'tw:cursor-pointer'
                             : 'tw:cursor-not-allowed tw:text-muted-foreground',
@@ -185,10 +216,18 @@ export function InternetAccessOptionList({
                         {localizedStrings[row.labelKey]}
                         {/* Visible affordance that a description exists — without it nothing on the
                             row hints at hidden content, so anyone clicking straight through never
-                            learns what the options mean. aria-hidden, so it adds no tab stop and
-                            does not leak into the radio's accessible name; assistive tech gets the
-                            text from the sr-only copy below instead. */}
-                        <Info aria-hidden className="tw:size-3.5 tw:shrink-0" />
+                            learns what the options mean. In the text flow rather than a flex item
+                            beside it, so that a label long enough to wrap — as several do in the
+                            first-run wizard's narrow column — keeps the icon trailing its last
+                            word instead of parking it at the row's edge against the "Coming soon"
+                            badge. `tw:inline` overrides the preflight's `svg { display: block }`.
+                            aria-hidden, so it adds no tab stop and does not leak into the radio's
+                            accessible name; assistive tech gets the text from the sr-only copy
+                            below instead. */}
+                        <Info
+                          aria-hidden
+                          className="tw:ms-1.5 tw:inline tw:size-3.5 tw:align-middle"
+                        />
                       </label>
                       {!row.isEnabled && (
                         <Badge variant="muted">
