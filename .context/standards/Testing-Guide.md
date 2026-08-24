@@ -801,7 +801,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as networkService from '@shared/services/network.service';
 
 vi.mock('@shared/services/network.service', () => ({
-  createNetworkEventEmitter: vi.fn(),
+  createCoreMultiSourceEventEmitter: vi.fn(),
   getNetworkEvent: vi.fn(),
   request: vi.fn(),
 }));
@@ -811,12 +811,20 @@ describe('sharedStoreService', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(networkService.createNetworkEventEmitter).mockReturnValue(mockEmitter);
+    // The factory returns the emitter alongside a promise for its central registration; the
+    // service consumes that promise in the background, so a mock must supply both.
+    vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockReturnValue({
+      emitter: mockEmitter,
+      registeredEmitterPromise: Promise.resolve(mockEmitter),
+    });
   });
 
   it('should initialize with network event emitter', async () => {
     await initializeSharedStore(networkService);
-    expect(networkService.createNetworkEventEmitter).toHaveBeenCalledWith('shared-store:change');
+    expect(networkService.createCoreMultiSourceEventEmitter).toHaveBeenCalledWith(
+      'shared-store:change',
+      expect.anything(),
+    );
   });
 });
 ```
