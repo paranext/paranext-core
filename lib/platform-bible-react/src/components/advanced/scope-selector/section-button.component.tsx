@@ -60,10 +60,18 @@ function SectionButton({
     </Button>
   );
 
-  if (!isDisabled || !disabledExplanation) return button;
+  if (!disabledExplanation) return button;
 
+  // Wrapped whenever an explanation is supplied, not only while disabled: swapping the element type
+  // at this position on an `isDisabled` flip would remount the Button and drop keyboard focus. The
+  // wrapper is inert while `disabled` is false. `tw:flex` keeps it from breaking the button row it
+  // becomes a flex item of.
   return (
-    <DisabledActionTooltip disabled tooltipText={disabledExplanation}>
+    <DisabledActionTooltip
+      className="tw:flex"
+      disabled={isDisabled}
+      tooltipText={disabledExplanation}
+    >
       {button}
     </DisabledActionTooltip>
   );

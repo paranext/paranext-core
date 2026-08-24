@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Canon } from '@sillsdev/scripture';
 import { newPlatformError } from 'platform-bible-utils';
-import { BOOKS_PRESENT_DEFAULT } from 'platform-bible-utils/experimental';
 import { FindJobStatusReport } from 'platform-scripture';
 import {
   applyPreserveCase,
@@ -10,10 +8,7 @@ import {
   callControllerSafely,
   CharacterCategorizer,
   classifyPollAttempt,
-  deriveFindBookLists,
-  excludeExtraMaterialBooks,
   gateStartSearch,
-  getPresentBookIds,
   isDifferentProjectSelection,
   isFindQueryValid,
   isSimpleInterfaceMode,
@@ -659,140 +654,6 @@ describe('isDifferentProjectSelection', () => {
   });
 });
 
-/** Builds a `booksPresent` flag string of full canon length with the given books flagged present */
-function booksPresentFor(bookIds: string[]): string {
-  const flags = Array.from({ length: Canon.allBookIds.length }, () => '0');
-  bookIds.forEach((bookId) => {
-    flags[Canon.bookIdToNumber(bookId) - 1] = '1';
-  });
-  return flags.join('');
-}
-
-/** Reads back the ids flagged present in a `booksPresent` flag string */
-function presentBookIds(booksPresent: string): string[] {
-  const ids: string[] = [];
-  for (let index = 0; index < booksPresent.length; index += 1) {
-    if (booksPresent[index] === '1') ids.push(Canon.bookNumberToId(index + 1));
-  }
-  return ids;
-}
-
-/**
- * Every book id the canon classifies as extra material. Spelled out as literals rather than derived
- * from `Canon.isExtraMaterial` so this list is an independent oracle for the code under test.
- */
-const ALL_EXTRA_MATERIAL_BOOK_IDS = [
-  'XXA',
-  'XXB',
-  'XXC',
-  'XXD',
-  'XXE',
-  'XXF',
-  'XXG',
-  'FRT',
-  'BAK',
-  'OTH',
-  'INT',
-  'CNC',
-  'GLO',
-  'TDX',
-  'NDX',
-];
-
-describe('excludeExtraMaterialBooks', () => {
-  it('clears extra-scriptural books while keeping OT, NT, and DC books', () => {
-    const booksPresent = booksPresentFor(['GEN', 'MAT', 'TOB', 'GLO', 'FRT', 'INT', 'XXA']);
-    expect(presentBookIds(excludeExtraMaterialBooks(booksPresent))).toEqual(['GEN', 'MAT', 'TOB']);
-  });
-
-  it('clears every extra-material book in the canon, not just the common ones', () => {
-    const booksPresent = booksPresentFor([...ALL_EXTRA_MATERIAL_BOOK_IDS, 'GEN', 'REV']);
-    expect(presentBookIds(excludeExtraMaterialBooks(booksPresent))).toEqual(['GEN', 'REV']);
-  });
-
-  // `getAvailableBookIds` in platform-bible-react throws when the flag string is not exactly canon
-  // length, so the exclusion must clear flags in place rather than drop positions.
-  it('preserves the length of the flag string', () => {
-    const booksPresent = booksPresentFor(['GEN', 'GLO']);
-    expect(excludeExtraMaterialBooks(booksPresent)).toHaveLength(booksPresent.length);
-  });
-
-  it('leaves a string with no extra-scriptural books unchanged', () => {
-    const booksPresent = booksPresentFor(['GEN', 'MAT']);
-    expect(excludeExtraMaterialBooks(booksPresent)).toBe(booksPresent);
-  });
-
-  it('handles the default that is in place while the project setting resolves', () => {
-    expect(excludeExtraMaterialBooks(BOOKS_PRESENT_DEFAULT)).toBe(BOOKS_PRESENT_DEFAULT);
-  });
-
-  it('handles a flag string shorter than the canon', () => {
-    expect(excludeExtraMaterialBooks('000')).toBe('000');
-  });
-
-  it('leaves flags past the end of the canon alone', () => {
-    const overlong = `${booksPresentFor(['GEN', 'GLO'])}1`;
-    const result = excludeExtraMaterialBooks(overlong);
-    expect(result).toHaveLength(overlong.length);
-    expect(result[result.length - 1]).toBe('1');
-  });
-});
-
-describe('getPresentBookIds', () => {
-  it('lists the books flagged present in canonical order', () => {
-    expect(getPresentBookIds(booksPresentFor(['MAT', 'GEN', 'TOB']))).toEqual([
-      'GEN',
-      'MAT',
-      'TOB',
-    ]);
-  });
-
-  it('keeps extra-scriptural books, which are filtered separately', () => {
-    expect(getPresentBookIds(booksPresentFor(['GEN', 'GLO']))).toEqual(['GEN', 'GLO']);
-  });
-
-  it('drops obsolete books', () => {
-    // 4 Ezra is obsolete, so it has no localized name to show and cannot be navigated to.
-    expect(getPresentBookIds(booksPresentFor(['GEN', '4ES']))).toEqual(['GEN']);
-  });
-
-  it('returns nothing for the all-zero default that is in place while the setting resolves', () => {
-    expect(getPresentBookIds(booksPresentFor([]))).toEqual([]);
-  });
-});
-
-describe('deriveFindBookLists', () => {
-  it('excludes extra-scriptural books from the searchable flags and the available book ids', () => {
-    const lists = deriveFindBookLists(booksPresentFor(['GEN', 'MAT', 'GLO', 'FRT']));
-    expect(presentBookIds(lists.searchableBooksPresent)).toEqual(['GEN', 'MAT']);
-    expect(lists.availableBookIds).toEqual(['GEN', 'MAT']);
-  });
-
-  it('keeps extra-scriptural books localizable so a scope label can still name them', () => {
-    const lists = deriveFindBookLists(booksPresentFor(['GEN', 'GLO']));
-    expect(lists.localizableBookIds).toEqual(['GEN', 'GLO']);
-  });
-
-  it('keeps the searchable flag string at canon length so the book picker accepts it', () => {
-    const booksPresent = booksPresentFor(['GEN', 'GLO']);
-    expect(deriveFindBookLists(booksPresent).searchableBooksPresent).toHaveLength(
-      booksPresent.length,
-    );
-  });
-
-  it('yields empty book lists for the all-zero default in place while the setting resolves', () => {
-    const lists = deriveFindBookLists(booksPresentFor([]));
-    expect(lists.availableBookIds).toEqual([]);
-    expect(lists.localizableBookIds).toEqual([]);
-  });
-
-  it('offers nothing to search for a project whose only books are extra-scriptural', () => {
-    const lists = deriveFindBookLists(booksPresentFor(['GLO', 'FRT']));
-    expect(lists.availableBookIds).toEqual([]);
-    expect(lists.localizableBookIds).toEqual(['FRT', 'GLO']);
-  });
-});
-
 describe('prunePresentBookIds', () => {
   it('removes books the project does not have', () => {
     expect(prunePresentBookIds(['GEN', 'EXO'], ['GEN', 'LEV', 'EXO'])).toEqual(['GEN', 'EXO']);
@@ -813,7 +674,7 @@ describe('prunePresentBookIds', () => {
     expect(prunePresentBookIds(undefined, selectedBookIds)).toBe(selectedBookIds);
   });
 
-  // The other half of that distinction: Find excludes extra-scriptural books, so a project holding
+  // The other half of that distinction: Find excludes extra material, so a project holding
   // nothing else has a genuinely empty searchable book list. Treating that as "not known yet" would
   // leave a stale selection live and searchable.
   it('empties the selection when the project has no searchable books at all', () => {

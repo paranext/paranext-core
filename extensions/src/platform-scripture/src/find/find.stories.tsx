@@ -1,6 +1,7 @@
 import { Usj, usxStringToUsj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import type { Meta, StoryObj } from '@storybook/react-webpack5';
+import { expect, within } from 'storybook/test';
 import { Scope, SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
 import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import {
@@ -106,6 +107,9 @@ const availableBookIds = ['GEN', 'JHN'];
 const booksPresent = Canon.allBookIds
   .map((bookId) => (availableBookIds.includes(bookId) ? '1' : '0'))
   .join('');
+
+// The story project is scripture-only, so Find has no extra material to explain withholding.
+const hasExcludedExtraMaterial = false;
 
 const localizedBookData = new Map<string, LocalizedBookData>([
   ['GEN', { localizedId: 'Genesis', localizedName: 'Genesis' }],
@@ -507,6 +511,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       scope={scope}
       verseRef={verseRef}
       booksPresent={booksPresent}
+      hasExcludedExtraMaterial={hasExcludedExtraMaterial}
       selectedBookIds={selectedBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}
@@ -694,4 +699,57 @@ export const NoOpenProjects: Story = {
  */
 export const LoadingProjects: Story = {
   decorators: [createDecorator({ live: false, results: [], isLoadingProjects: true })],
+};
+
+/**
+ * Regression guard for the "Showing" row widening the panel. The panel is pinned to a 260px column
+ * — the shape Find is docked into in Simple mode — and the play function asserts that the panel
+ * does not scroll horizontally and that the scope summary is the element that clips.
+ *
+ * Before the fix the trigger kept its full content width: `tw:min-w-0` is inert against the
+ * `tw:shrink-0` every shadcn `Button` carries in its base class, so the row pushed past the panel
+ * and the whole web view grew a horizontal scrollbar.
+ *
+ * The assertions run when the story is opened in Storybook (Interactions panel), NOT in CI: the
+ * `storybook (chromium)` vitest project is scoped to `lib/platform-bible-react/.storybook`, and
+ * bundled-extension stories are collected only by the repo-root Storybook config, which has no
+ * vitest browser project. They become automatic if that changes; the layout assertion needs real
+ * layout, so jsdom cannot host it.
+ */
+export const NarrowPanelClipsScopeSummary: Story = {
+  decorators: [
+    createDecorator({ scope: 'selectedBooks', selectedBookIds: ['GEN', 'EXO', 'LEV'] }),
+    (Story) => (
+      <div data-testid="find-panel" className="tw:w-[260px] tw:overflow-x-auto">
+        <Story />
+      </div>
+    ),
+  ],
+  play: async ({ canvasElement, step }) => {
+    const canvas = within(canvasElement);
+
+    await step('The panel does not scroll horizontally', async () => {
+      const panel = canvas.getByTestId('find-panel');
+      // The regression: scrollWidth exceeding clientWidth IS the horizontal scrollbar.
+      await expect(panel.scrollWidth).toBeLessThanOrEqual(panel.clientWidth);
+    });
+
+    await step('The scope summary is the element that gives, by clipping', async () => {
+      const summary = canvas.getByText('GEN, EXO, LEV');
+      await expect(summary.getBoundingClientRect().width).toBeLessThanOrEqual(
+        canvas.getByTestId('find-panel').clientWidth,
+      );
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The scope trigger must clip its summary rather than widen the row. Asserted by ' +
+          "comparing the panel's scrollWidth against its clientWidth in a 260px column. Runs " +
+          'in the Interactions panel, not in CI — bundled-extension stories have no vitest ' +
+          'browser project.',
+      },
+    },
+  },
 };

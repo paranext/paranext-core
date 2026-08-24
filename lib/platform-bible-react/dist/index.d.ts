@@ -1685,6 +1685,12 @@ type SelectBooksPickerProps = {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/**
+	 * Optional explanations, by section, for why that section has no available books. A section with
+	 * no books renders no group at all, so its explanation is shown as a note under the list —
+	 * otherwise a search for one of its books lands on the bare "no book found".
+	 */
+	disabledSectionExplanations?: Partial<Record<Section, string>>;
 };
 /**
  * A searchable dropdown (combobox) for picking multiple books from the Bible canon. It provides:
@@ -1697,7 +1703,7 @@ type SelectBooksPickerProps = {
  * This is the standalone picker used by {@link SelectBooks}, which additionally renders section
  * quick-select buttons and badges for the current selection.
  */
-export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
+export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, disabledSectionExplanations, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no

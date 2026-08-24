@@ -101,6 +101,7 @@ export function SelectBooks({
         onChangeSelectedBookIds={onChangeSelectedBookIds}
         localizedStrings={localizedStrings}
         localizedBookNames={localizedBookNames}
+        disabledSectionExplanations={disabledSectionExplanations}
       />
 
       {selectedBookIds.length > 0 && (

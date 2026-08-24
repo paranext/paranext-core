@@ -53,7 +53,6 @@ import {
   armBoundedWait,
   callControllerSafely,
   classifyPollAttempt,
-  deriveFindBookLists,
   GIVE_UP_AFTER_MS,
   gateStartSearch,
   isDifferentProjectSelection,
@@ -64,6 +63,7 @@ import {
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
 } from './find/find.utils';
+import { deriveFindBookLists, UNKNOWN_FIND_BOOK_LISTS } from './find/find-book-lists.utils';
 import {
   STRUCTURE_PROTECTED_ERROR,
   replacementContainsStructuralMarker,
@@ -674,10 +674,10 @@ global.webViewComponent = function FindWebView({
     BOOKS_PRESENT_DEFAULT,
   );
 
-  // Extra-scriptural books are excluded inside `deriveFindBookLists`, which covers both book-list
-  // consumers at once: the `availableBooksIds` the search runs over and the `booksPresent` the scope
-  // selector builds its book picker from. Filtering one but not the other would let a user pick a
-  // book the search never covers.
+  // Extra material is excluded inside `deriveFindBookLists`, which covers both book-list consumers
+  // at once: the `availableBooksIds` the picker's selection is pruned against and the `booksPresent`
+  // the scope selector builds its book picker from. Filtering one but not the other would let a user
+  // pick a book the search never covers.
   //
   // This does NOT cover the `book`/`chapter` scopes, which build `findScope` from
   // `verseRefSetting.book` rather than from these lists. The navigation control offers every book the
@@ -685,13 +685,19 @@ global.webViewComponent = function FindWebView({
   // a book of extra material those two scopes still search it and still report the useless
   // reference this exclusion exists to hide. Closing that path means gating the scopes themselves
   // on the current book being searchable; PT-4415 tracks it.
+  //
+  // A book list is "not known" while the setting is still resolving AND when the read fails.
+  // `useProjectSetting` reports a delivered `PlatformError` as loaded, so the error branch has to be
+  // recognized explicitly: treating it as an answer would report zero available books, and the prune
+  // below would then wipe the user's persisted selection for good.
   const bookLists = useMemo(() => {
+    if (isBooksPresentLoading) return UNKNOWN_FIND_BOOK_LISTS;
     if (isPlatformError(booksPresentPossiblyError)) {
       logger.warn(`Error getting books present: ${getErrorMessage(booksPresentPossiblyError)}`);
-      return deriveFindBookLists(BOOKS_PRESENT_DEFAULT);
+      return UNKNOWN_FIND_BOOK_LISTS;
     }
     return deriveFindBookLists(booksPresentPossiblyError);
-  }, [booksPresentPossiblyError]);
+  }, [isBooksPresentLoading, booksPresentPossiblyError]);
 
   // `localizableBookIds` covers every book the project has, not just the searchable ones: the `book`
   // and `chapter` scopes label themselves from the CURRENT reference, which can sit in a book of
@@ -701,6 +707,12 @@ global.webViewComponent = function FindWebView({
     availableBookIds: availableBooksIds,
     localizableBookIds,
   } = bookLists;
+
+  // The two lists differ only by extra material (both already drop obsolete books), so a shortfall
+  // is exactly "this project has extra material that Find withholds". While the book list is
+  // unknown there is nothing to explain yet.
+  const hasExcludedExtraMaterial =
+    availableBooksIds !== undefined && localizableBookIds.length > availableBooksIds.length;
 
   // Whether the project preserves invisible characters literally in USFM. Forwarded to the result
   // cards so the "Show invisible" preview renders the USFM tilde `~` as a literal tilde (true) vs. an
@@ -736,24 +748,21 @@ global.webViewComponent = function FindWebView({
   // `scope === 'selectedBooks'` the search would silently cover fewer books than the checkbox list
   // shows. Prune the selection to what the newly selected project actually has.
   //
-  // "Don't know the books yet" must not read as "the project has no books", so the book list is
-  // withheld (passed as `undefined`) until the setting resolves rather than inferred from an empty
-  // list. `useProjectSetting` re-enters loading whenever the project changes, and holds the previous
-  // project's value in the meantime — so emptiness alone can't tell a pending read from a project
-  // that genuinely has nothing to search, which is a real case here because extra material is
-  // excluded above.
+  // "Don't know the books yet" must not read as "the project has no books", so `availableBooksIds`
+  // is `undefined` until the setting resolves rather than inferred from an empty list, and the
+  // selection is then left untouched. `useProjectSetting` re-enters loading whenever the project
+  // changes, and holds the previous project's value in the meantime — so emptiness alone can't tell
+  // an unread list from a project that genuinely has nothing to search, which is a real case here
+  // because extra material is excluded above.
   //
   // Depends on `selectedBookIds` because `useWebViewState`'s setter takes a value, not an updater.
   // That is safe: `prunePresentBookIds` returns the original array reference when nothing needs
   // removing, so the identity check makes the write conditional and the effect converges after a
   // single prune instead of re-triggering itself.
   useEffect(() => {
-    const prunedBookIds = prunePresentBookIds(
-      isBooksPresentLoading ? undefined : availableBooksIds,
-      selectedBookIds,
-    );
+    const prunedBookIds = prunePresentBookIds(availableBooksIds, selectedBookIds);
     if (prunedBookIds !== selectedBookIds) setSelectedBookIds(prunedBookIds);
-  }, [isBooksPresentLoading, availableBooksIds, selectedBookIds, setSelectedBookIds]);
+  }, [availableBooksIds, selectedBookIds, setSelectedBookIds]);
 
   const availableBooksLocalizationKeys = useMemo(() => {
     const keys: `%${string}%`[] = [];
@@ -2080,6 +2089,7 @@ global.webViewComponent = function FindWebView({
       scope={scope}
       verseRef={verseRefSetting}
       booksPresent={booksPresent}
+      hasExcludedExtraMaterial={hasExcludedExtraMaterial}
       allowInvisibleCharacters={allowInvisibleCharacters}
       selectedBookIds={selectedBookIds}
       localizedBookData={localizedBookData}
