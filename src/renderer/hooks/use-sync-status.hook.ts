@@ -81,6 +81,22 @@ function isSameProjectIdSet(a: readonly string[], b: readonly string[]): boolean
   return sortedA.every((id, index) => id === sortedB[index]);
 }
 
+/**
+ * Every `ResultStatus` this hook knows how to read. Validated as membership rather than as a bare
+ * string because the green check rests on the complement: `FAILED_RESULT_STATUSES` names the three
+ * non-success values, so a value outside the union would fall through as a success. This contract
+ * is demonstrably still moving — `syncingProjectIds` was just added to it — and a seventh status
+ * arriving should report `unknown` (honest) rather than a possibly-false `synced`.
+ */
+const KNOWN_RESULT_STATUSES: ReadonlySet<string> = new Set<ResultStatus>([
+  'succeeded',
+  'initialSend',
+  'initialReceive',
+  'failed',
+  'notUpgraded',
+  'projectVersionUpgraded',
+]);
+
 /** Result statuses that mean the project did NOT sync successfully. */
 const FAILED_RESULT_STATUSES: ReadonlySet<ResultStatus> = new Set<ResultStatus>([
   'failed',
@@ -131,9 +147,10 @@ function isValidSyncState(state: unknown): state is SyncState {
     if (syncingProjectIds.some((id: unknown) => typeof id !== 'string')) return false;
   }
   // Absent is valid — it just means nothing has synced yet. Present-but-malformed is not: the green
-  // check rests entirely on every entry's `resultStatus`, and `didLastSyncSucceed` reads a missing
-  // one as "not a failure", so an entry without it would report success on unreadable data. Failing
-  // the whole snapshot here reports `unknown` instead, which is what a snapshot we cannot read is.
+  // check rests entirely on every entry's `resultStatus`, and `didLastSyncSucceed` reads anything
+  // that is not one of the three failure values as a success, so an entry whose status is missing or
+  // outside the union would report success on data we cannot read. Failing the whole snapshot here
+  // reports `unknown` instead, which is what a snapshot we cannot read is.
   if ('lastResults' in state && state.lastResults !== undefined) {
     const { lastResults } = state;
     if (typeof lastResults !== 'object' || !lastResults) return false;
@@ -144,7 +161,8 @@ function isValidSyncState(state: unknown): state is SyncState {
       typeof result === 'object' &&
       !!result &&
       'resultStatus' in result &&
-      typeof result.resultStatus === 'string';
+      typeof result.resultStatus === 'string' &&
+      KNOWN_RESULT_STATUSES.has(result.resultStatus);
     if (!Object.values(resultsInfo).every(isValidResult)) return false;
   }
   return true;

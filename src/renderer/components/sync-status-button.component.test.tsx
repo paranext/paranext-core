@@ -399,6 +399,44 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
     expect(await screen.findByText('Test status unavailable')).toBeInTheDocument();
   });
 
+  // Same seam, the other way in: `resultStatus` is present and a string, but outside the union. The
+  // failure check is a membership test over three values, so an unrecognised seventh status would
+  // fall through as a success and earn a green check on data this build cannot interpret.
+  it('reports unknown rather than synced when a result entry has an unrecognised resultStatus', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['proj1'] },
+      {
+        isSyncing: false,
+        lastRequestedProjectIds: ['proj1'],
+        syncingProjectIds: [],
+        lastResults: {
+          sendReceiveDate: '2026-08-24T00:00:00Z',
+          resultsInfo: {
+            // A status a later send/receive added and this build has never heard of, so it is not
+            // in `ResultStatus` and can only come in through `unknown` — exactly the shape the wire
+            // can carry and the type cannot.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            proj1: { id: 'proj1', resultStatus: 'quicheLorraine' } as unknown as ResultInfo,
+          },
+        },
+      },
+    ]);
+    render(<SyncStatusButton />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('Test Syncing');
+    });
+
+    fireSyncStateChanged(false);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-button')).toHaveTextContent('Sync');
+    });
+    expect(screen.queryByRole('button', { name: 'Test Synced' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('toolbar-sync-button'));
+    expect(await screen.findByText('Test status unavailable')).toBeInTheDocument();
+  });
+
   it('reports a failure when only one project of several did not succeed', async () => {
     mockSyncState(completedState({ ok1: 'succeeded', ok2: 'initialSend', bad: 'notUpgraded' }));
 
@@ -501,6 +539,9 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
       expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith({
         message: SYNC_UNAVAILABLE_MESSAGE_KEY,
         severity: 'warning',
+        // A shared id per message, so clicking again during a cold start replaces the toast
+        // rather than stacking another identical copy.
+        notificationId: 'toolbar-sync-unavailable',
       });
     });
   });
@@ -521,6 +562,9 @@ describe('SyncStatusButton — failed and cancelled syncs', () => {
       expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith({
         message: SYNC_UNAVAILABLE_MESSAGE_KEY,
         severity: 'warning',
+        // A shared id per message, so clicking again during a cold start replaces the toast
+        // rather than stacking another identical copy.
+        notificationId: 'toolbar-sync-unavailable',
       });
     });
   });
@@ -956,6 +1000,7 @@ describe('SyncStatusButton — popover and cancel', () => {
       expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith({
         message: SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
         severity: 'warning',
+        notificationId: 'toolbar-sync-cancel-unavailable',
       });
     });
     expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveAttribute(
@@ -1129,6 +1174,49 @@ describe('SyncStatusButton — popover and cancel', () => {
     });
     // Let the re-read's state updates land before asserting nothing changed.
     await act(async () => {});
+
+    const cancel = screen.getByTestId('toolbar-sync-cancel-button');
+    expect(cancel).toHaveTextContent('Test Cancelling');
+    expect(cancel).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  // The blank window the two tests above dodge is also clickable: while the follow-up read is in
+  // flight the popover shows the bare "Syncing" with a live Cancel. A cancel latched there names
+  // nothing, so every id in the next read looks new — and the same sync would re-arm it.
+  it('keeps Cancel pending when it was clicked while the id set was blank', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    const heldRead = deferredSyncState();
+    const syncingOfA: SyncState = {
+      isSyncing: true,
+      lastRequestedProjectIds: [],
+      syncingProjectIds: ['a'],
+    };
+    // The seed answers, then the event's follow-up read is held open — that is the blank window.
+    mockSyncStateSequence([syncingOfA, heldRead.promise, syncingOfA]);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    await waitFor(() => {
+      expect(
+        within(screen.getByTestId('toolbar-sync-popover-projects')).getAllByRole('listitem'),
+      ).toHaveLength(1);
+    });
+
+    fireSyncStateChanged(true);
+    // No named project any more, but still syncing and still cancellable.
+    await waitFor(() => {
+      expect(screen.queryByTestId('toolbar-sync-popover-projects')).not.toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    // The held read answers with the sync that was already running — not a new one.
+    await act(async () => {
+      heldRead.resolve(syncingOfA);
+    });
 
     const cancel = screen.getByTestId('toolbar-sync-cancel-button');
     expect(cancel).toHaveTextContent('Test Cancelling');

@@ -1092,6 +1092,15 @@ step, no automation. Just a record.
   Send/Receive declaration. NN-4's "a single, truthful notification" is therefore not achieved in the
   shipped product by this decision alone, and the remaining work is cross-repo rather than a change to
   this component.
+  One more consequence of the status resting on `resultStatus`: the green check is decided by the
+  *complement* of a three-value failure set, so any value outside `ResultStatus` would read as a
+  success. Because this contract is demonstrably still moving — `syncingProjectIds` was added to it by
+  this very work — the snapshot validator checks `resultStatus` for membership in the known union
+  rather than merely for being a string, and a snapshot carrying an unrecognised status reports
+  `unknown` (yellow, honest) instead of a possibly-false `synced`. The cost is deliberate: a seventh
+  status added upstream degrades this button to `unknown` until core's mirrored declaration is
+  re-synced, which is the failure direction this whole entry chooses everywhere else.
+
 - **Follow-up (needs tickets under PT-4336, none filed as of this entry):** three items above are
   deliberately out of this decision's scope and will not happen on their own.
   1. *Close the Simple-mode startup-sync blind spot* — route `main/startup-tasks.ts` and the picker's

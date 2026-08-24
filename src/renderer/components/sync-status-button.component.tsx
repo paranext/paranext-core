@@ -55,6 +55,15 @@ export const SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY: LocalizeKey = '%toolbar_sync_c
 export const SYNC_UNAVAILABLE_MESSAGE_KEY: LocalizeKey = '%toolbar_sync_unavailable%';
 
 /**
+ * Ids that make each of this component's two warnings replace its own previous copy instead of
+ * stacking another. Both fire on the cold-start path they exist for, where a user who clicks again
+ * because nothing visibly happened would otherwise collect identical toasts. One id per message
+ * rather than one shared id, so the two never overwrite each other's distinct text.
+ */
+const SYNC_CANCEL_UNAVAILABLE_NOTIFICATION_ID = 'toolbar-sync-cancel-unavailable';
+const SYNC_UNAVAILABLE_NOTIFICATION_ID = 'toolbar-sync-unavailable';
+
+/**
  * Every key this component renders. Exported so the localization-parity test asserts against the
  * list the component actually reads, rather than a hand-copied duplicate that silently stops
  * matching the moment a key is added here.
@@ -160,6 +169,7 @@ export function SyncStatusButton() {
         await notificationService.send({
           message: SYNC_CANCEL_UNAVAILABLE_MESSAGE_KEY,
           severity: 'warning',
+          notificationId: SYNC_CANCEL_UNAVAILABLE_NOTIFICATION_ID,
         });
       } catch (notificationError) {
         logger.warn(
@@ -186,6 +196,7 @@ export function SyncStatusButton() {
       await notificationService.send({
         message: SYNC_UNAVAILABLE_MESSAGE_KEY,
         severity: 'warning',
+        notificationId: SYNC_UNAVAILABLE_NOTIFICATION_ID,
       });
     } catch (notificationError) {
       logger.warn(
@@ -227,6 +238,12 @@ export function SyncStatusButton() {
     const cancelledForIds = cancelledForIdsRef.current;
     // No cancel pending: nothing to re-arm, and nothing to compare against.
     if (!cancelledForIds) return;
+    // A latch that names nothing cannot prove a different sync is running, for the same reason the
+    // blank set above cannot: a cancel clicked during that blank window latches `[]`, and every id
+    // in the next read would then look new. Staying pending until the status leaves `syncing` (the
+    // effect above) is the safe half of the trade — it can delay re-arming for a genuinely new
+    // overlapping sync, but it never shows a live "Cancel sync" while a cancel is in flight.
+    if (cancelledForIds.length === 0) return;
     if (!currentIds.some((id) => !cancelledForIds.includes(id))) return;
     setIsCancelling(false);
     setIsCancelEnabled(true);
