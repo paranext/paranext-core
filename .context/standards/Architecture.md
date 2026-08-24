@@ -108,15 +108,15 @@ more than one window.
   window-scoped network objects, which makes "a second window cannot start because the name is
   taken" structurally impossible rather than fixed case by case. The window-scoped services got
   there by scoping their network object names; the two app-global services got there by being hosted
-  in main — `src/main/services/scroll-group.service-host.ts` (ADR-0014) and
-  `src/main/services/theme.service-host.ts` (ADR-0015). Main outlives every window, so a
+  in main — `src/main/services/scroll-group.service-host.ts` (ADR-0020) and
+  `src/main/services/theme.service-host.ts` (ADR-0021). Main outlives every window, so a
   globally-unique name it registers is held for the life of the app and no window's close can free
   it.
 
   Commands and request names went further than scoping: a renderer registers none of them. Every
   command a window used to host — the dialogs, the settings tabs, the Usersnap forms, the
   BookChapterControl, the scripture navigation steps — is registered in main and forwarded to a
-  window's shard as a method call (ADR-0016). There is nothing left to keep a per-window name list
+  window's shard as a method call (ADR-0022). There is nothing left to keep a per-window name list
   in step with.
 
   **Two exceptions.** Extension and web-view code calls `papi.commands.registerCommand(...)` exactly
