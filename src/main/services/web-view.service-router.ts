@@ -300,10 +300,13 @@ async function findLayoutTargetOwner(targetTabId: string): Promise<WindowShard |
  * tab is appearing in front of the user there anyway and taking OS focus would interrupt whatever
  * else they are doing to show it to them.
  *
- * It happens only while this app holds focus, so this can move focus BETWEEN this app's windows but
- * never take it from another application. An open routed here need not be something the user just
- * asked for — an extension can re-open a web view by id at any moment — and pulling the app in
- * front of whatever they are working in would be the wrong answer to every one of those.
+ * It happens only once some window in this app has been focused, which keeps a raise from firing
+ * during startup before the user has interacted. That is the whole of what the gate establishes:
+ * the flag latches on the first focus and nothing clears it, so this does NOT know whether the app
+ * holds focus right now, and a raise can still take focus from another application. An open routed
+ * here need not be something the user just asked for — an extension can re-open a web view by id at
+ * any moment — and pulling the app in front of whatever they are working in is the wrong answer to
+ * every one of those, so the blur-aware check that would make this safe is TODO(PT-4281).
  *
  * It happens only when the caller did not opt out with `bringToFront: false` — see the comment
  * below.
