@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
     getUnreachableWindowIds: vi.fn(),
     getAbandonedWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
+    wasWindowEverReady: vi.fn(),
     getFocusedWindowId: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
@@ -63,6 +64,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getUnreachableWindowIds: mocks.getUnreachableWindowIds,
   getAbandonedWindowIds: mocks.getAbandonedWindowIds,
   isWindowReady: mocks.isWindowReady,
+  wasWindowEverReady: mocks.wasWindowEverReady,
   getFocusedWindowId: mocks.getFocusedWindowId,
   focusWindow: mocks.focusWindow,
 }));
@@ -121,6 +123,7 @@ describe('web view service router', () => {
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
+    mocks.wasWindowEverReady.mockReturnValue(true);
     mocks.getFocusedWindowId.mockReturnValue(1);
   });
 
@@ -911,6 +914,18 @@ describe('web view service router', () => {
       // the truth, so its unsynced work would be dropped with nothing to correct it later.
       withWindows({ 1: undefined });
       mocks.isWindowReady.mockReturnValue(true);
+      mocks.wasWindowEverReady.mockReturnValue(true);
+
+      await expect(getOpenWebViewDefinitionsForWindow(1)).rejects.toThrow('could not be read');
+    });
+
+    test('refuses to answer "nothing open" for a window whose renderer has since died', async () => {
+      // The case the readiness check used to get wrong. A crashed window is marked not-ready, so a
+      // guard reading "is ready now" falls through to the empty answer for the very window most
+      // likely to be holding unsaved work — silently, on the one path that cannot ask again later.
+      withWindows({ 1: undefined });
+      mocks.isWindowReady.mockReturnValue(false);
+      mocks.wasWindowEverReady.mockReturnValue(true);
 
       await expect(getOpenWebViewDefinitionsForWindow(1)).rejects.toThrow('could not be read');
     });
@@ -919,6 +934,7 @@ describe('web view service router', () => {
       // A window that was never ready never had a web view in it, so there is nothing to warn about
       withWindows({ 1: undefined });
       mocks.isWindowReady.mockReturnValue(false);
+      mocks.wasWindowEverReady.mockReturnValue(false);
 
       await expect(getOpenWebViewDefinitionsForWindow(1)).resolves.toEqual([]);
     });
