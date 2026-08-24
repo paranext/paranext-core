@@ -1223,30 +1223,171 @@ declare module 'platform-scripture' {
   // #region Pt9 Interlinear Types
 
   /**
-   * One PT9 interlinear file: its raw text and the lowercase SHA-256 hex of the bytes that text was
-   * read from. The hash is over the raw bytes, so it matches the same file's manifest hash and lets
-   * a caller persist the fingerprint of exactly the content it received.
+   * One lexeme reference inside a PT9 interlinear cluster: the lexicon lexeme it selects and, when
+   * the user chose a specific sense, the id of that sense's gloss entry.
    *
    * @experimental
    */
-  export type Pt9InterlinearFile = {
-    /** The file's raw text (any byte-order mark is stripped; the hash still covers the raw bytes). */
-    text: string;
-    /** Lowercase SHA-256 hex of the file's raw bytes. */
-    sha256: string;
+  export type Pt9InterlinearLexemeRef = {
+    /**
+     * Lexeme id, e.g. `Word:greetings` or `Stem:run` (`Type:Form` with an optional homograph).
+     * Absent only when the cluster element is corrupt (no id attribute); consumers should count and
+     * drop such references.
+     */
+    lexemeId?: string;
+    /**
+     * Id of the selected sense within the lexeme's lexicon entry, when one was chosen. Sense ids
+     * are 8 characters of Base64, so `/` and `+` are legal. Stored in PT9's XML as `GlossId` for
+     * historical reasons; it references a sense, not a gloss.
+     */
+    senseId?: string;
   };
 
   /**
-   * Map of project-relative, forward-slash-normalized PT9 interlinear file path to that file's
-   * content and fingerprint. Empty when the project has no interlinear data.
+   * One glossed cluster in a verse. `index` and `length` locate the cluster in the verse text as
+   * PT9 recorded it; they index PT9's own string, not any text this provider returns.
    *
    * @experimental
    */
-  export type Pt9InterlinearFileSet = { [filePath: string]: Pt9InterlinearFile };
+  export type Pt9InterlinearCluster = {
+    index: number;
+    length: number;
+    /** True when the user excluded this occurrence from the interlinear. */
+    excluded: boolean;
+    /** The cluster's lexemes in order; more than one means a morphological word parse. */
+    lexemes: Pt9InterlinearLexemeRef[];
+  };
+
+  /**
+   * One punctuation adjustment PT9 recorded for a verse's back translation output.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearPunctuation = {
+    index: number;
+    length: number;
+    beforeText?: string;
+    afterText?: string;
+  };
+
+  /**
+   * One verse's interlinear data.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearVerse = {
+    /** Verse reference as PT9 stored it, e.g. `JAS 1:2`. */
+    reference: string;
+    /** PT9's hash of the verse text at approval time; absent when the verse was never approved. */
+    approvedHash?: string;
+    clusters: Pt9InterlinearCluster[];
+    punctuations: Pt9InterlinearPunctuation[];
+  };
+
+  /**
+   * One book's interlinear data for one gloss language. `glossLanguage` and `bookId` come from the
+   * file's own attributes, not from its file name.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearBook = {
+    glossLanguage?: string;
+    bookId?: string;
+    verses: Pt9InterlinearVerse[];
+  };
+
+  /**
+   * One gloss of a lexicon sense in one target language.
+   *
+   * @experimental
+   */
+  export type Pt9LexiconGloss = {
+    language?: string;
+    text: string;
+  };
+
+  /**
+   * One sense of a lexicon entry, carrying the id that interlinear clusters reference.
+   *
+   * @experimental
+   */
+  export type Pt9LexiconSense = {
+    id?: string;
+    glosses: Pt9LexiconGloss[];
+  };
+
+  /**
+   * One lexicon entry: the lexeme's morphological type (`Word`, `Phrase`, `Stem`, `Prefix`,
+   * `Suffix`, or `Lemma`), its form, its homograph number, and its senses.
+   *
+   * @experimental
+   */
+  export type Pt9LexiconEntry = {
+    type: string;
+    form: string;
+    homograph: number;
+    senses: Pt9LexiconSense[];
+  };
+
+  /**
+   * The known morphological breakdowns of one surface word. Each analysis is an ordered list of
+   * lexeme ids.
+   *
+   * @experimental
+   */
+  export type Pt9WordParse = {
+    word: string;
+    analyses: string[][];
+  };
+
+  /**
+   * The project's PT9 lexicon: gloss entries by lexeme plus the legacy word analyses that older
+   * Paratext versions stored inside Lexicon.xml.
+   *
+   * @experimental
+   */
+  export type Pt9Lexicon = {
+    language?: string;
+    entries: Pt9LexiconEntry[];
+    legacyAnalyses: Pt9WordParse[];
+  };
+
+  /**
+   * One configured interlinearization: the gloss language id and, for setups created without a
+   * model text, the display name the user gave the language.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearSetup = {
+    languageId?: string;
+    languageName?: string;
+  };
+
+  /**
+   * A Paratext project's complete PT9 interlinear data, parsed from the project's files.
+   * `hasAssociatedLexicalProject` is true when the project's lexicon lives in an associated
+   * external lexical project (e.g. FieldWorks) rather than in Lexicon.xml, so an absent `lexicon`
+   * does not mean the project has no gloss data.
+   *
+   * Files are read with Paratext 9's own semantics, never more strictly: a duplicate verse
+   * reference, lexicon key, or wordform keeps the last occurrence; a cluster missing its Range
+   * element gets range (0, 0); and a malformed boolean or unknown enum name fails the whole file
+   * the same way it would fail in Paratext 9.
+   *
+   * @experimental
+   */
+  export type Pt9InterlinearProjectData = {
+    setups: Pt9InterlinearSetup[];
+    books: Pt9InterlinearBook[];
+    lexicon?: Pt9Lexicon;
+    wordAnalyses: Pt9WordParse[];
+    hasAssociatedLexicalProject: boolean;
+  };
 
   /**
    * Map of project-relative, forward-slash-normalized PT9 interlinear file path to the lowercase
-   * SHA-256 hex of that file's current bytes. Empty when the project has no interlinear data.
+   * SHA-256 hex of that file's current bytes: an opaque change-detection token per file. Empty when
+   * the project has no interlinear data.
    *
    * @experimental
    */
@@ -1263,15 +1404,16 @@ declare module 'platform-scripture' {
   export type Pt9InterlinearProjectInterfaceDataTypes = {
     /** Per-file SHA-256 hex, for change detection without transferring content. */
     Pt9InterlinearManifest: DataProviderDataType<undefined, Pt9InterlinearManifest, never>;
-    /** Per-file raw text plus fingerprint. */
-    Pt9InterlinearFiles: DataProviderDataType<undefined, Pt9InterlinearFileSet, never>;
+    /** The parsed interlinear data. */
+    Pt9InterlinearData: DataProviderDataType<undefined, Pt9InterlinearProjectData, never>;
   };
 
   /**
-   * Read-only access to a Paratext project's persisted PT9 interlinear files, for importing legacy
-   * interlinear data into an interlinearizer. Advertised only on editable projects - published
-   * (resource) projects are archives that do not carry interlinear authoring data - so a consumer
-   * reads "interface unsupported" as "no PT9 interlinear import available for this project".
+   * Read-only access to a Paratext project's persisted PT9 interlinear data, parsed from the
+   * project's interlinear files, for importing legacy interlinear data into an interlinearizer.
+   * Advertised only on editable projects - published (resource) projects are archives that do not
+   * carry interlinear authoring data - so a consumer reads "interface unsupported" as "no PT9
+   * interlinear import available for this project".
    *
    * Both data types are read-only: `set*` is unsupported and throws if called; the authoritative
    * source is the files on disk, not this projectInterface. The interface raises no change events -
@@ -1318,31 +1460,32 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
 
       /**
-       * Returns each PT9 interlinear file's raw text and byte fingerprint, keyed by
-       * project-relative path; empty when the project has no interlinear data. Throws if a file
-       * found by the scan cannot be read, so a caller never receives a partial set.
+       * Returns the project's PT9 interlinear data parsed from its interlinear files: setups,
+       * per-book cluster data, the lexicon, and stored word analyses. Empty lists when the project
+       * has no interlinear data. Throws if a file found by the scan cannot be read or parsed, so a
+       * caller never receives a partial payload.
        *
        * @experimental
        */
-      getPt9InterlinearFiles(): Promise<Pt9InterlinearFileSet>;
+      getPt9InterlinearData(): Promise<Pt9InterlinearProjectData>;
       /**
        * Read-only - throws if called. See {@link setPt9InterlinearManifest}.
        *
        * @experimental
        */
-      setPt9InterlinearFiles(
+      setPt9InterlinearData(
         newValue: never,
       ): Promise<DataProviderUpdateInstructions<Pt9InterlinearProjectInterfaceDataTypes>>;
       /**
-       * Subscribe to the file set. Emits at most the current value once; the interface does not
+       * Subscribe to the parsed data. Emits at most the current value once; the interface does not
        * track file changes, so no further updates fire. Poll `getPt9InterlinearManifest` to detect
        * changes.
        *
        * @experimental
        */
-      subscribePt9InterlinearFiles(
+      subscribePt9InterlinearData(
         selector: undefined,
-        callback: (files: Pt9InterlinearFileSet | PlatformError) => void,
+        callback: (data: Pt9InterlinearProjectData | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
