@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { isPlatformError } from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import type {
   EffectiveResourceReference,
   EffectiveResourceReferenceList,
   ResourceReference,
   ResourceReferenceList,
 } from 'platform-scripture';
+import { logger } from '@papi/frontend';
 import { useProjectDataProvider } from '@papi/frontend/react';
 import {
   CURRENT_DATA_VERSION,
@@ -25,7 +26,7 @@ function getDeduplicationKey(item: ResourceReference): string | undefined {
   if ('id' in item && typeof item.id === 'string') return `id:${item.id}`;
   if ('name' in item && typeof item.name === 'string') return `name:${item.name}`;
   // Should never happen after upstream validation; discard rather than silently misidentify
-  console.error(`Resource reference of type '${item.type}' has no string name; discarding.`);
+  logger.warn(`Resource reference of type '${item.type}' has no string name; discarding.`);
   return undefined;
 }
 
@@ -43,6 +44,14 @@ function mergeResourceReferenceLists(
   const merged: EffectiveResourceReference[] = [];
 
   const processItems = (items: ResourceReference[], source: 'admin' | 'user') => {
+    // These lists come from a project file that reaches us via send/receive without passing through
+    // `resourceReferenceListValidator`, which runs on write only. A malformed `items` would throw
+    // inside the memo and unmount the panel with no error boundary.
+    if (!Array.isArray(items)) {
+      logger.warn('Resource reference list has a non-array `items` field; treating it as empty.');
+      return;
+    }
+
     items
       .filter((item) => KNOWN_RESOURCE_TYPES.has(item.type))
       .forEach((item) => {
@@ -124,7 +133,9 @@ export function useEffectiveResourceReferenceList(
         return undefined;
       })
       .catch((err) => {
-        console.error(`Failed to subscribe to user text connection settings: ${err}`);
+        logger.error(
+          `Failed to subscribe to user text connection settings: ${getErrorMessage(err)}`,
+        );
         // Fall back to an empty user layer so the merged list still resolves. Leaving it
         // `undefined` reported `loading` forever — an unresolvable spinner — and contradicted this
         // hook's own contract, which promises the project-level items in this case.

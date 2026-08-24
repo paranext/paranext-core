@@ -19,7 +19,7 @@ vi.mock('@papi/frontend/react', () => ({
 
 vi.mock('@papi/frontend', () => ({
   default: { network: { getNetworkEvent: vi.fn(() => 'event-token') } },
-  logger: { warn: vi.fn() },
+  logger: { warn: vi.fn(), error: vi.fn() },
 }));
 
 // Capture the re-arm handler so buffering can be exercised.
@@ -248,7 +248,10 @@ describe('useEffectiveResourceReferenceList', () => {
   });
 
   it('reports loading when projectId is undefined', () => {
-    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
+    // The project setting is settled on purpose. With `isLoading: true` the first guard fired and
+    // `projectId` was never consulted, so this pinned nothing: without a project there is no user
+    // PDP, and that is what must keep the hook out of `ready`.
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
     mockUseProjectDataProvider.mockReturnValue(undefined);
 
     const { result } = renderHook(() =>
@@ -432,6 +435,28 @@ describe('useEffectiveResourceReferenceList', () => {
 
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(readyList(result.current).items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
+  });
+
+  it('survives a malformed items field rather than crashing the panel', () => {
+    // `items` comes from a project file that reaches us via send/receive without passing through
+    // `resourceReferenceListValidator` (which runs on write only). A non-array `items` makes
+    // `items.filter` throw inside the memo, which unmounts the panel's React tree with no error
+    // boundary — the opposite of the graceful `error` state this hook exists to provide.
+    const malformed = {
+      dataVersion: '1.0.0',
+      // Cast through unknown to simulate a malformed list that passed the type boundary at runtime.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      items: 'not-an-array' as unknown as ResourceReferenceList['items'],
+    };
+    mockUseProjectSetting.mockReturnValue([malformed, undefined, undefined, false]);
+    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    expect(result.current.status).toBe('ready');
+    expect(readyList(result.current).items).toEqual([]);
   });
 
   it('discards name-based items that are missing a string name', () => {
