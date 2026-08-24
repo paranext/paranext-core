@@ -68,6 +68,8 @@ const config = defineConfig({
       // rejects the very app they need to attach to:
       //   ./.erb/scripts/refresh.sh
       //   npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/
+      // The entry below therefore only registers the directory with this config; its practical
+      // effect is that `test:e2e:all` (this config, no --project) cannot pass either.
       name: 'enhanced-resources',
       testDir: './tests/enhanced-resources',
     },

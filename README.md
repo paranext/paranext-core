@@ -463,7 +463,10 @@ All `test:e2e:*` scripts are there for running variations of the playwright end-
   the `title-bar` and `navigation-history` subsets attach to a running app over CDP, which the
   project's own global setup refuses to start alongside
 - `test:e2e-cdp` runs tests that require the application UI to be open already
-- `test:e2e:all` runs all configured tests
+- `test:e2e:all` runs every project in `e2e-tests/playwright.config.ts`. Like
+  `test:e2e:isolated all` it cannot currently pass: `enhanced-resources`, `title-bar` and
+  `navigation-history` all attach to a running app, which that config's global setup refuses to
+  start alongside
 
 ## Storybook
 

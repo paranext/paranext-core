@@ -18,7 +18,9 @@ How each subset gets its app differs — see "Subdirectories" below.
 # The bare form runs nothing: it lists the subsets and exits 1.
 npm run test:e2e:isolated all
 
-# A single file
+# A single file, or any path — this also reaches the specs directly under tests/isolated/, which
+# belong to no subset because run-isolated.mjs derives subsets from directories only
+npm run test:e2e:isolated tests/isolated/comments-tab.spec.ts
 npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e2e-tests/tests/isolated/<file>.spec.ts
 
 # On WSL2, wrap a subset that launches its own Electron to keep its windows off the desktop.
@@ -26,6 +28,14 @@ npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e
 # started separately by ./.erb/scripts/refresh.sh, which already runs it under its own Xvfb.
 e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 ```
+
+## Spec files directly under `tests/isolated/`
+
+These belong to no subset; run them by path (see "How to run").
+
+- `comments-tab.spec.ts` (one Electron per worker)
+- `first-run-wizard.spec.ts` (one Electron per test)
+- `internet-settings.spec.ts` (one Electron per test)
 
 ## Subdirectories
 
