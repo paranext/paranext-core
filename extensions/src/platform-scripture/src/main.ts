@@ -1,7 +1,7 @@
 import papi, { logger } from '@papi/backend';
-import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
-import { PlatformEventEmitter } from 'platform-bible-utils';
-import { CheckResultsInvalidated } from 'platform-scripture';
+import { ExecutionActivationContext, ProjectSettingValidator, ScrollGroupScrRef } from '@papi/core';
+import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
+import { CheckResultsInvalidated, FindFocusSearchEvent } from 'platform-scripture';
 import {
   ChecksSidePanelWebViewOptions,
   ChecksSidePanelWebViewProvider,
@@ -13,6 +13,7 @@ import {
   markersChecklistWebViewType,
 } from './checklist.web-view-provider';
 import { CHECKLIST_OPEN_SETTINGS_EVENT } from './checklist.model';
+import { FIND_FOCUS_SEARCH_EVENT } from './find.model';
 import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import { FindHistoryDataProviderEngine } from './find/find-history.data-provider';
 import {
@@ -26,6 +27,10 @@ import {
 } from './checks/check-aggregator.service';
 import { checkHostingService } from './checks/extension-host-check-runner.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
+import {
+  MANAGE_BOOKS_CREATE_INTENT_FLOAT_SIZE,
+  resolveMissingBookId,
+} from './manage-books-launch.utils';
 import {
   MANAGE_BOOKS_WEB_VIEW_TYPE,
   ManageBooksWebViewOptions,
@@ -221,6 +226,14 @@ async function openMarkersChecklist(webViewId: string | undefined): Promise<stri
  */
 let openSettingsEventEmitter: PlatformEventEmitter<undefined> | undefined;
 
+/**
+ * Network event emitter used by `openFind` to ask an already-mounted Find web view to put the caret
+ * in its search box. Registered in `activate` and disposed via `context.registrations`, for the
+ * same reasons as the emitter above. See `find.model.ts` for the event contract and for why the
+ * reload path uses `FindWebViewOptions.shouldFocusSearch` instead of this event.
+ */
+let focusFindSearchEventEmitter: PlatformEventEmitter<FindFocusSearchEvent> | undefined;
+
 async function openMarkersChecklistSettings(): Promise<void> {
   if (!openSettingsEventEmitter) {
     logger.warn(
@@ -232,6 +245,15 @@ async function openMarkersChecklistSettings(): Promise<void> {
 }
 
 /**
+ * Serializes `openManageBooks` so two rapid invocations cannot both miss the existing-instance
+ * probe and open two dialogs. FN-003 allows only one Manage Books dialog at a time, and the probe
+ * below is an `await` with nothing holding the gap — a double-click, or a click on two editors'
+ * buttons in quick succession, is enough. Each call chains onto the previous one's completion, so
+ * the second call's probe runs after the first call's web view exists and finds it.
+ */
+let openManageBooksInFlight: Promise<string | undefined> = Promise.resolve(undefined);
+
+/**
  * FN-008 (2026-05-01): Open the unified Manage Books dialog as a centered floating window. The
  * optional argument is either an editor's `webViewId` (from a scripture-editor menu) or a literal
  * project id — we probe with `papi.webViews.getOpenWebViewDefinition`, and if it doesn't resolve to
@@ -241,8 +263,24 @@ async function openMarkersChecklistSettings(): Promise<void> {
  */
 async function openManageBooks(
   webViewIdOrProjectId: string | undefined,
+  intent?: 'createMissingBook',
+): Promise<string | undefined> {
+  // Chain onto whatever open is already running, ignoring its outcome (a failed open must not stop
+  // the next one). `openManageBooksInFlight` is reassigned before the await so concurrent callers all
+  // queue behind this call rather than behind the one it queued behind.
+  const runAfter = openManageBooksInFlight.catch(() => undefined);
+  const thisRun = runAfter.then(() => openManageBooksUnserialized(webViewIdOrProjectId, intent));
+  openManageBooksInFlight = thisRun;
+  return thisRun;
+}
+
+/** {@link openManageBooks}'s body. Do not call directly — it has no single-instance protection. */
+async function openManageBooksUnserialized(
+  webViewIdOrProjectId: string | undefined,
+  intent?: 'createMissingBook',
 ): Promise<string | undefined> {
   let projectId: string | undefined;
+  let scrollGroupScrRef: ScrollGroupScrRef | undefined;
 
   if (webViewIdOrProjectId) {
     // Try to resolve as a web view id first; if that fails treat the value
@@ -251,12 +289,41 @@ async function openManageBooks(
     try {
       const def = await papi.webViews.getOpenWebViewDefinition(webViewIdOrProjectId);
       projectId = def?.projectId ?? webViewIdOrProjectId;
+      scrollGroupScrRef = def?.scrollGroupScrRef;
     } catch {
       projectId = webViewIdOrProjectId;
     }
   }
 
+  const isCreateMissingBookLaunch = intent === 'createMissingBook' && !!projectId;
+
   const options: ManageBooksWebViewOptions = { projectId };
+
+  // Only the intent is passed by the caller; the target book is derived from the calling editor's
+  // scroll-group reference rather than plumbed through the command signature. The lookup is bounded
+  // inside `resolveMissingBookId` (`papi.scrollGroups` can take up to 30s to resolve during a re-arm
+  // window) so a click can never sit here long enough to read as "the button did nothing".
+  if (isCreateMissingBookLaunch && projectId) {
+    options.initialSection = 'create';
+    const bookId = await resolveMissingBookId(
+      scrollGroupScrRef,
+      projectId,
+      papi.scrollGroups.getScrRefForProject,
+    );
+    if (bookId) options.initialSelectedBooks = [bookId];
+    else
+      logger.debug(
+        'openManageBooks: could not resolve a book to preselect for the createMissingBook intent; opening without one',
+      );
+  }
+
+  // Keyed on the same condition as the launch parameters above, NOT on `intent` alone: without a
+  // project there is no preselection and the dialog opens on its project picker, which needs the full
+  // width. `openManageBooks(undefined, 'createMissingBook')` would otherwise get the narrow
+  // create-focused window around a picker it cannot fit.
+  const floatLayoutSize = isCreateMissingBookLaunch
+    ? MANAGE_BOOKS_CREATE_INTENT_FLOAT_SIZE
+    : { width: 1100, height: 720 };
 
   // Reuse the existing Manage Books tab if one is already open (per FN-003 — only one
   // Manage Books dialog at a time). `existingId: '?'` matches any open instance of this
@@ -270,7 +337,7 @@ async function openManageBooks(
   const floatingLayout = {
     type: 'float',
     position: 'center',
-    floatSize: { width: 1100, height: 720 },
+    floatSize: floatLayoutSize,
   } as const;
   const existingId = await papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, {
     ...options,
@@ -278,11 +345,129 @@ async function openManageBooks(
     createNewIfNotFound: false,
   });
   if (existingId) {
-    // Bring the existing tab to the front and update it with the new project context.
-    await papi.webViews.reloadWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, existingId, options);
-    return existingId;
+    // Bring the existing tab to the front and hand it the new launch parameters.
+    //
+    // Reloading DOES remount the dialog, which is what makes the launch parameters take effect
+    // without any re-apply machinery: `reloadWebView` re-runs the provider's `getWebView`, and the
+    // per-call `srcNonce = newNonce()` that gets interpolated into the generated `content`
+    // (`web-view.service-host.ts`) makes `content` differ every time, so the `srcDoc` bound in
+    // `web-view.component.tsx` changes and the iframe reloads. The dialog therefore reads the new
+    // values in its ordinary mount-time initializers. There is a standing TODO on that nonce asking
+    // whether it should be stable per web view; if it ever becomes stable, this path stops working
+    // and the dialog will need an explicit re-apply signal.
+    //
+    // The cost of that remount is real and accepted: a relaunch discards the open dialog's transient
+    // state — attached import files, filter text, presence filter, group-by, copy source, scroll
+    // position. It is bounded by the fact that a relaunch is an explicit user action on a dialog they
+    // are choosing to re-target.
+    //
+    // Unlike `openFind`, which reloads only when it has a `selectedText` to deliver, this reloads
+    // unconditionally, because fronting the existing tab is itself part of what the caller asked for.
+    //
+    // The panel is deliberately NOT resized to the intent float size here — resizing a window the
+    // user already placed is more surprising than leaving it.
+    const reloadedId = await papi.webViews.reloadWebView(
+      MANAGE_BOOKS_WEB_VIEW_TYPE,
+      existingId,
+      options,
+    );
+    // `reloadWebView` resolves undefined when the web view it was asked to reload is no longer there
+    // (closed between the probe and here). Treating that as success would hand the caller an id for a
+    // tab that does not exist, so fall through and open a fresh one.
+    if (reloadedId) return reloadedId;
+    logger.debug(
+      `openManageBooks: web view ${existingId} was gone by the time it could be reloaded; opening a new one`,
+    );
   }
   return papi.webViews.openWebView(MANAGE_BOOKS_WEB_VIEW_TYPE, floatingLayout, options);
+}
+
+/**
+ * Probe options that resolve an already-open Find web view without ever creating one. `existingId:
+ * '?'` is PAPI's "any web view of this type" wildcard; `createNewIfNotFound: false` makes the probe
+ * a pure lookup.
+ */
+const REUSE_EXISTING_FIND_ONLY = { existingId: '?', createNewIfNotFound: false } as const;
+
+/**
+ * Re-points an already-open Find web view at `projectId`, creating nothing.
+ *
+ * Simple mode's Column 3 panels follow the active translation project, and the editor re-points
+ * them as a group whenever the project changes. Find is one of those panels but is not opened by
+ * that group operation — it lives in the fixed layout from startup — so without this it would keep
+ * showing the previous project's results and searching the previous project while its three
+ * siblings had already moved on, in a tab that is always on screen.
+ *
+ * Deliberately does not create a Find web view when none is open: outside the fixed Simple-mode
+ * layout, Find is a panel the user opens explicitly, and a project switch is not a request to open
+ * it.
+ *
+ * `editorWebViewId` matters because a project switch that replaces the editor tab mints a _new_
+ * editor web view id. Find caches the id it was given and uses it for `papi.window.setFocus` and
+ * for the `selectRange` / `setAnnotation` calls that jump to and highlight a clicked result, all of
+ * which it skips silently once the id no longer resolves — leaving result clicks degraded to
+ * scroll-group navigation with no selection and no highlight. The caller must therefore pass the id
+ * of the editor the switch produced, which is only knowable after that editor's web view exists.
+ */
+async function updateFindProject(
+  projectId: string,
+  editorWebViewId?: string,
+): Promise<string | undefined> {
+  const findWebViewId = await papi.webViews.openWebView(findWebViewType, undefined, {
+    ...REUSE_EXISTING_FIND_ONLY,
+    // Both calls here opt out explicitly, because `bringToFront` defaults to TRUE on the probe and
+    // the reload alike. A project switch must not yank Column 3 away from whichever tab the user was
+    // on — this runs as part of re-pointing the whole column, not in response to anyone asking for
+    // Find.
+    bringToFront: false,
+  });
+  if (!findWebViewId) return undefined;
+
+  const existingFindWebViewDefinition = await papi.webViews.getOpenWebViewDefinition(findWebViewId);
+  // Both halves have to match to skip the reload. Checking the project alone would skip it for a
+  // switch that replaced the editor without changing the project (re-opening the same project, or
+  // toggling read-only), which is exactly the case that leaves Find holding a dead editor id.
+  if (
+    existingFindWebViewDefinition?.projectId === projectId &&
+    (editorWebViewId === undefined ||
+      existingFindWebViewDefinition?.state?.editorWebViewId === editorWebViewId)
+  )
+    return findWebViewId;
+
+  const options: FindWebViewOptions = {
+    projectId,
+    // Preserved rather than passed as undefined: the provider writes this straight to
+    // `scrollGroupScrRef`, so dropping it would unbind the Find tab from the scroll group it shares
+    // with the editor.
+    editorScrollGroupId: existingFindWebViewDefinition?.scrollGroupScrRef,
+    editorWebViewId,
+    // Same explicit opt-out as the probe above; see the note there.
+    bringToFront: false,
+  };
+  await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
+  return findWebViewId;
+}
+
+/**
+ * Asks the Find web view with this id to put the caret in its search box.
+ *
+ * Only for a Find that is already mounted — bringing a tab to the front focuses the web view's
+ * iframe but lands on its `body`, so an invoke that reuses an open panel as-is would otherwise
+ * leave the user on a tab they cannot type into. The reload path does not use this: it passes
+ * `shouldFocusSearch` through the options instead, because the reload rebuilds the iframe and this
+ * event would race the new mount's own subscription.
+ *
+ * Never throws. `openFind` is sent without being awaited by the Ctrl+F handler, and failing to move
+ * the caret is not a reason to fail the invoke that did front the tab.
+ */
+function requestFindSearchFocus(findWebViewId: string): void {
+  if (!focusFindSearchEventEmitter) {
+    logger.warn(
+      'platformScripture.openFind could not ask Find to focus its search box: the event emitter was not initialized.',
+    );
+    return;
+  }
+  focusFindSearchEventEmitter.emit({ webViewId: findWebViewId });
 }
 
 async function openFind(
@@ -301,27 +486,62 @@ async function openFind(
     resolveFindInvocation(webViewDefinition, editorWebViewId, sourceProjectId);
 
   if (!projectId) {
-    logger.debug('No project!');
-    return undefined;
+    logger.debug('No project! Bringing any existing Find web view to the front as-is.');
+    // Simple mode keeps Find as a permanent tab, so invoking Find must always land on that tab —
+    // doing nothing would look like a dead shortcut with the tab sitting in plain view. Bring an
+    // existing Find web view to the front without touching its project, and don't create one if
+    // none exists: a Find with no project has nothing to search, so there is nothing to open.
+    try {
+      // `bringToFront` is left at its `true` default, as in the sibling open* helpers.
+      const frontedFindWebViewId = await papi.webViews.openWebView(findWebViewType, undefined, {
+        ...REUSE_EXISTING_FIND_ONLY,
+      });
+      // Nothing remounted, so the caret still needs moving. This branch has no project to search,
+      // but the user did ask for Find: landing them in the search box is what the other invoke paths
+      // do, and being unable to type is the complaint this exists to answer.
+      if (frontedFindWebViewId) requestFindSearchFocus(frontedFindWebViewId);
+      return frontedFindWebViewId;
+    } catch (e) {
+      // Swallowed deliberately. Passing any `existingId` routes through the main process's
+      // `findOwner`, which throws when a window cannot be reached — a rejection this branch did not
+      // have back when it returned `undefined` outright. The Ctrl+F handler sends this command
+      // without awaiting it, so letting the rejection escape would surface as an unhandled rejection
+      // for what is, from the user's side, a no-op: there was no project to search anyway.
+      logger.warn(`Could not bring an existing Find web view to the front: ${getErrorMessage(e)}`);
+      return undefined;
+    }
   }
 
   const options: FindWebViewOptions = {
     projectId,
     editorScrollGroupId,
-    bringToFront: true,
     editorWebViewId: editorWebViewIdForFind,
     // A non-editor trigger has no controller to couple to, so tell the provider to drop whatever
     // editor id the panel is holding rather than leaving a stale one in place.
     clearEditorWebViewId: !editorWebViewIdForFind,
     initialSearchText: selectedText,
   };
+  // The same options plus the request that Find put the caret in its search box once it is on screen.
+  // Used by the two paths that build a fresh iframe — reload and create — because a fresh mount reads
+  // the request out of its initial state; the path that reuses an open panel as-is sends the network
+  // event instead. Typed as `FindWebViewOptions` here rather than spread at each call so the extra
+  // property is carried by the options type both calls already accept.
+  const optionsWithFocusRequest: FindWebViewOptions = { ...options, shouldFocusSearch: true };
+
+  // Where a newly created Find panel goes in Power mode: docked to the right of the editor that
+  // asked for it. Ignored in Simple mode, where the fixed layout already holds a Find tab for the
+  // probe below to find.
+  const findPanelLayout = {
+    type: 'panel',
+    direction: 'right',
+    targetTabId: tabIdFromWebViewId,
+  } as const;
 
   // First tries to open an existing find web view
-  let findWebViewId = await papi.webViews.openWebView(
-    findWebViewType,
-    { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
-    { ...options, existingId: '?', createNewIfNotFound: false },
-  );
+  let findWebViewId = await papi.webViews.openWebView(findWebViewType, findPanelLayout, {
+    ...options,
+    ...REUSE_EXISTING_FIND_ONLY,
+  });
 
   // If found an existing web view, reload it when the project differs, when the caller supplied a
   // new term to pre-fill (e.g. Ctrl+F with a selection the panel isn't already showing), or when the
@@ -339,14 +559,23 @@ async function openFind(
         selectedText,
       )
     ) {
-      await papi.webViews.reloadWebView(findWebViewType, findWebViewId, options);
+      // The reload rebuilds the iframe, so the focus request rides in the options and is read out of
+      // the fresh mount's initial state. Emitting the event here instead would race that mount's own
+      // `useEvent` subscription — a network round-trip — and usually lose.
+      await papi.webViews.reloadWebView(findWebViewType, findWebViewId, optionsWithFocusRequest);
+    } else {
+      // Nothing remounted and nothing changed, so the panel is sitting there already correct. This is
+      // the common Ctrl+F: the Column 3 re-point supplies the project, editor id, and editability at
+      // project-open time, so all three checks above match and an empty selection is falsy.
+      requestFindSearchFocus(findWebViewId);
     }
   } else {
-    // Otherwise, opens a new web view
+    // Otherwise, opens a new web view. A new web view always mounts fresh, so this takes the same
+    // in-state route the reload path does.
     findWebViewId = await papi.webViews.openWebView(
       findWebViewType,
-      { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
-      options,
+      findPanelLayout,
+      optionsWithFocusRequest,
     );
   }
 
@@ -371,6 +600,33 @@ export async function activate(context: ExecutionActivationContext) {
       },
     },
   );
+
+  // Registered before `openFind` is exposed, for the same reason: the web view subscribes via
+  // `useEvent`, and the emitter is disposed through `context.registrations` so re-activation gets a
+  // fresh channel.
+  // Held in a local as well as the module-level variable: `registrations` below takes disposables, not
+  // `| undefined`, and the module-level variable is readable from a closure so its narrowing does not
+  // survive to that point.
+  const focusFindSearchEmitter = await papi.network.createNetworkEventEmitterAsync(
+    FIND_FOCUS_SEARCH_EVENT,
+    {
+      notification: {
+        // Experimental: this event is not yet a stable contract.
+        'x-experimental': true,
+        summary:
+          'Asks the named Find web view to put the caret in its search box. Other Find web views ignore it.',
+        params: [
+          {
+            name: 'webViewId',
+            required: true,
+            summary: 'Id of the Find web view whose search box should take focus.',
+            schema: { type: 'string' },
+          },
+        ],
+      },
+    },
+  );
+  focusFindSearchEventEmitter = focusFindSearchEmitter;
 
   const scriptureExtenderPdpefPromise =
     papi.projectDataProviders.registerProjectDataProviderEngineFactory(
@@ -666,6 +922,13 @@ export async function activate(context: ExecutionActivationContext) {
               'Either the active editor web view id (resolves its project) or a literal project id; omit to open with the project picker visible.',
             schema: { type: 'string' },
           },
+          {
+            name: 'intent',
+            required: false,
+            summary:
+              "Pass 'createMissingBook' to open on the Create-books section with the calling editor's current book pre-selected; omit for the default view.",
+            schema: { type: 'string', enum: ['createMissingBook'] },
+          },
         ],
         result: {
           name: 'return value',
@@ -685,7 +948,8 @@ export async function activate(context: ExecutionActivationContext) {
 
   const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
     method: {
-      summary: 'Open the find UI',
+      summary:
+        'Open the find UI, or bring an already-open one to the front when no project can be resolved',
       params: [
         {
           name: 'editorWebViewId',
@@ -710,11 +974,34 @@ export async function activate(context: ExecutionActivationContext) {
       ],
       result: {
         name: 'return value',
-        summary: 'The ID of the find web view, or undefined if not opened',
+        summary:
+          'The ID of the find web view (opened, reloaded, or brought to front), or undefined if none was opened and none was already open',
         schema: { type: ['string', 'null'] },
       },
     },
   });
+  const updateFindProjectPromise = papi.commands.registerCommand(
+    'platformScripture.updateFindProject',
+    updateFindProject,
+    {
+      method: {
+        summary: 'Re-point an already-open find web view at a different project',
+        params: [
+          {
+            name: 'projectId',
+            required: true,
+            summary: 'The ID of the project the find web view should search from now on',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the find web view, or undefined if none was open',
+          schema: { type: ['string', 'null'] },
+        },
+      },
+    },
+  );
   const openFindWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     findWebViewType,
     findWebViewProvider,
@@ -812,7 +1099,9 @@ export async function activate(context: ExecutionActivationContext) {
     await openMarkersChecklistSettingsPromise,
     await markersChecklistWebViewProviderPromise,
     openSettingsEventEmitter,
+    focusFindSearchEmitter,
     await openFindPromise,
+    await updateFindProjectPromise,
     await openFindWebViewProviderPromise,
     await findHistoryDataProviderPromise,
     await openManageBooksPromise,
