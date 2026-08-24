@@ -453,7 +453,9 @@ npm run test:e2e:smoke
 All `test:e2e:*` scripts are there for running variations of the playwright end-to-end tests.
 
 - `test:e2e:smoke` runs a single instance of the application, and all tests share that instance
-- `test:e2e:smoke-wsl` runs the same smoke tests using a "hidden UI" on Linux instead of a visible UI
+- `test:e2e:smoke-wsl` runs the same smoke tests using a "hidden UI" on Linux instead of a visible
+  UI. Its script also takes `--wrap <command>` to run any other e2e command the same way, e.g.
+  `e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated multi-window`
 - `test:e2e:isolated` runs tests that require a separate application instance for each test. These
   tests are organized into feature subsets under `e2e-tests/tests/isolated/`; run
   `npm run test:e2e:isolated all` for every test, `npm run test:e2e:isolated <subset>` for one

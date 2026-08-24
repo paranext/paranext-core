@@ -165,6 +165,11 @@ jobs:
       - name: npm unit tests
         run: npm test
 
+      # No --server-args, so this runs at Xvfb's 1280x1024x8 default, unlike
+      # e2e-tests/run-e2e-wsl.sh which pins 1920x1080x24. That is fine for the smoke suite
+      # (it does not use cdp.fixture), but fixtures/cdp.fixture.ts hard-fails screenshots below
+      # Full HD — add --server-args="-screen 0 1920x1080x24" here before running any
+      # cdp.fixture-based project in CI.
       - name: E2E tests (Linux)
         if: ${{ matrix.os == env.OS_LINUX }}
         run: xvfb-run --auto-servernum npm run test:e2e:smoke

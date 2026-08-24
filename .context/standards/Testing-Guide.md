@@ -1328,6 +1328,10 @@ npx playwright show-report e2e-tests/playwright-report
 # tests/isolated/** (most feature tests), `smoke` → tests/smoke/** (what CI runs, via
 # `npm run test:e2e:smoke`), `enhanced-resources` → tests/enhanced-resources/**.
 npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated --reporter=list
+
+# WSL2: wrap any of the above so Electron windows do not take over the Windows desktop.
+# A bare Xvfb has no window manager, so compositor-dependent suites can behave differently.
+e2e-tests/run-e2e-wsl.sh --wrap npx playwright test e2e-tests/tests/isolated/{feature}/ --config=e2e-tests/playwright.config.ts --project=isolated
 ```
 
 ### Failure Analysis

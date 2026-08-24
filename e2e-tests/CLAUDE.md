@@ -6,7 +6,10 @@
 |---|---|---|
 | Core happy path (app launch, basic nav) | `tests/smoke/` | `npm run test:e2e:smoke` (also CI) |
 | Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated` |
-| Tests needing real Marble resources | `tests/enhanced-resources/` | `npm run test:e2e:enhanced-resources` |
+| Tests needing real Marble resources | `tests/enhanced-resources/` | `npx playwright test --config e2e-tests/playwright.config.ts --project=enhanced-resources` |
+
+On WSL2, prefix any of these with `e2e-tests/run-e2e-wsl.sh --wrap` to keep the Electron windows
+off the Windows desktop — e.g. `e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated find`.
 
 **Feature-specific isolated tests belong in `tests/isolated/`** — not in their own directory.
 The `isolated` project covers the whole `tests/isolated/` tree, so a new spec file there is
@@ -14,8 +17,9 @@ immediately discoverable and runnable without any config changes.
 
 Only create a new top-level directory under `tests/` if the tests genuinely cannot share a
 project entry with `isolated/` (e.g., they need a completely different fixture or launch
-strategy). If you do, register a named project in `playwright.config.ts` and add a
-`test:e2e:<name>` npm script — see `enhanced-resources` as the template.
+strategy). If you do, register a named project in `playwright.config.ts` — see
+`enhanced-resources` as the template — and add a `test:e2e:<name>` npm script if the suite is
+meant to be run routinely.
 
 ## What NOT to do
 
