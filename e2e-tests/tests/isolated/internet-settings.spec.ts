@@ -5,6 +5,7 @@
  *
  * - Opening via profile popover
  * - Radio row visibility (2 active, 3 coming-soon with badges) and hover-revealed descriptions
+ * - Descriptions staying shut for a programmatic focus, which the panel takes on load
  * - Reset and Save and restart button state (disabled when no changes, enabled after change)
  * - Reset restores original selection (buttons become disabled again)
  * - Developer section expand/collapse and its Production/Development radio buttons
@@ -80,6 +81,28 @@ test.describe('Internet & Connectivity settings', () => {
     // per-row "Coming soon" badges above already carry that meaning, and dropping the line keeps
     // the first-run wizard's Next button in view.
     await expect(frame.getByText(/Disabled options are planned for future updates/)).toHaveCount(0);
+  });
+
+  // The panel focuses the checked radio once its fetch resolves, and Radix opens a tooltip on any
+  // focus — so a description would pop open every time the panel loads unless that focus is told
+  // apart from a keyboard one. This has to be asserted in a real browser: the distinction is
+  // Chromium behaviour, and the obvious `:focus-visible` guard does not make it (Chromium reports
+  // `:focus-visible` as true for a programmatic focus in a document that has seen no pointer input,
+  // which is this panel's iframe — the click that opened it landed in the host document).
+  test('a programmatic focus on a radio reveals no tooltip', async ({ mainPage }) => {
+    const frame = await openInternetSettingsPanel(mainPage);
+    await waitForSettingsLoaded(frame);
+
+    // Reproduce the panel's own call rather than waiting on its load focus, whose target depends on
+    // whichever option this machine has persisted.
+    const radio = internetUseRadio(frame, 'Unrestricted');
+    await radio.evaluate((el) => el.focus());
+    await expect(radio).toBeFocused();
+
+    // Focus opens a Radix tooltip with no delay, so waiting out the hover delay leaves no window in
+    // which one could still appear.
+    await mainPage.waitForTimeout(500);
+    await expect(descriptionTooltip(frame)).toHaveCount(0);
   });
 
   test('hovering a row reveals its description in a tooltip', async ({ mainPage }) => {
