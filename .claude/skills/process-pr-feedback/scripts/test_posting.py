@@ -10,6 +10,7 @@ import sys
 
 from posting_lib import (
     bad_control_chars,
+    declared_prs,
     guard_decision,
     scan_denylist,
     unresolved_failures,
@@ -167,6 +168,41 @@ def test_missing_vocabulary_file_is_a_hard_stop():
         assert "is missing" in str(e)
     else:
         raise AssertionError("a missing shared-vocabulary.md did not stop the run")
+
+
+def test_declared_prs_reads_the_round_from_the_packet_name():
+    assert declared_prs("/x/.feedback-packets/2659-2026-08-24") == {2659}
+    assert declared_prs("/x/.feedback-packets/2649-2651-2026-08-12") == {2649, 2651}
+    assert declared_prs("/x/.feedback-packets/2659-2026-08-24-2") == {2659}
+
+
+def test_declared_prs_does_not_swallow_the_date_or_run_suffix():
+    """A date segment must not be read as a PR number."""
+    got = declared_prs("/x/.feedback-packets/2659-2026-08-24-2")
+    assert 2026 not in got and 8 not in got and 24 not in got, got
+
+
+def _opens_badly(body):
+    import re
+    from check import OPENERS, PREFIX
+    after = body[len(PREFIX):] if body.startswith(PREFIX) else body
+    return [p for p in OPENERS if re.match(p, after)]
+
+
+def test_reflexive_opener_is_caught_after_the_prefix():
+    assert _opens_badly("\U0001f916 Claude: You're absolutely right, the guard is wrong.")
+    assert _opens_badly("\U0001f916 Claude: Great catch — reproduced.")
+    assert _opens_badly("\U0001f916 Claude: Thanks! Fixed.")
+
+
+def test_a_verdict_first_reply_passes():
+    assert not _opens_badly("\U0001f916 Claude: Confirmed, and reproduced at the PR head.")
+    assert not _opens_badly("\U0001f916 Claude: Not reproduced — the stray check catches it.")
+
+
+def test_thanks_for_a_specific_thing_is_not_a_reflex():
+    """The ban is on reflexive gratitude, not on acknowledging real work."""
+    assert not _opens_badly("\U0001f916 Claude: Thanks for the repro — it saved a measurement.")
 
 
 def _added_lines(diff):

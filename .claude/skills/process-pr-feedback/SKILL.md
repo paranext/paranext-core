@@ -71,14 +71,21 @@ Every run writes one packet, and **never reuses another run's**:
   shared-vocabulary.md   P2   which labels the reviewer has actually seen (see below)
   03-rulings.md          G1   the user's rulings, verbatim, dated
   03-repin.md            P3   heads re-derived after the gate; which cited files moved
+                              (evidence: read by P3's own completeness check, not by a later phase)
   04-fix-reports/        P3   one report per fix
-  05-self-review.md      P4   /code-review findings + adjudication
+  05-self-review.md      P4   /code-review findings + adjudication — read again at G2, where
+                              any finding left unfixed is something the user is told about
   06-verification.md     P5   gate battery results, e2e, live verification
   06-evidence/           P5   optional screenshots from live verification (embed candidates)
   07-replies.d/          P6   parts directory (conf.d-style): one file per reply-drafter agent
   07-replies.md          P6   the assembled drafts — orchestrator concatenates 07-replies.d/
   g2-approval.md         G2   the user's approval, verbatim and dated — what P7 is allowed to do
-  bodies.json            P7   drafts extracted to JSON — the exact bytes that will post
+  bodies.json            P6   provisional, for the anchor pass (pr-thread-conversion.md); then
+                         P7   re-extracted from the approved drafts — the exact bytes that will post
+  heads.json             P7   {"<pr>": "<head sha>"} re-derived at posting time; bases.json beside
+                              it when there are inline anchors to verify
+  A.txt · N.txt          P6   restack battery evidence: the old and new ranges' changed files,
+                              with the set-difference files beside them
   08-posting-log.txt     P7   append-only, write-ahead: status, item, pr, kind, id, url, time
   09-record.md           P8   what landed where, durability copies, residue
   _phase-<n>-complete    all  one per finished phase, naming what it produced (see below)
@@ -139,6 +146,15 @@ is writing. The response is **not** `npm run format` — that rewrites `bodies.j
 holding the exact approved bytes. Confirm instead that every path it reports sits inside
 `.feedback-packets/`, record that in `06-verification.md`, and treat the gate as passed for repo
 files. Add the entry only if the branch is one you own.
+
+**That workaround has a cost worth naming before it is used.** `format:check` is
+`prettier --check --ignore-path .prettierignorerun . && npm run format:check --workspaces
+--if-present`, and `.prettierignorerun` excludes `extensions/` and five `lib/*` trees that
+`.prettierignore` deliberately leaves in. The workspace half after the `&&` is those trees' only
+coverage, so a failing root half short-circuits it and six trees go unchecked while the run
+records "gate passed for repo files". Declaring the gate passed is therefore only honest when the
+**only** reported paths are inside `.feedback-packets/` — verify that, do not assume it — and it
+should never be carried onto a branch where the root half fails for any other reason.
 
 Neither check is a formality, and neither may be assumed from "this repo ships it" — a fork, an
 older branch, a long-lived feature branch, or a run of this skill from a checkout that does not
@@ -490,6 +506,15 @@ classified if it makes a claim, kinded if it does not, and none left untouched. 
 **Agents:** parallel `verifier` agents, brief in `references/agent-briefs.md`. Shard by area
 (main / renderer / extension-host / C# / docs) or by contiguous item ranges, ~6–10 items each.
 
+**Where the session cannot dispatch subagents, run the shards in the orchestrator and say so in
+the phase's output.** Unlike P3's Superpowers dependency this is not a stop: the fan-out is a
+context-and-wall-clock optimisation, and every rule that makes P1 trustworthy — reading by
+explicit ref, the six sub-checks, the grep safety net, the spot-verification below — is the
+orchestrator's to apply either way. A single-shard run is in one respect *stronger*, since the
+wrong-tree failure the briefs guard against cannot arise. What is not acceptable is running
+single-shard silently: record the deviation in `01-verification/`, because "one report" and "one
+report because four agents never ran" are different rounds.
+
 Every item **that makes a claim about the code** gets one of five classifications, defined with
 worked examples in `references/classification-rubric.md`:
 
@@ -572,6 +597,14 @@ hurts: a one-word change on a startup path is `(XS, L)` — the edit is trivial 
 works means building, launching the app, and reproducing the reviewer's scenario. Collapsing that
 to "XS" is how a round promises a fix in an hour and spends an afternoon, and it is how a fix
 reaches a reviewer verified only in theory. Size both halves separately and state both.
+
+**Before sizing a reviewer's "do it properly" suggestion, check whether anything needs it.** A
+reviewer proposing a general mechanism — a config knob, an interface, a second implementation —
+is reasoning from the diff in front of them, not from the call sites. Grep for real usage first,
+and where there is exactly one, "the specific fix, plus a note that the general one is a
+one-caller change if a second arrives" is a legitimate option to put at G1 alongside the general
+one. It is an **option to present, never a decline to take** — the reviewer asked, so the user
+rules.
 
 The triage must separate, in its own sections:
 
@@ -657,9 +690,14 @@ committed.
 
 **In:** `03-rulings.md` — or, on a `--fast-lane` run, the qualifying statement in `02-triage.md`
 (see G1).
-**Out:** `04-fix-reports/` — per fix: what changed, why, the test that covers it, the commit.
+**Out:** `03-repin.md` — the re-derived heads and which cited files moved; `04-fix-reports/` —
+per fix: what changed, why, the test that covers it, the commit.
 **Agents:** `fix-train` agents, brief in `references/agent-briefs.md`. Serialize fixes that
-touch the same files; parallelize across branches only when they do not share a worktree.
+touch the same files, and **serialize any two agents sharing a worktree** even when their files
+differ: they contend on one `.git/index`, one `HEAD` and one pre-commit hook, so a plain
+`git commit` stages whatever is in the index and one agent's commit swallows another's staged
+work. Parallelize only across separate worktrees. Where two agents must share one, every commit
+names its paths — `git commit -- <paths>` — and never `git add -A`.
 
 **Re-pin the evidence first — the orchestrator's step, before any agent is dispatched.** P1 cited
 every finding at an explicit ref, and P3 acts on those citations however long afterwards; on a
@@ -689,6 +727,8 @@ a ref that is gone. If a head moved at all, the P0 base-state record is stale to
 rather than reading it.
 
 **Superpowers is a hard dependency of this phase — check it here, and stop if it is missing.**
+(Recorded as ADR-0022 in `.context/standards/Architecture-Decisions.md`, together with the
+packet directory's ignore mechanism.)
 The method below is not this skill's own, and there is no degraded version of it to fall back on:
 `superpowers:brainstorming`, `superpowers:writing-plans`, `superpowers:test-driven-development`
 and the execution skills (`superpowers:subagent-driven-development` /
@@ -758,7 +798,12 @@ Rules that apply to every fix, whichever flow produced it:
 - **Red-first** for every behavior change: a test that fails for the stated reason before the
   fix, passes after. A fix with no failing-first test is not done.
 - **Comment discipline** per `.context/standards/Code-Style-Guide.md` — constraints and "why",
-  no ticket ids or PR numbers in source comments, no before/after-the-fix framing.
+  no before/after-the-fix framing.
+- **No transient references in the files this skill authors** — the prompt, agent, command and
+  skill files under `.claude/`. Ticket ids and PR numbers go stale there and nothing re-reads them
+  once the item merges. This is deliberately *not* a rule about source comments: root `CLAUDE.md`
+  § Send/Receive Write Gate requires a ticket id inside a source comment for every write-gate
+  exemption, and the tree carries ten of them.
 - **Two-surface `@experimental` for any new public API** — TSDoc on the type-visible surface
   and `'x-experimental': true` in the registration's OpenRPC documentation for the wire-visible
   surface. The authoritative per-surface table is
@@ -785,12 +830,13 @@ Docs-only rounds get this phase too. Documentation findings count.
 ### P5 — Verify effectiveness
 
 **In:** the working tree after P3/P4.
-**Out:** `06-verification.md`.
+**Out:** `06-verification.md`; `06-evidence/` where live verification produced screenshots.
 
 Full battery, each with its command and its result recorded:
 
 ```bash
 npm run build:types           # state the expected papi.d.ts delta BEFORE running
+npm run build:main            # creates release/app/buildInfo.json, which typecheck imports
 npm run typecheck
 npm test                      # full suite, not a filtered subset
 npm run lint                  # note: lint runs build:types again as its first step
@@ -804,6 +850,12 @@ new members", or "unchanged"), then compare. An unexpected diff there is a findi
 `build:types` comes first deliberately: `npm run lint` invokes it as its own first step, so
 running lint earlier would regenerate `papi.d.ts` before you had recorded the prediction, and
 the comparison you most want would be gone.
+
+`build:main` is not optional and not a leftover from a build step you already ran.
+`src/main/services/app.service-host.ts` imports `release/app/buildInfo.json`, which is git-ignored
+and therefore absent from a clean checkout, so `typecheck` fails on a missing module rather than on
+anything this round changed. `.github/workflows/test.yml` carries the same ordering with the same
+note beside it.
 
 **Where to run it when the packet lives in a worktree.** A fresh worktree has no `node_modules`
 and every command above needs it, so run the battery in the checkout that already has the
@@ -848,17 +900,30 @@ complaint this answers: evidence the reviewer can see beats evidence the reply a
    `references/restack-battery.md`. Run the full battery at the top of the stack. Nothing is
    force-pushed before G2.
 
+   **Then re-run P5's gate battery at the restacked tip**, and record it in `06-verification.md`
+   beside the first run. P5 verified the working tree; this step rewrites every commit above the
+   one that changed, so without a second run G2 is shown green results for commits that no longer
+   exist. On a round with no branches above the one that changed there is nothing to restack and
+   nothing to re-run — say so explicitly rather than leaving the omission to be inferred.
+
    **A force-push can dismiss reviewer approvals.** On repositories configured to dismiss stale
    approvals on new commits, force-pushing a restacked branch drops every existing approving
    review on its PR — silently, as a side effect of a push the run made for unrelated reasons. So
    for every branch this round will force-push, record `gh pr view <n> --json reviewDecision,reviews`
-   **here in P6** — step 4 of `references/restack-battery.md`, taken alongside the ahead/behind
-   counts and for the same reason. The push itself happens in P7, after G2, and **re-checks it
-   there**; this phase's job is only to capture the "before". If an
-   approval was dismissed, say so at once and re-request review from exactly the reviewers who had
-   approved (`gh pr edit <n> --add-reviewer <login>`), then report it — a PR that reads
-   `APPROVED` before the round and `REVIEW_REQUIRED` after, with nobody told, looks to the
-   reviewer like their approval was thrown away and to the author like the PR is ready to merge.
+   **and the branch's current remote tip SHA** (`git rev-parse origin/<branch>`) **here in P6**.
+   `references/restack-battery.md` step 4 takes both alongside the ahead/behind counts, but that
+   file is scoped to stacks, and P7's push preconditions are not: a single-PR round force-pushes
+   too, and without this step there is no recorded SHA for `--force-with-lease=<branch>:<sha>` to
+   lease against and no "before" approval state to compare. **Take both on every round that will
+   push**, stack or not. The push itself happens in P7, after G2, and **re-checks it
+   there**; this phase's job is only to capture the "before", and nothing here notifies anyone.
+
+   Re-requesting a dismissed approval is a **P7** step, because there is no "after" state until the
+   push has happened. `gh pr edit <n> --add-reviewer <login>` notifies a human, so it is a gated
+   mutation like posting: it happens only when the G2 approval covered pushing, and it is reported
+   in the same breath. A PR that reads `APPROVED` before the round and `REVIEW_REQUIRED` after,
+   with nobody told, looks to the reviewer like their approval was thrown away and to the author
+   like the PR is ready to merge.
    Whether the repo dismisses is a setting, so check the state rather than reasoning about the
    config: the before/after pair answers it for this repo, today, for free.
 3. **Draft replies** — `reply-drafter` agents, brief in `references/agent-briefs.md`,
@@ -926,8 +991,11 @@ Present and stop. Nothing is pushed and nothing is posted in this turn. Present:
 - the P5 gate results, including the e2e outcome and the live verification,
 - the restack battery results,
 - **the full reply texts** — including any `pr-attach` image embeds exactly as they will
-  post — flagging every one that is confrontational, that refutes the reviewer, that asks
-  for something, or that retracts something previously posted,
+  post — flagging every one that `references/reply-conventions.md` says to flag: it refutes the
+  reviewer or contradicts them on a point they stated confidently, asks them for something,
+  retracts or corrects something already posted, **announces a decline**, or **names a deferral
+  without a ticket key**. That list lives in one place; read it there rather than from this
+  summary,
 - anything a reviewer is owed a correction on.
 
 Most of that is evidence, not a question, and it belongs under **"No decision needed — FYI"**.
@@ -952,8 +1020,8 @@ file means something. Record what was approved, what was explicitly *not*, and t
 
 ### P7 — Publish
 
-**In:** `g2-approval.md`, `07-replies.md`.
-**Out:** `08-posting-log.txt`, updated remotes.
+**In:** `g2-approval.md`, `07-replies.md`, `shared-vocabulary.md`.
+**Out:** `bodies.json`, `heads.json`, `08-posting-log.txt`, updated remotes.
 **Agent:** `poster`, brief in `references/agent-briefs.md`; mechanics in
 `references/posting-mechanics.md`.
 
@@ -962,8 +1030,12 @@ file means something. Record what was approved, what was explicitly *not*, and t
    `--force-with-lease`** (with no expected value the lease is checked against the
    remote-tracking ref, which any `git fetch` across the two gates has already advanced), in
    stack order, bottom first, one command at a time with the result checked before the next.
-   Re-check each PR's approval state immediately after its own push, per P6 step 2 — a dismissed
-   approval is reported and re-requested in this run, not discovered by the reviewer later.
+   Re-check each PR's approval state immediately after its own push against the "before" P6
+   recorded. Where an approval was dismissed, re-request review from exactly the reviewers who had
+   approved (`gh pr edit <n> --add-reviewer <login>`) and say so in the run's report — a dismissed
+   approval is handled in this run, not discovered by the reviewer later. Both the push and the
+   re-request are covered by the same G2 approval; if that approval covered posting only, report
+   the dismissal and re-request nothing.
 2. **Post** per `references/posting-mechanics.md`: extract bodies to JSON, run the dry-run
    checks, re-derive every head SHA at posting time, post sequentially, stop on the first
    failure with no retry, then verify by count and id set against the live API.
@@ -983,12 +1055,17 @@ landed locally without citing an unpushed SHA.
 **Out:** `09-record.md`.
 
 - Mark every draft POSTED with its comment id and URL. A draft with no id did not post.
-- **Resolve the threads that are now answered**, using the GraphQL node ids P0 recorded.
-  `.claude/commands/triage-feedback.md` holds the mutation and the house rule that governs it:
-  never resolve a thread without first posting a visible reply — the reply is the audit trail,
-  resolution is the state. Leaving answered threads open is what makes the next round
-  re-collect, re-verify and re-answer everything this one just did. Threads still waiting on the
-  reviewer stay open; say which ones and why.
+- **Do not resolve the reviewer's threads.** `.context/standards/Code-Review-Guide.md`
+  § Comment Resolution reserves that to the reviewer — "Reviewers manage their own comment
+  resolutions" — and resolving on their behalf takes a decision that is theirs, in public, under
+  the user's name. A posted reply is the audit trail; the resolution is the reviewer's answer to
+  it. Report which threads are now answered and are waiting on the reviewer to close, and which
+  are still waiting on us.
+
+  The cost of this is real and is paid at P0, not here: threads we answered but nobody closed are
+  re-collected next round. That is what P0's timestamp test is for — an item written *before* our
+  reply is `already-handled` context, not work. `.claude/commands/triage-feedback.md` does resolve
+  threads, and predates this; the divergence is deliberate and the standard is the authority.
 - **Durability rule — the one that is easy to skip.** Review threads die with the squash-merge.
   Every decision that lives only in a thread must be copied into a durable home **before the PR
   merges**: an ADR in `.context/standards/Architecture-Decisions.md`, a standards entry, a
@@ -1057,6 +1134,21 @@ bundles, and pushes and postings should not originate from an unattended job und
 gates at all.
 
 ---
+
+## Enforcing this, rather than trusting a retype
+
+The load-bearing parts of this skill are code, and code that ships as prose in a document is
+retyped per run by an agent — which is how ten defects in the posting layer's guards reached
+review at once. Two things follow, and both are already available in this repo:
+
+- **The posting layer is executable files with tests** (`scripts/`, run `test_posting.py` before
+  trusting a batch), not a template. Anything else in this skill that becomes load-bearing enough
+  to have a failure mode belongs there too, not in a code fence.
+- **The gated actions are gated by the harness, not only by this document.**
+  `.claude/settings.json` already denies `git commit --no-verify` and `git push --force`/`-f` and
+  asks on `--force-with-lease`, and `.claude/agents/*.md` restrict what a role can reach with
+  `tools:`. A guardrail this file states in prose *and* the harness enforces survives an agent
+  that skims; one that only this file states does not.
 
 ## References
 

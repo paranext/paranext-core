@@ -90,5 +90,3 @@ service-account.json
 # Local git worktrees used for isolated feature-branch work
 .worktrees/
 
-# Working state for the /process-pr-feedback skill (one packet directory per run)
-.feedback-packets/

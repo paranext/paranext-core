@@ -111,6 +111,17 @@ Run every check over the extracted bodies:
    exactly the nested-thread shape §1 exists for — there the root is routinely **our own**
    comment, whose timestamp says nothing about the reviewer's words.
 
+6. **Opener phrases.** No body opens with reflexive agreement or gratitude — "You're absolutely
+   right", "Great point", "Thanks!". `reply-conventions.md` § Tone asks for the verdict in the
+   first sentence, and this is where that is enforced: at the point a body goes public under the
+   user's name, rather than depending on whether the drafter had a convention loaded.
+
+   The rule needs its seam stated, because it is borrowed from advice written for a different
+   audience. A blanket ban on gratitude is calibrated for in-session replies to your own partner;
+   these bodies are public text to a human colleague. What survives the translation is *concede
+   specifically rather than thank reflexively* — so "Thanks for the repro, it saved a measurement"
+   is not what this catches, and "Thanks!" as an opener is.
+
 Print a single `DRY-RUN RESULT: PASS/FAIL` line and exit non-zero on FAIL.
 
 ## 5. Re-derive every head SHA at posting time

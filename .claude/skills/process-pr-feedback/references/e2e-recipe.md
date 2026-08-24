@@ -32,9 +32,17 @@ npm run test:e2e:isolated <subset> -- --workers=1
 an unknown name instead of a silent "no tests found". Use it rather than reconstructing the
 command.
 
+`--project=isolated` matters because `e2e-tests/playwright.config.ts` defines three projects —
+`smoke`, `isolated` and `enhanced-resources` — as plain `testDir` splits. Omitting it runs all
+three, including `enhanced-resources`, which needs real Marble resources that are not present
+locally or in CI. Neither config declares a `webServer`, so a failure to connect is about which
+projects ran and whether the app is up, not about a dev server that did not start;
+`.context/standards/Testing-Guide.md` § Running E2E Tests attributes *that* symptom to a missing
+`--config`, which is a different flag and a different failure. Do not conflate them.
+
 The raw form, for when a flag the wrapper does not pass through is needed:
 `npx playwright test --config e2e-tests/playwright.config.ts --project=isolated <suite-path> --workers=1`
-— never omit `--project=isolated` (ECONNREFUSED without it); always `--workers=1` locally;
+— never omit `--project=isolated`; always `--workers=1` locally;
 output redirected to a file; NO outer timeout wrapper (first Electron launch after a rebuild
 takes 60–90 s and reads as a hang).
 

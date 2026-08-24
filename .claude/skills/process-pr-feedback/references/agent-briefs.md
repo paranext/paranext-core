@@ -45,8 +45,15 @@ role 4:
   ```bash
   git -C <worktree> rev-parse --abbrev-ref HEAD   # literally `HEAD` when detached — pair with the SHA
   git -C <worktree> rev-parse HEAD                # must equal the SHA the brief named
-  git -C <worktree> diff --stat <base>..<head> | tail -1   # sanity-check the file count
+  git -C <worktree> diff --stat <base>...<head> | tail -1  # THREE dots - see below
   ```
+
+  **Three dots, not two.** `<base>..<head>` shows everything that landed on the base since the
+  branch forked, so the count it prints is a property of how long the base has been moving rather
+  than of this branch's work; `<base>...<head>` shows the branch's own changes. Measured on PR
+  #2659, 2026-08-24: the two-dot form reported 325 files and 37,464 deletions where the three-dot
+  form reported 13 files and 2,982 insertions. Since the instruction below is to stop on a
+  mismatch, a two-dot guard aborts correct reviews whenever the base has moved - the normal state.
 
   If any of them disagrees with the brief, **stop and report the mismatch** rather than reviewing
   what you found. A session's working directory is not a reliable answer to "which code am I
@@ -77,9 +84,11 @@ role 4:
   with no file loses the phase when the session dies. (The general "no report files" instinct is
   right about *ad-hoc* reports nobody asked for — it does not apply to the packet paths named
   here, which are this skill's persistence layer.)
-- **Bracket every large-list judgment scan with a deterministic grep** over the same corpus, per
-  `<repo-root>/.claude/rules/grep-safety-net.md`. Every grep hit must appear
-  in your result or be explained as a false positive.
+- **Read `<repo-root>/.claude/rules/grep-safety-net.md` and follow it** for every large-list
+  judgment scan. It is singled out among the repo's unconditional rules because these roles are
+  built on exactly the scan it governs - "every item in the inventory", "every usage of this
+  symbol" - and because a brief cannot assume its own agent inherited the repo's rule set.
+  Follow the file; it is not restated here.
 
 ---
 
@@ -144,7 +153,12 @@ role 4:
 > **Re-derive every SHA** you cite (`git cat-file -t`, `git branch --contains`). Do not trust a
 > SHA quoted in the feedback or in an earlier document.
 >
-> **Output.** Write your full per-item findings to `<packet>/01-verification/<your-shard>.md`,
+> **Output.** Write your full per-item findings to
+> `<packet>/01-verification/<your-shard>-<your-agent-label>.md`. The agent label is what keeps two
+> verifiers deliberately overlapped on the same items from writing to one path - same items would
+> otherwise mean same filename, and the second report would overwrite the first, losing precisely
+> the disagreement the overlap was bought for. If you were given no label, use your shard plus a
+> distinguishing suffix and say in your final message which file you wrote.
 > then summarise in your final message: the branch/ref state you established, one line per item
 > (id → classification → cost pair → needs-ruling?), and anything you could not settle.
 
@@ -164,7 +178,7 @@ independent verdicts that disagree is exactly the signal worth having.
 > **Before your first commit, confirm the branch is cleanly on its base.**
 >
 > ```bash
-> gh pr view <n> -R paranext/paranext-core --json mergeable,mergeStateStatus,baseRefName
+> gh pr view <n> -R paranext/paranext-core --json state,mergeable,mergeStateStatus,baseRefName
 > git -C <repo-root> fetch origin <base> -q
 > git -C <repo-root> rev-list --count HEAD..origin/<base>   # behind — MUST be 0
 > git -C <repo-root> rev-parse --abbrev-ref HEAD
@@ -174,14 +188,20 @@ independent verdicts that disagree is exactly the signal worth having.
 > `gh pr view` outside a checkout fails with `not a git repository`.
 >
 > **Stop and report** if the behind-count is not `0`, if `mergeable` is `CONFLICTING` or
-> `mergeStateStatus` is `DIRTY`, or if HEAD is not the branch your ruling names. Do not rebase on
+> `UNKNOWN`, if `mergeStateStatus` is `DIRTY`, or if HEAD is not the branch your ruling names.
+> `UNKNOWN` is computed asynchronously, so "no conflict was reported" and "no conflict exists"
+> arrive as the same output and only one of them is a fact - re-query a few times, and stop if it
+> has not settled. `state` is in the query above because a merged or closed PR reports `UNKNOWN`
+> permanently and legitimately, which is the one case that is not a reason to stop. Do not rebase on
 > your own initiative and do not commit anyway. Fix commits on a stale or conflicted branch inherit
 > the problem, show the reviewer a diff that will not merge, and get replayed through the conflict
 > when the rebase finally happens. Getting **this** branch onto **its** base is a precondition
 > someone else owns; restacking the branches **above** it is separate, downstream, and not yours.
 >
-> Do not read `mergeStateStatus` as the behind-check — it reports `BEHIND` only under a branch
-> protection this repo does not use. The `rev-list` count is the authority.
+> Do not read `mergeStateStatus` as the behind-check — it reports `BEHIND` only where a branch
+> protection requiring up-to-date branches is configured. Measured on this repo 2026-08-10, across
+> 100 open PRs, `BEHIND` appeared zero times; re-measure rather than trusting that, since it is a
+> setting that can change without this file changing. The `rev-list` count is the authority.
 >
 > P0 recorded this state, and it was settled before you started: on a normal run G1 ruled on it;
 > on a `--fast-lane` run — where P3 precedes the only gate — no gate has run yet, and it is the
@@ -207,8 +227,14 @@ independent verdicts that disagree is exactly the signal worth having.
 > done. Follow `<repo-root>/.context/standards/Testing-Guide.md`.
 >
 > **Comment discipline.** Follow `<repo-root>/.context/standards/Code-Style-Guide.md`.
-> Comments carry constraints and the "why". No ticket ids, no PR numbers, no
-> before/after-the-fix framing in source comments.
+> Comments carry constraints and the "why", not before/after-the-fix framing.
+>
+> **No transient references in the files this skill authors** — prompt, agent, command and skill
+> files under `.claude/`. Ticket ids and PR numbers go stale there and nothing ever re-reads them.
+> That scope is deliberate and it is not a rule about source comments: root `CLAUDE.md` § Send/Receive
+> Write Gate *requires* a ticket id inside a source comment for every write-gate exemption, and the
+> tree carries ten of them. Where the reference is the tracked work item itself, it is the payload,
+> not stale decoration.
 >
 > **New public API — the experimental marker goes on TWO surfaces**, the type-visible one and
 > the wire-visible one, and missing either is a miss. Read the authoritative per-surface table
@@ -241,8 +267,10 @@ share a worktree.
 > `07-replies.md` once every drafter has reported, and that assembled file is what G2 presents and
 > P7 extracts from.
 >
-> **Inputs.** `<packet>/01-verification/` for the facts, `<packet>/03-rulings.md` for the
-> dispositions, `<packet>/04-fix-reports/` for what landed where.
+> **Inputs.** `<packet>/01-verification/` for the facts, `<packet>/04-fix-reports/` for what
+> landed where, and for the dispositions `<packet>/03-rulings.md` — or, on a `--fast-lane` run
+> (which has no G1, so no rulings file exists until after G2), the qualifying statement in
+> `<packet>/02-triage.md`. Use whichever exists; if neither does, stop.
 >
 > **Conventions.** Follow
 > `<skill-dir>/references/reply-conventions.md`
@@ -276,6 +304,12 @@ share a worktree.
 ## 4. Poster (P7)
 
 > **Task.** Post the approved batch `<ids>` from `<packet>/07-replies.md`.
+>
+> **Inputs.** `<packet>/g2-approval.md`, `<packet>/07-replies.md`, and
+> `<packet>/shared-vocabulary.md` — the last one is not optional and not background reading: its
+> **Internal** list is the configuration for dry-run check 5, and `posting-mechanics.md` makes its
+> absence a hard stop. Read it, do not edit it, and quote the entries you transcribed in your
+> report so they can be eyeballed.
 >
 > **Approval.** The user approved exactly `<quote>` — copied verbatim from
 > `<packet>/g2-approval.md`, never from anyone's recollection of the conversation. Post nothing

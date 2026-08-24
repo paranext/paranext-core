@@ -128,3 +128,24 @@ def bad_control_chars(body):
     """
     illegal = sorted({hex(ord(c)) for c in body if ord(c) < 32 and c not in "\n\t"} - {"0xd"})
     return {"illegal": illegal, "has_cr": "\r" in body, "has_nul": "\x00" in body}
+
+
+def declared_prs(packet_dir):
+    """The PRs this packet is for, from its own directory name.
+
+    A packet is named `<pr>[-<pr>...]-<YYYY-MM-DD>[-<run>]`, so the name is the round's own
+    declaration of which PRs it covers — independent of `bodies.json`, which is the artifact being
+    checked. Deriving the expectation from `bodies.json` instead would make the check
+    self-referential: every item's PR is in that set by construction, so it could never fail.
+
+    The date is matched as a whole `YYYY-MM-DD` trailer rather than segment by segment: a PR
+    number is itself four digits, so a per-segment "is this a year?" test matches `2659` and stops
+    before reading anything.
+    """
+    import os
+    import re
+    name = os.path.basename(os.path.normpath(packet_dir))
+    m = re.fullmatch(r"(?P<prs>\d+(?:-\d+)*)-\d{4}-\d{2}-\d{2}(?:-\d+)?", name)
+    if not m:
+        return set()
+    return {int(x) for x in m.group("prs").split("-")}

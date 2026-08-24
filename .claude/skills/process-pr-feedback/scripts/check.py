@@ -13,11 +13,27 @@ import re
 import subprocess
 import sys
 
-from posting_lib import bad_control_chars, scan_denylist
+from posting_lib import bad_control_chars, declared_prs, scan_denylist
 
 PLACEHOLDERS = [r"\bTODO\b", r"\bTBD\b", r"\bFIXME\b", r"\bXXX\b", r"\bPLACEHOLDER\b",
                 r"\bLOREM\b", r"<[A-Z][A-Z_ -]{2,}>", r"\{\{"]
 PREFIX = "\U0001f916 Claude: "
+
+# 6. Opener phrases. These are reflexes, not communication: they open a public reply to a
+# colleague with agreement or gratitude before the substance, which reads as deference rather
+# than as an answer. `reply-conventions.md` asks for the verdict in the first sentence.
+#
+# The rule is enforced here, at the point a body is about to go public under the user's name,
+# rather than left to whether a drafter agent happened to have a skill loaded. Note the seam: a
+# blanket ban on gratitude is calibrated for in-session replies to your own partner, and these
+# bodies are public text to a human colleague — "concede specifically rather than thank
+# reflexively" is what survives the translation, so thanks for a specific thing a reviewer did
+# is not what this catches.
+OPENERS = [r"^\W*You(?:'re| are) absolutely right",
+           r"^\W*(?:Great|Good|Excellent|Nice) (?:point|catch|question|call)",
+           r"^\W*(?:Thanks|Thank you)\b(?![^.\n]*\bfor (?:the|your) (?:trace|repro|measurement|patch|numbers))",
+           r"^\W*(?:Absolutely|Exactly)[.,!]",
+           r"^\W*I appreciate (?:the|your) (?:feedback|comment|review)\b"]
 
 
 def internal_labels(packet):
@@ -118,19 +134,34 @@ def main():
             fails.append(f"{it['item']}: CR present — normalise the drafts file to LF "
                          f"(the body itself is fine; do not edit its text)")
 
+        # 6. opener phrases, tested against the body after the prefix
+        after = body[len(PREFIX):] if body.startswith(PREFIX) else body
+        for pat in OPENERS:
+            m = re.match(pat, after)
+            if m:
+                fails.append(f"{it['item']}: opens with {m.group(0)!r} — lead with the verdict, "
+                             f"not with agreement (reply-conventions.md § Tone)")
+
         # 4 + 5. placeholders and this round's internal labels, skipping quoted code and URLs
         for tok, at in scan_denylist(body, PLACEHOLDERS + labels):
             ctx = body[max(0, at - 50): at + 50].replace("\n", " | ")
             fails.append(f"{it['item']}: {tok!r} -> ...{ctx}...")
 
-    # 6. targets resolve
-    declared_prs = {i["pr"] for i in items}
+    # 6. targets resolve. The PR set comes from the packet's own directory name, not from
+    # bodies.json — an expectation read off the artifact under test can never fail.
+    declared = declared_prs(packet)
+    if not declared:
+        sys.exit(f"STOP: cannot read the PR set from the packet directory name "
+                 f"{os.path.basename(packet)!r}; expected <pr>[-<pr>...]-<YYYY-MM-DD>")
+    print(f"[targets] packet declares PR(s) {sorted(declared)}")
     for it in items:
+        if it["pr"] not in declared:
+            fails.append(f"{it['item']}: pr {it['pr']} is not one this packet declares "
+                         f"({sorted(declared)}) — on a stack this is how a reply reaches the "
+                         f"wrong PR while every id-set check still passes")
         if it.get("kind") == "inline":
             if it["line"] <= 0 or it["side"] not in ("RIGHT", "LEFT"):
                 fails.append(f"{it['item']}: bad anchor {it['path']}:{it['line']} side={it['side']}")
-            if it["pr"] not in declared_prs:
-                fails.append(f"{it['item']}: pr {it['pr']} is not one this packet declares")
         if it.get("kind") != "reply":
             continue
         got_c = subprocess.run(["gh", "api", f"repos/{slug}/pulls/comments/{it['comment_id']}"],
