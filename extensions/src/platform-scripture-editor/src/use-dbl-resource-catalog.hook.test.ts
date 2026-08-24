@@ -91,5 +91,8 @@ describe('useDblResourceCatalog', () => {
     });
 
     expect(result.current.hasCatalogError).toBe(true);
+    // The symptom a panel would actually show: a cleared error plus a defined-but-empty catalog
+    // reads as `isCatalogReady`, which `getResourcePanelReadiness` turns into 'empty'.
+    expect(result.current.isCatalogReady).toBe(false);
   });
 });
