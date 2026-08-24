@@ -23,10 +23,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import {
-  isNavigableProjectIds,
-  NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
-} from 'platform-bible-utils/experimental';
+import { NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY } from 'platform-bible-utils/experimental';
 import type { DblResourceReference } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getViewOptionsTexts } from './scripture-text-grid-contents.utils';
@@ -46,7 +43,7 @@ import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { resolveTextCollectionProjectId } from './scripture-text-grid-project.utils';
-import { getNavigableProjectIdsToPublish } from './scripture-text-grid-navigable-ids.utils';
+import { resolveNavigableProjectIdsWrite } from './scripture-text-grid-navigable-ids.utils';
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
@@ -282,17 +279,26 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
     [],
   );
   useEffect(() => {
-    // Persisted state can come back from an older build or a bad write; treat it as unknown.
-    const published = isNavigableProjectIds(publishedNavigableProjectIds)
-      ? publishedNavigableProjectIds
-      : [];
-    const toPublish = getNavigableProjectIdsToPublish(displayedProjectIds, published);
+    // Don't publish until the sources and the cached DBL list have both loaded: `resources` — and
+    // so `displayedProjectIds` — is transiently empty before then, which is indistinguishable from
+    // "every project was removed" and would wipe a correct persisted list on remount.
+    if (sources === undefined || isLoadingCachedResources) return;
+    const toPublish = resolveNavigableProjectIdsWrite(
+      displayedProjectIds,
+      publishedNavigableProjectIds,
+    );
     if (toPublish) setPublishedNavigableProjectIds(toPublish);
     // Hidden case: intentionally handled by doing nothing special. This publishing is data-driven,
     // not geometry-driven, so the effect keeps running while this tab is inactive (rc-dock hides
     // panes with display:none but leaves them mounted) and the declared ids stay current. There is
     // nothing to defer and nothing to catch up on activation.
-  }, [displayedProjectIds, publishedNavigableProjectIds, setPublishedNavigableProjectIds]);
+  }, [
+    sources,
+    isLoadingCachedResources,
+    displayedProjectIds,
+    publishedNavigableProjectIds,
+    setPublishedNavigableProjectIds,
+  ]);
 
   // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
   // one (e.g. clicking a verse in Chapter view) makes that resource the active editor. Never switch
