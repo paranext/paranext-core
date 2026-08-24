@@ -2753,6 +2753,15 @@ describe('a failed dock add rolls back what the open already did', () => {
     (localThemeService as { getCurrentThemeSync?: unknown }).getCurrentThemeSync = vi.fn(() => ({
       cssVariables: {},
     }));
+    // This test is about a dock add that throws, not about emptiness. The window loads an empty
+    // layout (the shared default), so it reports born-empty — and the shared answer to that report
+    // is `closing`, which makes the shard refuse this open before it ever reaches the dock. Answer
+    // `stay` so the open gets as far as the failure this test exists to cover.
+    mocks.networkRequest.mockImplementation(async (requestType: string) => {
+      if (requestType === 'windowLayout:get') return { kind: 'empty' };
+      if (requestType === 'windowLayout:emptied') return { action: 'stay' };
+      return undefined;
+    });
     await module.startWebViewServiceShard();
     const { dockLayout } = await registerWindow(layoutWithTab('unrelated-tab'));
     // `dockLayout` comes back from `makeDockLayout` typed as the full `PapiDockLayout`; overriding
