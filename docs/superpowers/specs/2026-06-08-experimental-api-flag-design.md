@@ -4,8 +4,11 @@
 > event-migration inventory below has drifted: several entries name emitter counts, line numbers or
 > APIs that no longer match, and the companion plan's tasks describe work that is largely done.
 > Individual notes mark what has been checked; the absence of a note does not mean an entry was
-> verified. Exactly one deprecated sync `createNetworkEventEmitter` call remains repo-wide, in
-> `platform-scripture-editor`.
+> verified. Exactly one deprecated sync `createNetworkEventEmitter` call remains in PRODUCTION
+> code, in `platform-scripture-editor`; test mocks are a separate matter and the plan's list of
+> them is both over- and under-inclusive. Separately, **the whole "init refactor" category
+> below is superseded**: those emitters are now buffered and created at module load on purpose,
+> so the throwing-accessor refactor would reintroduce the throw the buffering prevents.
 
 **Status:** Draft for review
 **Date:** 2026-06-08
@@ -397,7 +400,8 @@ Single-source emitters. Names are added to the augmentable `NetworkEvents` inter
 
 - All 4 test files: `src/shared/services/shared-store.service.test.ts`, `src/renderer/app.component.test.tsx`, `src/renderer/hooks/use-project-picker-data.hook.test.ts`  
   _Stale as of 2026-08-25: says four and lists three, and `app.component.test.tsx` no longer references `createNetworkEventEmitter`._
-- `extensions/src/hello-rock3/src/main.ts:462`
+- `extensions/src/hello-rock3/src/main.ts:462`  
+  _Stale as of 2026-08-25: already on `createBufferedNetworkEventEmitter`, now at `:470`. Nothing to do._
 - `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234`  
   _Stale as of 2026-08-25: four emitters now; one (`selectionChangedEventEmitter`) is still on the deprecated sync call._
 - `src/extension-host/services/extension.service.ts` (2 occurrences)  
@@ -425,8 +429,10 @@ Single-source emitters. Names are added to the augmentable `NetworkEvents` inter
 
 **Trickier** — module-level `const` emitters that need lazy-init refactoring:
 
-- `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — four lifecycle emitters at module top level. Move into the existing service-host initialization function, store in `let` bindings, expose via accessor functions that throw with a descriptive error if invoked before initialization.
-- `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — same pattern.
+- `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — four lifecycle emitters at module top level. Move into the existing service-host initialization function, store in `let` bindings, expose via accessor functions that throw with a descriptive error if invoked before initialization.  
+  _Superseded as of 2026-08-25: all four are `createBufferedNetworkEventEmitter` now, at `:128,147,165,184`, created at module load deliberately. **Do not perform this refactor** — the throwing accessor is what the buffering exists to avoid._
+- `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — same pattern.  
+  _Stale as of 2026-08-25: already on `createBufferedNetworkEventEmitter`, now at `:394`. Nothing to do, and the refactor below is superseded._
 
 ### Foundational work (this design)
 
