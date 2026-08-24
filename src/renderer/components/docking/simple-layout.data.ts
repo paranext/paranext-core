@@ -1,5 +1,5 @@
 import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
-import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
+import { FIND_WEBVIEW_TYPE, SCRIPTURE_EDITOR_WEBVIEW_TYPE } from '@shared/models/web-view.model';
 import { LayoutBase } from 'rc-dock';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './dock-tab-group.util';
 
@@ -90,6 +90,16 @@ export const simpleLayout: LayoutBase = {
                 data: {
                   webViewType: 'legacyCommentManager.commentListPanel',
                   id: 'c7e4a8b2-3d91-4f06-8e5a-1b2c9d0e7f83',
+                  contentType: 'react',
+                  state: {},
+                },
+              },
+              {
+                id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
+                tabType: TAB_TYPE_WEBVIEW,
+                data: {
+                  webViewType: FIND_WEBVIEW_TYPE,
+                  id: 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d',
                   contentType: 'react',
                   state: {},
                 },

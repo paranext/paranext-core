@@ -99,6 +99,11 @@ import {
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
 import {
+  BookNotAvailableView,
+  BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
+  type ManageBooksDisabledReason,
+} from './book-not-available-view.component';
+import {
   ShareLayoutButton,
   SHARE_LAYOUT_BUTTON_STRING_KEYS,
 } from './share-layout-button.component';
@@ -108,6 +113,7 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
@@ -169,6 +175,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...MARKER_MENU_STRING_KEYS,
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...EMPTY_CHAPTER_VIEW_STRING_KEYS,
+  ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
   ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
@@ -188,7 +195,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%paragraphMenu_misc_markerDescription%',
   '%versionHistoryCommit_beforeInsertFootnote%',
   '%versionHistoryCommit_beforeInsertCrossReference%',
-  '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
@@ -417,7 +423,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
 
-  const [interfaceModePossiblyError] = useSetting('platform.interfaceMode', 'simple');
+  const [interfaceModePossiblyError, , , isInterfaceModeLoading] = useSetting(
+    'platform.interfaceMode',
+    'simple',
+  );
 
   const isPowerMode = useMemo(() => {
     if (isPlatformError(interfaceModePossiblyError)) {
@@ -527,6 +536,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
     [isReadOnly, isSyncBlocked, viewType],
   );
+
+  /**
+   * Why the "Manage books" action on the book-not-available zero-state cannot be taken right now,
+   * or `undefined` when it can.
+   *
+   * Deliberately NOT derived from `isReadOnlyEffective`, which folds in `viewType === 'markers'`
+   * because the editor CANVAS is not editable in that view. Manage Books is a separate floating
+   * dialog, and its ability to create a book does not depend on which view the editor is showing —
+   * so gating on the effective flag disabled an action that would have worked fine. Only the two
+   * conditions that genuinely prevent adding a book are listed, checked in the order in which the
+   * user can do something about them: a read-only project is a standing state they must get
+   * changed, while a sync is transient and about to end on its own.
+   */
+  const manageBooksDisabledReason = useMemo<ManageBooksDisabledReason | undefined>(() => {
+    if (isReadOnly) return 'readOnly';
+    if (isSyncBlocked) return 'syncInProgress';
+    return undefined;
+  }, [isReadOnly, isSyncBlocked]);
 
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
   // paragraph/verse markers in the editor (fed into EditorOptions.structureProtectionMode below). The
@@ -1133,7 +1160,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [showMarkersMenu]);
 
-  // Listen for Ctrl+F to open find dialog and for the marker menu trigger to open the marker menu
+  // Ctrl+F opens Find for this editor's own project. Uses the same hook as the read-only reference
+  // panels so there is a single Ctrl+F→openFind implementation across every scripture tab type.
+  useOpenFindShortcut(webViewId, projectId);
+
+  // Listen for the marker menu trigger to open the marker menu, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     const editorInput = document.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
@@ -1154,24 +1185,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
       }
 
-      // Find dialog trigger listener
-      if (event.ctrlKey && event.key.toLowerCase() === 'f') {
+      const isInsertCommentHotkey = isMac
+        ? event.metaKey &&
+          event.altKey &&
+          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
+          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
+        : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
+          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
+      if (isInsertCommentHotkey) {
         event.preventDefault();
-        const selectedText = window.getSelection()?.toString() ?? '';
-        papi.commands.sendCommand('platformScripture.openFind', webViewId, selectedText);
-      } else {
-        const isInsertCommentHotkey = isMac
-          ? event.metaKey &&
-            event.altKey &&
-            // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
-            (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
-          : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
-            (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
-        if (isInsertCommentHotkey) {
-          event.preventDefault();
-          event.stopPropagation();
-          insertCommentAtCurrentSelection();
-        }
+        event.stopPropagation();
+        insertCommentAtCurrentSelection();
       }
     };
 
@@ -1180,7 +1204,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [webViewId, insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu, isMac]);
+  }, [insertCommentAtCurrentSelection, showMarkersMenu, showInlineMarkersMenu, isMac]);
 
   // Apply annotation styles from extensions
   useAnnotationStyleSheet();
@@ -1853,6 +1877,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     BOOKS_PRESENT_DEFAULT,
   );
 
+  // `platform.isPublished` is the project-kind classification (resource vs project); `isReadOnly` /
+  // `platform.isEditable` is Scripture-text edit PERMISSION and says nothing about kind. Only the
+  // former may decide whether the user is told "this book is not in this resource", which is a
+  // statement of fact with no remedy. Same distinction the open path draws in this extension's
+  // `main.ts`, where the comment on `isPublished` spells out why the two must not be conflated.
+  // Defaults to false so an unresolved setting shows the actionable project message rather than
+  // wrongly telling a project owner their project is a resource.
+  const [isPublishedPossiblyError, , , isIsPublishedLoading] = useProjectSetting(
+    projectId,
+    'platform.isPublished',
+    false,
+  );
+
+  const isResource = useMemo(() => {
+    if (isPlatformError(isPublishedPossiblyError)) {
+      logger.warn(
+        `Error getting whether the project is published: ${getErrorMessage(isPublishedPossiblyError)}`,
+      );
+      return false;
+    }
+    return isPublishedPossiblyError;
+  }, [isPublishedPossiblyError]);
+
   const booksPresent = useMemo(() => {
     if (isPlatformError(booksPresentPossiblyError)) {
       logger.warn(`Error getting books present: ${getErrorMessage(booksPresentPossiblyError)}`);
@@ -1896,13 +1943,55 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
     }
     if (!bookExists) {
+      // Each branch below picks DIFFERENT advice, so none of them may render off a setting's default:
+      //   - `platform.interfaceMode` decides Simple's "ask your project administrator" against Power's
+      //     actionable zero-state. Showing Simple's advice to a Power user tells them to go ask
+      //     someone for something they can do themselves in two clicks.
+      //   - `platform.isPublished` decides the resource message against the zero-state. Either default
+      //     is wrong for someone: a resource reader would briefly get an add-this-book button, or a
+      //     project owner would briefly be told their project is a resource.
+      // Both hooks serve their default until the real value arrives, which makes the default
+      // indistinguishable from an answer — `isLoading` is the only thing that separates them. The code
+      // this replaced rendered one string for all of these cases, which is why the hazard is new here.
+      // Same class of problem this file guards `CharacterMarkerBarOverlay` against further down.
+      if (isInterfaceModeLoading || isIsPublishedLoading) {
+        return (
+          <div className="tw:flex tw:items-center tw:justify-center tw:h-full">
+            {workaround}
+            <Spinner />
+          </div>
+        );
+      }
+      // A resource keeps its own message: "not in this resource" is a statement of fact with no
+      // remedy, whereas a project's missing book is actionable (Manage Books) for Donna. Branching on
+      // `isResource` (`platform.isPublished`) rather than on editability is what keeps a read-only
+      // PROJECT — a real and common case — out of this branch: it is not a resource, so it gets the
+      // zero-state, with the Manage books button disabled and a tooltip saying the project is
+      // read-only.
+      if (isResource) {
+        return (
+          <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+            {workaround}
+            {localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']}
+          </div>
+        );
+      }
       return (
-        <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+        <>
           {workaround}
-          {isReadOnly
-            ? localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
-            : localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundProject%']}
-        </div>
+          <BookNotAvailableView
+            localizedStrings={localizedStrings}
+            isPowerMode={isPowerMode}
+            manageBooksDisabledReason={manageBooksDisabledReason}
+            onOpenManageBooks={() => {
+              papi.commands
+                .sendCommand('platformScripture.openManageBooks', webViewId, 'createMissingBook')
+                .catch((e) =>
+                  logger.warn(`Failed to open Manage Books from the book-not-available view: ${e}`),
+                );
+            }}
+          />
+        </>
       );
     }
     if (!usjFromPdp || usjFromPdp === defaultUsj) {

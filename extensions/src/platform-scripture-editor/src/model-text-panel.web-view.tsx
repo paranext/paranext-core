@@ -18,6 +18,7 @@ import type {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { isDblResourceReference } from './resource-reference.utils';
+import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
@@ -43,6 +44,7 @@ const ALL_STRING_KEYS: LocalizeKey[] = [
  * resolved resource's USJ + text direction) are passed as callbacks.
  */
 globalThis.webViewComponent = function ModelTextPanelWebView({
+  id: webViewId,
   projectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
@@ -128,6 +130,9 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
       updateWebViewDefinition({ title: baseTitle });
     }
   }, [modelTextSmallName, localizedStrings, updateWebViewDefinition]);
+
+  // Ctrl+F opens Find for the displayed model resource.
+  useOpenFindShortcut(webViewId, modelResourceProjectId);
 
   // --- Operation callbacks ---
 

@@ -83,6 +83,9 @@ step, no automation. Just a record.
 - **Consequences:** shortcuts are app-global and cross-platform from one place; couples `main.ts` to
   an extension's command name by string (degrades gracefully if the extension is absent). **Revisit**
   (and likely supersede this) once enough shortcuts accumulate to justify the declarative API.
+  Narrowed by ADR-0015: this applies to shortcuts whose command needs nothing from the focused view;
+  a shortcut whose command needs the focused web view's id, project, or text selection stays in the
+  renderer, in one shared hook.
 - **Source:** discovery brief for "Donna syncs her project with the team (core Send/Receive)".
 
 ## ADR-0003: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
@@ -540,9 +543,225 @@ step, no automation. Just a record.
   of the implementing branch, which surfaced and fixed a startup-path regression (analytics
   initialization briefly gated extension-host activation) before merge.
 
----
+## ADR-0015: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
 
-## ADR-0015: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
+- **Date:** 2026-08-18
+- **Status:** Accepted (narrows ADR-0002 rather than superseding it)
+- **Context:** PT-4341 makes Find (Ctrl+F) reachable from every scripture tab type, not just the
+  Scripture editor. ADR-0002 says app-global shortcuts belong in the Electron main-process
+  `before-input-event` handler (`src/main/main.ts`) and explicitly rejects "renderer-level global
+  `keydown` — duplicated into every web-view" as the alternative. Find is app-wide in the sense that
+  the user expects Ctrl+F to work wherever scripture is on screen, so on its face this work looks
+  like an ADR-0002 case. But `platformScripture.openFind` is not a zero-argument command: it needs
+  the id of the web view the user is *in*, the project of the scripture that web view is *showing*
+  (for a reference panel this is the displayed resource, not the tab's own `projectId`), and that
+  web view's current **text selection** to pre-fill the search box. `before-input-event` fires in the
+  main process, which has none of those: it can identify the focused window, not the focused tab, and
+  it cannot read a selection inside an `about:srcdoc` iframe. Routing them back would mean inventing
+  a "focused scripture tab reports its selection" channel — a platform capability that does not exist.
+- **Decision:** Keep the Ctrl+F handler in the renderer, inside the web views, but hold it in **one
+  shared hook** — `useOpenFindShortcut` in
+  `extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts` — that every
+  scripture tab type mounts (Scripture editor, model text, Bible text, commentary, Text Collection).
+  The hook owns the key match, the "no scripture resolved yet" no-op, the selection read, and the
+  error logging; a tab supplies only its web view id and the project id of the scripture it is
+  showing. ADR-0002 continues to govern shortcuts whose command needs nothing from the focused view.
+  The Text Collection tab shows several resources at once and so has no single displayed resource: it
+  supplies the project of the resource holding the **caret**, tracked by `useFocusedResourceProjectId`
+  off the cells' `data-project-id`.
+- **Alternatives:** (a) **A `before-input-event` branch per ADR-0002** — rejected: it cannot supply
+  the triggering web view id, the displayed resource's project, or the selection, so Find would open
+  against the wrong scripture and never pre-fill. (b) **`before-input-event` plus a new "focused
+  scripture tab" PAPI channel that reports id + project + selection** — deferred: that is the
+  general fix (and the honest precondition for making Ctrl+F app-global), but it is a platform
+  capability well beyond this ticket's scope. (c) **Duplicate the listener per web view** (what the
+  first draft of this branch did, with the editor keeping its own inline copy) — rejected: two
+  implementations of the same shortcut drift, which is exactly ADR-0002's stated objection.
+- **Consequences:** Ctrl+F works only in tabs that mount the hook, so **each new scripture tab type
+  is an opt-in** — the real coverage gap of the renderer-level approach, and the one thing the
+  main-process handler would have given for free. Adding a tab type is one hook call plus a resolved
+  source project. The catalog entry `scripture-find` in `src/stories/keyboard-shortcuts.data.ts` lists
+  the hook plus every mount site, so the current coverage is greppable in one place; keeping it
+  accurate is what stops the gap from going unnoticed. **Revisit** if (b) is ever built, or once
+  enough view-context-dependent shortcuts accumulate to justify a general channel.
+- **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
+  branch diverged from ADR-0002 without recording why.
+
+## ADR-0016: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
+
+- **Date:** 2026-08-18
+- **Status:** Accepted
+- **Context:** PT-4111 needed a zero-state carrying a title, a description, and an optional action
+  button (the scripture editor's "this book is not in this project" state, whose Power-mode variant
+  offers a Manage Books button). Three candidate shapes already existed and nothing said which to
+  reach for. `EmptyState` (`lib/platform-bible-react/src/components/basics/empty-state.component.tsx`,
+  2 consumers) renders a single `role="status"` message and has no slot for a title or an action.
+  `InstallFailedView` (`extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`,
+  2 consumers) is genuinely "full-panel message + action button" but is scoped to DBL install
+  recovery. Neither is a general primitive, and the next three tickets in the same epic (PT-4132,
+  PT-4347, PT-4349) each need a zero-state too, so an ad-hoc fourth shape would have compounded.
+- **Decision:** Vendor shadcn's `empty` into `lib/platform-bible-react/src/components/shadcn-ui/` and
+  treat it as the primitive for any zero-state that needs more than a bare sentence — title,
+  description, media, or an action. `EmptyState` keeps its existing consumers and remains the
+  message-only case; it did NOT gain `title`/`icon`/`action` props. `InstallFailedView` stays local to
+  install recovery. Feature-specific zero-states compose `Empty` inside their own extension (see
+  `book-not-available-view.component.tsx`) rather than adding variants to the shared library.
+- **Alternatives:** **Extend `EmptyState` with optional `title`/`icon`/`action`** — rejected: it
+  changes a shared design-system component for the benefit of consumers that do not need the new
+  props, and still would not be the primitive UX specified. **Follow the `InstallFailedView` idiom
+  with a new local view** — rejected: cheapest for one ticket, but it is an install-recovery view by
+  intent, and copying its shape for a fourth time is exactly the drift ADR-0012 warns about; UX also
+  specified the shadcn primitive by name. **Hand-write an equivalent component** — rejected: forfeits
+  the upstream-diffable baseline that `/add-shadcn-component` exists to preserve.
+- **Consequences:** `empty.tsx` must keep its two-commit history (raw shadcn baseline, then the
+  standard `pr-twp`/TSDoc customizations) so future shadcn upgrades can diff generated against
+  customized — its PR must not be squash-merged. One upstream quirk was kept deliberately:
+  `EmptyDescription` is typed `React.ComponentProps<'p'>` but renders a `<div>`; do not "fix" it
+  locally, since that would diverge from the baseline for no behavioral gain. Adding a shadcn
+  component is its own PR with its own branch, so any feature depending on a not-yet-vendored
+  primitive stacks on that PR rather than bundling it — which is how PT-4111 shipped it: the vendoring
+  is PR #2690 and the feature PR #2691 is based on it, so squash-merging the feature cannot flatten the
+  baseline.
+
+  **Accessibility is the caller's job, and this decision is what makes it so.** `EmptyState` came with
+  `role="status"`; `Empty` sets no role, and `EmptyTitle` renders a `<div>` rather than a heading.
+  Choosing `Empty` therefore silently drops an announcement that the rejected component provided —
+  something this entry originally failed to record, and which a review caught only after the first
+  implementation shipped without it. Every `Empty` consumer must pass `role="status"` and nest its own
+  heading; a zero state that REPLACES focused content (as the editor canvas one does) must also move
+  focus into the region, guarded on the document already having focus. Recorded as a rule in
+  [Component-Selection-Quick-Reference.md](Component-Selection-Quick-Reference.md#zero-states-no-content-to-show).
+- **Source:** PT-4111 design + implementation. (The original design note lives under gitignored
+  `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
+  precisely because that path is not readable from the repo.)
+
+## ADR-0017: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
+
+- **Date:** 2026-08-18
+- **Status:** Accepted. (Briefly amended by ADR-0018, now withdrawn: ADR-0018 asserted that point (4)
+  rested on a false premise about `reloadWebView`. Tracing the nonce showed the opposite — the premise
+  here is correct and the mechanism is stronger than stated. Point (4)'s wording is corrected below to
+  say why the reload works, and the "a nonce or launch token — rejected" alternative stands.)
+- **Context:** Opening a tool web view sometimes needs a value that applies to *this* launch only —
+  text to pre-fill, a section to land on, a row to pre-select — as distinct from the durable state the
+  web view persists. The pattern existed in the codebase but was never written down: `openFind` takes
+  `selectedText` and threads it through `FindWebViewOptions.initialSearchText`, and two providers
+  force a transient key back to its inert value on every rebuild
+  (`platform-scripture-editor/src/main.ts` `isSyncBlocked: false`, and
+  `legacy-comment-manager/src/main.ts`, whose comment explicitly cites the former). Because it was
+  undocumented, PT-4111's first design independently invented a consume-once protocol plus a launch
+  token — machinery the existing pattern does not need — and only discarded it after reading the
+  precedents.
+- **Decision:** A one-shot launch parameter is (1) an **optional scalar** appended to the `open*`
+  command's signature — never a structured request object, and never a new sibling command; (2)
+  carried as a field on that web view's `*WebViewOptions`; (3) written into the web view's `state` in
+  `getWebView` by **unconditional assignment from the current options**, which is what scrubs a stale
+  value off a restored layout; and (4) delivered to an already-open instance by force-calling
+  `reloadWebView` when the value is present. Point (4) works because `reloadWebView` **remounts** the
+  web view: it re-runs the provider's `getWebView`, and `srcNonce = newNonce()` is regenerated on every
+  call and interpolated into the generated `content`
+  (`src/renderer/services/web-view.service-host.ts`), so `content` differs each time and the `srcDoc`
+  bound in `web-view.component.tsx` changes, reloading the iframe and recreating the React root. The
+  mount-time initializers therefore see the new values with no re-apply machinery at all. Note the
+  trap: `getWebViewNonce(id)` IS stable per id, but it is not the nonce that reaches `content`. Contextual inputs that can be derived — `projectId`, the
+  current reference, the current book — are resolved from the triggering web view's definition
+  (`getOpenWebViewDefinition`, `scrollGroupScrRef`), not added as parameters. Only the caller's
+  *intent* is passed, because intent is the one thing not derivable.
+- **Alternatives:** **A second command** (e.g. `openManageBooksToCreateBook`) — rejected: duplicates
+  the resolve-and-open body and grows the command surface for one flag. **A structured options object**
+  — rejected by the command-signature rule in `.claude/rules/architecture/extension-patterns.md`
+  absent a behavior the bare shape cannot express. **Consume-once in the web view** (read the value,
+  then clear the state slot) — rejected: the provider-side scrub already guarantees the value cannot
+  outlive its launch, so a second mechanism is redundant and gives two places to get it wrong.
+  **A nonce or launch token to make repeat launches re-trigger** — rejected: the force-reload already
+  does that. **Conditionally spreading the key only when present** — rejected, and this is the
+  subtle one: it reads as tidier but lets a stale value survive a layout restore, which is precisely
+  the bug the scrub prevents.
+- **Consequences:** Consumers read the value as ordinary mount-time state (a lazy `useState`
+  initializer), with no clearing logic and no re-apply effect — re-applying would override the user's
+  own in-dialog navigation. Two costs come with the remount that makes this work. First, it discards
+  the web view's transient UI state on every relaunch — for Manage Books that is attached import files,
+  filter text, presence filter, group-by, copy source and scroll position — which is accepted because a
+  relaunch is an explicit user action on a dialog they are choosing to re-target, but it should be
+  weighed for any tool a user may be mid-task in. Second, the mechanism rests on a nonce the service
+  host has a standing TODO to make stable; if that TODO is ever acted on, every consumer of this
+  pattern silently stops seeing new options, so that TODO is the place to look if a launch parameter
+  ever stops arriving. A one-shot scroll or other launch side effect must be owned ABOVE any
+  conditionally-rendered child that performs it — otherwise the child's own remount (a filter clearing,
+  say) re-fires it long after the launch. The scrub is easy to regress into a conditional spread, so it warrants a
+  test that fails when the assignment becomes conditional (see
+  `manage-books.web-view-provider.test.ts`). Note `useWebViewState` is per-`webViewId` and does not
+  survive close/reopen, which is why this pattern flows through provider options rather than relying
+  on persisted slots.
+- **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
+  transient-state scrubs.
+
+## ADR-0018: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
+
+- **Date:** 2026-08-18 (withdrawn 2026-08-19)
+- **Status:** **Withdrawn.** Its central factual claim is wrong, and the mechanism it introduced was
+  dead code. ADR-0017 stands unamended in substance. Kept rather than deleted because the *way* it was
+  wrong is the useful part: it is a worked example of a plausible mechanism claim that survived
+  implementation, five duplicated code comments and a passing test, and was caught only by tracing the
+  nonce to its use site.
+- **What was wrong:** it asserted "the generated `content` string and per-id nonce are unchanged." Two
+  nonces exist and they were conflated. `getWebViewNonce(id)` is indeed stable per id — but it never
+  enters `content`. `srcNonce = newNonce()` does, regenerating on every `getWebView` call and
+  interpolated throughout the generated document, so `content` differs on every reload,
+  `web-view.component.tsx`'s `srcDoc={content}` changes, the iframe reloads, and the React root IS
+  destroyed and recreated. The service host even carries a standing TODO saying so in as many words
+  ("Generating nonces every time causes webviews to rerender every time `getWebView` is used on an
+  existing webview").
+- **Consequences of the withdrawal:** the launch token could never have fired — every guard seeded its
+  ref from the incoming token at mount, so `launchToken === ref.current` was always true and no effect
+  body ever ran. The feature worked throughout because ADR-0017's lazy initializers were correct all
+  along. The token plumbing has been removed from all five files, and the inverted trade-off ADR-0018
+  claimed to avoid is recorded honestly in ADR-0017's consequences instead: the remount really does
+  discard in-dialog state, which is the cost of the mechanism rather than something a token avoided.
+  The sibling `projectId` bug ADR-0018 reported is likewise not a bug: a mount-only initializer is
+  correct precisely because the reload remounts.
+- **Process lesson:** a claim about platform behavior belongs in ONE place. This one was duplicated into
+  five code comments, and when it turned out false all five were wrong together — and their number read
+  as corroboration. Assert platform mechanics once, at the site that depends on them, and link to it.
+- **Superseded content follows, for the record.**
+- **Original status:** Accepted (supersedes ADR-0017's delivery mechanism)
+- **Context:** ADR-0017 rejected a launch token on the stated premise that force-calling
+  `reloadWebView` re-triggers the launch. Code review traced the call and found the premise false.
+  `reloadWebView` -> `openOrReloadWebView` (`src/renderer/services/web-view.service-host.ts`) calls the
+  provider's `getWebView` and saves the new state, but the iframe is **not** reloaded: the generated
+  `content` string and per-id nonce are unchanged, so only `onDidUpdateWebView` fires
+  (`src/renderer/components/web-view.component.tsx` re-sets `srcDoc` only when `content` changes). The
+  existing React root re-renders and never unmounts. `useWebViewState` does surface the new values, but
+  ADR-0017's prescribed consumer shape — a lazy `useState` initializer — does not re-run on re-render,
+  and a mount-only `useLayoutEffect([])` does not re-fire. Net user-visible effect for PT-4111: with
+  Manage Books already open, choosing "Manage books" from the not-available view fronted the tab but
+  left it on the previous section with no preselection and no scroll — the feature's core affordance
+  silently no-opped. Implementing the fix surfaced a second latent bug: a `useEffect` resetting
+  `selectionsByAction` on `projectId` also ran on mount, wiping the lazy-initialized preselection, so
+  even the *first*-launch case never worked.
+- **Decision:** Carry a monotonically increasing **launch token** in the web view's options alongside
+  the launch parameters, bumped on every `open*` invocation, scrubbed by the same unconditional
+  assignment ADR-0017 point (3) prescribes. Consumers apply launch parameters in an **effect keyed on
+  the token**, not in a lazy `useState` initializer. A token — rather than comparing the parameter
+  values — is required because two consecutive identical launches produce identical parameters and are
+  otherwise indistinguishable.
+- **Alternatives:** **Compare parameter values and re-apply on change** — rejected: cannot distinguish
+  a repeat launch with the same parameters, which is a normal case. **Remount via a `key` derived from
+  the token** — viable and simpler to reason about, but discards all unrelated in-dialog state (scroll,
+  other sections' selections) that the user may care about; the keyed effect preserves it. **Make
+  `reloadWebView` genuinely reload the iframe** — rejected as out of scope and far more disruptive: it
+  would change behavior for every existing caller.
+- **Consequences:** ADR-0017's "no re-apply effect" consequence is reversed; the re-apply is scoped so
+  it overrides only the launched-to section's selection and leaves the user's other in-dialog state
+  intact. The same token fixes the sibling case where `projectId` was seeded by a mount-only
+  initializer, so "reload updates the existing tab with the new project context" now holds. The
+  already-open relaunch path needs a test — it is invisible in the mount-only tests that previously
+  covered this feature (see `manage-books-dialog.component.test.tsx`). More generally: `reloadWebView`
+  should not be assumed to remount anything.
+- **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
+  `srcNonce` to its use site.
+
+## ADR-0019: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
 
 - **Date:** 2026-08-20
 - **Status:** Accepted (interim — retirement of the superseded guard is deferred, not decided against)

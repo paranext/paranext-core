@@ -33,6 +33,7 @@ import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import {
   AlertEntry,
   EstherTemplate,
+  ManageBooksAction,
   ManageBooksCopyStrategy,
   ManageBooksCreateMethod,
   ManageBooksDialog,
@@ -50,15 +51,15 @@ import {
   GreekEstherTemplatePickerLocalizedStrings,
 } from './greek-esther-template-picker.component';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 const NETWORK_OBJECT_ID = 'platformScripture.manageBooks';
 const BOOKS_PRESENT_DEFAULT = '0'.repeat(123);
 
 // Only Scripture Editor tabs should mark a project as "open" in the ProjectSelector.
 // Other project-bound tabs (Manage Books itself, Checks side panel, etc.) carry a `projectId`
-// but are not the "is the project open" signal users expect. Mirrors the canonical webViewType
-// from `platform-scripture-editor.utils.ts` (SCRIPTURE_EDITOR_WEBVIEW_TYPE = 'platformScriptureEditor.react').
-const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
+// but are not the "is the project open" signal users expect.
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>([SCRIPTURE_EDITOR_WEBVIEW_TYPE]);
 
 /**
  * Wire-shape of a single import file as the C# orchestrator expects to receive it. Mirrors
@@ -313,6 +314,18 @@ global.webViewComponent = function ManageBooksWebView({
     initialProjectId ?? '',
   );
 
+  // Transient launch parameters from `openManageBooks(..., 'createMissingBook')`. The provider
+  // rebuilds these from the current open/reload options on every getWebView and scrubs them
+  // otherwise, so they are already guaranteed not to survive a layout restore — no clearing needed
+  // here. Read as ordinary mount-time values for the reason given on `projectId` below.
+  const [initialSection] = useWebViewState<ManageBooksAction | undefined>(
+    'initialSection',
+    undefined,
+  );
+  const [initialSelectedBooks] = useWebViewState<string[] | undefined>(
+    'initialSelectedBooks',
+    undefined,
+  );
   // The EXPLICIT open context wins over persisted state: the dialog is only
   // opened from a scripture editor's hamburger menu, so a fresh
   // `initialProjectId` means "the user asked to manage THIS
@@ -320,6 +333,13 @@ global.webViewComponent = function ManageBooksWebView({
   // a project id that no longer resolves) must not override it. Persistence
   // still covers dock-layout session restores, where the definition carries
   // no fresh option.
+  //
+  // A mount-only initializer is sufficient, including for a RELAUNCH onto an already-open dialog,
+  // because reloading a web view remounts it — every launch is a fresh mount. Do not add a re-apply
+  // effect on top of it. Why the reload remounts is stated once, in `openManageBooks`
+  // (`platform-scripture/src/main.ts`), and as a rule in `.claude/rules/architecture/react-patterns.md`;
+  // it is not restated here, because the previous version of this feature duplicated that claim into
+  // five comments and when it turned out to be wrong all five were wrong together.
   const [projectId, setProjectIdLocal] = useState<string>(
     () => initialProjectId || persistedProjectId || '',
   );
@@ -1055,6 +1075,8 @@ global.webViewComponent = function ManageBooksWebView({
       <ManageBooksDialog
         open
         projectId={projectId}
+        initialSection={initialSection}
+        initialSelectedBooks={initialSelectedBooks}
         onProjectIdChange={setProjectIdLocal}
         loadProjects={loadProjects}
         loadBooks={loadBooks}

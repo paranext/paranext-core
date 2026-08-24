@@ -36,11 +36,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from 'platform-bible-react';
-import { ScopeWithRange } from 'platform-bible-react/experimental';
+import {
+  ProjectSelector,
+  ProjectSelectorLocalizedStrings,
+  ProjectSelectorOpenTab,
+  ProjectSelectorProject,
+  ScopeWithRange,
+} from 'platform-bible-react/experimental';
 import {
   formatReplacementString,
   LanguageStrings,
   LocalizedStringValue,
+  ScrollGroupId,
 } from 'platform-bible-utils';
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import React, { useCallback, useMemo, useRef } from 'react';
@@ -60,6 +67,14 @@ import {
 } from './replace-preview-options.component';
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './replace-preview-types';
 
+/**
+ * The `openTabs` value handed to the project picker in simple interface mode. Module-level rather
+ * than an inline `[]` so its identity is stable: `ProjectSelector` memoizes its row list on
+ * `openTabs`, and a fresh array each render would recompute the rows on every keystroke and every
+ * streamed result batch.
+ */
+const NO_OPEN_TABS: ProjectSelectorOpenTab[] = [];
+
 /** Localization keys used by the {@link Find} component itself (excludes child component keys). */
 export const FIND_LOCALIZED_STRING_KEYS = [
   '%general_countOfTotal%',
@@ -74,11 +89,18 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_matchCase%',
   '%webView_find_matchContentIn%',
   '%webView_find_nextResult%',
+  '%webView_find_noOpenProjects_results%',
   '%webView_find_noResultsFound%',
   '%webView_find_pattern%',
   '%webView_find_preserveCase%',
   '%webView_find_preserveCase_tooltip%',
   '%webView_find_previousResult%',
+  '%webView_find_projectFilter_noOpenProjects%',
+  '%webView_find_projectFilter_noProjectsFound%',
+  '%webView_find_projectSelector_label%',
+  '%webView_find_projectSelector_openTabsSectionHeading%',
+  '%webView_find_projectSelector_otherProjectsSectionHeading%',
+  '%webView_find_projectSelector_searchPlaceholder%',
   '%webView_find_recent%',
   '%webView_find_replace%',
   '%webView_find_replaceAll%',
@@ -114,6 +136,16 @@ export const FIND_LOCALIZED_STRING_KEYS = [
  */
 export type BookResultEntry = { result: HidableFindResult; originalIndex: number };
 
+/** A project (or resource) the user can select for Find to operate on. */
+export type FindProject = {
+  /** Unique id of the project. */
+  id: string;
+  /** Short display name (e.g. an abbreviation). */
+  shortName: string;
+  /** Full display name. */
+  fullName: string;
+};
+
 /** Props for the {@link Find} presentational component. */
 export type FindProps = {
   /** Localized strings for the find/replace UI; resolve via {@link FIND_LOCALIZED_STRING_KEYS}. */
@@ -127,6 +159,59 @@ export type FindProps = {
   searchResultLocalizedStrings: {
     [localizedKey in (typeof SEARCH_RESULT_LOCALIZED_STRING_KEYS)[number]]?: LocalizedStringValue;
   };
+
+  // Project selection
+  /**
+   * Scripture projects/resources the user can select for Find to operate on — only those currently
+   * open in an editor tab; Find has nothing to scroll for a project that isn't open.
+   */
+  projects: FindProject[];
+  /** Id of the project Find currently operates on, or `undefined` if none is selected. */
+  selectedProjectId: string | undefined;
+  /**
+   * The specific open tab (by scroll group) Find currently targets, or `undefined` before an
+   * initial selection has been made.
+   */
+  selectedScrollGroupId: ScrollGroupId | undefined;
+  /** Currently-open scripture editor tabs backing the `projects` list above. */
+  openTabs: ProjectSelectorOpenTab[];
+  /**
+   * True while the project metadata backing `projects` is still being fetched. Distinct from
+   * `noOpenProjects`: until the fetch resolves, `projects` is empty even when tabs ARE open, so
+   * without this the picker would render its "no open projects" placeholder and contradict the
+   * results area. Shows a loading affordance instead.
+   */
+  isLoadingProjects: boolean;
+  /**
+   * True when no scripture project is open in any editor tab. The project selector and the results
+   * area both show a "no open projects" placeholder instead of their normal content.
+   */
+  noOpenProjects: boolean;
+  /**
+   * When true, the project picker presents projects as a flat list with no scroll-group letters —
+   * neither in the trigger nor on any row (simple interface mode). Simple mode hides
+   * `ScrollGroupSelector` from both the app toolbar and the web view toolbar, so a group letter
+   * would name something the user can neither see nor change. `onSelectProject` handles selection
+   * instead of `onSelectProjectScrollGroup` while this is set.
+   */
+  hideScrollGroups?: boolean;
+  /**
+   * Called when the user selects a different open project/tab for Find to operate on. Not used
+   * while `hideScrollGroups` is set — see `onSelectProject`.
+   */
+  onSelectProjectScrollGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
+  /**
+   * Called when the user selects a different open project while `hideScrollGroups` is set. Carries
+   * no scroll group: the picker does not surface groups in that mode, so which of the project's
+   * open tabs Find targets is the caller's decision.
+   */
+  onSelectProject: (projectId: string) => void;
+  /**
+   * Required by the underlying project picker but expected never to fire: the picker only ever
+   * lists open projects, so there is nothing for it to open. Not passed while `hideScrollGroups` is
+   * set — `mode="project"` has no "open in group" affordance at all.
+   */
+  onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
 
   // Search/replace input + filter state
   /** The current search term. */
@@ -288,6 +373,16 @@ export function Find({
   localizedStrings,
   scopeSelectorLocalizedStrings,
   searchResultLocalizedStrings,
+  projects,
+  selectedProjectId,
+  selectedScrollGroupId,
+  openTabs,
+  isLoadingProjects,
+  noOpenProjects,
+  hideScrollGroups = false,
+  onSelectProjectScrollGroup,
+  onSelectProject,
+  onOpenProjectInGroup,
   searchTerm,
   recentSearches,
   scope,
@@ -485,14 +580,23 @@ export function Find({
   // are mutually exclusive by construction instead of by three separately-maintained boolean
   // expressions. 'none' covers both "results are present" and "a search finished with 0 results" —
   // in the latter case the status bar's message (see resultsMessage) handles the feedback instead.
-  const resultsAreaState: 'skeleton' | 'idlePrompt' | 'invalidQueryPrompt' | 'none' =
-    useMemo(() => {
-      if (results.length > 0) return 'none';
-      if (searchStatus === 'running') return 'skeleton';
-      if (searchStatus !== undefined) return 'none';
-      if (searchTerm.trim() === '') return 'idlePrompt';
-      return isSearchQueryValid ? 'skeleton' : 'invalidQueryPrompt';
-    }, [results.length, searchStatus, searchTerm, isSearchQueryValid]);
+  // 'noOpenProjectsPrompt' is checked FIRST, ahead of even `results.length > 0`: with no project
+  // open in any editor tab there is nothing to search, and every result-activation callback is
+  // gated on a target editor tab, so results left on screen would be inert. They are replaced
+  // rather than merely covered.
+  const resultsAreaState:
+    | 'noOpenProjectsPrompt'
+    | 'skeleton'
+    | 'idlePrompt'
+    | 'invalidQueryPrompt'
+    | 'none' = useMemo(() => {
+    if (noOpenProjects) return 'noOpenProjectsPrompt';
+    if (results.length > 0) return 'none';
+    if (searchStatus === 'running') return 'skeleton';
+    if (searchStatus !== undefined) return 'none';
+    if (searchTerm.trim() === '') return 'idlePrompt';
+    return isSearchQueryValid ? 'skeleton' : 'invalidQueryPrompt';
+  }, [noOpenProjects, results.length, searchStatus, searchTerm, isSearchQueryValid]);
 
   const resultsMessage = useMemo(() => {
     if (results.length === 0) {
@@ -574,35 +678,137 @@ export function Find({
     swatchNew: localizedStrings['%webView_find_previewOptions_swatchNew%'],
   };
 
+  const sortedProjects = useMemo<ProjectSelectorProject[]>(
+    () =>
+      [...projects]
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, undefined, { sensitivity: 'base' }))
+        .map((project) => ({
+          id: project.id,
+          shortName: project.shortName,
+          fullName: project.fullName,
+        })),
+    [projects],
+  );
+
+  // `ProjectSelector`'s popover strings default to hardcoded English (`DEFAULT_STRINGS` in
+  // `project-selector.component.tsx`), so they must be supplied explicitly or the picker's insides
+  // stay untranslated. Mirrors the `manage-books.web-view.tsx` precedent.
+  //
+  // Deliberately only the strings REACHABLE from Find's configuration, since localized keys are
+  // immutable once shipped and one that can never render is permanent dead surface. Omitted, with
+  // the reason each cannot appear here:
+  // - `filterAriaLabel` / `groupSectionLabel` / `filterSectionLabel` / `filterGroupByOpenTabs` —
+  //   the funnel menu is not mounted at all (`hideFilterMenu` below).
+  // - `selectAll` / `clearAll` / `filterShowSelectedOnly` — multi-select only; both of Find's
+  //   configurations are single-select (`mode="projectScrollGroup"` / `mode="project"`).
+  // - `versificationUnknownSectionHeading` — requires versification grouping.
+  // - `boundButClosedTooltip` / `openButtonLabel` — render only on bound-but-closed rows, which Find
+  //   cannot produce (see `onOpenProjectInGroup`'s defensive no-op) and which `mode="project"` has no
+  //   code path for at all.
+  //
+  // `otherProjectsSectionHeading` is kept even though today's list is all open tabs (so that section
+  // is empty and its heading does not render): unlike the above, its reachability depends on what
+  // ends up in `projects` rather than on a setting here, so it is the one worth holding.
+  //
+  // `openTabsSectionHeading` is only reachable in the power-mode configuration: `defaultGroupByOpenTabs`
+  // defaults to `true`, and there every row carries a `scrollGroupId` so all of them land in the
+  // "open tabs" section. The simple-mode configuration passes `openTabs={[]}`, which leaves no row
+  // eligible for that section and collapses the list to a single unheaded group.
+  const projectSelectorLocalizedStrings = useMemo<ProjectSelectorLocalizedStrings>(
+    () => ({
+      searchPlaceholder: localizedStrings['%webView_find_projectSelector_searchPlaceholder%'],
+      openTabsSectionHeading:
+        localizedStrings['%webView_find_projectSelector_openTabsSectionHeading%'],
+      otherProjectsSectionHeading:
+        localizedStrings['%webView_find_projectSelector_otherProjectsSectionHeading%'],
+    }),
+    [localizedStrings],
+  );
+
+  // Presentation and localization shared by both project-picker configurations, so the
+  // `hideScrollGroups` branch below differs only in the parts that actually vary: the mode, the
+  // selection shape, and the change/open callbacks.
+  const sharedProjectSelectorProps = {
+    localizedStrings: projectSelectorLocalizedStrings,
+    isLoading: isLoadingProjects,
+    hideFilterMenu: true,
+    buttonPlaceholder: localizedStrings['%webView_find_projectFilter_noOpenProjects%'],
+    commandEmptyMessage: localizedStrings['%webView_find_projectFilter_noProjectsFound%'],
+    ariaLabel: localizedStrings['%webView_find_projectSelector_label%'],
+    buttonVariant: 'outline' as const,
+    buttonClassName: 'tw:w-full tw:font-normal',
+    popoverContentClassName: 'tw:w-[300px]',
+    alignDropDown: 'start' as const,
+  };
+
   return (
     <div className="pr-twp tw:mx-auto tw:flex tw:flex-col tw:gap-4 tw:p-4 tw:min-w-[10rem] tw:max-h-screen">
       {/* Header with searchbar and filters */}
       <div className="tw:space-y-3">
-        {/* Find/Replace mode toggle — hidden in simple interface mode, where replace is not offered
-            and the panel is find-only. */}
-        {!hideModeToggle && (
-          <ToggleGroup
-            type="single"
-            value={activeMode}
-            onValueChange={(value) => {
-              if (value === 'find' || value === 'replace') onToggleMode(value);
-            }}
-            className="tw:w-fit tw:rounded-lg tw:bg-muted tw:p-1"
-          >
-            <ToggleGroupItem
-              value="find"
-              className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+        {/* Project selector + Find/Replace toggle share one row. The responsiveness guideline caps a
+            filter toolbar at two–three rows and expects a 300px min width, and these were two
+            full-width rows of a four-row header; `flex-wrap` lets them fall back to stacking when
+            the panel is too narrow to fit both. */}
+        <div className="tw:flex tw:flex-wrap tw:items-center tw:gap-2">
+          {/* Always visible; lets the user see and change which project Find operates on (and, by
+              extension, which open tab a result click will scroll). */}
+          <div className="tw:min-w-[8rem] tw:flex-1" data-testid="find-project-trigger">
+            {hideScrollGroups ? (
+              /* Simple interface mode: a flat project list with no scroll-group letters anywhere.
+                 `openTabs={[]}` is what suppresses them — `mode="project"` derives each row's
+                 group badges from `openTabs`, so passing Find's real tabs here would still badge
+                 every open project with its group letter. It also leaves no row eligible for the
+                 "open tabs" section, collapsing the list into one unheaded group. Matches the
+                 `ProjectSelector` "Simple Flat List" story. */
+              <ProjectSelector
+                mode="project"
+                projects={sortedProjects}
+                openTabs={NO_OPEN_TABS}
+                selection={{ projectId: selectedProjectId }}
+                onChangeSelection={({ projectId: nextId }) => onSelectProject(nextId)}
+                {...sharedProjectSelectorProps}
+              />
+            ) : (
+              <ProjectSelector
+                mode="projectScrollGroup"
+                projects={sortedProjects}
+                openTabs={openTabs}
+                selection={{ projectId: selectedProjectId, scrollGroupId: selectedScrollGroupId }}
+                onChangeSelection={({ projectId: nextId, scrollGroupId: nextScrollGroupId }) =>
+                  onSelectProjectScrollGroup(nextId, nextScrollGroupId)
+                }
+                onOpenProjectInGroup={onOpenProjectInGroup}
+                {...sharedProjectSelectorProps}
+              />
+            )}
+          </div>
+
+          {/* Find/Replace mode toggle — hidden in simple interface mode, where replace is not
+              offered and the panel is find-only. */}
+          {!hideModeToggle && (
+            <ToggleGroup
+              type="single"
+              value={activeMode}
+              onValueChange={(value) => {
+                if (value === 'find' || value === 'replace') onToggleMode(value);
+              }}
+              className="tw:w-fit tw:shrink-0 tw:rounded-lg tw:bg-muted tw:p-1"
             >
-              {localizedStrings['%webView_find_findTab%']}
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              value="replace"
-              className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
-            >
-              {localizedStrings['%webView_find_replaceTab%']}
-            </ToggleGroupItem>
-          </ToggleGroup>
-        )}
+              <ToggleGroupItem
+                value="find"
+                className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+              >
+                {localizedStrings['%webView_find_findTab%']}
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="replace"
+                className="tw:data-[state=on]:!bg-background tw:data-[state=on]:!text-foreground tw:data-[state=on]:shadow-sm tw:data-[state=off]:text-muted-foreground"
+              >
+                {localizedStrings['%webView_find_replaceTab%']}
+              </ToggleGroupItem>
+            </ToggleGroup>
+          )}
+        </div>
 
         {/* Find input row */}
         <div className="tw:flex tw:gap-2 tw:flex-wrap">
@@ -876,6 +1082,16 @@ export function Find({
             message={localizedStrings['%webView_find_searchPrompt%']}
           />
         )}
+        {/* No-open-projects placeholder: nothing is open in any editor tab, so there is nothing to
+            search. Outranks every other state — every result-activation callback is gated on a
+            target editor tab, so results still on screen would be inert, and leaving them rendered
+            invites clicks that silently do nothing. */}
+        {resultsAreaState === 'noOpenProjectsPrompt' && (
+          <ResultsPlaceholder
+            id="find-no-open-projects-placeholder"
+            message={localizedStrings['%webView_find_noOpenProjects_results%']}
+          />
+        )}
         {/* Invalid-query placeholder: a term is present but won't run (e.g. `selectedBooks` scope
             with no books selected — can happen after a project switch invalidates a carried-over
             selection). Distinct from the idle prompt so the user knows why nothing is happening. */}
@@ -886,6 +1102,10 @@ export function Find({
           />
         )}
         {(() => {
+          // With no project open in any editor tab there is no target to scroll, so these rows are
+          // inert. The no-open-projects placeholder replaces them rather than rendering alongside,
+          // so a click can't silently do nothing.
+          if (noOpenProjects) return undefined;
           // Only the first book that has a replaced result gets the cancel handler.
           // All replaced rows share one pending operation, so only one Cancel button
           // should appear to avoid implying per-row granularity.
@@ -942,8 +1162,9 @@ export function Find({
         })()}
       </div>
 
-      {/* Status bar */}
-      {searchStatus && (
+      {/* Status bar — suppressed while no project is open, so a stale "Showing N results" cannot
+          contradict the placeholder above. */}
+      {searchStatus && !noOpenProjects && (
         <div className="tw:flex tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:border-t tw:pt-4">
           {searchStatus === 'running' && (activeMode !== 'replace' || !isPostReplaceSearch) && (
             <div className="tw:flex tw:items-center tw:gap-4">
