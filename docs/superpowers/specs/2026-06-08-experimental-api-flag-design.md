@@ -388,9 +388,11 @@ The remaining 25 are user-level call sites that all migrate to the same `createN
 
 These live in `src/shared/services/*` and are emitted by every process that hosts the service. Their names are added to the closed `MultiSourceNetworkEvents` type alias in core declarations and to the `MULTI_SOURCE_EVENT_NAMES` runtime constant:
 
-- `src/shared/services/network-object.service.ts:124-127` — `onDidCreateNetworkObjectEmitter`. Every process emits when it creates a local network object.
+- `src/shared/services/network-object.service.ts:124-127` — `onDidCreateNetworkObjectEmitter`. Every process emits when it creates a local network object.  
+  _Verified done 2026-08-25: both on `createCoreMultiSourceEventEmitter` (`:56`, `:77`)._
 - `src/shared/services/network-object.service.ts:142-144` — `onDidDisposeNetworkObjectEmitter`. Every process emits when it disposes a local network object (comment at lines 139-141 explicitly notes the multi-process intent).
-- `src/shared/services/shared-store.service.ts:84` — `storeChangeEmitter`. Every process emits when its local store changes.
+- `src/shared/services/shared-store.service.ts:84` — `storeChangeEmitter`. Every process emits when its local store changes.  
+  _Verified done 2026-08-25: on `createCoreMultiSourceEventEmitter` (`:150`)._
 
 ### Events whose names go in `NetworkEvents` (22 sites)
 
@@ -411,7 +413,8 @@ Single-source emitters. Names are added to the augmentable `NetworkEvents` inter
 
 **Dynamic-name (type-assertion pattern)** — one site has a name that can't be a literal in the registry:
 
-- `src/shared/services/data-provider.service.ts:817` — the name is `serializeRequestType(dataProviderObjectId, ON_DID_UPDATE)`, computed per data-provider instance. The payload type is statically known from the surrounding function's generics. Migration uses a double assertion (name into `NetworkEventTypes` to satisfy the constraint, then result into the known emitter type) with a comment explaining why the literal-name path isn't available:
+- `src/shared/services/data-provider.service.ts:817` — the name is `serializeRequestType(dataProviderObjectId, ON_DID_UPDATE)`, computed per data-provider instance. The payload type is statically known from the surrounding function's generics. Migration uses a double assertion (name into `NetworkEventTypes` to satisfy the constraint, then result into the known emitter type) with a comment explaining why the literal-name path isn't available:  
+  _Verified done 2026-08-25: on `createNetworkEventEmitterAsync` (`:854`)._
 
   ```ts
   const dynamicName = serializeRequestType(dataProviderObjectId, ON_DID_UPDATE);

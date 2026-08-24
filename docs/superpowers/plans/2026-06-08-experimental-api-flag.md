@@ -23,8 +23,11 @@
 > That covers `web-view.service-shard.ts` (four buffered emitters), `scroll-group.service-host.ts`
 > (two) and `check-aggregator.service.ts` (one).
 >
-> **Taken together, the whole of Phase 4 — Tasks 13 through 19 — is already done or superseded**,
-> with the single exception named in finding one. Each task below carries a note saying which.
+> **Taken together, Tasks 13 through 18 are already done or superseded**, bar the single editor
+> call site in finding one. **Task 19 is the exception: test-mock migration is still live work.**
+> Seven sync references remain across five test files, and the plan's list of them is both
+> over-inclusive (`app.component.test.tsx` no longer references the API) and under-inclusive
+> (three service-router tests are missing from it). Each task below carries a verdict.
 >
 > Whether this plan should be fenced as a frozen record or retired is its owner's call; it is
 > annotated rather than retired here.
@@ -75,9 +78,12 @@
 
 **Phase 4 — Event migration (25 sites)**
 
-- `src/shared/services/network-object.service.ts:124-144` — 2 emitters
-- `src/shared/services/shared-store.service.ts:84` — 1 emitter
-- `src/shared/services/data-provider.service.ts:817` — 1 emitter (type-assertion pattern)
+- `src/shared/services/network-object.service.ts:124-144` — 2 emitters  
+  _Verified done 2026-08-25: both on `createCoreMultiSourceEventEmitter`, `:56` and `:77`._
+- `src/shared/services/shared-store.service.ts:84` — 1 emitter  
+  _Verified done 2026-08-25: on `createCoreMultiSourceEventEmitter`, `:150`._
+- `src/shared/services/data-provider.service.ts:817` — 1 emitter (type-assertion pattern)  
+  _Verified done 2026-08-25: on `createNetworkEventEmitterAsync`, `:854`._
 - `src/extension-host/services/extension.service.ts` — 2 emitters  
   _Stale as of 2026-08-25: this file now holds **one** emitter, already created through `createNetworkEventEmitterAsync`. See the note on Task 14 Step 3._
 - `src/main/services/scroll-group.service-host.ts` — 1 emitter  
@@ -89,7 +95,7 @@
 - `extensions/src/hello-rock3/src/main.ts:462` — 1 emitter  
   _Stale as of 2026-08-25: already on `createBufferedNetworkEventEmitter`, now at `:470`. Nothing to do._
 - `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234` — 3 emitters  
-  _Stale as of 2026-08-25: **four** emitters now. Three already use `createNetworkEventEmitterAsync`; `selectionChangedEventEmitter` is still on the deprecated sync `createNetworkEventEmitter`. **That one site is the only un-migrated emitter left in this inventory** — do not read the count mismatch as "already done"._
+  _Stale as of 2026-08-25: **four** emitters now. Three already use `createNetworkEventEmitterAsync`; `selectionChangedEventEmitter` is still on the deprecated sync `createNetworkEventEmitter`. **That one site is the only un-migrated PRODUCTION emitter left** — do not read the count mismatch as "already done". Test mocks are separate and still live; see Task 19._
 - 4 test files: `src/shared/services/shared-store.service.test.ts`, `src/renderer/app.component.test.tsx`, `src/renderer/hooks/use-project-picker-data.hook.test.ts`  
   _Stale as of 2026-08-25: says four files but lists three, and `app.component.test.tsx` no longer references `createNetworkEventEmitter` at all._
 
@@ -1335,6 +1341,8 @@ git commit -m "refactor(experimental): migrate shared platform events to createN
 
 ### Task 14: Migrate easy single-process platform events
 
+> **Already done or superseded across all four steps (verified 2026-08-25).** Step 1's augmentation no longer compiles as written, Step 2 is already applied, Step 3 has no second emitter to migrate, and Step 4 is superseded by deliberate module-load buffering. Details in the per-step notes below.
+
 **Files:**
 
 - Modify: `src/extension-host/services/extension.service.ts` (2 emitters)  
@@ -1551,6 +1559,8 @@ git commit -m "refactor(experimental): migrate data-provider per-instance emitte
 
 ### Task 18: Migrate extension main.ts emitters (3 extensions)
 
+> **Nearly done — one site remains (verified 2026-08-25).** hello-rock3 is already buffered. The editor's `selectionChangedEventEmitter` is the single remaining production sync call in the repo. Step 1's declarations are stale; see the note below.
+
 **Files:**
 
 - Modify: `extensions/src/hello-rock3/src/main.ts:462`
@@ -1605,6 +1615,8 @@ git commit -m "refactor(experimental): migrate extension emitters to createNetwo
 ---
 
 ### Task 19: Migrate test files (4 test files)
+
+> **STILL LIVE WORK (verified 2026-08-25).** The only Phase 4 task with real work left: seven sync `createNetworkEventEmitter` references across five test files — `shared-store.service.test.ts` `:14,52`, `use-project-picker-data.hook.test.ts` `:20,22`, `usersnap.service-router.test.ts` `:45`, `book-chapter-control.service-router.test.ts` `:45`, `dialog.service-router.test.ts` `:48`. The file list below is both over- and under-inclusive.
 
 **Files:**
 
