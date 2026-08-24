@@ -740,7 +740,7 @@ a ref that is gone. If a head moved at all, the P0 base-state record is stale to
 rather than reading it.
 
 **Superpowers is a hard dependency of this phase — check it here, and stop if it is missing.**
-(Recorded as ADR-0022 in `.context/standards/Architecture-Decisions.md`, together with the
+(Recorded as ADR-0024 in `.context/standards/Architecture-Decisions.md`, together with the
 packet directory's ignore mechanism.)
 The method below is not this skill's own, and there is no degraded version of it to fall back on:
 `superpowers:brainstorming`, `superpowers:writing-plans`, `superpowers:test-driven-development`
