@@ -795,9 +795,9 @@ declare module 'shared/models/web-view.model' {
      * If a new WebView is created, it is always brought to the front, regardless of this option.
      *
      * When the existing WebView is in a window other than the one this call is otherwise headed for,
-     * this also determines whether that other window is raised to the front of the OS window order
-     * (never stealing focus from outside the app). Set this to `false` for a call that should not
-     * disturb whatever window the user is currently looking at.
+     * this also determines whether that other window is raised to the front of the OS window order.
+     * Set this to `false` for a call that should not disturb whatever window the user is currently
+     * looking at.
      */
     bringToFront?: boolean;
   };
