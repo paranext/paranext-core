@@ -172,7 +172,7 @@ Reference implementations: `extensions/src/platform-scripture/src/find.web-view-
 ## Async Hook State Shape
 
 Two shapes are both correct; pick by whether the payload is **state-specific**. See
-[ADR-0015](Architecture-Decisions.md) for the full rationale.
+[ADR-0023](Architecture-Decisions.md) for the full rationale.
 
 **Discriminated union** — when data exists in only one state, so the type can make the other
 combinations unrepresentable:
