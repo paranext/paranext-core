@@ -596,7 +596,9 @@ step, no automation. Just a record.
   offers a Manage Books button). Three candidate shapes already existed and nothing said which to
   reach for. `EmptyState` (`lib/platform-bible-react/src/components/basics/empty-state.component.tsx`,
   2 consumers) renders a single `role="status"` message and has no slot for a title or an action.
-  `InstallFailedView` (`extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`,
+  `InstallFailedView` (then at
+  `extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`; renamed
+  `RetryableErrorView` in `panel-state-views.component.tsx` by PT-4347 — see ADR-0022,
   2 consumers) is genuinely "full-panel message + action button" but is scoped to DBL install
   recovery. Neither is a general primitive, and the next three tickets in the same epic (PT-4132,
   PT-4347, PT-4349) each need a zero-state too, so an ad-hoc fourth shape would have compounded.
@@ -1123,8 +1125,9 @@ step, no automation. Just a record.
   reading an unreadable setting as an empty one. `useTextCollectionSources`, the hook's other
   consumer, had to be updated to read the error channel for exactly this reason — a new consumer of
   `useBufferedLayoutSetting` must check the third tuple element, not just the held value.
-  `InstallFailedView` keeps its name and its scope: it is for failures a retry can act on, which the
-  settings-read failure is not. Panels that grow a third async source must extend the readiness
+  `RetryableErrorView` (renamed from `InstallFailedView` and moved to
+  `panel-state-views.component.tsx`) is scoped to failures a retry can act on — a failed install or a
+  failed catalog fetch. The settings-read failure is not one, so it renders a message alone. Panels that grow a third async source must extend the readiness
   signal rather than add another flag — the bug class here is precisely one guard being unaware of
   one source.
 - **Source:** PT-4347 (NN 5C Resource panel shows correct loading state), whose named root cause —

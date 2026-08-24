@@ -93,8 +93,8 @@ export type ModelTextPanelProps = {
   /** All DBL resources — used to match the configured model text and to feed the resource picker. */
   dblResources: DblResourceData[];
   /**
-   * Whether the DBL resource catalog has finished loading AND delivered. Distinct from
-   * `!isLoadingResources`: `dblResources` coerces a missing catalog to `[]`, which is
+   * Whether the DBL resource catalog has finished loading AND delivered a real answer. Not the same
+   * as "the fetch settled": `dblResources` coerces a missing or failed catalog to `[]`, which is
    * indistinguishable from a genuinely empty one.
    */
   isCatalogReady: boolean;
