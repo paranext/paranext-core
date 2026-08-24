@@ -51,12 +51,15 @@ def main():
     rows = [ln.rstrip("\n").split("\t") for ln in open(log, encoding="utf-8") if ln.strip()]
     logged = defaultdict(lambda: {"review": set(), "issue": set()})
     ok_rows = 0
+    # Malformed rows are excluded from the 5-field unpack below, but NOT from the pending/failure
+    # analysis: a truncated `PENDING\t<item>\t<pr>` row is the canonical artifact of a kill, and
+    # dropping it there would hide the one row meaning "a comment may already be live".
     malformed = [r for r in rows if len(r) < 5]
-    rows = [r for r in rows if len(r) >= 5]
+    unpackable = [r for r in rows if len(r) >= 5]
     for r in malformed:
         print(f"  !! MALFORMED log row, not verified: {r!r} — this script exists to run after a "
               f"kill, and a truncated or hand-edited row is exactly what that leaves behind")
-    for row in rows:
+    for row in unpackable:
         status, item, pr, kind, cid = row[:5]
         # Touch the PR for EVERY row, including failures and pendings, so it enters the query set
         # below: gh can fail after GitHub already created the comment, and that stray only
@@ -100,8 +103,16 @@ def main():
         it = bodies.get(item)
         if it is None or it["kind"] == "issue":
             continue
-        c = json.loads(subprocess.run(["gh", "api", f"repos/{slug}/pulls/comments/{cid}"],
-                                      capture_output=True, text=True, check=True).stdout)
+        # No check=True: a comment deleted between posting and verification, or any transient gh
+        # failure, must surface as a FAIL line rather than a traceback — this is the script that
+        # runs after a crash.
+        got = subprocess.run(["gh", "api", f"repos/{slug}/pulls/comments/{cid}"],
+                             capture_output=True, text=True)
+        if got.returncode != 0:
+            fails.append(f"{item}: logged comment {cid} could not be re-fetched "
+                         f"(deleted, or gh failed): {got.stderr.strip()[:120]}")
+            continue
+        c = json.loads(got.stdout)
         if it["kind"] == "inline" and c.get("subject_type") != "line":
             fails.append(f"{item}: posted as subject_type={c.get('subject_type')!r}, "
                          f"expected 'line' — degraded anchor, {c['html_url']}")

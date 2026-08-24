@@ -10,6 +10,8 @@ import sys
 
 from posting_lib import (
     added_lines,
+    opening_reflex,
+    scan_body,
     bad_control_chars,
     declared_prs,
     guard_decision,
@@ -193,11 +195,11 @@ def test_declared_prs_does_not_swallow_the_date_or_run_suffix():
     assert 2026 not in got and 8 not in got and 24 not in got, got
 
 
+PREFIX = "\U0001f916 Claude: "
+
+
 def _opens_badly(body):
-    import re
-    from check import OPENERS, PREFIX
-    after = body[len(PREFIX):] if body.startswith(PREFIX) else body
-    return [p for p in OPENERS if re.match(p, after)]
+    return opening_reflex(body, PREFIX) is not None
 
 
 def test_reflexive_opener_is_caught_after_the_prefix():
@@ -237,9 +239,46 @@ def test_missing_required_field_is_a_finding_not_a_traceback():
 
 
 def test_internal_label_in_backticks_is_still_caught():
-    """posting-mechanics grants internal labels the URL exemption ONLY, never quoted code."""
-    assert scan_denylist("see `2659-38` here", [r"2659-\d\d"], skip_code=False)
-    assert scan_denylist("```\n2659-38\n```", [r"2659-\d\d"], skip_code=False)
+    """The SPLIT is what matters: labels never get the quoted-code exemption placeholders get.
+
+    Exercises `scan_body`, the function check.py actually calls, so reverting the split turns
+    this red. Passing `skip_code=` here instead would only pin `scan_denylist`'s parameter.
+    """
+    assert scan_body("see `2659-38` here", PLACEHOLDERS, [r"2659-\d\d"])
+    assert scan_body("```\n2659-38\n```", PLACEHOLDERS, [r"2659-\d\d"])
+
+
+def test_placeholder_in_quoted_code_is_still_exempt_through_the_same_call():
+    """The other half of the split — same function, opposite rule."""
+    assert scan_body("```csharp\n// TODO(PT-4210): assess\n```", PLACEHOLDERS, [r"2659-\d\d"]) == []
+
+
+def test_markdown_link_with_parenthesised_url_does_not_false_positive():
+    body = "see [wiki](https://en.wikipedia.org/wiki/Foo_(bar)#XXX) ok"
+    assert scan_body(body, PLACEHOLDERS, []) == [], "a balanced-paren link target was truncated"
+
+
+def test_vocabulary_entry_may_be_a_markdown_bullet():
+    import tempfile
+    from check import internal_labels
+    d = _vocab(tempfile.mkdtemp(), r"- 2659-\d\d — our packet item ids")
+    assert internal_labels(d) == [r"2659-\d\d"]
+
+
+def test_one_word_prose_is_not_transcribed_as_a_pattern():
+    """`Note` as a literal pattern would hard-FAIL any approved body containing the word."""
+    import tempfile
+    from check import internal_labels
+    d = _vocab(tempfile.mkdtemp(),
+               "Note — the reviewer never saw these ids.\n" + r"2659-\d\d — our ids")
+    assert internal_labels(d) == [r"2659-\d\d"]
+
+
+def test_preamble_before_the_first_item_is_not_stray_content():
+    import extract_bodies
+    text = ("# Drafts\n\nnotes here\n\n## item: X\nkind: issue\npr: 1\n"
+            "--- body ---\nb\n--- end ---\n")
+    assert [i["item"] for i in extract_bodies.parse(text)] == ["X"]
 
 
 def test_placeholder_rejector_accepts_a_real_regex_containing_nn():

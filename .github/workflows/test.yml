@@ -147,9 +147,17 @@ jobs:
       - name: Agent script checks
         if: ${{ matrix.os == env.OS_LINUX }}
         run: |
-          python3 -m compileall -q .claude/skills/process-pr-feedback/scripts
+          # Discover rather than hardcode: a script added elsewhere under .claude/ should be
+          # covered the day it lands, not the day someone remembers to edit this list.
+          git ls-files '*.py' | xargs -r python3 -m py_compile
           python3 .claude/skills/process-pr-feedback/scripts/test_posting.py
-          for f in $(git ls-files '*.sh'); do bash -n "$f"; done
+          # `*.sh` misses tracked shell scripts with no extension - .husky/pre-commit among them,
+          # the one whose syntax failing would break every commit - so match on the shebang too.
+          for f in $(git ls-files); do
+            if [ "${f##*.}" = "sh" ] || head -c 40 "$f" 2>/dev/null | grep -qE '^#!.*\b(ba)?sh\b'; then
+              bash -n "$f" || exit 1
+            fi
+          done
 
       - name: Build
         run: npm run build

@@ -6,9 +6,12 @@
 # to stderr and prints nothing to stdout for that file. It must never block the workflow
 # that calls it.
 #
-# Exit codes: 0 = at least one embed on stdout (a partial batch exits 0 and warns, because
-# the embeds it did produce are usable); 3 = no embeds, the skippable condition. Never any
-# other nonzero code - so callers can branch on 3 alone.
+# Exit codes for an upload run: 0 = at least one embed on stdout (a partial batch exits 0 and
+# warns, because the embeds it did produce are usable); 3 = no embeds, the skippable condition.
+# Never any other nonzero code - so callers can branch on 3 alone.
+#
+# `--check` is a canary, not an upload: on success it exits 0 having written only to stderr, so
+# empty stdout there means the endpoint is healthy rather than that nothing was produced.
 #
 # Lifecycle fact (verified 2026-08-11): a fresh upload is served ONLY to authenticated
 # requests; it becomes anonymously visible once the URL is referenced in posted content

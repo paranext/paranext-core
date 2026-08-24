@@ -36,12 +36,13 @@ INT_FIELDS = {"pr", "line", "comment_id", "answers_id"}
 
 
 def parse(text):
-    items, cur, body, in_body = [], None, [], False
+    items, cur, body, in_body, seen_item = [], None, [], False, False
     for raw in text.split("\n"):
         if raw.startswith("## item:"):
             if cur is not None:
                 sys.exit(f"item {cur.get('item')!r}: new item started before '--- end ---'")
             cur = {"item": raw[len("## item:"):].strip()}
+            seen_item = True
             body, in_body = [], False
             continue
         if cur is None:
@@ -49,8 +50,10 @@ def parse(text):
             # itself `--- end ---` closes the item early and the remainder lands here; without
             # this the rest is discarded silently, and check.py's verbatim binding still passes
             # because the truncated body IS a substring of the drafts file.
-            if raw.strip():
-                sys.exit(f"stray content outside any item: {raw.strip()[:60]!r}\n"
+            # Only content AFTER an item has closed is a truncation signal. A file preamble or
+            # heading before the first `## item:` is ordinary and must not stop the run.
+            if raw.strip() and seen_item:
+                sys.exit(f"stray content after an item ended: {raw.strip()[:60]!r}\n"
                          f"  A body line equal to '--- body ---' or '--- end ---' closes the item "
                          f"early. Reply bodies that quote this grammar must indent or fence it.")
             continue

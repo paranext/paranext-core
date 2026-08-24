@@ -98,7 +98,11 @@ def url_spans(body):
     instead of being cut at its first `)`.
     """
     spans = []
-    for m in re.finditer(r"\]\((\S*?)\)", body):
+    # A markdown link target may itself contain balanced parentheses —
+    # `](https://en.wikipedia.org/wiki/Foo_(bar)#XXX)`. A non-greedy `\S*?` stops at the URL's
+    # own first `)`, truncating the span; the bare-URL pass below then skips the same URL because
+    # its start already sits inside that truncated span, so the tail is left unprotected.
+    for m in re.finditer(r"\]\(([^()\s]*(?:\([^()\s]*\)[^()\s]*)*)\)", body):
         spans.append((m.start(1), m.end(1)))
     for m in re.finditer(r"https?://\S+", body):
         if not any(s <= m.start() < e for s, e in spans):
@@ -223,3 +227,45 @@ def parse_common_args(argv, n_positional):
     if len(positional) != n_positional:
         return None, slug
     return positional, slug
+
+
+# Opener phrases. These are reflexes, not communication: they open a public reply to a colleague
+# with agreement or gratitude before the substance, which reads as deference rather than an
+# answer. `reply-conventions.md` § Structure asks that the first sentence carry the verdict.
+#
+# The seam is worth stating: a blanket ban on gratitude is calibrated for in-session replies to
+# your own partner, and these bodies are public text to a human colleague. "Concede specifically
+# rather than thank reflexively" survives that translation; thanks for a specific thing a reviewer
+# did does not.
+OPENERS = [r"^\W*You(?:'re| are) absolutely right",
+           r"^\W*(?:Great|Good|Excellent|Nice) (?:point|catch|question|call)",
+           r"^\W*(?:Thanks|Thank you)\b(?![^.\n]*\bfor (?:the|your) "
+           r"(?:trace|repro|measurement|patch|numbers))",
+           r"^\W*(?:Absolutely|Exactly)[.,!]",
+           r"^\W*I appreciate (?:the|your) (?:feedback|comment|review)\b"]
+
+
+def opening_reflex(body, prefix):
+    """The reflexive opener a body starts with, after the prefix — or None."""
+    after = body[len(prefix):] if body.startswith(prefix) else body
+    for pat in OPENERS:
+        m = re.match(pat, after)
+        if m:
+            return m.group(0)
+    return None
+
+
+def scan_body(body, placeholders, labels):
+    """Every deny-list hit in one body, with the two lists scanned under different rules.
+
+    Placeholders get the quoted-code exemption: a reply quoting a real source line is the most
+    likely body to contain `TODO`, and the poster may not edit an approved body to get past a
+    check. Internal labels do NOT: `posting-mechanics.md` grants them the URL exemption and
+    nothing else, and backticking an id is the conventional way to write one — the very
+    formatting the check most needs to catch.
+
+    The split lives here rather than in `check.py` so a test can pin it. A test that passes
+    `skip_code=` itself only pins `scan_denylist`'s parameter, not the caller's use of it.
+    """
+    return (scan_denylist(body, placeholders, skip_code=True)
+            + scan_denylist(body, labels, skip_code=False))

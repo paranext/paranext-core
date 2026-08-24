@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """verify_anchors.py — every inline anchor still says what the draft quotes, and is an ADDED line.
 
-Usage: verify_anchors.py <packet-dir> <repo-root> [--repo owner/name]
+Usage: verify_anchors.py <packet-dir> <repo-root>
 
 Run it TWICE: once at drafting time over the provisional mapping, once at posting time over the
 real bodies.json against re-derived heads. The first keeps a bad anchor out of a draft; the
@@ -21,7 +21,7 @@ from posting_lib import added_lines, parse_common_args
 
 
 def main():
-    args, _slug = parse_common_args(sys.argv[1:], 2)
+    args, _ = parse_common_args(sys.argv[1:], 2)   # no gh calls here; slug unused
     if args is None:
         sys.exit(__doc__)
     packet, root = os.path.abspath(args[0]), os.path.abspath(args[1])
@@ -68,6 +68,7 @@ def main():
         actual, expected = flines[line - 1], it["anchor_line"]
         if not expected.strip():
             fails.append(f"{it['item']}: anchor_line is empty — it must quote the line's content")
+            continue
         elif actual.strip() != expected.strip():
             fails.append(f"{it['item']}: anchor mismatch at {path}:{line}\n"
                          f"    draft:   {expected!r}\n    at head: {actual!r}")

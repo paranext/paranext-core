@@ -13,29 +13,12 @@ import re
 import subprocess
 import sys
 
-from posting_lib import (bad_control_chars, declared_prs, missing_fields,
-                         parse_common_args, scan_denylist)
+from posting_lib import (bad_control_chars, declared_prs, missing_fields, opening_reflex,
+                         parse_common_args, scan_body)
 
 PLACEHOLDERS = [r"\bTODO\b", r"\bTBD\b", r"\bFIXME\b", r"\bXXX\b", r"\bPLACEHOLDER\b",
                 r"\bLOREM\b", r"<[A-Z][A-Z_ -]{2,}>", r"\{\{"]
 PREFIX = "\U0001f916 Claude: "
-
-# 6. Opener phrases. These are reflexes, not communication: they open a public reply to a
-# colleague with agreement or gratitude before the substance, which reads as deference rather
-# than as an answer. `reply-conventions.md` asks for the verdict in the first sentence.
-#
-# The rule is enforced here, at the point a body is about to go public under the user's name,
-# rather than left to whether a drafter agent happened to have a skill loaded. Note the seam: a
-# blanket ban on gratitude is calibrated for in-session replies to your own partner, and these
-# bodies are public text to a human colleague — "concede specifically rather than thank
-# reflexively" is what survives the translation, so thanks for a specific thing a reviewer did
-# is not what this catches.
-OPENERS = [r"^\W*You(?:'re| are) absolutely right",
-           r"^\W*(?:Great|Good|Excellent|Nice) (?:point|catch|question|call)",
-           r"^\W*(?:Thanks|Thank you)\b(?![^.\n]*\bfor (?:the|your) (?:trace|repro|measurement|patch|numbers))",
-           r"^\W*(?:Absolutely|Exactly)[.,!]",
-           r"^\W*I appreciate (?:the|your) (?:feedback|comment|review)\b"]
-
 
 def internal_labels(packet):
     """Transcribe the Internal list from shared-vocabulary.md — P2's artifact, read-only here.
@@ -68,9 +51,16 @@ def internal_labels(packet):
         # sentence taken as a regex either throws or silently matches nothing, and either way it
         # dilutes a deny-list whose whole job is to be exact. Skipped lines are printed so a real
         # entry written in the wrong shape is visible rather than dropped.
-        parts = re.split(r"\s+—\s+|\s+-\s+", line.strip(), maxsplit=1)
+        # `shared-vocabulary.md` is markdown written by hand, so a bullet marker is the natural
+        # form and must not silently disqualify a real entry.
+        entry = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", line.strip())
+        parts = re.split(r"\s+—\s+|\s+-\s+", entry, maxsplit=1)
         token = parts[0].strip()
-        if not token or len(parts) < 2 or re.search(r"\s", token):
+        # A pattern has no whitespace AND looks like one — it carries a regex metacharacter or a
+        # digit. Without the second test a one-word prose opener ("Note — the reviewer never saw
+        # these ids.") transcribes as the literal pattern `Note`, which then hard-FAILs any
+        # approved body containing that word, with no permitted remedy.
+        if not token or re.search(r"\s", token) or not re.search(r"[\\\[\](){}*+?|^$.\d]", token):
             skipped.append(line.strip()[:70])
             continue
         # Anchored on standalone uppercase runs and bracketed slots. An unanchored `nn`
@@ -85,6 +75,8 @@ def internal_labels(packet):
             bad.append(f"{token} (not a valid regex: {e})")
             continue
         out.append(token)
+    for sk in skipped:
+        print(f"[labels] not an entry, skipped: {sk!r}")
     if bad:
         sys.exit("STOP: shared-vocabulary.md Internal entries are placeholders, not patterns:\n"
                  + "\n".join(f"  - {b}" for b in bad)
@@ -92,8 +84,6 @@ def internal_labels(packet):
                    "A literal placeholder matches no real id and the check would report PASS.")
     if not out:
         sys.exit(f"STOP: no entries parsed from the Internal section of {path}")
-    for sk in skipped:
-        print(f"[labels] not an entry, skipped: {sk!r}")
     print(f"[labels] transcribed {len(out)} internal patterns: {out}")
     return out
 
@@ -105,13 +95,17 @@ def main():
     packet = os.path.abspath(args[0])
 
     items = json.load(open(os.path.join(packet, "bodies.json"), encoding="utf-8"))
-    fails_early = []
+    fails_early, malformed = [], set()
     for it in items:
         for gap in missing_fields(it):
+            malformed.add(it.get("item"))
             # Reported, not raised. An unrecognised kind is the dangerous one: post.py used to
             # treat anything that was not reply/inline as an issue comment, so a typo turned a
             # threaded reply into a new top-level comment on the PR.
             fails_early.append(f"{it.get('item', '<no item id>')}: {gap}")
+    if malformed:
+        print(f"[shape] {len(malformed)} malformed item(s) skipped by later checks: "
+              f"{sorted(malformed)}")
     drafts_text = open(os.path.join(packet, "07-replies.md"), encoding="utf-8").read()
     fails = list(fails_early)
 
@@ -133,6 +127,8 @@ def main():
 
     labels = internal_labels(packet)
     for it in items:
+        if it.get("item") in malformed:
+            continue
         body = it["body"]
         # 2. prefix — exactly once, at the very start
         if not body.startswith(PREFIX):
@@ -150,13 +146,11 @@ def main():
             fails.append(f"{it['item']}: CR present — normalise the drafts file to LF "
                          f"(the body itself is fine; do not edit its text)")
 
-        # 6. opener phrases, tested against the body after the prefix
-        after = body[len(PREFIX):] if body.startswith(PREFIX) else body
-        for pat in OPENERS:
-            m = re.match(pat, after)
-            if m:
-                fails.append(f"{it['item']}: opens with {m.group(0)!r} — lead with the verdict, "
-                             f"not with agreement (reply-conventions.md § Tone)")
+        # 7. opener phrases, tested against the body after the prefix
+        reflex = opening_reflex(body, PREFIX)
+        if reflex:
+            fails.append(f"{it['item']}: opens with {reflex!r} — lead with the verdict, not with "
+                         f"agreement (reply-conventions.md § Structure)")
 
         # 4. placeholders — quoted code is exempt, because a reply quoting a real source line is
         #    the most likely body to contain TODO and the poster may not edit it to get past a check.
@@ -164,10 +158,9 @@ def main():
         #    the URL exemption and nothing else, and backticking an id is the most natural way to
         #    write one in a reply, so a code-span exemption here would wave through the exact
         #    thing the check exists to stop.
-        for pats, skip_code in ((PLACEHOLDERS, True), (labels, False)):
-            for tok, at in scan_denylist(body, pats, skip_code=skip_code):
-                ctx = body[max(0, at - 50): at + 50].replace("\n", " | ")
-                fails.append(f"{it['item']}: {tok!r} -> ...{ctx}...")
+        for tok, at in scan_body(body, PLACEHOLDERS, labels):
+            ctx = body[max(0, at - 50): at + 50].replace("\n", " | ")
+            fails.append(f"{it['item']}: {tok!r} -> ...{ctx}...")
 
     # 6. targets resolve. The PR set comes from the packet's own directory name, not from
     # bodies.json — an expectation read off the artifact under test can never fail.
@@ -177,6 +170,8 @@ def main():
                  f"{os.path.basename(packet)!r}; expected <pr>[-<pr>...]-<YYYY-MM-DD>")
     print(f"[targets] packet declares PR(s) {sorted(declared)}")
     for it in items:
+        if it.get("item") in malformed:
+            continue
         if it["pr"] not in declared:
             fails.append(f"{it['item']}: pr {it['pr']} is not one this packet declares "
                          f"({sorted(declared)}) — on a stack this is how a reply reaches the "

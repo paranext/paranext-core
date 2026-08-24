@@ -111,9 +111,9 @@ Run every check over the extracted bodies:
    exactly the nested-thread shape §1 exists for — there the root is routinely **our own**
    comment, whose timestamp says nothing about the reviewer's words.
 
-6. **Opener phrases.** No body opens with reflexive agreement or gratitude — "You're absolutely
-   right", "Great point", "Thanks!". `reply-conventions.md` § Tone asks for the verdict in the
-   first sentence, and this is where that is enforced: at the point a body goes public under the
+7. **Opener phrases.** No body opens with reflexive agreement or gratitude — "You're absolutely
+   right", "Great point", "Thanks!". `reply-conventions.md` § Structure asks that the first
+   sentence carry the verdict, and this is where that is enforced: at the point a body goes public under the
    user's name, rather than depending on whether the drafter had a convention loaded.
 
    The rule needs its seam stated, because it is borrowed from advice written for a different
@@ -189,6 +189,9 @@ executables, the library they share, and the tests that pin the guards:
   test_posting.py      the guards' tests — run this first
 ```
 
+`restack_battery.sh` sits in the same directory but belongs to `restack-battery.md`, not to the
+posting sequence.
+
 They are files because the checks above are load-bearing and a transcript cannot be tested. Every
 one of them takes the **packet directory as its first argument** — never a module constant. The
 working directory resets between calls, so a relative packet path either fails outright or, worse,
@@ -251,7 +254,9 @@ Write real patterns, one per line, prose after an em-dash:
 
 An entry is `<pattern> — <prose>` and a pattern contains **no whitespace**; anything else in the
 section is treated as prose, skipped, and printed so a real entry written in the wrong shape is
-visible rather than dropped. Schema-shaped entries (`2659-NN`, `R5-XX`, anything with `<…>` or
-`..`) are **rejected with a hard stop**. `2659-NN` is a literal: it matches the characters `NN`, so every real id passes the
-check and the dry run reports PASS having tested nothing. That failure is invisible from the
-output, which is why it is made loud at the point of transcription.
+visible rather than dropped. Schema-shaped entries (`2659-NN`, `R5-XX`, anything with `<…>`
+or `..`) are **rejected with a hard stop**: `2659-NN` is a literal that matches the characters
+`NN`, so every real id passes the check and the dry run reports PASS having tested nothing. That
+failure is invisible from the output, which is why it is made loud at the point of transcription.
+A leading markdown list marker is accepted, and an entry must look like a pattern — carry a regex
+metacharacter or a digit — so a one-word prose opener is not transcribed as a literal.

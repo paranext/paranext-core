@@ -91,8 +91,10 @@ role 4:
   "every item in the inventory", "every usage of this symbol".
 
   The one exception is the built-in **Explore** and **Plan** agents, which skip CLAUDE.md files
-  and project rules entirely. Do not use them for a phase whose correctness depends on a repo
-  rule; the roles below are custom agents and inherit normally.
+  and project rules entirely. **Never dispatch a phase of this skill to one of them** — the roles
+  below are briefs handed to a general-purpose agent, not registered agent types in
+  `.claude/agents/`, so which built-in receives them is a live choice at dispatch time rather than
+  something the brief settles.
 
 ---
 
@@ -237,7 +239,8 @@ independent verdicts that disagree is exactly the signal worth having.
 > files under `.claude/`. Ticket ids and PR numbers go stale there and nothing ever re-reads them.
 > That scope is deliberate and it is not a rule about source comments: root `CLAUDE.md` § Send/Receive
 > Write Gate *requires* a ticket id inside a source comment for every write-gate exemption, and the
-> tree carries ten of them. Where the reference is the tracked work item itself, it is the payload,
+> tree carries 14 such markers, 13 of them citing the ticket. Where the reference is the
+> tracked work item itself, it is the payload,
 > not stale decoration.
 >
 > **New public API — the experimental marker goes on TWO surfaces**, the type-visible one and

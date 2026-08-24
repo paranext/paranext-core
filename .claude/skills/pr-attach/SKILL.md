@@ -39,6 +39,8 @@ mp4, mov, webm.
   "no embeds available": the caller SKIPS the images and continues. Never retry-loop,
   never block, never fail a workflow because of a missing screenshot.
 - Before a batch that matters, optionally run `--check` once; if it fails, skip the batch.
+  `--check` is a canary rather than an upload: on success it exits 0 with **empty stdout**,
+  writing its confirmation to stderr. Empty stdout from `--check` means healthy, not "no embeds".
 - If the endpoint dies permanently, fall back to the `paranext/media` repo pattern
   (push under `paranext-core/pr-<N>/`, embed `raw.githubusercontent.com` URLs — the rule
   proposed in PR #2506, in flight as of 2026-08-11), or post without images.

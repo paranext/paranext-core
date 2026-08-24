@@ -803,7 +803,7 @@ Rules that apply to every fix, whichever flow produced it:
   skill files under `.claude/`. Ticket ids and PR numbers go stale there and nothing re-reads them
   once the item merges. This is deliberately *not* a rule about source comments: root `CLAUDE.md`
   § Send/Receive Write Gate requires a ticket id inside a source comment for every write-gate
-  exemption, and the tree carries ten of them.
+  exemption, and the tree carries 14 such markers, 13 of them citing the ticket.
 - **Two-surface `@experimental` for any new public API** — TSDoc on the type-visible surface
   and `'x-experimental': true` in the registration's OpenRPC documentation for the wire-visible
   surface. The authoritative per-surface table is
