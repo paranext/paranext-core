@@ -1409,20 +1409,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // `verseNum > 1` would land scrolled to the top instead of at that verse. Gated on
   // `pendingScaffoldInsertRef` so ordinary chapter navigation away from a blank chapter, a
   // remote/collaborative update landing content, or a Send/Receive sync completing (all of which can
-  // also flip `isBlankChapter` to `false`) do not steal focus or scroll. Also gated on
-  // `!isPowerMode`: the empty-chapter-view feature (and this button) is Simple-mode only, so the
-  // button can't render in Power mode today — the guard is currently redundant but documents that
-  // invariant and protects against a future refactor.
+  // also flip `isBlankChapter` to `false`) do not steal focus or scroll.
   useEffect(() => {
     if (isBlankChapter) return;
     // The round trip the in-flight guard above was waiting for has completed, regardless of what
     // caused this transition.
-    if (!isPowerMode && pendingScaffoldInsertRef.current) {
+    if (pendingScaffoldInsertRef.current) {
       scrollToVerse(scrRef);
       editorRef.current?.focus();
     }
     pendingScaffoldInsertRef.current = false;
-  }, [isBlankChapter, isPowerMode, scrRef]);
+  }, [isBlankChapter, scrRef]);
 
   /**
    * Creates a click handler for a comment annotation that opens the comment list and scrolls to the
@@ -2059,7 +2056,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       </TwoStepDeleteTooltipOverlay>
     );
 
-    const showEmptyChapterView = !isPowerMode && isBlankChapter;
+    // Both interface modes: an honest message for a blank chapter is owed to every editor, and a
+    // Power user has the same use for the scaffold action as a Simple one. `showButton` below is
+    // what keeps it off read-only projects.
+    const showEmptyChapterView = isBlankChapter;
 
     return (
       <>

@@ -23,6 +23,10 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
   '%webView_modelTextPanel_bookNotAvailable%',
+  // Shared with the resource text panel's blank-chapter branch. Distinct from the editable
+  // `..._emptyChapter_message%`, which sits beside an "Add chapter number" action this read-only
+  // panel must not offer.
+  '%webView_platformScriptureEditor_emptyChapter_messageResource%',
 ] as const);
 
 export type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];
