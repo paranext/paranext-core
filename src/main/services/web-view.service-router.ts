@@ -15,7 +15,7 @@ import {
   getReadyWindowIds,
   getTargetWindowId,
   getUnreachableWindowIds,
-  isWindowReady,
+  wasWindowEverReady,
 } from '@main/services/window-state.service';
 import { createTargetShardResolver } from '@main/services/target-shard-resolver.util';
 import {
@@ -530,11 +530,13 @@ export async function getOpenWebViewDefinitionsForWindow(
   const webViewShard = await getWebViewShard(windowId);
   if (webViewShard) return webViewShard.getAllOpenWebViewDefinitions();
 
-  // Readiness is what tells the two empty answers apart. A window whose renderer never registered
-  // genuinely had nothing open. One that was serving requests a moment ago may have had editors
-  // with unsaved work in it, and its own service is the only thing that could have listed them, so
-  // the caller has to hear that the question went unanswered rather than that the answer was none.
-  if (isWindowReady(windowId))
+  // Having EVER been ready is what tells the two empty answers apart, not being ready right now. A
+  // window whose renderer never registered genuinely had nothing open. One that was serving
+  // requests a moment ago may have had editors with unsaved work in it, and its own service is the
+  // only thing that could have listed them, so the caller has to hear that the question went
+  // unanswered rather than that the answer was none — and that is just as true of a window whose
+  // renderer has since died, which is exactly when the distinction is load-bearing.
+  if (wasWindowEverReady(windowId))
     throw new Error(
       `WebView service for window ${windowId} is not available, so what it had open could not be read.`,
     );
