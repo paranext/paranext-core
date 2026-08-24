@@ -1504,3 +1504,41 @@ step, no automation. Just a record.
   required. The window minimum and the column floor are two constants in different files that must
   move together; the test cannot import the Electron-side value, so its comment says to change both.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
+
+## ADR-navigable-project-ids: A web view declares the extra projects it displays in its own web view state
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** The global book/chapter/verse control offers only the active project's books, so a
+  book present in an open resource but not the project is unreachable. Collecting "books in open
+  resources" from the renderer works for views that are one tab per project, but the Scripture Text
+  Grid is a single web view hosting many projects: its members are React components inside one
+  iframe, resolved from three extension-owned settings plus a DBL-to-installed-project lookup plus a
+  latch that lives in that view's React state. Nothing reading open web view definitions can see
+  them, and core cannot re-derive them correctly.
+- **Decision:** A web view that displays scripture from projects beyond its own `projectId` declares
+  those project ids in its own web view state under `NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY`
+  (`platform-bible-utils/experimental`, the one place both core and extension web views can import a
+  runtime value from). Readers union `definition.projectId` with the declared list across open
+  definitions and react to the existing web view open/update/close events. The declaring view owns
+  its own resolution and publishes installed project ids; readers guard the value with
+  `isNavigableProjectIds` rather than trusting it, since web view state is written by whoever owns
+  the view and persists into saved layouts.
+- **Alternatives:** **A PAPI command on the owning extension** — rejected: the extension's `main.ts`
+  cannot see ids that live in a web view's React state, so the view would have to push them to
+  `main.ts` anyway, giving a registry *and* a command, for a strictly larger surface. It also gives
+  core a hard dependency on one specific extension's command existing. **Core reads the underlying
+  settings and re-derives membership** — rejected as not merely duplicative but incorrect, since the
+  displayed-project latch is unobservable from outside the view. **A renderer-side registry** —
+  rejected: it cannot cross the iframe boundary, which is exactly the boundary in question.
+- **Consequences:** Any future multi-project view becomes visible to global navigation UI by writing
+  one state key, with no core change. The cost is an informal convention that only holds if writers
+  publish installed project ids, so readers must guard. The key persists into the saved layout, so a
+  stale list can survive a restart until the view remounts and republishes. A publisher must also
+  wait for its own data to load before publishing: derived membership is transiently empty during
+  mount, which is indistinguishable from "everything was removed" and would otherwise wipe a correct
+  persisted list. And membership should be compared as a set before writing, since every write is a
+  web view definition update that lands in layout persistence.
+  **Revisit** if a reader ever needs more than project ids from a declaring view, which would call
+  for a typed surface rather than a state key.
+- **Source:** PT-4346, global BCV control showing books from open resources.
