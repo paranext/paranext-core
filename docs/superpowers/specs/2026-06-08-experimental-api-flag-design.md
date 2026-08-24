@@ -399,7 +399,7 @@ Single-source emitters. Names are added to the augmentable `NetworkEvents` inter
 **Easy** — already in an async initialization context, straightforward `await` swap:
 
 - All 4 test files: `src/shared/services/shared-store.service.test.ts`, `src/renderer/app.component.test.tsx`, `src/renderer/hooks/use-project-picker-data.hook.test.ts`  
-  _Stale as of 2026-08-25: says four and lists three, and `app.component.test.tsx` no longer references `createNetworkEventEmitter`._
+  _Stale as of 2026-08-25: says four and lists three, and `app.component.test.tsx` no longer references `createNetworkEventEmitter`. `shared-store.service.test.ts` has two sync references now, not three. The list is also under-inclusive: `usersnap.service-router.test.ts`, `book-chapter-control.service-router.test.ts` and `dialog.service-router.test.ts` all mock the sync factory and appear nowhere in it._
 - `extensions/src/hello-rock3/src/main.ts:462`  
   _Stale as of 2026-08-25: already on `createBufferedNetworkEventEmitter`, now at `:470`. Nothing to do._
 - `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234`  
