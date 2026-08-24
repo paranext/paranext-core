@@ -24,4 +24,23 @@ describe('URL_PARAMETERS', () => {
     // as an unexplained mismatch in the comparison above.
     expect(platformData).toHaveProperty('WINDOW_ID');
   });
+
+  // Read sites consume `default` and `allowed` instead of restating them — see the log-level read
+  // in `src/renderer/global-this.model.ts`. Both fields are optional on the spec type because a
+  // `flag` has neither, so nothing but this test stops an `enum` entry from shipping without the
+  // values its reader depends on, which would resolve to `undefined` at runtime.
+  test('every `enum` entry declares a default and the values it allows, and the default is one of them', () => {
+    const enumEntries = Object.entries(URL_PARAMETERS).filter(([, spec]) => spec.kind === 'enum');
+
+    // A table with no enum entries would pass every assertion below without checking anything
+    expect(enumEntries.length).toBeGreaterThan(0);
+
+    enumEntries.forEach(([name, spec]) => {
+      expect(spec.allowed, `${name} declares no allowed values`).toBeDefined();
+      expect(spec.default, `${name} declares no default`).toBeDefined();
+      expect(spec.allowed, `${name}'s default is not one of its allowed values`).toContain(
+        spec.default,
+      );
+    });
+  });
 });
