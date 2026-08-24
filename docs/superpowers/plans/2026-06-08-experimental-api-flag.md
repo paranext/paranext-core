@@ -50,7 +50,8 @@
 - `src/shared/services/shared-store.service.ts:84` — 1 emitter
 - `src/shared/services/data-provider.service.ts:817` — 1 emitter (type-assertion pattern)
 - `src/extension-host/services/extension.service.ts` — 2 emitters
-- `src/main/services/scroll-group.service-host.ts` — 1 emitter
+- `src/main/services/scroll-group.service-host.ts` — 1 emitter  
+  _Stale as of 2026-08-25: this file now holds **two** emitters (lines 51 and 76), both already registered centrally via `createBufferedNetworkEventEmitter`. Verify the current shape before acting on the count or the prescribed migration._
 - `src/renderer/services/web-view.service-shard.ts:96,101,120,128` — 4 emitters (init refactor)
 - `extensions/src/platform-scripture/src/checks/check-aggregator.service.ts:410` — 1 emitter (init refactor)
 - `extensions/src/hello-rock3/src/main.ts:462` — 1 emitter
@@ -1300,7 +1301,8 @@ git commit -m "refactor(experimental): migrate shared platform events to createN
 **Files:**
 
 - Modify: `src/extension-host/services/extension.service.ts` (2 emitters)
-- Modify: `src/main/services/scroll-group.service-host.ts` (1 emitter)
+- Modify: `src/main/services/scroll-group.service-host.ts` (1 emitter)  
+  _Stale as of 2026-08-25: this file now holds **two** emitters (lines 51 and 76), both already registered centrally via `createBufferedNetworkEventEmitter`. Verify the current shape before acting on the count or the prescribed migration._
 
 For each emitter, declare the event name in `NetworkEventTypes` (in `papi-shared-types.ts`) with its payload type, then replace the sync call with async + `await`.
 
@@ -1335,6 +1337,13 @@ reloadFinishedEventEmitter = await createNetworkEventEmitterAsync('platform.onDi
 - [ ] **Step 4: Migrate `scroll-group.service-host.ts:59`**
 
 The emitter is module-level; refactor into the service's init function with a `let` binding and an accessor that throws if invoked before initialization (same pattern as Task 13 Step 1).
+
+> **Check this step against the file before starting it (noted 2026-08-25).** The service moved from
+> the renderer to `src/main/services/` and now holds two emitters, at lines 51 and 76 rather than 59,
+> both already going through `createBufferedNetworkEventEmitter` with their own OpenRPC notification
+> docs. Whether that satisfies this step's intent is the plan owner's call, so the box is left
+> unticked — but note `createBufferedNetworkEventEmitterAsync` does not exist in
+> `network.service.ts`, so the migration as written cannot be performed literally.
 
 - [ ] **Step 5: Run tests + typecheck — expect pass**
 
