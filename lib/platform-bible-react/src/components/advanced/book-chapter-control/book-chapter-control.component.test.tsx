@@ -362,13 +362,13 @@ describe('BookChapterControl additional books', () => {
     await user.click(getTrigger());
 
     const toggle = await screen.findByRole('button', { name: 'Show all books' });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
 
     await user.click(toggle);
 
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
-    await waitFor(() => expect(toggle).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'true'));
   });
 
   test('a revealed book outside the project is dimmed', async () => {
@@ -455,5 +455,32 @@ describe('BookChapterControl additional books', () => {
     await waitFor(() =>
       expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument(),
     );
+  });
+
+  test('clearing a search restores the expanded list and the toggle', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    await userEvent.click(await screen.findByRole('button', { name: 'Show all books' }));
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
+
+    await userEvent.type(getSearchInput(), 'rev');
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Show all books' })).not.toBeInTheDocument(),
+    );
+
+    await userEvent.clear(getSearchInput());
+
+    // Typing never touches the expansion state, so clearing returns to exactly the prior view.
+    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
   });
 });
