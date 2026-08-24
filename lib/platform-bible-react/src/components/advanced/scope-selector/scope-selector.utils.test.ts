@@ -1,9 +1,5 @@
 import { Canon } from '@sillsdev/scripture';
-import {
-  formatSelectedBooksList,
-  summarizeSelectedBooks,
-  getAvailableBookIds,
-} from './scope-selector.utils';
+import { getAvailableBookIds, summarizeSelectedBooks } from './scope-selector.utils';
 
 describe('scope-selector.utils', () => {
   describe('getAvailableBookIds', () => {
@@ -17,8 +13,25 @@ describe('scope-selector.utils', () => {
       expect(getAvailableBookIds('')).toEqual([]);
     });
 
-    test('Returns an empty array for a wrong-length info string', () => {
-      expect(getAvailableBookIds('1'.repeat(66))).toEqual([]);
+    test('Returns the books it can read from a short info string', () => {
+      // Shares `getBookIdsFromBooksPresent`'s decoding, so a truncated string still yields the
+      // flags it does carry rather than discarding the whole read.
+      expect(getAvailableBookIds(`11${'0'.repeat(64)}`)).toEqual(['GEN', 'EXO']);
+    });
+
+    test('Ignores flags past the last canon book', () => {
+      // The provider always emits exactly `Canon.allBookIds.length` flags, so anything beyond that
+      // is never meaningful — and reading it would produce Canon's '***' placeholder id.
+      expect(getAvailableBookIds(`1${'0'.repeat(Canon.allBookIds.length)}`)).toEqual(['GEN']);
+    });
+
+    test('Omits obsolete books that are flagged as present', () => {
+      const allPresent = '1'.repeat(Canon.allBookIds.length);
+      const availableBookIds = getAvailableBookIds(allPresent);
+      expect(availableBookIds.length).toBeLessThan(Canon.allBookIds.length);
+      expect(
+        availableBookIds.some((bookId) => Canon.isObsolete(Canon.bookIdToNumber(bookId))),
+      ).toBe(false);
     });
   });
 
@@ -44,7 +57,7 @@ describe('scope-selector.utils', () => {
 
     test('Prefers the "all books" text over the collapsed range', () => {
       // A full selection of a seven-book project is past the listing threshold, so the range form
-      // would otherwise apply; "All books" has to win or it would read "GEN … JDG".
+      // would otherwise apply; "All books" has to win or it would read "GEN - JDG".
       const sevenBookProject = ['GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'JOS', 'JDG'];
       expect(summarizeSelectedBooks(sevenBookProject, sevenBookProject, allBooksText)).toBe(
         allBooksText,
@@ -79,7 +92,7 @@ describe('scope-selector.utils', () => {
           availableBookIds,
           allBooksText,
         ),
-      ).toBe('GEN … MRK');
+      ).toBe('GEN - MRK');
     });
 
     test('Picks the range endpoints in canon order, not selection order', () => {
@@ -91,21 +104,57 @@ describe('scope-selector.utils', () => {
           availableBookIds,
           allBooksText,
         ),
-      ).toBe('NUM … REV');
+      ).toBe('NUM - REV');
     });
 
-    test('Does not claim "all books" when a book the project lacks is selected', () => {
+    test('Does not claim "all books" when a book the project lacks stands in for a missing one', () => {
       // A stale selection can hold a book that is no longer available; it must not tip the
       // summary over into "All books" when an available book is still unselected.
       const selected = [...availableBookIds.slice(0, -1), 'JHN'];
-      expect(summarizeSelectedBooks(selected, availableBookIds, allBooksText)).toBe('GEN … JHN');
+      expect(summarizeSelectedBooks(selected, availableBookIds, allBooksText)).toBe('GEN - JHN');
+    });
+
+    test('Does not claim "all books" when the selection is a superset of the project', () => {
+      // Every available book IS selected here, but so is a book the project does not have, so the
+      // selection is not "the project's books" and must not say so.
+      const selected = [...availableBookIds, 'JHN'];
+      expect(summarizeSelectedBooks(selected, availableBookIds, allBooksText)).toBe('GEN - REV');
+    });
+
+    test('Matches the "all books" check case-insensitively', () => {
+      // Book IDs are not guaranteed uppercase — `handleScopeChange` seeds the current reference's
+      // book raw — so a lowercase selection still describes the same set of books.
+      const lowercased = availableBookIds.map((bookId) => bookId.toLowerCase());
+      expect(summarizeSelectedBooks(lowercased, availableBookIds, allBooksText)).toBe(allBooksText);
+    });
+
+    test('Ignores a book ID Canon does not recognize', () => {
+      // `Canon.bookIdToNumber` returns 0 for an unknown id, which would sort it ahead of Genesis
+      // and make it the range's left endpoint.
+      expect(
+        summarizeSelectedBooks(
+          ['GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'XYZ'],
+          availableBookIds,
+          allBooksText,
+        ),
+      ).toBe('GEN, EXO, LEV, NUM, DEU');
+    });
+
+    test('Collapses duplicate book IDs', () => {
+      expect(summarizeSelectedBooks(['GEN', 'gen', 'EXO'], availableBookIds, allBooksText)).toBe(
+        'GEN, EXO',
+      );
+    });
+
+    test('Returns undefined when nothing in the selection is a recognizable book', () => {
+      expect(summarizeSelectedBooks(['XYZ'], availableBookIds, allBooksText)).toBeUndefined();
     });
 
     test('Never claims "all books" when the available books are unknown', () => {
       // An empty availableBookIds means the project's books setting has not loaded (or was
       // malformed); "All books" would be a claim we cannot make.
       expect(summarizeSelectedBooks(['GEN', 'EXO'], [], allBooksText)).toBe('GEN, EXO');
-      expect(summarizeSelectedBooks(availableBookIds, [], allBooksText)).toBe('GEN … REV');
+      expect(summarizeSelectedBooks(availableBookIds, [], allBooksText)).toBe('GEN - REV');
     });
 
     test('Uses localized book IDs when a localized name map is provided', () => {
@@ -119,7 +168,7 @@ describe('scope-selector.utils', () => {
     });
 
     test('Uses localized book IDs for the endpoints of a collapsed range', () => {
-      // The range form must localize too — it used to be built from the raw English IDs.
+      // The range form localizes its endpoints too, not just the listed form.
       const localizedBookNames = new Map([
         ['GEN', { localizedId: 'Gén', localizedName: 'Génesis' }],
         ['MRK', { localizedId: 'Mar', localizedName: 'Marcos' }],
@@ -131,7 +180,7 @@ describe('scope-selector.utils', () => {
           allBooksText,
           localizedBookNames,
         ),
-      ).toBe('Gén … Mar');
+      ).toBe('Gén - Mar');
     });
 
     test('Falls back to the uppercase book ID when a book is missing from the localized map', () => {
@@ -141,39 +190,6 @@ describe('scope-selector.utils', () => {
       expect(
         summarizeSelectedBooks(['GEN', 'EXO'], availableBookIds, allBooksText, localizedBookNames),
       ).toBe('Gén, EXO');
-    });
-  });
-
-  describe('formatSelectedBooksList', () => {
-    test('Returns undefined when nothing is selected', () => {
-      expect(formatSelectedBooksList([])).toBeUndefined();
-    });
-
-    test('Lists every selected book, however many there are', () => {
-      // This is the tooltip behind the collapsed summary, so it must never collapse into a
-      // `first … last` range the way `summarizeSelectedBooks` does past five books.
-      expect(formatSelectedBooksList(['GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'MRK', 'MAT'])).toBe(
-        'GEN, EXO, LEV, NUM, DEU, MAT, MRK',
-      );
-    });
-
-    test('Lists books in canon order, not selection order', () => {
-      expect(formatSelectedBooksList(['REV', 'GEN', 'MAT'])).toBe('GEN, MAT, REV');
-    });
-
-    test('Uses localized book IDs when a localized name map is provided', () => {
-      const localizedBookNames = new Map([
-        ['GEN', { localizedId: 'Gén', localizedName: 'Génesis' }],
-        ['EXO', { localizedId: 'Éxo', localizedName: 'Éxodo' }],
-      ]);
-      expect(formatSelectedBooksList(['GEN', 'EXO'], localizedBookNames)).toBe('Gén, Éxo');
-    });
-
-    test('Falls back to the uppercase book ID when a book is missing from the localized map', () => {
-      const localizedBookNames = new Map([
-        ['GEN', { localizedId: 'Gén', localizedName: 'Génesis' }],
-      ]);
-      expect(formatSelectedBooksList(['GEN', 'EXO'], localizedBookNames)).toBe('Gén, EXO');
     });
   });
 });

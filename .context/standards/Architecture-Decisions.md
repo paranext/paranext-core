@@ -898,3 +898,72 @@ step, no automation. Just a record.
   like the chapter-surface exemption above, not like this rule. Promoting on a surface count would
   turn a deliberate single-verse-vs-whole-chapter difference into apparent drift from a shared util.
 - **Source:** PT-4061 (B3), which resolves PT-3133; Ian Hewerdine confirmed parity 2026-08-05.
+
+## ADR-0020: A book selection is summarized, not listed, on a scope trigger; its details surface is the picker, not a tooltip
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** The Find panel's "Showing" row rendered a selected-books scope by joining every
+  selected book ID with commas. Past a handful of books the row outgrew the panel and forced a
+  horizontal scrollbar across the whole web view (PT-4092). Any fix has to answer two questions:
+  what short form replaces the full list, and where — if anywhere — a reader can still see the
+  books the short form drops.
+- **Decision:** `summarizeSelectedBooks`
+  (`lib/platform-bible-react/src/components/advanced/scope-selector/scope-selector.utils.ts`)
+  collapses a selection to one of three forms: the localized "All books" when the selection is
+  exactly the project's available books, the books listed individually at five or fewer, and a
+  canon-order `first - last` range beyond that. The dropped books get **no dedicated details
+  surface**: `Guidelines/Responsiveness` asks truncated text to be backed by "either a Tooltip or
+  any details view", and the details view already exists — the popover the trigger opens contains
+  the real selection as checkboxes and badges. The separator is ` - `, matching `formatScrRefRange`,
+  so `…` keeps its `Guidelines/Ellipses` meaning of "opens a dialog".
+- **Alternatives considered:**
+  - **A hover tooltip on the trigger carrying the full canon-ordered list.** Implemented first and
+    reverted. A full selection is ~570 characters against a `Guidelines/Tooltips` "avoid" example of
+    69, Radix opens tooltips on focus so every programmatic focus restore fired it uninvited, Radix
+    renders a visually-hidden duplicate so the payload also became an `aria-describedby` on the
+    combobox, and `TooltipContent` has no height cap — reintroducing the same clipping bug on the
+    surface meant to explain it.
+  - **`+N more` after the first five books,** matching `SelectBooks`' badge rule. Rejected: it tells
+    a reader how many books they cannot see rather than which range they picked, and the two
+    surfaces order their books differently (canon vs. click), so agreement would be cosmetic.
+  - **A separate expandable row under the trigger.** Rejected as more chrome than a scope line
+    warrants when opening the popover already shows the selection.
+- **Consequences:** The summary is deliberately lossy and there is no way to read the exact
+  selection without opening the popover — accepted, because opening it is one click and it is the
+  only surface where the selection can also be *changed*. A selection that is CSS-truncated inside a
+  narrow column (`GEN, EXO, LEV, NU…`) likewise has no tooltip; `useTruncationTooltip` exists if
+  that becomes a real complaint. **Revisit if a books-scope summary is ever needed somewhere the
+  reader cannot open the picker** — that surface would need its own details view.
+
+## ADR-0021: `BooksPresent` decoding degrades to a partial read; `platform-bible-utils` owns the wire format
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** `getAvailableBookIds` (platform-bible-react) threw when its input length did not
+  equal `Canon.allBookIds.length`. That input is the `platformScripture.booksPresent` project
+  setting, whose default is the empty string until the setting resolves — and which stays empty
+  permanently if the read returns a `PlatformError`. The throw therefore happened during render,
+  and with no error boundary above these components it tore down the whole web view. Separately,
+  `platform-bible-utils` already owned the same wire format in `getBookIdsFromBooksPresent`, which
+  clamps to the canon length rather than rejecting, so the two functions returned different answers
+  for the same string.
+- **Decision:** `platform-bible-utils`' `getBookIdsFromBooksPresent` is the single decoder for the
+  `booksPresent` flag string. `getAvailableBookIds` delegates to it and adds only the obsolete-book
+  filter its callers need, so a malformed or partial string yields the flags it does carry instead
+  of throwing or discarding the read. Neither function is on `platform-bible-react`'s stable root
+  export; both live behind the `experimental` entry point alongside their nearest relatives, so
+  folding them together later is not a breaking change.
+- **Alternatives considered:**
+  - **Keep throwing and add an error boundary.** Rejected for this change: an error boundary is a
+    larger platform decision, and an unresolved setting is an expected state, not an exception.
+  - **Thread the decoded `string[]` down as a prop** instead of passing the raw string to
+    `ScopeSelector`/`SelectBooks`/`SelectBooksPicker`. Rejected as a breaking prop change across
+    three public components for a decode that is microseconds and already memoized at each site.
+- **Consequences:** Degrading means callers must now handle "no books known" as a real state rather
+  than trusting the decode. Every control that acts on the whole list needs an explicit guard —
+  `SelectBooksPicker`'s "Select all" is disabled while the list is empty, because selecting all of
+  nothing would commit an empty array and silently wipe the user's existing selection. **Any new
+  control that maps over the available books must add the same guard**; the pattern to copy is
+  `SectionButton`'s `isDisabled`.
+- **Source:** PT-4092, review of #2699.

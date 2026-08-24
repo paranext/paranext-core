@@ -4,7 +4,7 @@ import '@testing-library/jest-dom';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { getAvailableBookIds, SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
+import { SCOPE_SELECTOR_STRING_KEYS } from 'platform-bible-react';
 import { ProjectSelectorOpenTab } from 'platform-bible-react/experimental';
 import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -632,7 +632,6 @@ describe('Find — books-scope summary in the "Showing" trigger', () => {
   // The real BooksPresent setting is one character per canon book. These tests pin their own
   // full-length string so the expected summaries don't depend on buildProps' default.
   const ALL_BOOKS_PRESENT = '1'.repeat(Canon.allBookIds.length);
-  const allAvailableBookIds = getAvailableBookIds(ALL_BOOKS_PRESENT);
 
   function buildBooksScopeProps(selectedBookIds: string[]): FindProps {
     return buildProps({
@@ -647,17 +646,30 @@ describe('Find — books-scope summary in the "Showing" trigger', () => {
   }
 
   it('summarizes a full selection as "All books" instead of listing every book', () => {
-    render(<Find {...buildBooksScopeProps(allAvailableBookIds)} />);
+    // Spelled out independently of the component's own decoder, so a decoder that stopped
+    // filtering obsolete books would fail here rather than agree with itself.
+    const everyNonObsoleteBookId = Canon.allBookIds.filter(
+      (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+    );
+    render(<Find {...buildBooksScopeProps(everyNonObsoleteBookId)} />);
     expect(screen.getByText('All books')).toBeInTheDocument();
     // The regression this guards: every id joined into the trigger, which overflowed the panel.
     expect(screen.queryByText(/GEN, EXO, LEV/)).not.toBeInTheDocument();
   });
 
-  it('truncates to a canon-order first … last range when more than five books are selected', () => {
+  it('does not claim "All books" when an available book is missing from the selection', () => {
+    const everyNonObsoleteBookId = Canon.allBookIds.filter(
+      (bookId) => !Canon.isObsolete(Canon.bookIdToNumber(bookId)),
+    );
+    render(<Find {...buildBooksScopeProps(everyNonObsoleteBookId.slice(0, -1))} />);
+    expect(screen.queryByText('All books')).not.toBeInTheDocument();
+  });
+
+  it('truncates to a canon-order first-last range when more than five books are selected', () => {
     render(<Find {...buildBooksScopeProps(['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU'])} />);
     // The regression this guards: every selected id joined into the trigger, which widened the
     // "Showing" row until the whole panel grew a horizontal scrollbar.
-    expect(screen.getByText('GEN … MRK')).toBeInTheDocument();
+    expect(screen.getByText('GEN - MRK')).toBeInTheDocument();
   });
 
   it('lists the books individually when few enough are selected', () => {
@@ -665,13 +677,10 @@ describe('Find — books-scope summary in the "Showing" trigger', () => {
     expect(screen.getByText('GEN, EXO, LEV')).toBeInTheDocument();
   });
 
-  it('still opens the scope popover when the trigger also carries the full-selection tooltip', async () => {
-    // With a lossy summary the trigger Button is the asChild child of both PopoverTrigger and
-    // TooltipTrigger (PT-4092); nesting two asChild triggers is easy to get wrong in a way that
-    // silently stops the popover from opening.
+  it('opens the scope popover from the summarized trigger', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(<Find {...buildBooksScopeProps(['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'MAT'])} />);
-    await user.click(screen.getByText('GEN … MRK'));
+    await user.click(screen.getByText('GEN - MRK'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });
 });

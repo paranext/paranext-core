@@ -76,10 +76,8 @@ export function SelectBooksPicker({
   const lastSelectedBookRef = useRef<string | undefined>(undefined);
   const lastKeyEventShiftKey = useRef(false);
 
-  // `availableBookInfo` comes from the `BooksPresent` project setting, which is the empty default
-  // string until the setting resolves (and stays empty if the read errors). This component can
-  // mount inside that window, so it renders an empty book list — `getAvailableBookIds` degrades
-  // rather than throwing, which during render would tear down the web view. (PT-4092)
+  // Empty while the `BooksPresent` project setting is still resolving, and permanently empty if
+  // that read errors — so every control that acts on the whole list has to handle "no books known".
   const availableBookIds = useMemo(
     () => getAvailableBookIds(availableBookInfo),
     [availableBookInfo],
@@ -202,7 +200,7 @@ export function SelectBooksPicker({
           Without the cap, a trigger sitting low in its container makes Radix flip the
           popover upward, and the full-height content (input + section buttons + a
           max-h-72 list) overruns the top of the viewport — inside a web view's iframe
-          that clips the search input away entirely, leaving no way to filter (PT-4092).
+          that clips the search input away entirely, leaving no way to filter.
           The list below shrinks instead so the input stays put. */}
       <PopoverContent
         className="tw:max-h-(--radix-popover-content-available-height) tw:w-[500px] tw:max-w-[calc(100vw-2rem)] tw:p-0"
@@ -220,22 +218,31 @@ export function SelectBooksPicker({
           }}
         >
           <CommandInput
+            className="tw:shrink-0"
             placeholder={searchBooksText}
             value={inputValue}
             onValueChange={setInputValue}
           />
-          <div className="tw:flex tw:justify-between tw:border-b tw:p-2">
-            <Button variant="ghost" size="sm" onClick={handleSelectAll}>
+          <div className="tw:flex tw:shrink-0 tw:justify-between tw:border-b tw:p-2">
+            {/* Selecting all of nothing would commit an empty selection, wiping whatever the user
+                already had — so the control is unavailable until the project's books are known. */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleSelectAll}
+              disabled={availableBookIds.length === 0}
+            >
               {selectAllText}
             </Button>
             <Button variant="ghost" size="sm" onClick={handleClearAll}>
               {clearAllText}
             </Button>
           </div>
-          {/* Drop CommandList's own max-height so it shrinks to whatever the height-capped
-              popover leaves it (and still scrolls); min-h-0 lets it shrink below its content
-              inside the flex column. */}
-          <CommandList className="tw:max-h-none tw:min-h-0 tw:flex-1">
+          {/* min-h-0 + flex-1 let the list shrink below its content inside the flex column, so it
+              absorbs the height-capped popover's shortfall (and still scrolls) while the search
+              input and section buttons stay put. CommandList's own max-height is kept as the
+              upper bound for when there is room to spare — a max-height never blocks shrinking. */}
+          <CommandList className="tw:max-h-72 tw:min-h-0 tw:flex-1">
             <CommandEmpty>{noBookFoundText}</CommandEmpty>
             {Object.values(Section).map((section, index) => {
               const sectionBooks = filteredBooksBySection[section];

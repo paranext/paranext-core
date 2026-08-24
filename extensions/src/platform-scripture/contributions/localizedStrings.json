@@ -3,6 +3,9 @@
     "%webView_find_projectFilter_noProjectsFound%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_noProjectsFound%"
     },
+    "%webView_scope_selector_all_books%": {
+      "fallbackKey": "%comment_filter_scope_all_books%"
+    },
     "%webView_find_projectSelector_label%": {
       "fallbackKey": "%webView_checksSidePanel_projectFilter_label%"
     },

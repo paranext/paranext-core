@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ComponentProps, useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
+import { expect, within } from 'storybook/test';
 import { SelectBooksPicker } from './select-books-picker.component';
 
 // Mock book information - represents which books are available (all books available in this case)
@@ -99,27 +100,64 @@ export const ConstrainedHeightFlipsUpward: Story = {
       'ACT',
     ],
   },
+  // The popover portals to `document.body`, so Radix measures collisions against the viewport —
+  // a short wrapper element around the trigger would not constrain it. Only a short viewport
+  // reproduces the web view this bug was reported in, hence the small-screen global plus a
+  // full-bleed layout that lets the decorator own the whole of it.
+  globals: { viewport: { value: 'shortWebView' } },
   decorators: [
     (Story) => (
-      // Deliberately short, bordered container with the trigger pushed to the bottom so Radix's
-      // collision detection flips the popover upward. The border makes it obvious whether the
-      // popover overruns the container. (PT-4092)
-      <div className="tw:flex tw:h-[320px] tw:w-full tw:flex-col tw:justify-end tw:border">
+      <div className="tw:flex tw:h-screen tw:w-full tw:flex-col tw:justify-end tw:p-2">
         <Story />
       </div>
     ),
   ],
+  play: async ({ canvasElement, userEvent, step }) => {
+    const body = within(canvasElement.ownerDocument.body);
+
+    await step(
+      'Open the picker from a trigger pinned to the bottom of a short viewport',
+      async () => {
+        await userEvent.click(body.getByRole('combobox'));
+      },
+    );
+
+    await step('The search input stays on screen even though the popover flipped', async () => {
+      // The regression: at full height the popover overran the top of the viewport and took the
+      // search input with it, leaving no way to filter the list.
+      const searchInput = await body.findByPlaceholderText('Search books...');
+      const inputTop = searchInput.getBoundingClientRect().top;
+      await expect(inputTop).toBeGreaterThanOrEqual(0);
+    });
+
+    await step(
+      'The book list absorbs the shortfall by scrolling instead of overflowing',
+      async () => {
+        const popover = await body.findByRole('dialog');
+        const { height } = popover.getBoundingClientRect();
+        await expect(height).toBeLessThanOrEqual(
+          canvasElement.ownerDocument.documentElement.clientHeight,
+        );
+      },
+    );
+  },
   parameters: {
+    layout: 'fullscreen',
+    // A web view docked into a short panel — the shape this bug was reported in. Storybook's
+    // stock viewports are all phone-portrait or taller, none short enough to reproduce it.
+    viewport: {
+      options: {
+        shortWebView: { name: 'Short web view', styles: { width: '640px', height: '300px' } },
+      },
+    },
     docs: {
       description: {
         story:
-          'Regression guard for PT-4092. The fix is CSS-only, so jsdom cannot verify it — check ' +
-          'this story visually. The picker sits at the bottom of a short (320px) bordered ' +
-          'container, so opening it should flip the popover *upward*. Verify that the search ' +
-          'input stays visible and reachable at the top of the popover, and that the book list ' +
-          'scrolls internally instead of the popover growing past the top of the bordered ' +
-          'container. Before the fix, the full-height popover overran the container and clipped ' +
-          'the search input off-screen inside a web view.',
+          'Regression guard for the books picker overrunning a short viewport. The picker sits at ' +
+          'the bottom of a short viewport, so opening it flips the popover upward. The play ' +
+          'function asserts that the search input stays on screen and that the popover fits ' +
+          'within the viewport; before the fix the full-height popover overran the top and ' +
+          'clipped the search input away inside a web view.',
       },
     },
   },
