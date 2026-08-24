@@ -432,6 +432,16 @@ npm run test --workspace=lib/platform-bible-react
 npm run test:core -- --coverage
 ```
 
+**`npm test` needs Playwright's browsers installed.** `lib/platform-bible-react`'s vitest config
+includes a `storybook (chromium)` project that runs stories in a real browser, so a checkout that
+has never run `npx playwright install` fails there rather than in any `.test.ts` file. CI installs
+them before running tests; locally, run it once.
+
+That project is also the repo's main source of flaky test runs: its story files are timing-sensitive
+under parallel load, and a full `npm test` can fail a different handful of them each time while every
+one passes in isolation. Before chasing a story failure, re-run that project on its own with
+`--no-file-parallelism` — if it goes green, the failure was contention, not a regression.
+
 ---
 
 ## C# Testing

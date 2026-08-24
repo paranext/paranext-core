@@ -1083,6 +1083,11 @@ declare module 'platform-scripture' {
     subscript?: boolean;
     superscript?: boolean;
     color?: string;
+    /**
+     * Mirrors the editor package's `MarkerStyleInfo` union. Note that `'left'` never arrives from
+     * this provider: the C# side omits the property for the default/left case rather than emitting
+     * it, so a consumer branching on `'left'` writes a dead branch.
+     */
     justification?: 'left' | 'center' | 'right' | 'both';
     firstLineIndent?: number;
     leftMargin?: number;
