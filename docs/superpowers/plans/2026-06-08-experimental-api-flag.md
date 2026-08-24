@@ -1626,13 +1626,12 @@ git commit -m "refactor(experimental): migrate extension emitters to createNetwo
 - Modify: `src/renderer/app.component.test.tsx`
 - Modify: `src/renderer/hooks/use-project-picker-data.hook.test.ts`
 
-(One of the 4 listed earlier — `shared-store.service.test.ts` — has 3 occurrences. Migrate each.)
+(One of the 4 listed earlier — `shared-store.service.test.ts` — has 3 occurrences.)
 
-> **Check before starting (noted 2026-08-25).** "The 4 listed earlier" lists three, and
-> `app.component.test.tsx` no longer references `createNetworkEventEmitter` at all.
-> `shared-store.service.test.ts` has two sync references now, not three. The list is also
-> under-inclusive: `usersnap.service-router.test.ts`, `book-chapter-control.service-router.test.ts`
-> and `dialog.service-router.test.ts` all mock the sync factory and appear nowhere in it.
+> The corrections that used to sit here are now in the task verdict above, which also states why
+> these sites are deletions rather than migrations. Steps 1-3 below still describe the swap; treat
+> all three as superseded, including their `npm test` and `git add` file lists, which name
+> `app.component.test.tsx` — a file that references nothing.
 
 - [ ] **Step 1: For each test file, replace `createNetworkEventEmitter` with `createNetworkEventEmitterAsync` and `await` in the surrounding async setup**
 
