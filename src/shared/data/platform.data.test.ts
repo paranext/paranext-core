@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
+import type { LogLevel } from 'electron-log';
 import * as platformData from './platform.data';
-import { URL_PARAMETERS } from './platform.data';
+import { LOG_LEVEL_QUERY_PARAMETER, URL_PARAMETERS } from './platform.data';
 
 describe('URL_PARAMETERS', () => {
   // What this catches: an export named `*_QUERY_PARAMETER` (or the one hardcoded exception,
@@ -46,5 +47,25 @@ describe('URL_PARAMETERS', () => {
         .filter(([, spec]) => !spec.allowed?.includes(spec.default ?? ''))
         .map(([name]) => name),
     ).toEqual([]);
+  });
+
+  // `allowed` is typed `readonly string[]`, so platform.data.ts itself cannot stop a level
+  // electron-log does not define from being added — and the log-level read casts to `LogLevel` on
+  // the strength of that list (`src/renderer/global-this.model.ts`), so an unbacked entry would be
+  // blessed rather than caught. The relationship is pinned here rather than in the table because
+  // platform.data.ts is deliberately import-free, so the ts-node startup-waterfall CLI can read it.
+  // Typing the comparison as `readonly LogLevel[]` makes this fail at COMPILE time if electron-log
+  // drops a level, and at RUN time if the table gains one electron-log never had.
+  test('the log level parameter allows exactly the levels electron-log defines', () => {
+    const electronLogLevels: readonly LogLevel[] = [
+      'error',
+      'warn',
+      'info',
+      'verbose',
+      'debug',
+      'silly',
+    ];
+
+    expect(URL_PARAMETERS[LOG_LEVEL_QUERY_PARAMETER].allowed).toEqual(electronLogLevels);
   });
 });

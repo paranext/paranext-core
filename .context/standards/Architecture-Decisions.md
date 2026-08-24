@@ -1687,24 +1687,25 @@ step, no automation. Just a record.
   unreachable window the same way — by throwing at call time, as the transitional router did — which
   the eight navigation commands need stating explicitly because they resolve a value: a go-to
   resolves `undefined` and a history command resolves a boolean, so `false` means "nothing to move
-  to" and never "this could not run". Two behavior changes. The navigation
-  commands are serialized by two locks, not one. The per-renderer mutex became app-global, since the
-  handler runs in main: two windows driving one scroll group are serialized against each other,
-  which a per-renderer lock could not do. That lock holds main's own read-compute-write plus the
-  versification-bounds fetch and the `availableBooks` await, so everything the write depends on is
-  decided inside it. Outside it, a second mutex keyed per WINDOW
+  to" and never "this could not run". Two behavior changes. The go-to commands are serialized by two
+  locks, not one; the two history commands take neither. The per-renderer mutex became app-global,
+  since the handler runs in main: two windows driving one scroll group are serialized against each
+  other, which a per-renderer lock could not do. That lock holds main's own read-compute-write plus
+  the versification-bounds fetch and the `availableBooks` await, so everything the write depends on
+  is decided inside it. Outside it, a second mutex keyed per WINDOW
   (`navigationCommandMutexesByWindowId`) wraps the whole handler, including the round trip that asks
-  a window what to navigate. That ask has to be inside a lock because for a detached
-  target it IS the read: overlapping runs that each ask before taking the inner lock all compute
-  from the same reference, so a held key — one fire-and-forget command per OS auto-repeat — advanced
-  one verse N times instead of N verses. It is keyed by window rather than app-global because the
-  ask is a request to another process, and a window that has stopped answering takes the whole
-  request timeout to say so; behind one shared lock that wait would stall every other window's
-  navigation for its duration. And a go-to now steps from the reference main holds rather than from the asking window's
-  predicting cache, which is what keeps a held key advancing one step per repeat; a navigation the
-  window itself just made reaches main one hop later. Cross-window navigation ordering beyond this
-  is PT-4270. Registering three routers plus the navigation commands adds four entries to main's
-  awaited startup batch; they are in-process registrations against main's own RPC server.
+  a window what to navigate. That ask has to be inside a lock because for a detached target it IS
+  the read: overlapping runs that each ask before taking the inner lock all compute from the same
+  reference, so a held key — one fire-and-forget command per OS auto-repeat — advanced one verse N
+  times instead of N verses. It is keyed by window rather than app-global because the ask is a
+  request to another process, and a window that has stopped answering takes the whole request
+  timeout to say so; behind one shared lock that wait would stall every other window's navigation
+  for its duration. And a go-to now steps from the reference main holds rather than from the asking
+  window's predicting cache, which is what keeps a held key advancing one step per repeat; a
+  navigation the window itself just made reaches main one hop later. Cross-window navigation
+  ordering beyond this is PT-4270. Registering three routers plus the navigation commands adds four
+  entries to main's awaited startup batch; they are in-process registrations against main's own RPC
+  server.
 - **Marking pre-existing names experimental:** this epic republishes names that already existed, and
   it treats them two ways on purpose, so the rule is written down here rather than re-argued at each
   router move. **Mark the OBJECT when the contract behind its name changed** — `WebViewService`,
