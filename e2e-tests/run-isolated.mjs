@@ -24,7 +24,10 @@ const subsets = readdirSync(isolatedDir, { withFileTypes: true })
   .sort();
 
 function printUsage() {
-  console.log('Isolated e2e subsets (each test launches its own Electron instance):\n');
+  console.log(
+    'Isolated e2e subsets (most launch their own Electron; title-bar and navigation-history attach\n' +
+      'over CDP to an app started by ./.erb/scripts/refresh.sh):\n',
+  );
   subsets.forEach((subset) => console.log(`  ${subset}`));
   console.log(`
 Usage:

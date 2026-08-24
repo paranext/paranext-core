@@ -5,7 +5,7 @@
 | What you're testing | Where it goes | How to run |
 |---|---|---|
 | Core happy path (app launch, basic nav) | `tests/smoke/` | `npm run test:e2e:smoke` (also CI) |
-| Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated` |
+| Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated all` (the bare form lists the subsets and exits 1) |
 | Tests needing real Marble resources | `tests/enhanced-resources/` | `npx playwright test --config e2e-tests/playwright.config.ts --project=enhanced-resources` |
 
 On WSL2, prefix a suite that launches its own Electron with `e2e-tests/run-e2e-wsl.sh --wrap` to

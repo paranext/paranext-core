@@ -1,6 +1,7 @@
 # isolated E2E Tests
 
-Feature and state-mutating E2E tests that each run against their own Electron instance.
+Feature and state-mutating E2E tests, most of which run against their own Electron instance. The
+exceptions are noted under "How to run" below.
 
 ## What belongs here
 
@@ -11,8 +12,8 @@ Feature and state-mutating E2E tests that each run against their own Electron in
 ## How to run
 
 ```bash
-# All isolated tests
-npm run test:e2e:isolated
+# All isolated tests. The bare form runs nothing: it lists the subsets and exits 1.
+npm run test:e2e:isolated all
 
 # A single file
 npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e2e-tests/tests/isolated/<file>.spec.ts
