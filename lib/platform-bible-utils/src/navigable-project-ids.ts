@@ -23,6 +23,10 @@ export const NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY = 'navigableProjectIds';
  * saved layouts, so a reader can encounter a value from an older build or a buggy writer. Guard, do
  * not assume.
  *
+ * Checks SHAPE ONLY. A string that passes is not thereby a usable project id — an empty string, or
+ * an id whose project has since been removed, both pass. Readers open project data providers from
+ * these values, so validating individual ids stays the reader's job.
+ *
  * @param value The raw value read from a web view's state
  * @returns Whether `value` is an array of strings
  * @experimental This export is unstable and may change shape or disappear without notice
