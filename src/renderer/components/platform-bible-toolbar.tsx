@@ -11,6 +11,7 @@ import {
   useProjectSetting,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { useOpenResourceBookIds } from '@renderer/hooks/use-open-resource-book-ids.hook';
 import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-availability.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
@@ -35,6 +36,7 @@ import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { HomeIcon } from 'lucide-react';
 import {
   Badge,
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
   BookChapterControlHandle,
   Button,
@@ -90,6 +92,11 @@ const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 // with CSS container queries — their failure mode here is silent.
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+// Copied into a mutable array because useLocalizedStrings takes LocalizeKey[] while the exported
+// constant is readonly. Module scope keeps the identity stable, which useLocalizedStrings needs to
+// avoid resubscribing on every render.
+const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%mainMenu_openHome%',
@@ -261,6 +268,14 @@ export function PlatformBibleToolbar() {
   );
   const getActiveBookIds = booksPresent ? fetchActiveBookIds : undefined;
 
+  const openResourceBookIds = useOpenResourceBookIds(resolvedWebView?.definition.projectId);
+  // Stable identity per value, for the same reason fetchActiveBookIds is memoized above:
+  // BookChapterControl memoizes its book list on this function's identity.
+  const fetchAdditionalBookIds = useCallback(() => openResourceBookIds, [openResourceBookIds]);
+  // Undefined rather than a function returning an empty list: the control offers no "show all
+  // books" toggle when there is nothing extra to offer.
+  const getAdditionalBookIds = openResourceBookIds.length > 0 ? fetchAdditionalBookIds : undefined;
+
   // Register the top BookChapterControl's imperative handle only while it is enabled — a React 19
   // cleanup callback ref so registration tracks both mount/unmount and the enabled state. When
   // isBookChapterControlDisabled flips, this callback's identity changes, so React runs the old
@@ -304,6 +319,10 @@ export function PlatformBibleToolbar() {
   const hasProjectPickerItems = projectPickerItems.length > 0;
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
+
+  const [bookChapterControlLocalizedStrings] = useLocalizedStrings(
+    bookChapterControlLocalizedStringKeys,
+  );
 
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
@@ -539,6 +558,8 @@ export function PlatformBibleToolbar() {
           showTriggerChevron={!isPowerMode}
           disabled={isBookChapterControlDisabled}
           getActiveBookIds={getActiveBookIds}
+          getAdditionalBookIds={getAdditionalBookIds}
+          localizedStrings={bookChapterControlLocalizedStrings}
           recentSearches={recentScriptureRefs}
           onAddRecentSearch={addRecentScriptureRef}
         />
