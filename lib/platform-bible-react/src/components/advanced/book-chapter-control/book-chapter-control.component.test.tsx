@@ -412,6 +412,27 @@ describe('BookChapterControl additional books', () => {
     );
   });
 
+  test('the toggle is hidden while a search is active', async () => {
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await userEvent.click(getTrigger());
+    expect(await screen.findByRole('button', { name: 'Show all books' })).toBeInTheDocument();
+
+    // Searching already spans every reachable book, so the control has nothing left to do.
+    await userEvent.type(getSearchInput(), 'rev');
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Show all books' })).not.toBeInTheDocument(),
+    );
+  });
+
   test('pressing the toggle a second time collapses the list', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(
