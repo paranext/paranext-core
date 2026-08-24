@@ -800,14 +800,26 @@ internal class DummyPapiClient : PapiClient
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as networkService from '@shared/services/network.service';
 
+// Mock EVERY member the code under test touches, not just the one being asserted on — a missing
+// member is `undefined` at the call site, and the resulting throw is usually swallowed by the
+// service's own try/catch and surfaces only as a rejected promise.
 vi.mock('@shared/services/network.service', () => ({
   createCoreMultiSourceEventEmitter: vi.fn(),
   getNetworkEvent: vi.fn(),
   request: vi.fn(),
+  registerRequestHandler: vi.fn(),
 }));
 
 describe('sharedStoreService', () => {
-  const mockEmitter = { emit: vi.fn(), subscribe: vi.fn(), dispose: vi.fn() };
+  // `event` matters as much as `emit`: the service subscribes through it during initialization.
+  const mockEmitter = {
+    emit: vi.fn(),
+    event: vi.fn(),
+    subscribe: vi.fn(),
+    subscribeOnce: vi.fn(),
+    dispose: vi.fn(),
+    emitLocal: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.resetAllMocks();
