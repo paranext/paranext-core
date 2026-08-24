@@ -1,5 +1,12 @@
 # Experimental API Flag — Design
 
+> **Substantially overtaken by the code — verify before relying on it (audited 2026-08-25).** The
+> event-migration inventory below has drifted: several entries name emitter counts, line numbers or
+> APIs that no longer match, and the companion plan's tasks describe work that is largely done.
+> Individual notes mark what has been checked; the absence of a note does not mean an entry was
+> verified. Exactly one deprecated sync `createNetworkEventEmitter` call remains repo-wide, in
+> `platform-scripture-editor`.
+
 **Status:** Draft for review
 **Date:** 2026-06-08
 **Owner:** tjcouch-sil
@@ -388,7 +395,8 @@ Single-source emitters. Names are added to the augmentable `NetworkEvents` inter
 
 **Easy** — already in an async initialization context, straightforward `await` swap:
 
-- All 4 test files: `src/shared/services/shared-store.service.test.ts`, `src/renderer/app.component.test.tsx`, `src/renderer/hooks/use-project-picker-data.hook.test.ts`
+- All 4 test files: `src/shared/services/shared-store.service.test.ts`, `src/renderer/app.component.test.tsx`, `src/renderer/hooks/use-project-picker-data.hook.test.ts`  
+  _Stale as of 2026-08-25: says four and lists three, and `app.component.test.tsx` no longer references `createNetworkEventEmitter`._
 - `extensions/src/hello-rock3/src/main.ts:462`
 - `extensions/src/platform-scripture-editor/src/main.ts:286,290,1234`  
   _Stale as of 2026-08-25: four emitters now; one (`selectionChangedEventEmitter`) is still on the deprecated sync call._
