@@ -14,6 +14,7 @@ the wrong directory".
 """
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -63,22 +64,28 @@ def main():
             continue
         # the line must be an ADDED line in this PR's own diff (three-dot: the branch's own work)
         try:
-            diff = sh("diff", "-U0", f"origin/{bases[pr]}...{head}", "--", path)
+            mb = sh("merge-base", f"origin/{bases[pr]}", head).strip()
+            diff = sh("diff", "--unified=0", mb, head, "--", path)
         except subprocess.CalledProcessError:
             fails.append(f"{it['item']}: cannot diff origin/{bases[pr]}...{head[:11]} — is the "
                          f"base branch fetched?")
             continue
-        added = set()
-        cur = None
-        for ln in diff.split("\n"):
-            if ln.startswith("@@"):
-                try:
-                    cur = int(ln.split("+")[1].split(",")[0].split(" ")[0])
-                except (IndexError, ValueError):
-                    cur = None
-            elif cur is not None and ln.startswith("+") and not ln.startswith("+++"):
-                added.add(cur)
-                cur += 1
+        added, new_ln = set(), None
+        for dl in diff.split("\n"):
+            h = re.match(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", dl)
+            if h:
+                new_ln = int(h.group(1))
+            # `new_ln is None` covers the ---/+++ file headers, which always precede the first @@.
+            # Do NOT also skip on startswith("+++"): an added line whose own text begins with "++"
+            # renders as "+++…", and skipping it without advancing new_ln shifts every later line
+            # number in the file by one. That is reachable from any doc containing a diff snippet.
+            elif new_ln is None:
+                continue
+            elif dl.startswith("+"):
+                added.add(new_ln)
+                new_ln += 1
+            elif dl.startswith(" "):
+                new_ln += 1
         if line not in added:
             fails.append(f"{it['item']}: {path}:{line} is not an ADDED line in PR #{pr}'s own diff")
 

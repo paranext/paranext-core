@@ -169,6 +169,30 @@ def test_missing_vocabulary_file_is_a_hard_stop():
         raise AssertionError("a missing shared-vocabulary.md did not stop the run")
 
 
+def _added_lines(diff):
+    """The added-line parser from verify_anchors.py, exercised on a synthetic diff."""
+    import re
+    added, new_ln = set(), None
+    for dl in diff.split("\n"):
+        h = re.match(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", dl)
+        if h:
+            new_ln = int(h.group(1))
+        elif new_ln is None:
+            continue
+        elif dl.startswith("+"):
+            added.add(new_ln)
+            new_ln += 1
+        elif dl.startswith(" "):
+            new_ln += 1
+    return added
+
+
+def test_added_line_beginning_with_plus_plus_does_not_shift_later_line_numbers():
+    """An added line whose text starts with `++` renders as `+++` in the diff."""
+    diff = "--- a/f\n+++ b/f\n@@ -0,0 +1,3 @@\n+normal\n+++plus-prefixed\n+after\n"
+    assert _added_lines(diff) == {1, 2, 3}, f"line numbers shifted: {_added_lines(diff)}"
+
+
 def main():
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

@@ -78,51 +78,61 @@ empty commit.
 
 ## The battery
 
-Run all six at the top of the stack. `A` = the old range's changed files, `N` = the new range's.
+Run it at the top of the stack, before anything is force-pushed. It is a script, not a block to
+retype — the checks it runs are exactly the ones whose failure is invisible in per-commit review,
+and an empty stdout from a mistyped redirect looks identical to a passing set-difference.
 
 ```bash
-P=.feedback-packets/<pr>-<date>        # keep these in the packet, not /tmp
-git diff --name-only <old-base> <old-tip> | LC_ALL=C sort > "$P/A.txt"
-git diff --name-only <new-base> <new-tip> | LC_ALL=C sort > "$P/N.txt"
-
-comm -13 "$P/A.txt" "$P/N.txt"    # N \ A  — check 2, must be empty
-comm -23 "$P/A.txt" "$P/N.txt"    # A \ N  — check 3, must be empty
-comm -12 "$P/A.txt" "$P/N.txt"    # A ∩ N  — the input to check 4
+<skill-dir>/scripts/restack_battery.sh \
+  "$PACKET" <old-base> <old-tip> <new-base> <new-tip> [repo-root]
 ```
 
-Two details that are not cosmetic. **`LC_ALL=C`**: `comm` compares byte-wise, but `sort` collates
-per locale, and under a locale like `en_US.UTF-8` it ignores punctuation in ordering. Feed
-locale-sorted input to `comm` and it warns on stderr and emits wrong set differences — a
-false-empty `N \ A`, which is precisely the check this battery exists for. Pinning both to `C`
-makes the two agree. **Packet paths rather than `/tmp/A.txt`**: fixed temp names collide when two
-restacks run at once, and the files are evidence worth keeping with the run.
+The output directory is the first argument and is created up front; `A.txt`, `N.txt` and the
+set-difference files are written there and kept with the run as evidence. Take `<old-tip>` from a
+backup tag made before the rebase.
 
-1. **Commit accounting.** `git cherry <new-tip> <old-tip> <old-base>` — walks the old range and
-   marks each commit `-` when an equivalent patch exists at the new tip (it survived the replay)
-   and `+` when none does (**it was dropped**). Every `+` must be an intentional drop, confirmed
-   against the new range with `git show <sha> | git patch-id --stable` before it is accepted.
+`A` = the old range's changed files, `N` = the new range's. What each check is for:
+
+1. **Commit accounting.** `git cherry <new-tip> <old-tip> <old-base>` marks each old commit `-`
+   when an equivalent patch exists at the new tip and `+` when none does. Every `+` must be
+   confirmed an intentional drop — compare `git show <sha> | git patch-id --stable` against the new
+   range, and expect a benign `+` whenever the new base touched a file that commit also touched,
+   because re-contextualised hunks change the patch-id without changing the content.
 
    Compare against the new **tip**, not the new base. The base contains none of the branch's own
    commits by construction, so `git cherry <new-base> …` marks every commit `+` whether it
    survived or not, and the only commit-accounting check in the battery can never fail.
 
-2. **`N \ A` — content the new branch carries that the old never did.** Must be empty, or
-   every entry a documented deviation. *This is the check that caught 33 untracked proof PNGs
-   swept into a replayed commit by a broad `git add` during conflict resolution.*
+2. **`N \ A` — content the new branch carries that the old never did.** Must be empty, or every
+   entry a documented deviation. *This is the check that caught 33 untracked proof PNGs swept into
+   a replayed commit by a broad `git add` during conflict resolution.*
 
 3. **`A \ N` — content no longer carried.** Every entry must be either already-upstream
    (blob-identical on the new base) or a documented deletion.
 
-4. **Byte-identity.** For files in `A ∩ N` that the new base did **not** touch,
-   `git rev-parse <old-tip>:<file>` must equal `git rev-parse <new-tip>:<file>`. Only
-   documented deviations may differ.
+4. **Byte-identity.** For files in `A ∩ N` **that the new base did not touch**, the blob at the old
+   tip must equal the blob at the new tip. That filter is computed by the script, not left as a
+   predicate in the prose: a file the new base changed is *expected* to differ, so folding it in
+   with the rest makes the check unreadable and folding it out by eye makes it unreliable.
 
-5. **Conflict markers.** `git grep -nE '^(<{7} |>{7} |={7}$)' <new-tip>`.
+5. **Conflict markers.** The grep covers `<<<<<<< `, `>>>>>>> `, `=======` **and `|||||||`** — the
+   diff3/zdiff3 base marker. Under `merge.conflictStyle=diff3` or `zdiff3` a conflicted file can
+   retain only the `|||||||` line, so a pattern without it passes a check whose entire purpose is
+   to catch conflicted files.
 
 6. **Surgery isolation.** After editing one mid-history commit (`rebase -i`, `edit`, amend),
    `git range-diff <base> <pre-surgery-tip> <new-tip>` must show `!` on the edited commit and
    **only** on it. Read the range-diff rather than skimming it — it is the one check that shows
    what actually changed in a replay.
+
+**Locale pinning is not cosmetic.** `LC_ALL=C` goes on the `comm` calls as well as the `sort`
+calls. `comm --help` states that "comparisons honor the rules specified by `LC_COLLATE`", so it is
+not the byte-wise comparator it is often assumed to be; pinning only the sorts leaves the two
+disagreeing under a locale that ignores punctuation in ordering, and the result is a false-empty
+difference — precisely the check this battery exists for. The script pins both.
+
+**Packet paths rather than `/tmp/A.txt`**: fixed temp names collide when two restacks run at once,
+and the files are evidence worth keeping with the run.
 
 **Assert on positive output.** `ls a b` exit codes and a pipeline's `$?` (which is the last
 command's) are useless as verification. Every check above must produce output you read.

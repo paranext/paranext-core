@@ -74,90 +74,33 @@ question is about.
 
 ### Anchor verification script
 
-Run it **twice**. It reads `bodies.json`, which P7 extracts — so at drafting time, write the
-item→anchor mapping table below into that same shape (`item`, `pr`, `path`, `line`, `side`,
-`anchor_line`) and run it before a single body is written; then run it again at posting time
-over the real `bodies.json`, against the re-derived heads. The first pass is what keeps a bad
+Run it **twice**. It reads `bodies.json`, which `extract_bodies.py` writes — so at drafting time,
+write the item→anchor mapping table below into that same shape (`item`, `pr`, `path`, `line`,
+`side`, `anchor_line`) and run it before a single body is written; then run it again at posting
+time over the real `bodies.json`, against the re-derived heads. The first pass is what keeps a bad
 anchor out of a draft; the second is what keeps a moved head out of a post. Skipping the first
 because the file does not exist yet is how an anchor error survives all the way to G2.
 
-```python
-#!/usr/bin/env python3
-"""Verify every inline anchor: the content at the PR head matches the quoted anchor line,
-and the line is an ADDED line in that PR's own diff (base...head)."""
-import json, re, subprocess, sys
-
-# Absolute, like every path in this skill — the working directory resets between shell calls, and
-# a relative "bodies.json" either fails outright or silently verifies an older batch it found in
-# whatever directory it was launched from.
-PACKET = "/abs/path/to/repo/.feedback-packets/<pr>-<date>"
-
-items = [i for i in json.load(open(f"{PACKET}/bodies.json", encoding="utf-8"))
-         if i["kind"] == "inline"]
-HEADS = {2649: "<full-40-char-sha>"}          # gh pr view <n> --json headRefOid
-BASES = {2649: "<base-branch-name>"}          # gh pr view <n> --json baseRefName
-
-
-def sh(*args):
-    return subprocess.run(args, capture_output=True, text=True, check=True).stdout
-
-
-fails = []
-for it in items:
-    pr, path, line, head = it["pr"], it["path"], it["line"], HEADS[it["pr"]]
-
-    # 1. the line's content at the PR head must match what the draft quotes
-    try:
-        flines = sh("git", "show", f"{head}:{path}").split("\n")
-    except subprocess.CalledProcessError:
-        fails.append(f"{it['item']}: {path} not present at head {head[:11]}")
-        continue
-    if line > len(flines):
-        fails.append(f"{it['item']}: line {line} beyond EOF ({len(flines)}) in {path}")
-        continue
-    actual, expected = flines[line - 1], it["anchor_line"]
-    if actual.strip() != expected.strip():
-        fails.append(f"{it['item']}: anchor mismatch at {path}:{line}\n"
-                     f"    draft:   {expected!r}\n    at head: {actual!r}")
-
-    # 2. the line must be an ADDED line in this PR's own diff.
-    # Wrapped like the `git show` above: a base branch that was renamed or never fetched leaves
-    # origin/<base> absent, and an uncaught CalledProcessError here is a traceback instead of the
-    # "ANCHOR VERIFY: FAIL" line the caller keys on — killing every remaining anchor's check too.
-    try:
-        mb = sh("git", "merge-base", f"origin/{BASES[pr]}", head).strip()
-        diff_lines = sh("git", "diff", "--unified=0", mb, head, "--", path).split("\n")
-    except subprocess.CalledProcessError as exc:
-        fails.append(f"{it['item']}: cannot diff PR #{pr} against origin/{BASES[pr]} "
-                     f"(fetch it, or fix BASES) - {exc}")
-        continue
-    added, new_ln = set(), None
-    for dl in diff_lines:
-        h = re.match(r"^@@ -\S+ \+(\d+)(?:,(\d+))? @@", dl)
-        if h:
-            new_ln = int(h.group(1))
-        # `new_ln is None` covers the ---/+++ file headers, which always precede the first @@.
-        # Do NOT also skip on startswith("+++"): an added line whose own text begins with "++"
-        # renders as "+++…", and skipping it without advancing new_ln shifts every later line
-        # number in the file by one. That is reachable from any doc containing a diff snippet.
-        elif new_ln is None:
-            continue
-        elif dl.startswith("+"):
-            added.add(new_ln)
-            new_ln += 1
-        elif dl.startswith(" "):
-            new_ln += 1
-    if line not in added:
-        fails.append(f"{it['item']}: {path}:{line} is not an ADDED line in PR #{pr} "
-                     f"({mb[:11]}...{head[:11]})")
-
-if fails:
-    print("ANCHOR VERIFY: FAIL")
-    for f_ in fails:
-        print("  - " + f_)
-    sys.exit(1)
-print(f"ANCHOR VERIFY: PASS - all {len(items)} anchors resolve as added lines at their PR head")
+```bash
+<skill-dir>/scripts/verify_anchors.py "$PACKET" <repo-root>
 ```
+
+Both paths are arguments and every git call inside is `git -C <repo-root>`. Inheriting the working
+directory would make each check depend on where the process happened to be launched, and the
+failure surfaces as the uniform "not present at head", which reads as *the code moved* rather than
+*we ran in the wrong directory*.
+
+It reads `<packet>/heads.json` and `<packet>/bases.json` — `{"2659": "<40-char-sha>"}` and
+`{"2659": "<base-branch-name>"}` — and checks two things per inline item:
+
+1. **The line's content at the PR head matches what the draft quotes.** The file is split with
+   `splitlines()`, not `split("\n")`: a newline-terminated file yields `N+1` elements under
+   `split()`, so line `N+1` clears a `line > len(...)` guard and then indexes the empty trailing
+   element — which compares equal to a blank `anchor_line` and passes silently. An empty
+   `anchor_line` is itself an error, since it quotes nothing.
+2. **The line is an ADDED line in that PR's own diff**, taken against the merge-base so the
+   comparison is the branch's own work rather than everything that landed on the base since it
+   forked.
 
 ## The index comment
 

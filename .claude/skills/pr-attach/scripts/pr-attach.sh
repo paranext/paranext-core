@@ -3,9 +3,12 @@
 #
 # Rides an UNDOCUMENTED endpoint (uploads.github.com/user-attachments/assets) that GitHub
 # could remove or change at any time. Designed to FAIL SOFT: any failure prints a warning
-# to stderr, prints nothing to stdout for that file, and the script exits 3 — never any
-# other nonzero code — so callers can treat "no embeds" as a skippable condition, not an
-# error. It must never block the workflow that calls it.
+# to stderr and prints nothing to stdout for that file. It must never block the workflow
+# that calls it.
+#
+# Exit codes: 0 = at least one embed on stdout (a partial batch exits 0 and warns, because
+# the embeds it did produce are usable); 3 = no embeds, the skippable condition. Never any
+# other nonzero code - so callers can branch on 3 alone.
 #
 # Lifecycle fact (verified 2026-08-11): a fresh upload is served ONLY to authenticated
 # requests; it becomes anonymously visible once the URL is referenced in posted content
@@ -19,17 +22,6 @@
 
 set -u
 
-REPO=""
-CHECK=0
-FILES=()
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -r) REPO="$2"; shift 2 ;;
-    --check) CHECK=1; shift ;;
-    *) FILES+=("$1"); shift ;;
-  esac
-done
-
 warn() { echo "pr-attach: $*" >&2; }
 
 fail_hint() {
@@ -37,8 +29,26 @@ fail_hint() {
   warn "Fall back to the paranext/media repo (raw URLs; paranext-core PR #2506) or post without images."
 }
 
+REPO=""
+CHECK=0
+FILES=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -r)
+      # Under `set -u` a bare `-r` dereferences an unset $2 and the shell exits 1, breaking the
+      # "exits 3 - never any other nonzero code" contract callers are told to rely on.
+      if [ $# -lt 2 ]; then warn "-r needs an argument (owner/repo)"; exit 3; fi
+      REPO="$2"; shift 2 ;;
+    --check) CHECK=1; shift ;;
+    *) FILES+=("$1"); shift ;;
+  esac
+done
+
 if ! command -v gh >/dev/null || ! command -v jq >/dev/null || ! command -v curl >/dev/null; then
   warn "missing gh/jq/curl"; exit 3
+fi
+if [ "$CHECK" = 1 ] && ! command -v python3 >/dev/null; then
+  warn "--check needs python3 to generate its canary png"; exit 3
 fi
 
 if [ -z "$REPO" ]; then
@@ -60,7 +70,10 @@ if [ -z "$TOKEN" ]; then
 fi
 
 if [ "$CHECK" = 1 ]; then
-  TMPPNG=$(mktemp --suffix=.png)
+  # `mktemp --suffix=` is GNU-only - BSD mktemp (macOS) rejects it, which would make --check fail
+  # permanently there and report it through fail_hint, blaming GitHub for a local tool gap.
+  TMPDIR_C=$(mktemp -d) || { warn "mktemp failed"; exit 3; }
+  TMPPNG="$TMPDIR_C/canary.png"
   python3 - "$TMPPNG" <<'PYEOF'
 import struct, sys, zlib
 def chunk(t, d):
@@ -87,6 +100,7 @@ mime_for() {
 }
 
 RC=0
+OK_COUNT=0
 for f in "${FILES[@]}"; do
   if [ ! -f "$f" ]; then warn "no such file: $f"; RC=3; continue; fi
   MIME=$(mime_for "$f")
@@ -103,6 +117,7 @@ for f in "${FILES[@]}"; do
         echo "pr-attach: endpoint OK ($URL)" >&2
       else
         echo "![$NAME]($URL)"
+        OK_COUNT=$((OK_COUNT + 1))
       fi
       ;;
     *)
@@ -113,5 +128,13 @@ for f in "${FILES[@]}"; do
   esac
 done
 
-[ "$CHECK" = 1 ] && rm -f "$TMPPNG"
+[ "$CHECK" = 1 ] && rm -rf "$TMPDIR_C"
+
+# Exit 3 means "no embeds" - the skippable condition the header promises. A batch in which some
+# files uploaded has embeds on stdout, and exiting 3 there would tell a caller following that
+# contract to discard them.
+if [ "$RC" != 0 ] && [ "$OK_COUNT" -gt 0 ]; then
+  warn "partial batch: $OK_COUNT uploaded, the rest failed - embeds above are usable"
+  exit 0
+fi
 exit $RC

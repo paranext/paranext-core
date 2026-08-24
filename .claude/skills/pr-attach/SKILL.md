@@ -32,7 +32,10 @@ mp4, mov, webm.
 ## The contract (graceful degradation — the point of this design)
 
 - On ANY failure (endpoint gone, schema drift, timeout, auth) the script warns on stderr,
-  prints nothing for that file, and exits **3** — its only failure code. Exit 3 means
+  prints nothing for that file. **Exit 3 is its only failure code**, and it means *no embeds were
+  produced*. A partial batch — some files uploaded, some did not — exits **0** with the usable
+  embeds on stdout and a warning on stderr, because a caller told to treat a nonzero exit as
+  "skip the images" would otherwise discard embeds that are perfectly good. Exit 3 means
   "no embeds available": the caller SKIPS the images and continues. Never retry-loop,
   never block, never fail a workflow because of a missing screenshot.
 - Before a batch that matters, optionally run `--check` once; if it fails, skip the batch.

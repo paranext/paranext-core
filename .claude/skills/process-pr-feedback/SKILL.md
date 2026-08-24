@@ -876,8 +876,10 @@ complaint this answers: evidence the reviewer can see beats evidence the reply a
    skill rather than under the checkout — see `references/agent-briefs.md` on `<skill-dir>`) and
    paste the returned `![name](https://github.com/user-attachments/assets/…)` lines into the draft
    body.
-   Fail-soft is the rule — pr-attach exiting 3 means draft WITHOUT images and continue; never
-   block or retry-loop over a screenshot. Two facts from that skill matter here: a fresh
+   Fail-soft is the rule — pr-attach exiting 3 means it produced no embeds, so draft WITHOUT
+   images and continue; never block or retry-loop over a screenshot. A batch in which some files
+   uploaded exits **0** with those embeds on stdout and a warning on stderr, so 3 is genuinely
+   "nothing to embed" rather than "something went wrong somewhere". Two facts from that skill matter here: a fresh
    upload 404s anonymously until the draft is actually posted (verify pending assets with an
    authenticated fetch, not a plain curl), and the embeds are part of the body G2 inspects —
    the approver sees the exact markdown, image URLs included.
