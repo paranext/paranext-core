@@ -54,18 +54,26 @@ describe('URL_PARAMETERS', () => {
   // the strength of that list (`src/renderer/global-this.model.ts`), so an unbacked entry would be
   // blessed rather than caught. The relationship is pinned here rather than in the table because
   // platform.data.ts is deliberately import-free, so the ts-node startup-waterfall CLI can read it.
-  // Typing the comparison as `readonly LogLevel[]` makes this fail at COMPILE time if electron-log
-  // drops a level, and at RUN time if the table gains one electron-log never had.
+  //
+  // `Record<LogLevel, true>` is what makes this exhaustive in BOTH directions, which a
+  // `readonly LogLevel[]` annotation cannot do: a list typed that way is allowed to be short, so a
+  // level electron-log ADDS would slip past unnoticed. A Record must name every member of the union
+  // and may name nothing else, so electron-log gaining or dropping a level breaks the build here,
+  // and the table drifting from it fails the assertion below.
   test('the log level parameter allows exactly the levels electron-log defines', () => {
-    const electronLogLevels: readonly LogLevel[] = [
-      'error',
-      'warn',
-      'info',
-      'verbose',
-      'debug',
-      'silly',
-    ];
+    const everyElectronLogLevel: Record<LogLevel, true> = {
+      error: true,
+      warn: true,
+      info: true,
+      verbose: true,
+      debug: true,
+      silly: true,
+    };
 
-    expect(URL_PARAMETERS[LOG_LEVEL_QUERY_PARAMETER].allowed).toEqual(electronLogLevels);
+    // Sorted on both sides: this pins the SET of levels, not the severity order the table lists
+    // them in, which is presentation rather than contract.
+    expect([...(URL_PARAMETERS[LOG_LEVEL_QUERY_PARAMETER].allowed ?? [])].sort()).toEqual(
+      Object.keys(everyElectronLogLevel).sort(),
+    );
   });
 });
