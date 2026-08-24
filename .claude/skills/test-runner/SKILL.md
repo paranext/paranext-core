@@ -143,7 +143,7 @@ Prerequisite: App running with `--remote-debugging-port=9223` (the `app-runner` 
 ```bash
 npm stop  # Port 8876 must be free
 npm run test:e2e:smoke                 # the CI smoke project
-npm run test:e2e:isolated [subset]     # per-test isolated Electron suite
+npm run test:e2e:isolated [subset]     # isolated Electron suite (per test or per worker)
 # raw invocation, if needed: npx playwright test --config=e2e-tests/playwright.config.ts --project=smoke
 ```
 
