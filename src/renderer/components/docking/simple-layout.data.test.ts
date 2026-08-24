@@ -92,6 +92,27 @@ describe('simple-layout.data', () => {
       expect(allWebViewTypes).toContain('platformScripture.find');
     });
 
+    it('every fixed tab declares isClosable: false so none is closable before its provider responds', () => {
+      // `loadWebViewTab` seeds TabInfo.isClosable from this saved data (web-view.component.tsx), and
+      // `createRCDockTabFromTabInfo` defaults a missing value to closable (`isClosable ?? true`). So
+      // a tab that omits this renders WITH a close button for the whole async provider round-trip at
+      // startup. Closing the Find tab in that window strands the feature: the next Ctrl+F falls
+      // through to the create branch and builds a fourth column beside the editor, and Simple mode
+      // never persists layout, so it stays broken for the session.
+      columns.forEach((col) => {
+        // Narrowing column to BoxData and its first child to PanelData to iterate tabs.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const panel = (col as BoxData).children[0] as PanelData;
+        panel.tabs.forEach((tab) => {
+          // The layout data file casts tabs to SavedTabInfo[], so each tab is a SavedTabInfo at
+          // runtime even though rc-dock types it as TabData.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          const data = (tab as unknown as SavedTabInfo).data as { isClosable?: boolean };
+          expect(data.isClosable).toBe(false);
+        });
+      });
+    });
+
     it('each column panel has panelLock.minWidth of 300 so it cannot be resized to nothing', () => {
       columns.forEach((col) => {
         // Narrowing column to BoxData and its first child to PanelData to read panelLock.

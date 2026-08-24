@@ -216,6 +216,12 @@ export type FindProps = {
   onOpenProjectInGroup: (projectId: string, scrollGroupId: ScrollGroupId) => void;
 
   // Search/replace input + filter state
+  /**
+   * Ref attached to the search box, so the web view can put the caret there when Find is invoked.
+   * Owned by the caller rather than exposed as an imperative handle, matching how the scripture
+   * editor hands `MarkerMenu` its `searchRef`.
+   */
+  searchInputRef?: React.Ref<HTMLInputElement>;
   /** The current search term. */
   searchTerm: string;
   /** Recent search terms shown in the recent-searches dropdown. */
@@ -385,6 +391,7 @@ export function Find({
   onSelectProjectScrollGroup,
   onSelectProject,
   onOpenProjectInGroup,
+  searchInputRef,
   searchTerm,
   recentSearches,
   scope,
@@ -578,8 +585,8 @@ export function Find({
   // receives every input the rule needs.
   const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
 
-  // Single source of truth for which (if any) results-area placeholder shows, so the three states
-  // are mutually exclusive by construction instead of by three separately-maintained boolean
+  // Single source of truth for which (if any) results-area placeholder shows, so the four states
+  // are mutually exclusive by construction instead of by four separately-maintained boolean
   // expressions. 'none' covers both "results are present" and "a search finished with 0 results" —
   // in the latter case the status bar's message (see resultsMessage) handles the feedback instead.
   // 'noOpenProjectsPrompt' is checked FIRST, ahead of even `results.length > 0`: with no project
@@ -835,6 +842,7 @@ export function Find({
             <TextSearch className="tw:pointer-events-none tw:absolute tw:left-2 tw:top-1/2 tw:h-4 tw:w-4 tw:-translate-y-1/2 tw:text-muted-foreground" />
             <Input
               id="search-term"
+              ref={searchInputRef}
               value={searchTerm}
               onChange={(e) => onSearchTermChange(e.target.value)}
               onKeyDown={(e) => {

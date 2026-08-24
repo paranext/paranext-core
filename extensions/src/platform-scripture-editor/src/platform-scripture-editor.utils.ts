@@ -1072,6 +1072,40 @@ export async function openOrUpdateRelatedPanels(
   }
 }
 
+/**
+ * Re-points the Find panel at `projectId`, the way {@link openOrUpdateRelatedPanels} re-points the
+ * rest of Column 3. Kept separate, and called after the editor's own web view exists, because Find
+ * needs `editorWebViewId`: it caches that id and uses it to select and highlight a clicked result
+ * in the editor, and a project switch that replaces the editor tab mints a new one. Running this
+ * alongside the other panels would hand Find the id of the editor being replaced.
+ *
+ * Find is also the one Column 3 panel that is re-pointed without being opened. In Simple mode it is
+ * part of the fixed layout from startup, so it is always already there; anywhere else it is a panel
+ * the user opened deliberately, and a project switch is not a request to open it.
+ *
+ * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
+ * swallowed, because the project switch itself has already succeeded by this point.
+ *
+ * @param papi The instance of papi to send the command
+ * @param projectId The id of the project Find should search from now on
+ * @param editorWebViewId Id of the editor web view the switch produced
+ */
+export async function updateRelatedFindPanel(
+  papi: typeof PapiBackend,
+  projectId: string,
+  editorWebViewId: string | undefined,
+): Promise<void> {
+  try {
+    await papi.commands.sendCommand(
+      'platformScripture.updateFindProject',
+      projectId,
+      editorWebViewId,
+    );
+  } catch (e) {
+    papi.logger.warn(`Error updating find panel project: ${getErrorMessage(e)}`);
+  }
+}
+
 // #endregion Text Connection Panels
 
 // #region Chapter Scaffold Helpers
