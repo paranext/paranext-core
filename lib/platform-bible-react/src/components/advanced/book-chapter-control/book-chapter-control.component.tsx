@@ -531,16 +531,16 @@ export function BookChapterControl({
     [disableReferencesUpTo],
   );
 
+  // `||`, not `??`, throughout: the localization service returns the localize key itself when a key
+  // is missing, and an absent translation can also come back empty — both are values `??` would
+  // pass straight through, rendering a raw `%key%` or a blank label. `||` falls back to the English
+  // text in either case.
   const selectChapterTitle =
-    localizedStrings?.['%webView_bookChapterControl_selectChapter%'] ?? 'Select Chapter';
+    localizedStrings?.['%webView_bookChapterControl_selectChapter%'] || 'Select Chapter';
   const selectVerseTitle =
-    localizedStrings?.['%webView_bookChapterControl_selectVerse%'] ?? 'Select Verse';
-  // `||`, not `??`: this string is the sole screen-reader signal for a dimmed book, and `??` would
-  // pass an empty translation through, silently dropping the dimming.
+    localizedStrings?.['%webView_bookChapterControl_selectVerse%'] || 'Select Verse';
   const bookNotInProjectLabel =
     localizedStrings?.['%webView_bookChapterControl_bookNotInProject%'] || 'not in this project';
-  // `||` for the same reason as bookNotInProjectLabel: an empty translation must not leave the
-  // toggle with a blank accessible name.
   const showAllBooksLabel =
     localizedStrings?.['%webView_bookChapterControl_showAllBooks%'] || 'Show all books';
 
