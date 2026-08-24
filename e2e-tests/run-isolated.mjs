@@ -33,9 +33,9 @@ function printUsage() {
 Usage:
   npm run test:e2e:isolated all                  Every subset (does not currently pass)
   npm run test:e2e:isolated <subset>             Run one subset (e.g. ${subsets[0]})
-  npm run test:e2e:isolated <path>               Run a path filter. The specs directly under
-                                                 tests/isolated/ belong to no subset, so this is
-                                                 the only way to reach them, e.g.
+  npm run test:e2e:isolated <path>               Run a path filter. This is how you select the
+                                                 specs directly under tests/isolated/, which
+                                                 belong to no subset, e.g.
                                                  tests/isolated/comments-tab.spec.ts
   npm run test:e2e:isolated <subset> -- --debug  Extra args after -- go to Playwright
   npm run test:e2e:isolated -- --list            Enumerate individual tests`);
