@@ -66,6 +66,24 @@ import { filterAndRankPaletteItems } from '@/components/advanced/marker-palette-
  */
 export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
 
+/**
+ * Which gesture opened a marker-palette session. This is what decides the session's key semantics —
+ * chiefly which keys commit and what committing does. In every kind, typed characters filter the
+ * palette rather than landing in the document.
+ *
+ * - `'backslash'` — the collapsed-caret `\` palette, for inserting a marker at the caret. Space
+ *   commits the marker the user literally typed, `*` commits it as a CLOSING marker, and `\`
+ *   commits and immediately reopens the palette so `\qt-s\qt-e` is one flow.
+ * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
+ *   the split creates. Its only commit is the highlighted item, so Space is a filter character here
+ *   rather than a commit key.
+ * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
+ *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
+ *   selection in the marker the filter names exactly; `*` instead replaces the selection with the
+ *   typed closing marker (Paratext 9 parity).
+ *
+ * The full per-kind key table is documented at the top of this module.
+ */
 export type MarkerPaletteSessionKind = 'backslash' | 'enter' | 'selection';
 
 /** The mutable per-session state the forwarding table reads and updates. */

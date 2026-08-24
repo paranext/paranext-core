@@ -31,6 +31,23 @@ export interface EditorDocumentSelector {
   versificationStr?: string;
 }
 
+/**
+ * Whether the editor's USJ holds the same content as a PDP document, IGNORING the `version` field.
+ *
+ * `areUsjContentsEqualExceptWhitespace` shallow-compares every top-level property except `content`
+ * — `version` included — while the editor always reports its USJ as 3.1 and the PDP serves 3.0
+ * (which is why every save path runs `correctEditorUsjVersion` on the way out). Comparing the two
+ * documents raw is therefore FALSE whatever the content says, so an editor-vs-PDP equality check
+ * that does not neutralize `version` can never report a converged round trip.
+ */
+function areUsjContentsEqualIgnoringVersion(
+  editorUsj: Usj | undefined,
+  pdpUsj: Usj | undefined,
+): boolean {
+  if (!editorUsj || !pdpUsj) return areUsjContentsEqualExceptWhitespace(editorUsj, pdpUsj);
+  return areUsjContentsEqualExceptWhitespace({ ...editorUsj, version: pdpUsj.version }, pdpUsj);
+}
+
 /** Whether two selectors identify the same chapter document (see {@link EditorDocumentSelector}). */
 function areSameDocumentSelectors(
   a: EditorDocumentSelector | undefined,
@@ -215,7 +232,7 @@ export function useEditorPdpSync({
           lastAppliedDocumentSelector.current,
         );
         if (isSameDocument) {
-          if (areUsjContentsEqualExceptWhitespace(usjFromPdp, editorUsj)) {
+          if (areUsjContentsEqualIgnoringVersion(editorUsj, usjFromPdp)) {
             // The PDP now agrees with the editor — the round-trip converged.
             nonConvergingDeferralCount.current = 0;
             lastEditorUsjPushedWhileDeferring.current = undefined;

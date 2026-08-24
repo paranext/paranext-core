@@ -478,15 +478,19 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     purpose: 'Select the highlighted item in a picker whose search box is empty',
     category: 'Selection',
     // Opt-in per picker (`spaceSelectsHighlightedItem`) so a surface with its own Space semantics —
-    // the marker palettes, the generic combo boxes — keeps the key. Currently enabled on the book
-    // and chapter picker, the project selector, and the book scope picker.
-    context: 'Book/chapter picker, project selector, book scope picker',
+    // the marker palettes, which claim Space to commit what the user TYPED — keeps the key. Every
+    // picker below opts in.
+    context:
+      'Book/chapter picker, project selector, book scope picker, combo boxes, inline marker menu',
     keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
     locations: [
       'lib/platform-bible-react/src/components/shadcn-ui/command.tsx',
       'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
       'lib/platform-bible-react/src/components/advanced/project-selector/project-selector.component.tsx',
       'lib/platform-bible-react/src/components/advanced/scope-selector/select-books-picker.component.tsx',
+      'lib/platform-bible-react/src/components/basics/combo-box.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/multi-select-combo-box.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/marker-menu.component.tsx',
     ],
   },
   {

@@ -251,6 +251,10 @@ export function MarkerMenu({
         value={commandSearch}
         onValueChange={(value) => setCommandSearch(value)}
         placeholder={searchPlaceholder ?? localizedStrings['%markerMenu_searchPlaceholder%']}
+        // Picker semantics: the list is the whole point here, and nothing else in this menu claims
+        // Space. Only a LEADING space is intercepted, so titles containing spaces ("Cross
+        // Reference") are still searchable.
+        spaceSelectsHighlightedItem
       />
       <CommandList>
         <CommandEmpty>{localizedStrings['%markerMenu_noResults%']}</CommandEmpty>

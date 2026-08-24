@@ -800,6 +800,38 @@ describe('overlay.service-host', () => {
       expect(result).toBe('c');
     });
 
+    // A new filter re-ranks the list, so an index left over from arrow-key movement points at an
+    // unrelated item. Carrying it forward (clamping only) commits that item on Enter instead of the
+    // best match the new filter puts first — a silent wrong-marker insert.
+    it('should reset the highlight to the top match when the filter text changes', async () => {
+      const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
+
+      // Arrow down to the last item (Figure) in the unfiltered list...
+      await overlayService.updateCommandPalette('test-webview', { moveSelection: 2 });
+      // ...then type a filter, which narrows to Footnote, Figure.
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'F' });
+
+      const overlay = getOverlayById(getOverlays()[0].id);
+      // TypeScript cannot narrow a discriminated union after getOverlayById(); cast needed to access typed fields
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const palette = overlay as Extract<NonNullable<typeof overlay>, { type: 'commandPalette' }>;
+      expect(palette.selectedIndex).toBe(0);
+
+      await overlayService.commitCommandPaletteSelection('test-webview');
+      expect(await promise).toBe('ft');
+    });
+
+    // The counterpart: an arrow-key move must still carry the index it moved to.
+    it('should keep the highlight when only the selection moves', async () => {
+      const promise = overlayService.showCommandPalette(passiveRequest, 'test-webview');
+
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'F' });
+      await overlayService.updateCommandPalette('test-webview', { moveSelection: 1 });
+
+      await overlayService.commitCommandPaletteSelection('test-webview');
+      expect(await promise).toBe('fig');
+    });
+
     it('should no-op when committing and every item is disabled', async () => {
       const request: CommandPaletteRequest = {
         items: [

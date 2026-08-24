@@ -2015,6 +2015,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         viewType === 'standard' &&
         editorRef.current?.isFocused() &&
         event.ctrlKey &&
+        // AltGr reports as Ctrl+Alt on Windows/Linux, and it is how `t`-bearing characters are
+        // typed on several European layouts — so an unqualified Ctrl+T would eat those keystrokes
+        // and insert a footnote instead. Meta is excluded for the same reason: it is a different
+        // chord, not this one.
+        !event.altKey &&
+        !event.metaKey &&
         event.key.toLowerCase() === 't'
       ) {
         // Ctrl+T inserts a footnote; Ctrl+Shift+T inserts a cross-reference. Scoped to
@@ -2023,11 +2029,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // popovers (which have their own separate `.editor-input`) have focus. Standard-view only,
         // matching the other Standard view PT9-parity entry points.
         event.preventDefault();
-        if (event.shiftKey) {
-          insertCrossReferenceAtCurrentSelection();
-        } else {
-          insertFootnoteAtCurrentSelection();
-        }
+        // Both are async and this handler is not, so surface a rejection instead of dropping it as
+        // an unhandled promise: the user pressed a key and must not be left with no marker and no
+        // explanation.
+        const isCrossReference = event.shiftKey;
+        const insert = isCrossReference
+          ? insertCrossReferenceAtCurrentSelection()
+          : insertFootnoteAtCurrentSelection();
+        insert.catch((error) => {
+          logger.warn(
+            `Error inserting ${isCrossReference ? 'cross-reference' : 'footnote'} from keyboard shortcut: ${getErrorMessage(error)}`,
+          );
+        });
       } else {
         const isInsertCommentHotkey = isMac
           ? event.metaKey &&

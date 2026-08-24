@@ -858,6 +858,55 @@ describe('useEditorPdpSync', () => {
     expect(mockLoggerWarn).not.toHaveBeenCalled();
   });
 
+  // The editor reports USJ version 3.1 while the PDP serves 3.0, and
+  // `areUsjContentsEqualExceptWhitespace` shallow-compares every top-level property except
+  // `content` — `version` included. Comparing a RAW editor document against PDP content is
+  // therefore false whatever the content says, which made the convergence branch unreachable in
+  // the app while every fixture here used 3.1 on both sides and passed. Pin the real pairing.
+  it('treats a converged round trip as converged even though the editor reports 3.1 and the PDP 3.0', () => {
+    const editorContent: Usj = { ...makeChapterUsj('14', 'match'), version: '3.1' };
+    const differentInitial: Usj = { ...makeChapterUsj('14', 'other'), version: '3.0' };
+    const convergedEcho: Usj = { ...makeChapterUsj('14', 'match'), version: '3.0' };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          documentSelector: lev14Selector,
+          editorRef,
+          usjSentToPdp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: differentInitial } },
+    );
+    setUsjSpy.mockClear();
+    saveUsjToPdpIfUpdated.mockClear();
+    mockLoggerWarn.mockClear();
+
+    act(() => rerender({ usjFromPdp: convergedEcho }));
+
+    // Converged: nothing to apply and nothing to push back.
+    expect(setUsjSpy).not.toHaveBeenCalled();
+    expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+  });
+
   // Telemetry: if incoming Scripture keeps getting deferred without the round-trip ever converging,
   // that is worth a single warning (a non-idempotent round-trip or a concurrent external edit).
   it('logs a single warning once deferrals reach the non-convergence threshold', () => {

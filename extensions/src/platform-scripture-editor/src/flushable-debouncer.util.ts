@@ -1,7 +1,8 @@
 /**
  * Trailing-edge debouncer with an explicit lifecycle, for the web view's keystroke-driven PDP save.
- * `platform-bible-utils`' `debounce` exposes no `flush`/`cancel`, which leaves two holes in a
- * debounced save:
+ * `platform-bible-utils`' `debounce` has `cancel`, but no `flush` — and its pending call is a
+ * promise that `cancel` REJECTS, so a fire-and-forget keystroke save that ignores the return value
+ * produces unhandled rejections. Without a `flush` there are two holes in a debounced save:
  *
  * - Renderer death (crash, web-view dispose, app quit) inside the trailing window silently loses the
  *   final edits.

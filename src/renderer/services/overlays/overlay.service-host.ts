@@ -840,11 +840,21 @@ async function updateCommandPalette(
 
   let nextFilterText = entry.filterText;
   if (update.filterText !== undefined) {
-    nextFilterText = update.filterText;
+    // Match the store's own normalization ('' is never stored) so an empty string arriving over a
+    // stored `undefined` does not read as a change.
+    nextFilterText = update.filterText || undefined;
   } else if (update.moveSelection === undefined) {
     // Nothing to update
     return;
   }
+
+  // A new filter produces a NEWLY RANKED list, so the old highlight index means nothing in it —
+  // carrying it forward (the store only clamps) would leave the highlight on whatever now happens
+  // to sit at that position and commit that item on Enter, rather than the best match the
+  // re-ranked list puts first. Only when the filter actually changed, and never on an arrow-key
+  // move, which is the one case that legitimately carries the index.
+  const didFilterTextChange = nextFilterText !== entry.filterText;
+  const resetSelection = didFilterTextChange && update.moveSelection === undefined;
 
   const filteredItems = filterPaletteItems(
     entry.items,
@@ -853,6 +863,7 @@ async function updateCommandPalette(
   );
   updateCommandPaletteState(entry.id, {
     filterText: nextFilterText,
+    selectedIndex: resetSelection ? 0 : undefined,
     selectedIndexDelta: update.moveSelection,
     itemCount: filteredItems.length,
   });

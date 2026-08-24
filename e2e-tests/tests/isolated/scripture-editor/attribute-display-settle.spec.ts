@@ -153,7 +153,7 @@ test.describe('scripture editor attribute display', () => {
 
       // The closing `*` is the first terminator this span ever sees, so extractAttributes derives
       // `lemma="gloss"` straight from the typed named form and redisplays it canonically per PT9's
-      // settle-time simplification (§3 of the design): a lone default attribute collapses to `|value`.
+      // settle-time simplification: a lone default attribute collapses to `|value`.
       await editorInput.pressSequentially('\\w mid|lemma="gloss"\\w*', { delay: 30 });
 
       await expect(editorInput).toContainText('mid|gloss', { timeout: 15_000 });
