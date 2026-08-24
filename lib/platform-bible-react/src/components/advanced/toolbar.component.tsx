@@ -77,19 +77,9 @@ export function getToolbarOSReservedSpaceClassName(
  *
  * This component is designed to be used in the window title bar of an electron application.
  *
- * Two `data-testid` hooks are part of this contract as well, relied on by end-to-end tests outside
- * this package: `toolbar-content-row` (the row that clips when contents do not fit) and
- * `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking change.
- *
- * @example
- *
- * Hide a child once the usable bar width drops below 52rem:
- *
- * ```tsx
- * <Toolbar {...props}>
- *   <Badge className="tw:@max-[52rem]/toolbar:hidden">{version}</Badge>
- * </Toolbar>;
- * ```
+ * Two `data-testid` hooks are relied on by end-to-end tests outside this package, so they are part
+ * of this component's contract: `toolbar-content-row` (the row that clips when contents do not fit)
+ * and `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking change.
  *
  * @param {ToolbarProps} props - The props for the component.
  */
