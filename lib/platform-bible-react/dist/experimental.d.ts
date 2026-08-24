@@ -308,6 +308,58 @@ export interface ResourcePickerDialogProps {
  * @param props See {@link ResourcePickerDialogProps}
  */
 export function ResourcePickerDialog({ allResources, isResourcesLoading, resourceType, selectedResourceIds, localizedStrings, allowDeselect, onSelect, }: ResourcePickerDialogProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Derives the list of available, non-obsolete book IDs from the `availableBookInfo` string
+ *
+ * Yields an empty array rather than throwing when `availableBookInfo` holds no flags. Every caller
+ * reads this to render something, and the string arrives from the `BooksPresent` project setting,
+ * which is the empty default until that setting resolves (and stays empty if the read errors). A
+ * throw here happens during render, and with no error boundary above these components that tears
+ * down the whole web view — so an unusable setting degrades to "no books known" instead.
+ *
+ * @example
+ *
+ * ```ts
+ * // A project holding only Genesis and Exodus
+ * getAvailableBookIds('11' + '0'.repeat(121)); // ['GEN', 'EXO']
+ * ```
+ *
+ * @param availableBookInfo Information about available books, formatted as defined in a project's
+ *   BooksPresent setting. Index N is '1' when the Nth canon book is available
+ * @returns Array of available, non-obsolete book IDs in canon order
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function getAvailableBookIds(availableBookInfo: string): string[];
+/**
+ * Builds a short, fixed-width-ish summary of a book selection suitable for a dropdown trigger or a
+ * status line. Listing every selected book overflows its container once a handful are selected, so
+ * the summary collapses: every available book selected reads as "All books", and a longer selection
+ * reads as a canon-order range from its first book to its last (e.g. `GEN - HOS`). This matches how
+ * Paratext 9 summarizes a book set.
+ *
+ * @example
+ *
+ * ```ts
+ * summarizeSelectedBooks(['GEN', 'EXO'], allBookIds, 'All books'); // 'GEN, EXO'
+ * summarizeSelectedBooks(allBookIds, allBookIds, 'All books'); // 'All books'
+ * summarizeSelectedBooks(sevenBookIds, allBookIds, 'All books'); // 'GEN - HOS'
+ * ```
+ *
+ * @param selectedBookIds Array of currently selected book IDs, in any order and any case
+ * @param availableBookIds Array of book IDs available in the project (see `getAvailableBookIds`).
+ *   Pass an empty array when the project's books are unknown; the summary then never claims "All
+ *   books" but still lists or collapses the selection
+ * @param allBooksText Localized text to show when every available book is selected
+ * @param localizedBookNames Optional map of localized book IDs/short names and full names. Key is
+ *   the (English) book ID
+ * @returns The summary text, or `undefined` when nothing is selected so callers can supply their
+ *   own placeholder
+ * @experimental This export is unstable and may change shape or disappear without notice
+ */
+export declare function summarizeSelectedBooks(selectedBookIds: string[], availableBookIds: string[], allBooksText: string, localizedBookNames?: Map<string, {
+	localizedId: string;
+	localizedName: string;
+}>): string | undefined;
 /** Base item interface for items displayed in the SourceLanguageIndexedList */
 export type IndexedListItem = {
 	/** Unique identifier for the item */

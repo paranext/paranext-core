@@ -996,7 +996,86 @@ step, no automation. Just a record.
 - **Source:** Review of the `pt-4342-dock-find-in-simple` branch — findings on the supplement's silent
   append fallback and the untested shipped column order; open question raised in the PR body.
 
-## ADR-0022: The toolbar's sync status is local renderer UI, and names in-progress projects from a new upstream field
+## ADR-0022: A book selection is summarized, not listed, on a scope trigger; its details surface is the picker, not a tooltip
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** The Find panel's "Showing" row rendered a selected-books scope by joining every
+  selected book ID with commas. Past a handful of books the row outgrew the panel and forced a
+  horizontal scrollbar across the whole web view (PT-4092). Any fix has to answer two questions:
+  what short form replaces the full list, and where — if anywhere — a reader can still see the
+  books the short form drops.
+- **Decision:** `summarizeSelectedBooks`
+  (`lib/platform-bible-react/src/components/advanced/scope-selector/scope-selector.utils.ts`)
+  collapses a selection to one of three forms: the localized "All books" when the selection is
+  exactly the project's available books, the books listed individually at five or fewer, and a
+  canon-order `first - last` range beyond that. The dropped books get **no dedicated details
+  surface**: `Guidelines/Responsiveness` asks truncated text to be backed by "either a Tooltip or
+  any details view", and the details view already exists — the popover the trigger opens contains
+  the real selection as checkboxes and badges. The separator is ` - `, matching `formatScrRefRange`,
+  so `…` keeps its `Guidelines/Ellipses` meaning of "opens a dialog".
+- **Alternatives considered:**
+  - **A hover tooltip on the trigger carrying the full canon-ordered list.** Implemented first and
+    reverted. A full selection is ~570 characters against a `Guidelines/Tooltips` "avoid" example of
+    69, Radix opens tooltips on focus so every programmatic focus restore fired it uninvited, Radix
+    renders a visually-hidden duplicate so the payload also became an `aria-describedby` on the
+    combobox, and `TooltipContent` has no height cap — reintroducing the same clipping bug on the
+    surface meant to explain it.
+  - **`+N more` after the first five books,** matching `SelectBooks`' badge rule. Rejected: it tells
+    a reader how many books they cannot see rather than which range they picked, and the two
+    surfaces order their books differently (canon vs. click), so agreement would be cosmetic.
+  - **A separate expandable row under the trigger.** Rejected as more chrome than a scope line
+    warrants when opening the popover already shows the selection.
+- **Consequences:** The summary is deliberately lossy and there is no way to read the exact
+  selection without opening the popover — accepted, because opening it is one click and it is the
+  only surface where the selection can also be *changed*. A selection that is CSS-truncated inside a
+  narrow column (`GEN, EXO, LEV, NU…`) likewise has no tooltip; `useTruncationTooltip` exists if
+  that becomes a real complaint. **Revisit if a books-scope summary is ever needed somewhere the
+  reader cannot open the picker** — that surface would need its own details view.
+
+  Two known deferrals sit against this entry. First, the summary is applied only at Find's "Showing"
+  row: `ScopeSelector`'s `variant="dropdown"` trigger still joins every selected ID, so the original
+  overflow remains latent there. It has no consumer today (the one dropdown consumer does not offer
+  the `selectedBooks` scope) and `summarizeSelectedBooks` is exported for whoever adds one, so this
+  is a deliberate deferral rather than an oversight — a future dropdown consumer that offers
+  `selectedBooks` must adopt the summary. Second, the ` - ` separator is a fifth deliberate
+  divergence from Paratext 9's `BookSetX.Summary` (alongside the collapse threshold, short IDs vs.
+  localized full names, and the empty-selection placeholder); the whole set belongs to PT-3363's UX
+  owner rather than to this change.
+
+## ADR-0023: `BooksPresent` decoding degrades to a partial read; `platform-bible-utils` owns the wire format
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** `getAvailableBookIds` (platform-bible-react) threw when its input length did not
+  equal `Canon.allBookIds.length`. That input is the `platformScripture.booksPresent` project
+  setting, whose default is the empty string until the setting resolves — and which stays empty
+  permanently if the read returns a `PlatformError`. The throw therefore happened during render,
+  and with no error boundary above these components it tore down the whole web view. Separately,
+  `platform-bible-utils` already owned the same wire format in `getBookIdsFromBooksPresent`, which
+  clamps to the canon length rather than rejecting, so the two functions returned different answers
+  for the same string.
+- **Decision:** `platform-bible-utils`' `getBookIdsFromBooksPresent` is the single decoder for the
+  `booksPresent` flag string. `getAvailableBookIds` delegates to it and adds only the obsolete-book
+  filter its callers need, so a malformed or partial string yields the flags it does carry instead
+  of throwing or discarding the read. Neither function is on `platform-bible-react`'s stable root
+  export; both live behind the `experimental` entry point alongside their nearest relatives, so
+  folding them together later is not a breaking change.
+- **Alternatives considered:**
+  - **Keep throwing and add an error boundary.** Rejected for this change: an error boundary is a
+    larger platform decision, and an unresolved setting is an expected state, not an exception.
+  - **Thread the decoded `string[]` down as a prop** instead of passing the raw string to
+    `ScopeSelector`/`SelectBooks`/`SelectBooksPicker`. Rejected as a breaking prop change across
+    three public components for a decode that is microseconds and already memoized at each site.
+- **Consequences:** Degrading means callers must now handle "no books known" as a real state rather
+  than trusting the decode. Every control that acts on the whole list needs an explicit guard —
+  `SelectBooksPicker`'s "Select all" is disabled while the list is empty, because selecting all of
+  nothing would commit an empty array and silently wipe the user's existing selection. **Any new
+  control that maps over the available books must add the same guard**; the pattern to copy is
+  `SectionButton`'s `isDisabled`.
+- **Source:** PT-4092, review of #2699.
+
+## ADR-0024: The toolbar's sync status is local renderer UI, and names in-progress projects from a new upstream field
 
 - **Date:** 2026-08-17
 - **Status:** Accepted
@@ -1051,7 +1130,7 @@ step, no automation. Just a record.
   empty `SetSyncing([])` would be toothless, would waste a full drain on nothing, and would trip the
   gate's "no valid project ids" warning. The Simple-mode startup sync **is** the scheduled path, so
   the gate stays silent through its entire share-resolution phase — precisely the window this
-  paragraph identifies as unclosed. What actually closed it is PT-4398 (ADR-0023): a new
+  paragraph identifies as unclosed. What actually closed it is PT-4398 (ADR-0025): a new
   run-marker-derived signal (`onSyncActivityChanged` / `getSyncActivity`) taken from the
   `BeginSyncRun`/`EndSync` bracket, which is entered before the suppression branch above and held
   across the whole resolution phase, so it sees the startup sync from the moment it starts. Of the four richer UX
@@ -1119,11 +1198,11 @@ step, no automation. Just a record.
 - **Source:** PT-4348, under PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can trust the app"; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` contract.
 
-## ADR-0023: One sync surface per interface mode, closed by a run-marker signal rather than the gate
+## ADR-0025: One sync surface per interface mode, closed by a run-marker signal rather than the gate
 
 - **Date:** 2026-08-20
 - **Status:** Accepted
-- **Context:** ADR-0022 recorded, and then corrected above, that PT-4214's write-gate signal cannot
+- **Context:** ADR-0024 recorded, and then corrected above, that PT-4214's write-gate signal cannot
   report the Simple-mode startup sync: the gate's initial arm is deliberately suppressed on the
   scheduled path, so it stays silent through exactly the window (share resolution) that startup sync
   spends before it knows which projects it is syncing. Separately, Paratext 10 Studio's
@@ -1179,7 +1258,7 @@ step, no automation. Just a record.
   - `NotifyIfRoleChanged` — **kept** in both modes; the indicator has no state for a role change.
   - The thrown-failure toast in the `catch` block, including its connection-failure variant —
     **kept** in both modes; the indicator has no state for a connection problem, and the requirement's
-    "Connection problem" UX remains explicitly deferred (ADR-0022).
+    "Connection problem" UX remains explicitly deferred (ADR-0024).
 
   Interface mode is read on the toast-gate path from a cached value (seeded at startup, refreshed
   from `SettingsService`'s `onDidUpdate`) rather than a live round trip, because `ShowSyncNotification`
@@ -1189,9 +1268,9 @@ step, no automation. Just a record.
 - **Alternatives:**
   - **Gate-derived signal only (`onSyncWriteLockChanged`).** Rejected: silent through the scheduled
     path's resolution phase, i.e. broken at exactly the moment — app startup — the requirement cares most about.
-    See ADR-0022's correction above for the mechanism.
+    See ADR-0024's correction above for the mechanism.
   - **Route `startup-tasks.ts` and `syncOnProjectSwitch` through a claiming wrapper** (e.g.
-    `runManualSync`), as ADR-0022 first floated. Rejected for the same reason ADR-0022 declined it:
+    `runManualSync`), as ADR-0024 first floated. Rejected for the same reason ADR-0024 declined it:
     it covers today's two direct-call sites but leaves the next one dark, it recruits `runManualSync`
     — designed for a manual, foreground sync — for a background sync it was never shaped for, and,
     most importantly, it fixes a **reporting** problem by changing sync **behavior**. This design's
@@ -1214,7 +1293,7 @@ step, no automation. Just a record.
 - **Consequences:**
   - **Only ONE of the four toast surfaces is gated, not two.** Gating `NotifyIfSyncFailed` as well as
     `ShowSyncNotification` on `ShouldShowPersistentSyncToast()` would rest on the toolbar indicator's
-    `failed` state (derived from `lastResults.resultsInfo`, ADR-0022) already covering a plain sync
+    `failed` state (derived from `lastResults.resultsInfo`, ADR-0024) already covering a plain sync
     failure in Simple mode. That is false for precisely the syncs this decision exists to cover: `main/startup-tasks.ts` and the picker's `syncOnProjectSwitch` call the dotnet
     commands directly, so the Send/Receive extension raises no claim and there is no `lastResults` for
     those syncs — the indicator's `failed` state cannot exist for them. The activity signal that DOES
@@ -1257,13 +1336,14 @@ step, no automation. Just a record.
     `repo-patches/paranext-core.patch` (the `SyncActivityChanged` event, its notifier, and the toast
     gate). Neither half is independently useful: core's union degrades cleanly to claim-only behavior
     when the patch is absent (older Studio build, or public Platform.Bible), by the same
-    declare-it-optional pattern ADR-0022 established for `syncingProjectIds`, but the invisible-path
+    declare-it-optional pattern ADR-0024 established for `syncingProjectIds`, but the invisible-path
     gap and the double-toast overlap are only actually closed once both halves ship. As with PT-4214
     (core #2574 / studio #164), the core PR and the studio PR carrying this work must merge in the same
-    window; landing one without the other leaves the product in an intermediate, ADR-0022-documented
+    window; landing one without the other leaves the product in an intermediate, ADR-0024-documented
     state rather than a broken one.
-- **Source:** PT-4398, sub-task of PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can trust the app"; ADR-0022's "second sync surface" finding and its
+- **Source:** PT-4398, sub-task of PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can trust the app"; ADR-0024's "second sync surface" finding and its
   correction above; `src/renderer/hooks/use-sync-status.hook.ts` for the union and seed-retry
   behavior; `c-sharp/Projects/SendReceive/SendReceiveBlockNotifierService.cs` for the mirrored notifier
   pattern; Paratext 10 Studio's `repo-patches/paranext-core.patch` for `RunWithSyncNotification`,
   `BeginSyncRun`/`EndSync`, and `ShowSyncNotification` (not in this repo).
+

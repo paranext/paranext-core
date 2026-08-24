@@ -282,7 +282,7 @@ declare module 'paratext-bible-send-receive' {
    * commands directly are invisible here — nothing in `c-sharp/` emits `onSyncStateChanged` — so
    * treat this as best-effort rather than ground truth. Making this authoritative would take a
    * signal derived from the C# sync semaphore itself, which is upstream work in the Send/Receive
-   * extension; see ADR-0022 in `.context/standards/Architecture-Decisions.md`.
+   * extension; see ADR-0024 in `.context/standards/Architecture-Decisions.md`.
    *
    * Two core paths are on the invisible side today, both worth knowing before relying on this for a
    * startup status:
