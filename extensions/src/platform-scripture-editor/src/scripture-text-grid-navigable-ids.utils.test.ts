@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { getNavigableProjectIdsToPublish } from './scripture-text-grid-navigable-ids.utils';
+import {
+  getNavigableProjectIdsToPublish,
+  resolveNavigableProjectIdsWrite,
+} from './scripture-text-grid-navigable-ids.utils';
 
 describe('getNavigableProjectIdsToPublish', () => {
   test('publishes the displayed ids when nothing is published yet', () => {
@@ -48,5 +51,44 @@ describe('getNavigableProjectIdsToPublish', () => {
 
   test('publishes nothing when both are empty', () => {
     expect(getNavigableProjectIdsToPublish([], [])).toBeUndefined();
+  });
+});
+
+describe('resolveNavigableProjectIdsWrite', () => {
+  test('passes a valid published array through to the comparison', () => {
+    expect(resolveNavigableProjectIdsWrite(['projectA', 'projectB'], ['projectA'])).toEqual(
+      getNavigableProjectIdsToPublish(['projectA', 'projectB'], ['projectA']),
+    );
+  });
+
+  test('treats a non-array persisted value as nothing published', () => {
+    expect(resolveNavigableProjectIdsWrite(['projectA'], 'not an array')).toEqual(['projectA']);
+  });
+
+  test('treats missing persisted state as nothing published', () => {
+    expect(resolveNavigableProjectIdsWrite(['projectA'], undefined)).toEqual(['projectA']);
+  });
+
+  test('treats an array of non-strings as nothing published', () => {
+    expect(resolveNavigableProjectIdsWrite(['projectA'], [1, 2])).toEqual(['projectA']);
+  });
+
+  test('treats an object as nothing published', () => {
+    expect(resolveNavigableProjectIdsWrite(['projectA'], { projectIds: ['projectA'] })).toEqual([
+      'projectA',
+    ]);
+  });
+
+  test('publishes nothing when the valid published value already matches', () => {
+    expect(
+      resolveNavigableProjectIdsWrite(['projectA', 'projectB'], ['projectB', 'projectA']),
+    ).toBeUndefined();
+  });
+
+  test('pins the argument order: the displayed list is what gets published', () => {
+    // Swapping the parameters would return ['projectA', 'projectB'] instead.
+    expect(resolveNavigableProjectIdsWrite(['projectA'], ['projectA', 'projectB'])).toEqual([
+      'projectA',
+    ]);
   });
 });
