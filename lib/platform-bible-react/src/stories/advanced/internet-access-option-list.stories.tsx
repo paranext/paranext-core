@@ -93,8 +93,9 @@ export const DescriptionTooltipOnHover: Story = {
  * radio and opens its row's tooltip. Screen-reader users get it from the visually-hidden copy
  * instead, which also covers the disabled coming-soon rows that focus can never reach.
  *
- * This story is the only coverage for the keyboard path — it needs a real browser, because the
- * component gates tooltip-on-focus behind `:focus-visible`, which jsdom always reports as false.
+ * The mirror image — a programmatic focus revealing nothing — is what keeps the standalone panel
+ * from popping a description open as it loads, and is asserted in a real browser by the
+ * `internet-settings` Playwright spec.
  */
 export const DescriptionTooltipOnKeyboardFocus: Story = {
   render: (args) => <Controlled {...args} initialValue="Enabled" />,
@@ -102,6 +103,19 @@ export const DescriptionTooltipOnKeyboardFocus: Story = {
     await userEvent.tab();
     await expectVisibleTooltip('Allows Paratext to use the internet for all services');
   },
+};
+
+/**
+ * Roughly the width the first-run wizard gives this list, where the longer labels wrap onto a
+ * second line. The info icon stays with its label's last word instead of drifting out to the row's
+ * edge next to the "Coming soon" badge, which reads as if it belonged to the badge.
+ */
+export const NarrowColumn: Story = {
+  render: (args) => (
+    <div className="tw:w-[380px]">
+      <Controlled {...args} initialValue="Enabled" />
+    </div>
+  ),
 };
 
 /** Option 2 selected — "Disable access to some Bible translation services". */
