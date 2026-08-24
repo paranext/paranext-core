@@ -26,8 +26,12 @@
 #     that `--` for you.
 #   * Playwright needs `--config`; this script cd's to the repo root, where there is no config.
 #
-# Not for CDP runs: playwright-cdp.config.ts attaches to an app you already started, and this
-# would hand it a second, empty display.
+# The wrap only helps when the Electron app is launched INSIDE it. Suites built on
+# fixtures/cdp.fixture.ts attach over port 9223 to an app you started separately
+# (all of tests/enhanced-resources/, plus isolated/title-bar/ and isolated/navigation-history/),
+# so wrapping the Playwright process alone changes nothing for them. On Linux
+# .erb/scripts/refresh.sh already starts that app under its own Xvfb, so those runs are off the
+# desktop without this script.
 
 set -e
 
@@ -62,7 +66,10 @@ fi
 # stays consumable (e.g. --reporter=json redirected to a file).
 echo "Running with virtual display (Xvfb): $*" >&2
 
-# 1920x1080x24 is load-bearing: fixtures/cdp.fixture.ts fails a screenshot below Full HD.
+# Xvfb's 1280x1024 default would do for the suites this script launches itself (isolated.fixture
+# sizes its window to 1280x800). Full HD is here to match .erb/scripts/refresh.sh, so that a
+# wrapped command which starts the app AND Playwright together still satisfies
+# fixtures/cdp.fixture.ts, which fails a screenshot below Full HD.
 # exec so that Ctrl-C reaches xvfb-run directly instead of orphaning it behind this shell.
 # If Xvfb itself fails to start, xvfb-run only says so; add --error-file=/dev/stderr for the
 # detail. It is not on by default because it also prints Xvfb's normal startup chatter.

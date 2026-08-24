@@ -8,8 +8,14 @@
 | Feature tests, state-mutating flows | `tests/isolated/` | `npm run test:e2e:isolated` |
 | Tests needing real Marble resources | `tests/enhanced-resources/` | `npx playwright test --config e2e-tests/playwright.config.ts --project=enhanced-resources` |
 
-On WSL2, prefix any of these with `e2e-tests/run-e2e-wsl.sh --wrap` to keep the Electron windows
-off the Windows desktop — e.g. `e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated find`.
+On WSL2, prefix a suite that launches its own Electron with `e2e-tests/run-e2e-wsl.sh --wrap` to
+keep its windows off the Windows desktop — e.g.
+`e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated find`.
+
+This does nothing for suites built on `fixtures/cdp.fixture.ts`, which attach over port 9223 to an
+app you started separately: all of `tests/enhanced-resources/`, plus the `title-bar/` and
+`navigation-history/` isolated subsets. Start those with `./.erb/scripts/refresh.sh`, which on
+Linux already runs the app under its own Xvfb.
 
 **Feature-specific isolated tests belong in `tests/isolated/`** — not in their own directory.
 The `isolated` project covers the whole `tests/isolated/` tree, so a new spec file there is

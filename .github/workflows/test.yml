@@ -165,11 +165,12 @@ jobs:
       - name: npm unit tests
         run: npm test
 
-      # No --server-args, so this runs at Xvfb's 1280x1024x8 default, unlike
-      # e2e-tests/run-e2e-wsl.sh which pins 1920x1080x24. That is fine for the smoke suite
-      # (it does not use cdp.fixture), but fixtures/cdp.fixture.ts hard-fails screenshots below
-      # Full HD — add --server-args="-screen 0 1920x1080x24" here before running any
-      # cdp.fixture-based project in CI.
+      # No --server-args, so this runs at Xvfb's 1280x1024x8 default. Fine here: the smoke
+      # suite launches its own Electron and does not use cdp.fixture. A cdp.fixture-based job
+      # cannot be added by putting --server-args on this step — that fixture attaches over port
+      # 9223 to an app started elsewhere, so this xvfb-run would never govern that app's window.
+      # Such a job has to start the app and Playwright under one Xvfb at 1920x1080x24, which is
+      # what fixtures/cdp.fixture.ts requires for screenshots.
       - name: E2E tests (Linux)
         if: ${{ matrix.os == env.OS_LINUX }}
         run: xvfb-run --auto-servernum npm run test:e2e:smoke

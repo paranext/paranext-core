@@ -17,7 +17,9 @@ npm run test:e2e:isolated
 # A single file
 npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e2e-tests/tests/isolated/<file>.spec.ts
 
-# On WSL2, wrap any of the above to keep Electron windows off the Windows desktop
+# On WSL2, wrap a subset that launches its own Electron to keep its windows off the desktop.
+# Not title-bar/ or navigation-history/ — those use fixtures/cdp.fixture.ts and attach to an app
+# started separately by ./.erb/scripts/refresh.sh, which already runs it under its own Xvfb.
 e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 ```
 
