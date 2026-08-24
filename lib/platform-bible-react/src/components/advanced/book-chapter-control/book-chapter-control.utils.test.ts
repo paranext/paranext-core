@@ -1,7 +1,9 @@
 import { ALL_BOOK_IDS, ALL_ENGLISH_BOOK_NAMES } from '@/components/shared/book.utils';
+import { Section } from 'platform-bible-utils';
 import {
   fetchEndChapter,
   calculateTopMatch,
+  deriveBookChapterControlBookLists,
   SCRIPTURE_REGEX_PATTERNS,
 } from './book-chapter-control.utils';
 
@@ -299,6 +301,87 @@ describe('book-chapter-control.utils', () => {
       expect(SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE.test('GEN 1:1')).toBe(true);
       expect(SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE.test('Genesis 1:')).toBe(true);
       expect(SCRIPTURE_REGEX_PATTERNS.BOOK_CHAPTER_VERSE.test('Genesis 1')).toBe(false);
+    });
+  });
+
+  describe('deriveBookChapterControlBookLists', () => {
+    test('Project books alone are both browsable and reachable, with nothing dimmed', () => {
+      const {
+        projectBooksBySection,
+        reachableBooksBySection,
+        reachableBooks,
+        booksOutsideProject,
+      } = deriveBookChapterControlBookLists(['GEN', 'MAT', 'REV'], [], 'MAT');
+
+      expect(Object.values(projectBooksBySection).flat()).toEqual(['GEN', 'MAT', 'REV']);
+      expect(Object.values(reachableBooksBySection).flat()).toEqual(['GEN', 'MAT', 'REV']);
+      expect(reachableBooks).toEqual(['GEN', 'MAT', 'REV']);
+      expect(booksOutsideProject.size).toBe(0);
+    });
+
+    test('An additional book outside the project is reachable, not browsable, and dimmed', () => {
+      const { projectBooksBySection, reachableBooks, booksOutsideProject } =
+        deriveBookChapterControlBookLists(['GEN', 'MAT'], ['TOB'], 'GEN');
+
+      expect(reachableBooks).toContain('TOB');
+      expect(Object.values(projectBooksBySection).flat()).not.toContain('TOB');
+      expect(booksOutsideProject.has('TOB')).toBe(true);
+    });
+
+    test('An additional id the project already has is not dimmed', () => {
+      const { reachableBooks, booksOutsideProject } = deriveBookChapterControlBookLists(
+        ['GEN', 'MAT'],
+        ['MAT'],
+        'GEN',
+      );
+
+      expect(reachableBooks).toEqual(['GEN', 'MAT']);
+      expect(booksOutsideProject.has('MAT')).toBe(false);
+      expect(booksOutsideProject.size).toBe(0);
+    });
+
+    test('The current book stays reachable and dimmed when the project lacks it', () => {
+      const { reachableBooks, booksOutsideProject } = deriveBookChapterControlBookLists(
+        ['GEN', 'MAT'],
+        [],
+        'REV',
+      );
+
+      expect(reachableBooks).toContain('REV');
+      expect(booksOutsideProject.has('REV')).toBe(true);
+    });
+
+    // Guards against `reachableBooks` being "simplified" to the raw canon-filtered list: section
+    // grouping drops the peripheral ids, so callers are never offered a book they cannot browse to.
+    test('A peripheral additional id no section claims is not reachable', () => {
+      const { reachableBooks, booksOutsideProject } = deriveBookChapterControlBookLists(
+        ['GEN', 'MAT'],
+        ['FRT'],
+        'GEN',
+      );
+
+      expect(reachableBooks).not.toContain('FRT');
+      expect(reachableBooks).toEqual(['GEN', 'MAT']);
+      expect(booksOutsideProject.has('FRT')).toBe(false);
+    });
+
+    test('Reachable books come back in canon order regardless of the project list order', () => {
+      const { reachableBooks } = deriveBookChapterControlBookLists(['REV', 'GEN'], ['MAT'], 'GEN');
+
+      expect(reachableBooks).toEqual(['GEN', 'MAT', 'REV']);
+    });
+
+    test('With no extras and the current book in the project, the project list is grouped as-is', () => {
+      const { reachableBooksBySection } = deriveBookChapterControlBookLists(
+        ['REV', 'GEN', 'TOB'],
+        [],
+        'GEN',
+      );
+
+      expect(reachableBooksBySection[Section.OT]).toEqual(['GEN']);
+      expect(reachableBooksBySection[Section.NT]).toEqual(['REV']);
+      expect(reachableBooksBySection[Section.DC]).toEqual(['TOB']);
+      expect(reachableBooksBySection[Section.Extra]).toEqual([]);
     });
   });
 });

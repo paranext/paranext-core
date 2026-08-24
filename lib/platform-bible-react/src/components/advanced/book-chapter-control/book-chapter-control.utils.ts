@@ -1,6 +1,10 @@
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { getChaptersForBook } from 'platform-bible-utils';
-import { ALL_ENGLISH_BOOK_NAMES, doesBookMatchQuery } from '@/components/shared/book.utils';
+import { getChaptersForBook, Section } from 'platform-bible-utils';
+import {
+  ALL_BOOK_IDS,
+  ALL_ENGLISH_BOOK_NAMES,
+  doesBookMatchQuery,
+} from '@/components/shared/book.utils';
 import { BookWithOptionalChapterAndVerse } from './book-chapter-control.types';
 
 // Smart parsing regex patterns
@@ -183,4 +187,74 @@ export function calculateTopMatch(
   if (topMatch) return topMatch;
 
   return undefined;
+}
+
+/** Grouped and flattened book lists a `BookChapterControl` renders. */
+export type BookChapterControlBookLists = {
+  /** The active project's books, grouped by section — what the control browses by default. */
+  projectBooksBySection: Record<Section, string[]>;
+  /** Every reachable book, grouped by section — what searching spans. */
+  reachableBooksBySection: Record<Section, string[]>;
+  /**
+   * `reachableBooksBySection` flattened — the candidate list for top-match parsing and quick
+   * navigation. Deliberately the flattened GROUPED list rather than the raw reachable ids: section
+   * grouping drops the peripheral ids no section claims (FRT, BAK, OTH, INT, CNC, GLO, TDX, NDX)
+   * and orders DC/Extra differently from raw canon order, so the raw list would offer callers books
+   * they have never been offered.
+   */
+  reachableBooks: string[];
+  /** Reachable books the project does not have. These render greyed but stay selectable. */
+  booksOutsideProject: ReadonlySet<string>;
+};
+
+function groupBooksBySection(bookIds: string[]): Record<Section, string[]> {
+  return {
+    [Section.OT]: bookIds.filter((bookId) => Canon.isBookOT(bookId)),
+    [Section.NT]: bookIds.filter((bookId) => Canon.isBookNT(bookId)),
+    [Section.DC]: bookIds.filter((bookId) => Canon.isBookDC(bookId)),
+    [Section.Extra]: bookIds.filter((bookId) => Canon.extraBooks().includes(bookId)),
+  };
+}
+
+/**
+ * Derives every book list the control renders from the three inputs that determine them.
+ *
+ * `currentBookId` is always reachable, so a reference in neither the project nor any open resource
+ * stays visible rather than silently absent.
+ *
+ * @param projectBookIds Books the active project has
+ * @param additionalBookIds Books reachable elsewhere, e.g. present in an open resource. Ids the
+ *   project already has are ignored — this arrives from a public callback that may include them.
+ * @param currentBookId The book of the control's current reference
+ */
+export function deriveBookChapterControlBookLists(
+  projectBookIds: string[],
+  additionalBookIds: string[],
+  currentBookId: string,
+): BookChapterControlBookLists {
+  const projectBookIdSet = new Set(projectBookIds);
+  const extraBookIds = additionalBookIds.filter((bookId) => !projectBookIdSet.has(bookId));
+  const extraBookIdSet = new Set(extraBookIds);
+
+  // Canon-ordered so an extra book lands among its neighbours instead of after the project's books.
+  // The fast path preserves the caller's array when nothing widens the list.
+  const reachableBookIds =
+    extraBookIdSet.size === 0 && projectBookIdSet.has(currentBookId)
+      ? projectBookIds
+      : ALL_BOOK_IDS.filter(
+          (bookId) =>
+            projectBookIdSet.has(bookId) || extraBookIdSet.has(bookId) || bookId === currentBookId,
+        );
+
+  const reachableBooksBySection = groupBooksBySection(reachableBookIds);
+  const reachableBooks = Object.values(reachableBooksBySection).flat();
+
+  return {
+    projectBooksBySection: groupBooksBySection(projectBookIds),
+    reachableBooksBySection,
+    reachableBooks,
+    // Derived from the grouped-and-flattened list, so a peripheral id that grouping dropped can
+    // never be marked dimmed for a list it is not part of.
+    booksOutsideProject: new Set(reachableBooks.filter((bookId) => !projectBookIdSet.has(bookId))),
+  };
 }
