@@ -510,6 +510,8 @@
   "%userProfile_networkSettings_2%": "Internet & connectivity",
   "%userProfile_profileAndRegistration%": "Profile & registration",
   "%webView_bookChapterControl_bookNotInProject%": "not in this project",
+  "%webView_bookChapterControl_selectChapter%": "Select Chapter",
+  "%webView_bookChapterControl_selectVerse%": "Select Verse",
   "%webView_bookChapterControl_showAllBooks%": "Show all books",
   "%webView_defaultTitle_webView%": "Web View",
   "%webView_edit%": "Edit",
