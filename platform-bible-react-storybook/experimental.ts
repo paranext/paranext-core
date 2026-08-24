@@ -26,6 +26,10 @@ export {
   RESOURCE_PICKER_DIALOG_STRING_KEYS,
 } from './components/advanced/resource-picker-dialog/resource-picker-dialog.component';
 export type { ScopeSelectorVariant } from './components/advanced/scope-selector/scope-selector.component';
+export {
+  getAvailableBookIds,
+  summarizeSelectedBooks,
+} from './components/advanced/scope-selector/scope-selector.utils';
 export { default as SourceLanguageIndexedList } from './components/advanced/source-language-indexed-list/source-language-indexed-list.component';
 export type {
   IndexedListItem,
