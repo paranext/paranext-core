@@ -1007,7 +1007,9 @@ a question, and burying it in a wall of results is how a confrontational reply g
 unread.
 
 Repeat the house rule. Approval must name what is approved — "post the replies", "push the
-stack", or the specific items. A general go-ahead does not cross this gate.
+stack", "resolve our own question threads", or the specific items. A general go-ahead does not
+cross this gate. **Thread resolution is its own permission**, not a rider on posting: P8 closes
+only threads whose root comment is ours, and only when the approval covered that.
 
 **Write the approval verbatim into `g2-approval.md`, dated, before starting P7** — exactly as G1
 writes `03-rulings.md`, and for exactly the same reason. P7 is the phase that pushes and posts
@@ -1055,17 +1057,32 @@ landed locally without citing an unpushed SHA.
 **Out:** `09-record.md`.
 
 - Mark every draft POSTED with its comment id and URL. A draft with no id did not post.
-- **Do not resolve the reviewer's threads.** `.context/standards/Code-Review-Guide.md`
-  § Comment Resolution reserves that to the reviewer — "Reviewers manage their own comment
-  resolutions" — and resolving on their behalf takes a decision that is theirs, in public, under
-  the user's name. A posted reply is the audit trail; the resolution is the reviewer's answer to
-  it. Report which threads are now answered and are waiting on the reviewer to close, and which
-  are still waiting on us.
+- **Resolve only the threads we opened ourselves — never the reviewer's.** The two kinds look
+  identical in the API and are governed by opposite rules, so the discriminator is mechanical:
+  **who authored the thread's root comment.**
 
-  The cost of this is real and is paid at P0, not here: threads we answered but nobody closed are
-  re-collected next round. That is what P0's timestamp test is for — an item written *before* our
-  reply is `already-handled` context, not work. `.claude/commands/triage-feedback.md` does resolve
-  threads, and predates this; the divergence is deliberate and the standard is the authority.
+  - **Root comment is ours** — the anchored question threads `references/pr-thread-conversion.md`
+    has us open, plus any thread we started. Once the reviewer has answered and we have replied,
+    resolve it. Leaving our own answered questions open is what makes the next round re-collect,
+    re-verify and re-answer everything this one just did.
+  - **Root comment is the reviewer's** — never resolve it. `.context/standards/Code-Review-Guide.md`
+    § Comment Resolution reserves that to them: *"Reviewers manage their own comment resolutions."*
+    Closing their thread takes a decision that is theirs, in public, under the user's name. Report
+    which of their threads are answered and waiting on them, and which are still waiting on us.
+
+  The standard is consistent with this rather than an exception to it — it is about a reviewer's
+  own comments, and its next lines already contemplate the other direction (*"Set status to
+  **Discussing** for optional/non-blocking items (allows authors to self-resolve)"*).
+
+  `.claude/commands/triage-feedback.md` holds the mutation and the house rule that governs it:
+  **never resolve a thread without first posting a visible reply** — the reply is the audit trail,
+  resolution is the state.
+
+  **Resolution is a reviewer-visible mutation, so it is gated exactly like posting.** It runs only
+  under a G2 approval that covered it, and `g2-approval.md` must say so; an approval that covered
+  the replies alone does not authorise closing threads. If that is ambiguous, reply and leave every
+  thread open — an unresolved thread costs the next round a re-collection, while a wrongly-closed
+  one is a public act on someone else's behalf that they have to notice to undo.
 - **Durability rule — the one that is easy to skip.** Review threads die with the squash-merge.
   Every decision that lives only in a thread must be copied into a durable home **before the PR
   merges**: an ADR in `.context/standards/Architecture-Decisions.md`, a standards entry, a
