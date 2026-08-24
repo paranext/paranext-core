@@ -33,6 +33,9 @@ export const NOT_INSTALLED_KEY = '%webView_scriptureTextGrid_cell_not_installed%
 export const LOADING_KEY = '%webView_scriptureTextGrid_cell_status_loading%';
 export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_failed%';
 export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
+// Shared with the resource text panel and model text panel so every surface words a missing book
+// identically; the grid deliberately does not define a key of its own.
+export const BOOK_NOT_FOUND_KEY = '%webView_platformScriptureEditor_error_bookNotFoundResource%';
 export const ZOOM_IN_KEY = '%webView_scriptureTextGrid_cell_zoomIn%';
 export const ZOOM_OUT_KEY = '%webView_scriptureTextGrid_cell_zoomOut%';
 export const RESET_ZOOM_KEY = '%webView_scriptureTextGrid_cell_resetZoom%';
@@ -44,6 +47,7 @@ export const RESOURCE_CELL_STRING_KEYS = Object.freeze([
   LOADING_KEY,
   FAILED_KEY,
   EMPTY_KEY,
+  BOOK_NOT_FOUND_KEY,
   ZOOM_IN_KEY,
   ZOOM_OUT_KEY,
   RESET_ZOOM_KEY,
@@ -178,8 +182,8 @@ function ResourceNameLabel({ label, className }: { label: string; className?: st
 /**
  * Presentational ResourceCell: renders the resource name (inline label or header band), per-cell
  * text direction, and either the editor (`ready`) or the unavailable placeholder
- * (`downloading`/`failed`/`unavailable`). Data-free so Storybook can drive every state;
- * `ResourceCell` wraps it with the PAPI fetch/direction/availability wiring.
+ * (`downloading`/`bookNotFound`/`failed`/`unavailable`). Data-free so Storybook can drive every
+ * state; `ResourceCell` wraps it with the PAPI fetch/direction/availability wiring.
  *
  * All role, focus, activation, and accessible-name concerns are handled by the parent verse
  * `listitem` in `ScriptureTextGrid` — this component is purely presentational. It adds only the
@@ -228,6 +232,12 @@ export function ResourceCellView({
   } else if (state === 'unavailable') {
     unavailableContent = (
       <span className="tw:font-medium">{localizedStrings[NOT_INSTALLED_KEY]}</span>
+    );
+  } else if (state === 'bookNotFound') {
+    unavailableContent = (
+      <span className="tw:text-sm tw:text-muted-foreground">
+        {localizedStrings[BOOK_NOT_FOUND_KEY]}
+      </span>
     );
   } else {
     unavailableContent = (

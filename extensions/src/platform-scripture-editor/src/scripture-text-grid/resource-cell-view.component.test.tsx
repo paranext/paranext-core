@@ -5,6 +5,7 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
+  BOOK_NOT_FOUND_KEY,
   EMPTY_KEY,
   LOADING_KEY,
   FAILED_KEY,
@@ -54,6 +55,7 @@ const localizedStrings = {
   [LOADING_KEY]: 'Resource is loading…',
   [FAILED_KEY]: 'Download failed',
   [EMPTY_KEY]: 'No text for this verse',
+  [BOOK_NOT_FOUND_KEY]: 'This book does not exist in this resource.',
 };
 
 /** Renders cells in a plain div wrapper — ResourceCellView is now presentational, no role needed. */
@@ -121,6 +123,23 @@ describe('ResourceCellView row smoke', () => {
     expect(screen.queryByText('Resource is loading…')).not.toBeInTheDocument();
     expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
     expect(screen.queryByText('Resource unavailable')).not.toBeInTheDocument();
+  });
+
+  it('bookNotFound: explains the missing book without claiming a download failure', () => {
+    renderCells(
+      <ResourceCellView
+        state="bookNotFound"
+        label="NIV"
+        textDirection="ltr"
+        localizedStrings={localizedStrings}
+        editor={undefined}
+      />,
+    );
+    expect(screen.getByText('This book does not exist in this resource.')).toBeInTheDocument();
+    expect(screen.queryByText('Download failed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource unavailable')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource not installed')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resource is loading…')).not.toBeInTheDocument();
   });
 
   it('mixed direction: LTR and RTL cells apply independent dir', () => {
