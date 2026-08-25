@@ -592,9 +592,12 @@ internal class LocalParatextProjects : IDisposable
             return [];
         // Snapshot under the ScrTextArbitrator lock and materialize before returning — same
         // pattern as GetScrTexts() to avoid racing the background watcher's RefreshScrTexts.
+        // AllAccessible (not ScriptureOnly) is required so that locally-installed non-DBL
+        // resources such as TNN and VULGP83 (.p8z bundles) are included; ScriptureOnly
+        // silently omits them.
         using (ScrTextArbitrator.GetLock())
             return ScrTextCollection
-                .ScrTexts(IncludeProjects.ScriptureOnly)
+                .ScrTexts(IncludeProjects.AllAccessible)
                 .Where(scrText => scrText.IsResourceProject)
                 .ToList();
     }
