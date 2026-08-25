@@ -20,12 +20,14 @@ import {
   UnsubscriberAsync,
   formatReplacementString,
   isLocalizeKey,
+  type LocalizeKey,
   serialize,
   getLocalizeKeysForScrollGroupIds,
   isPlatformError,
   getErrorMessage,
 } from 'platform-bible-utils';
 import {
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
   BookChapterControlHandle,
   SelectMenuItemHandler,
@@ -64,6 +66,11 @@ const WEB_VIEW_MENU_DEFAULT = {
 };
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+// Copied into a mutable array because useLocalizedStrings takes LocalizeKey[] while the exported
+// constant is readonly. Module scope keeps the identity stable, which useLocalizedStrings needs to
+// avoid resubscribing on every render.
+const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
 const registrationPromises = new PromiseChainingMap<string>(logger);
 
@@ -465,6 +472,10 @@ export function WebView({
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
+  const [bookChapterControlLocalizedStrings] = useLocalizedStrings(
+    bookChapterControlLocalizedStringKeys,
+  );
+
   const { recentScriptureRefs, addRecentScriptureRef } = useRecentScriptureRefs();
 
   const [booksPresentPossiblyError] = useProjectSetting(
@@ -544,6 +555,7 @@ export function WebView({
                 getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
                 recentSearches={recentScriptureRefs}
                 onAddRecentSearch={addRecentScriptureRef}
+                localizedStrings={bookChapterControlLocalizedStrings}
               />
             ) : undefined
           }

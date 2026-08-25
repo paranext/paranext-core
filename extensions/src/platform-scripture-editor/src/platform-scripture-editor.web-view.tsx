@@ -36,6 +36,7 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
+  BOOK_CHAPTER_CONTROL_STRING_KEYS,
   BookChapterControl,
   Button,
   COMMENT_EDITOR_STRING_KEYS,
@@ -265,6 +266,10 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // Consumed by the character-marker bar's removal action, which this file does not
   // call directly.
   ...REMOVE_CHARACTER_MARKER_STRING_KEYS,
+  // Read only by the BookChapterControl this web view mounts in Power mode — its section headings,
+  // recent-searches labels, and the show-all-books/not-in-this-project strings that appear once a
+  // book outside this project is reachable.
+  ...BOOK_CHAPTER_CONTROL_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
@@ -2350,6 +2355,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       getEndVerse={getEndVerse}
       recentSearches={recentScriptureRefs}
       onAddRecentSearch={addRecentScriptureRef}
+      localizedStrings={localizedStrings}
     />
   ) : undefined;
 

@@ -97,9 +97,11 @@ async function getAvailableBooks(projectId: string | undefined): Promise<string[
     );
     const booksPresent = await projectDataProvider.getSetting('platformScripture.booksPresent');
     // A non-empty flag string is authoritative even when it marks NO books present (all zeros —
-    // e.g. a newly created project): the book picker UI shows the same empty list for it, and the
-    // commands must not disagree with the picker by substituting the full canon. Fall back to the
-    // canon only when there is no usable data at all.
+    // e.g. a newly created project): substituting the full canon there would invent books the
+    // project does not have. Fall back to the canon only when there is no usable data at all.
+    // These commands are project-scoped by contract: the book picker matches them by default, and
+    // widens past the project's books only when the user explicitly asks it to show every reachable
+    // book.
     if (typeof booksPresent === 'string' && booksPresent.length > 0)
       return getBookIdsFromBooksPresent(booksPresent);
   } catch (e) {
