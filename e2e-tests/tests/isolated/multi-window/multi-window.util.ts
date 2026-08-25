@@ -428,7 +428,20 @@ export async function waitForRendererRegistered(
  * text instead.
  */
 export function homeTabTitle(page: Page, windowId: number) {
-  return page.locator(`.platform-tab-title[data-web-view-id="${HOME_TAB_UUID}-w${windowId}"]`);
+  return webViewTabTitle(page, `${HOME_TAB_UUID}-w${windowId}`);
+}
+
+/**
+ * The tab title element for a web view, by its id.
+ *
+ * The one place this selector is spelled, so the id is the only thing a caller can get wrong —
+ * which matters because a wrong id yields a zero-element locator that blocks until the test times
+ * out rather than failing with something that names the cause. Note {@link homeTabTitle} builds the
+ * FIXED fallback-layout id, which only the first window's Home tab carries; a window that docks
+ * Home on the fly mints its own, and must be looked up by that.
+ */
+export function webViewTabTitle(page: Page, webViewId: string) {
+  return page.locator(`.platform-tab-title[data-web-view-id="${webViewId}"]`);
 }
 
 /**
