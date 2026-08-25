@@ -39,9 +39,31 @@ export const DevelopmentActive: Story = {
   },
 };
 
+/** Section expanded — Test is the active server. */
+export const TestActive: Story = {
+  args: { selectedServer: 'Test' },
+  play: async ({ canvasElement, userEvent }) => {
+    const header = canvasElement.querySelector('button');
+    if (header) await userEvent.click(header);
+  },
+};
+
 /**
- * `disabled={true}` — header still clickable, but the Production/Development toggle is greyed out
- * and non-interactive.
+ * Section expanded — Quality Assurance is the active server. QA is its own ParatextData
+ * environment: it shares the registry and DBL servers with Development, but has its own
+ * Send/Receive archive and Paratext Live server.
+ */
+export const QualityAssuranceActive: Story = {
+  args: { selectedServer: 'QualityAssurance' },
+  play: async ({ canvasElement, userEvent }) => {
+    const header = canvasElement.querySelector('button');
+    if (header) await userEvent.click(header);
+  },
+};
+
+/**
+ * `disabled={true}` — header still clickable, but the server toggle is greyed out and
+ * non-interactive.
  */
 export const Disabled: Story = {
   args: { disabled: true },

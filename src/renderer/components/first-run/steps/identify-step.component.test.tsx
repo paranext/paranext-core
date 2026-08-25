@@ -1,11 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import userEvent from '@testing-library/user-event';
 import { ChangeEvent, ReactNode } from 'react';
 import * as commandService from '@shared/services/command.service';
 import * as firstRunStore from '@renderer/services/first-run-store';
 import { settingsService } from '@shared/services/settings.service';
+import { logger } from '@shared/services/logger.service';
 import {
   IdentifyStep,
   INVALID_CODE_DISPLAY_DEBOUNCE_MS,
@@ -44,6 +45,9 @@ vi.mock('@renderer/services/first-run-store', () => ({
 }));
 vi.mock('@shared/services/settings.service', () => ({
   settingsService: { get: vi.fn(), set: vi.fn().mockResolvedValue(undefined) },
+}));
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('platform-bible-react', () => ({
   Alert: ({ children, variant }: { children: ReactNode; variant?: string }) => (
@@ -109,6 +113,34 @@ vi.mock('platform-bible-react', () => ({
     <label htmlFor={htmlFor}>{children}</label>
   ),
   cn: (...classes: unknown[]) => classes.filter(Boolean).join(' '),
+  // Faithful stand-in for the real usePromise (platform-bible-react is fully mocked here): returns
+  // the default, then the callback's resolved value so `waitFor` assertions see the update.
+  // Mirrors the real hook's `setValue(() => result)` — including when `result` is undefined — so a
+  // regression that stops returning a fallback URL surfaces as a missing href rather than being
+  // swallowed by the mock and leaving the default in place.
+  usePromise: (callback?: () => Promise<unknown>, defaultValue?: unknown) => {
+    // A vi.mock factory can't close over hoisted ESM imports, so require pulls the real React hooks.
+    // eslint-disable-next-line global-require
+    const { useState, useEffect } = require('react');
+    const [value, setValue] = useState(defaultValue);
+    const [isLoading, setIsLoading] = useState(true);
+    useEffect(() => {
+      let current = true;
+      setIsLoading(!!callback);
+      (async () => {
+        if (!callback) return;
+        const result = await callback();
+        if (current) {
+          setValue(() => result);
+          setIsLoading(false);
+        }
+      })();
+      return () => {
+        current = false;
+      };
+    }, [callback]);
+    return [value, isLoading];
+  },
 }));
 vi.mock('lucide-react', () => ({
   CircleCheck: () => <span data-testid="circle-check-icon" />,
@@ -117,8 +149,36 @@ vi.mock('lucide-react', () => ({
 
 const mockSendCommand = vi.mocked(commandService.sendCommand);
 const mockIsDemoMode = vi.mocked(firstRunStore.isDemoMode);
+const mockLogger = vi.mocked(logger);
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
+
+const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org';
+
+/**
+ * Routes `sendCommand` by command name so the mount-time registry-URL fetch never consumes the mock
+ * queued for validation/save. Pass per-test overrides for the validation/save outcomes.
+ */
+function mockCommands(
+  overrides: { validate?: boolean; validateError?: Error; saveError?: Error; url?: string } = {},
+) {
+  mockSendCommand.mockImplementation((command: string) => {
+    switch (command) {
+      case 'paratextRegistration.getParatextRegistryUrl':
+        return Promise.resolve(overrides.url ?? PRODUCTION_REGISTRY_URL);
+      case 'paratextRegistration.validateParatextRegistrationData':
+        return overrides.validateError
+          ? Promise.reject(overrides.validateError)
+          : Promise.resolve(overrides.validate ?? false);
+      case 'paratextRegistration.setParatextRegistrationData':
+        return overrides.saveError
+          ? Promise.reject(overrides.saveError)
+          : Promise.resolve(undefined);
+      default:
+        return Promise.resolve(undefined);
+    }
+  });
+}
 
 beforeEach(() => {
   // Clear call history between tests (keeps factory/mockResolvedValue implementations) so
@@ -126,6 +186,7 @@ beforeEach(() => {
   // accumulate across the re-register-mode cases.
   vi.clearAllMocks();
   mockSendCommand.mockReset();
+  mockCommands();
   mockIsDemoMode.mockReturnValue(false);
   vi.useFakeTimers();
 });
@@ -166,7 +227,7 @@ describe('IdentifyStep', () => {
 
   it('submit calls validateParatextRegistrationData with the entered name and code', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(true);
+    mockCommands({ validate: true });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -184,7 +245,7 @@ describe('IdentifyStep', () => {
 
   it('shows inline error without advancing when validation fails', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(false);
+    mockCommands({ validate: false });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -199,10 +260,7 @@ describe('IdentifyStep', () => {
 
   it('replaces form with restart messaging after validation success and save', async () => {
     const user = setupUser();
-    mockSendCommand
-      .mockResolvedValueOnce(true) // validateParatextRegistrationData
-      .mockResolvedValueOnce(undefined) // setParatextRegistrationData
-      .mockReturnValueOnce(new Promise(() => {})); // platform.restart — never settles
+    mockCommands({ validate: true });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -226,9 +284,7 @@ describe('IdentifyStep', () => {
 
   it('calls onRestartAfterSave instead of platform.restart when provided', async () => {
     const user = setupUser();
-    mockSendCommand
-      .mockResolvedValueOnce(true) // validateParatextRegistrationData
-      .mockResolvedValueOnce(undefined); // setParatextRegistrationData
+    mockCommands({ validate: true });
     const onRestartAfterSave = vi.fn().mockReturnValue(new Promise<never>(() => {}));
 
     render(
@@ -254,9 +310,7 @@ describe('IdentifyStep', () => {
 
   it('clears the spinner overlay when onRestartAfterSave resolves', async () => {
     const user = setupUser();
-    mockSendCommand
-      .mockResolvedValueOnce(true) // validateParatextRegistrationData
-      .mockResolvedValueOnce(undefined); // setParatextRegistrationData
+    mockCommands({ validate: true });
     const onRestartAfterSave = vi.fn().mockResolvedValue(undefined);
 
     render(
@@ -294,15 +348,37 @@ describe('IdentifyStep', () => {
     expect(screen.getByLabelText(/registration code/i)).toBeInTheDocument();
   });
 
-  it('renders a Paratext Registry link', () => {
+  it('renders a Paratext Registry link pointing at the selected server environment', async () => {
+    mockCommands({ url: 'https://registry-dev.paratext.org' });
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
     const link = screen.getByRole('link', { name: /visit paratext registry/i });
-    expect(link).toHaveAttribute('href', 'https://registry.paratext.org/');
+    await waitFor(() => expect(link).toHaveAttribute('href', 'https://registry-dev.paratext.org'));
+  });
+
+  it('falls back to the production registry link when the URL lookup fails', async () => {
+    mockSendCommand.mockImplementation((command: string) =>
+      command === 'paratextRegistration.getParatextRegistryUrl'
+        ? Promise.reject(new Error('offline'))
+        : Promise.resolve(undefined),
+    );
+    render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
+    const link = screen.getByRole('link', { name: /visit paratext registry/i });
+    // Flush the rejected lookup inside `act` so React commits the resulting state update. `waitFor`
+    // cannot poll here: these tests install fake timers, which stall its polling interval.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(mockLogger.warn).toHaveBeenCalledWith(expect.stringContaining('offline'));
+    // The failed lookup leaves the link on the production fallback rather than going blank.
+    // Production is also usePromise's initial value, so this assertion only means something because
+    // the usePromise stand-in commits whatever the callback resolves to: delete the catch block's
+    // `return PRODUCTION_REGISTRY_URL` and the href disappears instead of resting on the default.
+    expect(link).toHaveAttribute('href', PRODUCTION_REGISTRY_URL);
   });
 
   it('shows valid registration alert when backend confirms the name+code', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(true);
+    mockCommands({ validate: true });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -350,7 +426,7 @@ describe('IdentifyStep', () => {
 
   it('shows error and keeps Save disabled when validation request throws', async () => {
     const user = setupUser();
-    mockSendCommand.mockRejectedValueOnce(new Error('Network error'));
+    mockCommands({ validateError: new Error('Network error') });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -364,7 +440,7 @@ describe('IdentifyStep', () => {
 
   it('clears validation error immediately when user types again', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(false);
+    mockCommands({ validate: false });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -380,7 +456,7 @@ describe('IdentifyStep', () => {
 
   it('validates with the correct name when code is entered before name', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(true);
+    mockCommands({ validate: true });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -398,7 +474,7 @@ describe('IdentifyStep', () => {
 
   it('re-disables Save immediately when a valid code is edited (synchronous state reset)', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(true);
+    mockCommands({ validate: true });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
@@ -415,7 +491,7 @@ describe('IdentifyStep', () => {
 
   it('shows error and re-enables Save when setParatextRegistrationData fails', async () => {
     const user = setupUser();
-    mockSendCommand.mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('Server error'));
+    mockCommands({ validate: true, saveError: new Error('Server error') });
 
     render(<IdentifyStep onNext={onNext} setCanProceed={setCanProceed} />);
 
