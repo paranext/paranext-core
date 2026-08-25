@@ -295,25 +295,43 @@ export function PlatformTabTitle({
 
   const handleMenuOpenChange = async (isOpen: boolean) => {
     if (!isOpen) return;
+
+    let windows: WindowSummary[];
     try {
-      const windows = await sendCommand('platform.getWindows');
-      const otherWindows = windows.filter((window) => `${window.windowId}` !== globalThis.windowId);
-      // Moving the only web view out of a window that is not the primary one would build an
-      // identical window and empty this one, which is the no-op Paratext 9 hides its float item for
-      const isThisWindowSecondary = !windows.some(
-        (window) => `${window.windowId}` === globalThis.windowId && window.isMain,
-      );
-      setMenuTargets({
-        otherWindows,
-        isOnlyTabInSecondaryWindow:
-          isThisWindowSecondary && getAllOpenWebViewDefinitionsSync().length <= 1,
-      });
+      windows = await sendCommand('platform.getWindows');
     } catch (error) {
       // Leave the target list empty, which hides the submenu rather than offering an empty one. An
       // empty list would read as "there are no other windows", which is a different claim
       logger.warn(`Could not read the open windows for the tab menu: ${getErrorMessage(error)}`);
       setMenuTargets({ otherWindows: [], isOnlyTabInSecondaryWindow: false });
+      return;
     }
+
+    const otherWindows = windows.filter((window) => `${window.windowId}` !== globalThis.windowId);
+    const isThisWindowSecondary = !windows.some(
+      (window) => `${window.windowId}` === globalThis.windowId && window.isMain,
+    );
+
+    // Counting this window's web views is guarded separately because it can fail for reasons that
+    // say nothing about the windows — it throws before the dock layout registers. Folding it into
+    // the read above would throw away a window list that arrived perfectly well, and report the
+    // failure as one the open windows could not be read.
+    //
+    // Moving the only web view out of a window that is not the primary one would build an identical
+    // window and empty this one, which is the no-op Paratext 9 hides its float item for.
+    let isOnlyTabInSecondaryWindow = false;
+    try {
+      isOnlyTabInSecondaryWindow =
+        isThisWindowSecondary && getAllOpenWebViewDefinitionsSync().length <= 1;
+    } catch (error) {
+      // Offering the action is the safe way to be wrong: at worst the user makes a window they did
+      // not want, which they can close
+      logger.warn(
+        `Could not count this window's web views for the tab menu: ${getErrorMessage(error)}`,
+      );
+    }
+
+    setMenuTargets({ otherWindows, isOnlyTabInSecondaryWindow });
   };
 
   // Handle applying and removing the CSS styles for flashing
