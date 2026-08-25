@@ -32,8 +32,8 @@ const REQUIRED_EDITOR_REF_MEMBERS = [
   'removeCharacterMarker(marker?: string): boolean;',
   // The operation `changeCharacterMarker` adapts. NOTE THE ARGUMENT ORDER — see below.
   'replaceCharacterMarker(toMarker: string, fromMarker?: string): boolean;',
-  // Nothing supplies this yet (TODO(PT-4394)); pinned so the partial-coverage row can be wired
-  // against a known shape rather than a guess.
+  // This menu has no extend option yet (TODO(PT-4394)); pinned so the partial-coverage row can be
+  // wired against a known shape rather than a guess.
   'extendCharacterMarker(marker: string, conflictingMarkers?: readonly string[]): boolean;',
 ];
 

@@ -360,7 +360,7 @@ describe('generateCharacterMarkerMenuListItems', () => {
     expect(changeCharacterMarker).not.toHaveBeenCalled();
   });
 
-  it('leaves a partially-covering marker row inert (extend is not an editor operation yet)', () => {
+  it('leaves a partially-covering marker row inert (this menu has no extend operation)', () => {
     const { ref, insertMarker } = makeMockEditorRef();
     const close = vi.fn();
     const removeCharacterMarker = vi.fn();
