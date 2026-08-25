@@ -1,8 +1,18 @@
-import { describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { localizationService } from '@shared/services/localization.service';
 import {
   EMPTY_WINDOW_LABEL_KEY,
   getWindowLabel,
+  updateWindowTitle,
 } from '@renderer/components/docking/window-label.util';
+
+vi.mock('@shared/services/localization.service', () => ({
+  localizationService: { getLocalizedString: vi.fn() },
+}));
+
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
 
 /** Stand-in for looking a tab up in the live dock layout */
 const lookUpIn =
@@ -93,5 +103,84 @@ describe('getWindowLabel', () => {
     const layout = { dockbox: { children: [panel('gone', 'gone', 'b')] } };
 
     expect(getWindowLabel(layout, lookUpIn({ b: 'Notes' }))).toBe('Notes');
+  });
+
+  test('names the window after a maximized panel, which is what the user is looking at', () => {
+    // Maximizing moves the real panel into `maxbox` and leaves an empty placeholder behind, so a
+    // window showing a maximized tab would otherwise look empty
+    const layout = {
+      maxbox: { children: [panel('m', 'm')] },
+      dockbox: { children: [{ activeId: undefined, tabs: [] }] },
+    };
+
+    expect(getWindowLabel(layout, lookUpIn({ m: 'MRK — wgPIDGIN' }))).toBe('MRK — wgPIDGIN');
+  });
+
+  test('prefers the maximized panel over what is still docked behind it', () => {
+    const layout = {
+      maxbox: { children: [panel('m', 'm')] },
+      dockbox: { children: [panel('a', 'a')] },
+    };
+
+    expect(getWindowLabel(layout, lookUpIn({ m: 'Notes', a: 'Home' }))).toBe('Notes');
+  });
+});
+
+const layoutWith = (tabId: string) => ({
+  dockbox: { children: [{ activeId: tabId, tabs: [{ id: tabId }] }] },
+});
+const titled = (title: string) => () => ({ tabTitle: title });
+
+beforeEach(() => {
+  vi.mocked(localizationService.getLocalizedString).mockReset();
+  document.title = 'unset';
+});
+
+describe('updateWindowTitle', () => {
+  test('publishes a plain tab title as the page title', async () => {
+    await updateWindowTitle(layoutWith('a'), titled('MRK — wgPIDGIN'));
+
+    expect(document.title).toBe('MRK — wgPIDGIN');
+    expect(localizationService.getLocalizedString).not.toHaveBeenCalled();
+  });
+
+  test('localizes a title that is a localize key', async () => {
+    vi.mocked(localizationService.getLocalizedString).mockResolvedValue('Empty window');
+
+    await updateWindowTitle(layoutWith('a'), () => undefined);
+
+    expect(localizationService.getLocalizedString).toHaveBeenCalledWith({
+      localizeKey: '%window_label_empty%',
+    });
+    expect(document.title).toBe('Empty window');
+  });
+
+  test('leaves the title alone when localizing fails', async () => {
+    document.title = 'Notes';
+    vi.mocked(localizationService.getLocalizedString).mockRejectedValue(new Error('no strings'));
+
+    await updateWindowTitle(layoutWith('a'), () => undefined);
+
+    expect(document.title).toBe('Notes');
+  });
+
+  test('lets the newest request win when localizing resolves out of order', async () => {
+    // Two layout changes in quick succession, the first one's localization resolving last
+    const resolvers: ((value: string) => void)[] = [];
+    vi.mocked(localizationService.getLocalizedString).mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          resolvers.push(resolve);
+        }),
+    );
+
+    const first = updateWindowTitle(layoutWith('a'), () => ({ tabTitle: '%first%' }));
+    const second = updateWindowTitle(layoutWith('a'), () => ({ tabTitle: '%second%' }));
+
+    resolvers[1]('Second');
+    resolvers[0]('First');
+    await Promise.all([first, second]);
+
+    expect(document.title).toBe('Second');
   });
 });

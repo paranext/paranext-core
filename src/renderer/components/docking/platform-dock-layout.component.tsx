@@ -251,9 +251,11 @@ export function PlatformDockLayout() {
         // layout moves: a tab switch, or a tab opening, closing or moving between windows. It does
         // not change on navigation or typing, so this stays cheap.
         //
-        // Reads the layout rc-dock passes rather than asking the dock for it: this fires before the
-        // dock adopts the new layout, so `getLayout()` would still describe the previous one
-        updateWindowTitle(layout, findTabForTitle);
+        // Deferred a microtask because this callback runs BEFORE the dock adopts the new layout, so
+        // both the layout the dock reports and the tabs it can find are still the previous ones. A
+        // tab that has just opened is not findable yet, and reading now would name the window after
+        // whatever it was showing before — the very case this feature exists for
+        queueMicrotask(refreshWindowTitle);
 
         (async () => {
           if (onLayoutChangeRef.current) {

@@ -131,7 +131,10 @@ class MenuDataDataProviderEngine
           items: filterItemsForInterfaceMode(webViewMenu.contextMenu.items, this.currentMode),
         }
       : undefined;
-    const tabMenu = this.#filteredTabMenu(webViewMenu.tabMenu);
+    // Unlike the top and context menus, the tab menu is not opt-in: its items act on the tab frame
+    // rather than on the web view's contents, so every tab gets them whether or not the web view
+    // asked for platform defaults. A web view that contributes none of its own gets exactly these
+    const tabMenu = this.#filteredTabMenu(webViewMenu.tabMenu ?? this.defaultTabMenu);
     return { ...webViewMenu, topMenu, contextMenu, tabMenu };
   }
 

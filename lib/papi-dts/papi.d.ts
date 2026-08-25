@@ -10369,6 +10369,8 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
          * Id of the contributed menu item this submenu was built from, when it came from a
          * contribution. Lets a consumer recognize a particular submenu — for one whose contents are
          * only known at the moment the menu opens, for instance — without matching on its label.
+         *
+         * @experimental This field is unstable and may change or disappear without notice
          */
         id?: string;
         label: string | LocalizeKey;
