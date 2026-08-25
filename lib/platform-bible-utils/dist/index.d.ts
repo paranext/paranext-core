@@ -969,7 +969,8 @@ export declare function deepClone<T>(obj: T): T;
  */
 export declare const DEBOUNCE_CANCELED_ERROR_MESSAGE = "Debounced function invocation was canceled";
 /**
- * A debounced function with a `cancel` method to abandon any pending invocation.
+ * A debounced function with `cancel` and `flush` methods to abandon or immediately run any pending
+ * invocation (lodash-style lifecycle controls).
  *
  * @template TFunc - The type of the function being debounced.
  */
@@ -985,6 +986,19 @@ export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((...args
 	 * rejection when `cancel()` runs.
 	 */
 	cancel: () => void;
+	/**
+	 * Run the pending debounced invocation NOW (synchronously, with the most recently passed
+	 * arguments) instead of waiting out the remaining delay, and clear the timer so it does not fire
+	 * a second time.
+	 *
+	 * Useful at lifecycle boundaries where the trailing window would otherwise lose the final
+	 * invocation (unmount, blur, pagehide) or run it against changed context (see the
+	 * platform-scripture-editor extension's debounced PDP save).
+	 *
+	 * @returns The same promise the pending calls received (resolving/rejecting with the flushed
+	 *   invocation's outcome), or `undefined` when nothing was pending (in which case nothing runs).
+	 */
+	flush: () => Promise<ReturnType<TFunc>> | undefined;
 };
 /**
  * Get a function that reduces calls to the function passed in
@@ -995,9 +1009,10 @@ export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((...args
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
  * @returns Function that, when called, only calls the function passed in at maximum every delay ms.
- *   The returned function also has a `cancel` method to abandon any pending invocation; canceling
+ *   The returned function also has a `cancel` method to abandon any pending invocation (canceling
  *   makes the pending invocation's promise reject with an error whose message is
- *   {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}.
+ *   {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}) and a `flush` method to run the pending invocation
+ *   immediately instead of waiting out the delay.
  */
 export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): DebouncedFunction<TFunc>;
 /**

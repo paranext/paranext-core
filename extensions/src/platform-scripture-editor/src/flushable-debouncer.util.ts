@@ -1,17 +1,24 @@
+import { debounce } from 'platform-bible-utils';
+
 /**
  * Trailing-edge debouncer with an explicit lifecycle, for the web view's keystroke-driven PDP save.
- * `platform-bible-utils`' `debounce` has `cancel`, but no `flush` — and its pending call is a
- * promise that `cancel` REJECTS, so a fire-and-forget keystroke save that ignores the return value
- * produces unhandled rejections. Without a `flush` there are two holes in a debounced save:
+ * A thin fire-and-forget adapter over `platform-bible-utils`' shared `debounce` (which carries the
+ * actual `flush`/`cancel` machinery): the shared debounce hands every call a promise for the
+ * pending invocation and `cancel` REJECTS it, so a keystroke save that ignored the return value
+ * would produce unhandled rejections. This adapter keeps the promise plumbing internal (each
+ * scheduled call's promise gets a no-op rejection handler) and exposes the void-returning
+ * `schedule`/`flush`/`cancel`/`isPending` surface the save pipeline wants.
+ *
+ * Why a debounced save needs `flush` at all — two holes in a plain trailing-edge debounce:
  *
  * - Renderer death (crash, web-view dispose, app quit) inside the trailing window silently loses the
  *   final edits.
  * - A pending trailing call captures the OLD chapter's USJ but resolves AFTER rapid chapter
  *   navigation swaps the save function's closure to the NEW chapter — a cross-chapter stale write.
  *
- * `flush` fires the pending call immediately (with its captured args) and clears the timer;
- * `cancel` discards it. Callers wire `flush` to unmount/blur/pagehide and to the moment BEFORE the
- * captured context changes (see the web view's book/chapter effect).
+ * `flush` fires the pending call immediately (synchronously, with its captured args) and clears the
+ * timer; `cancel` discards it. Callers wire `flush` to unmount/blur/pagehide and to the moment
+ * BEFORE the captured context changes (see the web view's book/chapter effect).
  */
 export interface FlushableDebouncer<TArgs extends unknown[]> {
   /** (Re)arm the trailing-edge timer with the latest arguments. */
@@ -28,32 +35,29 @@ export function createFlushableDebouncer<TArgs extends unknown[]>(
   fn: (...args: TArgs) => void,
   delayMs: number,
 ): FlushableDebouncer<TArgs> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  let pendingArgs: TArgs | undefined;
+  // Pending-ness is tracked here rather than exposed by the shared debounce. Cleared BEFORE `fn`
+  // runs (in the wrapped callback below) so a re-schedule from inside `fn` is not wiped out.
+  let isPending = false;
 
-  const clear = () => {
-    if (timeout !== undefined) clearTimeout(timeout);
-    timeout = undefined;
-    pendingArgs = undefined;
-  };
-
-  const fire = () => {
-    const args = pendingArgs;
-    clear();
-    // Cleared BEFORE invoking so a re-schedule from inside `fn` is not wiped out.
-    if (args) fn(...args);
-  };
+  const debouncedFn = debounce((...args: TArgs) => {
+    isPending = false;
+    fn(...args);
+  }, delayMs);
 
   return {
     schedule: (...args: TArgs) => {
-      pendingArgs = args;
-      if (timeout !== undefined) clearTimeout(timeout);
-      timeout = setTimeout(fire, delayMs);
+      isPending = true;
+      // Swallow the pending promise's rejection: `cancel` rejects it by design, and this adapter's
+      // callers are fire-and-forget (outcomes are handled inside `fn` itself).
+      debouncedFn(...args).catch(() => undefined);
     },
     flush: () => {
-      if (pendingArgs) fire();
+      debouncedFn.flush();
     },
-    cancel: clear,
-    isPending: () => pendingArgs !== undefined,
+    cancel: () => {
+      isPending = false;
+      debouncedFn.cancel();
+    },
+    isPending: () => isPending,
   };
 }

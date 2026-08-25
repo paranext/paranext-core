@@ -2569,10 +2569,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * synchronous). Imperative saves elsewhere (explicit flows, `useEditorPdpSync`'s push-back) are
    * unaffected.
    *
-   * Uses the local flushable debouncer (not `platform-bible-utils`' `debounce`, which has no
-   * flush/cancel) so pending edits survive lifecycle boundaries — see the effects below. Each
-   * `schedule` captures the current chapter's save fn and chapter key into the payload, so
-   * `performDebouncedPdpSave` can guarantee the save targets the chapter the content was typed in.
+   * Uses the local flushable debouncer (a fire-and-forget adapter over `platform-bible-utils`'
+   * `debounce` and its `flush`/`cancel`) so pending edits survive lifecycle boundaries — see the
+   * effects below. Each `schedule` captures the current chapter's save fn and chapter key into the
+   * payload, so `performDebouncedPdpSave` can guarantee the save targets the chapter the content
+   * was typed in.
    */
   const saveUsjToPdpDebounced = useMemo(
     () =>

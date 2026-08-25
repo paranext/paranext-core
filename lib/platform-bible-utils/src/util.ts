@@ -41,7 +41,8 @@ export function deepClone<T>(obj: T): T {
 export const DEBOUNCE_CANCELED_ERROR_MESSAGE = 'Debounced function invocation was canceled';
 
 /**
- * A debounced function with a `cancel` method to abandon any pending invocation.
+ * A debounced function with `cancel` and `flush` methods to abandon or immediately run any pending
+ * invocation (lodash-style lifecycle controls).
  *
  * @template TFunc - The type of the function being debounced.
  */
@@ -61,6 +62,19 @@ export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((
    * rejection when `cancel()` runs.
    */
   cancel: () => void;
+  /**
+   * Run the pending debounced invocation NOW (synchronously, with the most recently passed
+   * arguments) instead of waiting out the remaining delay, and clear the timer so it does not fire
+   * a second time.
+   *
+   * Useful at lifecycle boundaries where the trailing window would otherwise lose the final
+   * invocation (unmount, blur, pagehide) or run it against changed context (see the
+   * platform-scripture-editor extension's debounced PDP save).
+   *
+   * @returns The same promise the pending calls received (resolving/rejecting with the flushed
+   *   invocation's outcome), or `undefined` when nothing was pending (in which case nothing runs).
+   */
+  flush: () => Promise<ReturnType<TFunc>> | undefined;
 };
 
 /**
@@ -72,9 +86,10 @@ export type DebouncedFunction<TFunc extends (...args: any[]) => any> = ((
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
  * @returns Function that, when called, only calls the function passed in at maximum every delay ms.
- *   The returned function also has a `cancel` method to abandon any pending invocation; canceling
+ *   The returned function also has a `cancel` method to abandon any pending invocation (canceling
  *   makes the pending invocation's promise reject with an error whose message is
- *   {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}.
+ *   {@link DEBOUNCE_CANCELED_ERROR_MESSAGE}) and a `flush` method to run the pending invocation
+ *   immediately instead of waiting out the delay.
  */
 // We don't know the parameter types since this function can be anything and can return anything
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -86,6 +101,22 @@ export function debounce<TFunc extends (...args: any[]) => any>(
   let promise: Promise<ReturnType<TFunc>> | undefined;
   let promiseResolve: (value: ReturnType<TFunc> | PromiseLike<ReturnType<TFunc>>) => void;
   let promiseReject: (reason?: unknown) => void;
+  // The most recently passed arguments while an invocation is pending; undefined when none is.
+  // Shared between the trailing-edge timer and `flush` so both run exactly the same invocation.
+  let pendingArgs: Parameters<TFunc> | undefined;
+
+  // Runs one invocation with the given args, settling the shared pending promise with its outcome.
+  // `fn` itself is invoked synchronously (before any await), which is what lets `flush` run the
+  // pending call even in teardown paths (pagehide/beforeunload) where async work never resumes.
+  const runInvocation = async (args: Parameters<TFunc>): Promise<void> => {
+    try {
+      promiseResolve(await fn(...args));
+    } catch (e) {
+      promiseReject(e);
+    } finally {
+      promise = undefined;
+    }
+  };
 
   const debouncedFn = (...args: Parameters<TFunc>): Promise<ReturnType<TFunc>> => {
     clearTimeout(timeout);
@@ -95,14 +126,12 @@ export function debounce<TFunc extends (...args: any[]) => any>(
         promiseReject = reject;
       });
 
-    timeout = setTimeout(async () => {
-      try {
-        promiseResolve(await fn(...args));
-      } catch (e) {
-        promiseReject(e);
-      } finally {
-        promise = undefined;
-      }
+    pendingArgs = args;
+    timeout = setTimeout(() => {
+      const argsToRun = pendingArgs;
+      // Cleared BEFORE invoking so a re-schedule from inside `fn` is not wiped out
+      pendingArgs = undefined;
+      if (argsToRun) runInvocation(argsToRun);
     }, delay);
 
     return promise;
@@ -110,10 +139,22 @@ export function debounce<TFunc extends (...args: any[]) => any>(
 
   debouncedFn.cancel = () => {
     clearTimeout(timeout);
+    pendingArgs = undefined;
     if (promise) {
       promiseReject(new Error(DEBOUNCE_CANCELED_ERROR_MESSAGE));
       promise = undefined;
     }
+  };
+
+  debouncedFn.flush = () => {
+    if (pendingArgs === undefined) return undefined;
+    clearTimeout(timeout);
+    const argsToRun = pendingArgs;
+    // Cleared BEFORE invoking so a re-schedule from inside `fn` is not wiped out
+    pendingArgs = undefined;
+    const pendingPromise = promise;
+    runInvocation(argsToRun);
+    return pendingPromise;
   };
 
   // Type assertion is necessary to cast the internal implementation type to the public API type
