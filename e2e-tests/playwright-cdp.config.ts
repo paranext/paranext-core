@@ -38,14 +38,14 @@ const config = defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    // NOTE: a `viewport: { width: 1920, height: 1080 }` setting was previously here. Playwright's
-    // `use.viewport` is applied to pages CREATED by the test framework inside a browser context.
-    // For pages obtained via `connectOverCDP` (already-running Electron renderer), the config
-    // viewport is NOT retroactively applied — Playwright never gets to call `setViewportSize`
-    // during page creation because the page already exists. Viewport enforcement therefore happens
-    // exclusively in `cdp.fixture.ts` via an explicit `setViewportSize` + an `evaluate()`
-    // verification that reads the renderer's actual `window.innerWidth` / `innerHeight`. See
-    // `cdp.fixture.ts` module docblock for the full enforcement chain.
+    // No `viewport` setting here. Playwright's `use.viewport` applies to pages it CREATES inside a
+    // browser context; a page obtained through `connectOverCDP` already exists, so it is never
+    // applied. The fixture does not call `setViewportSize` either — on a CDP-attached page that
+    // applies an emulation override, which changes `innerWidth` while the real window stays whatever
+    // size it was, so it reports a success it cannot deliver. Window size is instead ASSERTED rather
+    // than applied: `assertDeclaredWindowSize` reads `outerWidth`/`outerHeight` against the size the
+    // spec declared with `test.use({ windowSize })`, and the app must be started at that size. See
+    // the `cdp.fixture.ts` module docblock.
   },
   outputDir: './test-results',
   // NO globalSetup/globalTeardown — app is already running
