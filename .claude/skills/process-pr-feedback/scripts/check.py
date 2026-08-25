@@ -125,10 +125,8 @@ def main():
     for it in items:
         for gap in missing_fields(it):
             malformed.add(it.get("item"))
-            # Reported, not raised: a missing or unknown field is collected as a finding so the
-            # dry run still reaches its verdict, rather than indexed into and raising mid-loop.
-            # An unrecognised `kind` is the dangerous one — see `post.py`'s kind dispatch for
-            # why it refuses instead of falling back.
+            # An unrecognised `kind` is the dangerous one here — see `post.py`'s kind dispatch
+            # for why it refuses instead of falling back.
             fails_early.append(f"{it.get('item', '<no item id>')}: {gap}")
     if malformed:
         print(f"[shape] {len(malformed)} malformed item(s) skipped by later checks: "
