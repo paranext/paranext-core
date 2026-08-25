@@ -44,7 +44,7 @@ export function deriveCellState(args: {
   isLoading: boolean;
   currentBookNum: number;
   projectId: string | undefined;
-}): 'downloading' | 'ready' | 'failed' | 'bookNotAvailable' {
+}): Exclude<ResourceCellState, 'unavailable'> {
   const { usjPossiblyError, isLoading, currentBookNum, projectId } = args;
   if (isPlatformError(usjPossiblyError)) {
     if (isMissingBookOnScreen({ error: usjPossiblyError, currentBookNum, projectId }))

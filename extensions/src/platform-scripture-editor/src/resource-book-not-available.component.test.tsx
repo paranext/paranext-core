@@ -60,5 +60,25 @@ describe('ResourceBookNotAvailable', () => {
 
       expect(screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID)).not.toHaveFocus();
     });
+
+    it('re-announces when the subject changes while the message stays on screen', () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+
+      const { rerender } = render(
+        <ResourceBookNotAvailable message={MESSAGE} announcementKey="ABC:1" />,
+      );
+      const firstRegion = screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID);
+      expect(firstRegion).toHaveFocus();
+
+      // Picking another text that also lacks the book, from the selector this panel keeps mounted.
+      rerender(<ResourceBookNotAvailable message={MESSAGE} announcementKey="ABC:2" />);
+      const secondRegion = screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID);
+
+      // Node identity is the assertion that matters: the message is byte-identical, so a region that
+      // SURVIVES the change keeps focus and announces nothing, and asserting focus alone would pass
+      // either way. Remounting is what drops focus to `body` and lets the repair fire again.
+      expect(secondRegion).not.toBe(firstRegion);
+      expect(secondRegion).toHaveFocus();
+    });
   });
 });

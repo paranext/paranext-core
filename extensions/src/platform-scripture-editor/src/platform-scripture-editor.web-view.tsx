@@ -1438,9 +1438,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // always parses — it names some other book or project — so an unparseable one cannot be stale.
     // This gate has no neutral outcome, and the alternative is the worse one; `bookExists` true
     // with USJ that never arrives leaves this editor on an indefinite spinner.
+    const missingBookIdentities = parseMissingBookError(usjFromPdpPossiblyError);
     const isBookMissingHere =
       isMissingBookOnScreen({ error: usjFromPdpPossiblyError, currentBookNum, projectId }) ||
-      (isMissingBook && !parseMissingBookError(usjFromPdpPossiblyError));
+      (isMissingBook && !missingBookIdentities);
+
+    // A message that parses into the WRONG project is the one shape neither branch above covers: the
+    // fallback needs the parse to FAIL, so a mis-parse leaves `bookExists` true with USJ that never
+    // arrives — an indefinite spinner rather than the missing-book message. The known trigger is a
+    // trailing sentence on the same line, because the identity capture runs greedily to the terminal
+    // period so that project ids containing `.` survive; narrowing it only trades one break for the
+    // other, so this warns rather than changing the parse. Matching the book number but not the
+    // project is what separates this from ordinary staleness, which names the book the user just
+    // left — that path is the common one and must stay quiet.
+    // TODO(PT-4416): Replace message matching with a structured error carrying the book and project.
+    if (
+      missingBookIdentities &&
+      !isBookMissingHere &&
+      missingBookIdentities.bookNum === currentBookNum
+    )
+      logger.warn(
+        `Book-not-found error names project "${missingBookIdentities.projectId}" but this editor is showing "${projectId}", so the message cannot be trusted to describe the book on screen. If the editor never finishes loading, suspect the exception's wording: ${errorMessage}`,
+      );
+
     return [defaultUsj, !isBookMissingHere];
   }, [usjFromPdpPossiblyError, currentBookNum, projectId]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);

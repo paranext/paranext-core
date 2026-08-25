@@ -639,6 +639,56 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
+  // Scripture content, or the reason there is none: the resource has no such book, or it has the
+  // book but the chapter is blank. A blank chapter arrives as a successful, empty USJ rather than as
+  // an error, so it is invisible to `contentState` and needs its own check; the missing book is
+  // tested first because it is the more specific claim. Either message beats letting `Editorial`
+  // render with no scripture set, which shows its "enter some Scripture" prompt — an edit invitation
+  // in a text the reader cannot edit.
+  //
+  // The selector stays mounted above all three: a resource missing a book has no remedy inside this
+  // panel, so the only thing the user can do about it is switch to a text that has the book.
+  //
+  // Only the editor gets `dir`. That is the RESOURCE's text direction, and the messages are app
+  // chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
+  // resource is RTL.
+  const renderContent = () => {
+    if (contentState === 'bookNotAvailable')
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceBookNotAvailable
+            message={localizedStrings[bookNotAvailableKey]}
+            announcementKey={`${resourceProjectId}:${scrRef.book}`}
+          />
+        </div>
+      );
+
+    if (isBlankChapter)
+      return (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <EmptyState
+            id="resource-text-panel-empty-chapter"
+            className="tw:text-center"
+            message={
+              localizedStrings['%webView_platformScriptureEditor_emptyChapter_messageResource%']
+            }
+          />
+        </div>
+      );
+
+    return (
+      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
+        <Editorial
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={setScrRef}
+          options={options}
+          logger={logger}
+        />
+      </div>
+    );
+  };
+
   // Active state: resource is installed and USJ is available
   // This panel (Bible Texts / Commentaries) is Simple-mode-only, so `editor-container-simple`
   // (flattens .editor-container's rounded top corners — see _simple-mode.scss) is applied
@@ -654,49 +704,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
         downloadResourcesLabel={localizedStrings['%webView_resourcePanel_downloadResources%']}
       />
 
-      {/* Scripture content, or the reason there is none: the resource has no such book, or it has
-        the book but the chapter is blank. A blank chapter arrives as a successful, empty USJ rather
-        than as an error, so it is invisible to `contentState` and needs its own check; it is
-        ordered after the missing book because that is the more specific claim. Either message beats
-        letting `Editorial` render with no scripture set, which shows its "enter some Scripture"
-        prompt — an edit invitation in a text the reader cannot edit.
-
-        The selector above stays mounted either way: a resource missing a book has no remedy inside
-        this panel, so the only thing the user can do about it is switch to a text that has the book.
-
-        Only the editor gets `dir`. That is the RESOURCE's text direction, and the messages are app
-        chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
-        resource is RTL. */}
-      {contentState === 'bookNotAvailable' && (
-        <div className="tw:flex-1 tw:overflow-auto">
-          <ResourceBookNotAvailable
-            message={localizedStrings[bookNotAvailableKey]}
-            announcementKey={`${resourceProjectId}:${scrRef.book}`}
-          />
-        </div>
-      )}
-      {contentState !== 'bookNotAvailable' && isBlankChapter && (
-        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-          <EmptyState
-            id="resource-text-panel-empty-chapter"
-            className="tw:text-center"
-            message={
-              localizedStrings['%webView_platformScriptureEditor_emptyChapter_messageResource%']
-            }
-          />
-        </div>
-      )}
-      {contentState !== 'bookNotAvailable' && !isBlankChapter && (
-        <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-          <Editorial
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={setScrRef}
-            options={options}
-            logger={logger}
-          />
-        </div>
-      )}
+      {renderContent()}
     </div>
   );
 

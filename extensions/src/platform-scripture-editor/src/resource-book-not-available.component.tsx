@@ -67,15 +67,19 @@ export function ResourceBookNotAvailable({
   const regionRef = useFocusReplacedContent<HTMLDivElement>(announcementKey);
 
   return (
+    // Keyed on the FOCUS TARGET, not on the message inside it. A new subject has to remount this
+    // element for the announcement to carry: a surviving wrapper keeps focus, so the focus repair
+    // sees a non-body `activeElement` and declines, leaving only a remounted `role="status"` that
+    // several screen readers do not report. Remounting here drops focus to `body`, which is the
+    // condition the repair is waiting for.
     <div
+      key={announcementKey}
       ref={regionRef}
       data-testid={RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID}
       tabIndex={-1}
       className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4 tw:outline-none"
     >
-      {/* Keyed so a new subject remounts the live region. `aria-live` reports content that CHANGES;
-          the same sentence about a different text is not a change it can see. */}
-      <EmptyState key={announcementKey} message={message} className="tw:text-center" />
+      <EmptyState message={message} className="tw:text-center" />
     </div>
   );
 }

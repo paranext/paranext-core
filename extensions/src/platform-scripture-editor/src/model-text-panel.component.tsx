@@ -379,9 +379,9 @@ export function ModelTextPanel({
   // recover rather than being stranded.
   const notFoundState = (
     <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-      <p>{localizedStrings['%webView_modelTextPanel_unknownResource%']}</p>
+      <p>{localize(localizedStrings, '%webView_modelTextPanel_unknownResource%')}</p>
       <Button onClick={() => handlePickModelText()}>
-        {localizedStrings['%webView_modelTextPanel_pickModelText%']}
+        {localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
       </Button>
     </div>
   );
@@ -390,7 +390,7 @@ export function ModelTextPanel({
   if (!hasProject) {
     return (
       <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <p>{localizedStrings['%webView_modelTextPanel_noProject%']}</p>
+        <p>{localize(localizedStrings, '%webView_modelTextPanel_noProject%')}</p>
       </div>
     );
   }
@@ -406,9 +406,9 @@ export function ModelTextPanel({
           <Spinner />
         ) : (
           <>
-            <p>{localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}</p>
+            <p>{localize(localizedStrings, '%webView_modelTextPanel_emptyState_prompt%')}</p>
             <Button onClick={() => handlePickModelText()}>
-              {localizedStrings['%webView_modelTextPanel_pickModelText%']}
+              {localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
             </Button>
           </>
         )}
@@ -428,14 +428,13 @@ export function ModelTextPanel({
   if (installFailed) {
     return (
       <InstallFailedView
-        message={
-          localizedStrings[
-            isOnline
-              ? '%webView_modelTextPanel_installFailed%'
-              : '%webView_modelTextPanel_installFailedOffline%'
-          ]
-        }
-        retryLabel={localizedStrings['%webView_modelTextPanel_retry%']}
+        message={localize(
+          localizedStrings,
+          isOnline
+            ? '%webView_modelTextPanel_installFailed%'
+            : '%webView_modelTextPanel_installFailedOffline%',
+        )}
+        retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
         onRetry={retryInstall}
       />
     );
@@ -448,13 +447,12 @@ export function ModelTextPanel({
   if (isSelecting || isInstalling) {
     return (
       <InstallingView
-        label={
-          localizedStrings[
-            isSelecting
-              ? '%webView_modelTextPanel_selecting%'
-              : '%webView_modelTextPanel_installing%'
-          ]
-        }
+        label={localize(
+          localizedStrings,
+          isSelecting
+            ? '%webView_modelTextPanel_selecting%'
+            : '%webView_modelTextPanel_installing%',
+        )}
       />
     );
   }
@@ -483,6 +481,59 @@ export function ModelTextPanel({
       </div>
     );
   }
+
+  // The model text, or the reason there is none. The label header stays mounted above all three, so
+  // the message is attributed to a named text rather than floating in an anonymous panel. Unlike the
+  // Bible texts panel there is no in-panel selector to preserve — this panel surfaces its picker
+  // only in the zero and not-found states — so this panel's message has to name the remedy in words
+  // instead: a different model text, or a book this one covers.
+  //
+  // A blank chapter is one the model text HAS but with nothing in it. It is invisible to
+  // `isBookMissing`, which keys off the fetch rejecting, so it needs its own check; the missing book
+  // is tested first because it is the more specific claim. Without the blank-chapter arm the
+  // read-only editor renders with nothing set and shows `Editorial`'s "enter some Scripture" prompt
+  // — an edit invitation in a text the reader cannot edit.
+  //
+  // Only the editor gets `dir`. That is the RESOURCE's text direction, and the messages are app
+  // chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the model
+  // text is RTL.
+  const renderContent = () => {
+    if (isBookMissing)
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceBookNotAvailable
+            message={localize(localizedStrings, '%webView_modelTextPanel_bookNotAvailable%')}
+            announcementKey={`${resourceProjectId}:${scrRef.book}`}
+          />
+        </div>
+      );
+
+    if (isBlankChapter)
+      return (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <EmptyState
+            id="model-text-panel-empty-chapter"
+            className="tw:text-center"
+            message={localize(
+              localizedStrings,
+              '%webView_platformScriptureEditor_emptyChapter_messageResource%',
+            )}
+          />
+        </div>
+      );
+
+    return (
+      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
+        <Editorial
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={handleScrRefChange}
+          options={options}
+          logger={logger}
+        />
+      </div>
+    );
+  };
 
   // Active: read-only editor showing the model text.
   // This panel is Simple-mode-only, so `editor-container-simple` (flattens .editor-container's
@@ -533,51 +584,7 @@ export function ModelTextPanel({
           </Tooltip>
         </TooltipProvider>
       )}
-      {/* The model text, or the reason there is none. The label header above stays mounted either
-        way, so the message is attributed to a named text rather than floating in an anonymous panel.
-        Unlike the Bible texts panel there is no in-panel selector to preserve — this panel surfaces
-        its picker only in the zero and not-found states — so this panel's message has to name the
-        remedy in words instead: a different model text, or a book this one covers.
-
-        Only the editor gets `dir`. That is the RESOURCE's text direction, and the message is app
-        chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
-        model text is RTL. */}
-      {isBookMissing && (
-        <div className="tw:flex-1 tw:overflow-auto">
-          <ResourceBookNotAvailable
-            message={localize(localizedStrings, '%webView_modelTextPanel_bookNotAvailable%')}
-            announcementKey={`${resourceProjectId}:${scrRef.book}`}
-          />
-        </div>
-      )}
-      {/* A chapter the model text HAS but with nothing in it. Invisible to `isBookMissing`, which
-        keys off the fetch rejecting, so it needs its own check; ordered after the missing book
-        because that is the more specific claim. Without it the read-only editor renders with
-        nothing set and shows `Editorial`'s "enter some Scripture" prompt — an edit invitation in a
-        text the reader cannot edit. */}
-      {!isBookMissing && isBlankChapter && (
-        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-          <EmptyState
-            id="model-text-panel-empty-chapter"
-            className="tw:text-center"
-            message={localize(
-              localizedStrings,
-              '%webView_platformScriptureEditor_emptyChapter_messageResource%',
-            )}
-          />
-        </div>
-      )}
-      {!isBookMissing && !isBlankChapter && (
-        <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-          <Editorial
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={handleScrRefChange}
-            options={options}
-            logger={logger}
-          />
-        </div>
-      )}
+      {renderContent()}
     </div>
   );
 }
