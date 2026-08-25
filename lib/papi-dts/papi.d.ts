@@ -7759,8 +7759,8 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    *   It is not yet a stable contract.
    */
   export type ResourcePickerDialogOptions = DialogOptions & {
-    /** If provided, only resources of this type are shown */
-    resourceType?: ResourceType;
+    /** If provided, only resources of this type (or any of the listed types) are shown */
+    resourceType?: ResourceType | ResourceType[];
     /** IDs of resources already selected in the calling panel */
     selectedResourceIds?: string[];
   };

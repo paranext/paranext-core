@@ -117,6 +117,17 @@ describe('buildPickerResources', () => {
     expect(rows[0].source).toBe('admin');
   });
 
+  it('filters out DblResourceReferences not present in the DBL catalog', () => {
+    const dblRef: EffectiveResourceReference = {
+      type: 'dblResource',
+      name: 'Ghost',
+      id: 'uid-not-in-catalog',
+      source: 'admin',
+    };
+    const rows = buildPickerResources([dblRef], [], []);
+    expect(rows).toHaveLength(0);
+  });
+
   it('marks an enhancedResource reference (name-only, no id) as not installed', () => {
     const enhancedRef: EffectiveResourceReference = {
       type: 'enhancedResource',
