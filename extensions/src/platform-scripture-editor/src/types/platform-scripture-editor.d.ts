@@ -747,18 +747,20 @@ declare module 'papi-shared-types' {
      */
     'platformScriptureEditor.enableScriptureTextGrid': boolean;
     /**
-     * Delay in milliseconds before the editor settles pending marker edits in place while the
-     * user is idle, in editable marker modes. `undefined` (the default) lets the editor use its
-     * own default delay — the JSON contribution stores `null` (a JSON document cannot express
-     * `undefined`) and papi's serialization maps JSON `null` to JS `undefined` on read. `0`
-     * settles immediately after each edit; `-1` disables the editor's idle settle clock
-     * entirely, so pending edits settle only on caret departure, Enter, blur, or when the
-     * document is read.
+     * Delay in milliseconds before the editor settles pending marker edits in place while the user
+     * is idle, in editable marker modes. The default (`1000`) matches the editor's own built-in
+     * idle delay, so an unset setting behaves identically to no setting at all. `0` settles
+     * immediately after each edit; `-1` disables the editor's idle settle clock entirely, so
+     * pending edits settle only on caret departure, Enter, blur, or when the document is read.
+     *
+     * Deliberately typed `number`, never `number | undefined`: an undefined-able member widens the
+     * whole `SettingTypes` union, silently disabling the compile-time guards that catch a settings
+     * mock's implicit-undefined fallthrough for every OTHER setting.
      *
      * @experimental A tuning knob for the Standard view marker-settle cadence; the setting name
      *   and value semantics are not yet a settled contract and may change.
      */
-    'platformScriptureEditor.markerSettleDelayMs': number | undefined;
+    'platformScriptureEditor.markerSettleDelayMs': number;
   }
 
   export interface CommandHandlers {

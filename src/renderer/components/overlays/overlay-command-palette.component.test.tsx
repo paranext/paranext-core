@@ -2,6 +2,7 @@ import { vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import {
+  ForwardedSessionKind,
   getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
   MarkerPaletteSessionDriver,
@@ -1077,7 +1078,9 @@ describe('key forwarding — the session keeps its keys even when the palette ho
   }
 
   function renderForwardingPalette(
-    session: MarkerPaletteSessionState,
+    // The forwarded kinds only: an 'enter' session never declares key forwarding (its palette is
+    // always focused), so getMarkerPaletteClaimedKeys does not accept it.
+    session: MarkerPaletteSessionState & { kind: ForwardedSessionKind },
     driver: MarkerPaletteSessionDriver,
     onSelect = vi.fn(),
   ) {
@@ -1097,7 +1100,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
 
   it('routes typed characters into the SESSION filter, not the palette input', () => {
     // Without this the session would commit an empty query while the screen showed a full one.
-    const session: MarkerPaletteSessionState = {
+    const session: MarkerPaletteSessionState & { kind: ForwardedSessionKind } = {
       kind: 'selection',
       filter: '',
       items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
@@ -1115,7 +1118,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
   it('overlay-focused + NON-EMPTY filter + Space performs the ratified selection wrap', () => {
     // Previously: Space was an ordinary character appended to cmdk's filter, so the wrap never
     // happened and the query stopped matching anything.
-    const session: MarkerPaletteSessionState = {
+    const session: MarkerPaletteSessionState & { kind: ForwardedSessionKind } = {
       kind: 'selection',
       filter: '',
       items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],
@@ -1138,7 +1141,7 @@ describe('key forwarding — the session keeps its keys even when the palette ho
     // item, committing something the user never typed and bypassing the session entirely. With
     // the patch now opt-in (this palette does not opt in) and Space forwarded, the session's own
     // visible refusal runs instead.
-    const session: MarkerPaletteSessionState = {
+    const session: MarkerPaletteSessionState & { kind: ForwardedSessionKind } = {
       kind: 'selection',
       filter: '',
       items: [{ marker: 'nd' }, { marker: 'nb' }, { marker: 'w' }],

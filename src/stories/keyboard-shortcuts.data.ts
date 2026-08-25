@@ -206,10 +206,35 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Editing',
     context: 'Scripture editor web view, while the markers menu is open',
     // Space commits what was TYPED, not the highlighted entry: at a collapsed caret it materializes
-    // the typed marker; over a selection it wraps only on an exact match and otherwise closes
-    // without touching the selection. In the Enter-triggered paragraph menu Space keeps filtering
-    // instead, matching the editor package's own Enter menu.
+    // the typed marker; over a selection it wraps only on an exact (case-insensitive) match and
+    // otherwise closes without touching the selection. (The Enter-triggered paragraph menu is a
+    // focused palette the forwarding table does not drive; its Space behavior is the overlay
+    // input's own.)
     keys: { macOS: '␣', windows: 'Space', linux: 'Space' },
+    locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
+  },
+  {
+    id: 'scripture-markers-menu-commit-highlighted',
+    purpose: 'Commit the highlighted entry in the markers menu',
+    category: 'Editing',
+    context: 'Scripture editor web view, while the markers menu is open',
+    // Enter and Tab are one commit gesture, matching the editor package's own menus. Over a
+    // zero-match filter both are claimed no-ops (PT9 parity — the menu stays open).
+    keys: { macOS: '⏎ / ⇥', windows: 'Enter / Tab', linux: 'Enter / Tab' },
+    locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
+  },
+  {
+    id: 'scripture-markers-menu-filter',
+    purpose: 'Move the highlight and widen or narrow the typed filter in the markers menu',
+    category: 'Editing',
+    context: 'Scripture editor web view, while the markers menu is open',
+    // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
+    // menu when nothing is typed. Marker characters (letters, digits, `+`, `-`) narrow it.
+    keys: {
+      macOS: '↑ / ↓ / ⌫',
+      windows: 'Up / Down / Backspace',
+      linux: 'Up / Down / Backspace',
+    },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },
   {

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { forwardRef, useImperativeHandle } from 'react';
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type {
@@ -85,6 +85,13 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
       return <div className="editor-input" tabIndex={0} data-testid="popover-editor-input" />;
     }),
   };
+});
+
+// The hoisted mock is module-scope and this config sets no `clearMocks`, so without an explicit
+// reset a `not.toHaveBeenCalled()` assertion is green-or-red by TEST ORDER rather than by
+// behavior — any earlier test that exercised the same path leaks its calls into later ones.
+beforeEach(() => {
+  mockGetMarkerMenuItems.mockClear();
 });
 
 function buildLocalizedStrings(): FootnoteEditorLocalizedStrings {

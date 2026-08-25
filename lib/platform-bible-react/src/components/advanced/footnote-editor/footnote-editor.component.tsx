@@ -830,7 +830,12 @@ export default function FootnoteEditor({
   // Listens for the marker menu trigger to open the markers menu (non-editable modes) or to drive
   // the standard-view `\` marker palette (editable mode with a host-supplied `markerPalette`).
   useEffect(() => {
-    const editorInput =
+    // Resolved PER-EVENT, never captured at effect setup: the popover's inner editor can remount
+    // while this effect stays live, and a captured element goes stale across that remount — the
+    // Enter guard, the `\` trigger, in-session key routing and the paste guard all gated on
+    // `document.activeElement !== editorInput` against a DETACHED node and went dead. Same
+    // treatment as the web view's own capture-phase listener.
+    const getEditorInput = () =>
       editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
 
     if (options.view?.markerMode === 'editable') {
@@ -854,6 +859,7 @@ export default function FootnoteEditor({
         // its own. (The shared forwarding table repeats the check for its in-session keys, so
         // this outer guard covers only this handler's own trigger paths.)
         if (isImeCompositionKeyEvent(event)) return;
+        const editorInput = getEditorInput();
         if (!editorInput || document.activeElement !== editorInput) return;
         const session = paletteSession.current;
 
@@ -915,6 +921,7 @@ export default function FootnoteEditor({
       // the restored in-note caret. A paste with the caret already inside the note is left
       // completely alone.
       const handlePaste = () => {
+        const editorInput = getEditorInput();
         if (!editorInput || document.activeElement !== editorInput) return;
         if (isDomCaretInsideNote()) return;
         editorRef.current?.selectNote(0);
@@ -931,6 +938,7 @@ export default function FootnoteEditor({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      const editorInput = getEditorInput();
       // Shows the marker menu if it isn't already being shown and if the editor is currently selected
       if (
         !showMarkersMenu &&
@@ -974,11 +982,19 @@ export default function FootnoteEditor({
   // already inside it (the overwhelmingly common case, since users normally click their own note
   // text) is left completely alone, so calling `selectNote(0)` here can never re-trigger itself.
   useEffect(() => {
-    const editorInput =
-      editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
-
     const snapStrayCaretIntoNote = () => {
+      // Resolved per-event for the same remount-staleness reason as the keydown/paste guards
+      // above: a captured `.editor-input` detaches when the inner editor remounts and the snap
+      // silently dies with it.
+      const editorInput =
+        editorParentRef.current?.querySelector<HTMLDivElement>('.editor-input') ?? undefined;
       if (!editorInput || document.activeElement !== editorInput) return;
+      // Only a COLLAPSED caret is snapped. A drag-select that merely STARTS in the wrapper
+      // dead space is a selection the user is still building (its live end may be inside the
+      // note), and collapsing it via selectNote(0) destroyed the drag mid-gesture — in every
+      // marker mode, for the popover's whole lifetime.
+      const domSelection = document.getSelection();
+      if (domSelection && !domSelection.isCollapsed) return;
       if (isDomCaretInsideNote()) return;
       editorRef.current?.selectNote(0);
       editorRef.current?.focus();

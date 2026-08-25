@@ -21,22 +21,20 @@
  * directly, and "Sync" resolves immediately without a real backend call.
  */
 import { test, expect } from '../../../fixtures/isolated.fixture';
-import { preConfigureSettings } from '../../../fixtures/helpers';
 import { FirstRunPage } from './first-run.page';
 
-// Override dev-appdata so the wizard always shows, even after a developer has
-// run the app locally and persisted platform.firstRunComplete: true.
-// Per-test (beforeEach/afterEach) rather than per-suite: the "skip setup" test calls
-// completeFirstRun() which writes firstRunComplete:true back to the file, poisoning any
-// subsequent test that runs against the same settings.json within the same suite.
-let restoreSettings: (() => void) | undefined;
-
-test.beforeEach(() => {
-  restoreSettings = preConfigureSettings({ 'platform.firstRunComplete': false });
-});
-
-test.afterEach(() => {
-  restoreSettings?.();
+// Override dev-appdata so the wizard always shows, even after a developer has run the app
+// locally and persisted platform.firstRunComplete: true. Seeded THROUGH the fixture's options,
+// never with a local preConfigureSettings hook: hooks run before test-scoped fixture setup, so a
+// hand-rolled seed was overridden for shared keys and then leaked back into shared dev-appdata
+// by the fixture's later restore. The fixture is test-scoped, so this re-seeds per test — the
+// "skip setup" test calls completeFirstRun(), which writes firstRunComplete: true back to the
+// file and would otherwise poison every later test in the suite. `interfaceMode: 'simple'` is
+// explicit because the wizard is a simple-mode surface: in power mode the first-run resolution
+// shows the app immediately and the wizard never appears.
+test.use({
+  interfaceMode: 'simple',
+  seedSettings: { 'platform.firstRunComplete': false },
 });
 
 /**

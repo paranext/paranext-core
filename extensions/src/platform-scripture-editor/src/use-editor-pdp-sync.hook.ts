@@ -105,7 +105,12 @@ export function useEditorPdpSync({
   usjSentToPdp: MutableRefObject<Usj | undefined>;
   /** Stable ref whose `.current` is the function to call to update the editor's displayed content */
   setEditorUsj: MutableRefObject<(usj: Usj) => void>;
-  saveUsjToPdpIfUpdated: () => void;
+  /**
+   * Saves the editor's USJ to the PDP if it changed. Resolves `true` only when a write actually RAN
+   * (the write-in-flight guard accepted it) — the deferral bookkeeping below records a push only on
+   * that confirmation. A plain `void` return is treated as "ran" for compatibility.
+   */
+  saveUsjToPdpIfUpdated: () => void | Promise<boolean>;
   /**
    * Extends the "actively editing" deferral beyond DOM focus: returns true while an editing SESSION
    * owns the editor's content even though the editor itself is blurred — a marker-palette session
@@ -285,8 +290,26 @@ export function useEditorPdpSync({
           );
           lastIncomingUsjDeferred.current = usjFromPdp;
           if (!editorUnchanged || !incomingUnchanged) {
-            lastEditorUsjPushedWhileDeferring.current = editorUsj;
-            saveUsjToPdpIfUpdated();
+            // Record the push only once the save pipeline CONFIRMS a write ran: a save the
+            // write-in-flight guard drops never leaves the editor, and recording it anyway made
+            // the next deferral compare against content that never left — misattributing an
+            // ordinary deferral as "the editor is doing something lossy". A `void`-returning
+            // save has no outcome to wait on and records SYNCHRONOUSLY (the pre-confirmation
+            // behavior — deferring it to a microtask would let a same-tick delivery burst bypass
+            // the damping entirely); a promise-returning save records when it resolves, and
+            // until then the slot keeps its previous value — the worst case of that window is
+            // one extra re-push, never a wrong lossy warning.
+            const pushOutcome = saveUsjToPdpIfUpdated();
+            if (pushOutcome) {
+              pushOutcome
+                .then((pushed) => {
+                  if (pushed) lastEditorUsjPushedWhileDeferring.current = editorUsj;
+                  return undefined;
+                })
+                .catch(() => undefined);
+            } else {
+              lastEditorUsjPushedWhileDeferring.current = editorUsj;
+            }
           }
           // Pure echo of our OWN unchanged push: the editor still shows exactly what we last pushed
           // (editorUnchanged) AND the PDP keeps re-delivering the SAME differing echo

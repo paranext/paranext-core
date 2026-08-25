@@ -16,9 +16,9 @@ import {
 } from '@renderer/services/overlays/overlay-store';
 import {
   CommandPaletteItem,
-  filterPaletteItems,
   OverlayEntry,
 } from '@renderer/services/overlays/overlay.service-model';
+import { filterPaletteItems } from '@renderer/services/overlays/overlay-palette-filter.util';
 import {
   cn,
   Command,
@@ -391,6 +391,9 @@ export function OverlayCommandPalettePresentational({
           metaKey: e.metaKey,
           altKey: e.altKey,
           shiftKey: e.shiftKey,
+          // Through the native event: the DOM signature takes any string, while React's
+          // synthetic wrapper narrows the argument to its ModifierKey union.
+          getModifierState: (keyArg: string) => e.nativeEvent.getModifierState(keyArg),
           preventDefault: () => e.preventDefault(),
           stopPropagation: () => e.stopPropagation(),
         });

@@ -183,6 +183,26 @@ describe('generateInlineMarkerMenuListItems', () => {
     expect(items.find((i) => i.marker === 'v')?.title).toBe('v');
   });
 
+  it('prefers the bundled markerMenu LocalizeKey over the stylesheet description when loaded', () => {
+    const { ref } = makeMockEditorRef();
+    const items = generateInlineMarkerMenuListItems(
+      ref,
+      noop,
+      { '%markerMenu_marker_f_description%': 'Fußnote (übersetzt)' },
+      false,
+      vi.fn(),
+      undefined,
+      PARENT,
+      BASE_STYLE_INFO,
+    );
+
+    // The translated markerMenu_marker_* strings are the PRIMARY title source; the raw
+    // stylesheet Description only fills in for markers with no loaded LocalizeKey — which is
+    // what custom.sty markers rely on.
+    expect(items.find((i) => i.marker === 'f')?.title).toBe('Fußnote (übersetzt)');
+    expect(items.find((i) => i.marker === 'v')?.title).toBe('v');
+  });
+
   it('localizes a description that is a localize key through localizedStrings', () => {
     const { ref } = makeMockEditorRef();
     const withLocalizeKeyDescription: StyleInfo = {

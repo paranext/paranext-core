@@ -294,4 +294,35 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
       );
     });
   });
+
+  describe('cross-copy drift pins (must agree with the shipping copy in platform-scripture-editor)', () => {
+    // The two vendored copies of the editor stylesheet (this one and
+    // extensions/src/platform-scripture-editor/src/_usj-nodes.scss) are pinned at different
+    // upstream commits, and their suites used to assert DISJOINT rule sets — which is how the
+    // RTL/bidi gutter fixes and the ::after outline landed in only one copy. The shipping suite
+    // carries the same three pins, so a fix landing in one copy fails the other's suite until it
+    // is forwarded.
+    it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {
+      expect(css).toMatch(
+        rule(
+          [
+            '.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child',
+            '.psc-gutter-markers .book > .marker:first-child',
+          ],
+          'unicode-bidi: isolate;',
+        ),
+      );
+    });
+    it('renders the active-text outline via ::after, never ::before (book-code collision)', () => {
+      expect(css).toMatch(/\.psc-active-focus \.psc-active-text::after\s*\{/);
+      expect(declarations).not.toMatch(/\.psc-active-focus \.psc-active-text::before/);
+    });
+    it('does not override text-align in the RTL gutter rule (Chrome/Firefox bidi paint quirk)', () => {
+      const rtlGutter = declarations.match(
+        /\.psc-gutter-markers\[dir='rtl'\] \.para[^{]*\{([^}]*)\}/,
+      );
+      expect(rtlGutter).not.toBeNull();
+      expect(rtlGutter?.[1]).not.toContain('text-align');
+    });
+  });
 });

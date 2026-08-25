@@ -96,6 +96,32 @@ describe('withWriteInFlightGuard', () => {
       expect(neverSettlingOutcome).toBeInstanceOf(Promise);
     });
 
+    it('reports { ran: false, released: true } when a released write eventually resolves', async () => {
+      const isWritingRef = { current: false };
+      let resolveWrite: (value: boolean) => void = () => {};
+      const zombieOutcome = withWriteInFlightGuard(
+        isWritingRef,
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveWrite = resolve;
+          }),
+      );
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(isWritingRef.current).toBe(false);
+
+      // A successor takes the guard; the zombie's late resolution must neither read as a
+      // completed run (its result is a 60-second-stale baseline) nor unlatch the successor.
+      const successorOutcome = withWriteInFlightGuard(
+        isWritingRef,
+        () => new Promise<boolean>(() => {}),
+      );
+      expect(isWritingRef.current).toBe(true);
+      resolveWrite(true);
+      await expect(zombieOutcome).resolves.toEqual({ ran: false, released: true });
+      expect(isWritingRef.current).toBe(true);
+      expect(successorOutcome).toBeInstanceOf(Promise);
+    });
+
     it('honors a non-default releaseAfterMs: still held 1 ms before it, released exactly at it', async () => {
       const isWritingRef = { current: false };
       const customReleaseAfterMs = 5_000;
@@ -133,9 +159,11 @@ describe('withWriteInFlightGuard', () => {
       const successorOutcome = withWriteInFlightGuard(isWritingRef, () => successor.promise);
       expect(isWritingRef.current).toBe(true);
 
-      // The zombie finally settles — its finally must NOT clear the successor's guard
+      // The zombie finally settles — its finally must NOT clear the successor's guard, and its
+      // outcome must NOT read as a completed run (the result is a releaseAfterMs-stale baseline
+      // a successor may already be superseding).
       zombie.resolve(true);
-      await expect(zombieOutcome).resolves.toEqual({ ran: true, result: true });
+      await expect(zombieOutcome).resolves.toEqual({ ran: false, released: true });
       expect(isWritingRef.current).toBe(true);
 
       // A third call while the successor is in flight still sees the guard held

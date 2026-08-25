@@ -41,12 +41,12 @@ import type { ReactElement } from 'react';
 import {
   CommandPaletteItem,
   CommandPaletteRequest,
-  filterPaletteItems,
   IOverlayService,
   OverlayEntry,
   PopoverContent,
   PopoverRequest,
 } from './overlay.service-model';
+import { filterPaletteItems } from './overlay-palette-filter.util';
 import { convertContributionToContextMenuItems } from './overlay-menu-converter';
 import {
   validateCommandPaletteRequest,
@@ -725,17 +725,10 @@ async function showCommandPalette(
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
-  // Resolve LocalizeKey item text ONCE, up front, so the stored entry only ever holds the same
-  // resolved strings the palette renders — host-side filtering and commit can then never disagree
-  // with the on-screen list. Skipped entirely (no await) when every item field is a plain string,
-  // preserving synchronous overlay creation for those callers.
-  const itemLocalizeKeys = collectPaletteItemLocalizeKeys(request.items);
-  const items =
-    itemLocalizeKeys.length > 0
-      ? await localizePaletteItems(request.items, itemLocalizeKeys)
-      : request.items;
-
-  // Replace any existing command palette from this webView
+  // Replace any existing command palette from this webView — BEFORE the localization await
+  // below, never after it: with the replace on the far side of the await, a second request could
+  // start while the first was still resolving localization and BOTH ended up added, after which
+  // `getActiveCommandPalette` (`.find` in creation order) drove the OLDER one.
   const existingOverlays = getOverlaysByWebView(webViewId).filter(
     (o) => o.type === 'commandPalette',
   );
@@ -746,6 +739,16 @@ async function showCommandPalette(
     );
     restoreFocus(existing.id);
   });
+
+  // Resolve LocalizeKey item text ONCE, up front, so the stored entry only ever holds the same
+  // resolved strings the palette renders — host-side filtering and commit can then never disagree
+  // with the on-screen list. Skipped entirely (no await) when every item field is a plain string,
+  // preserving synchronous overlay creation for those callers.
+  const itemLocalizeKeys = collectPaletteItemLocalizeKeys(request.items);
+  const items =
+    itemLocalizeKeys.length > 0
+      ? await localizePaletteItems(request.items, itemLocalizeKeys)
+      : request.items;
 
   const overlayId = newGuid();
 
@@ -1031,6 +1034,11 @@ function handleAppWindowInput(event: AppWindowInputEvent): void {
       Date.now() - lastParentPointerDown.time < PARENT_POINTER_DOWN_CORRELATION_MS
         ? lastParentPointerDown
         : undefined;
+    // Consume-once: this record correlates ONE app-window signal with ONE parent pointerdown.
+    // Left in place, an already-consumed value could satisfy a LATER signal still inside the
+    // correlation window — a follow-up click inside a WebView would inherit the previous
+    // click's "inside overlay" verdict and skip a dismissal it should have performed.
+    lastParentPointerDown = undefined;
     // Clicking overlay content (a palette item, a popover's body) is interacting with the overlay,
     // not clicking away from it. Everything else dismisses, including a click with no recent
     // parent-document pointerdown — that one landed inside a WebView iframe, which is always

@@ -91,7 +91,14 @@ namespace TestParanextDataProvider.Projects
             );
 
             // (b) USX -> USFM: capture the saved-USFM byte form after a full provider round trip.
-            provider.SetChapterUsx(verseRef, usxFromTypedUsfm);
+            // The write result is asserted so this pin is falsifiable: a write the provider
+            // REJECTS would otherwise still pass, because the seeded and expected content
+            // coincide.
+            Assert.That(
+                provider.SetChapterUsx(verseRef, usxFromTypedUsfm),
+                Is.True,
+                "SetChapterUsx must accept the captured USX (a rejected write leaves the seeded content in place, and the pins below would pass vacuously)."
+            );
             string usfmAfterUsxRoundTrip = provider.GetChapterUsfm(verseRef);
             TestContext.Out.WriteLine("USFM: " + usfmAfterUsxRoundTrip);
             Assert.That(

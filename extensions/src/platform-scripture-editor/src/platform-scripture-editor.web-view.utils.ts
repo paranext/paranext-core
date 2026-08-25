@@ -16,7 +16,7 @@
  * package.
  */
 
-import { isBlockMarker, isLocalizeKey, LanguageStrings } from 'platform-bible-utils';
+import { isBlockMarker, isLocalizeKey, LanguageStrings, usfmMarkers } from 'platform-bible-utils';
 import type { MutableRefObject } from 'react';
 import {
   defaultStyleInfo,
@@ -29,16 +29,26 @@ import type { MarkerMenuItem } from 'platform-bible-react';
 import type { ScriptureEditorViewType } from 'platform-scripture-editor';
 
 /**
- * Resolves the display title for a stylesheet-sourced marker-menu item: localizes `description`
- * when it happens to be a `LocalizeKey` (`%...%`), uses it as-is otherwise — the bundled usfm.sty's
- * descriptions are raw English text, not localization keys, so this is the common case — and falls
- * back to the marker code itself when the stylesheet gives no description at all.
+ * Resolves the display title for a stylesheet-sourced marker-menu item.
+ *
+ * The bundled markers table's `description` is always a `LocalizeKey`
+ * (`%markerMenu_marker_*_description%`) and is the PRIMARY title source — the translated
+ * `markerMenu_marker_*` strings must keep working for every marker the table knows. The
+ * stylesheet's raw English `Description` is the FALLBACK: it is all a custom.sty marker has (no
+ * LocalizeKey exists for it), and it also covers a bundled marker whose translation is not loaded.
+ * The marker code itself is the last resort so a row with no description at all still has a title
+ * (though the row then shows the code twice).
  */
 function resolveMarkerMenuItemTitle(
   marker: string,
   description: string | undefined,
   localizedStrings: LanguageStrings,
 ): string {
+  const localizeKey = usfmMarkers[marker]?.description;
+  if (localizeKey && isLocalizeKey(localizeKey)) {
+    const localized = localizedStrings[localizeKey];
+    if (localized) return localized;
+  }
   if (!description) return marker;
   return isLocalizeKey(description) ? (localizedStrings[description] ?? description) : description;
 }

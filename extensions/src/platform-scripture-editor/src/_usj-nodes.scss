@@ -1,7 +1,9 @@
 /* Based on scripture-editors' packages/platform/src/usj-nodes.css:
    https://github.com/eten-tech-foundation/scripture-editors/blob/main/packages/platform/src/usj-nodes.css
    (originally synced from commit ba0e846b3f1:
-   https://github.com/eten-tech-foundation/scripture-editors/commit/ba0e846b3f1).
+   https://github.com/eten-tech-foundation/scripture-editors/commit/ba0e846b3f1,
+   with the RTL/bidi gutter-marker fixes and the ::after active-text outline forwarded from the
+   demo copy's d95907eed30 sync — the two vendored copies must not diverge on those rules).
    Local additions: li/lim --para-indent and --verse-text-start entries in
    .psc-gutter-markers.text-spacing, mirroring scripture-editors commit 846ad99
    (https://github.com/eten-tech-foundation/scripture-editors/commit/846ad99,
@@ -79,13 +81,19 @@
 /* `\ca` renders identically in BOTH of its states — a first-class `char ca` span at root and the
    chapter's attribute-run form (AttributeRunNode carries `usfm_ca` for runKind "ca", the same
    wrapper-class mechanism `usfm_va`/`usfm_vp` use): non-bold green italic, never the chapter's own
-   bold. `font-weight: normal` is explicit — a no-op for the standalone span (nothing bold above
-   it) but load-bearing for the run, which sits INSIDE the chapter element and would otherwise
-   inherit `.usfm_c`'s bold. */
+   bold. A later-injected project stylesheet still wins the ordinary properties where it defines
+   them (the layering rule), which is why color/size/style stay at single-class specificity. */
 .formatted-font .usfm_ca {
   color: #007306;
   font-size: 133%;
   font-style: italic;
+}
+/* The anti-bold is load-bearing for the run form, which sits INSIDE the chapter element and would
+   otherwise inherit `.usfm_c`'s bold — and it must survive a project stylesheet that bolds `\ca`
+   (hbkeng.scss declares `.formatted-font .usfm_ca { font-weight: bold }`, an identical-specificity
+   rule injected later, so source order handed it the win). The doubled class — the same
+   specificity bump `commentary-overrides.scss` uses for `\jmp` — pins exactly this one property. */
+.formatted-font .usfm_ca.usfm_ca {
   font-weight: normal;
 }
 
@@ -2323,17 +2331,18 @@
   counter-reset: none;
 }
 
-.note.usfm_f .immutable-note-caller[data-caller='+'],
-.note.usfm_fe .immutable-note-caller[data-caller='+'],
-.note.usfm_ef .immutable-note-caller[data-caller='+'],
-.note.usfm_efe .immutable-note-caller[data-caller='+'] {
+/* The footnote sequence is the FLOOR for every note family except cross-references, not an
+   enumerated f/fe/ef/efe list: a project custom.sty note marker (`\StyleType Note`, e.g. `\zfn`)
+   renders `class="note usfm_zfn"`, and an enumerated list matched neither family — leaving the
+   caller with no counter and an empty ::before, an invisible, unclickable note. StyleInfo offers
+   custom.sty markers to users, so the custom case is reachable from the UI, not hypothetical. */
+.note:not(.usfm_x):not(.usfm_ex) .immutable-note-caller[data-caller='+'] {
   counter-increment: caller;
 }
 
-.note.collapsed.usfm_f .immutable-note-caller[data-caller='+'] > button::before,
-.note.collapsed.usfm_fe .immutable-note-caller[data-caller='+'] > button::before,
-.note.collapsed.usfm_ef .immutable-note-caller[data-caller='+'] > button::before,
-.note.collapsed.usfm_efe .immutable-note-caller[data-caller='+'] > button::before {
+.note.collapsed:not(.usfm_x):not(.usfm_ex)
+  .immutable-note-caller[data-caller='+']
+  > button::before {
   content: counter(caller, note-callers);
 }
 
@@ -2775,13 +2784,20 @@ span.read img {
    Milestone and character markers that appear later in the paragraph are NOT shown in the
    gutter — they are already hidden by the .marker:not(.verse):not(.chapter) rule above.
    :not(.verse) excludes ImmutableVerseNode; :not(.chapter) excludes ImmutableChapterNode. */
-.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child {
+/* direction: ltr + unicode-bidi: isolate keep USFM marker text (e.g. \q1) readable as
+   LTR even in RTL documents. Physical left/right are used for positioning (instead of
+   inset-inline-*) because forcing direction: ltr on the element makes logical property
+   resolution unreliable across browsers. */
+.psc-gutter-markers .para > .marker:not(.verse):not(.chapter):first-child,
+.psc-gutter-markers .book > .marker:first-child {
   display: block;
   position: absolute;
   /* left = -(gutter-width) + 0.5em-gap + para-indent-compensation */
   left: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
   top: 0;
   width: 3em;
+  direction: ltr;
+  unicode-bidi: isolate;
   text-align: right;
   white-space: nowrap;
   color: var(--scripture-accent-marker);
@@ -2920,10 +2936,19 @@ span.read img {
   padding-left: 10px; /* restore base value */
 }
 
-.psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child {
+/* RTL: gutter moves to the right. Physical right is used for the same reason as left above.
+   var(--para-indent) is inherited from the paragraph element (same variable the LTR left
+   calc uses), so indented para types automatically get the correct gutter column without
+   needing per-type overrides.
+   text-align is intentionally NOT overridden here: the base rule's `text-align: right` is
+   what keeps the (forced-ltr) marker text painting inside its 3em box. Setting
+   `text-align: left` here in an RTL containing block triggers a Chrome/Firefox bidi quirk
+   where the text glyphs are painted ~57px outside the box to the left (only manifests when
+   the box width matches the CSS width — auto-widened boxes like \mt1, \ms1 escape it). */
+.psc-gutter-markers[dir='rtl'] .para > .marker:not(.verse):not(.chapter):first-child,
+.psc-gutter-markers[dir='rtl'] .book > .marker:first-child {
   left: auto;
   right: calc(-1 * (var(--psc-gutter-width) - 0.5em) - var(--para-indent));
-  text-align: left;
 }
 
 /* ── Active text focus box ────────────────────────────────────────────────────
@@ -2937,25 +2962,34 @@ span.read img {
   --scripture-accent: #c4956a;
 }
 
-/* position: relative on the active paragraph is the containing block for ::before. */
+/* position: relative on the active paragraph is the containing block for the outline pseudo.
+   We use ::after instead of ::before because BookNode paragraphs already use ::before to render
+   the book code via attr(data-code) (see .marker-hidden .book[data-code]::before above), and that
+   rule has higher specificity than the outline's — sharing ::before would let "HAB" bleed into the
+   outline's absolutely-positioned box. */
 .psc-active-focus .psc-active-text {
   position: relative;
 }
 
-.psc-active-focus .psc-active-text::before {
+.psc-active-focus .psc-active-text::after {
   content: '';
   position: absolute;
-  left: var(--verse-text-start, 0px);
-  right: 0;
-  top: var(--active-verse-top, -2px);
-  bottom: var(--active-verse-bottom, -2px);
+  inset-inline-start: var(--verse-text-start, 0px);
+  inset-inline-end: 0;
+  top: -2px;
+  bottom: -2px;
   border: 2.5px solid var(--scripture-accent);
   border-radius: 4px;
   pointer-events: none;
 }
 
-/* RTL: active text box mirrors the hanging indent to the right side */
-.psc-active-focus[dir='rtl'] .psc-active-text::before {
-  left: 0;
-  right: var(--verse-text-start, 0px);
+/* In gutter-marker mode, the paragraph marker (\p, \q1, etc.) is absolutely positioned in the
+   gutter to the inline-start side of the paragraph's content box. Extend the outline's
+   inline-start so the box surrounds the marker too — using min() picks whichever is further
+   into the gutter, the hanging-indent text start (for poetry) or the marker's own column. */
+.psc-active-focus.psc-gutter-markers .psc-active-text::after {
+  inset-inline-start: min(
+    var(--verse-text-start, 0px),
+    calc(-1 * var(--psc-gutter-width) - var(--para-indent))
+  );
 }

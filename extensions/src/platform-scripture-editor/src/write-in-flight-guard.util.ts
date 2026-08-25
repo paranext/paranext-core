@@ -25,14 +25,16 @@ export const WRITE_GUARD_RELEASE_AFTER_MS = 60_000;
  * extension host, a lost JSON-RPC request the network layer can't time out). Ownership then passes
  * to whichever later write takes the guard: if the timed-out "zombie" write eventually settles, its
  * `finally` deliberately does NOT clear the guard, so it can never unlatch a successor's in-flight
- * write. For writes that settle normally the timer is cleared in the same `finally` and this path
- * never runs.
+ * write — and its outcome reports `{ ran: false, released: true }` rather than a completed run,
+ * because by then a successor may own the guard against newer editor content, and reporting success
+ * made the caller run its whole post-save pipeline against a `releaseAfterMs`-stale baseline. For
+ * writes that settle normally the timer is cleared in the same `finally` and this path never runs.
  */
 export async function withWriteInFlightGuard<T>(
   isWritingRef: MutableRefObject<boolean>,
   write: () => Promise<T>,
   releaseAfterMs: number = WRITE_GUARD_RELEASE_AFTER_MS,
-): Promise<{ ran: true; result: T } | { ran: false }> {
+): Promise<{ ran: true; result: T } | { ran: false; released?: true }> {
   if (isWritingRef.current) return { ran: false };
   isWritingRef.current = true;
   // Local ownership token: once the release below fires, THIS write no longer owns the guard, so
@@ -46,7 +48,11 @@ export async function withWriteInFlightGuard<T>(
     );
   }, releaseAfterMs);
   try {
-    return { ran: true, result: await write() };
+    const result = await write();
+    // Settled only AFTER the release fired: this write no longer owns the guard, so it must not
+    // report a completed run (see the doc comment above).
+    if (released) return { ran: false, released: true };
+    return { ran: true, result };
   } finally {
     clearTimeout(releaseTimer);
     if (!released) isWritingRef.current = false;

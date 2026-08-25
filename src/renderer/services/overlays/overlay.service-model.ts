@@ -8,7 +8,11 @@
 
 import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
 import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
-import { filterAndRankPaletteItems, type PaletteFilterMode } from 'platform-bible-react';
+// Type-only, deliberately: this module is the overlay service's cross-process CONTRACT, and a
+// runtime value import from `platform-bible-react` here pulled the whole component library into
+// every consumer of these types. The implementation half lives in
+// `overlay-palette-filter.util.ts`.
+import type { PaletteFilterMode } from 'platform-bible-react';
 import type { ReactElement } from 'react';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 
@@ -169,7 +173,8 @@ export interface CommandPaletteRequest {
 }
 
 /**
- * How {@link filterPaletteItems} matches filter text against items — one mode per palette flavor:
+ * How `filterPaletteItems` (overlay-palette-filter.util.ts) matches filter text against items — one
+ * mode per palette flavor:
  *
  * - `'passive'` — case-insensitive PREFIX match on `label` only. Passive palettes show bare marker
  *   codes (`f`, `fe`, `fig`) filtered by the marker prefix the user has typed into the document,
@@ -179,49 +184,13 @@ export interface CommandPaletteRequest {
  *   never match, so an exact marker match cannot be buried under items whose descriptions happen to
  *   contain the typed letter.
  *
- * Both modes rank matches exact-first — see {@link filterPaletteItems}.
+ * Both modes rank matches exact-first — see `filterPaletteItems`.
  *
  * Re-exported from `platform-bible-react`, the home of the `filterAndRankPaletteItems` that
- * {@link filterPaletteItems} delegates to, so the mode this service accepts and the mode that
- * function implements cannot drift apart.
+ * `filterPaletteItems` delegates to, so the mode this service accepts and the mode that function
+ * implements cannot drift apart.
  */
 export type { PaletteFilterMode };
-
-/**
- * Filters command palette items by matching `filterText` against each item's `label`, with
- * per-{@link PaletteFilterMode} semantics (passive prefix-matches with a leading `+` stripped from
- * the filter first, active containment-matches), and ranks the matches EXACT-FIRST: exact label
- * match, then prefix matches, then containment matches, ties keeping their original context order.
- * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
- * never be case-picky). Returns `items` unchanged when `filterText` is empty or undefined.
- *
- * Delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the editor package's
- * own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette — so the host
- * palette and the editor palette can never disagree about ordering, and the marker-palette keydown
- * table's zero-match detection counts with the same semantics.
- *
- * This is the single filtering implementation shared by {@link IOverlayService}'s host-side
- * `commitCommandPaletteSelection` (to resolve the highlighted item) and the command palette
- * component (to render the filtered list) — using one function for both keeps host-side selection
- * and on-screen rendering from disagreeing about which items are visible.
- *
- * @remarks
- * Matching operates directly on the strings in `items` with no localization of its own. Both
- * callers pass items whose `LocalizeKey` text was already resolved to localized strings when the
- * palette was shown (see {@link IOverlayService.showCommandPalette}), so host-side filtering, commit
- * resolution, and the rendered list all match against the same display text.
- * @param items The full, unfiltered list of command palette items
- * @param filterText The current filter text, or undefined/empty for no filtering
- * @param mode Which palette flavor's matching semantics to apply
- * @returns The items matching the filter text under the given mode, ranked exact-first
- */
-export function filterPaletteItems(
-  items: CommandPaletteItem[],
-  filterText: string | undefined,
-  mode: PaletteFilterMode,
-): CommandPaletteItem[] {
-  return filterAndRankPaletteItems(items, filterText, mode);
-}
 
 // ── Service Interface ──
 

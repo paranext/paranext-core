@@ -1139,9 +1139,14 @@ export function BookChapterControl({
                             chapterNum: topMatch.chapterNum ?? 1,
                             verseNum: topMatch.verseNum ?? 1,
                           },
+                          // 'English', matching the trigger formatter's fallback above: with no
+                          // localizedBookNames prop (no app code passes one today), `undefined`
+                          // made formatScrRef render the raw book CODE ("OBA 1:1") here while the
+                          // trigger showed "Obadiah 1:1" — the same reference in two spellings in
+                          // one control.
                           localizedBookNames
                             ? getLocalizedBookId(topMatch.book, localizedBookNames)
-                            : undefined,
+                            : 'English',
                         )}
                       </CommandItem>
                     </CommandGroup>

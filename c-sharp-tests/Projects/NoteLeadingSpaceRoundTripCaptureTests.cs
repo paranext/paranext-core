@@ -165,8 +165,14 @@ namespace TestParanextDataProvider.Projects
                 "USFM -> USX must keep the space after \\cat* as note text (captured pin)."
             );
 
-            // (b) USX -> USFM via the provider's real save path: the byte survives to disk.
-            provider.SetChapterUsx(verseRef, usxFromTypedUsfm);
+            // (b) USX -> USFM via the provider's real save path: the byte survives to disk. The
+            // write result is asserted so the pins below are falsifiable — a rejected write would
+            // leave the seeded content in place, which coincides with the expected bytes.
+            Assert.That(
+                provider.SetChapterUsx(verseRef, usxFromTypedUsfm),
+                Is.True,
+                "SetChapterUsx must accept the captured USX."
+            );
             string usfmAfterUsxRoundTrip = provider.GetChapterUsfm(verseRef);
             TestContext.Out.WriteLine("USFM: " + usfmAfterUsxRoundTrip);
             Assert.That(

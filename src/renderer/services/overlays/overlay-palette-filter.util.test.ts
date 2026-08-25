@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { CommandPaletteItem, filterPaletteItems } from './overlay.service-model';
+import { CommandPaletteItem } from './overlay.service-model';
+import { filterPaletteItems } from './overlay-palette-filter.util';
 
 describe('filterPaletteItems', () => {
   describe('passive mode (bare-marker prefix matching, exact match first)', () => {

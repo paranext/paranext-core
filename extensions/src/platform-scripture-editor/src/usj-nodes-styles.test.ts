@@ -142,8 +142,12 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // render bold at roughly 200%/225% of body text instead of matching their standalone
     // `char ca`/`cp` twins, and `\ca` stays on the chapter's line instead of dropping below it.
     it('keeps a nested \\ca run non-bold like its standalone twin', () => {
+      expect(scss).toMatch(/\.formatted-font \.usfm_ca \{[^}]*font-style: italic;[^}]*\}/);
+      // The anti-bold rides on a DOUBLED class so a later-injected project stylesheet's
+      // identical-specificity `.formatted-font .usfm_ca { font-weight: bold }` (hbkeng.scss has
+      // exactly this) cannot win the tie on source order.
       expect(scss).toMatch(
-        /\.formatted-font \.usfm_ca \{[^}]*font-style: italic;[^}]*font-weight: normal;[^}]*\}/,
+        /\.formatted-font \.usfm_ca\.usfm_ca \{[^}]*font-weight: normal;[^}]*\}/,
       );
     });
 
@@ -191,9 +195,13 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
         /\.note\.usfm_x \.immutable-note-caller\[data-caller='\+'\],\n\.note\.usfm_ex \.immutable-note-caller\[data-caller='\+'\] \{\s*counter-increment: crossref;\s*\}/,
       );
       expect(scss).toMatch(/counter\(crossref, cross-ref-callers\)/);
-      // The footnote half must stay pinned too — a re-sync dropping the scoped footnote rules
-      // while keeping the crossref ones would leave nothing incrementing `caller`.
-      expect(scss).toMatch(/\.note\.usfm_f \.immutable-note-caller\[data-caller='\+'\]/);
+      // The footnote half is the FLOOR, not an enumerated f/fe/ef/efe list: a custom.sty note
+      // marker (`\zfn` → class "note usfm_zfn") matched neither family list and rendered an
+      // invisible, unclickable caller — no counter, empty ::before. Everything that is not a
+      // cross-reference increments `caller`.
+      expect(scss).toMatch(
+        /\.note:not\(\.usfm_x\):not\(\.usfm_ex\) \.immutable-note-caller\[data-caller='\+'\]/,
+      );
       expect(scss).toMatch(/counter\(caller, note-callers\)/);
       // The generic rules the scoped versions replaced must not return — a re-synced copy that
       // re-adds them alongside the scoped ones would double-increment the footnote counter.
@@ -201,6 +209,33 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
       expect(scss).not.toMatch(
         /^\.note\.collapsed \.immutable-note-caller\[data-caller='\+'\] > button::before/m,
       );
+    });
+  });
+
+  describe('cross-copy drift pins (must agree with the demo copy in platform-bible-react)', () => {
+    // The two vendored copies of the editor stylesheet (this one and
+    // lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css) are pinned at
+    // different upstream commits, and their suites used to assert DISJOINT rule sets — which is
+    // how the RTL/bidi gutter fixes and the ::after outline landed in only one copy. The demo
+    // suite carries the same three pins, so a fix landing in one copy fails the other's suite
+    // until it is forwarded.
+    it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {
+      expect(scss).toMatch(
+        /\.psc-gutter-markers \.para > \.marker:not\(\.verse\):not\(\.chapter\):first-child,\s*\.psc-gutter-markers \.book > \.marker:first-child \{[^}]*unicode-bidi: isolate;/,
+      );
+    });
+    it('renders the active-text outline via ::after, never ::before (book-code collision)', () => {
+      expect(scss).toMatch(/\.psc-active-focus \.psc-active-text::after\s*\{/);
+      expect(scss.replace(/\/\*[\s\S]*?\*\//g, '')).not.toMatch(
+        /\.psc-active-focus \.psc-active-text::before/,
+      );
+    });
+    it('does not override text-align in the RTL gutter rule (Chrome/Firefox bidi paint quirk)', () => {
+      const rtlGutter = scss
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .match(/\.psc-gutter-markers\[dir='rtl'\] \.para[^{]*\{([^}]*)\}/);
+      expect(rtlGutter).not.toBeNull();
+      expect(rtlGutter?.[1]).not.toContain('text-align');
     });
   });
 });

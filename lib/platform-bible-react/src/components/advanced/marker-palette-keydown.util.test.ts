@@ -120,7 +120,7 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     // closes). Previously the table returned 'ended' unconditionally on Enter while the overlay
     // service dropped the zero-match commit and kept the palette open — orphaning the overlay
     // over a dead session (subsequent typing landed in the document under a floating palette).
-    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+    (['backslash', 'selection'] as const).forEach((kind) => {
       const driver = makeDriver();
       const state = session(kind, 'qqqq');
       const event = makeEvent('Enter');
@@ -163,8 +163,8 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(focusedDriver.commit).toHaveBeenCalledOnce();
   });
 
-  it('claims Escape and dismisses for every session kind', () => {
-    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+  it('claims Escape and dismisses for every forwarded session kind', () => {
+    (['backslash', 'selection'] as const).forEach((kind) => {
       const driver = makeDriver();
       const event = makeEvent('Escape');
       expect(handleMarkerPaletteSessionKeyDown(event, session(kind), driver)).toBe('ended');
@@ -176,7 +176,7 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   it('claims arrows and drives the highlight without ending the session', () => {
     const driver = makeDriver();
     const event = makeEvent('ArrowDown');
-    expect(handleMarkerPaletteSessionKeyDown(event, session('enter'), driver)).toBe('continue');
+    expect(handleMarkerPaletteSessionKeyDown(event, session('backslash'), driver)).toBe('continue');
     expect(event.defaultPrevented).toBe(true);
     expect(driver.update).toHaveBeenCalledWith({ moveSelection: 1 });
   });
@@ -371,12 +371,12 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.commit).not.toHaveBeenCalled();
   });
 
-  it('Backspace on an empty filter is CLAIMED and closes the palette for every kind', () => {
+  it('Backspace on an empty filter is CLAIMED and closes the palette for every forwarded kind', () => {
     // Editor-palette parity: with nothing typed there is nothing to widen — Backspace closes the
     // menu. Under the active palette nothing of the palette's ever landed, so an unclaimed
     // Backspace would eat a real document character (the passive palette relied on it deleting
     // the landed trigger `\`).
-    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+    (['backslash', 'selection'] as const).forEach((kind) => {
       const driver = makeDriver();
       const event = makeEvent('Backspace');
       expect(handleMarkerPaletteSessionKeyDown(event, session(kind, ''), driver)).toBe('ended');
@@ -394,26 +394,21 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
-  it('enter session: filter chars (incl. digits) are CLAIMED and forwarded', () => {
+  it('enter session: every key passes through untouched — the table does not drive it', () => {
+    // The Enter-split palette is always FOCUSED with no key forwarding (the overlay's own input
+    // owns every key), so its per-kind table entries were dead code — including a latent bug
+    // where Space appended a literal space no marker label matches. The only way a key reaches
+    // the table with an 'enter' session is the sub-frame race before the overlay takes focus;
+    // it passes through with nothing claimed and nothing driven.
     const driver = makeDriver();
     const state = session('enter', 'q');
-    const event = makeEvent('1');
-    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('continue');
-    expect(event.defaultPrevented).toBe(true); // must NOT land in the document
-    expect(driver.update).toHaveBeenCalledWith({ filterText: 'q1' });
-  });
-
-  it('enter session: Space keeps filtering — claimed, appended to the query (editor-menu parity)', () => {
-    // The editor package's Enter-triggered menu swallows Space into its query (its only commit
-    // is the highlighted item); the host menu matches. Marker names never contain spaces, so
-    // this narrows to zero matches — where Enter no-ops and the palette stays open.
-    const driver = makeDriver();
-    const state = session('enter', 'q1');
-    const event = makeEvent(' ');
-    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('continue');
-    expect(event.defaultPrevented).toBe(true);
-    expect(state.filter).toBe('q1 ');
-    expect(driver.update).toHaveBeenCalledWith({ filterText: 'q1 ' });
+    for (const key of ['1', ' ', 'Enter', 'Escape', 'Backspace', 'ArrowDown']) {
+      const event = makeEvent(key);
+      expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('passed');
+      expect(event.defaultPrevented).toBe(false);
+    }
+    expect(state.filter).toBe('q');
+    expect(driver.update).not.toHaveBeenCalled();
     expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
@@ -509,8 +504,8 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.dismiss).toHaveBeenCalledOnce();
   });
 
-  it('backslash/enter sessions let unrelated keys land while dismissing', () => {
-    (['backslash', 'enter'] as const).forEach((kind) => {
+  it('backslash sessions let unrelated keys land while dismissing', () => {
+    (['backslash'] as const).forEach((kind) => {
       const driver = makeDriver();
       const event = makeEvent('%');
       expect(handleMarkerPaletteSessionKeyDown(event, session(kind), driver)).toBe('ended');
@@ -519,8 +514,8 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     });
   });
 
-  it('Backspace edits a non-empty filter — claimed for every kind (nothing landed to delete)', () => {
-    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+  it('Backspace edits a non-empty filter — claimed for every forwarded kind (nothing landed to delete)', () => {
+    (['backslash', 'selection'] as const).forEach((kind) => {
       const driver = makeDriver();
       const state = session(kind, 'wj');
       const event = makeEvent('Backspace');
@@ -567,8 +562,10 @@ describe('getMarkerPaletteClaimedKeys', () => {
   // The list a session hands to its palette so the palette forwards exactly these keys back
   // instead of consuming them. It must be derived from the table below rather than hand-written,
   // or the two drift and the forwarded half of a session behaves differently from the focused one.
-  it('claims every key the table acts on, for each session kind', () => {
-    (['backslash', 'enter', 'selection'] as const).forEach((kind) => {
+  it('claims every key the table acts on, for each forwarded session kind', () => {
+    // 'enter' is deliberately absent: the Enter-split palette is always focused with no key
+    // forwarding, so the table neither drives it nor claims keys for it.
+    (['backslash', 'selection'] as const).forEach((kind) => {
       const keys = getMarkerPaletteClaimedKeys(kind);
       // The control keys the owner named explicitly, plus the ones the table has branches for.
       [' ', 'Enter', 'Escape', 'Tab', '*', 'Backspace', 'ArrowUp', 'ArrowDown'].forEach((key) => {

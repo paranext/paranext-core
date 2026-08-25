@@ -1079,8 +1079,9 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  *   commits the marker the user literally typed, `*` commits it as a CLOSING marker, and `\`
  *   commits and immediately reopens the palette so `\qt-s\qt-e` is one flow.
  * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
- *   the split creates. Its only commit is the highlighted item, so Space is a filter character here
- *   rather than a commit key.
+ *   the split creates. Its only commit is the highlighted item. Always a FOCUSED palette with no
+ *   key forwarding, so the forwarding table never drives it — the kind exists for session-tracking
+ *   (re-entrancy guards, token cleanup) in the session owners.
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
  *   selection in the marker the filter names exactly; `*` instead replaces the selection with the
@@ -1167,6 +1168,15 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
  */
 export type MarkerPaletteKeyOutcome = "passed" | "continue" | "ended";
 /**
+ * The session kinds this forwarding table actually drives. `'enter'` is deliberately absent: the
+ * Enter-split palette is always FOCUSED with no key forwarding (`openEnterPalette`'s own doc —
+ * nothing lands on the Enter keypress itself, so there is no forwarding table to drive), which
+ * makes any per-kind `'enter'` entries here dead code and a drift trap. An `'enter'` session that
+ * still reaches {@link handleMarkerPaletteSessionKeyDown} (the sub-frame race before the overlay
+ * takes focus) is passed through untouched.
+ */
+export type ForwardedSessionKind = Exclude<MarkerPaletteSessionKind, "enter">;
+/**
  * Every `KeyboardEvent.key` this table acts on for `kind` — the list a session hands to its palette
  * as the `keys` of its `PaletteKeyForwarding` declaration so the palette forwards exactly these
  * back instead of consuming them.
@@ -1182,7 +1192,7 @@ export type MarkerPaletteKeyOutcome = "passed" | "continue" | "ended";
  * Derived from the table rather than hand-listed, so the two cannot drift. Pure modifiers are
  * excluded: the table only passes them through, and claiming them would break `+` chords.
  */
-export declare function getMarkerPaletteClaimedKeys(kind: MarkerPaletteSessionKind): string[];
+export declare function getMarkerPaletteClaimedKeys(kind: ForwardedSessionKind): string[];
 /**
  * Routes one keydown through an open marker-palette session. See the module doc for the per-kind
  * semantics. Call from a CAPTURE-phase listener; on `'ended'` clear the session ref.

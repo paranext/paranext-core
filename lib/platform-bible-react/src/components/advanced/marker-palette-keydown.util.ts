@@ -31,9 +31,9 @@
  *   ordinary character and no palette reopens. Because they commit, neither `*` nor `\` is a filter
  *   character — a close-tag entry can no longer be narrowed to by typing its trailing `*`, since
  *   pressing `*` commits the end state that entry would have applied.
- * - `'enter'` — FOCUSED Enter-split menu (collapsed caret): control keys and filter characters
- *   (including Space — the menu's only commit is the highlighted item) are claimed, any other key
- *   means the user resumed editing (dismiss, let it land).
+ * - `'enter'` — FOCUSED Enter-split menu (collapsed caret). NOT driven by this table: the menu is
+ *   always focused with no key forwarding (the overlay's own input owns every key), so the table
+ *   passes an `'enter'` session's keys through untouched (see `ForwardedSessionKind`).
  * - `'selection'` — FOCUSED selection-wrap palette: EVERY non-chord key is claimed — nothing may land
  *   while it is open, because typing would replace the wrapped selection. Space commits the item
  *   the typed filter names EXACTLY ({@link MarkerPaletteSessionDriver.commitItem} — the wrap), or
@@ -53,6 +53,7 @@
  * the wrapped selection instead of being swallowed while a wrap palette is open).
  */
 
+import { MODIFIER_KEYS } from 'platform-bible-utils';
 import type { ForwardedPaletteKeyEvent, PaletteDriver } from 'platform-bible-utils/experimental';
 import type { MutableRefObject } from 'react';
 import { filterAndRankPaletteItems } from '@/components/advanced/marker-palette-filter.util';
@@ -75,8 +76,9 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  *   commits the marker the user literally typed, `*` commits it as a CLOSING marker, and `\`
  *   commits and immediately reopens the palette so `\qt-s\qt-e` is one flow.
  * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
- *   the split creates. Its only commit is the highlighted item, so Space is a filter character here
- *   rather than a commit key.
+ *   the split creates. Its only commit is the highlighted item. Always a FOCUSED palette with no
+ *   key forwarding, so the forwarding table never drives it — the kind exists for session-tracking
+ *   (re-entrancy guards, token cleanup) in the session owners.
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
  *   selection in the marker the filter names exactly; `*` instead replaces the selection with the
@@ -181,15 +183,23 @@ export function isImeCompositionKeyEvent(event: MarkerPaletteKeyEvent): boolean 
   return event.isComposing || event.keyCode === 229;
 }
 
-const FILTER_CHAR_REGEX: Record<MarkerPaletteSessionKind, RegExp> = {
+/**
+ * The session kinds this forwarding table actually drives. `'enter'` is deliberately absent: the
+ * Enter-split palette is always FOCUSED with no key forwarding (`openEnterPalette`'s own doc —
+ * nothing lands on the Enter keypress itself, so there is no forwarding table to drive), which
+ * makes any per-kind `'enter'` entries here dead code and a drift trap. An `'enter'` session that
+ * still reaches {@link handleMarkerPaletteSessionKeyDown} (the sub-frame race before the overlay
+ * takes focus) is passed through untouched.
+ */
+export type ForwardedSessionKind = Exclude<MarkerPaletteSessionKind, 'enter'>;
+
+const FILTER_CHAR_REGEX: Record<ForwardedSessionKind, RegExp> = {
   // USFM marker characters that filter the palette. Hyphens (milestones `ts-s`/`ts-e`, `qt-s`,
   // `zpa-xb`) and letter case (custom markers may be capitalized; marker search is
   // case-insensitive) are valid wherever markers are filtered. `*` is NOT here: at a collapsed
   // caret it is the CLOSING-marker commit key (see the `*` branch below), so it can never reach
   // the filter.
   backslash: /^[a-z0-9+-]$/i,
-  // Focused Enter-split menu: paragraph markers only (digits for q1/s2 etc.).
-  enter: /^[a-z0-9]$/i,
   selection: /^[a-z0-9+-]$/i,
 };
 
@@ -231,7 +241,7 @@ const FILTER_CHAR_ALPHABET: readonly string[] = [
  * Derived from the table rather than hand-listed, so the two cannot drift. Pure modifiers are
  * excluded: the table only passes them through, and claiming them would break `+` chords.
  */
-export function getMarkerPaletteClaimedKeys(kind: MarkerPaletteSessionKind): string[] {
+export function getMarkerPaletteClaimedKeys(kind: ForwardedSessionKind): string[] {
   return [
     ...CONTROL_KEYS,
     ...FILTER_CHAR_ALPHABET.filter((char) => FILTER_CHAR_REGEX[kind].test(char)),
@@ -252,6 +262,15 @@ export function handleMarkerPaletteSessionKeyDown(
   session: MarkerPaletteSessionState,
   driver: MarkerPaletteSessionDriver,
 ): MarkerPaletteKeyOutcome {
+  const { kind } = session;
+  if (kind === 'enter') {
+    // The Enter-split palette is always FOCUSED with no key forwarding (see
+    // ForwardedSessionKind), so its keys never legitimately reach this table — the only way in
+    // is the sub-frame race between the session being recorded and the overlay taking focus.
+    // Pass such a key through untouched rather than keeping a dead per-kind branch set alive.
+    return 'passed';
+  }
+
   if (isImeCompositionKeyEvent(event)) {
     // A composition key is not palette input — claiming an Enter that confirms a CJK candidate
     // (or ingesting composition keystrokes into the filter) would corrupt the composition. Leave
@@ -259,21 +278,21 @@ export function handleMarkerPaletteSessionKeyDown(
     return 'passed';
   }
 
-  if (
-    event.key === 'Shift' ||
-    event.key === 'Control' ||
-    event.key === 'Alt' ||
-    event.key === 'Meta'
-  ) {
-    // Pure modifier keydowns aren't input — e.g. the Shift half of a `+` chord fires its own
-    // keydown before the `+` arrives. Dismissing here would kill the session mid-chord and break
-    // `\+w` nested-marker filtering.
+  if (MODIFIER_KEYS.has(event.key) || event.key === 'Dead') {
+    // Modifier and lock keydowns aren't input — e.g. the Shift half of a `+` chord fires its own
+    // keydown before the `+` arrives, and CapsLock is how an uppercase CUSTOM marker gets typed.
+    // The shared MODIFIER_KEYS set (platform-bible-utils) covers the lock keys a hand-kept list
+    // here kept missing; `Dead` is not in that set but is how diacritics begin on many layouts,
+    // and dismissing on it would close the palette mid-character.
     return 'passed';
   }
 
-  if (event.ctrlKey || event.metaKey || event.altKey) {
+  if ((event.ctrlKey || event.metaKey || event.altKey) && !event.getModifierState?.('AltGraph')) {
     // A real chord (Ctrl+C, Cmd+V, …): never ingest it into the filter and never claim it — let
-    // it do its normal job. The palette is no longer relevant to what happens next.
+    // it do its normal job. The palette is no longer relevant to what happens next. AltGr is the
+    // exception: on Windows/Linux a character typed WITH AltGr held reports `ctrlKey && altKey`
+    // both set, so without the explicit exclusion ordinary typing on several European layouts
+    // dismissed the session.
     driver.dismiss();
     return 'ended';
   }
@@ -284,7 +303,11 @@ export function handleMarkerPaletteSessionKeyDown(
     return 'continue';
   }
 
-  if (event.key === 'Enter') {
+  if (event.key === 'Enter' || event.key === 'Tab') {
+    // Tab commits the highlighted item exactly like Enter — the editor package's own menus treat
+    // the two as one commit gesture, and Tab is in CONTROL_KEYS (so a focused palette forwards
+    // it here); without a branch it fell through to the catch-all and dismissed the session.
+    //
     // In capture, the claim keeps Lexical's KEY_ENTER (paragraph split / note `\fp`) from running
     // BEFORE the palette commit applies — the popover double-mutation bug. Claimed even for the
     // zero-match no-op below: an unclaimed Enter would split the paragraph under the open palette.
@@ -292,7 +315,7 @@ export function handleMarkerPaletteSessionKeyDown(
     const matches = filterAndRankPaletteItems(
       session.items.map((item) => ({ label: item.marker })),
       session.filter,
-      session.kind === 'backslash' ? 'passive' : 'active',
+      kind === 'backslash' ? 'passive' : 'active',
     );
     if (matches.length === 0) {
       // P9 parity: Enter over a zero-match filter does NOTHING and the palette stays open — the
@@ -312,7 +335,7 @@ export function handleMarkerPaletteSessionKeyDown(
   }
 
   if (event.key === ' ') {
-    if (session.kind === 'backslash') {
+    if (kind === 'backslash') {
       // The active palette's Space commit ("commit what was typed"). Claimed: nothing may land.
       claim(event);
       if (session.shouldSpaceCommit?.(session.filter)) {
@@ -325,27 +348,22 @@ export function handleMarkerPaletteSessionKeyDown(
       driver.dismiss();
       return 'ended';
     }
-    if (session.kind === 'selection') {
-      // Wrap commit: the marker is whatever was literally TYPED — an exact match against the
-      // offered entries. A marker not offered (unknown, or not valid here) has nothing to
-      // commit: the palette closes and the selection stays intact rather than wrapped in a
-      // guess (visible refusal). Claimed either way — nothing may replace the selection.
-      claim(event);
-      const match = session.items.find((item) => item.marker === session.filter);
-      if (match) driver.commitItem(match.marker);
-      driver.dismiss();
-      return 'ended';
-    }
-    // 'enter': Space keeps filtering, matching the editor package's Enter-triggered menu (its
-    // only commit is the highlighted item). Falls through to the filter branch below via the
-    // explicit append — ' ' is not in FILTER_CHAR_REGEX.
+    // Wrap commit: the marker is whatever was literally TYPED — an exact match against the
+    // offered entries, compared case-insensitively because markers are unique ignoring case and
+    // custom markers may be capitalized (FILTER_CHAR_REGEX's own rule; a case-sensitive compare
+    // showed `ND` matching in the list and then refused the very commit it displayed). A marker
+    // not offered (unknown, or not valid here) has nothing to commit: the palette closes and
+    // the selection stays intact rather than wrapped in a guess (visible refusal). Claimed
+    // either way — nothing may replace the selection.
     claim(event);
-    session.filter += ' ';
-    driver.update({ filterText: session.filter });
-    return 'continue';
+    const typed = session.filter.toLowerCase();
+    const match = session.items.find((item) => item.marker.toLowerCase() === typed);
+    if (match) driver.commitItem(match.marker);
+    driver.dismiss();
+    return 'ended';
   }
 
-  if (event.key === '*' && session.kind !== 'enter') {
+  if (event.key === '*') {
     // The palette's CLOSING-marker commit, the counterpart to Space's opening one: commit
     // `\` + filter + `*`, with no terminating space and no opening glyph, and close.
     // Claimed: nothing may land on top of the commit.
@@ -366,7 +384,7 @@ export function handleMarkerPaletteSessionKeyDown(
     return 'ended';
   }
 
-  if (event.key === '\\' && session.kind === 'backslash') {
+  if (event.key === '\\' && kind === 'backslash') {
     // The palette's THIRD commit key: `\` commits what was typed exactly as Space does but with NO
     // terminating space byte, then opens a FRESH palette for the backslash just pressed — so
     // `\qt-s\qt-e` is one continuous flow instead of losing the first marker. The separator is
@@ -392,7 +410,7 @@ export function handleMarkerPaletteSessionKeyDown(
     return 'ended';
   }
 
-  if (event.key === 'Backspace' || FILTER_CHAR_REGEX[session.kind].test(event.key)) {
+  if (event.key === 'Backspace' || FILTER_CHAR_REGEX[kind].test(event.key)) {
     // ACTIVE palettes: the character narrows the query (or Backspace widens it) and must never
     // land in the document.
     claim(event);
@@ -405,7 +423,7 @@ export function handleMarkerPaletteSessionKeyDown(
   // Any other key: what's about to land no longer matches what the palette is offering. The
   // selection session still claims it (nothing may replace the wrapped selection); the others let
   // it land.
-  if (session.kind === 'selection') claim(event);
+  if (kind === 'selection') claim(event);
   driver.dismiss();
   return 'ended';
 }

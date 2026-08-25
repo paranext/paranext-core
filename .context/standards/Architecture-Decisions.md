@@ -539,3 +539,115 @@ step, no automation. Just a record.
   `docs/superpowers/specs/2026-08-13-analytics-abstraction-layer-design.md`; final whole-branch review
   of the implementing branch, which surfaced and fixed a startup-path regression (analytics
   initialization briefly gated extension-host activation) before merge.
+
+## ADR-0015: App-window input announcements carry the input KIND only, never key identity
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** Transient overlays (command palettes, popovers, context menus) must dismiss on a
+  mouse-down or Escape ANYWHERE in the app window, including inside sandboxed WebView iframes whose
+  events never reach the parent document. The main process's `before-input-event` hooks see every
+  frame, so the standard-view work added a PAPI-published network event
+  (`platform.onDidAppWindowInput`, `src/main/app-window-input.util.ts`, declared JSON schema,
+  `x-experimental: true`) that broadcasts these inputs to the renderer.
+- **Decision:** The event payload is `{ kind }` only (`mousedown` / `escape`). Broadcasting global
+  input to arbitrary subscribers is a keylogging-shaped surface, so key identity is deliberately
+  excluded; the one consumer that needs identity — a palette returning claimed keys to the session
+  that opened it — gets it through the scoped `PaletteKeyForwarding` channel instead (ADR-0016),
+  which returns keystrokes only to the requester that declared them.
+- **Alternatives:** carrying the key in the broadcast — rejected as an information-exposure
+  boundary violation; per-overlay iframe listeners — rejected because a WebView's events cannot be
+  observed from the parent document at all.
+- **Consequences:** any future consumer needing key identity must justify its own scoped channel.
+  KNOWN GAP (review finding, open): the payload carries no WINDOW identity while the hooks are
+  registered per window and the app creates several — a click in window B reaches window A's
+  subscribers, which can dismiss A's overlays or resolve A's topmost-overlay promise. Adding a
+  window id is cheap while the event is still `x-experimental`; do it before the event hardens.
+- **Source:** PT-4187 standard-view branch (core #2565); review comment on
+  `app-window-input.util.ts`.
+
+## ADR-0016: Passive palette mode with session-owned queries and scoped key forwarding
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** PT9's marker dropdown filters while the user keeps TYPING INTO THE DOCUMENT (the
+  typed `\nd` literal is real document text). The renderer-hosted command palette lives in a
+  different document than the editor iframe, so whichever document holds focus is the only one
+  that sees a keystroke.
+- **Decision:** Two cooperating mechanisms in the overlay service:
+  - **Passive mode** (`CommandPaletteRequest.passive`): the palette never steals focus; its filter
+    text and highlighted selection are driven externally by the requesting session, so typing keeps
+    landing in the editor exactly as PT9 does.
+  - **Scoped key forwarding** (`PaletteKeyForwarding`): a session that opens a FOCUSED palette
+    declares exactly the keys it claims; the palette forwards those back to the session instead of
+    acting on them. One forwarding table (`marker-palette-keydown.util.ts`,
+    platform-bible-react) is the single source of the while-open key semantics for every consumer,
+    and the session is the single owner of the query in both focus states.
+- **Alternatives:** rendering the palette inside the editor iframe (cannot overlay other content —
+  the reason the overlay service exists); mirroring keys through the global input event (rejected
+  per ADR-0015's identity boundary).
+- **Consequences:** commit resolution always reads the session's filter, never the palette input,
+  so the two can never disagree; every new palette surface must route its keys through the shared
+  table rather than growing its own copy.
+- **Source:** PT-4187 standard-view branch (core #2565).
+
+## ADR-0017: Project stylesheets cross the wire as structured StyleInfo, not generated CSS
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** Standard view must render and validate against the PROJECT's merged stylesheet
+  (usfm.sty + custom.sty), not the bundled defaults: custom.sty markers must be offered, styled,
+  and validated like built-ins.
+- **Decision:** The ParatextProjectDataProvider serializes the merged stylesheet as structured
+  data (`getStyleInfo` → `PlatformStyleInfo`/`PlatformMarkerStyleInfo`, `c-sharp/JsonUtils/`),
+  matching the editor package's `StyleInfo` TS shape; the CLIENT derives CSS (`generateUsjCss`)
+  and marker classification (`createMarkerLookup`) from it. PT9's server-side CSSCreator approach
+  (emit CSS strings) was not ported: structured data serves ALL consumers — CSS generation, the
+  marker palette's item source, and marker validation — from one wire call, and keeps styling
+  decisions (theming, zoom, RTL) client-side where the rendering context lives.
+- **Alternatives:** port CSSCreator and ship CSS strings — rejected: opaque to the palette and
+  validator, and bakes render-context decisions into the provider.
+- **Consequences:** the TS `StyleInfo` shape is a cross-language contract (C# serializer ↔ editor
+  package types); absent-vs-explicit-zero fidelity on numeric properties is a known open question
+  (review finding: `x != 0 ? x : null` cannot express an authored `\FirstLineIndent 0`, which
+  matters now that project CSS is layered over a base sheet).
+- **Source:** PT-4187 standard-view branch (core #2565 ∥ scripture-editors #545).
+
+## ADR-0018: `standard` is a first-class editor view type; simple mode coerces for display only
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** The PT9 Standard-view port needs a view where marker glyphs are editable text.
+  Simple mode pairs with structure protection, which blocks exactly the paragraph-marker edits
+  standard view is built around, so the view must not be reachable there.
+- **Decision:** `standard` joins `ScriptureEditorViewType` and is the POWER-mode default for a
+  fresh editor. Simple mode never shows it: the web view derives an effective view type
+  (`resolveViewTypeForInterfaceMode`) for display, WITHOUT writing the coercion back — the
+  persisted choice survives, so flipping back to power mode restores the user's Standard view.
+  Only explicit user actions persist a view type.
+- **Alternatives:** persisting the coercion — rejected after review: it destroyed the persisted
+  choice unrecoverably (the one-shot power-default correction is gated on
+  `hadPersistedViewTypeAtMount`, so it never re-fires).
+- **Consequences:** state readers must distinguish the persisted view type from the effective one;
+  anything keyed on `viewType` in the web view sees the effective value.
+- **Source:** PT-4187 standard-view branch (core #2565); review comment on the coercion effect.
+
+## ADR-0019: PT9-parity table boxes in the base editor stylesheet (reverses PT-3086's scoping)
+
+- **Date:** 2026-08-24
+- **Status:** Proposed — needs sign-off from PT-3086's owner
+- **Context:** PT9 boxes every table it renders (`ScriptureBase.css` `table`/`td` borders).
+  PT-3086 had previously scoped the box OUT of non-handbook surfaces; the standard-view branch
+  moved the box into the base `_usj-nodes.scss` (scoped to `.usfm`), where it reaches every
+  surface that loads the sheet: the editor, resource/model text panels, scripture-text-grid,
+  enhanced resources.
+- **Decision (pending):** ship PT9 parity (all tables boxed) as the default, reversing PT-3086.
+  Recorded as Proposed because it reverses a previously-decided scoping and the review asked who
+  owns the call; the `#000000` border literal (PT9's value) on a theme-aware surface is part of
+  the same question.
+- **Alternatives:** keep PT-3086's scoping and box only handbook iframes
+  (`marker-styles/commentary-overrides.scss` already re-asserts the values there) — the state
+  before this branch.
+- **Consequences:** until resolved, project-view tables render boxed like PT9; if PT-3086's
+  scoping is reinstated, the base rule moves back behind the handbook injection.
+- **Source:** PT-4187 standard-view branch (core #2565); review question #4 on the table box.

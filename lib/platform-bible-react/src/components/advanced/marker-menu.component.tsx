@@ -1,5 +1,6 @@
 import { FC, LegacyRef, useMemo, useState } from 'react';
 import { Ban, Check } from 'lucide-react';
+import { stripMarkerNestingPrefix } from '@/components/advanced/marker-palette-filter.util';
 import {
   Command,
   CommandEmpty,
@@ -213,9 +214,9 @@ export function MarkerMenu({
 
   const [codeMatchItems, titleMatchItems] = useMemo(() => {
     // A leading `+` is USFM nesting syntax (`\+nd` nests inside an open char span), not part of the
-    // marker code — strip it so `+nd` resolves to the bare `nd` item. Marker codes never start with
-    // `+`, so this only ever affects a typed nest prefix.
-    const query = commandSearch.trim().toLowerCase().replace(/^\+/, '');
+    // marker code — strip it so `+nd` resolves to the bare `nd` item. The shared helper is the one
+    // strip rule for every marker-matching site, so this menu and the palettes cannot drift.
+    const query = stripMarkerNestingPrefix(commandSearch.trim().toLowerCase());
     if (!query) {
       // Hide disallowed markers until specifically searched, so the menu isn't cluttered with
       // entries the user cannot insert.

@@ -108,18 +108,28 @@ internal class NoteCallerAndSeparatorSettingTests : PapiTestBase
 
     #region GetProjectSetting — value present in Settings.xml
 
-    [TestCase(ProjectSettingsNames.PB_CHAPTER_VERSE_SEPARATOR, "!")]
-    [TestCase(ProjectSettingsNames.PB_VERSE_RANGE_SEPARATOR, "–")]
-    [TestCase(ProjectSettingsNames.PB_DEFAULT_FOOTNOTE_CALLER, "*")]
-    [TestCase(ProjectSettingsNames.PB_DEFAULT_CROSS_REF_CALLER, "#")]
+    // The Settings.xml tag is HARD-CODED per case, never derived through
+    // GetParatextSettingNameFromPlatformBibleSettingName: deriving it from the very mapping under
+    // test made the four cases unfalsifiable — mapping PT_VERSE_RANGE_SEPARATOR to the wrong tag
+    // (the exact PT9-name confusion the constant's own doc comment warns about, RangeIndicator
+    // vs a plausible "VerseRangeSeparator") kept everything green. These literals are the wire
+    // contract with Paratext 9's Settings.xml.
+    [TestCase(ProjectSettingsNames.PB_CHAPTER_VERSE_SEPARATOR, "ChapterVerseSeparator", "!")]
+    [TestCase(ProjectSettingsNames.PB_VERSE_RANGE_SEPARATOR, "RangeIndicator", "–")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_FOOTNOTE_CALLER, "DefaultFootnoteCaller", "*")]
+    [TestCase(ProjectSettingsNames.PB_DEFAULT_CROSS_REF_CALLER, "DefaultCrossRefCaller", "#")]
     public void GetProjectSetting_ValuePresentInSettingsXml_ReturnsStoredValue(
         string pbSettingName,
+        string ptSettingsXmlTag,
         string storedValue
     )
     {
-        string ptSettingName =
-            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(pbSettingName)!;
-        SetRawSetting(ptSettingName, storedValue);
+        Assert.That(
+            ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(pbSettingName),
+            Is.EqualTo(ptSettingsXmlTag),
+            "The PB->PT setting-name mapping must resolve to the hard-coded Settings.xml tag."
+        );
+        SetRawSetting(ptSettingsXmlTag, storedValue);
 
         var result = _provider.GetProjectSetting(pbSettingName);
 

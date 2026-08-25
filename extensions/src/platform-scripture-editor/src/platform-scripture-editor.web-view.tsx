@@ -188,6 +188,14 @@ function PortalContents({ children }: PropsWithChildren) {
  */
 const EDITOR_LOAD_DELAY_TIME = 200;
 
+/**
+ * Trailing-edge debounce for the keystroke-driven PDP save, in milliseconds. Chosen to kill the
+ * per-keystroke echo storm while keeping the save close behind the typing; ballpark, not tuned. See
+ * the `saveUsjToPdpDebounced` doc comment for the full rationale and the lifecycle flushes that
+ * keep the trailing window from losing the final edits.
+ */
+const PDP_SAVE_DEBOUNCE_MS = 700;
+
 const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...COMMENT_EDITOR_STRING_KEYS,
   ...FOOTNOTE_EDITOR_STRING_KEYS,
@@ -532,7 +540,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     () => globalThis.getWebViewState('viewType', VIEW_TYPE_UNSET) !== VIEW_TYPE_UNSET,
   );
 
-  const [viewType, setViewType] = useWebViewState<ScriptureEditorViewType>(
+  const [persistedViewType, setViewType] = useWebViewState<ScriptureEditorViewType>(
     'viewType',
     // Saved-state views never flip -- `useWebViewState` only reads this default when nothing is
     // persisted yet. A first-ever-open power-mode view may still render one or more frames as
@@ -576,16 +584,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // affordances are built around (see `resolveViewTypeForInterfaceMode`). This covers both a
   // 'standard' persisted during a power-mode session loading while the app is in simple mode and
   // a live `platform.interfaceMode` flip to simple while this standard-view web view is open.
-  // Unlike the one-shot power-default correction above, this runs on every mode/view change and
-  // persists the coercion (`setViewType` saves synchronously), so a reload stays coerced. Waits
-  // for `platform.interfaceMode` to resolve because `isPowerMode` is always `false` while the
-  // setting loads — coercing then would clobber a power user's persisted standard view on every
-  // mount.
-  useEffect(() => {
-    if (isLoadingInterfaceMode) return;
-    const allowedViewType = resolveViewTypeForInterfaceMode(viewType, isPowerMode);
-    if (allowedViewType !== viewType) setViewType(allowedViewType);
-  }, [isLoadingInterfaceMode, isPowerMode, setViewType, viewType]);
+  // The coercion is DERIVED for display, never written back: persisting it destroyed the user's
+  // choice permanently — flipping back to power mode could not restore it, because the one-shot
+  // power-default correction above is gated on `hadPersistedViewTypeAtMount` and its fresh
+  // re-probe then found the persisted 'formatted'. Every consumer below reads this effective
+  // value; only an explicit user action (`setViewType` via cycling or `changeScriptureView`)
+  // writes the store. Waits for `platform.interfaceMode` to resolve because `isPowerMode` is
+  // always `false` while the setting loads — coercing then would hide a power user's persisted
+  // standard view on every mount's first frames.
+  const viewType = isLoadingInterfaceMode
+    ? persistedViewType
+    : resolveViewTypeForInterfaceMode(persistedViewType, isPowerMode);
 
   const [unformattedTitle] = useWebViewState<string | undefined>(
     'unformattedTitle',
@@ -769,23 +778,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // Project-settings-sourced separators/callers for `nodeOptions` below (PT9
   // ChapterVerseSeparator / RangeIndicator / DefaultFootnoteCaller / DefaultCrossRefCaller). Each
-  // fallback matches the pre-C#-restart `UsjNodeOptions` default so behavior is unchanged if the
-  // setting can't be read. `noteCallers` is intentionally left unset so the editor's built-in
-  // default (lowercase Latin a-z) applies; `crossRefCallers` has no corresponding Paratext setting
-  // and stays hard-coded.
+  // fallback matches the CONTRIBUTION's default (projectSettings.json — '.' like Paratext, not
+  // ':'), so a read error and an unset setting render the same reference. Each memo also guards
+  // the empty string: `GetProjectSetting` returns ParametersDictionary values verbatim, so an
+  // empty `<ChapterVerseSeparator/>` in Settings.xml would otherwise yield '' and render
+  // `Mt 13` — the same guard the `textDirection` memo above applies. `noteCallers` is
+  // intentionally left unset so the editor's built-in default (lowercase Latin a-z) applies;
+  // `crossRefCallers` has no corresponding Paratext setting and stays hard-coded.
   const [chapterVerseSeparatorPossiblyError] = useProjectSetting(
     projectId,
     'platformScripture.chapterVerseSeparator',
-    ':',
+    '.',
   );
   const chapterVerseSeparator = useMemo(() => {
     if (isPlatformError(chapterVerseSeparatorPossiblyError)) {
       logger.warn(
         `Error getting chapter/verse separator: ${getErrorMessage(chapterVerseSeparatorPossiblyError)}`,
       );
-      return ':';
+      return '.';
     }
-    return chapterVerseSeparatorPossiblyError;
+    return chapterVerseSeparatorPossiblyError || '.';
   }, [chapterVerseSeparatorPossiblyError]);
 
   const [verseRangeSeparatorPossiblyError] = useProjectSetting(
@@ -800,7 +812,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
       return '-';
     }
-    return verseRangeSeparatorPossiblyError;
+    return verseRangeSeparatorPossiblyError || '-';
   }, [verseRangeSeparatorPossiblyError]);
 
   const [defaultFootnoteCallerPossiblyError] = useProjectSetting(
@@ -815,7 +827,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
       return GENERATOR_NOTE_CALLER;
     }
-    return defaultFootnoteCallerPossiblyError;
+    return defaultFootnoteCallerPossiblyError || GENERATOR_NOTE_CALLER;
   }, [defaultFootnoteCallerPossiblyError]);
 
   const [defaultCrossRefCallerPossiblyError] = useProjectSetting(
@@ -830,7 +842,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
       return HIDDEN_NOTE_CALLER;
     }
-    return defaultCrossRefCallerPossiblyError;
+    return defaultCrossRefCallerPossiblyError || HIDDEN_NOTE_CALLER;
   }, [defaultCrossRefCallerPossiblyError]);
 
   const nodeOptions = useMemo<UsjNodeOptions>(
@@ -1898,8 +1910,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const footnoteMarkerPalette = useMemo<FootnoteEditorMarkerPalette>(
     () => ({
-      show: (items, anchor, passive) =>
-        papi.overlays.showCommandPalette({ items, anchor, passive }, webViewId),
+      // All FOUR parameters forwarded. TypeScript accepts a shorter implementation arity, so a
+      // three-parameter version compiled while silently dropping `keyForwarding` — the popover's
+      // selection-`\` palette then opened focus-stealing with no forwarding, and the Space/`*`/
+      // `\`/Backspace commit semantics never ran.
+      show: (items, anchor, passive, keyForwarding) =>
+        papi.overlays.showCommandPalette({ items, anchor, passive, keyForwarding }, webViewId),
       update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
       commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
       dismiss: () => papi.overlays.dismissCommandPalette(webViewId),
@@ -2197,6 +2213,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [usjFromPdpPossiblyError]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
+  // Monotonic count of PDP deliveries observed — the failed-save retry gate's other half. The
+  // retry used to be conditioned on "no newer PDP data arrived while the write was in flight"
+  // (the in-flight flag was cleared on every delivery, so a failed save that overlapped an
+  // incoming update deliberately did NOT re-push over it); `withWriteInFlightGuard` now owns
+  // that flag's lifecycle for the write's own duration, so this counter carries the
+  // delivery-arrival half of the old condition instead.
+  const pdpDeliveryCount = useRef(0);
+  useEffect(() => {
+    pdpDeliveryCount.current += 1;
+  }, [usjFromPdp]);
 
   // Single source of truth for "is the footnotes pane ACTUALLY rendered": the same value gates the
   // `FootnotesLayout` render below AND (mirrored into `footnotesPaneRenderedRef`) the
@@ -2333,24 +2359,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // #region PDP Save Write Path
 
-  /* If the editor has updates that the PDP hasn't recorded, save them to the PDP */
+  /* If the editor has updates that the PDP hasn't recorded, save them to the PDP. Resolves `true`
+   * only when a write actually RAN (the in-flight guard accepted it) — the deferral bookkeeping
+   * in `useEditorPdpSync` records a push only on that confirmation, so a dropped save is never
+   * misremembered as content that left the editor. */
   const saveUsjToPdpIfUpdated = useMemo(() => {
-    function saveUsjToPdpIfUpdatedInternal(usjFromEditor = editorRef.current?.getUsj()) {
-      if (!usjFromEditor) return;
+    function saveUsjToPdpIfUpdatedInternal(
+      usjFromEditor = editorRef.current?.getUsj(),
+    ): Promise<boolean> {
+      if (!usjFromEditor) return Promise.resolve(false);
 
       // An open command surface's in-progress input is excluded by the editor itself
       // (`setTransientInput`), so what arrives here is already the document we mean to save.
       const usjToSave = resolveUsjToSaveToPdp(correctEditorUsjVersion(usjFromEditor), usjFromPdp);
-      if (usjToSave) saveUsjToPdpInternal(usjToSave);
+      if (usjToSave) return saveUsjToPdpInternal(usjToSave);
+      return Promise.resolve(false);
     }
 
     // We used to have this running on the editor's `onUsjChanged`, but it seems the editor still
     // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
     // `saveUsjToPdpIfUpdated` everywhere.
-    async function saveUsjToPdpInternal(newUsj: Usj) {
+    async function saveUsjToPdpInternal(newUsj: Usj): Promise<boolean> {
       const rawSave = saveUsjToPdpRawStableRef.current;
-      if (!rawSave) return;
+      if (!rawSave) return false;
 
+      const deliveriesAtWriteStart = pdpDeliveryCount.current;
       try {
         // `withWriteInFlightGuard` holds `currentlyWritingUsjToPdp` for exactly the duration of the
         // write and clears it when the write settles — so it is never reset mid-write by an
@@ -2360,7 +2393,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           usjSentToPdp.current = newUsj;
           return rawSave(newUsj);
         });
-        if (!outcome.ran) return;
+        if (!outcome.ran) {
+          // A zombie write (settled only after the guard's timeout release) already warned at
+          // release time and its bytes did reach the PDP; nothing more to say here.
+          if (outcome.released) return false;
+          // A save arriving while another write is in flight is DROPPED here, not queued: the
+          // debouncer has already consumed its pending args, and the echo-driven push-back only
+          // re-pushes while the editor still shows this document — so a chapter-switch flush
+          // that lands on a held guard loses those edits outright. Surface it loudly until a
+          // re-queue exists.
+          logger.warn(
+            'saveUsjToPdp: dropped a save because another PDP write was already in flight — ' +
+              'no retry is queued for this content, so if this was a chapter-switch flush the ' +
+              'flushed edits did not reach the PDP',
+          );
+          return false;
+        }
         const { result: saveResult } = outcome;
 
         // Prompts the PDP to commit changes to the version history once a day if the save was successfully
@@ -2382,11 +2430,23 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }
         } else if (!saveResult) {
           // The set was unsuccessful, so there is a chance the editor has more updates since the
-          // last attempted save. Let's check and save again if there have been updates
+          // last attempted save. Retry ONLY when no newer PDP data arrived while the write was
+          // in flight: a delivery that landed mid-write may carry a concurrent external change
+          // (a Send/Receive merge, another app's write), and an unconditional re-push would
+          // clobber it with content from before the merge. The deferral logic owns that
+          // reconciliation; a delivery-overlapped failure leaves it to the incoming update.
+          if (pdpDeliveryCount.current !== deliveriesAtWriteStart) {
+            logger.debug(
+              'saveUsjToPdp: a PDP update arrived while the failed write was in flight; ' +
+                'skipping the retry and letting the incoming update reconcile.',
+            );
+            return true;
+          }
           let editorUsj = editorRef.current?.getUsj();
           if (editorUsj) editorUsj = correctEditorUsjVersion(editorUsj);
           if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
         }
+        return true;
       } catch (e) {
         // The write rejected; the guard's `finally` already cleared the in-flight flag.
         const errorMessage = getErrorMessage(e);
@@ -2397,7 +2457,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // an automatic Send/Receive), so it is a warning; a permissions failure is an error.
         const isSyncEditBlocked = SYNC_EDIT_BLOCKED_REGEX.test(errorMessage);
         const isPermissionsError = PERMISSIONS_EXCEPTION_REGEX.test(errorMessage);
-        if (!isSyncEditBlocked && !isPermissionsError) return;
+        if (!isSyncEditBlocked && !isPermissionsError) return true;
 
         try {
           if (usjFromPdp && editorRef.current) {
@@ -2422,6 +2482,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             } exception when saving USJ to PDP: ${getErrorMessage(innerError)}`,
           );
         }
+        // The write RAN (and rejected); only a guard-dropped save reports false, since that is
+        // the one case where the content never left the editor at all.
+        return true;
       }
     }
 
@@ -2524,7 +2587,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             getEditorUsj: () => editorRef.current?.getUsj(),
           });
         },
-        700,
+        PDP_SAVE_DEBOUNCE_MS,
       ),
     [],
   );

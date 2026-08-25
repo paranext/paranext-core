@@ -58,6 +58,19 @@ export interface IsolatedFixtures {
    * view.
    */
   interfaceMode: 'simple' | 'power';
+  /**
+   * Extra dev-appdata settings seeded alongside `interfaceMode` and the interface language, in the
+   * SAME `preConfigureSettings` call; set with `test.use({ seedSettings: {...} })`.
+   *
+   * Specs must seed through this option, never with their own `preConfigureSettings` in
+   * `beforeAll`/`beforeEach`: hooks run BEFORE test-scoped fixture setup, so a spec's own seed was
+   * (a) overridden by this fixture's seed for any shared key (the wizard spec's deliberately-seeded
+   * `'simple'` lost to the `'power'` default), and (b) captured by the fixture as the "original"
+   * contents — the fixture's restore, which runs AFTER the spec's own `afterEach`/`afterAll`
+   * restore, then wrote the spec's test-only values back into the shared dev-appdata file, the very
+   * leak both restores exist to prevent.
+   */
+  seedSettings: Record<string, unknown>;
   electronApp: ElectronApplication;
   mainPage: Page;
 }
@@ -69,17 +82,23 @@ export const test = base.extend<IsolatedFixtures>({
   // Option fixture: see the IsolatedFixtures doc for why the default is 'power'.
   interfaceMode: ['power', { option: true }],
 
+  // Option fixture: extra settings seeded in the same pre-launch write (see IsolatedFixtures doc
+  // for why specs must not run their own preConfigureSettings).
+  seedSettings: [{}, { option: true }],
+
   // Test-scoped fixture: Playwright launches one Electron instance per test() block.
-  electronApp: async ({ electronLaunchOptions, interfaceMode }, use) => {
+  electronApp: async ({ electronLaunchOptions, interfaceMode, seedSettings }, use) => {
     // Seed settings BEFORE launch (the app reads dev-appdata settings at startup). Pin the
     // interface mode (see the IsolatedFixtures doc) AND the interface language to English so specs
     // that match English UI text — `waitForHomeTab`'s 'Home' tab (localized via %home_dialog_title%)
-    // and `navigateToolbarBcv`'s English book names (BookChapterControl matches localizedBookNames) —
-    // are deterministic regardless of the developer's saved locale. Same both-settings seeding as
+    // and `navigateToolbarBcv`'s English book names (no app code passes `localizedBookNames`, so
+    // `BookChapterControl` renders `formatScrRef`'s explicit 'English' fallback) — are
+    // deterministic regardless of the developer's saved locale. Same both-settings seeding as
     // comment.fixture.ts. workers=1 (playwright.config.ts) means no other test can race this shared file.
     const restoreSettings = preConfigureSettings({
       'platform.interfaceMode': interfaceMode,
       'platform.interfaceLanguage': ['en'],
+      ...seedSettings,
     });
     try {
       const ctx = await launchElectronApp(electronLaunchOptions);

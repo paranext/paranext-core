@@ -82,6 +82,14 @@ export interface ForwardedPaletteKeyEvent {
 	metaKey: boolean;
 	altKey: boolean;
 	shiftKey: boolean;
+	/**
+	 * `KeyboardEvent.getModifierState`, when the forwarder can supply it. Needed to tell an AltGr
+	 * chord apart from a real Ctrl+Alt chord: on Windows/Linux a character typed WITH AltGr held
+	 * arrives with `ctrlKey && altKey` both set, and without this signal a session dismisses on
+	 * what is actually ordinary typing on several European layouts. Optional so a plain-data
+	 * forwarder that cannot supply it stays valid — consumers must treat "absent" as "not held".
+	 */
+	getModifierState?(keyArg: string): boolean;
 	/** Stops the palette (and the browser) from acting on this key. */
 	preventDefault(): void;
 	/** Stops the key from propagating further in the palette's own document. */

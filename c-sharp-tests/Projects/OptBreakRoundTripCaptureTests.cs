@@ -109,8 +109,14 @@ namespace TestParanextDataProvider.Projects
 
             // (b) Feed ParatextData's own <optbreak/> USX back through the provider's real save path
             // (USX -> USFM via ConvertUsxToUsfm, which loads with LoadOptions.PreserveWhitespace) and
-            // confirm the `//` AND its exact surrounding spaces survive in the saved USFM.
-            provider.SetChapterUsx(verseRef, usxFromTypedUsfm);
+            // confirm the `//` AND its exact surrounding spaces survive in the saved USFM. The write
+            // result is asserted so the pins below are falsifiable — a rejected write would leave the
+            // seeded content in place, which coincides with the expected bytes.
+            Assert.That(
+                provider.SetChapterUsx(verseRef, usxFromTypedUsfm),
+                Is.True,
+                "SetChapterUsx must accept the captured USX."
+            );
             string usfmAfterUsxRoundTrip = provider.GetChapterUsfm(verseRef);
             Assert.That(
                 usfmAfterUsxRoundTrip,
@@ -156,7 +162,11 @@ namespace TestParanextDataProvider.Projects
                     ParatextProjects
                 );
                 string usx = provider.GetChapterUsx(verseRef);
-                provider.SetChapterUsx(verseRef, usx);
+                Assert.That(
+                    provider.SetChapterUsx(verseRef, usx),
+                    Is.True,
+                    "SetChapterUsx must accept the captured USX (a rejected write leaves the seeded content, making the distinctness check vacuous)."
+                );
                 savedUsfms.Add(provider.GetChapterUsfm(verseRef));
             }
 

@@ -32,6 +32,17 @@ export type PaletteFilterMode = 'active' | 'passive';
 type RankableItem = Item & { label: string };
 
 /**
+ * Strips the USFM nesting prefix (`+`) from typed filter text before matching: `\+nd` names the
+ * same marker as `\nd` (PT9's dropdown strips it too), and item labels never carry it. THE one
+ * strip for every matching site — both modes below and the legacy inline `MarkerMenu` — so the rule
+ * cannot drift between them: it used to exist in `'passive'` only, so the same keystrokes that
+ * filtered at a caret produced zero matches and a silent refusal over a selection.
+ */
+export function stripMarkerNestingPrefix(filterText: string): string {
+  return filterText.replace(/^\+/, '');
+}
+
+/**
  * Filters `items` by matching `filterText` against each item's `label` and ranks the matches
  * exact-first (exact > prefix > containment, ties keeping their original order — the editor
  * palette's ordering). Returns `items` in their original order when `filterText` is empty or
@@ -59,14 +70,17 @@ export function filterAndRankPaletteItems<T extends { label: string }>(
   const rankableItems = [...items] as unknown as (T & RankableItem)[];
 
   if (mode === 'passive') {
-    const query = filterText.replace(/^\+/, '');
     return filterAndRankItems({
-      query,
+      query: stripMarkerNestingPrefix(filterText),
       items: rankableItems,
       filter: (item, itemQuery) => item.label.toLowerCase().startsWith(itemQuery.toLowerCase()),
       sortBy: 'label',
     });
   }
 
-  return filterAndRankItems({ query: filterText, items: rankableItems, filterBy: 'label' });
+  return filterAndRankItems({
+    query: stripMarkerNestingPrefix(filterText),
+    items: rankableItems,
+    filterBy: 'label',
+  });
 }
