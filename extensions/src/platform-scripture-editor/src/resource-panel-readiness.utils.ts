@@ -22,7 +22,7 @@ export type ResourcePanelReadinessInput = {
    *
    * Taking `listStatus` and `configuredCount` separately let them disagree — `'loading'` alongside
    * a count of five, or `'ready'` alongside zero when a list was never delivered — which is the
-   * shape the union exists to forbid (see ADR-0027). The count is derived here from the narrowed
+   * shape the union exists to forbid (see ADR-0028). The count is derived here from the narrowed
    * union instead.
    */
   listState: EffectiveResourceReferenceListState;

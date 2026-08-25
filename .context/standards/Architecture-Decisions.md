@@ -1386,7 +1386,7 @@ step, no automation. Just a record.
   the merged conditional in `model-text-panel.component.tsx` — proved to be the symptom site rather
   than the defect.
 
-## ADR-0027: Async hook state shape — discriminated union when the payload is state-specific, flat object otherwise
+## ADR-0028: Async hook state shape — discriminated union when the payload is state-specific, flat object otherwise
 
 - **Date:** 2026-08-21
 - **Status:** Proposed — the rule is drawn from exactly two hooks, both introduced by PT-4347. It
