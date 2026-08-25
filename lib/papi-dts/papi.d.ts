@@ -2240,9 +2240,10 @@ declare module 'shared/services/network.service' {
    * WARNING: the no-retry flag only holds in the main process (whose `RpcServer` /
    * `RpcWebSocketListener` honor it). From any other process the flag does not cross the wire:
    * `RpcClient.request` drops it, and main re-dispatches the incoming request through its
-   * registration-race retry loop (up to 10 attempts, 1 s apart) before failing. So a renderer-side
-   * `requestNoRetry` to an unregistered handler still costs ~9 s and 10 warning logs in main before
-   * it rejects.
+   * registration-race retry loop (`requestWithRetry` in `shared/data/rpc.model.ts` —
+   * `MAX_REQUEST_ATTEMPTS` attempts, `REQUEST_ATTEMPT_WAIT_TIME_MS` apart) before failing. So a
+   * renderer-side `requestNoRetry` to an unregistered handler still costs ~9 s and one `debug` log
+   * per attempt in main before it rejects.
    *
    * @param requestType The type of request
    * @param args Arguments to send in the request (put in request.contents)
