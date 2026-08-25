@@ -38,6 +38,9 @@ import { RetryableErrorView, LoadingView } from './panel-state-views.component';
  *   the settings error this one IS recoverable, so it is paired with a working retry.
  * @param loadingLabel Already-localized status text shown beside the loading spinner.
  * @param emptyPrompt Already-localized prompt shown when nothing is configured.
+ * @param moreInfo Optional disclosure rendered between the empty prompt and the pick button, for
+ *   panels whose prompt alone does not explain what the user is being asked to choose. Omitted
+ *   where the prompt is self-explanatory, so the empty state stays as short as it can be.
  * @param pickLabel Already-localized label for the resource picker button.
  * @param retryLabel Already-localized label for the catalog retry button.
  * @param onPick Opens the resource picker.
@@ -49,6 +52,7 @@ export function PanelReadinessView({
   catalogErrorMessage,
   loadingLabel,
   emptyPrompt,
+  moreInfo,
   pickLabel,
   retryLabel,
   onPick,
@@ -59,6 +63,7 @@ export function PanelReadinessView({
   catalogErrorMessage: ReactNode;
   loadingLabel: ReactNode;
   emptyPrompt: ReactNode;
+  moreInfo?: ReactNode;
   pickLabel: ReactNode;
   retryLabel: ReactNode;
   onPick: () => void;
@@ -104,6 +109,7 @@ export function PanelReadinessView({
           <EmptyDescription>{emptyPrompt}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
+          {moreInfo}
           <Button onClick={() => onPick()}>{pickLabel}</Button>
         </EmptyContent>
       </Empty>
