@@ -1,5 +1,3 @@
-import fs from 'fs';
-import path from 'path';
 import { expect, test } from '../../fixtures/isolated.fixture';
 import {
   preConfigureRecentlyOpenedProjects,
@@ -12,6 +10,7 @@ import {
 import {
   cleanupCommentTestProject,
   createCommentTestProject,
+  removeRevelationFromProject,
   type CommentTestProject,
 } from '../../fixtures/comment-test-helpers';
 
@@ -86,51 +85,6 @@ const BIBLE_TEXTS_PANEL_UUID = '27616073-bf60-4f2b-9518-922d1a7d3601';
  * 30 s PAPI request timeout.
  */
 const OPEN_EDITOR_TIMEOUT_MS = 150_000;
-
-/**
- * Revelation's USFM file in the bundled WEB project. The `67` prefix is the USFM file-naming
- * number, which is one higher than the canon book number for every New Testament book.
- */
-const REVELATION_SFM_FILE_NAME = '67REVengWEBUS.SFM';
-
-/**
- * Index of Revelation in `Settings.xml`'s `BooksPresent` bit string. The string is indexed by canon
- * book number minus one, and Revelation is canon book 66.
- */
-const REVELATION_BOOKS_PRESENT_INDEX = 65;
-
-/**
- * Removes Revelation from a project copy: both the book file and the `BooksPresent` bit, because
- * `platformScripture.booksPresent` is served from `ScrText.BooksPresentSet`, which reconciles the
- * two. Throws if either input does not look the way this expects, so a changed WEB asset surfaces
- * as a setup failure instead of a test that quietly stops discriminating.
- *
- * `bcv-open-resource-books.spec.ts` needs the same preparation and carries its own copy of this.
- */
-function removeRevelationFromProject(project: CommentTestProject): void {
-  const sfmPath = path.join(project.projectDir, REVELATION_SFM_FILE_NAME);
-  if (!fs.existsSync(sfmPath))
-    throw new Error(`Expected ${REVELATION_SFM_FILE_NAME} in the WEB project copy at ${sfmPath}`);
-  fs.rmSync(sfmPath);
-
-  const settingsPath = path.join(project.projectDir, 'Settings.xml');
-  const settingsXml = fs.readFileSync(settingsPath, 'utf8');
-  const booksPresentMatch = settingsXml.match(/<BooksPresent>([01]+)<\/BooksPresent>/);
-  const booksPresent = booksPresentMatch?.[1];
-  if (!booksPresentMatch || !booksPresent)
-    throw new Error(`No <BooksPresent> bit string found in ${settingsPath}`);
-  if (booksPresent[REVELATION_BOOKS_PRESENT_INDEX] !== '1')
-    throw new Error(
-      `Expected Revelation to be present at index ${REVELATION_BOOKS_PRESENT_INDEX} of BooksPresent, got "${booksPresent}"`,
-    );
-
-  const withoutRevelation = `${booksPresent.slice(0, REVELATION_BOOKS_PRESENT_INDEX)}0${booksPresent.slice(REVELATION_BOOKS_PRESENT_INDEX + 1)}`;
-  fs.writeFileSync(
-    settingsPath,
-    settingsXml.replace(booksPresentMatch[0], `<BooksPresent>${withoutRevelation}</BooksPresent>`),
-    'utf8',
-  );
-}
 
 /**
  * Opens the editable Scripture editor for `projectId`, retrying a dock "Replacing tab failed"
