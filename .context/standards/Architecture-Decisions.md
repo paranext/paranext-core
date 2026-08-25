@@ -23,6 +23,12 @@ step, no automation. Just a record.
 - **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-NNNN` instead of deleting
   it; add the new decision as a new entry.
 - **Append at the end**, newest last. Number entries `ADR-NNNN`.
+- **Numbers are claimed at merge, not at write.** Several branches in flight at once each append the
+  next free number as of the day they branched, so two unmerged branches routinely carry the SAME
+  number for different decisions — and because the file is append-only, nothing catches it: the
+  second merge simply leaves `main` with two identical headings. Before merging a PR that adds an
+  entry, re-read the last heading on `main` and renumber yours to follow it, updating any
+  cross-references. Whoever merges second does the renumbering.
 
 ### Entry template
 
@@ -1069,3 +1075,155 @@ step, no automation. Just a record.
   `SectionButton`'s `isDisabled`.
 - **Source:** PT-4092, review of #2699.
 
+## ADR-0024: The toolbar's sync status is local renderer UI, and names in-progress projects from a new upstream field
+
+- **Date:** 2026-08-17
+- **Status:** Accepted
+- **Context:** PT-4336 NN-4 asks for a single truthful sync status with a one-click cancel. Two
+  obstacles surfaced while implementing PT-4348. First, the existing toolbar button's only action was
+  `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface — a web view that
+  updates on its own schedule — alongside the button, which is exactly the "two messages that seem to
+  contradict each other" the NN exists to remove. Second, the ticket specified naming the syncing
+  projects from `SyncState.lastRequestedProjectIds`, but that field is written only by the Send/Receive
+  extension's `setResults` (on completion), never at `beginSync` — deliberately, so a failed sync
+  cannot pair its ids with the previous run's results. Read during a sync it names the PREVIOUS
+  sync's projects, so implementing the ticket as written would have shipped a confidently wrong label.
+- **Decision:** The status lives entirely in the renderer: `SyncStatusButton` renders a
+  `platform-bible-react` `Popover` in place (no overlay service, no web view) with the project list
+  and a single-shot Cancel wired to `paratextBibleSendReceive.cancelSync`. `useSyncStatus` seeds from
+  a one-shot `paratextBibleSendReceive.getSyncState` on mount, because `onSyncStateChanged` fires on
+  transitions only and a consumer mounting mid-sync would otherwise read idle until that sync ended.
+  For the names, a companion change to `paratext-bible-internal-extensions` adds
+  `SyncState.syncingProjectIds` (derived from the live claim map, so it cannot drift from `isSyncing`),
+  and core declares that field **optional** in its mirrored `src/@types/paratext-bible-send-receive`
+  copy so core merges independently of the upstream release. Absent field ⇒ a bare "Syncing" that
+  names no project.
+- **Alternatives:** **Read `lastRequestedProjectIds` during a sync** (the ticket as written) —
+  rejected: names the wrong projects, which is the specific failure NN-4 exists to fix. **Derive names
+  from `onSyncProgress.progressText`** — rejected: it carries the current *item*, not the set, and for
+  indeterminate progress it is a full localized sentence, so the label's meaning would change shape
+  mid-sync. **Ship without names** — viable and fully truthful, but misses the NN's explicit "shows
+  which project(s) are syncing". **Declare `syncingProjectIds` required in core** — rejected: it would
+  make core's types lie for any Studio build predating the upstream change.
+- **Consequences:** Core now ships a type declaration for a field that only exists once the companion
+  extension PR lands; the optional marker plus a fallback path is what makes that safe, and the same
+  pattern is available the next time core needs to consume an upstream contract addition ahead of its
+  release. `getSyncState` reflects only syncs run through the Send/Receive extension's own wrappers —
+  callers reaching the dotnet commands directly stay invisible (upstream PT-4214) — so this status is
+  best-effort, not ground truth. **Corrected 2026-08-17, after this decision was first written:** an
+  earlier draft of this entry claimed core's startup syncs were unaffected because they route through
+  `runScheduledSessionSync`. That holds for Power mode only. In Simple mode — the only mode this
+  button renders in — `main/startup-tasks.ts` calls the dotnet `syncProjects` command directly, and
+  the picker's `syncOnProjectSwitch` (`platform-scripture-editor`) does the same, so neither raises a
+  claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: NN-4's "status is
+  correct from app startup" is met for manual and scheduled syncs, but the Simple-mode startup sync
+  still shows no status. Closing that needs either PT-4214 or routing those two call sites through a
+  claiming wrapper (e.g. `runManualSync`); this decision deliberately does neither, since both are
+  changes to sync behavior rather than to how status is reported. Of the four richer UX
+  states in the NN-4 design, three ("Connection problem", "Unsaved changes", "Unsynced changes") are
+  deferred and marked as such in `sync-status-button.component.tsx`: none is derivable from what
+  Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this work
+  removes. Sync FAILURE is the exception and IS reported, because it is derivable: the snapshot's
+  `lastResults.resultsInfo` carries a per-project `resultStatus`, so a completed sync that did not
+  succeed everywhere shows a failure state rather than a green check. A user-cancelled sync lands
+  there too, which is the case that most obviously must not read as "Synced". The detail behind a
+  failure (per-project conflicts, `failureMessage`, warnings) lives only in the sync status web view,
+  so the popover keeps a link to it via `paratextBibleSendReceive.openSyncStatus` — this decision
+  removes that command from the button's CLICK, not from the product. **A second sync surface exists outside core's tree, and it overlaps this one on most
+  syncs.** As of 2026-08-18, Paratext 10 Studio carries (in its unmerged `repo-patches/paranext-core.patch`)
+  a C#-side sync toast in `ParatextProjectSendReceiveService`, tracked by `_syncNotificationId` and
+  created by `RunWithSyncNotification`. Traced through that patch: `RunWithSyncNotification` defaults
+  `showNotification` to `true`; `SyncProjects` omits the argument entirely, so the `syncProjects` path
+  always toasts; and `SendReceiveProjects` derives it from a `suppressNotification` parameter that
+  defaults to `false`. Only the open S/R dialog opts out. The toast is `Duration = 0` (persistent) with
+  `ClickCommand = "paratextBibleSendReceive.cancelSync"`, i.e. the same cancel affordance this popover
+  offers. The resulting overlap in Simple mode:
+
+  | Sync | C# toast | This button | Result |
+  | --- | --- | --- | --- |
+  | Simple-mode startup (`startup-tasks.ts` → `syncProjects`) | yes | no claim | toast only |
+  | Picker `syncOnProjectSwitch` (direct dotnet) | yes | no claim | toast only |
+  | Scheduled / auto-sync engine (`runSync` → `syncProjects`) | yes | claims | **both** |
+  | Manual hamburger / background (`sendReceiveProjects`) | yes | claims | **both** |
+  | Open S/R dialog (`suppressNotification: true`) | no | claims | button only |
+
+  **A second cancel surface also exists INSIDE core.**
+  `extensions/src/platform-scripture-editor/src/sync-blocked-banner.component.tsx` renders its own
+  `role="status"` region with a single-shot Cancel wired to the same
+  `paratextBibleSendReceive.cancelSync`, shown while a sync is blocking the editor. During a blocking
+  scheduled sync in Simple mode both it and this popover can be on screen at once: two live regions,
+  two differently-labelled Cancel buttons, and neither aware the other was clicked, so cancelling in
+  one leaves the other reading as armed. They are not merged here because they answer different
+  questions — the banner explains why the editor is unavailable *right now* and is modal to that
+  editor, while the popover is an ambient whole-app indicator the user opens deliberately — and
+  because a shared cancel state would have to live in a service neither currently uses. The concrete
+  defect (a spent cancel still reading as armed in the other surface) is what a follow-up should fix,
+  by having both read one piece of cancel-requested state.
+
+  Two consequences worth carrying forward. First, the C# service is *broader* coverage than this
+  button, not narrower: it sits where every sync converges on the `_sendReceiveSemaphore`, so it sees
+  the direct-command syncs this button is blind to — which is the same reason a semaphore-derived
+  signal is the proper general fix. Second, each surface is individually sound; Power mode does not
+  render this button at all, so the toast is its sole truthful indicator there. The defect is
+  specifically the **Simple-mode overlap**, not the toast's existence. Note also that suppressing the
+  toast is only wired for `sendReceiveProjects`; `syncProjects` has no such parameter, so quieting the
+  scheduled path needs a C# change in Studio's patch plus a contract addition in both copies of the
+  Send/Receive declaration. NN-4's "a single, truthful notification" is therefore not achieved in the
+  shipped product by this decision alone, and the remaining work is cross-repo rather than a change to
+  this component.
+  One more consequence of the status resting on `resultStatus`: the green check is decided by the
+  *complement* of a three-value failure set, so any value outside `ResultStatus` would read as a
+  success. Because this contract is demonstrably still moving — `syncingProjectIds` was added to it by
+  this very work — the snapshot validator checks `resultStatus` for membership in the known union
+  rather than merely for being a string, and a snapshot carrying an unrecognised status reports
+  `unknown` instead of a possibly-false `synced`. `unknown` carries no icon and shares the plain
+  "Sync" label with `idle` — it is distinguished only in the popover text and the live region, which
+  is deliberate: a degraded read is not an error worth a persistent badge in the toolbar, and the
+  honest answer is available the moment the user asks for it. The cost is deliberate: a seventh
+  status added upstream degrades this button to `unknown` until core's mirrored declaration is
+  re-synced, which is the failure direction this whole entry chooses everywhere else.
+
+  **A pending Cancel cannot be settled by the project ids.** Upstream derives `syncingProjectIds`
+  from live, ref-counted per-project claims (`sync-state.ts` `initSyncState`), and a single
+  continuous `isSyncing: true` window spans however many overlapping claims the sync paths take out.
+  A project can therefore release and re-claim without a new sync having started, so "an id this
+  cancel did not cover" is not evidence of a different sync and cannot re-arm Cancel. The button
+  settles a pending cancel on the two signals that are sound — the status leaving `syncing`, and the
+  popover being reopened — and accepts the cost: a genuinely new overlapping sync keeps a dim
+  "Cancelling…" until the whole union goes idle. That is the safe half of the trade, since the
+  alternative offers a live Cancel while a cancel is still in flight. Settling this properly needs a
+  monotonic sync-episode identifier in `SyncState`, which is an upstream contract change.
+
+- **Follow-up (needs tickets under PT-4336, none filed as of this entry):** the items above are
+  deliberately out of this decision's scope and will not happen on their own.
+  1. *Close the Simple-mode startup-sync blind spot* — route `main/startup-tasks.ts` and the picker's
+     `syncOnProjectSwitch` through a claiming wrapper, or land upstream PT-4214. Owner: core.
+  2. *Achieve NN-4's "single, truthful notification"* — suppress the C# toast on the paths this
+     button covers. Needs a `suppressNotification` parameter on `syncProjects` in Studio's
+     `repo-patches/paranext-core.patch`, plus the matching contract addition in BOTH copies of the
+     Send/Receive declaration. Owner: whoever owns Studio's patch — this cannot be done from core.
+  3. *Reconcile the two in-core cancel surfaces* — share one piece of cancel-requested state between
+     this popover and `sync-blocked-banner.component.tsx`. Owner: core.
+  4. *Make a new sync episode provable* — add a monotonic episode id to `SyncState` so a pending
+     Cancel can be settled positively rather than waited out. Owner: upstream Send/Receive, then
+     core. Unblocks the "dim Cancelling…" cost recorded above.
+  5. *Validate the snapshot field-by-field rather than all-or-nothing* — `isValidSyncState` rejects a
+     whole snapshot for an unrecognised historical `resultStatus`, discarding live, well-formed
+     `isSyncing`/`syncingProjectIds` with it. Answer the completed-sync question with `unknown` and
+     keep the live fields. Owner: core.
+  6. *Close the remaining sync-status timing holes* — a newer sync starting before a finished sync's
+     follow-up read returns swallows that sync's `failed`; the first event ends the seed's retry
+     budget without the event path having a retry of its own; a cancel rejected just as the sync ends
+     can toast beside a popover that says it finished; a cancel accepted but not acted on leaves the
+     button wedged. All need a specific timing collision. Owner: core.
+  7. *Debounce the syncing-project metadata lookup* — it calls the retrying
+     `getMetadataForAllProjects` on every id-set change, including the transient blank each event
+     produces, and this component is mounted in every window's toolbar.
+     `use-project-picker-data.hook.ts` debounces the identical call. Owner: core.
+  8. *Resolve the shared-layout contradiction* — `shared-layout-receiver.model.ts` rests on
+     "`onSyncStateChanged` only fires for manual Send/Receives", while this work's declaration says
+     the state controller also covers `runScheduledSessionSync` and the auto-sync engine. Under the
+     new semantics a background sync raises the interactive "Apply now" prompt to someone who took no
+     action. This decision establishes the contradiction rather than causing it. Owner: core.
+- **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
+  the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
