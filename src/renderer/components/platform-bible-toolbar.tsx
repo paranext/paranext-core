@@ -79,7 +79,7 @@ const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 // The fix here is confined to letting the bar's contents SHRINK: `min-w-0` on the Toolbar's content
 // area (see toolbar.component.tsx) plus a smaller floor on the project selector below. Nothing is
 // hidden. Width-driven collapse of individual controls — abbreviating labels, dropping to icon-only
-// — is deliberately out of scope here and belongs to `useShrinkStep` per ADR-0016, which rejects
+// — is deliberately out of scope here and belongs to `useShrinkStep` per adr-empty-is-zero-state-primitive, which rejects
 // CSS container queries for this job (their failure mode is silent) and PT-4344 implements.
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);

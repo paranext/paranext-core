@@ -208,9 +208,9 @@ function isValidSyncState(state: unknown): state is SyncState {
  * absent from `getSyncState` and fires no event, so this reports `idle` throughout it. In Simple
  * mode that currently includes the startup sync itself (`main/startup-tasks.ts` calls the dotnet
  * `syncProjects` command directly), so "correct from startup" holds for manual and scheduled syncs
- * but not yet for that one. See {@link SyncState} for the full list, and ADR-0024 in
- * `.context/standards/Architecture-Decisions.md` for why closing that gap is a change to sync
- * behavior rather than to this hook.
+ * but not yet for that one. See {@link SyncState} for the full list, and
+ * adr-toolbar-sync-status-is-local in `.context/standards/Architecture-Decisions.md` for why
+ * closing that gap is a change to sync behavior rather than to this hook.
  *
  * Projects are resolved from project metadata rather than the event, which carries no ids. They are
  * absent (empty, with `status` still `syncing`) in three cases callers must handle: a Send/Receive

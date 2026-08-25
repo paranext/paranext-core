@@ -37,7 +37,7 @@ Live · USB-drive sync & Chorus Hub (all separate PRDs/epics).
 ## 2. What already exists
 
 **The feature is already shipped end-to-end in PT10** (last touched 2026-06-30). The
-investigation found the prior discovery for this PRD reflected in ADR-0002, and the build merged:
+investigation found the prior discovery for this PRD reflected in `adr-app-global-shortcuts-in-main`, and the build merged:
 
 - **Paratext 9 (reference):** the S/R transaction is commit → pull → merge → push-last, per
   project, atomic via Mercurial; results default to Failed until proven Succeeded (FB-51674);
@@ -56,7 +56,7 @@ investigation found the prior discovery for this PRD reflected in ADR-0002, and 
   from PT9); paranext-core carries the wire contract, stub service, toolbar button, and the
   registration/auth extension. Project-menu trigger ships (NN-1, menu half).
 - **Genuine gaps (deterministic sweeps):** `F9` has zero hits in all four repos (NN-1's F9 half
-  unwired; ADR-0002 already prescribes the fix). A cancelled sync renders as an empty success
+  unwired; `adr-app-global-shortcuts-in-main` already prescribes the fix). A cancelled sync renders as an empty success
   (`Cancelled` flag ignored — a known bug in the studio transport layer). There is no transfer *resume* anywhere —
   resilience is reconnect-retry + per-project atomic transactions, i.e. "fail cleanly".
 
@@ -64,14 +64,14 @@ investigation found the prior discovery for this PRD reflected in ADR-0002, and 
 
 | #    | Work item                                                    | Repo                                | Complexity | Depends on | Covers            |
 | ---- | ------------------------------------------------------------ | ----------------------------------- | ---------- | ---------- | ----------------- |
-| WI-1 | Wire a free key (F6 — F9 is taken by PT10 book navigation) to open Send/Receive (ADR-0002) | paranext-core                       | Simple     | —          | NN-1              |
+| WI-1 | Wire a free key (F6 — F9 is taken by PT10 book navigation) to open Send/Receive (`adr-app-global-shortcuts-in-main`) | paranext-core                       | Simple     | —          | NN-1              |
 | WI-2 | Show cancelled syncs as cancelled, not empty success          | paratext-bible-internal-extensions  | Simple     | —          | NN-5, NTH-3       |
 | WI-3 | Verify each non-negotiable against the shipped feature        | all (verification)                  | Moderate   | —          | NN-2…NN-6 (evidence) |
 
 **WI-1 — Wire the S/R shortcut (F6).** Add the key branch to the main-process
 `before-input-event` handler (`src/main/main.ts` ~663-798) dispatching
-`paratextBibleSendReceive.openSendReceive`, exactly as ADR-0002 prescribes (no declarative
-keybinding API). F9 was the PRD's candidate but is taken by PT10 book navigation, so ADR-0002
+`paratextBibleSendReceive.openSendReceive`, exactly as `adr-app-global-shortcuts-in-main` prescribes (no declarative
+keybinding API). F9 was the PRD's candidate but is taken by PT10 book navigation, so `adr-app-global-shortcuts-in-main`
 settled on F6 (verified free); update the shortcuts catalog per `keyboard-shortcuts-catalog.md`.
 Degrade gracefully when the S/R extension is absent.
 
@@ -111,7 +111,7 @@ verse counts, notes/renderings). Each named gap becomes a new ticket.
    require the transport changes this PRD forbids. Suggested: accept "fail cleanly + safe retry"
    as satisfying NN-6, and let WI-3 verify it empirically.
 3. **Shortcut provenance.** The PRD lists F9 as a PT9 behavior; PT9 actually binds F9 to "Next
-   book" (the inventory annotation was wrong), and PT10 also uses F9 for book navigation. ADR-0002
+   book" (the inventory annotation was wrong), and PT10 also uses F9 for book navigation. `adr-app-global-shortcuts-in-main`
    commits PT10 to a new S/R shortcut on F6 — no action needed unless the owner wants to
    reconsider the key.
 4. **PT9's hidden S/R support gestures** (Shift-open resets sync mementos, Ctrl-click forces all
