@@ -6,6 +6,7 @@ import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
+import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 import { ModelTextPanel, ModelTextPanelProps } from './model-text-panel.component';
 
 /**
@@ -50,6 +51,10 @@ const STRINGS = {
     'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
   '%webView_platformScriptureEditor_emptyChapter_messageResource%':
     'This chapter is empty in this resource.',
+  '%webView_modelTextPanel_catalogUnavailable%': "Couldn't load the list of available resources.",
+  '%webView_modelTextPanel_loading%': 'Loading…',
+  '%webView_modelTextPanel_settingsUnavailable%':
+    "Couldn't load your model text. It will appear once it's available.",
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -95,14 +100,20 @@ function configuredModelText(dblEntryUid: string): EffectiveResourceReferenceLis
   };
 }
 
+/** Wraps a list in the hook's `ready` state — the only state that may carry one. */
+function readyState(list: EffectiveResourceReferenceList): EffectiveResourceReferenceListState {
+  return { status: 'ready', list };
+}
+
 function makeProps(overrides: Partial<ModelTextPanelProps> = {}): ModelTextPanelProps {
   return {
     localizedStrings: STRINGS,
     hasProject: true,
-    effectiveModelTexts: { dataVersion: '1.0.0', items: [] },
-    isEffectiveModelTextsLoading: false,
+    modelTextsState: readyState({ dataVersion: '1.0.0', items: [] }),
+    isCatalogReady: true,
+    hasCatalogError: false,
+    onRetryCatalog: vi.fn(),
     dblResources: [],
-    isLoadingResources: false,
     getUserModelTexts: async () => undefined,
     installResource: vi.fn(async () => {}),
     setUserModelTexts: vi.fn(async () => {}),
@@ -133,7 +144,7 @@ describe('ModelTextPanel', () => {
   it('auto-installs a configured model text whose resource is matched but not installed', async () => {
     const installResource = vi.fn(async () => {});
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
@@ -146,7 +157,7 @@ describe('ModelTextPanel', () => {
   it('renders the editor once the configured resource finishes installing', async () => {
     const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
     const { rerender } = renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       getResourceChapter,
     });
@@ -157,7 +168,7 @@ describe('ModelTextPanel', () => {
     rerender(
       <ModelTextPanel
         {...makeProps({
-          effectiveModelTexts: configuredModelText('uid-web'),
+          modelTextsState: readyState(configuredModelText('uid-web')),
           dblResources: [INSTALLED_RESOURCE],
           getResourceChapter,
         })}
@@ -171,7 +182,7 @@ describe('ModelTextPanel', () => {
       throw new Error('install failed');
     });
     const { rerender } = renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
@@ -183,7 +194,7 @@ describe('ModelTextPanel', () => {
     rerender(
       <ModelTextPanel
         {...makeProps({
-          effectiveModelTexts: configuredModelText('uid-web'),
+          modelTextsState: readyState(configuredModelText('uid-web')),
           dblResources: [{ ...UNINSTALLED_RESOURCE }],
           installResource,
         })}
@@ -199,7 +210,7 @@ describe('ModelTextPanel', () => {
     installResource.mockRejectedValueOnce(new Error('install failed'));
     const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
     const { rerender } = renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
       getResourceChapter,
@@ -213,7 +224,7 @@ describe('ModelTextPanel', () => {
     rerender(
       <ModelTextPanel
         {...makeProps({
-          effectiveModelTexts: configuredModelText('uid-web'),
+          modelTextsState: readyState(configuredModelText('uid-web')),
           dblResources: [INSTALLED_RESOURCE],
           installResource,
           getResourceChapter,
@@ -227,7 +238,7 @@ describe('ModelTextPanel', () => {
     // A never-resolving install keeps the panel in the installing state so it is observable.
     const installResource = vi.fn(() => new Promise<void>(() => {}));
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
@@ -242,7 +253,7 @@ describe('ModelTextPanel', () => {
       throw new Error('install failed');
     });
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
@@ -265,7 +276,7 @@ describe('ModelTextPanel', () => {
     const installResource = vi.fn(async () => {});
     const getResourceChapter = vi.fn(async () => ({ usj: undefined, textDirection: 'ltr' }));
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       installResource,
       getResourceChapter,
@@ -283,10 +294,10 @@ describe('ModelTextPanel', () => {
     // recover by picking another.
     const showResourcePicker = vi.fn(async () => undefined);
     renderPanel({
-      effectiveModelTexts: {
+      modelTextsState: readyState({
         dataVersion: '1.0.0',
         items: [{ type: 'project', id: 'p1', name: 'Some Project', source: 'admin' }],
-      },
+      }),
       dblResources: [],
       showResourcePicker,
     });
@@ -302,7 +313,7 @@ describe('ModelTextPanel', () => {
       throw new Error('offline');
     });
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [UNINSTALLED_RESOURCE],
       installResource,
     });
@@ -318,7 +329,7 @@ describe('ModelTextPanel', () => {
       throw new Error('Book number 1 not found in project project-web.');
     });
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     });
@@ -341,7 +352,7 @@ describe('ModelTextPanel', () => {
       throw new Error('Project project-web is not available');
     });
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     });
@@ -365,7 +376,7 @@ describe('ModelTextPanel', () => {
       return { usj: SAMPLE_USJ, textDirection: 'ltr' };
     });
     const props = {
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     };
@@ -409,7 +420,7 @@ describe('ModelTextPanel', () => {
     // cannot edit.
     const getResourceChapter = vi.fn(async () => ({ usj: BLANK_USJ, textDirection: 'ltr' }));
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     });
@@ -427,7 +438,7 @@ describe('ModelTextPanel', () => {
     // the missing-book sentence, which would tell the reader the book is absent when it is present.
     const getResourceChapter = vi.fn(async () => ({ usj: BLANK_USJ, textDirection: 'ltr' }));
     renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     });
@@ -446,7 +457,7 @@ describe('ModelTextPanel', () => {
     // blank-chapter branch has to be gated on the load having finished.
     const getResourceChapter = vi.fn(async () => ({ usj: BLANK_USJ, textDirection: 'ltr' }));
     const { rerender } = renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
       scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
@@ -458,7 +469,7 @@ describe('ModelTextPanel', () => {
     rerender(
       <ModelTextPanel
         {...makeProps({
-          effectiveModelTexts: configuredModelText('uid-web'),
+          modelTextsState: readyState(configuredModelText('uid-web')),
           dblResources: [INSTALLED_RESOURCE],
           getResourceChapter: neverResolves,
           scrRef: { book: 'GEN', chapterNum: 2, verseNum: 1 },
@@ -486,7 +497,7 @@ describe('ModelTextPanel', () => {
       return { usj: BLANK_USJ, textDirection: 'ltr' };
     });
     const props = {
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
     };
@@ -519,7 +530,7 @@ describe('ModelTextPanel', () => {
     const getResourceChapter = vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' }));
     getResourceChapter.mockResolvedValueOnce({ usj: BLANK_USJ, textDirection: 'ltr' });
     const { rerender } = renderPanel({
-      effectiveModelTexts: configuredModelText('uid-web'),
+      modelTextsState: readyState(configuredModelText('uid-web')),
       dblResources: [INSTALLED_RESOURCE],
       getResourceChapter,
       scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
@@ -529,7 +540,7 @@ describe('ModelTextPanel', () => {
     rerender(
       <ModelTextPanel
         {...makeProps({
-          effectiveModelTexts: configuredModelText('uid-web'),
+          modelTextsState: readyState(configuredModelText('uid-web')),
           dblResources: [INSTALLED_RESOURCE],
           getResourceChapter,
           scrRef: { book: 'GEN', chapterNum: 2, verseNum: 1 },
@@ -538,5 +549,63 @@ describe('ModelTextPanel', () => {
     );
     expect(await screen.findByTestId('editorial')).toBeInTheDocument();
     expect(screen.queryByText('This chapter is empty in this resource.')).not.toBeInTheDocument();
+  });
+  it('shows the settings-unavailable error instead of the empty prompt when the setting cannot be read', () => {
+    // An unreadable setting is not "nothing configured": offering only the picker would invite the
+    // user to reconfigure a model text that may already be set.
+    render(<ModelTextPanel {...makeProps({ modelTextsState: { status: 'error' } })} />);
+
+    expect(
+      screen.getByText("Couldn't load your model text. It will appear once it's available."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+  });
+
+  it('offers no controls in the settings-error state', () => {
+    render(<ModelTextPanel {...makeProps({ modelTextsState: { status: 'error' } })} />);
+
+    // Nothing in this panel can re-drive the project-setting read, so any button here would be
+    // inert. The message carries the recovery expectation instead; the setting stays watched and
+    // the panel recovers on its own.
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('does not claim the model text is missing while the resource catalog has not arrived', () => {
+    // A configured DBL resource matches nothing until the catalog lands, so answering "could not be
+    // found" here is a guess dressed as a fact — and it renders a Pick button that invites the user
+    // to replace a model text that is configured and fine.
+    render(
+      <ModelTextPanel
+        {...makeProps({
+          modelTextsState: readyState(configuredModelText('uid-web')),
+          dblResources: [],
+          isCatalogReady: false,
+        })}
+      />,
+    );
+
+    expect(
+      screen.queryByText('The selected model text could not be found.'),
+    ).not.toBeInTheDocument();
+    // Asserting only the not-found string left this blind to the mutation it exists to guard:
+    // flipping the pre-catalog branch from 'loading' to 'empty' kept it green. The empty prompt's
+    // absence and the spinner's presence are what actually pin AC-1 here.
+    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('does not show the empty prompt while the configured list is still resolving', () => {
+    // The defect this guards: the loading and empty states shared one branch, so any gap in the
+    // nested ternary that re-decided between them fell through to the empty prompt.
+    render(
+      <ModelTextPanel
+        {...makeProps({
+          modelTextsState: { status: 'loading' },
+        })}
+      />,
+    );
+
+    expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
   });
 });

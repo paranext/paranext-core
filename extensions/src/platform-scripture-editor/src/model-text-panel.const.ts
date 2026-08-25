@@ -22,6 +22,11 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
+  // Readiness states: the panel cannot read its setting, the DBL catalog failed, or either is still
+  // in flight. See `getResourcePanelReadiness` and `PanelReadinessView`.
+  '%webView_modelTextPanel_settingsUnavailable%',
+  '%webView_modelTextPanel_catalogUnavailable%',
+  '%webView_modelTextPanel_loading%',
   '%webView_modelTextPanel_bookNotAvailable%',
   // Shared with the resource text panel's blank-chapter branch. Distinct from the editable
   // `..._emptyChapter_message%`, which sits beside an "Add chapter number" action this read-only

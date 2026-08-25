@@ -71,6 +71,17 @@ const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 // getToolbarOSReservedSpaceClassName) because the live measurement is exact, unlike that guess.
 const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 
+// Simple mode packs a project selector, the reference-history buttons and the BCV control into the
+// title bar. Together they need more room than the app's minimum window width leaves once the OS
+// caption buttons are reserved, so the trailing controls used to be clipped outright by the
+// Toolbar's `overflow-hidden`.
+//
+// The fix here is confined to letting the bar's contents SHRINK: `min-w-0` on the Toolbar's content
+// area (see toolbar.component.tsx) plus a smaller floor on the project selector below. Nothing is
+// hidden. Width-driven collapse of individual controls — abbreviating labels, dropping to icon-only
+// — is deliberately out of scope here and belongs to `useShrinkStep` per ADR-0016, which rejects
+// CSS container queries for this job (their failure mode is silent) and PT-4344 implements.
+
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
@@ -376,7 +387,17 @@ export function PlatformBibleToolbar() {
             }}
             disabled={!hasProjectPickerItems}
           >
-            <SelectTrigger className="tw:max-w-64 tw:min-w-48 tw:border-0 tw:bg-transparent">
+            {/* Replaces a `min-w-48` (192px) floor that alone was a quarter of the usable bar at
+                the app's minimum window width and could not be shrunk past (PT-4218). Not dropped
+                to `min-w-0`: with everything else in the row shrinkable too, the trigger would
+                collapse to just its chevron. `min-w-24` (96px) is the measured width a short project
+                name needs (~97px for `ESVUS16`, including the trigger's padding and chevron), so the
+                name stays readable at the narrowest window while the `truncate` on the value handles
+                longer names. The `max-w-64` cap continues to govern the roomy case. */}
+            <SelectTrigger
+              data-testid="toolbar-project-selector"
+              className="tw:max-w-64 tw:min-w-24 tw:border-0 tw:bg-transparent"
+            >
               <SelectValue
                 placeholder={
                   hasProjectPickerItems

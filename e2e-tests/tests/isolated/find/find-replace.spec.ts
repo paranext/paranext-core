@@ -43,6 +43,18 @@ const NO_MATCH_TERM = 'ZZZQQQXXX_NORESULT_12345';
 /** History debounce delay (ms). Must match HISTORY_DEBOUNCE_DELAY_MS in find.web-view.tsx. */
 const HISTORY_DEBOUNCE_MS = 5_000;
 
+/**
+ * The paragraph Find renders once a search has finished — the results summary, the no-results
+ * message, or the search error.
+ *
+ * The `:not([role="status"])` is load-bearing: the idle / no-open-projects / invalid-query
+ * placeholders are `EmptyState`, which carries the same `tw:text-center tw:font-light` classes the
+ * caller passes it plus `role="status"`. Without the exclusion this selector also matches a panel
+ * that has never run a search, so every "wait until the search finished" gate below would resolve
+ * immediately.
+ */
+const SEARCH_OUTCOME_MESSAGE_SELECTOR = 'p.tw\\:font-light.tw\\:text-center:not([role="status"])';
+
 // ---------------------------------------------------------------------------
 // Worker-level setup — runs once before any test in this file.
 // Opens a scripture editor so the hamburger menu is available throughout
@@ -128,7 +140,7 @@ test.beforeAll(async ({ electronApp }) => {
   const hamburger = editorFrame.locator('button[aria-label="Project"]');
   await expect(hamburger).toBeVisible({ timeout: 15_000 });
   await hamburger.click();
-  const findMenuItem = editorFrame.getByRole('menuitem', { name: /find\.\.\./i });
+  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
   await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
   await findMenuItem.click();
 
@@ -142,8 +154,8 @@ test.beforeAll(async ({ electronApp }) => {
   // Wait up to 90 s for either the counter (results found) or the results/no-results paragraph.
   await expect(
     findFrame
-      .locator('.tw-tabular-nums')
-      .or(findFrame.locator('p.tw-font-light.tw-text-center'))
+      .locator('.tw\\:tabular-nums')
+      .or(findFrame.locator(SEARCH_OUTCOME_MESSAGE_SELECTOR))
       .first(),
   ).toBeVisible({ timeout: 90_000 });
 
@@ -224,8 +236,8 @@ async function openFindPanel(mainPage: Page): Promise<FrameLocator> {
   await expect(hamburger).toBeVisible({ timeout: 15_000 });
   await hamburger.click();
 
-  // Click "Find..." from the dropdown (the Radix DropdownMenuContent portals into the iframe body)
-  const findMenuItem = editorFrame.getByRole('menuitem', { name: /find\.\.\./i });
+  // Click "Find" from the dropdown (the Radix DropdownMenuContent portals into the iframe body)
+  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
   await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
   await findMenuItem.click();
 
@@ -260,7 +272,7 @@ async function fillSearchAndWaitForResults(frame: FrameLocator, term: string): P
   // can take 60–120 s on a cold start while the C# backend loads project data.  Even on a warm
   // engine, a fresh web-view instance re-awaits the PDP resolution hook, so the first search in
   // each new Find panel can still take > 90 s.
-  await expect(frame.locator('.tw-tabular-nums')).toBeVisible({ timeout: 150_000 });
+  await expect(frame.locator('.tw\\:tabular-nums')).toBeVisible({ timeout: 150_000 });
 }
 
 /** Click the X (clear search) button in the search input. */
@@ -291,6 +303,73 @@ async function switchToReplaceMode(frame: FrameLocator): Promise<void> {
  */
 function firstResultCard(frame: FrameLocator): Locator {
   return frame.locator('[role="button"][aria-pressed]').first();
+}
+
+/**
+ * Select the first word in the editor's text that is long enough to be distinctive and is not one
+ * of `excludedWords`, and return the selected text. A programmatic Range keeps the setup
+ * deterministic — a positional double-click can land on a verse number or whitespace — while still
+ * producing the real DOM selection the Find triggers read.
+ *
+ * Why exclusions at all: the Find panel restores the project's last search term into an empty
+ * search box when it mounts, so a word equal to a term an earlier test already searched would let
+ * the test pass without the selection ever reaching Find. With today's constants the 6+ letter rule
+ * already rules that out on its own — `excludedWords` is what keeps that true if a shorter search
+ * term is ever replaced with a long one.
+ */
+async function selectDistinctiveWordInEditor(
+  editorFrame: Frame,
+  excludedWords: string[],
+): Promise<string> {
+  return editorFrame.evaluate((excluded: string[]) => {
+    const content = document.querySelector('.editor-input');
+    if (!content) throw new Error('Editor content (.editor-input) not found');
+    const isExcluded = (word: string) =>
+      excluded.some((candidate) => candidate.toLowerCase() === word.toLowerCase());
+    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+    const wordPattern = /\p{L}{6,}/gu;
+    let node = walker.nextNode();
+    while (node) {
+      const text = node.textContent ?? '';
+      wordPattern.lastIndex = 0;
+      let match = wordPattern.exec(text);
+      while (match) {
+        if (!isExcluded(match[0])) {
+          const range = document.createRange();
+          range.setStart(node, match.index);
+          range.setEnd(node, match.index + match[0].length);
+          const selection = window.getSelection();
+          if (!selection) throw new Error('No selection object available in the editor frame');
+          selection.removeAllRanges();
+          selection.addRange(range);
+          // Collapsed footnotes live inside `.editor-input` but are `display: none`, and
+          // `Selection.toString()` is empty over hidden content. Keep walking rather than handing
+          // back a word the user could not have selected.
+          if (selection.toString().trim()) return selection.toString();
+          selection.removeAllRanges();
+        }
+        match = wordPattern.exec(text);
+      }
+      node = walker.nextNode();
+    }
+    throw new Error(
+      'No distinctive word (6+ letters, visible, not an excluded search term) found in the editor',
+    );
+  }, excludedWords);
+}
+
+/**
+ * Undo {@link selectDistinctiveWordInEditor} so no selection leaks into later tests: drop the
+ * document selection, and press inside the editor's text content, which is what clears the tab's
+ * pointer-press selection snapshot.
+ */
+async function clearEditorSelection(editorFrame: Frame): Promise<void> {
+  await editorFrame.evaluate(() => {
+    window.getSelection()?.removeAllRanges();
+    document
+      .querySelector('.editor-input')
+      ?.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -350,6 +429,60 @@ test.describe('Find Panel Basics', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests: Selection carried into Find
+// ---------------------------------------------------------------------------
+
+test.describe('Editor selection to Find', () => {
+  // The test body waits ~60 s for editor text, then openFindPanel (~90 s worst case), then the
+  // results counter (~150 s worst case) — sum to ~300 s, so give the block extra headroom above
+  // that worst case.
+  test.describe.configure({ timeout: 360_000 });
+
+  test('pre-fills and searches the editor selection when Find is opened from the tab menu', async ({
+    mainPage,
+  }) => {
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    // Wait for verse text to populate, not just for the container to exist — the helper needs real
+    // words to select.
+    await expect(editorFrame.locator('.editor-input')).toContainText(/\p{L}{6,}/u, {
+      timeout: 60_000,
+    });
+
+    const excludedTerms = [COMMON_SEARCH_TERM, REPLACE_SEARCH_TERM];
+    const selectedText = (await selectDistinctiveWordInEditor(editorFrame, excludedTerms)).trim();
+    // A word rendered inside a collapsed footnote is `display: none`, and `Selection.toString()`
+    // returns '' over hidden content. Assert the selection is real before using it, or the
+    // `toHaveValue(selectedText)` check below passes vacuously against an empty search box.
+    expect(selectedText).not.toBe('');
+    // The Find panel restores the project's last search term into an empty box on mount, so a word
+    // colliding with a term another test searched would make this test pass without the selection
+    // ever reaching Find.
+    expect(excludedTerms.map((term) => term.toLowerCase())).not.toContain(
+      selectedText.toLowerCase(),
+    );
+
+    try {
+      const frame = await openFindPanel(mainPage);
+
+      await expect(frame.locator('#search-term')).toHaveValue(selectedText, { timeout: 15_000 });
+      // The panel searches the pre-filled term immediately; the results counter proves it ran.
+      // Generous timeout: the findInScripture PDP factory initializes lazily and can take 60-120 s
+      // on a cold start.
+      await expect(frame.locator('.tw\\:tabular-nums')).toBeVisible({ timeout: 150_000 });
+
+      await closeFindPanel(mainPage);
+    } finally {
+      // Leave no selection behind, including when an assertion above threw. `closeFindPanel` clicks
+      // the dock tab on the main page, which never reaches the editor iframe, so without this the
+      // selection — and the pointer-press snapshot built from it — would pre-fill every later
+      // `openFindPanel` call in this file and kick off an unintended search before those tests type
+      // their own term.
+      await clearEditorSelection(editorFrame);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: Search Results
 // ---------------------------------------------------------------------------
 
@@ -371,7 +504,7 @@ test.describe('Search Results', () => {
     await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     await fillSearchAndWaitForResults(frame, COMMON_SEARCH_TERM);
-    const counterFirst = await frame.locator('.tw-tabular-nums').textContent();
+    const counterFirst = await frame.locator('.tw\\:tabular-nums').textContent();
 
     // Switch to a rare term: "Bartholomew" (4 occurrences) stays under the 100-result batch
     // cap, so its counter must differ — another common word would cap at "1 of 100" like the
@@ -386,14 +519,14 @@ test.describe('Search Results', () => {
     // Use isVisible() for non-blocking checks so the predicate never hangs waiting for an
     // element that may never reappear (counter disappears when results are cleared).
     await expect(async () => {
-      const counterVisible = await frame.locator('.tw-tabular-nums').isVisible();
+      const counterVisible = await frame.locator('.tw\\:tabular-nums').isVisible();
       if (counterVisible) {
         // Counter is visible — verify it changed from the original 'the' search
         const counterSecond = await frame
-          .locator('.tw-tabular-nums')
+          .locator('.tw\\:tabular-nums')
           .textContent({ timeout: 1_000 });
         expect(counterSecond).not.toBe(counterFirst);
-      } else if (await frame.locator('p.tw-font-light.tw-text-center').isVisible()) {
+      } else if (await frame.locator(SEARCH_OUTCOME_MESSAGE_SELECTOR).isVisible()) {
         // No-results paragraph appeared — search completed with 0 results (results changed)
       } else {
         // Neither visible yet — search still in progress, keep waiting
@@ -415,7 +548,7 @@ test.describe('Search Results', () => {
     await clickClearSearch(frame);
 
     // Results and counter should disappear; input should be empty
-    await expect(frame.locator('.tw-tabular-nums')).not.toBeVisible({ timeout: 5_000 });
+    await expect(frame.locator('.tw\\:tabular-nums')).not.toBeVisible({ timeout: 5_000 });
     await expect(frame.locator('#search-term')).toHaveValue('');
     await expect(firstResultCard(frame)).not.toBeVisible({ timeout: 5_000 });
 
@@ -843,7 +976,10 @@ test.describe('Search Filters', () => {
     // updates (different result count) or the no-results paragraph appears — either confirms
     // both filters are honoured without a crash.
     await expect(
-      frame.locator('.tw-tabular-nums').or(frame.locator('p.tw-font-light.tw-text-center')).first(),
+      frame
+        .locator('.tw\\:tabular-nums')
+        .or(frame.locator(SEARCH_OUTCOME_MESSAGE_SELECTOR))
+        .first(),
     ).toBeVisible({ timeout: 30_000 });
 
     await closeFindPanel(mainPage);
@@ -891,9 +1027,9 @@ test.describe('Scope Switching', () => {
       expect(newScopeText).not.toBe(initialScopeText);
 
       // A search should have completed with results or no-results
-      const counterVisible = await frame.locator('.tw-tabular-nums').isVisible();
+      const counterVisible = await frame.locator('.tw\\:tabular-nums').isVisible();
       if (counterVisible) return;
-      if (await frame.locator('p.tw-font-light.tw-text-center').isVisible()) return;
+      if (await frame.locator(SEARCH_OUTCOME_MESSAGE_SELECTOR).isVisible()) return;
       throw new Error('Waiting for scope-change search to complete');
     }).toPass({ timeout: 30_000 });
 

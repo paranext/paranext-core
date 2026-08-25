@@ -602,7 +602,9 @@ step, no automation. Just a record.
   offers a Manage Books button). Three candidate shapes already existed and nothing said which to
   reach for. `EmptyState` (`lib/platform-bible-react/src/components/basics/empty-state.component.tsx`,
   2 consumers) renders a single `role="status"` message and has no slot for a title or an action.
-  `InstallFailedView` (`extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`,
+  `InstallFailedView` (then at
+  `extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`; renamed
+  `RetryableErrorView` in `panel-state-views.component.tsx` by PT-4347 — see ADR-0022,
   2 consumers) is genuinely "full-panel message + action button" but is scoped to DBL install
   recovery. Neither is a general primitive, and the next three tickets in the same epic (PT-4132,
   PT-4347, PT-4349) each need a zero-state too, so an ad-hoc fourth shape would have compounded.
@@ -1265,7 +1267,169 @@ step, no automation. Just a record.
   loaded, so the error branch has to be recognized on its own.
 - **Source:** PT-3299, review of #2708.
 
-## ADR-0026: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
+## ADR-0026: A tab’s own web view supplies its selection to Find, rather than a shared selection store
+
+- **Date:** 2026-08-16
+- **Status:** Accepted
+- **Source:** PT-3216 (pass editor text selection to Find), PR #2692; builds on the shared Ctrl+F
+  hook from ADR-0015 / PT-4341.
+- **Context:** Opening Find from a scripture editor tab's menu needed that tab's text selection. The
+  work item proposed publishing the selection into the platform's shared store so a command handler
+  could read it. Two facts made that unnecessary and unavailable: (a) the scripture editor sets
+  `shouldShowToolbar: false` (`extensions/src/platform-scripture-editor/src/main.ts`) and instead
+  renders its own `TabToolbar` *inside* its web view
+  (`extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`), so its
+  menu handler already runs in the document that owns the selection; (b) `sharedStoreService`
+  (`src/shared/services/shared-store.service.ts`) is explicitly not part of the public API and is not
+  reachable from extensions.
+- **Decision:** Find takes the selection of the tab it was triggered from, read in that tab's own web
+  view via `window.getSelection()` and passed through the existing `platformScripture.openFind`
+  `selectedText` parameter. No cross-tab selection state. `resolveFindSelectionText`
+  (`extensions/src/platform-scripture-editor/src/find-trigger.util.ts`) is the single normalizer
+  every trigger goes through, so all of them apply the same two rules: trim (a double-click word
+  selection often carries a trailing space), and reject anything spanning lines (Find's search box is
+  a single-line input, so a Ctrl+A selection cannot be shown honestly and must not be flattened into
+  a run-on term). The two trigger paths deliberately
+  differ in one respect: the tab menu additionally consults a capture-phase pointer-press snapshot
+  (`use-selection-snapshot.hook.ts`), because the click that opens the dropdown is itself what
+  collapses the selection; Ctrl+F (`use-open-find-shortcut.hook.ts`, ADR-0015) reads only the live
+  selection, because a keystroke destroys nothing, and a fallback there would let a long-abandoned
+  selection pre-fill and immediately re-run a search over whatever term an open Find panel already
+  held.
+- **Alternatives:** (a) Shared store — rejected: not extension-accessible, and unnecessary once the
+  menu handler's location is understood. (b) A global "last selection" registry in the editor
+  extension built on the existing `platformScriptureEditor.onDidSelectionChange` event — deferred:
+  every Find entry point today is tab-scoped, so the triggering tab *is* the focused editor; a
+  registry would add cross-tab state with no current consumer. (c) Deriving the text from the
+  existing `PlatformScriptureEditorWebViewController.getSelection()` — rejected: that carries USJ
+  document offsets, not text, so it would mean re-reading and slicing USJ to recover a string the
+  triggering document already has.
+- **Consequences:** The selection path stays inside one file per tab type and needs no new
+  cross-process state. The snapshot is deliberately narrow, because a remembered selection that
+  outlives the interaction that produced it would pre-fill — and immediately re-run — a search over
+  whatever term the user had since typed into an open Find panel. Three bounds keep it honest: it
+  only remembers selections anchored inside the tab's text content (chrome has its own selectable
+  text — a reference input, a search box — that is not scripture); a press inside that content clears
+  it; and reading it consumes it, so it bridges exactly the one pointer press it exists for.
+  **Revisit** if a Find entry point ever lives outside a tab (a top-toolbar or application-menu Find,
+  or an extension asking "what is selected right now" to enable/disable menu items) — that is the
+  point where alternative (b) becomes the right answer. The snapshot is load-bearing, not defensive: in Chromium, a menu item's `click` handler
+  reads an empty `window.getSelection()` even though the same selection is still live at the
+  capture-phase `pointerdown` on that item — the collapse lands between the two, which is exactly the
+  window the snapshot covers. The end-to-end test written to prove this inside the real editor could
+  not be run in this development environment, and `test:e2e:isolated` (the only runner that reaches
+  `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
+  a manual pass rather than by automation.
+## ADR-0027: Panel readiness is derived from whether data sources arrived, never from a filtered result
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** The Model Text and Resource (Bible Texts / Commentaries) panels each decided "is
+  anything configured?" from a value that is only meaningful *after* its data had arrived, and each
+  did it differently. `useEffectiveResourceReferenceList` returned `[list | undefined, boolean]`
+  where the list accounted for two async sources (the project-level setting and a user-level PDP
+  subscription) but the boolean reported only the first — so the normal interleaving on essentially
+  every mount, where the project setting resolves before the user subscription delivers, was
+  reported as "not loading, nothing configured". The resource panel separately gated its spinner on
+  `filteredResources.length !== 0`, a list filtered against a DBL catalog that had not loaded yet,
+  so the guard could not fire during the exact window it existed for. Both rendered "No … selected"
+  with a Pick button for a correctly-configured resource, inviting the user to replace something
+  that was already set. A read failure compounded it: `useBufferedLayoutSetting` applied a
+  `PlatformError` to its held copy and disarmed, so a transient failure latched for the session.
+- **Decision:** Readiness is a first-class, data-derived signal evaluated before any empty or
+  not-found branch. `useEffectiveResourceReferenceList` returns a discriminated
+  `{ status: 'loading' | 'error' | 'ready' }` whose `loading` covers *both* sources and whose
+  `ready` may legitimately carry zero items — the only state in which a panel may render its empty
+  prompt. `getResourcePanelReadiness` (`resource-panel-readiness.utils.ts`) maps list status
+  plus catalog arrival to `loading | error | catalogError | empty | configured`, and
+  `PanelReadinessView` renders those states. **Both** panels route through them: the Model Text
+  panel takes the list status as one prop rather than separate loading/error booleans, so neither
+  panel can drift from the other on the question that caused this bug. The catalog itself is fetched
+  by one hook, `useDblResourceCatalog`, which owns the "has it arrived?" distinction the whole fix
+  hinges on and catches a rejected fetch — `usePromise` has no rejection path, so an uncaught
+  rejection never clears its loading flag and would strand the panel on a spinner forever. `useBufferedLayoutSetting` no longer latches a read error:
+  its mount arm skips a `PlatformError` and stays armed, and reports the live error on a third
+  tuple element, because at that point the held value is the placeholder and is indistinguishable
+  from a genuinely empty setting.
+- **Alternatives:** **Split the model panel's merged loading/empty conditional, as the ticket
+  proposed** — rejected as insufficient: in the failing window both `isEffectiveModelTextsLoading`
+  and `isLoadingResources` are `false`, so there is no honest signal to split on; the hook's
+  contract had to be fixed first. **Keep the tuple and widen the boolean** — rejected: it makes the
+  error state unrepresentable, and an unreadable setting would have to masquerade as either loading
+  (spins forever) or ready-and-empty (the original bug). **Treat an unreadable setting as
+  not-ready** — rejected: it trades a premature empty state for an endless spinner with no recovery.
+- **Consequences:** "Nothing configured at all" is deliberately kept catalog-independent, so a
+  genuinely unconfigured project still gets its pick prompt immediately rather than waiting on a
+  fetch; only "does a configured item belong to *this* panel?" waits for the catalog. The two failure
+  states differ in whether they offer a control, and that difference is the point. A catalog fetch
+  can genuinely be re-driven, so `catalogError` carries a working retry. A project-setting read
+  cannot be — nothing in either panel can force one, and user-layer errors are swallowed to the
+  default list — so `error` shows a message alone. An inert control in a state that withholds every
+  other affordance is worse than no control, so that message carries the recovery expectation
+  instead: the setting stays watched and the panel recovers on its own. The error is also reported only while no
+  readable value has ever been applied; once one has, holding it across a failed re-read is the job
+  the buffer exists to do, so a later failure must not replace working content. Un-latching is not a free
+  improvement for existing consumers: because the held value is now the placeholder rather than the
+  error, any consumer that detected failure via `isPlatformError(heldValue)` alone silently starts
+  reading an unreadable setting as an empty one. `useTextCollectionSources`, the hook's other
+  consumer, had to be updated to read the error channel for exactly this reason — a new consumer of
+  `useBufferedLayoutSetting` must check the third tuple element, not just the held value.
+  `RetryableErrorView` (renamed from `InstallFailedView` and moved to
+  `panel-state-views.component.tsx`) is scoped to failures a retry can act on — a failed install or a
+  failed catalog fetch. The settings-read failure is not one, so it renders a message alone. All
+  four front states compose the shadcn `Empty` primitive per ADR-0016, each with its own icon:
+  without one, the pick prompt and the catalog error rendered as identical screens whose buttons did
+  opposite things (reconfigure vs. retry), which is what AC-4 asks these states to prevent. Panels that grow a third async source must extend the readiness
+  signal rather than add another flag — the bug class here is precisely one guard being unaware of
+  one source.
+- **Source:** PT-4347 (NN 5C Resource panel shows correct loading state), whose named root cause —
+  the merged conditional in `model-text-panel.component.tsx` — proved to be the symptom site rather
+  than the defect.
+
+## ADR-0028: Async hook state shape — discriminated union when the payload is state-specific, flat object otherwise
+
+- **Date:** 2026-08-21
+- **Status:** Proposed — the rule is drawn from exactly two hooks, both introduced by PT-4347. It
+  stands as the default for new async hook state, but the next hook that does not fit either shape
+  should reopen it rather than contort to satisfy it. Promote to Accepted once a third hook has
+  exercised it independently.
+- **Context:** PT-4347 introduced `useEffectiveResourceReferenceList`'s
+  `EffectiveResourceReferenceListState` — the repo's first discriminated-union async state. A review
+  grep confirmed no other exists: siblings use a tuple (`useBufferedLayoutSetting` →
+  `[value, isLoading, settingError]`) or a flat named state object (`useStructureProtectionState` →
+  `StructureProtectionState.adminSettingError`). The same PR also added `useDblResourceCatalog`, which
+  uses the flat-object shape, so one change shipped two shapes. The reviewer flagged the divergence as
+  a pattern question: either converge, or say why not.
+- **Decision:** Keep both, chosen by whether the payload is state-specific.
+  - **Discriminated union** when data exists in only one state, so the type can make the other
+    combinations unrepresentable. `useEffectiveResourceReferenceList` returns
+    `{ status: 'loading' } | { status: 'error' } | { status: 'ready'; list }` — there is no list to
+    hand out while loading or on error, and the union is what prevents a caller reading one anyway.
+  - **Flat named state object** when the values are always present and the flags describe them.
+    `useDblResourceCatalog` returns a catalog (coerced to `[]`), loading/ready/error flags, and a
+    refetch callback — all meaningful together, with nothing to make unrepresentable.
+  - **Corollary — do not unpack a union at a boundary.** A union's guarantee is lost the moment a
+    consumer splits it into a nullable payload plus a bare status: indexing the discriminant
+    (`SomeState['status']`) strips the payload and hands the callee two values free to disagree, which
+    is the shape the union existed to forbid. Pass the whole state so narrowing survives. PT-4347 hit
+    this exactly — `ModelTextPanelProps` took `modelTextsStatus` plus an `undefined`-able list until it
+    was corrected to take `modelTextsState`.
+- **Alternatives:** **Converge everything on the flat object** for consistency with the existing
+  majority — rejected: it makes `ready`-implies-`list` unenforceable and reintroduces the
+  nullable-payload-plus-flag shape this epic spent its effort removing. **Converge everything on the
+  union** — rejected: it would force a discriminant onto hooks like `useDblResourceCatalog` whose
+  values are all always present, inventing states to satisfy a form. **Leave it unstated** — rejected:
+  with one instance of each shape and no rule, the next hook re-litigates it.
+- **Consequences:** Reviewers should expect both shapes and ask which fits rather than flagging
+  either as wrong. The union costs something real: consumers must narrow, and it cannot be spread into
+  props piecemeal — that constraint is the point. `resource-panel-readiness.utils.ts` keeps a
+  `*.utils.ts` → `*.hook.ts` type import to derive the status union, which is the only such import in
+  the extension and would have become moot had the flat shape won; with the union kept it stands as a
+  known wart, and moving the union into the utils module (or a `.types.ts`) is the fix if it bothers a
+  future reader.
+- **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
+  author rather than decided in the review pass.
+## ADR-0029: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
 
 - **Date:** 2026-08-20
 - **Status:** Accepted
@@ -1383,7 +1547,7 @@ step, no automation. Just a record.
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
 
-## ADR-0027: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
+## ADR-0030: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
 
 - **Date:** 2026-08-25
 - **Status:** Accepted

@@ -42,7 +42,7 @@
   "devDependencies": {
     "@dreamsicle.io/stylelint-config-tailwindcss": "^1.2.2",
     "@fontsource-variable/ibm-plex-sans": "^5.2.8",
-    "@eten-tech-foundation/platform-editor": "~0.8.14",
+    "@eten-tech-foundation/platform-editor": "~0.8.15",
     "@eten-tech-foundation/scripture-utilities": "~0.1.6",
     "@stylistic/eslint-plugin-ts": "^2.13.0",
     "@swc/core": "1.13.3",

@@ -37,7 +37,12 @@ export type UseCharacterMarkerStateOptions = {
    * remove row.
    */
   removeCharacterMarker?: (marker?: string) => void;
-  /** Supplied once replacement exists upstream; absent means picking a marker adds instead. */
+  /**
+   * Replaces the applied marker with the picked one. Absent means picking a marker while one is
+   * applied does nothing — it never falls back to adding, because adding nests.
+   *
+   * TODO(PT-4394): wire this to `EditorRef.replaceCharacterMarker`.
+   */
   changeCharacterMarker?: (fromMarker: string, toMarker: string) => void;
 };
 
