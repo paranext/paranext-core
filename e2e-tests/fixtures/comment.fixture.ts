@@ -59,6 +59,12 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
       const restoreSettings = preConfigureSettings({
         'platform.interfaceLanguage': ['en'],
         'platform.interfaceMode': 'simple',
+        // Pinned because this fixture pins simple mode, and simple is the one mode that shows the
+        // first-run wizard — power bypasses it. The wizard is a modal that cannot be dismissed
+        // (its Radix handlers all preventDefault) and aria-hides the rest of the app, so without
+        // this these suites depend on the checkout already holding a true value: they inherit it
+        // from whatever a previous run left in the shared dev-appdata settings file.
+        'platform.firstRunComplete': true,
       });
       const ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
       await use(ctx);
