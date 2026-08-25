@@ -2497,3 +2497,42 @@ step, no automation. Just a record.
   worse than a badly-timed foreground.
 - **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
   which carries the design, the call-site table and the `show` hazard in full.
+## ADR-0031: The tab context menu is a contribution channel, and a window is named by its content
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** The tab context menu was hard-coded in the renderer and fed by nothing, so
+  neither the platform nor an extension could contribute to it. Two move actions had to be
+  added to it, one of them a submenu listing the open windows — which needed windows to have
+  user-facing names, and every window was showing the same title. Paratext 9 answers the
+  naming half: a floating window takes the title of its active tab, and its Window menu lists
+  windows by content with no ordinals and no de-duplication.
+- **Decision:** The tab menu is a `tabMenu` channel on the existing per-web-view menu
+  contribution system, alongside `topMenu` and `contextMenu`, rather than a data type of its
+  own. Unlike those two it is not opt-in: its items act on the tab frame rather than the web
+  view's contents, so every tab receives the platform items whether or not the web view asked
+  for defaults, and a tab hosting no web view receives them too. Runtime visibility — whether
+  an action applies to this tab, and which windows exist — is resolved in the consuming
+  component, because no contribution can express a fact about the moment a menu opens. A
+  window is named by its first docked panel's active tab, falling back to the next titled tab
+  and then to one localized string, and publishes that as its page title, which Electron
+  carries to the native window title; the move-to-window submenu reads those titles on open.
+- **Alternatives:** A standalone `tabContextMenu` document with its own `MenuDataDataTypes`
+  entry — rejected; it touches the same files and adds a public getter and subscriber for the
+  same result. Hand-rolling the submenu next to the existing items — rejected; the ticket
+  calls for the contribution point and retrofitting one later costs the same with more items
+  to migrate. Naming windows by ordinal — rejected; meaningless to the user and unstable, since
+  closing window 2 of 3 renumbers the third. Naming them by monitor — rejected; Electron's
+  display label is blank or generic on most Windows and Linux displays, and two windows on one
+  display collide immediately. A window data provider pushing names — rejected; a context menu
+  needs them at the moment it opens and never again.
+- **Consequences:** Duplicate window names are possible and accepted, as they are in Paratext
+  9: the cost of choosing wrong is one tab in the wrong window. Nothing in the main process may
+  call `setTitle`, or the native title stops following the page title and the submenu's names
+  go stale. Contributed tab items carry a `command` that may name an action the menu performs
+  itself rather than a registered PAPI command, which the channel's TSDoc states. Float panels
+  are excluded from naming so a modal dialog cannot rename the window; a maximized panel is
+  read first, since it is what the user is looking at.
+- **Source:** PT-4282; design and plan in the PRD folder
+  (`2026-08-25-pt-4282-tab-move-menu-design.md`), Paratext 9 `ParatextFloatWindow.SetText`
+  and `MainForm`'s Window menu.
