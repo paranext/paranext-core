@@ -466,6 +466,48 @@ export function PlatformTabTitle({
     };
   }, [focusSubject, id, lastSelectedScriptureNavigableWebViewId, lastFocusedTabId, isPowerMode]);
 
+  // Give this menu a keyboard path. rc-tabs renders every tab as a focusable `role="tab"` element
+  // with the title inside it, and the context-menu trigger sets no tabIndex — so pressing Shift+F10
+  // or the Menu key on a focused tab fires `contextmenu` at the tab and it bubbles UP, past the
+  // trigger, opening nothing. Forwarding that event to an element INSIDE the trigger sends it back
+  // through the trigger on its way up, which is what opens the menu.
+  //
+  // This is the whole keyboard story for the tab menu: every item in it becomes reachable at once,
+  // including ones an extension contributes, rather than only the ones given their own shortcut.
+  useEffect(() => {
+    if (!isPowerMode) return undefined;
+    const containerElement = containerRef.current;
+    const tabElement = containerElement?.closest('[role="tab"]');
+    if (!containerElement || !tabElement) return undefined;
+
+    let isForwarding = false;
+    const forwardToTrigger = (event: Event) => {
+      // The forwarded event bubbles back through here on its way up; letting it through would
+      // forward it again forever
+      if (isForwarding) return;
+      // Anything raised inside the trigger already reaches it by bubbling, so leave it alone. This
+      // is every ordinary right-click on the tab's title
+      if (event.target instanceof Node && containerElement.contains(event.target)) return;
+
+      event.preventDefault();
+      isForwarding = true;
+      try {
+        // Carry the position across so the menu opens where the event said, which for a keyboard
+        // press is the focused tab rather than wherever the pointer happens to rest
+        const { clientX, clientY } =
+          event instanceof MouseEvent ? event : { clientX: 0, clientY: 0 };
+        containerElement.dispatchEvent(
+          new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY }),
+        );
+      } finally {
+        isForwarding = false;
+      }
+    };
+
+    tabElement.addEventListener('contextmenu', forwardToTrigger);
+    return () => tabElement.removeEventListener('contextmenu', forwardToTrigger);
+  }, [isPowerMode]);
+
   // rc-dock's DragDropDiv skips drag-start entirely when the pointerdown's native target carries
   // this class (see `onPointerDown` in `node_modules/rc-dock/es/dragdrop/DragDropDiv.js`) — the
   // library's own supported way to make part of a draggable tab non-draggable. Simple mode's
