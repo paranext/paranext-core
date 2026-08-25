@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
@@ -1527,6 +1527,11 @@ interface ScopeSelectorProps {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/**
+	 * Optional explanations, by section, for why that section has no available books. Forwarded to
+	 * {@link SelectBooks} and shown as a tooltip on that section's disabled quick-select button.
+	 */
+	disabledSectionExplanations?: Partial<Record<Section, string>>;
 	/** Optional ID that is applied to the root element of this component */
 	id?: string;
 	/**
@@ -1593,7 +1598,7 @@ interface ScopeSelectorProps {
  * chosen, two BookChapterControl pickers are displayed for selecting the start and end verse of the
  * range.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, disabledSectionExplanations, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the SelectBooks component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -1640,6 +1645,13 @@ type SelectBooksProps = {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/**
+	 * Optional explanations, by section, for why that section has no available books. Each is shown
+	 * as a tooltip on that section's quick-select button while it is disabled. Supply one for any
+	 * section whose books the consumer withholds deliberately, so the disabled button reads as "not
+	 * searched here" rather than "this project has none".
+	 */
+	disabledSectionExplanations?: Partial<Record<Section, string>>;
 };
 /**
  * A component for selecting multiple books from the Bible canon. It provides:
@@ -1649,7 +1661,7 @@ type SelectBooksProps = {
  * - Support for shift-click range selection
  * - Visual feedback with badges showing selected books
  */
-export declare function SelectBooks({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksProps): import("react/jsx-runtime").JSX.Element;
+export declare function SelectBooks({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, disabledSectionExplanations, }: SelectBooksProps): import("react/jsx-runtime").JSX.Element;
 type SelectBooksPickerProps = {
 	/**
 	 * Information about available books, formatted as a 123 character long string as defined in a
@@ -1673,6 +1685,12 @@ type SelectBooksPickerProps = {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/**
+	 * Optional explanations, by section, for why that section has no available books. A section with
+	 * no books renders no group at all, so its explanation is shown as a note under the list —
+	 * otherwise a search for one of its books lands on the bare "no book found".
+	 */
+	disabledSectionExplanations?: Partial<Record<Section, string>>;
 };
 /**
  * A searchable dropdown (combobox) for picking multiple books from the Bible canon. It provides:
@@ -1685,7 +1703,7 @@ type SelectBooksPickerProps = {
  * This is the standalone picker used by {@link SelectBooks}, which additionally renders section
  * quick-select buttons and badges for the current selection.
  */
-export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
+export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, disabledSectionExplanations, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no

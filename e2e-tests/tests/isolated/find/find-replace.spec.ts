@@ -5,9 +5,9 @@
  * the suite runs. testWEB is a programmatic copy of the WEB asset with a unique project ID and
  * Editable=T, reset to a clean state before each worker run to prevent test pollution.
  *
- * Run via: `npm run test:e2e:isolated`
+ * Run via: `npm run test:e2e:isolated find`
  *
- * OR more specifically `npm run test:e2e:isolated -- find-replace.spec.ts`
+ * OR by path: `npm run test:e2e:isolated tests/isolated/find/find-replace.spec.ts`
  */
 
 import { Frame, FrameLocator, Locator, Page } from '@playwright/test';
