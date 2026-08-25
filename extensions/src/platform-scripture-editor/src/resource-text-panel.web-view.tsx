@@ -56,10 +56,7 @@ import {
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
-import {
-  areNavigableProjectSourcesReady,
-  resolveNavigableProjectIdsWrite,
-} from './navigable-project-ids.utils';
+import { resolveNavigableProjectIdsWrite } from './navigable-project-ids.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -369,18 +366,12 @@ globalThis.webViewComponent = function ResourceTextPanel({
     [],
   );
   useEffect(() => {
-    // Don't publish until the reference list and the cached DBL list have both loaded:
-    // `resourceProjectId` is transiently undefined before then, which is indistinguishable from "no
-    // resource is displayed" and would wipe a correct persisted list on remount.
-    if (
-      !areNavigableProjectSourcesReady({
-        hasReferenceList: effectiveResourcesState.status === 'ready',
-        isReferenceListLoading: effectiveResourcesState.status === 'loading',
-        hasCachedResources: resourcesPossiblyUndefined !== undefined,
-        isLoadingCachedResources: isLoadingResources,
-      })
-    )
-      return;
+    // Only publish once both sources have arrived. `resourceProjectId` is undefined until the
+    // reference list is `ready` and the DBL catalog is ready, and that is indistinguishable from
+    // "no resource is displayed" — publishing then would wipe a correct persisted list on remount.
+    // A catalog error is also not readiness: the configured resource cannot be resolved, so its id
+    // is unknown rather than absent, and `isCatalogReady` already excludes that case.
+    if (effectiveResourcesState.status !== 'ready' || !isCatalogReady) return;
     const toPublish = resolveNavigableProjectIdsWrite(
       resourceProjectId ? [resourceProjectId] : [],
       publishedNavigableProjectIds,
@@ -392,8 +383,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     // nothing to defer and nothing to catch up on activation.
   }, [
     effectiveResourcesState,
-    resourcesPossiblyUndefined,
-    isLoadingResources,
+    isCatalogReady,
     resourceProjectId,
     publishedNavigableProjectIds,
     setPublishedNavigableProjectIds,

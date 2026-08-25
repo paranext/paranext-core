@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'vitest';
 import {
-  areNavigableProjectSourcesReady,
   getNavigableProjectIdsToPublish,
   resolveNavigableProjectIdsWrite,
 } from './navigable-project-ids.utils';
@@ -91,36 +90,5 @@ describe('resolveNavigableProjectIdsWrite', () => {
     expect(resolveNavigableProjectIdsWrite(['projectA'], ['projectA', 'projectB'])).toEqual([
       'projectA',
     ]);
-  });
-});
-
-describe('areNavigableProjectSourcesReady', () => {
-  const ready = {
-    hasReferenceList: true,
-    isReferenceListLoading: false,
-    hasCachedResources: true,
-    isLoadingCachedResources: false,
-  };
-
-  test('is ready when both sources have resolved and neither is loading', () => {
-    expect(areNavigableProjectSourcesReady(ready)).toBe(true);
-  });
-
-  test('is not ready while the reference list is loading', () => {
-    expect(areNavigableProjectSourcesReady({ ...ready, isReferenceListLoading: true })).toBe(false);
-  });
-
-  test('is not ready while the reference list has not resolved, even when not loading', () => {
-    expect(areNavigableProjectSourcesReady({ ...ready, hasReferenceList: false })).toBe(false);
-  });
-
-  test('is not ready while the cached resource list is loading', () => {
-    expect(areNavigableProjectSourcesReady({ ...ready, isLoadingCachedResources: true })).toBe(
-      false,
-    );
-  });
-
-  test('is not ready while the cached resource list has not resolved, even when not loading', () => {
-    expect(areNavigableProjectSourcesReady({ ...ready, hasCachedResources: false })).toBe(false);
   });
 });

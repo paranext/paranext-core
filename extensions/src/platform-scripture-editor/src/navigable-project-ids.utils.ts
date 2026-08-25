@@ -42,39 +42,3 @@ export function resolveNavigableProjectIdsWrite(
     isNavigableProjectIds(rawPublished) ? rawPublished : [],
   );
 }
-
-/** The load state of the data sources a resource panel resolves its displayed project id from. */
-export type NavigableProjectSourcesState = {
-  /** Whether the panel's resource reference list has resolved */
-  hasReferenceList: boolean;
-  /** Whether the panel's resource reference list is still loading */
-  isReferenceListLoading: boolean;
-  /** Whether the cached DBL resource list has resolved (an empty resolved list still counts) */
-  hasCachedResources: boolean;
-  /** Whether the cached DBL resource list is still loading */
-  isLoadingCachedResources: boolean;
-};
-
-/**
- * Whether a resource panel's data sources have loaded far enough for its displayed project id to
- * mean "this is what the panel shows" rather than "nothing has arrived yet".
- *
- * Each source needs both a resolved-value check and a loading check, because neither alone closes
- * the window: a reference list resolves independently of its loading flag (its user-scoped half
- * arrives over a separate subscription), and the cached DBL list is fetched in two passes, so it
- * reports "not loading" once while still holding nothing. Publishing in either window would declare
- * an empty list and wipe a correct persisted one on every remount.
- *
- * @param sources Load state of the panel's reference list and of the cached DBL resource list
- * @returns `true` when the displayed project id can be trusted and published
- */
-export function areNavigableProjectSourcesReady({
-  hasReferenceList,
-  isReferenceListLoading,
-  hasCachedResources,
-  isLoadingCachedResources,
-}: NavigableProjectSourcesState): boolean {
-  return (
-    hasReferenceList && !isReferenceListLoading && hasCachedResources && !isLoadingCachedResources
-  );
-}
