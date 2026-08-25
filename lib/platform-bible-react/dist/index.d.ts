@@ -1997,7 +1997,8 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * Two `data-testid` hooks are relied on by end-to-end tests outside this package, so they are part
  * of this component's contract: `toolbar-content-row` (the row that clips when contents do not fit)
- * and `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking change.
+ * and `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking
+ * change.
  *
  * @param {ToolbarProps} props - The props for the component.
  */
