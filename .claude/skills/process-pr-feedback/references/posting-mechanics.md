@@ -137,6 +137,23 @@ still resolves — see `pr-thread-conversion.md` for the anchor verification scr
 
 ## 6. Post sequentially, stop on first failure, never retry
 
+**Throttle.** GitHub applies a *secondary* rate limit to comment creation, and a batch posted as
+fast as the API answers will trip it. Measured on this repo, 2026-08-25: 40 threaded replies posted
+back-to-back, and the 41st returned
+
+```
+HTTP 422  {"resource":"PullRequestReview","code":"abuse","field":"base"}
+```
+
+Note the shape of that failure — a **422 Validation Failed**, not the 403 the primary rate limit
+returns, and with `code: "abuse"` buried in the body rather than in the status line. Read as
+"validation failed", it looks like a bad body or a dead target and invites editing an approved
+reply to get past it; it is neither. Sleep a second or two between posts on any batch beyond a
+handful, and if one does trip it, **stop, verify, wait, and resume from the log** — the guard in
+`post.py` allows a re-post after a `FAIL` row precisely because `gh` reporting a failure means
+nothing was created. Confirm that with `verify_posted.py` before resuming: a clean stray list is
+what makes the remaining items safe to post.
+
 One item per invocation. No loops that continue past an error, and no automatic retries — a
 retry after an ambiguous failure is how a comment gets double-posted.
 

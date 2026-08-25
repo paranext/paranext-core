@@ -29,8 +29,17 @@ the user's name, in public, on a repo the whole team reads.
    "kept on our small-items list".
 4. **Never create a Jira ticket to satisfy this.** Propose it at G1/G2 and let the user decide.
 5. **Name a revision with every claim.** File:line at a stated ref, or a commit SHA re-derived
-   at drafting time and re-checked at posting. A SHA orphaned by a restack in a public reply is
-   its own small embarrassment, and it has happened.
+   at drafting time and re-checked at posting.
+
+   **What a restack actually costs a posted SHA, measured 2026-08-25:** GitHub retains
+   force-pushed commits, so `repos/…/commits/<sha>` still resolves for a SHA that a rebase made
+   unreachable from every branch — verified on two commits orphaned earlier the same day. The
+   link in the reply still opens. What is lost is *context*: the commit no longer appears in the
+   PR's commit list, so a reader cannot place it in the branch's history, and the object is
+   eventually collectable. So a restack after posting is a degradation, not a broken link, and it
+   is not a reason to avoid a rebase the branch needs — but it is a reason to prefer posting
+   *after* the restack rather than before, and never to cite a SHA that has not been pushed at
+   all, which genuinely does not resolve.
 6. **No labels the reviewer has never seen.** The test is visibility, not format. An id the
    reviewer themselves assigned — their own review's finding numbers — is the clearest possible
    way to say which item you are answering, and Example 3 below uses exactly that. An id that
