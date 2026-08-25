@@ -11,7 +11,7 @@ import type { DblResourceData } from 'platform-bible-utils';
  * @returns `true` if the entry is a locally-installed non-DBL resource
  */
 export function isNonDblResource(resource: DblResourceData): boolean {
-  return resource.dblEntryUid === resource.projectId;
+  return resource.dblEntryUid !== '' && resource.dblEntryUid === resource.projectId;
 }
 
 /**

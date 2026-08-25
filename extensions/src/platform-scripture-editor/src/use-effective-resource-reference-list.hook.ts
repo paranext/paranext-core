@@ -88,7 +88,8 @@ export function useEffectiveResourceReferenceList(
 
   useEffect(() => {
     if (!userPdp) {
-      setUserResourceReferenceList(undefined);
+      // No PDP available for this project — treat as empty user list so callers don't wait forever.
+      setUserResourceReferenceList(DEFAULT_LIST);
       return;
     }
 
@@ -115,6 +116,8 @@ export function useEffectiveResourceReferenceList(
       })
       .catch((err) => {
         logger.error(`Failed to subscribe to user text connection settings: ${err}`);
+        // Fall back to the default list so callers don't spin on an undefined result forever.
+        if (!disposed) setUserResourceReferenceList(DEFAULT_LIST);
       });
 
     return () => {
@@ -123,16 +126,15 @@ export function useEffectiveResourceReferenceList(
     };
   }, [userPdp, settingName]);
 
-  return [
-    useMemo(() => {
-      if (isProjectSettingLoading) return undefined;
-      if (isPlatformError(projectResourceReferenceList)) return undefined;
-      if (userResourceReferenceList === undefined) return undefined;
+  const value = useMemo(() => {
+    if (isProjectSettingLoading) return undefined;
+    if (isPlatformError(projectResourceReferenceList)) return undefined;
+    if (userResourceReferenceList === undefined) return undefined;
 
-      return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
-    }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]),
-    isProjectSettingLoading || (userPdp !== undefined && userResourceReferenceList === undefined),
-  ];
+    return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
+  }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]);
+
+  return [value, isProjectSettingLoading || value === undefined];
 }
 
 export default useEffectiveResourceReferenceList;

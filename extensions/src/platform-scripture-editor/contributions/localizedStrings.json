@@ -14,6 +14,9 @@
     },
     "%webView_platformScriptureEditor_error_bookNotFoundProject%": {
       "fallbackKey": "%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%"
+    },
+    "%webView_scriptureTextGrid_cell_status_noContent%": {
+      "fallbackKey": "%webView_scriptureTextGrid_cell_status_failed%"
     }
   },
   "localizedStrings": {
@@ -167,6 +170,7 @@
       "%webView_scriptureTextGrid_cell_reorderHint%": "Drag or press arrow keys to reorder",
       "%webView_scriptureTextGrid_cell_resetZoom%": "Reset zoom",
       "%webView_scriptureTextGrid_cell_status_downloading%": "Downloading…",
+      "%webView_scriptureTextGrid_cell_status_failed%": "Resource failed to load",
       "%webView_scriptureTextGrid_cell_status_loading%": "Resource is loading…",
       "%webView_scriptureTextGrid_cell_status_noContent%": "No content for this reference",
       "%webView_scriptureTextGrid_cell_unavailable%": "Resource unavailable",
