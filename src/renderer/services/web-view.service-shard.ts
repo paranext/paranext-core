@@ -3580,11 +3580,13 @@ async function captureAndCloseWebView(
   if (!webViewDefinition) return undefined;
 
   const captured = convertWebViewDefinitionToSaved(webViewDefinition);
-  // The live state lives in this window's storage, not on the dock's definition — carry it.
-  // Deliberately NOT deleted here: if the move fails and the web view comes back to this
-  // window, its state being still here is what that recovery needs
-  const liveState = getFullWebViewStateById(captured.id);
-  if (Object.keys(liveState).length > 0) captured.state = liveState;
+  // The definition already carries the live state, so nothing is merged into it here: a
+  // `useWebViewState` write goes through `updateWebViewDefinitionSync`, which updates the dock
+  // definition and mirrors the same value into this window's storage, and reads come from the
+  // definition. The two cannot drift apart while that is the only writer of definition state.
+  //
+  // This window's stored copy is deliberately left in place rather than deleted: if the move fails
+  // and the web view comes back to this window, that copy is what the recovery reads.
   // A window re-scopes web view ids to itself when it reloads a layout. Hand the target the
   // minted id — the spelling a fresh open would use — so the id does not carry this window's
   // scope into a window it does not belong to

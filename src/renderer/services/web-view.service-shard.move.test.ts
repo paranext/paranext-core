@@ -177,24 +177,30 @@ describe('captureAndCloseWebView', () => {
     expect(removedTabIds).toEqual([]);
   });
 
-  test('capture merges the live state into the captured definition', async () => {
+  test("capture carries the definition state, not this window's stored copy", async () => {
+    // The definition is where a `useWebViewState` write lands, and the same write is mirrored into
+    // storage, so the two agree in production and only a mock can make them disagree. Making them
+    // disagree here is the point: it pins that the capture reads the definition, so a stored copy
+    // that somehow fell behind can never travel to the target in place of the live value.
     const { getFullWebViewStateById } = await import('@renderer/services/web-view-state.service');
     vi.mocked(getFullWebViewStateById).mockReturnValue({ scroll: 5 });
     const { shard } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
 
     const captured = await shard.captureAndCloseWebView('abc-w2');
 
-    expect(captured?.state).toEqual({ scroll: 5 });
+    expect(captured?.state).toEqual({ existing: true });
   });
 
-  test('capture leaves definition state alone when there is no live state', async () => {
-    const { getFullWebViewStateById } = await import('@renderer/services/web-view-state.service');
-    vi.mocked(getFullWebViewStateById).mockReturnValue({});
+  test("capture leaves this window's stored state in place for a failed move to recover from", async () => {
+    const { getFullWebViewStateById, deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+    vi.mocked(getFullWebViewStateById).mockReturnValue({ existing: true });
     const { shard } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
 
-    const captured = await shard.captureAndCloseWebView('abc-w2');
+    await shard.captureAndCloseWebView('abc-w2');
 
-    expect(captured?.state).toEqual({ existing: true });
+    expect(deleteFullWebViewStateById).not.toHaveBeenCalled();
   });
 
   test('capture closes the tab it captured', async () => {
