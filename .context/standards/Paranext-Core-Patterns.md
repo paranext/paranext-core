@@ -1092,8 +1092,8 @@ window to answer and no window has the right answer. Host it in the process that
 window, and give each renderer a cache instead of an authority. Predict only where the UI has a
 SYNCHRONOUS WRITER — the scroll group does, the theme does not, and a cache with no writer to predict
 is just a cache. See
-[ADR-0027](Architecture-Decisions.md#adr-0027-the-scroll-group-service-is-hosted-in-main-and-each-renderer-keeps-a-predicting-cache)
-and [ADR-0028](Architecture-Decisions.md#adr-0028-the-theme-service-is-hosted-in-main-and-each-window-caches-the-current-theme);
+[ADR-0030](Architecture-Decisions.md#adr-0030-the-scroll-group-service-is-hosted-in-main-and-each-renderer-keeps-a-predicting-cache)
+and [ADR-0031](Architecture-Decisions.md#adr-0031-the-theme-service-is-hosted-in-main-and-each-window-caches-the-current-theme);
 worked examples: `src/main/services/scroll-group.service-host.ts` +
 `src/renderer/services/scroll-group.service.ts` (predicting), and
 `src/main/services/theme.service-host.ts` + `src/renderer/services/theme.service.ts` (read-only).
