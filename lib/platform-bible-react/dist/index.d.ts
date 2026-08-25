@@ -2013,6 +2013,11 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * This component is designed to be used in the window title bar of an electron application.
  *
+ * Two `data-testid` hooks are relied on by end-to-end tests outside this package, so they are part
+ * of this component's contract: `toolbar-content-row` (the row that clips when contents do not fit)
+ * and `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking
+ * change.
+ *
  * @param {ToolbarProps} props - The props for the component.
  */
 export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
