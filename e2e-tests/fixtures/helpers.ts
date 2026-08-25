@@ -142,11 +142,6 @@ export interface LaunchElectronAppOptions {
   preserveUserDataDir?: boolean;
 }
 
-/**
- * Launch a fresh Electron instance with an isolated user-data directory (or, for relaunch tests, an
- * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the
- * user-data directory path, and a promise that resolves when the app closes.
- */
 /** The window size a spec's layout is written against. */
 export type WindowSize = { width: number; height: number };
 
@@ -198,6 +193,11 @@ export async function assertDeclaredWindowSize(
   }
 }
 
+/**
+ * Launch a fresh Electron instance with an isolated user-data directory (or, for relaunch tests, an
+ * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the
+ * user-data directory path, and a promise that resolves when the app closes.
+ */
 export async function launchElectronApp(
   opts: LaunchElectronAppOptions = {},
 ): Promise<ElectronAppContext> {
