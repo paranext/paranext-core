@@ -103,7 +103,8 @@ const RESOURCE_PICKER_OPTIONS = { includeDownloaded: true } as const;
 
 function pickerRowId(row: PickerResource): string {
   const { reference } = row;
-  if (isDblResourceReference(reference) || isProjectReference(reference)) return reference.id;
+  if (isDblResourceReference(reference)) return `dbl:${reference.id}`;
+  if (isProjectReference(reference)) return `project:${reference.id}`;
   const name = 'name' in reference && reference.name ? reference.name : '';
   return `${reference.type}:${name || row.projectId || ''}`;
 }
@@ -253,10 +254,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
         return Promise.resolve(undefined);
       }
 
-      const [cachedResources, localNonDblResources] = await Promise.all([
+      const [cachedResult, localResult] = await Promise.allSettled([
         papi.commands.sendCommand('platformGetResources.getCachedResources'),
         papi.commands.sendCommand('platformGetResources.getLocalNonDblResources'),
       ]);
+      const cachedResources = cachedResult.status === 'fulfilled' ? cachedResult.value : undefined;
+      const localNonDblResources =
+        localResult.status === 'fulfilled' ? localResult.value : undefined;
       return [...(cachedResources ?? []), ...(localNonDblResources ?? [])];
     }, [fetchResources]),
     undefined,
@@ -629,8 +633,8 @@ globalThis.webViewComponent = function ResourceTextPanel({
   }
 
   // Also shows spinner for if loading resources, except if there is no resources then it should
-  // directly show the button to pick a resource bellow
-  if (isPickerLoading || (isLoadingResources && filteredResources.length !== 0)) {
+  // directly show the button to pick a resource below
+  if (!pickerResources || (isLoadingResources && filteredResources.length !== 0)) {
     return (
       <PanelReadinessView
         readiness={readiness}

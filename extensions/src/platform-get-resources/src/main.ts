@@ -29,6 +29,7 @@ let executionToken: ExecutionToken | undefined;
 let cachedResources: DblResourceData[] | undefined;
 const fetchMutex = new Mutex();
 let hasFetchStarted = false;
+let syncInFlight: Promise<void> | undefined;
 
 async function fetchAndCacheResources(): Promise<DblResourceData[] | undefined> {
   const provider = await papi.dataProviders.get('platformGetResources.dblResourcesProvider');
@@ -154,16 +155,21 @@ async function getCachedResources(): Promise<DblResourceData[] | undefined> {
     // Run the installed-flag sync in the background so the dialog open is never blocked by
     // getMetadataForAllProjects retries (which can exceed the 30-second JSON-RPC timeout when
     // the C# PDPF is still initializing). The next dialog open picks up the updated flags.
-    syncInstalledFlags().catch((e) =>
-      logger.warn(`Background installed-flag sync failed: ${getErrorMessage(e)}`),
-    );
+    // The in-flight guard prevents concurrent calls from spawning duplicate syncs.
+    if (!syncInFlight) {
+      syncInFlight = syncInstalledFlags()
+        .catch((e) => logger.warn(`Background installed-flag sync failed: ${getErrorMessage(e)}`))
+        .finally(() => {
+          syncInFlight = undefined;
+        });
+    }
     return cachedResources;
   }
 
   return fetchMutex.runExclusive(async () => {
     if (cachedResources !== undefined) return cachedResources;
     try {
-      return fetchAndCacheResources();
+      return await fetchAndCacheResources();
     } catch (e) {
       logger.warn(`getCachedResources on-demand fetch failed: ${e}`);
       return undefined;
@@ -186,6 +192,10 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
     // an empty list during startup, which would let DBL-catalog resources slip through the exclusion
     // filter and appear as duplicates in the picker alongside their catalog entry.
     const dblCatalog = await getCachedResources();
+    // Return early rather than passing an empty exclusion list — if the catalog is unavailable
+    // (offline / C# not yet ready), every read-only project would appear as a non-DBL resource,
+    // creating duplicates alongside their real catalog entries once the catalog loads.
+    if (!dblCatalog) return [];
 
     // Retry until at least one isEditable=false project appears — mirrors the reasoning in
     // fetchDownloadedResources (frontend): a call that resolves before the C# Paratext factory has
@@ -211,7 +221,7 @@ async function getLocalNonDblResources(): Promise<DblResourceData[]> {
       });
     }
 
-    return buildLocalNonDblResources(allMetadata, dblCatalog ?? []);
+    return buildLocalNonDblResources(allMetadata, dblCatalog);
   } catch (error: unknown) {
     logger.warn(`Error getting local non-DBL resources: ${getErrorMessage(error)}`);
     return [];

@@ -7,7 +7,7 @@ import type {
 } from 'platform-scripture';
 import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
 import { CURRENT_DATA_VERSION } from './resource-reference-list.const';
-import type { DownloadedResource } from './downloaded-resources.utils';
+import { matchesDownloaded, type DownloadedResource } from './downloaded-resources.utils';
 
 /**
  * A Bible-text reference — the only reference types that carry `id` and
@@ -216,17 +216,9 @@ export function getViewOptionsTexts(
   });
 
   (options?.downloaded ?? []).forEach((downloadedResource) => {
-    const alreadyListed = [...top, ...bottom].some((row) => {
-      if (isProjectReference(row.reference))
-        return row.reference.id === downloadedResource.projectId;
-      if (isDblResourceReference(row.reference))
-        // Guard against empty id: ''.startsWith('') is true for every string.
-        return (
-          row.reference.id !== '' &&
-          downloadedResource.projectId.toLowerCase().startsWith(row.reference.id.toLowerCase())
-        );
-      return false;
-    });
+    const alreadyListed = [...top, ...bottom].some((row) =>
+      matchesDownloaded(downloadedResource, row.reference),
+    );
     if (alreadyListed) return;
     bottom.push({
       reference: {

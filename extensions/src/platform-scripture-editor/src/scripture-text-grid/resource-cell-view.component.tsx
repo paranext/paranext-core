@@ -41,7 +41,7 @@ import {
 export const UNAVAILABLE_KEY = '%webView_scriptureTextGrid_cell_unavailable%';
 export const NOT_INSTALLED_KEY = '%webView_scriptureTextGrid_cell_not_installed%';
 export const LOADING_KEY = '%webView_scriptureTextGrid_cell_status_loading%';
-export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_noContent%';
+export const FAILED_KEY = '%webView_scriptureTextGrid_cell_status_failed%';
 export const EMPTY_KEY = '%webView_scriptureTextGrid_cell_verse_empty%';
 export const ZOOM_IN_KEY = '%webView_scriptureTextGrid_cell_zoomIn%';
 export const ZOOM_OUT_KEY = '%webView_scriptureTextGrid_cell_zoomOut%';

@@ -20,6 +20,8 @@ import { getErrorMessage, type DblResourceData } from 'platform-bible-utils';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
+  EffectiveResourceReferenceList,
+  ProjectReference,
   ResourceReferenceList,
 } from 'platform-scripture';
 import { ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -401,7 +403,16 @@ export function ModelTextPanel({
       adminDblItems.length > 0 ? adminDblItems : dblItems.filter((r) => r.source === 'user');
     // Also include project reference IDs so locally-installed non-DBL resources (added as
     // ProjectReferences) appear in the INCLUDED section when the picker reopens.
-    const projectIds = items.flatMap((r) => (isProjectReference(r) ? [r.id] : []));
+    // Apply the same admin-precedence logic as DBL items.
+    const allProjectItems = items.filter((r): r is EffectiveResourceReference & ProjectReference =>
+      isProjectReference(r),
+    );
+    const adminProjectItems = allProjectItems.filter((r) => r.source === 'admin');
+    const relevantProjectItems =
+      adminProjectItems.length > 0
+        ? adminProjectItems
+        : allProjectItems.filter((r) => r.source === 'user');
+    const projectIds = relevantProjectItems.map((r) => r.id);
     return [...relevantDblItems.map((r) => r.id), ...projectIds];
   }, [effectiveModelTexts]);
 

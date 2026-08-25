@@ -58,12 +58,7 @@ export function buildLocalNonDblResources(
       (r) =>
         (r.projectId !== '' && r.projectId === m.id) ||
         // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
-        // Guard against reassigned UIDs: only exclude via startsWith when the matched DBL entry is
-        // actually installed, so a local project whose ID starts with a UID that now belongs to a
-        // DIFFERENT uninstalled resource is not incorrectly excluded.
-        (r.dblEntryUid !== '' &&
-          r.installed &&
-          m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
+        (r.dblEntryUid !== '' && m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
     );
     return matchingDblEntry === undefined;
   });
