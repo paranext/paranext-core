@@ -3780,11 +3780,91 @@ export declare const Z_INDEX_MODAL_BACKDROP = 450;
 /** Z-index for modal dialog content */
 export declare const Z_INDEX_MODAL = 500;
 /**
- * Z-index for the first-run setup wizard gate. Must sit above every other layer (including the
- * menubar at Z_INDEX_ABOVE_DOCK=600 and tooltips at 550) so the wizard fully gates the app at
- * startup and nothing behind it remains clickable or focusable.
+ * Z-index for the one-shot onboarding tour spotlight. Sits above Z_INDEX_ABOVE_DOCK and
+ * Z_INDEX_TOOLTIP so it can spotlight toolbar buttons and columns, but below Z_INDEX_FIRST_RUN so
+ * the wizard always wins if both are mounted.
+ */
+export declare const Z_INDEX_ONBOARDING_TOUR = 650;
+/**
+ * Z-index for the first-run setup wizard gate. Must sit above every other layer (including
+ * Z_INDEX_ABOVE_DOCK and Z_INDEX_TOOLTIP) so the wizard fully gates the app at startup and nothing
+ * behind it remains clickable or focusable.
  */
 export declare const Z_INDEX_FIRST_RUN = 700;
+/** One stop in the guided tour. */
+export interface TourStep {
+	/**
+	 * CSS selector for the element to spotlight. A step whose target is absent — or present but
+	 * zero-size, e.g. an empty wrapper whose conditional child is not rendered — is skipped.
+	 */
+	target: string;
+	/** Heading shown in the step card. */
+	title: string;
+	/** Body text shown in the step card. */
+	description: string;
+	/**
+	 * Logical side of the target on which the card appears. `start`/`end` resolve to physical
+	 * left/right via `readDirection()`, so callers never branch on RTL. In LTR (default):
+	 * `start`=left, `end`=right; in RTL these are swapped.
+	 *
+	 * @default 'bottom'
+	 */
+	side?: "top" | "bottom" | "start" | "end";
+	/**
+	 * Padding (px) added outside the target's bounding rect on all four sides to create the spotlight
+	 * cutout. Use a small positive value (e.g. 1) for column panels where the rc-dock divider
+	 * visually extends ~7 px into the panel — `spotlightPadding: 1` places the spotlight edge at the
+	 * divider's visual center so neither adjacent panel bleeds into the lit area.
+	 *
+	 * @default 6
+	 */
+	spotlightPadding?: number;
+}
+/** Props accepted by the {@link Tour} component. */
+export interface TourProps {
+	/**
+	 * Ordered list of steps. Steps whose target selector is not found are skipped.
+	 *
+	 * **Snapshotted at open:** the list is filtered once when `open` flips to `true`. Steps added
+	 * after that point — or steps whose targets mount after the tour opens — are not picked up until
+	 * the tour re-opens. Pass steps only after the targets you intend to spotlight are already in the
+	 * DOM.
+	 */
+	steps: TourStep[];
+	/** Whether the tour overlay is visible. */
+	open: boolean;
+	/** Called when the user finishes the last step (Done). */
+	onDone: () => void;
+	/** Called when the user dismisses the tour (Skip button or Escape). */
+	onSkip: () => void;
+	/**
+	 * Returns the step-counter string for the given 1-based step index and total step count. Used to
+	 * localize the "current / total" display. Falls back to `"{current} / {total}"` when omitted.
+	 */
+	stepCounter?: (current: number, total: number) => string;
+	/** @default 'Next' */
+	nextLabel?: string;
+	/** @default 'Back' */
+	backLabel?: string;
+	/** @default 'Skip' */
+	skipLabel?: string;
+	/** @default 'Done' */
+	doneLabel?: string;
+}
+/**
+ * Spotlight-overlay guided tour. Renders a full-viewport SVG mask (white fill + black cutout = a
+ * transparent "hole" over the target) that dims the page except around the current target element,
+ * and positions a step card beside it.
+ *
+ * Navigated with Back / Next / Skip / Done; Escape dismisses (calls `onSkip`). Steps whose target
+ * selector is not found in the DOM — or resolves to a zero-size element — when the tour opens are
+ * skipped, so an absent target degrades gracefully instead of killing the overlay. A step whose
+ * target disappears _after_ the tour opens is dropped the same way when it becomes current. If that
+ * leaves nothing to spotlight, `onSkip` is called so the caller is never left with an open tour
+ * that renders nothing. Returns `null` when `open` is false or the current step is not yet
+ * measured.
+ */
+export declare function Tour({ steps, open, onDone, onSkip, stepCounter, nextLabel, backLabel, skipLabel, doneLabel, }: TourProps): import("react/jsx-runtime").JSX.Element | null;
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

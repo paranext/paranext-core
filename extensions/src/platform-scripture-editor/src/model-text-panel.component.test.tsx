@@ -41,6 +41,9 @@ const STRINGS = {
   '%webView_modelTextPanel_loading%': 'Loading…',
   '%webView_modelTextPanel_settingsUnavailable%':
     "Couldn't load your model text. It will appear once it's available.",
+  '%webView_modelTextPanel_emptyState_moreInfo%': 'More info',
+  '%webView_modelTextPanel_emptyState_lessInfo%': 'Less info',
+  '%webView_modelTextPanel_emptyState_moreInfo_body%': 'Detail text here.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -346,5 +349,26 @@ describe('ModelTextPanel', () => {
 
     expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
+  });
+
+  it('shows and hides the More info section when the toggle is clicked', () => {
+    render(<ModelTextPanel {...makeProps()} />);
+
+    // Starts collapsed — body is in the DOM but hidden via the `hidden` attribute.
+    expect(screen.getByText('Detail text here.')).not.toBeVisible();
+
+    // Click "More info" to expand.
+    fireEvent.click(screen.getByRole('button', { name: 'More info' }));
+    expect(screen.getByText('Detail text here.')).toBeVisible();
+    // "More info" button is replaced by "Less info" after expanding.
+    expect(screen.queryByRole('button', { name: 'More info' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Less info' })).toBeInTheDocument();
+
+    // Click "Less info" to collapse.
+    fireEvent.click(screen.getByRole('button', { name: 'Less info' }));
+    expect(screen.getByText('Detail text here.')).not.toBeVisible();
+    // "Less info" button is replaced by "More info" after collapsing.
+    expect(screen.queryByRole('button', { name: 'Less info' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More info' })).toBeInTheDocument();
   });
 });

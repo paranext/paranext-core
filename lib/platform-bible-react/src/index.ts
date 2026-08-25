@@ -333,10 +333,13 @@ export {
   Z_INDEX_ABOVE_DOCK,
   Z_INDEX_FIRST_RUN,
   Z_INDEX_FOOTNOTE_EDITOR,
+  Z_INDEX_ONBOARDING_TOUR,
   Z_INDEX_OVERLAY,
   Z_INDEX_MODAL_BACKDROP,
   Z_INDEX_MODAL,
 } from './components/z-index';
+export { Tour } from './components/advanced/tour/tour.component';
+export type { TourStep, TourProps } from './components/advanced/tour/tour.component';
 
 // Utils
 export { cn } from './utils/shadcn-ui/utils';
