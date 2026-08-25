@@ -22,10 +22,7 @@ import { isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
-import {
-  areNavigableProjectSourcesReady,
-  resolveNavigableProjectIdsWrite,
-} from './navigable-project-ids.utils';
+import { resolveNavigableProjectIdsWrite } from './navigable-project-ids.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -134,18 +131,12 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     [],
   );
   useEffect(() => {
-    // Don't publish until the model-text list and the cached DBL list have both loaded:
-    // `modelResourceProjectId` is transiently undefined before then, which is indistinguishable from
-    // "no resource is displayed" and would wipe a correct persisted list on remount.
-    if (
-      !areNavigableProjectSourcesReady({
-        hasReferenceList: effectiveModelTexts !== undefined,
-        isReferenceListLoading: isEffectiveModelTextsLoading,
-        hasCachedResources: resourcesPossiblyUndefined !== undefined,
-        isLoadingCachedResources: isLoadingResources,
-      })
-    )
-      return;
+    // Only publish once both sources have arrived. `modelResourceProjectId` is undefined until the
+    // model-text list is `ready` and the DBL catalog is ready, and that is indistinguishable from
+    // "no resource is displayed" — publishing then would wipe a correct persisted list on remount.
+    // A catalog error is also not readiness: the configured resource cannot be resolved, so its id
+    // is unknown rather than absent, and `isCatalogReady` already excludes that case.
+    if (effectiveModelTextsState.status !== 'ready' || !isCatalogReady) return;
     const toPublish = resolveNavigableProjectIdsWrite(
       modelResourceProjectId ? [modelResourceProjectId] : [],
       publishedNavigableProjectIds,
@@ -156,10 +147,8 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
     // panes with display:none but leaves them mounted) and the declared ids stay current. There is
     // nothing to defer and nothing to catch up on activation.
   }, [
-    effectiveModelTexts,
-    isEffectiveModelTextsLoading,
-    resourcesPossiblyUndefined,
-    isLoadingResources,
+    effectiveModelTextsState,
+    isCatalogReady,
     modelResourceProjectId,
     publishedNavigableProjectIds,
     setPublishedNavigableProjectIds,
