@@ -524,6 +524,6 @@
   "%webView_project%": "Project",
   "%webView_projectAssignmentsAndProgress%": "Assignments and Progress",
   "%webView_title_type_formatString%": "{type} {defaultTitle}",
-  "%wordList%": "Word List",
-  "%window_label_empty%": "Empty window"
+  "%window_label_empty%": "Empty window",
+  "%wordList%": "Word List"
 }

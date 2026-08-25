@@ -147,7 +147,7 @@
   },
   "defaultWebViewTabMenu": {
     "groups": {
-      "platform.tabWindow": { "order": 1, "isExtensible": true }
+      "platform.tabWindow": { "order": 1, "isExtensible": true, "isExperimental": true }
     },
     "items": [
       {
