@@ -207,9 +207,8 @@ describe('retired book-not-found-in-project string', () => {
 });
 
 // The resource panels' strings come in matched `bibleTexts_` / `commentaries_` pairs and the model
-// text panel's in a single set, and none of them were covered here — so an en-only addition (or a
-// dropped `es` value) failed no check at all. Driven off the exported key lists so a key added to
-// either panel is covered without anyone remembering to edit this file.
+// text panel's in a single set. Driven off the exported key lists so that an en-only addition, or a
+// dropped `es` value, fails here without anyone remembering to edit this file.
 describe.each([...RESOURCE_PANEL_TYPED_STRING_KEYS])('resource panel label %s', (key) => {
   it('has an English label', () => {
     expect(localizedStrings.en[key]).toBeTruthy();

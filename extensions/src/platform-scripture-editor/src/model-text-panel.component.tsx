@@ -8,7 +8,6 @@ import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
-  EmptyState,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -34,6 +33,7 @@ import { InstallFailedView, InstallingView } from './install-state-views.compone
 import { scrollToVerse } from './editor-dom.util';
 import { getRefLabel } from './resource-reference.utils';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import { ResourceBlankChapter } from './resource-blank-chapter.component';
 import {
   isChapterBlank,
   isMissingBookError,
@@ -189,6 +189,16 @@ export function ModelTextPanel({
   // in the render body whether the failure still describes the book and model text on screen, so
   // navigating to a book this text does have cannot commit one frame still asserting the message.
   const [fetchError, setFetchError] = useState<unknown>(undefined);
+  // WHICH request `usj`/`fetchError` are the answer to. Every state above survives a navigation —
+  // `usj` still holds the previous chapter, `fetchError` the previous rejection — and the effect
+  // that clears them runs after the commit, so the first render pairing a new reference with the
+  // previous answer would otherwise read as an answer about the new one. That frame is what made a
+  // step into a book the model text lacks paint "this chapter is empty" first. Comparing this key
+  // against the reference being rendered makes the mismatched pairing unrepresentable instead of
+  // merely brief.
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | undefined>(undefined);
+
+  const requestKey = `${resourceProjectId ?? ''}:${scrRef.book}:${scrRef.chapterNum}:${scrRef.versificationStr}`;
 
   useEffect(() => {
     if (!resourceProjectId) {
@@ -198,6 +208,7 @@ export function ModelTextPanel({
     let isActive = true;
     setIsUsjLoading(true);
     setFetchError(undefined);
+    const keyForThisLoad = requestKey;
     const load = async () => {
       const { usj: nextUsj, textDirection: nextTextDirection } = await getResourceChapter(
         resourceProjectId,
@@ -206,12 +217,14 @@ export function ModelTextPanel({
       if (!isActive) return;
       setUsj(nextUsj);
       setTextDirection(nextTextDirection || DEFAULT_TEXT_DIRECTION);
+      setLoadedRequestKey(keyForThisLoad);
       setIsUsjLoading(false);
     };
     load().catch((e) => {
       if (!isActive) return;
       setUsj(undefined);
       setFetchError(e);
+      setLoadedRequestKey(keyForThisLoad);
       setIsUsjLoading(false);
       // A missing book is ordinary navigation, not a fault, and it is already explained on screen —
       // so `debug`, which packaged builds drop entirely (`global-this.model.ts` runs at `info` when
@@ -228,7 +241,8 @@ export function ModelTextPanel({
     };
     // Intentionally excludes scrRef.verseNum: chapter data only changes with book or chapter, not
     // verse. Also excludes `logger`, used in the catch above: it is a stable module object, so
-    // including it would only add a dep that never changes.
+    // including it would only add a dep that never changes, and `requestKey`, which is built from
+    // the four listed deps and so never changes independently of them.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     resourceProjectId,
@@ -282,13 +296,28 @@ export function ModelTextPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usj, isUsjLoading, scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
 
-  // A chapter the resource HAS but with nothing in it. Gated on the load having finished because
-  // `usj` keeps the previous chapter's content until the new fetch lands — deriving this mid-load
-  // would paint the message over a chapter that is still arriving.
+  // Whether `usj`/`fetchError` answer the reference currently being rendered. Everything below that
+  // makes a claim about the model text is gated on this.
+  const isAnswerCurrent = loadedRequestKey === requestKey;
+
+  // A chapter the resource HAS but with nothing in it. Gated on the answer in hand being for this
+  // reference, because `usj` keeps the previous chapter's content until the new fetch lands —
+  // deriving this from stale content would paint the message over a chapter that is still arriving,
+  // or over a book the model text does not have at all.
   const isBlankChapter = useMemo(
-    () => !isUsjLoading && usj !== undefined && isChapterBlank(usj),
-    [usj, isUsjLoading],
+    () => isAnswerCurrent && !isUsjLoading && usj !== undefined && isChapterBlank(usj),
+    [isAnswerCurrent, usj, isUsjLoading],
   );
+
+  // Whether the failure in hand still describes what this panel is showing. Derived rather than
+  // latched in the `catch` so it is accurate for the render it is used in.
+  const isBookMissing =
+    isAnswerCurrent &&
+    isMissingBookOnScreen({
+      error: fetchError,
+      currentBookNum: Canon.bookIdToNumber(scrRef.book),
+      projectId: resourceProjectId,
+    });
 
   // --- Editor ---
 
@@ -317,9 +346,15 @@ export function ModelTextPanel({
   );
 
   // Read-only: push incoming USJ directly into the editor whenever it changes.
+  //
+  // `isBookMissing` and `isBlankChapter` are deps because those branches UNMOUNT `Editorial` rather
+  // than hiding it. A remounted editor holds nothing, and this effect is its only feed — so without
+  // re-running when the panel comes back to the editor, the reader gets Lexical's "Enter some
+  // Scripture…" placeholder (an edit invitation in a text they cannot edit) until the next USJ
+  // happens to arrive.
   useEffect(() => {
     if (usj) editorRef.current?.setUsj(usj);
-  }, [usj]);
+  }, [usj, isBookMissing, isBlankChapter]);
 
   // --- Resource picker / selection ---
 
@@ -465,28 +500,12 @@ export function ModelTextPanel({
     return notFoundState;
   }
 
-  // Whether the failure in hand still describes what this panel is showing. Derived here rather than
-  // latched in the `catch` so it is accurate for the render it is used in.
-  const isBookMissing = isMissingBookOnScreen({
-    error: fetchError,
-    currentBookNum: Canon.bookIdToNumber(scrRef.book),
-    projectId: resourceProjectId,
-  });
-
-  // Loading: USJ not yet fetched for the resolved resource.
-  if (usj === undefined && isUsjLoading) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  // The model text, or the reason there is none. The label header stays mounted above all three, so
-  // the message is attributed to a named text rather than floating in an anonymous panel. Unlike the
-  // Bible texts panel there is no in-panel selector to preserve — this panel surfaces its picker
-  // only in the zero and not-found states — so this panel's message has to name the remedy in words
-  // instead: a different model text, or a book this one covers.
+  // The model text, or the reason there is none. These are the panel's CONTENT area only: the label
+  // header stays mounted above all of them, including the spinner, so the message is attributed to a
+  // named text rather than floating in an anonymous panel and does not blink away on every chapter
+  // step. Unlike the Bible texts panel there is no in-panel selector to preserve — this panel
+  // surfaces its picker only in the zero and not-found states — so this panel's message has to name
+  // the remedy in words instead: a different model text, or a book this one covers.
   //
   // A blank chapter is one the model text HAS but with nothing in it. It is invisible to
   // `isBookMissing`, which keys off the fetch rejecting, so it needs its own check; the missing book
@@ -510,15 +529,25 @@ export function ModelTextPanel({
 
     if (isBlankChapter)
       return (
-        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-          <EmptyState
-            id="model-text-panel-empty-chapter"
-            className="tw:text-center"
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceBlankChapter
             message={localize(
               localizedStrings,
               '%webView_platformScriptureEditor_emptyChapter_messageResource%',
             )}
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
           />
+        </div>
+      );
+
+    // Nothing in hand for the reference on screen: either the fetch is still out, or it failed in a
+    // way this panel has no message for. Keep waiting rather than mounting `Editorial` with nothing
+    // set, which paints Lexical's "Enter some Scripture…" placeholder — an edit invitation in a text
+    // the reader cannot edit.
+    if (!isAnswerCurrent || isUsjLoading || usj === undefined)
+      return (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <Spinner />
         </div>
       );
 

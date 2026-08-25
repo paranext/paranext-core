@@ -100,9 +100,11 @@ export function BookNotAvailableView({
       >
         {/* Same small muted treatment as `EmptyDescription` in the Power branch below and as
             `EmptyState` in the resource surfaces, so a missing book reads identically wherever the
-            user meets it. It stays a plain `span` rather than `EmptyState` because the
-            `role="status"` live region and the focus target both live on the wrapper above, which
-            `EmptyState` has no way to accept. */}
+            user meets it. A plain `span` rather than `EmptyState` because this branch puts
+            `role="status"` on the focus target itself; `EmptyState` supplies its own region, and
+            nesting two live regions is worse than one.
+            TODO(PT-4416): Converge this arm with `ResourceBookNotAvailable`, which now carries the
+            same layout, focus repair, and re-announcement in `ResourceMessageView`. */}
         <span className="tw:text-center tw:text-sm tw:text-muted-foreground">
           {localize(localizedStrings, SIMPLE_MESSAGE_KEY)}
         </span>

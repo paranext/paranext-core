@@ -1323,13 +1323,66 @@ export function isMissingBookOnScreen({
   currentBookNum: number;
   projectId: string | undefined;
 }): boolean {
+  return isMissingBookInfoOnScreen({
+    missingBook: parseMissingBookError(error),
+    currentBookNum,
+    projectId,
+  });
+}
+
+/**
+ * The comparison half of {@link isMissingBookOnScreen}, for a caller that has already parsed the
+ * failure. Use it when the same message would otherwise be parsed more than once for one decision —
+ * for example alongside {@link isMissingBookError}, or when the parsed identities are also needed
+ * for diagnostics.
+ *
+ * @param options.missingBook The identities {@link parseMissingBookError} read out of the failure,
+ *   or `undefined` if it read none.
+ * @param options.currentBookNum The book number the view is displaying. 0 or less means the view
+ *   has no book it can name, so no claim is made about one.
+ * @param options.projectId The project or resource id the view is reading from.
+ * @returns `true` only when the identities name both the book and the project currently on screen.
+ */
+export function isMissingBookInfoOnScreen({
+  missingBook,
+  currentBookNum,
+  projectId,
+}: {
+  missingBook: MissingBookErrorInfo | undefined;
+  currentBookNum: number;
+  projectId: string | undefined;
+}): boolean {
   if (!projectId || currentBookNum <= 0) return false;
-  const missingBook = parseMissingBookError(error);
   return (
     !!missingBook &&
     missingBook.bookNum === currentBookNum &&
     normalizeProjectId(missingBook.projectId) === normalizeProjectId(projectId)
   );
+}
+
+/**
+ * Whether a parsed project id looks like the on-screen one with extra text swept up after it.
+ *
+ * The identity capture runs greedily to the terminal period so that project ids containing `.`
+ * survive intact, which means a trailing sentence on the same line lands inside the capture (`"ABC.
+ * See logs"` for project `ABC`). That leaves a missing-book failure looking like one about a
+ * DIFFERENT project — indistinguishable, by comparison alone, from the ordinary case of an error
+ * left over from a resource the user just switched away from. This separates the two: only a
+ * mis-parse yields a captured id that STARTS with the real one.
+ *
+ * @param parsedProjectId The project id read out of the message.
+ * @param projectId The project id the view is reading from.
+ * @returns `true` when the parse looks like an over-run of `projectId` rather than a different
+ *   project.
+ */
+export function isOverrunProjectIdParse(
+  parsedProjectId: string,
+  projectId: string | undefined,
+): boolean {
+  if (!projectId) return false;
+  const parsed = normalizeProjectId(parsedProjectId);
+  const actual = normalizeProjectId(projectId);
+  return parsed !== actual && parsed.startsWith(actual);
 }
 
 /** What a resource panel (Model text, Bible texts, Commentaries) should show in its content area. */
@@ -1358,7 +1411,10 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'ready';
  *
  * @param options.resourceProjectId The project id the panel is reading from, or `undefined` if a
  *   resource has not resolved to one yet.
- * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet.
+ * @param options.usjPossiblyError The chapter USJ, a `PlatformError`, or `undefined` if none yet. A
+ *   caller that seeds its data hook with a default (the Bible texts panel passes `EMPTY_USJ`) never
+ *   passes `undefined`; for those, `resourceProjectId` not having resolved yet is what produces
+ *   `'loading'`.
  * @param options.currentBookNum The book number the panel is currently displaying. A value of 0 or
  *   less means the panel has no book it can name, so no claim is made about one.
  * @returns Which of the three content states to render.

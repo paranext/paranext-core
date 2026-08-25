@@ -2786,7 +2786,11 @@ describe('resolveResourceContentState', () => {
     ).toBe('loading');
   });
 
-  it('returns "loading" while no chapter data has arrived yet', () => {
+  it('returns "loading" for a caller whose hook is not seeded with a default', () => {
+    // The Bible texts panel passes `EMPTY_USJ` as its hook's default, so its value is an object from
+    // the first render and this pair does not occur there. Kept because the state is part of this
+    // function's contract for any caller reading a hook without a seeded default, and because the
+    // alternative — falling to `'ready'` — would mount an editor with nothing to put in it.
     expect(
       resolveResourceContentState({
         resourceProjectId: PROJECT_ID,

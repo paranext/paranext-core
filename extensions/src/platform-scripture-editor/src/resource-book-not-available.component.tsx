@@ -1,5 +1,4 @@
-import { EmptyState } from 'platform-bible-react';
-import { useFocusReplacedContent } from './use-focus-replaced-content.hook';
+import { ResourceMessageView } from './resource-message-view.component';
 
 /**
  * Identifies the focusable wrapper. The message inside carries `role="status"`, so tests and e2e
@@ -8,21 +7,11 @@ import { useFocusReplacedContent } from './use-focus-replaced-content.hook';
 export const RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID = 'resource-book-not-available';
 
 export type ResourceBookNotAvailableProps = {
-  /**
-   * The already-localized message to show. Resolved by the caller because each panel names the
-   * thing the user is looking at — "this model text", "this Bible text", "this commentary" —
-   * following the per-resource-type string convention the resource panel already uses for its other
-   * zero-states.
-   */
+  /** The already-localized message to show. See {@link ResourceMessageView}'s `message`. */
   message: string;
   /**
    * Identifies WHICH missing book in WHICH text this message is about — typically the project id
-   * and book number. When it changes while the message stays on screen, the live region is
-   * re-announced and focus repair is retried.
-   *
-   * Without it, moving from one missing book to another is silent: the component stays mounted at
-   * the same tree position with byte-identical text, so `aria-live` has nothing to report and a
-   * screen-reader user gets no confirmation that their selection applied at all.
+   * and book number. See {@link ResourceMessageView}'s `announcementKey`.
    */
   announcementKey?: string;
 };
@@ -41,45 +30,18 @@ export type ResourceBookNotAvailableProps = {
  * remedy — switch to a text that has the book — stays one click away; in the Model text panel it is
  * a label, which at least attributes the message to a named text.
  *
- * The message itself is `EmptyState`, the shared message-only zero-state primitive that ADR-0016
- * reserves for exactly this case (a bare sentence, no title, media, or action). Going through it
- * rather than a local `<p>` is what keeps this reading like every other empty state in the app —
- * `EmptyState` supplies the `tw:text-sm tw:text-muted-foreground` treatment and the `role="status"`
- * live region. This component contributes only the layout that centres it in a panel-sized area and
- * the focus target.
- *
- * Accessibility: this REPLACES the editor subtree, so its arrival is a content swap a screen-reader
- * user gets no other notice of, and the focused element inside the editor is destroyed along with
- * it. `EmptyState` marks the message `role="status"`; the wrapper deliberately does NOT repeat that
- * role, since nesting two status regions is worse than one. `EmptyState` mounts that region
- * together with its content, which several screen readers do not announce — the focus move below is
- * what actually carries the message, and closing that gap belongs to the shared primitive
- * (PT-4416). The wrapper is the focus target instead, taking focus on mount via
- * {@link useFocusReplacedContent} — which repairs focus only when it actually fell to the body, so
- * arriving here by picking a text from the panel's own selector does not yank focus off that
- * selector. Pass `announcementKey` so that moving from one missing book to another is not silent;
- * see that prop.
+ * Layout, focus repair, and announcement are {@link ResourceMessageView}'s, shared with the
+ * blank-chapter message so the two states behave identically.
  */
 export function ResourceBookNotAvailable({
   message,
   announcementKey,
 }: ResourceBookNotAvailableProps) {
-  const regionRef = useFocusReplacedContent<HTMLDivElement>(announcementKey);
-
   return (
-    // Keyed on the FOCUS TARGET, not on the message inside it. A new subject has to remount this
-    // element for the announcement to carry: a surviving wrapper keeps focus, so the focus repair
-    // sees a non-body `activeElement` and declines, leaving only a remounted `role="status"` that
-    // several screen readers do not report. Remounting here drops focus to `body`, which is the
-    // condition the repair is waiting for.
-    <div
-      key={announcementKey}
-      ref={regionRef}
-      data-testid={RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID}
-      tabIndex={-1}
-      className="tw:flex tw:h-full tw:items-center tw:justify-center tw:px-4 tw:outline-none"
-    >
-      <EmptyState message={message} className="tw:text-center" />
-    </div>
+    <ResourceMessageView
+      message={message}
+      testId={RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID}
+      announcementKey={announcementKey}
+    />
   );
 }

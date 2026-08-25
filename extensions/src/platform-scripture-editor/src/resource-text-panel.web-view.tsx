@@ -19,7 +19,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  EmptyState,
   Spinner,
   usePromise,
   useExtraValidMarkers,
@@ -56,6 +55,7 @@ import {
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { InstallFailedView, InstallingView } from './install-state-views.component';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
+import { ResourceBlankChapter } from './resource-blank-chapter.component';
 import { isChapterBlank, resolveResourceContentState } from './platform-scripture-editor.utils';
 import {
   RESOURCE_PANEL_TYPED_STRING_KEYS,
@@ -447,6 +447,20 @@ globalThis.webViewComponent = function ResourceTextPanel({
     [usjFromPdp, isUsjLoading],
   );
 
+  // The book-not-available message is withheld unless the failure names the book AND project on
+  // screen right now, so a result still describing the reference the user just left cannot be
+  // misattributed to this one. See `resolveResourceContentState`. Derived here rather than in the
+  // render body below so the editor-feeding effect can depend on it.
+  const contentState = useMemo(
+    () =>
+      resolveResourceContentState({
+        resourceProjectId,
+        usjPossiblyError,
+        currentBookNum: Canon.bookIdToNumber(scrRef.book),
+      }),
+    [resourceProjectId, usjPossiblyError, scrRef.book],
+  );
+
   // #endregion
 
   // #region Text direction
@@ -550,9 +564,14 @@ globalThis.webViewComponent = function ResourceTextPanel({
     [textDirection, extraValidMarkers],
   );
 
+  // `contentState` and `isBlankChapter` are deps because the branches below UNMOUNT `Editorial`
+  // rather than hiding it. A remounted editor holds nothing, and this effect is its only feed — so
+  // without re-running when the panel comes back to the editor, the reader gets Lexical's "Enter
+  // some Scripture…" placeholder (an edit invitation in a text they cannot edit) until the next USJ
+  // happens to arrive.
   useEffect(() => {
     if (usjFromPdp) editorRef.current?.setUsj(usjFromPdp);
-  }, [usjFromPdp]);
+  }, [usjFromPdp, contentState, isBlankChapter]);
 
   // #endregion
 
@@ -621,38 +640,29 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Loading state: USJ not yet available. The book-not-available message is withheld unless the
-  // failure names the book AND project on screen right now, so a result still describing the
-  // reference the user just left cannot be misattributed to this one. See
-  // `resolveResourceContentState`.
-  const contentState = resolveResourceContentState({
-    resourceProjectId,
-    usjPossiblyError,
-    currentBookNum: Canon.bookIdToNumber(scrRef.book),
-  });
-
-  if (contentState === 'loading') {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  // Scripture content, or the reason there is none: the resource has no such book, or it has the
-  // book but the chapter is blank. A blank chapter arrives as a successful, empty USJ rather than as
-  // an error, so it is invisible to `contentState` and needs its own check; the missing book is
-  // tested first because it is the more specific claim. Either message beats letting `Editorial`
-  // render with no scripture set, which shows its "enter some Scripture" prompt — an edit invitation
-  // in a text the reader cannot edit.
+  // Scripture content, or the reason there is none: nothing has arrived yet, the resource has no
+  // such book, or it has the book but the chapter is blank. A blank chapter arrives as a successful,
+  // empty USJ rather than as an error, so it is invisible to `contentState` and needs its own check;
+  // the missing book is tested first because it is the more specific claim. Every branch beats
+  // letting `Editorial` render with no scripture set, which shows its "enter some Scripture" prompt
+  // — an edit invitation in a text the reader cannot edit.
   //
-  // The selector stays mounted above all three: a resource missing a book has no remedy inside this
-  // panel, so the only thing the user can do about it is switch to a text that has the book.
+  // These are the panel's CONTENT area only. The selector header stays mounted above all of them,
+  // including the spinner: a resource missing a book has no remedy inside this panel, so the only
+  // thing the user can do about it is switch to a text that has the book, and taking the selector
+  // away while a chapter loads would remove that between every navigation.
   //
   // Only the editor gets `dir`. That is the RESOURCE's text direction, and the messages are app
   // chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the
   // resource is RTL.
   const renderContent = () => {
+    if (contentState === 'loading')
+      return (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <Spinner />
+        </div>
+      );
+
     if (contentState === 'bookNotAvailable')
       return (
         <div className="tw:flex-1 tw:overflow-auto">
@@ -665,14 +675,24 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
     if (isBlankChapter)
       return (
-        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-          <EmptyState
-            id="resource-text-panel-empty-chapter"
-            className="tw:text-center"
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceBlankChapter
             message={
               localizedStrings['%webView_platformScriptureEditor_emptyChapter_messageResource%']
             }
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
           />
+        </div>
+      );
+
+    // No USJ in hand for the reference on screen: either none has arrived yet, or the failure in
+    // hand is not one this panel has a message for. Keep waiting rather than mounting `Editorial`
+    // with nothing set, which paints Lexical's "Enter some Scripture…" placeholder — an edit
+    // invitation in a text the reader cannot edit.
+    if (!usjFromPdp)
+      return (
+        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+          <Spinner />
         </div>
       );
 

@@ -146,6 +146,18 @@ function ZoomItemsShared({
  * the enclosing gridcell already exposes the name via `aria-label`, so the visible copy is not
  * announced twice.
  */
+/**
+ * Compile-time exhaustiveness check for the cell-state chain below: every state that does NOT
+ * render a placeholder must be `'ready'`. Adding a `ResourceCellState` member without giving it a
+ * branch fails to compile here instead of silently rendering "Download failed".
+ *
+ * @param state The only state left unhandled by the chain.
+ * @returns The same state, so the check is an ordinary expression rather than an unused binding.
+ */
+function assertStateIsReady(state: 'ready'): 'ready' {
+  return state;
+}
+
 function ResourceNameLabel({ label, className }: { label: string; className?: string }) {
   // Show the tooltip only when the label text is actually clipped (same manual-`open` pattern
   // shared with `ProjectRowView` in `project-selector.component.tsx`).
@@ -233,13 +245,19 @@ export function ResourceCellView({
         {localizedStrings[BOOK_NOT_AVAILABLE_KEY]}
       </span>
     );
-  } else {
+  } else if (state === 'failed') {
     unavailableContent = (
       <>
         <span className="tw:font-medium">{localizedStrings[UNAVAILABLE_KEY]}</span>
         <span className="tw:text-sm tw:text-muted-foreground">{localizedStrings[FAILED_KEY]}</span>
       </>
     );
+  } else {
+    // Only `'ready'` is left, and it renders `readyContent` below rather than this. Testing
+    // `'failed'` explicitly instead of letting it be the fallthrough is what makes a future
+    // `ResourceCellState` member a type error here rather than a cell silently telling the user to
+    // retry a download that may have succeeded.
+    assertStateIsReady(state);
   }
 
   const stateContent =

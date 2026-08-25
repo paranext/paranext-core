@@ -8,9 +8,19 @@ import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import { ModelTextPanel, ModelTextPanelProps } from './model-text-panel.component';
 
+/**
+ * Records every `setUsj` the panel pushes into the editor, across editor instances.
+ *
+ * Shared rather than created per instance because the panel UNMOUNTS `Editorial` to show a message
+ * and remounts it on the way back to content — a fresh editor holds nothing, so what the tests
+ * below need to see is whether the panel re-fed it. A per-instance spy nobody captures makes "the
+ * editor is on screen" the only observable fact, which a permanently blank editor also satisfies.
+ */
+const setUsjSpy = vi.fn();
+
 vi.mock('@eten-tech-foundation/platform-editor', () => ({
   Editorial: React.forwardRef((_props: Record<string, unknown>, ref: React.Ref<unknown>) => {
-    React.useImperativeHandle(ref, () => ({ setUsj: vi.fn() }));
+    React.useImperativeHandle(ref, () => ({ setUsj: setUsjSpy }));
     return <div data-testid="editorial" />;
   }),
   // The component reads `getDefaultViewOptions()` at module scope; the mocked component below
@@ -110,6 +120,8 @@ function renderPanel(overrides: Partial<ModelTextPanelProps> = {}) {
 afterEach(() => {
   // restoreAllMocks (not just clearAllMocks) so a navigator.onLine getter spy can't leak between tests.
   vi.restoreAllMocks();
+  // Module-scoped, so it outlives `restoreAllMocks` and has to be cleared explicitly.
+  setUsjSpy.mockClear();
 });
 
 describe('ModelTextPanel', () => {
@@ -316,7 +328,8 @@ describe('ModelTextPanel', () => {
         'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
       ),
     ).toBeInTheDocument();
-    // The blank editor is the bug being fixed: it gave the user no reason for the emptiness.
+    // No editor alongside the message: a blank editor would give the user no reason for the
+    // emptiness, and its placeholder invites an edit this text does not accept.
     expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
     // The label header stays, so the message is attributed to a named model text rather than
     // floating in an anonymous panel.
@@ -335,12 +348,15 @@ describe('ModelTextPanel', () => {
 
     // Only a missing book earns the message. Claiming "this book is not in this text" for any
     // failure would state something the panel does not actually know.
-    expect(await screen.findByTestId('editorial')).toBeInTheDocument();
     expect(
       screen.queryByText(
         'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
       ),
     ).not.toBeInTheDocument();
+    // And no editor either: there is no USJ to put in one, so mounting it would show Lexical's
+    // "Enter some Scripture…" placeholder — an edit invitation in a text the reader cannot edit.
+    await waitFor(() => expect(screen.queryByTestId('editorial')).not.toBeInTheDocument());
+    expect(setUsjSpy).not.toHaveBeenCalled();
   });
 
   it('clears the message when the user navigates to a book the model text does have', async () => {
@@ -380,6 +396,10 @@ describe('ModelTextPanel', () => {
         'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
       ),
     ).not.toBeInTheDocument();
+    // The editor is a FRESH instance — the message branch unmounted the previous one — so it holds
+    // nothing until the panel feeds it. Asserting only that it mounted would pass just as well over
+    // a permanently blank editor showing Lexical's "Enter some Scripture…" placeholder.
+    await waitFor(() => expect(setUsjSpy).toHaveBeenCalledWith(SAMPLE_USJ));
   });
 
   it('shows the empty-chapter message instead of the editor when the chapter has no content', async () => {
@@ -445,6 +465,51 @@ describe('ModelTextPanel', () => {
         })}
       />,
     );
+    expect(screen.queryByText('This chapter is empty in this resource.')).not.toBeInTheDocument();
+    // Nor the editor. `usj` still holds the PREVIOUS chapter's content, so the panel has nothing to
+    // put in an editor for the chapter on screen; mounting one shows Lexical's
+    // "Enter some Scripture…" placeholder over a chapter that is still arriving.
+    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    // The label header stays mounted across the wait, so the panel does not go anonymous between
+    // every chapter step.
+    expect(screen.getByTestId('model-text-header')).toBeInTheDocument();
+  });
+
+  it('does not call a book absent from the model text an empty chapter', async () => {
+    // Both states can be true of the state in hand at once: navigating from a blank chapter into a
+    // book the model text lacks leaves the previous chapter's blank USJ in `usj` while the new
+    // failure has not landed yet. Claiming "this chapter is empty" about a book that is absent
+    // entirely is the wrong explanation, so nothing may be asserted until the answer in hand is the
+    // answer to the reference on screen.
+    const getResourceChapter = vi.fn(async (_projectId: string, ref: { book: string }) => {
+      if (ref.book === 'EXO') throw new Error('Book number 2 not found in project project-web.');
+      return { usj: BLANK_USJ, textDirection: 'ltr' };
+    });
+    const props = {
+      effectiveModelTexts: configuredModelText('uid-web'),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter,
+    };
+    const { rerender } = renderPanel({
+      ...props,
+      scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+    });
+    await screen.findByText('This chapter is empty in this resource.');
+
+    rerender(
+      <ModelTextPanel
+        {...makeProps({
+          ...props,
+          scrRef: { book: 'EXO', chapterNum: 1, verseNum: 1, versificationStr: 'English' },
+        })}
+      />,
+    );
+
+    expect(
+      await screen.findByText(
+        'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText('This chapter is empty in this resource.')).not.toBeInTheDocument();
   });
 

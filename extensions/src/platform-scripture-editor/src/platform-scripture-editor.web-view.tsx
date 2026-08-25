@@ -129,7 +129,8 @@ import {
   generateParagraphMenuListItems,
   isChapterBlank,
   isMissingBookError,
-  isMissingBookOnScreen,
+  isMissingBookInfoOnScreen,
+  isOverrunProjectIdParse,
   openCommentListAndSelectThreadSafe,
   parseMissingBookError,
   resolveAddChapterNumberClick,
@@ -1412,6 +1413,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
     useMemo(() => ({ whichUpdates: '*' }), []),
   );
+  // What the failure in hand IS, independent of what is on screen. Parsed once per failure, and
+  // deliberately not keyed on the reference: the same held error is re-read on every navigation, and
+  // re-parsing (and re-logging) it each time is pure waste.
+  const usjFromPdpError = useMemo(() => {
+    if (!isPlatformError(usjFromPdpPossiblyError)) return undefined;
+    return {
+      message: getErrorMessage(usjFromPdpPossiblyError),
+      isMissingBook: isMissingBookError(usjFromPdpPossiblyError),
+      identities: parseMissingBookError(usjFromPdpPossiblyError),
+    };
+  }, [usjFromPdpPossiblyError]);
+
   // Handle a PlatformError if one comes in instead of project text.
   //
   // "Book not in this project" is decided by comparing what the failure NAMES against the book and
@@ -1420,49 +1433,67 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // report a missing book for one committed render after the user navigates to a book the project
   // does have.
   //
-  // A book the project simply lacks is ordinary navigation rather than a fault, so it is logged at
-  // `debug`, which packaged builds drop (`global-this.model.ts` runs at `info` when packaged). That
-  // is deliberate: it fires on every navigation into a missing book, and the quiet path is the
-  // CORRECT one — if detection ever broke, the same failure would fall to `error` and stay loud in
-  // production.
+  // Pure: the diagnostics this decision would otherwise emit live in the effect below, so that a
+  // render pass — or React's double-invocation of memos in development — cannot write to the log.
   const [usjFromPdp, bookExists] = useMemo(() => {
     if (!isPlatformError(usjFromPdpPossiblyError)) return [usjFromPdpPossiblyError, true];
-
-    const errorMessage = getErrorMessage(usjFromPdpPossiblyError);
-    const isMissingBook = isMissingBookError(usjFromPdpPossiblyError);
-    if (isMissingBook) logger.debug(`Book not found in project: ${errorMessage}`);
-    else logger.error(`Error getting USJ from PDP: ${errorMessage}`);
+    // Unreachable while `usjFromPdpError` is derived from this same value; keeps the narrowing
+    // above and the memo below reading from one source rather than re-testing the error shape.
+    if (!usjFromPdpError) return [defaultUsj, true];
 
     // The comparison needs both identities parsed out of the message. If that wording ever drifts
     // so they cannot be, fall back to detection alone rather than to `bookExists`: a STALE failure
     // always parses — it names some other book or project — so an unparseable one cannot be stale.
     // This gate has no neutral outcome, and the alternative is the worse one; `bookExists` true
     // with USJ that never arrives leaves this editor on an indefinite spinner.
-    const missingBookIdentities = parseMissingBookError(usjFromPdpPossiblyError);
     const isBookMissingHere =
-      isMissingBookOnScreen({ error: usjFromPdpPossiblyError, currentBookNum, projectId }) ||
-      (isMissingBook && !missingBookIdentities);
-
-    // A message that parses into the WRONG project is the one shape neither branch above covers: the
-    // fallback needs the parse to FAIL, so a mis-parse leaves `bookExists` true with USJ that never
-    // arrives — an indefinite spinner rather than the missing-book message. The known trigger is a
-    // trailing sentence on the same line, because the identity capture runs greedily to the terminal
-    // period so that project ids containing `.` survive; narrowing it only trades one break for the
-    // other, so this warns rather than changing the parse. Matching the book number but not the
-    // project is what separates this from ordinary staleness, which names the book the user just
-    // left — that path is the common one and must stay quiet.
-    // TODO(PT-4416): Replace message matching with a structured error carrying the book and project.
-    if (
-      missingBookIdentities &&
-      !isBookMissingHere &&
-      missingBookIdentities.bookNum === currentBookNum
-    )
-      logger.warn(
-        `Book-not-found error names project "${missingBookIdentities.projectId}" but this editor is showing "${projectId}", so the message cannot be trusted to describe the book on screen. If the editor never finishes loading, suspect the exception's wording: ${errorMessage}`,
-      );
+      isMissingBookInfoOnScreen({
+        missingBook: usjFromPdpError.identities,
+        currentBookNum,
+        projectId,
+      }) ||
+      (usjFromPdpError.isMissingBook && !usjFromPdpError.identities);
 
     return [defaultUsj, !isBookMissingHere];
-  }, [usjFromPdpPossiblyError, currentBookNum, projectId]);
+  }, [usjFromPdpError, usjFromPdpPossiblyError, currentBookNum, projectId]);
+
+  // A book the project simply lacks is ordinary navigation rather than a fault, so it is logged at
+  // `debug`, which packaged builds drop (`global-this.model.ts` runs at `info` when packaged). That
+  // is deliberate: it fires on every navigation into a missing book, and the quiet path is the
+  // CORRECT one — if detection ever broke, the same failure would fall to `error` and stay loud in
+  // production. Keyed on the failure alone so that paging through books while one sticky failure is
+  // held (a permissions error, an offline PDP) writes one line rather than one per book.
+  useEffect(() => {
+    if (!usjFromPdpError) return;
+    if (usjFromPdpError.isMissingBook)
+      logger.debug(`Book not found in project: ${usjFromPdpError.message}`);
+    else logger.error(`Error getting USJ from PDP: ${usjFromPdpError.message}`);
+  }, [usjFromPdpError]);
+
+  // A message that parses into the WRONG project is the one shape neither branch of `bookExists`
+  // covers: the fallback needs the parse to FAIL, so a mis-parse leaves `bookExists` true with USJ
+  // that never arrives — an indefinite spinner rather than the missing-book message. The known
+  // trigger is a trailing sentence on the same line, because the identity capture runs greedily to
+  // the terminal period so that project ids containing `.` survive; narrowing it only trades one
+  // break for the other, so this warns rather than changing the parse.
+  //
+  // `isOverrunProjectIdParse` is what keeps this off the common paths. Both ordinary staleness
+  // (which names the book the user just left) and switching projects at the same reference (which
+  // names a genuinely different project) are quiet, because only an over-run capture starts with the
+  // id actually on screen.
+  // TODO(PT-4416): Replace message matching with a structured error carrying the book and project.
+  useEffect(() => {
+    const identities = usjFromPdpError?.identities;
+    if (
+      !identities ||
+      identities.bookNum !== currentBookNum ||
+      !isOverrunProjectIdParse(identities.projectId, projectId)
+    )
+      return;
+    logger.warn(
+      `Book-not-found error names project "${identities.projectId}" but this editor is showing "${projectId}", so the message cannot be trusted to describe the book on screen. If the editor never finishes loading, suspect the exception's wording: ${usjFromPdpError.message}`,
+    );
+  }, [usjFromPdpError, currentBookNum, projectId]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
   // Updated in useEffect (which runs after all useLayoutEffects), so this ref is stable for the
@@ -2197,10 +2228,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       </TwoStepDeleteTooltipOverlay>
     );
 
-    // Both interface modes: an honest message for a blank chapter is owed to every editor, and a
-    // Power user has the same use for the scaffold action as a Simple one. `showButton` below is
-    // what keeps it off read-only projects.
-    const showEmptyChapterView = isBlankChapter;
+    // Simple mode only. This view REPLACES the editing surface (the subtree below is
+    // `display: none`, which takes it out of both the accessibility tree and the tab order), and the
+    // scaffold button is the only way back in — but `showButton` withholds it for read-only
+    // projects, for `chapterNum: 0` front matter, and transiently while versification loads. In
+    // Power mode, where typing directly into a blank chapter is the expected workflow, that would
+    // turn those cases into dead ends. A Power user sees the ordinary empty editor instead.
+    const showEmptyChapterView = isBlankChapter && !isPowerMode;
 
     return (
       <>
@@ -2209,6 +2243,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           <EmptyChapterView
             localizedStrings={localizedStrings}
             isStructureProtected={isStructureProtected}
+            isResource={isResource}
             showButton={
               !isReadOnlyEffective &&
               lastVersesInCurrentBook !== undefined &&

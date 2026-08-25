@@ -38,9 +38,9 @@ describe('resolveResourcePanelStringKeys', () => {
   });
 
   it('gives every non-scripture resource type the commentaries wording', () => {
-    // Preserves what the five replaced ternaries did: each tested `=== 'ScriptureResource'`, so an
-    // enhanced, XML, or source-language resource has always shown commentary strings. Pinned so the
-    // fallback is a recorded decision rather than an accident of how the ternaries were written.
+    // Only `ScriptureResource` gets the Bible-texts wording; an enhanced, XML, or source-language
+    // resource falls to the commentary strings. Pinned so that fallback stays a decision rather than
+    // drifting per call site.
     const commentaries = resolveResourcePanelStringKeys('CommentaryResource');
 
     expect(resolveResourcePanelStringKeys('EnhancedResource')).toEqual(commentaries);

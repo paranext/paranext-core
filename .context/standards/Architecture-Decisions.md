@@ -1291,12 +1291,22 @@ step, no automation. Just a record.
   project-data-mutating action is a product decision, and it reopens exactly the Simple/Power split
   this ADR avoids for the resource case. Tracked as PT-4416.
 
-  Detection and the decision it feeds are both centralized in `platform-scripture-editor.utils.ts`,
-  which replaced a `bookNotFoundRegex` local to `platform-scripture-editor.web-view.tsx`. All three
-  surfaces — the main editor, the Bible texts/Commentaries panel, and the Model text panel — answer
-  "is the book on screen missing from the text on screen" through one function,
+  Detection is centralized in `platform-scripture-editor.utils.ts`, which replaced a
+  `bookNotFoundRegex` local to `platform-scripture-editor.web-view.tsx`. All FOUR surfaces — the main
+  editor, the Bible texts/Commentaries panel, the Model text panel, and the Scripture Text Grid's
+  cells — answer "is the book on screen missing from the text on screen" through one function,
   `isMissingBookOnScreen`, regardless of whether they read the error from a subscription hook or from
   an awaited call.
+
+  **What is NOT yet shared is the decision that leaf predicate feeds.** Each surface still spells out
+  its own loading / bookNotAvailable / ready ordering — `resolveResourceContentState`,
+  `deriveCellState`, the model panel's `renderContent` chain, and the main editor's `bookExists` — and
+  they do not agree for every input. A missing-book failure describing the resource the user just
+  navigated away from makes a grid cell say "loading" while a panel says "ready"; a failure that is
+  not about a missing book at all makes a cell say "Download failed" while a panel waits. A fifth
+  surface would invent a fifth ordering. Converging these on one resolver returning a discriminated
+  union — so the disagreement is unrepresentable rather than merely undocumented — is tracked as
+  PT-4416.
 
   The message itself is `EmptyState`, per ADR-0016's reservation of that component for the
   bare-sentence case; `ResourceBookNotAvailable` contributes only panel-sized centring and the focus
@@ -1372,3 +1382,33 @@ step, no automation. Just a record.
 - **Source:** PT-4132 (Empty state needs to be improved for the Model and Bible texts). Premise
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
+
+## ADR-0027: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** PT-4403 (#2710), squash-merged into PT-4132's branch, dropped the `!isPowerMode` gate
+  on `EmptyChapterView` in `platform-scripture-editor.web-view.tsx` so that a Power user would also
+  get the honest "this chapter is empty" message and the "Add chapter number" scaffold action.
+- **Decision:** Keep the gate. `EmptyChapterView` does not sit BESIDE the editor — it applies
+  `tw:hidden` to the editor subtree, and `display: none` removes it from the accessibility tree and
+  the tab order. The scaffold button is then the only way back to typing, and `showButton` withholds
+  it in three reachable cases: a read-only project, `chapterNum: 0` front matter (which
+  `calculateTopMatch('GEN 0')` produces and `handleTopMatchSelect` passes through), and the window
+  while versification is still loading (`usePromise(..., { preserveValue: false })`). In Power mode
+  — where typing straight into a blank chapter IS the workflow — each of those becomes a dead end
+  with no editor and no button. Simple mode accepts that trade because the scaffold, not free
+  typing, is its model for creating chapter content.
+- **Alternatives considered:** **Keep the unification and fix `showButton`'s three gaps** — the
+  better end state, but it is a Power-mode *editing* behaviour change that belongs in its own ticket
+  with a test pinning the new invariant, not folded into a PR about resource panels. **Show the
+  message without hiding the editor** — plausible, and it would make the mode question moot; it
+  changes the Simple-mode layout that PT-4403 shipped and reviewed, so it is not a drive-by either.
+  Both are PT-4416.
+- **Consequences:** A Power user sees an ordinary empty editor for a blank chapter, exactly as
+  before PT-4403 — no message, and no scaffold shortcut. `EmptyChapterView`'s docstring saying
+  "Simple mode only" stays true. The main editor's `isResource` case now passes `isResource` into
+  `EmptyChapterView` so a published resource gets
+  `%webView_platformScriptureEditor_emptyChapter_messageResource%` rather than the project-oriented
+  wording, matching the side panels.
+- **Source:** PT-4132, PR #2704 round-6 review (blocking finding 1).

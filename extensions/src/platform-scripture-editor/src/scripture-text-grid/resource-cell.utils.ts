@@ -1,8 +1,12 @@
 import { isPlatformError } from 'platform-bible-utils';
-import { isMissingBookError, isMissingBookOnScreen } from '../platform-scripture-editor.utils';
+import {
+  isMissingBookError,
+  isMissingBookInfoOnScreen,
+  parseMissingBookError,
+} from '../platform-scripture-editor.utils';
 
 /**
- * The four visual states a ResourceCell can be in; only `ready` renders Editorial.
+ * The five visual states a ResourceCell can be in; only `ready` renders Editorial.
  *
  * - `unavailable`: the resource's project could not be resolved (e.g., not installed or absent from
  *   the cached resource list). The cell shows a static "Resource unavailable" label.
@@ -47,11 +51,15 @@ export function deriveCellState(args: {
 }): Exclude<ResourceCellState, 'unavailable'> {
   const { usjPossiblyError, isLoading, currentBookNum, projectId } = args;
   if (isPlatformError(usjPossiblyError)) {
-    if (isMissingBookOnScreen({ error: usjPossiblyError, currentBookNum, projectId }))
+    // Parsed once and compared, rather than calling `isMissingBookOnScreen` and then
+    // `isMissingBookError`: this runs per grid cell, so the same message would otherwise be matched
+    // against both regexes twice for one decision.
+    const missingBook = parseMissingBookError(usjPossiblyError);
+    if (isMissingBookInfoOnScreen({ missingBook, currentBookNum, projectId }))
       return 'bookNotAvailable';
     // A missing-book failure naming some other book or resource is the previous selector's result,
     // held while the new subscription's first update is in flight — a spinner, not a fault.
-    if (isMissingBookError(usjPossiblyError)) return 'downloading';
+    if (missingBook || isMissingBookError(usjPossiblyError)) return 'downloading';
     return 'failed';
   }
   if (isLoading || usjPossiblyError === undefined) return 'downloading';

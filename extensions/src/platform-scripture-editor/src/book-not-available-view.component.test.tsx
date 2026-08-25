@@ -199,8 +199,6 @@ describe('BookNotAvailableView', () => {
       );
       const firstRegion = screen.getByRole('status');
       expect(firstRegion).toHaveFocus();
-      // Focus is orphaned again, as it is when the content the user was in gets torn out.
-      firstRegion.blur();
 
       rerender(
         <BookNotAvailableView
@@ -216,6 +214,54 @@ describe('BookNotAvailableView', () => {
       const secondRegion = screen.getByRole('status');
       expect(secondRegion).not.toBe(firstRegion);
       expect(secondRegion).toHaveFocus();
+    },
+  );
+
+  it.each([
+    ['simple', false],
+    ['power', true],
+  ])(
+    'in %s mode, re-keys the region without taking focus off the control the user is still in',
+    (_mode, isPowerMode) => {
+      // The real path to a second missing book is the toolbar's `BookChapterControl`, which this web
+      // view renders in its OWN document and which KEEPS focus across the navigation. The focus
+      // repair declines by design in that case, so the remounted region is the whole announcement —
+      // and `EmptyState` mounts its `role="status"` with the text already present, which several
+      // screen readers do not report.
+      //
+      // This pins the boundary rather than the wish: a new region node IS inserted, and the user's
+      // place is not stolen. Making that insertion reliably audible belongs to the shared primitive.
+      // TODO(PT-4416): Give `EmptyState` an announcement that does not depend on a focus move.
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+
+      const bookControl = document.createElement('button');
+      document.body.appendChild(bookControl);
+
+      const { rerender } = render(
+        <BookNotAvailableView
+          localizedStrings={STRINGS}
+          isPowerMode={isPowerMode}
+          onOpenManageBooks={vi.fn()}
+          announcementKey="projA:GEN"
+        />,
+      );
+      const firstRegion = screen.getByRole('status');
+      bookControl.focus();
+
+      rerender(
+        <BookNotAvailableView
+          localizedStrings={STRINGS}
+          isPowerMode={isPowerMode}
+          onOpenManageBooks={vi.fn()}
+          announcementKey="projA:EXO"
+        />,
+      );
+
+      const secondRegion = screen.getByRole('status');
+      expect(secondRegion).not.toBe(firstRegion);
+      expect(bookControl).toHaveFocus();
+
+      bookControl.remove();
     },
   );
 

@@ -31,6 +31,14 @@ describe('ResourceBookNotAvailable', () => {
   });
 
   describe('accessibility', () => {
+    it('gives the focus target an accessible name', () => {
+      // A role-less `div` maps to `generic`, which does not support name-from-content — a focused
+      // wrapper without a name is announced as "group", or as nothing at all.
+      render(<ResourceBookNotAvailable message={MESSAGE} />);
+
+      expect(screen.getByTestId(RESOURCE_BOOK_NOT_AVAILABLE_TEST_ID)).toHaveAccessibleName(MESSAGE);
+    });
+
     it('announces the message region', () => {
       render(<ResourceBookNotAvailable message={MESSAGE} />);
 
