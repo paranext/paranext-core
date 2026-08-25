@@ -318,10 +318,11 @@ export declare class EventRollingTimeCounter {
  * live with the plain string helpers in `string-util` instead.
  *
  * Range and padding methods return a `GraphemeString` rather than a `string` so the parent's
- * segmentation carries into the result instead of being recomputed. Call `.string` for the text.
+ * segmentation carries into the result instead of being recomputed. Call `toString()` for the
+ * text.
  */
 export declare class GraphemeString {
-	/** The raw string. Used for `.string`, the native scans behind search, and regex split. */
+	/** The raw string. Used for `toString`, the native scans behind search, and regex split. */
 	private readonly str;
 	/** Grapheme clusters — source of truth for indexing. Treat as read-only. */
 	private readonly graphemes;
@@ -333,18 +334,13 @@ export declare class GraphemeString {
 	 *   entirely — this is how derived instances avoid re-parsing.
 	 */
 	constructor(string: string, graphemes?: string[]);
-	/** The original raw string. */
-	get string(): string;
 	/** Number of grapheme clusters. Mirrors `String.prototype.length` in graphemes. */
 	get length(): number;
 	/**
-	 * UTF-16 start offset of each grapheme, where `offsets.length === graphemes.length`.
-	 *
-	 * PERF: built on first use rather than in the constructor. Only the search and range methods need
-	 * it; `length`, the point accessors, and the padding methods do not, and those are both the
-	 * cheapest and the most frequent operations — building it eagerly taxes them for nothing.
+	 * The original raw string. Named `toString` rather than exposed as a property so an instance
+	 * drops straight into a template literal or `String(...)` without an accessor.
 	 */
-	private get offsets();
+	toString(): string;
 	/** The grapheme clusters as an array. Treat the result as read-only. No native equivalent. */
 	toArray(): string[];
 	/**
@@ -449,6 +445,14 @@ export declare class GraphemeString {
 	 * match that does not begin and end on grapheme boundaries is skipped as if it had not matched.
 	 */
 	private splitOnRegExp;
+	/**
+	 * UTF-16 start offset of each grapheme, where `offsets.length === graphemes.length`.
+	 *
+	 * PERF: built on first use rather than in the constructor. Only the search and range methods need
+	 * it; `length`, the point accessors, and the padding methods do not, and those are both the
+	 * cheapest and the most frequent operations — building it eagerly taxes them for nothing.
+	 */
+	private offsets;
 	/** Build the grapheme array a padding method should prepend/append, empty when none is needed. */
 	private buildPadding;
 	/** UTF-16 offset where grapheme `index` starts, or the end of the string for `index === length`. */
