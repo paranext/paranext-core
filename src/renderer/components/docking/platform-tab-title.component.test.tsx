@@ -24,6 +24,26 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   ]),
   useData: vi.fn(() => ({
     Focus: () => [mockFocusSubject, vi.fn()],
+    WebViewMenu: () => [
+      {
+        includeDefaults: true,
+        topMenu: undefined,
+        contextMenu: undefined,
+        tabMenu: {
+          groups: { 'platform.tabWindow': { order: 1, isExtensible: true } },
+          items: [
+            {
+              label: 'Float Tab',
+              group: 'platform.tabWindow',
+              order: 1,
+              command: 'platform.floatTab',
+            },
+          ],
+        },
+      },
+      vi.fn(),
+      false,
+    ],
   })),
   useDataProvider: vi.fn(() => undefined),
 }));

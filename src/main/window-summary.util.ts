@@ -32,5 +32,3 @@ export function summarizeWindows(
     isMain: window.id === mainWindowId,
   }));
 }
-
-export default summarizeWindows;

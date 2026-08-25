@@ -226,7 +226,12 @@ test('Get web view menu data for videoExtension', async () => {
   // If I do not specify the type for this object it will not let me index with EXTENSION_NAME
   // eslint-disable-next-line prefer-destructuring
   const webViewMenus: WebViewMenus = MOCK_MENU_DATA.webViewMenus;
-  expect(result).toEqual(webViewMenus[EXTENSION_NAME]);
+  // The tab menu is added on the way out for every web view, since its items act on the tab frame
+  // rather than on the web view's contents
+  expect(result).toEqual({
+    ...webViewMenus[EXTENSION_NAME],
+    tabMenu: MOCK_MENU_DATA.defaultWebViewTabMenu,
+  });
 });
 
 test('Setting web view menu data throws', async () => {
@@ -535,6 +540,49 @@ describe('Tab menu', () => {
       'platform.moveWebViewToNewWindow',
       'platform.moveTabToWindow',
     ]);
+  });
+
+  test('a recognized web view that never asked for defaults still gets the platform items', async () => {
+    // Most shipped web views omit `includeDefaults`, so the combiner folds nothing into their tab
+    // menu. The items act on the tab frame rather than the web view, so opting out of them is not
+    // meaningful — without this the menu would be empty on almost every tab
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+
+    expect(commandsIn(result.tabMenu)).toContain('platform.floatTab');
+  });
+
+  test('a web view contributing its own tab menu keeps it', async () => {
+    // The positive control for the case above: the fallback fills a gap, it does not overwrite
+    const ownTabMenu = {
+      groups: { 'videoExtension.tabGroup': { order: 1 } },
+      items: [
+        {
+          label: '%rewind%',
+          localizeNotes: '',
+          group: 'videoExtension.tabGroup',
+          order: 1,
+          command: 'videoExtension.rewind',
+        },
+      ],
+    };
+    const menus = {
+      ...MOCK_MENU_DATA,
+      webViewMenus: {
+        ...MOCK_MENU_DATA.webViewMenus,
+        [EXTENSION_NAME]: { ...MOCK_MENU_DATA.webViewMenus[EXTENSION_NAME], tabMenu: ownTabMenu },
+      },
+    };
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(menus);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu(EXTENSION_NAME);
+
+    expect(commandsIn(result.tabMenu)).toEqual(['videoExtension.rewind']);
   });
 
   test('a tab hosting no web view is answered with the platform items, not with nothing', async () => {

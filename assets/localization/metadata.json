@@ -148,11 +148,12 @@
       "message": "This was a test string with an outdated key format. Use %general_button_submit%"
     }
   },
-  "%tab_contextMenu_floatPanel%": {
-    "fallbackKey": "%ParatextDockingTheme_2%"
-  },
   "%tab_contextMenu_floatTab%": {
-    "fallbackKey": "%tab_contextMenu_floatPanel%"
+    "fallbackKey": "%tab_contextMenu_floatPanel%",
+    "deprecationInfo": {
+      "date": "2026-08-25",
+      "message": "Reworded because the Spanish read \"Abrir como ventana flotante\" for an action that floats a panel inside the window rather than opening an operating system window. Use %tab_contextMenu_floatPanel% instead."
+    }
   },
   "%test_deprecated_string%": {
     "deprecationInfo": {

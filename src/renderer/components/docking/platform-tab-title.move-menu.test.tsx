@@ -21,6 +21,38 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   ]),
   useData: vi.fn(() => ({
     Focus: () => [undefined, vi.fn()],
+    WebViewMenu: () => [
+      {
+        includeDefaults: true,
+        topMenu: undefined,
+        contextMenu: undefined,
+        tabMenu: {
+          groups: { 'platform.tabWindow': { order: 1, isExtensible: true } },
+          items: [
+            {
+              label: 'Float Tab',
+              group: 'platform.tabWindow',
+              order: 1,
+              command: 'platform.floatTab',
+            },
+            {
+              label: 'Move tab to new window',
+              group: 'platform.tabWindow',
+              order: 2,
+              command: 'platform.moveWebViewToNewWindow',
+            },
+            {
+              id: 'platform.moveTabToWindow',
+              label: 'Move tab to window',
+              group: 'platform.tabWindow',
+              order: 3,
+            },
+          ],
+        },
+      },
+      vi.fn(),
+      false,
+    ],
   })),
   useDataProvider: vi.fn(() => undefined),
 }));

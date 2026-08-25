@@ -15,13 +15,18 @@ type PanelLike = {
 };
 
 /**
- * The parts of a dock layout this reads.
+ * The parts of a dock layout this reads, in the order they are read.
+ *
+ * `maxbox` comes first because a maximized panel is moved out of `dockbox` and replaced there by an
+ * empty placeholder, so a window whose only panel is maximized would otherwise look empty while
+ * showing content.
  *
  * `floatbox` is deliberately absent. In-app float panels are transient and often modal, so letting
  * one name the window would retitle it to "About" for as long as the About dialog is open and
  * rename it back on dismissal.
  */
 type LayoutLike = {
+  maxbox?: { children?: unknown[] };
   dockbox?: { children?: unknown[] };
 };
 
@@ -69,7 +74,7 @@ export function getWindowLabel(
   layout: LayoutLike,
   findTab: (tabId: string) => { tabTitle?: string | LocalizeKey } | undefined,
 ): string | LocalizeKey {
-  const panels = collectPanels(layout.dockbox);
+  const panels = [...collectPanels(layout.maxbox), ...collectPanels(layout.dockbox)];
   for (let panelIndex = 0; panelIndex < panels.length; panelIndex++) {
     const tabIds = orderTabIds(panels[panelIndex]);
     for (let tabIndex = 0; tabIndex < tabIds.length; tabIndex++) {
@@ -116,5 +121,3 @@ export async function updateWindowTitle(
     logger.warn(`Could not localize this window's title from ${label}: ${error}`);
   }
 }
-
-export default getWindowLabel;
