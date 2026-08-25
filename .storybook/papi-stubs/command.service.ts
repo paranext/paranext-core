@@ -12,8 +12,10 @@
  *   real cancel: it only takes effect once Send/Receive reaches a stopping point, so the request
  *   stays outstanding meanwhile. (Same device as the SyncConsentStep story's never-resolving
  *   `onSync`.)
- * - `openSyncStatus` resolves, so "View sync details" closes the popover as it does in the app rather
- *   than raising an "unavailable" toast about a web view Storybook could never open.
+ * - `openSyncStatus` resolves a web view id, so "View sync details" closes the popover as it does in
+ *   the app rather than raising an "unavailable" toast about a web view Storybook could never open.
+ *   An id, not a bare resolve: the command answers `undefined` when it created no web view, which
+ *   the button treats as a failure exactly like a rejection.
  *
  * Both overrides are GLOBAL to the whole Storybook build, unlike the `useSyncStatus` mock beside
  * them in `.storybook/mocks/`, which is scoped per story through a React context. Any future story
@@ -32,9 +34,13 @@ export type { ModuleSummaryComments } from '../../src/shared/services/command.se
 /** A cancel request that has been accepted and has not yet taken effect. */
 const NEVER_SETTLES = new Promise<never>(() => {});
 
+/** Stands in for the web view id a real `openSyncStatus` answers with when it opened the view. */
+const STUB_SYNC_STATUS_WEB_VIEW_ID = 'storybook-sync-status-web-view';
+
 const sendCommandStub = (commandName: string, ...args: unknown[]) => {
   if (commandName === 'paratextBibleSendReceive.cancelSync') return NEVER_SETTLES;
-  if (commandName === 'paratextBibleSendReceive.openSyncStatus') return Promise.resolve(undefined);
+  if (commandName === 'paratextBibleSendReceive.openSyncStatus')
+    return Promise.resolve(STUB_SYNC_STATUS_WEB_VIEW_ID);
   // `sendCommand` resolves a different return type per command name, which no single pass-through
   // body can satisfy; typing it faithfully would mean reproducing the whole command map here.
   // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any

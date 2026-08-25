@@ -1,6 +1,5 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { SyncingProject, useSyncStatus } from '@renderer/hooks/use-sync-status.hook';
-import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
+import { SyncStatus, useSyncStatus } from '@renderer/hooks/use-sync-status.hook';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
@@ -26,32 +25,6 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-/**
- * Joins normalized project ids into one comparable key. A `\0` cannot appear in a project id, so no
- * two different sets can produce the same key.
- */
-const PROJECT_ID_KEY_SEPARATOR = '\0';
-
-/**
- * The order- and casing-independent identity of the set of projects syncing right now.
- *
- * Normalized because the two signals `useSyncStatus` unions can report the same project in
- * different casing, and sorted because the list this reads comes ordered by NAME — so a name
- * resolving late reorders it while the set itself has not changed. Either would otherwise read as a
- * different sync.
- */
-function getSyncingProjectIdsKey(projects: readonly SyncingProject[]): string {
-  return projects
-    .map((project) => normalizeProjectId(project.projectId))
-    .sort()
-    .join(PROJECT_ID_KEY_SEPARATOR);
-}
-
-/** Splits a {@link getSyncingProjectIdsKey} key back into the ids it was built from. */
-function parseSyncingProjectIdsKey(key: string): string[] {
-  return key === '' ? [] : key.split(PROJECT_ID_KEY_SEPARATOR);
-}
 
 /**
  * Message shown when Cancel is clicked but send/receive can't answer. Declared here rather than
@@ -224,24 +197,28 @@ export function SyncStatusButton() {
 
   const handleViewDetails = useCallback(async () => {
     setIsOpen(false);
+    // This popover is shown whenever send/receive is part of the build, which is true before its
+    // commands finish registering — so a click can land while nothing is listening. This click also
+    // leaves the renderer, and it is the only route to the detail behind a reported failure, so both
+    // documented failures are surfaced rather than leaving the user with a link that appears to do
+    // nothing: a rejection, and the `undefined` the command returns when it created no web view.
+    let didOpen = false;
     try {
-      await sendCommand('paratextBibleSendReceive.openSyncStatus');
+      didOpen = (await sendCommand('paratextBibleSendReceive.openSyncStatus')) !== undefined;
     } catch (e) {
-      // This popover is shown whenever send/receive is part of the build, which is true before its
-      // commands finish registering — so a click can land while nothing is listening. Tell the user
-      // instead of leaving them with a link that appears to do nothing.
       logger.warn(`Toolbar could not open the sync status view: ${getErrorMessage(e)}`);
-      try {
-        await notificationService.send({
-          message: SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
-          severity: 'warning',
-          notificationId: SYNC_VIEW_DETAILS_UNAVAILABLE_NOTIFICATION_ID,
-        });
-      } catch (notificationError) {
-        logger.warn(
-          `Toolbar could not notify the user that sync details are unavailable: ${getErrorMessage(notificationError)}`,
-        );
-      }
+    }
+    if (didOpen) return;
+    try {
+      await notificationService.send({
+        message: SYNC_VIEW_DETAILS_UNAVAILABLE_MESSAGE_KEY,
+        severity: 'warning',
+        notificationId: SYNC_VIEW_DETAILS_UNAVAILABLE_NOTIFICATION_ID,
+      });
+    } catch (notificationError) {
+      logger.warn(
+        `Toolbar could not notify the user that sync details are unavailable: ${getErrorMessage(notificationError)}`,
+      );
     }
   }, []);
 
@@ -273,22 +250,19 @@ export function SyncStatusButton() {
     isCancellingRef.current = isCancelling;
   }, [isCancelling]);
 
-  /**
-   * Whether a non-empty syncing set has been recorded yet for the sync currently running. Until one
-   * has, there is no set to judge an arrival against: `getSyncActivity` reports a sync as running
-   * before the backend has resolved which projects it will touch, so the activity-only path's first
-   * named set arrives as `[] → ['proj1']` for one unchanged sync. Reset whenever the status leaves
-   * `syncing`, so the next sync is judged from nothing known rather than from its predecessor's
-   * set.
-   *
-   * Starts `false` even when a set is already known at mount: nothing has been cancelled yet, so
-   * the effect below has nothing to re-arm on its first run either way.
-   */
-  const hasKnownSyncingProjectIdsRef = useRef(false);
-
   // Whenever no sync is running, the pending cancel is settled — by completing, by being cancelled,
   // or by a different sync taking over. Re-arming here (rather than only on reopen) means a sync
   // starting while the popover is still open gets a live Cancel instead of a dead one.
+  //
+  // The syncing project ids are deliberately NOT a second trigger. Upstream derives
+  // `syncingProjectIds` from live, ref-counted per-project claims, and one continuous
+  // `isSyncing: true` window spans however many overlapping claims the sync paths take out — so a
+  // project can release and re-claim without a new sync having started, and "an id this cancel did
+  // not cover" is not evidence of a different sync. A pending cancel is therefore settled only by
+  // the status leaving `syncing` and by the popover being reopened, at the cost of a genuinely new
+  // overlapping sync keeping a dim "Cancelling…" until the whole union goes idle. That is the safe
+  // half of the trade: the alternative offers a live Cancel while a cancel is still in flight.
+  // Settling it positively needs a monotonic sync-episode id in `SyncState` (ADR-0024 follow-up 4).
   useEffect(() => {
     if (status === 'syncing') {
       // A running sync has no settled outcome to attribute to a cancel yet.
@@ -300,57 +274,7 @@ export function SyncStatusButton() {
     setWasCancelRequested(isCancellingRef.current);
     setIsCancelling(false);
     setIsCancelEnabled(true);
-    // The next sync starts over with nothing known about which projects it will touch, so its own
-    // first named set must not be read as a takeover. See `hasKnownSyncingProjectIdsRef`.
-    hasKnownSyncingProjectIdsRef.current = false;
   }, [status]);
-
-  /**
-   * Re-arm Cancel for a sync that took over from the one the last cancel was aimed at.
-   *
-   * The effect above can't cover this: overlapping syncs union, and `isSyncing: true` fires again
-   * when the set changes, so a new sync can begin without the status ever leaving `syncing`. The
-   * syncing set changing is the only signal that happened, so that is what this keys on — a spent
-   * Cancel would otherwise stay dead and mislabelled for a sync it was never aimed at.
-   */
-  const syncingProjectIdsKey = getSyncingProjectIdsKey(syncingProjects);
-  /**
-   * The ids this effect last judged against. Only non-empty sets are recorded, so the
-   * clear-then-read dip described below cannot be mistaken for a set change in either direction.
-   */
-  const lastSyncingProjectIdsRef = useRef<ReadonlySet<string>>(
-    new Set(parseSyncingProjectIdsKey(syncingProjectIdsKey)),
-  );
-  useEffect(() => {
-    const currentIds = parseSyncingProjectIdsKey(syncingProjectIdsKey);
-    const lastIds = lastSyncingProjectIdsRef.current;
-    // Nothing was known about this sync's projects until now, so this first named set is the same
-    // sync becoming knowable rather than a different one taking over.
-    const isFirstKnownSet = currentIds.length > 0 && !hasKnownSyncingProjectIdsRef.current;
-    if (currentIds.length > 0) hasKnownSyncingProjectIdsRef.current = true;
-    // A project APPEARING is the evidence that a sync this cancel was never aimed at has taken over.
-    // A project only leaving is not: the seam documents `isSyncing: true` firing again as the syncing
-    // set SHRINKS, so one project of a multi-project sync finishing before the others would otherwise
-    // flip a pending "Cancelling…" back to an armed "Cancel sync" mid-request — and a second click
-    // would fire a second `cancelSync`. `useSyncStatus` also drops the whole set before every
-    // follow-up read and re-applies it when the read answers, producing `[a,b] → [] → [a,b]` for one
-    // unchanged sync; both of those transitions reach this effect and neither adds a project.
-    const hasNewSyncingProject = currentIds.some((projectId) => !lastIds.has(projectId));
-    // The empty dip is not recorded, so the ids coming BACK is not read as an arrival either. An
-    // empty set is otherwise an ordinary state here rather than something to skip over: on the
-    // activity-only path (the Simple-mode startup sync) the backend reports a sync running before it
-    // has resolved a merge set, so empty is that path's steady state and returning early would leave
-    // this effect permanently silent for it.
-    if (currentIds.length > 0) lastSyncingProjectIdsRef.current = new Set(currentIds);
-    if (!hasNewSyncingProject || isFirstKnownSet) return;
-    if (status === 'syncing') {
-      setIsCancelling(false);
-      setIsCancelEnabled(true);
-    }
-    // Deliberately keyed on the id set rather than on `syncingProjects`, whose identity changes on
-    // every metadata read even when the same projects are syncing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncingProjectIdsKey]);
 
   /**
    * Dismiss when focus leaves the popover's content for a foreign browsing context — a
@@ -460,15 +384,50 @@ export function SyncStatusButton() {
    * label churns as project names resolve, turning one sync into three announcements. Empty until
    * the strings load, so the region can never speak a raw `%key%` aloud.
    */
-  const announcement = (() => {
-    if (!areStringsLoaded) return '';
-    if (status === 'syncing') return localizedStrings['%toolbar_sync_status_syncing%'];
-    if (status === 'synced') return localizedStrings['%toolbar_sync_status_synced%'];
-    if (wasCancelled) return localizedStrings['%toolbar_sync_status_cancelled%'];
-    if (status === 'failed') return localizedStrings['%toolbar_sync_status_failed%'];
-    // `idle` and `unknown` are not transitions worth interrupting a screen reader for.
-    return '';
-  })();
+  const [announcement, setAnnouncement] = useState('');
+  /**
+   * What the region was last computed for. The effect below re-runs on every render, because
+   * `localizedStrings` is a fresh object each time — without this it would immediately recompute
+   * `unknown` with itself as the previous status and blank the announcement it had just made.
+   */
+  const lastAnnouncedForRef = useRef<{ status: SyncStatus; areStringsLoaded: boolean } | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    const lastAnnouncedFor = lastAnnouncedForRef.current;
+    if (
+      lastAnnouncedFor &&
+      lastAnnouncedFor.status === status &&
+      lastAnnouncedFor.areStringsLoaded === areStringsLoaded
+    )
+      return;
+    const previousStatus = lastAnnouncedFor?.status;
+    lastAnnouncedForRef.current = { status, areStringsLoaded };
+    if (!areStringsLoaded) return;
+    if (status === 'syncing') {
+      setAnnouncement(localizedStrings['%toolbar_sync_status_syncing%']);
+      return;
+    }
+    if (status === 'synced') {
+      setAnnouncement(localizedStrings['%toolbar_sync_status_synced%']);
+      return;
+    }
+    if (wasCancelled) {
+      setAnnouncement(localizedStrings['%toolbar_sync_status_cancelled%']);
+      return;
+    }
+    if (status === 'failed') {
+      setAnnouncement(localizedStrings['%toolbar_sync_status_failed%']);
+      return;
+    }
+    // A sync the user was watching ending in "we cannot tell" IS worth saying; `idle`, and an
+    // `unknown` nobody was waiting on, are not transitions worth interrupting a screen reader for.
+    if (status === 'unknown' && previousStatus === 'syncing') {
+      setAnnouncement(localizedStrings['%toolbar_sync_status_unknown%']);
+      return;
+    }
+    setAnnouncement('');
+  }, [status, areStringsLoaded, wasCancelled, localizedStrings]);
 
   /**
    * The button's accessible name. `idle` and `unknown` share one visible label — the label is
@@ -616,7 +575,13 @@ export function SyncStatusButton() {
                     {syncingProjects.map((project) => (
                       // Keyed on the id, not the name: two projects can share a name, and a name
                       // falls back to the id only when its metadata couldn't be read.
-                      <li key={project.projectId} className="tw:truncate">
+                      // `data-project-id` because two projects can share a display name, which
+                      // makes the rendered rows indistinguishable from each other otherwise.
+                      <li
+                        key={project.projectId}
+                        data-project-id={project.projectId}
+                        className="tw:truncate"
+                      >
                         {project.name}
                       </li>
                     ))}

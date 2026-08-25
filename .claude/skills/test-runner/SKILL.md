@@ -20,7 +20,7 @@ Run and analyze tests for Platform.Bible (paranext-core) with structured output.
 | C# by category | `dotnet test c-sharp-tests/ --filter "Category=Contract"` |
 | Watch mode | `npm run test:core -- path/to/dir` (vitest watches by default) |
 | E2E (CDP, running app) | `npx playwright test --config=e2e-tests/playwright-cdp.config.ts` |
-| E2E (standalone) | `npm run test:e2e:smoke` (CI project) or `npm run test:e2e:isolated [subset]` |
+| E2E (standalone) | `npm run test:e2e:smoke` (CI project) or `npm run test:e2e:isolated <subset>` |
 
 ## TypeScript Tests (Vitest)
 
@@ -143,7 +143,11 @@ Prerequisite: App running with `--remote-debugging-port=9223` (the `app-runner` 
 ```bash
 npm stop  # Port 8876 must be free
 npm run test:e2e:smoke                 # the CI smoke project
-npm run test:e2e:isolated [subset]     # per-test isolated Electron suite
+npm run test:e2e:isolated <subset>     # isolated Electron suite (per test or per worker). The
+                                       # bare form and `all` do not run: the bare form lists the
+                                       # subsets and exits 1, and `all` includes title-bar/ and
+                                       # navigation-history/, which need an app this project's
+                                       # global setup refuses to start alongside
 # raw invocation, if needed: npx playwright test --config=e2e-tests/playwright.config.ts --project=smoke
 ```
 

@@ -1079,9 +1079,10 @@ step, no automation. Just a record.
 
 - **Date:** 2026-08-17
 - **Status:** Accepted
-- **Context:** PT-4336 asks that the user only ever see a single, truthful Send/Receive notification
-  at a time for the sync currently running, and be able to cancel any sync with a single click — the
-  fourth non-negotiable of the PRD "Simple — Saroj (and Donna) can trust the app". Two
+- **Context:** PT-4336 asks that the user only ever see a single, truthful Send/Receive
+  notification at a time for the sync currently running, and be able to cancel any sync with a
+  single click — the fourth non-negotiable of the PRD "Simple — Saroj (and Donna) can trust the
+  app". Two
   obstacles surfaced while implementing PT-4348. First, the existing toolbar button's only action was
   `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface — a web view that
   updates on its own schedule — alongside the button, which is exactly the "two messages that seem to
@@ -1101,10 +1102,12 @@ step, no automation. Just a record.
   copy so core merges independently of the upstream release. Absent field ⇒ a bare "Syncing" that
   names no project.
 - **Alternatives:** **Read `lastRequestedProjectIds` during a sync** (the ticket as written) —
-  rejected: names the wrong projects, which is the specific failure the single-truthful-status requirement exists to fix. **Derive names
+  rejected: names the wrong projects, which is the specific failure the single-truthful-status
+  requirement exists to fix. **Derive names
   from `onSyncProgress.progressText`** — rejected: it carries the current *item*, not the set, and for
   indeterminate progress it is a full localized sentence, so the label's meaning would change shape
-  mid-sync. **Ship without names** — viable and fully truthful, but misses that requirement's explicit "shows
+  mid-sync. **Ship without names** — viable and fully truthful, but misses that requirement's
+  explicit "shows
   which project(s) are syncing". **Declare `syncingProjectIds` required in core** — rejected: it would
   make core's types lie for any Studio build predating the upstream change.
 - **Consequences:** Core now ships a type declaration for a field that only exists once the companion
@@ -1112,28 +1115,29 @@ step, no automation. Just a record.
   pattern is available the next time core needs to consume an upstream contract addition ahead of its
   release. `getSyncState` reflects only syncs run through the Send/Receive extension's own wrappers —
   callers reaching the dotnet commands directly stay invisible (upstream PT-4214) — so this status is
-  best-effort, not ground truth. Routing through `runScheduledSessionSync` leaves core's startup syncs
-  unaffected in Power mode only. In Simple mode — the only mode this
+  best-effort, not ground truth. Routing through `runScheduledSessionSync` leaves core's startup
+  syncs unaffected in Power mode only. In Simple mode — the only mode this
   button renders in — `main/startup-tasks.ts` calls the dotnet `syncProjects` command directly, and
   the picker's `syncOnProjectSwitch` (`platform-scripture-editor`) does the same, so neither raises a
-  claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: the requirement's "status is
+  claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: the
+  requirement's "status is
   correct from app startup" is met for manual and scheduled syncs, but the Simple-mode startup sync
   still shows no status. Closing that needs either PT-4214 or routing those two call sites through a
   claiming wrapper (e.g. `runManualSync`); this decision deliberately does neither, since both are
   changes to sync behavior rather than to how status is reported. PT-4214 is Done, but it does not
-  close this gap — it shipped a
-  _gate_-derived signal (`paratextBibleSendReceive.onSyncWriteLockChanged`, backed by
-  `SendReceiveWriteLock`), not a signal derived from the sync run itself, and the gate cannot see the
-  window this paragraph is about. Studio's patch deliberately suppresses the gate's initial arm on the
-  scheduled path — `if (!isScheduledSync)` guards the `SetSyncing(...)` call in
-  `RunWithSyncNotification` — because the sync-all case passes `null` project ids, and arming with an
-  empty `SetSyncing([])` would be toothless, would waste a full drain on nothing, and would trip the
-  gate's "no valid project ids" warning. The Simple-mode startup sync **is** the scheduled path, so
-  the gate stays silent through its entire share-resolution phase — precisely the window this
-  paragraph identifies as unclosed. What actually closed it is PT-4398 (ADR-0025): a new
-  run-marker-derived signal (`onSyncActivityChanged` / `getSyncActivity`) taken from the
-  `BeginSyncRun`/`EndSync` bracket, which is entered before the suppression branch above and held
-  across the whole resolution phase, so it sees the startup sync from the moment it starts. Of the four richer UX
+  close this gap — it shipped a _gate_-derived signal
+  (`paratextBibleSendReceive.onSyncWriteLockChanged`, backed by `SendReceiveWriteLock`), not a signal
+  derived from the sync run itself, and the gate cannot see the window this paragraph is about.
+  Studio's patch deliberately suppresses the gate's initial arm on the scheduled path — `if
+  (!isScheduledSync)` guards the `SetSyncing(...)` call in `RunWithSyncNotification` — because the
+  sync-all case passes `null` project ids, and arming with an empty `SetSyncing([])` would be
+  toothless, would waste a full drain on nothing, and would trip the gate's "no valid project ids"
+  warning. The Simple-mode startup sync **is** the scheduled path, so the gate stays silent through
+  its entire share-resolution phase — precisely the window this paragraph identifies as unclosed.
+  What actually closed it is PT-4398 (ADR-0026): a new run-marker-derived signal
+  (`onSyncActivityChanged` / `getSyncActivity`) taken from the `BeginSyncRun`/`EndSync` bracket, which
+  is entered before the suppression branch above and held across the whole resolution phase, so it
+  sees the startup sync from the moment it starts. Of the four richer UX
   states in the design for that non-negotiable, three ("Connection problem", "Unsaved changes", "Unsynced changes") are
   deferred and marked as such in `sync-status-button.component.tsx`: none is derivable from what
   Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this work
@@ -1182,10 +1186,34 @@ step, no automation. Just a record.
   specifically the **Simple-mode overlap**, not the toast's existence. Note also that suppressing the
   toast is only wired for `sendReceiveProjects`; `syncProjects` has no such parameter, so quieting the
   scheduled path needs a C# change in Studio's patch plus a contract addition in both copies of the
-  Send/Receive declaration. The "single, truthful notification" requirement is therefore not achieved in the
+  Send/Receive declaration. The "single, truthful notification" requirement is therefore not
+  achieved in the
   shipped product by this decision alone, and the remaining work is cross-repo rather than a change to
   this component.
-- **Follow-up (needs tickets under PT-4336, none filed as of this entry):** three items above are
+  One more consequence of the status resting on `resultStatus`: the green check is decided by the
+  *complement* of a three-value failure set, so any value outside `ResultStatus` would read as a
+  success. Because this contract is demonstrably still moving — `syncingProjectIds` was added to it by
+  this very work — the snapshot validator checks `resultStatus` for membership in the known union
+  rather than merely for being a string, and a snapshot carrying an unrecognised status reports
+  `unknown` instead of a possibly-false `synced`. `unknown` carries no icon and shares the plain
+  "Sync" label with `idle` — it is distinguished only in the popover text and the live region, which
+  is deliberate: a degraded read is not an error worth a persistent badge in the toolbar, and the
+  honest answer is available the moment the user asks for it. The cost is deliberate: a seventh
+  status added upstream degrades this button to `unknown` until core's mirrored declaration is
+  re-synced, which is the failure direction this whole entry chooses everywhere else.
+
+  **A pending Cancel cannot be settled by the project ids.** Upstream derives `syncingProjectIds`
+  from live, ref-counted per-project claims (`sync-state.ts` `initSyncState`), and a single
+  continuous `isSyncing: true` window spans however many overlapping claims the sync paths take out.
+  A project can therefore release and re-claim without a new sync having started, so "an id this
+  cancel did not cover" is not evidence of a different sync and cannot re-arm Cancel. The button
+  settles a pending cancel on the two signals that are sound — the status leaving `syncing`, and the
+  popover being reopened — and accepts the cost: a genuinely new overlapping sync keeps a dim
+  "Cancelling…" until the whole union goes idle. That is the safe half of the trade, since the
+  alternative offers a live Cancel while a cancel is still in flight. Settling this properly needs a
+  monotonic sync-episode identifier in `SyncState`, which is an upstream contract change.
+
+- **Follow-up (needs tickets under PT-4336, none filed as of this entry):** the items above are
   deliberately out of this decision's scope and will not happen on their own.
   1. *Close the Simple-mode startup-sync blind spot* — route `main/startup-tasks.ts` and the picker's
      `syncOnProjectSwitch` through a claiming wrapper, or land upstream PT-4214. Owner: core.
@@ -1195,10 +1223,71 @@ step, no automation. Just a record.
      Send/Receive declaration. Owner: whoever owns Studio's patch — this cannot be done from core.
   3. *Reconcile the two in-core cancel surfaces* — share one piece of cancel-requested state between
      this popover and `sync-blocked-banner.component.tsx`. Owner: core.
-- **Source:** PT-4348, under PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can trust the app"; `sync-state.ts` in `paratext-bible-internal-extensions` for
-  the `lastRequestedProjectIds` contract.
+  4. *Make a new sync episode provable* — add a monotonic episode id to `SyncState` so a pending
+     Cancel can be settled positively rather than waited out. Owner: upstream Send/Receive, then
+     core. Unblocks the "dim Cancelling…" cost recorded above.
+  5. ~~*Validate the snapshot field-by-field rather than all-or-nothing*~~ — **Done (PT-4398).**
+     `isValidSyncState` no longer validates `lastResults` at all, so an unreadable historical
+     `resultStatus` no longer discards the live `isSyncing`/`syncingProjectIds` alongside it. The
+     completed-sync question is answered where it is asked instead: `deriveOutcomeFromResults`
+     returns `undefined` for results it cannot classify, which the caller reports as `unknown`.
+  6. *Close the remaining sync-status timing holes* — a newer sync starting before a finished sync's
+     follow-up read returns swallows that sync's `failed`; a cancel rejected just as the sync ends
+     can toast beside a popover that says it finished; a cancel accepted but not acted on leaves the
+     button wedged. All need a specific timing collision. Owner: core. (The fourth hole originally
+     listed here — the first event ending the seed's retry budget whether or not it applied anything
+     — was closed by PT-4398: the flag now means "an event's state was applied", so an event whose
+     own read failed leaves the seed alive with its budget intact.)
+  7. *Debounce the syncing-project metadata lookup* — it calls the retrying
+     `getMetadataForAllProjects` on every id-set change, including the transient blank each event
+     produces, and this component is mounted in every window's toolbar.
+     `use-project-picker-data.hook.ts` debounces the identical call. Owner: core.
+  8. *Resolve the shared-layout contradiction* — `shared-layout-receiver.model.ts` rests on
+     "`onSyncStateChanged` only fires for manual Send/Receives", while this work's declaration says
+     the state controller also covers `runScheduledSessionSync` and the auto-sync engine. Under the
+     new semantics a background sync raises the interactive "Apply now" prompt to someone who took no
+     action. This decision establishes the contradiction rather than causing it. Owner: core.
+- **Source:** PT-4348, under PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can
+  trust the app"; `sync-state.ts` in `paratext-bible-internal-extensions` for
+  the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
 
-## ADR-0025: One sync surface per interface mode, closed by a run-marker signal rather than the gate
+## ADR-0025: Find excludes extra material by narrowing its book lists, not by gating its scopes
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** Find reports a result's location by walking the `\c` and `\v` markers of the book it
+  matched in. Extra material (GLO, FRT, INT, XXA, … — `Canon.nonCanonicalIds`) is organized by
+  paragraph markers rather than verses, so every match in one resolves to the same useless reference
+  (`GLO 1:0`), and the platform cannot open such a book to act on the result anyway. Find had three
+  independent paths to those books: the flag string the book picker offers, the book ids the search
+  runs over, and the `book`/`chapter` scopes, which build their scope from the current scripture
+  reference rather than from any book list.
+- **Decision:** Exclude extra material by clearing its flags in the `booksPresent` string Find
+  derives its lists from (`deriveFindBookLists`), which covers the picker and the search together.
+  Flags are cleared **in place** rather than removed, because consumers index into the string by
+  book number and reject a length that does not match the canon. The `book`/`chapter` scopes are
+  **deliberately not gated** in this change; PT-4415 covers them, and PT-4414 covers dropping the
+  whole exclusion once extra material can be opened and addressed.
+- **Alternatives considered:**
+  - **Filter `findScope` before the search runs**, as a second line of defence behind the prune.
+    Rejected here: it half-solves the `book`/`chapter` bypass, which would make PT-4415's real fix
+    harder to reason about — two partial filters in different layers rather than one gate.
+  - **Drop the excluded positions from the flag string.** Rejected: it breaks the canon-length
+    invariant every downstream decoder relies on.
+  - **Filter at each consumer.** Rejected: filtering the search but not the picker (or the reverse)
+    lets a user pick a book the search never covers.
+- **Consequences:** Find now needs two book lists where it had one — `availableBookIds` (what the
+  search covers) and `localizableBookIds` (every book, so a scope label reading from the current
+  reference can still name a book the search excludes). That split exists only to compensate for
+  the exclusion and collapses back to one list under PT-4414. Because a project can now hold
+  nothing but extra material, "no searchable books" became a real answer, which forced the
+  unknown-vs-empty distinction below to be explicit: `deriveFindBookLists(undefined)` reports
+  `availableBookIds: undefined` while the setting is unread OR its read errored, and only a genuine
+  empty list prunes the user's persisted selection. Treating a delivered `PlatformError` as an
+  answer would have wiped that selection permanently — `useProjectSetting` reports an error as
+  loaded, so the error branch has to be recognized on its own.
+- **Source:** PT-3299, review of #2708.
+## ADR-0026: One sync surface per interface mode, closed by a run-marker signal rather than the gate
 
 - **Date:** 2026-08-20
 - **Status:** Accepted

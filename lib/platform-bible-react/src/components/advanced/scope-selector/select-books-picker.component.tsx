@@ -14,7 +14,7 @@ import { getSectionForBook, Section } from 'platform-bible-utils';
 import { getSectionLongName, doesBookMatchQuery } from '@/components/shared/book.utils';
 import { Fragment, MouseEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { generateCommandValue } from '@/components/shared/book-item.utils';
-import { getAvailableBookIds } from './scope-selector.utils';
+import { getAvailableBookIds, getBooksForSection } from './scope-selector.utils';
 import { SelectBooksLocalizedStrings } from './select-books.types';
 
 type SelectBooksPickerProps = {
@@ -37,6 +37,12 @@ type SelectBooksPickerProps = {
    * value contains localized versions of the ID and full book name
    */
   localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
+  /**
+   * Optional explanations, by section, for why that section has no available books. A section with
+   * no books renders no group at all, so its explanation is shown as a note under the list —
+   * otherwise a search for one of its books lands on the bare "no book found".
+   */
+  disabledSectionExplanations?: Partial<Record<Section, string>>;
 };
 
 /**
@@ -56,6 +62,7 @@ export function SelectBooksPicker({
   onChangeSelectedBookIds,
   localizedStrings,
   localizedBookNames,
+  disabledSectionExplanations,
 }: SelectBooksPickerProps) {
   const booksSelectedText = localizedStrings['%webView_book_selector_books_selected%'];
   const selectBooksText = localizedStrings['%webView_book_selector_select_books%'];
@@ -169,6 +176,20 @@ export function SelectBooksPicker({
     onChangeSelectedBookIds([]);
   };
 
+  // Sections the consumer explained AND that have no books at all — not merely none matching the
+  // current search, which is what the "no book found" empty state already covers.
+  const missingSectionExplanations = useMemo(
+    () =>
+      Object.values(Section)
+        .filter(
+          (section) =>
+            disabledSectionExplanations?.[section] !== undefined &&
+            getBooksForSection(availableBookIds, section).length === 0,
+        )
+        .map((section) => ({ section, explanation: disabledSectionExplanations?.[section] })),
+    [disabledSectionExplanations, availableBookIds],
+  );
+
   return (
     <Popover
       open={isBooksSelectorOpen}
@@ -244,36 +265,56 @@ export function SelectBooksPicker({
               upper bound for when there is room to spare — a max-height never blocks shrinking. */}
           <CommandList className="tw:max-h-72 tw:min-h-0 tw:flex-1">
             <CommandEmpty>{noBookFoundText}</CommandEmpty>
-            {Object.values(Section).map((section, index) => {
-              const sectionBooks = filteredBooksBySection[section];
+            {Object.values(Section)
+              .filter((section) => filteredBooksBySection[section].length > 0)
+              .map((section, index) => {
+                const sectionBooks = filteredBooksBySection[section];
 
-              if (sectionBooks.length === 0) return undefined;
+                return (
+                  <Fragment key={section}>
+                    {/* Separator goes BEFORE each group but the first, counted over the sections
+                    actually rendered. Emitting it after each group instead would leave a dangling
+                    rule below the last one whenever a later section has no books.
 
-              return (
-                <Fragment key={section}>
-                  <CommandGroup
-                    heading={getSectionLongName(section, otLong, ntLong, dcLong, extraLong)}
-                  >
-                    {sectionBooks.map((bookId) => (
-                      <BookItem
-                        key={bookId}
-                        bookId={bookId}
-                        isSelected={selectedBookIds.includes(bookId)}
-                        onSelect={() => handleKeyboardSelect(bookId)}
-                        onMouseDown={(event) => handleMouseDown(event, bookId)}
-                        section={getSectionForBook(bookId)}
-                        showCheck
-                        localizedBookNames={localizedBookNames}
-                        commandValue={generateCommandValue(bookId, localizedBookNames)}
-                        className="tw:flex tw:items-center"
-                      />
-                    ))}
-                  </CommandGroup>
-                  {index < Object.values(Section).length - 1 && <CommandSeparator />}
-                </Fragment>
-              );
-            })}
+                    `alwaysRender` because cmdk hides a separator whenever its search box is
+                    non-empty, on the assumption that cmdk itself did the filtering. This picker sets
+                    `shouldFilter={false}` and filters into sections on its own, so the groups below
+                    are real and still need dividing. */}
+                    {index > 0 && <CommandSeparator alwaysRender />}
+                    <CommandGroup
+                      heading={getSectionLongName(section, otLong, ntLong, dcLong, extraLong)}
+                    >
+                      {sectionBooks.map((bookId) => (
+                        <BookItem
+                          key={bookId}
+                          bookId={bookId}
+                          isSelected={selectedBookIds.includes(bookId)}
+                          onSelect={() => handleKeyboardSelect(bookId)}
+                          onMouseDown={(event) => handleMouseDown(event, bookId)}
+                          section={getSectionForBook(bookId)}
+                          showCheck
+                          localizedBookNames={localizedBookNames}
+                          commandValue={generateCommandValue(bookId, localizedBookNames)}
+                          className="tw:flex tw:items-center"
+                        />
+                      ))}
+                    </CommandGroup>
+                  </Fragment>
+                );
+              })}
           </CommandList>
+          {/* Explanations for the sections that render no group at all. Inside the popover but
+              outside CommandList so cmdk's filtering can't hide the note behind the very search
+              ("glossary") that makes the omission visible. */}
+          {missingSectionExplanations.length > 0 && (
+            <div className="tw:shrink-0 tw:border-t tw:p-2">
+              {missingSectionExplanations.map(({ section, explanation }) => (
+                <p key={section} className="tw:text-xs tw:text-muted-foreground">
+                  {explanation}
+                </p>
+              ))}
+            </div>
+          )}
         </Command>
       </PopoverContent>
     </Popover>

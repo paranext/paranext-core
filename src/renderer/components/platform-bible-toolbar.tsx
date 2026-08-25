@@ -320,9 +320,13 @@ export function PlatformBibleToolbar() {
               //
               // The cost of failing open is that mounting starts two seed-retry loops in builds with
               // no send/receive at all, and each toggle between Simple and Power mode unmounts and
-              // remounts this, discarding seeded state and restarting them. Availability settles to
-              // `false` within `SEND_RECEIVE_UNKNOWN_GRACE_MS` there, so it costs a few failed round
-              // trips rather than a full retry window — but a one-shot capability probe would fit a
+              // remounts this, discarding seeded state and restarting them. An unregistered command
+              // is not cheap to fail: `sendCommand` routes through `requestWithRetry`, so one read
+              // rejects only after `MAX_REQUEST_ATTEMPTS` attempts at `REQUEST_ATTEMPT_WAIT_TIME_MS`
+              // apart (~10s, `rpc.model.ts`). Availability settles to `false` within
+              // `SEND_RECEIVE_UNKNOWN_GRACE_MS` (5s) there, so this unmounts while each loop's FIRST
+              // read is still retrying — well short of the full retry window, but two reads' worth of
+              // round trips per mount rather than a handful. A one-shot capability probe would fit a
               // permanently-absent command better than a retry loop does.
               // TODO(PT-4233): Revisit once the companion Send/Receive PR lands and this command is
               // implemented somewhere, which is what makes the retry loop worth its cost.

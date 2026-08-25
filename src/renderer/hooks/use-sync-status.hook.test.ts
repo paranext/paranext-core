@@ -365,17 +365,20 @@ describe('useSyncStatus', () => {
 
   it('reports unknown once the claim seed exhausts its retry window with no answer', async () => {
     // The other half of the same case: with no activity signal claiming a sync either, running out
-    // of retry budget must be reported as `unknown` rather than left at the initial `idle`, which
+    // of retry budget must be reported as `unknown`, and must never fall back to `idle` — that
     // would claim nothing has synced on the strength of a read that never succeeded.
     commands.mockGetSyncState(new Error('extension host not ready'));
     commands.mockGetSyncActivity({ isSyncing: false, projectIds: [] });
 
     const { result } = renderHook(() => useSyncStatus());
+    const readsAfterFirstAttempt = commands.countGetSyncStateCalls();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_INTERVAL_MS);
     });
-    // Still inside the window, so the seed is retrying rather than giving up.
-    expect(result.current.status).toBe('idle');
+    // Inside the window the status is unreadable either way, so what separates "still retrying"
+    // from "gave up" is another attempt having been made.
+    expect(commands.countGetSyncStateCalls()).toBeGreaterThan(readsAfterFirstAttempt);
+    expect(result.current.status).not.toBe('idle');
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(SYNC_SEED_RETRY_WINDOW_MS);
@@ -694,7 +697,8 @@ describe('useSyncStatus', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(result.current.status).toBe('idle');
+    // The first read failed, so nothing has answered yet.
+    expect(result.current.status).toBe('unknown');
 
     emitSyncStateChanged({ isSyncing: false });
     await act(async () => {
