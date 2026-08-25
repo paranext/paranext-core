@@ -18,7 +18,7 @@ import path from 'path';
 import { ElectronApplication } from '@playwright/test';
 import WebSocket from 'ws';
 import { test as appTest } from './app.fixture';
-import { launchElectronApp, teardownElectronApp } from './helpers';
+import { launchElectronApp, preConfigureSettings, teardownElectronApp } from './helpers';
 
 /**
  * Fixed project ID for the testWEB copy used by find/replace tests. A deterministic GUID distinct
@@ -82,6 +82,12 @@ export const test = appTest.extend<{}, { electronApp: ElectronApplication }>({
       setupWEBCopyProject(projectsDir);
       // DEV_NOISY=false so test extensions (helloRock3, etc.) don't open webviews and shift the
       // `iframe.web-view nth(0)` selectors; envOverrides is spread last so both win over the defaults.
+      // Seed platform.firstRunComplete before launch, exactly as app.fixture does. This fixture
+      // replaces app.fixture's worker-scoped electronApp wholesale, so without seeding here the app
+      // starts on the first-run wizard — a full-screen modal that aria-hides the rest of the app and
+      // intercepts pointer events, which blocks this suite's beforeAll before it can warm the
+      // findInScripture PDP.
+      const restoreSettings = preConfigureSettings({ 'platform.firstRunComplete': true });
       const ctx = await launchElectronApp({
         envOverrides: { DEV_NOISY: 'false', PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: projectsDir },
       });
@@ -89,6 +95,8 @@ export const test = appTest.extend<{}, { electronApp: ElectronApplication }>({
         await use(ctx.electronApp);
       } finally {
         await teardownElectronApp(ctx);
+        // Restore only after the app has fully closed so its shutdown writes cannot clobber it.
+        restoreSettings();
         fs.rmSync(projectsDir, { recursive: true, force: true });
       }
     },
