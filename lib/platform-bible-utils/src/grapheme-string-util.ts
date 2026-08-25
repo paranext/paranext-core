@@ -75,10 +75,11 @@ function toUint32(value: number): number {
  * live with the plain string helpers in `string-util` instead.
  *
  * Range and padding methods return a `GraphemeString` rather than a `string` so the parent's
- * segmentation carries into the result instead of being recomputed. Call `.string` for the text.
+ * segmentation carries into the result instead of being recomputed. Call `toString()` for the
+ * text.
  */
 export class GraphemeString {
-  /** The raw string. Used for `.string`, the native scans behind search, and regex split. */
+  /** The raw string. Used for `toString`, the native scans behind search, and regex split. */
   private readonly str: string;
 
   /** Grapheme clusters — source of truth for indexing. Treat as read-only. */
@@ -99,34 +100,17 @@ export class GraphemeString {
     this.graphemes = graphemes ?? stringzToArray(string);
   }
 
-  /** The original raw string. */
-  get string(): string {
-    return this.str;
-  }
-
   /** Number of grapheme clusters. Mirrors `String.prototype.length` in graphemes. */
   get length(): number {
     return this.graphemes.length;
   }
 
   /**
-   * UTF-16 start offset of each grapheme, where `offsets.length === graphemes.length`.
-   *
-   * PERF: built on first use rather than in the constructor. Only the search and range methods need
-   * it; `length`, the point accessors, and the padding methods do not, and those are both the
-   * cheapest and the most frequent operations — building it eagerly taxes them for nothing.
+   * The original raw string. Named `toString` rather than exposed as a property so an instance
+   * drops straight into a template literal or `String(...)` without an accessor.
    */
-  private get offsets(): number[] {
-    if (!this.offsetsCache) {
-      const offsets: number[] = new Array(this.graphemes.length);
-      let offset = 0;
-      for (let i = 0; i < this.graphemes.length; i++) {
-        offsets[i] = offset;
-        offset += this.graphemes[i].length;
-      }
-      this.offsetsCache = offsets;
-    }
-    return this.offsetsCache;
+  toString(): string {
+    return this.str;
   }
 
   /** The grapheme clusters as an array. Treat the result as read-only. No native equivalent. */
@@ -389,7 +373,7 @@ export class GraphemeString {
         if (matchEnd === pieceStart) {
           // A zero-width match at the piece start would make no progress; skip one grapheme.
           if (matchStart + 1 >= length) break;
-          searchOffset = this.offsets[matchStart + 1];
+          searchOffset = this.offsets()[matchStart + 1];
         } else {
           result.push(this.derive(pieceStart, matchStart));
           if (result.length === limit) return result;
@@ -405,6 +389,26 @@ export class GraphemeString {
     }
     result.push(this.derive(pieceStart, length));
     return result;
+  }
+
+  /**
+   * UTF-16 start offset of each grapheme, where `offsets.length === graphemes.length`.
+   *
+   * PERF: built on first use rather than in the constructor. Only the search and range methods need
+   * it; `length`, the point accessors, and the padding methods do not, and those are both the
+   * cheapest and the most frequent operations — building it eagerly taxes them for nothing.
+   */
+  private offsets(): number[] {
+    if (!this.offsetsCache) {
+      const offsets: number[] = new Array(this.graphemes.length);
+      let offset = 0;
+      for (let i = 0; i < this.graphemes.length; i++) {
+        offsets[i] = offset;
+        offset += this.graphemes[i].length;
+      }
+      this.offsetsCache = offsets;
+    }
+    return this.offsetsCache;
   }
 
   /** Build the grapheme array a padding method should prepend/append, empty when none is needed. */
@@ -424,7 +428,8 @@ export class GraphemeString {
 
   /** UTF-16 offset where grapheme `index` starts, or the end of the string for `index === length`. */
   private offsetAt(index: number): number {
-    return index < this.offsets.length ? this.offsets[index] : this.str.length;
+    const offsets = this.offsets();
+    return index < offsets.length ? offsets[index] : this.str.length;
   }
 
   /**
@@ -432,7 +437,7 @@ export class GraphemeString {
    * occupies.
    */
   private graphemeSpan(index: number, needle: string): number {
-    const endOffset = this.offsets[index] + needle.length;
+    const endOffset = this.offsets()[index] + needle.length;
     if (endOffset >= this.str.length) return this.graphemes.length - index;
     return this.graphemeIndexAtOffset(endOffset) - index;
   }
@@ -453,7 +458,7 @@ export class GraphemeString {
    * grapheme boundary, else -1. `offsets` is strictly increasing.
    */
   private graphemeIndexAtOffset(utf16Offset: number): number {
-    const { offsets } = this;
+    const offsets = this.offsets();
     let lo = 0;
     let hi = offsets.length - 1;
     while (lo <= hi) {
@@ -474,7 +479,7 @@ export class GraphemeString {
 
 /** Extract the raw string form of a search needle (string or GraphemeString). */
 function rawNeedle(searchString: string | GraphemeString): string {
-  return typeof searchString === 'string' ? searchString : searchString.string;
+  return typeof searchString === 'string' ? searchString : searchString.toString();
 }
 
 /**
@@ -523,7 +528,7 @@ function buildReplacementParts<T = unknown>(
   ) {
     // `slice`, not `substring`: these indexes are always in order, and slice's no-argument-swapping
     // rule keeps a degenerate range empty instead of silently widening it.
-    const intermediateContent = gs.slice(nextIntermediateStartIndex, newContentIndex).string;
+    const intermediateContent = gs.slice(nextIntermediateStartIndex, newContentIndex).toString();
     const baseSubstring =
       contents.length > 0 && isString(contents[contents.length - 1])
         ? `${contents.pop()}${intermediateContent}`
@@ -545,7 +550,7 @@ function buildReplacementParts<T = unknown>(
         if (prev !== '\\') {
           const closeCurlyBraceIndex = indexOfClosestClosingCurlyBrace(gs, i, false);
           if (closeCurlyBraceIndex >= 0) {
-            const replacerKey = gs.slice(i + 1, closeCurlyBraceIndex).string;
+            const replacerKey = gs.slice(i + 1, closeCurlyBraceIndex).toString();
             const replacerContent =
               replacerKey in replacers
                 ? // `replacerKey in replacers` is a narrowing check; the cast is sound.
@@ -570,7 +575,7 @@ function buildReplacementParts<T = unknown>(
   }
 
   if (nextIntermediateStartIndex < strLength) {
-    const endContent = gs.slice(nextIntermediateStartIndex).string;
+    const endContent = gs.slice(nextIntermediateStartIndex).toString();
     contents.push(
       contents.length > 0 && isString(contents[contents.length - 1])
         ? `${contents.pop()}${endContent}`

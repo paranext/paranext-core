@@ -22,7 +22,7 @@ import { GraphemeString } from './grapheme-string-util';
  *     const graphemeText = new GraphemeString(text);
  *     const start = graphemeText.indexOf('{');
  *     const end = graphemeText.indexOf('}');
- *     const key = graphemeText.substring(start + 1, end).string;
+ *     const key = `${graphemeText.substring(start + 1, end)}`;
  */
 
 /**
@@ -206,7 +206,7 @@ export function ordinalCompare(
  * @returns String with the appropriate padding at the end
  */
 export function padEnd(string: string, targetLength: number, padString?: string): string {
-  return new GraphemeString(string).padEnd(targetLength, padString).string;
+  return new GraphemeString(string).padEnd(targetLength, padString).toString();
 }
 
 /**
@@ -223,7 +223,7 @@ export function padEnd(string: string, targetLength: number, padString?: string)
  * @returns String with the appropriate padding at the start
  */
 export function padStart(string: string, targetLength: number, padString?: string): string {
-  return new GraphemeString(string).padStart(targetLength, padString).string;
+  return new GraphemeString(string).padStart(targetLength, padString).toString();
 }
 
 /**
@@ -240,7 +240,7 @@ export function padStart(string: string, targetLength: number, padString?: strin
  * @returns A new string containing the extracted section of the string
  */
 export function slice(string: string, indexStart: number, indexEnd?: number): string {
-  return new GraphemeString(string).slice(indexStart, indexEnd).string;
+  return new GraphemeString(string).slice(indexStart, indexEnd).toString();
 }
 
 /**
@@ -259,7 +259,9 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
  * @returns An array of strings, split at each point where separator occurs in the starting string
  */
 export function split(string: string, separator: string | RegExp, splitLimit?: number): string[] {
-  const parts = new GraphemeString(string).split(separator, splitLimit).map((part) => part?.string);
+  const parts = new GraphemeString(string)
+    .split(separator, splitLimit)
+    .map((part) => part?.toString());
   // A capture group that did not participate in the match yields `undefined`, exactly as native
   // `String.prototype.split` does at runtime — and, as in native's own type declaration, that is not
   // reflected in the `string[]` return type. Only a capturing regular expression separator can
@@ -299,7 +301,7 @@ export function startsWith(string: string, searchString: string, position?: numb
  * @returns Substring from the starting string
  */
 export function substring(string: string, begin: number, end?: number): string {
-  return new GraphemeString(string).substring(begin, end).string;
+  return new GraphemeString(string).substring(begin, end).toString();
 }
 
 /**
