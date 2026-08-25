@@ -60,6 +60,32 @@ function firstEvaluatedSpecifier(source: string): string | undefined {
   return evaluated.sort((a, b) => a.index - b.index)[0]?.specifier;
 }
 
+/**
+ * Whether the installed `@eten-tech-foundation/scripture-utilities` delegates its XML work to the
+ * platform's DOM globals — true from the release that drops the package's own bundled
+ * `@xmldom/xmldom` (scripture-editors PR #541) onward, false before it, where the converters run
+ * fine in bare Node and nothing this polyfill installs is reachable.
+ *
+ * Probing beats reading the version because the behavior, not the range, is what the polyfill
+ * exists for.
+ */
+function convertersNeedDomGlobals(): boolean {
+  const saved = DOM_GLOBAL_NAMES.map((name) => [name, Reflect.get(globalThis, name)] as const);
+  DOM_GLOBAL_NAMES.forEach((name) => Reflect.deleteProperty(globalThis, name));
+  try {
+    usxStringToUsj('<usx version="3.0"><book code="GEN" style="id">Genesis</book></usx>');
+    return false;
+  } catch {
+    return true;
+  } finally {
+    saved.forEach(([name, value]) => {
+      if (value !== undefined) Reflect.set(globalThis, name, value);
+    });
+  }
+}
+
+const CONVERTERS_NEED_DOM_GLOBALS = convertersNeedDomGlobals();
+
 beforeEach(() => {
   savedGlobals = Object.fromEntries(
     DOM_GLOBAL_NAMES.map((name) => [name, Reflect.get(globalThis, name)]),
@@ -96,9 +122,12 @@ describe('dom-globals.polyfill', () => {
     expect(serialized).toContain('Genesis');
   });
 
-  // Asserting the globals exist is not the same as asserting the package accepts them: it gates on
-  // its own `assertDomEnvironment` and could need more of the environment than we install. This
-  // drives the exact two functions the extension host calls on every scripture read and write.
+  // Asserting the globals exist is not the same as asserting the package accepts them: once it
+  // gates on its own `assertDomEnvironment` it could need more of the environment than we install.
+  // This drives the exact two functions the extension host calls on every scripture read and write.
+  //
+  // While `scripture-utilities` still bundles its own `@xmldom/xmldom` this passes with or without
+  // the polyfill — see the skipped test below, which is what makes the difference detectable.
   test('the real USX⇔USJ converters round-trip under the installed globals', async () => {
     await importPolyfillFresh();
     const usx =
@@ -117,6 +146,19 @@ describe('dom-globals.polyfill', () => {
     // would drift a little further on every save.
     expect(usxStringToUsj(reserialized)).toEqual(usj);
   });
+
+  // The falsifying half of the round-trip test above: without it, deleting the polyfill outright
+  // still leaves this file green. It reports as skipped — not passed — for as long as the installed
+  // `scripture-utilities` bundles its own XML implementation, so nobody reads green CI as proof the
+  // polyfill is load-bearing. It starts failing the moment the polyfill stops working.
+  test.skipIf(!CONVERTERS_NEED_DOM_GLOBALS)(
+    'the converters fail without the globals, so the polyfill is what makes them work',
+    () => {
+      expect(() =>
+        usxStringToUsj('<usx version="3.0"><book code="GEN" style="id">Genesis</book></usx>'),
+      ).toThrow(/DOM environment/);
+    },
+  );
 
   test('does not override a real DOM (renderer, jsdom tests)', async () => {
     // Stand-ins for a real DOM's constructors — identity is all this test cares about
