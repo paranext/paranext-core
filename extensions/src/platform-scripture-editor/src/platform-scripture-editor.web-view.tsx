@@ -151,8 +151,10 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
   generateInlineMarkerMenuListItems,
+  resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
 import { TwoStepDeleteTooltipOverlay } from './two-step-delete-tooltip/two-step-delete-tooltip-overlay.component';
@@ -378,6 +380,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const editingNoteOps = useRef<DeltaOpInsertNoteEmbed[] | undefined>(undefined);
   /** True when the footnote editor was opened for a newly inserted note (not an existing one) */
   const editingNoteIsNew = useRef(false);
+  /**
+   * `Date.now()` when the {@link editingNoteKey} session was opened or last saved from (`undefined`
+   * while no session is open). The PDP-sync deferral consults it through
+   * `resolveEditingSessionActivity`: a session older than `STALE_NOTE_EDITING_SESSION_MS` with no
+   * interaction is treated as an orphaned key (a popover that died without cleanup) rather than a
+   * live edit, so it stops holding incoming PDP updates at bay. Refreshed on every save from the
+   * popover (the note-editing branch of `handleEditorialUsjChange`), so a live long edit never
+   * trips the bound.
+   */
+  const editingNoteSessionRefreshedAt = useRef<number | undefined>(undefined);
 
   // These control the placement of the comment editor popover by setting the location of the anchor
   const [showCommentEditor, setShowCommentEditor] = useState<boolean>(false);
@@ -882,6 +894,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
                 editingNoteIsNew.current = false;
                 editingNoteKey.current = undefined;
                 editingNoteOps.current = undefined;
+                editingNoteSessionRefreshedAt.current = undefined;
               }
               if (
                 decision.action === 'ignore-expanded' ||
@@ -915,6 +928,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
               setNotePopoverAnchorHeight(targetRect.height);
               editingNoteKey.current = noteNodeKey;
               editingNoteOps.current = [noteOp];
+              editingNoteSessionRefreshedAt.current = Date.now();
               setShowFootnoteEditor(true);
             },
     }),
@@ -2504,6 +2518,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     editingNoteIsNew.current = false;
     editingNoteKey.current = undefined;
     editingNoteOps.current = undefined;
+    editingNoteSessionRefreshedAt.current = undefined;
     setShowFootnoteEditor(false);
   }, []);
 
@@ -2531,6 +2546,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       setNotePopoverAnchorHeight(targetRect.height);
       editingNoteKey.current = insertedNodeKey;
       editingNoteOps.current = [noteOp];
+      editingNoteSessionRefreshedAt.current = Date.now();
       editingNoteIsNew.current = true;
       setShowFootnoteEditor(true);
     }
@@ -2624,8 +2640,27 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [saveUsjToPdpDebounced]);
 
+  /**
+   * `Date.now()` of the last LOCAL editor edit (`undefined` until the first one). Stamped in
+   * {@link handleEditorialUsjChange} for `'local'`-source changes only — the same signal that
+   * schedules the debounced PDP save — and read by `useEditorPdpSync`, whose
+   * `EDITOR_OWNERSHIP_WINDOW_MS` contract lets the focused editor defer incoming PDP updates only
+   * while a local edit is recent. External applies never refresh it (see the stamp site).
+   */
+  const lastLocalEditTimestamp = useRef<number | undefined>(undefined);
+
   const handleEditorialUsjChange = useCallback(
-    (usj: Usj, ops?: DeltaOp[], _source?: DeltaSource, insertedNodeKey?: string) => {
+    (usj: Usj, ops?: DeltaOp[], source?: DeltaSource, insertedNodeKey?: string) => {
+      // Stamp the last LOCAL edit — the recency signal behind useEditorPdpSync's
+      // EDITOR_OWNERSHIP_WINDOW_MS focused-deferral contract. Gated on the editor's own change
+      // source: `'local'` is what typing, marker applies, and other user-originated editor
+      // updates report, while programmatic applies (e.g. the footnote popover's
+      // `replaceEmbedUpdate` save) report `'remote'`. An EXTERNAL apply (`setEditorUsj` →
+      // `EditorRef.setUsj`) must never refresh this stamp, and it cannot: the editor loads
+      // external content under its change-suppression tag (`EXTERNAL_USJ_MUTATION_TAG`, excluded
+      // by `DeltaOnChangePlugin`'s ignore list), so it never reaches this callback at all — the
+      // source gate is belt-and-braces on top of that.
+      if (source === 'local') lastLocalEditTimestamp.current = Date.now();
       // Capture the current chapter's save fn and chapter key into the debounce payload so a
       // pending trailing save always targets the chapter this content was typed in.
       //
@@ -2656,6 +2691,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         chapterKeyRef.current,
       );
       if (editingNoteKey.current) {
+        // Any editor change that lands while the note-editing session is open counts as
+        // interaction with it — most importantly the popover's own save path (replaceEmbedUpdate
+        // → this callback) — so refresh the session's staleness clock: a live long edit must
+        // never be reaped as an orphaned session.
+        editingNoteSessionRefreshedAt.current = Date.now();
         // When the FootnoteEditor saves, Lexical emits a replaceEmbedUpdate. This triggers
         // onUsjChange with an insertedNodeKey.
         // Detect this case (has insertedNodeKey but is not an insert op) and mark the note
@@ -2719,17 +2759,36 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // Sync editor content with PDP data. The write-in-flight guard (`currentlyWritingUsjToPdp`) is
   // owned entirely by the save path (`withWriteInFlightGuard`), so it is no longer passed here.
-  // The editor owns its content while a marker-palette session or a footnote-popover editing
+  // The editor owns its content while a marker-palette session or a LIVE footnote-popover editing
   // session is open, even though DOM focus sits in the overlay/popover: a same-document echo
   // replacing the editor mid-session regenerates every Lexical key and kills the session
   // (live-observed: the popover's Save no-oping, the editor "jumping to the top" mid-insert).
-  // Wrapped in useCallback (reads only refs → empty deps) so its identity is stable; a fresh arrow
-  // each render would re-run useEditorPdpSync's effect on every render, firing an immediate
-  // non-debounced push-back save that partially defeats the 700ms save debounce.
-  const isEditingSessionActive = useCallback(
-    () => paletteSession.current !== undefined || editingNoteKey.current !== undefined,
-    [],
-  );
+  // A note session past its staleness bound is the exception — that key is orphaned bookkeeping
+  // from a popover that died without cleanup, and until the time bound existed it wedged sync
+  // until the user happened to click another note caller. `resolveEditingSessionActivity` makes
+  // the live/stale call; a stale session is closed through the normal footnote-editor close path
+  // (popover state stays consistent) and stops deferring.
+  // Wrapped in useCallback (reads only refs; `closeFootnoteEditor` is itself stable) so its
+  // identity is stable; a fresh arrow each render would re-run useEditorPdpSync's effect on every
+  // render, firing an immediate non-debounced push-back save that partially defeats the 700ms
+  // save debounce.
+  const isEditingSessionActive = useCallback(() => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: paletteSession.current !== undefined,
+      editingNoteKey: editingNoteKey.current,
+      noteSessionRefreshedAtMs: editingNoteSessionRefreshedAt.current,
+      nowMs: Date.now(),
+    });
+    if (activity.isNoteSessionStale) {
+      logger.warn(
+        `Note-editing session for note ${editingNoteKey.current} saw no interaction for over ` +
+          `${STALE_NOTE_EDITING_SESSION_MS} ms; clearing the stale session so incoming PDP ` +
+          `updates are no longer deferred.`,
+      );
+      closeFootnoteEditor(false);
+    }
+    return activity.isActive;
+  }, [closeFootnoteEditor]);
   useEditorPdpSync({
     usjFromPdp,
     documentSelector: chapterUsjSelector,
@@ -2738,6 +2797,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     setEditorUsj,
     saveUsjToPdpIfUpdated,
     isEditingSessionActive,
+    lastLocalEditTimestamp,
   });
 
   // #region Footnotes Auto-Show Decision

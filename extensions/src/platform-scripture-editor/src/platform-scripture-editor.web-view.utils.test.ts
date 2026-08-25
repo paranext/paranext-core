@@ -10,8 +10,10 @@ import { MutableRefObject } from 'react';
 import type { EditorRef, SelectionRange, StyleInfo } from '@eten-tech-foundation/platform-editor';
 import {
   generateInlineMarkerMenuListItems,
+  resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  STALE_NOTE_EDITING_SESSION_MS,
   type FootnotesPaneAutoVisibilityInput,
 } from './platform-scripture-editor.web-view.utils';
 
@@ -434,5 +436,89 @@ describe('restoreSelectionIfLost', () => {
     // `editorRef.current` is genuinely `null` before the editor mounts — the exact value under test
     // eslint-disable-next-line no-null/no-null
     expect(() => restoreSelectionIfLost(null, snapshot)).not.toThrow();
+  });
+});
+
+describe('resolveEditingSessionActivity', () => {
+  const NOW = 1_000_000;
+
+  it('keeps deferring for a fresh note-editing session', () => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW - 1_000,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+  });
+
+  it('keeps deferring right up to the staleness bound, and stops exactly at it', () => {
+    const justInside = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW - (STALE_NOTE_EDITING_SESSION_MS - 1),
+      nowMs: NOW,
+    });
+    expect(justInside).toEqual({ isActive: true, isNoteSessionStale: false });
+
+    const atBound = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW - STALE_NOTE_EDITING_SESSION_MS,
+      nowMs: NOW,
+    });
+    expect(atBound).toEqual({ isActive: false, isNoteSessionStale: true });
+  });
+
+  it('a save from the popover refreshes the clock, so a live long edit is never reaped', () => {
+    // Session opened long ago, but the user saved from the popover recently — the refresh
+    // timestamp (not the open timestamp) is what the caller passes in.
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW - 5_000,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+  });
+
+  it('treats an open session with no recorded time as stale (cannot prove it is live)', () => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: undefined,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: false, isNoteSessionStale: true });
+  });
+
+  it('is inactive with no palette session and no note session', () => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: false,
+      editingNoteKey: undefined,
+      noteSessionRefreshedAtMs: undefined,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: false, isNoteSessionStale: false });
+  });
+
+  it('a palette session keeps the deferral active with no time bound of its own', () => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: true,
+      editingNoteKey: undefined,
+      noteSessionRefreshedAtMs: undefined,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: true, isNoteSessionStale: false });
+  });
+
+  it('still reports a stale note session for cleanup even while a palette session stays active', () => {
+    const activity = resolveEditingSessionActivity({
+      hasPaletteSession: true,
+      editingNoteKey: 'note-key-1',
+      noteSessionRefreshedAtMs: NOW - STALE_NOTE_EDITING_SESSION_MS - 1,
+      nowMs: NOW,
+    });
+    expect(activity).toEqual({ isActive: true, isNoteSessionStale: true });
   });
 });

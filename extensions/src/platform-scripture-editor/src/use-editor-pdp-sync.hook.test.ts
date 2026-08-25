@@ -15,9 +15,10 @@ import '@testing-library/jest-dom';
 import { act, renderHook } from '@testing-library/react';
 import { Usj } from '@eten-tech-foundation/scripture-utilities';
 import { useRef } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import {
+  EDITOR_OWNERSHIP_WINDOW_MS,
   EditorDocumentSelector,
   NON_CONVERGENCE_WARN_THRESHOLD,
   useEditorPdpSync,
@@ -31,9 +32,18 @@ vi.mock('@papi/frontend', () => ({
   logger: { debug: mockLoggerDebug, warn: mockLoggerWarn, info: vi.fn(), error: vi.fn() },
 }));
 
+/**
+ * Shared last-local-edit ref passed to every hook invocation below. Reset to "just edited" before
+ * each test: the focused-deferral tests model a user actively typing, and a recent local edit is
+ * what keeps them inside the `EDITOR_OWNERSHIP_WINDOW_MS` ownership window (the pre-window
+ * behavior). The ownership-window suite overrides it per test.
+ */
+const lastLocalEditTimestamp: { current: number | undefined } = { current: undefined };
+
 beforeEach(() => {
   mockLoggerDebug.mockClear();
   mockLoggerWarn.mockClear();
+  lastLocalEditTimestamp.current = Date.now();
 });
 
 // Empty USJ — returned by useProjectData while loading or when a book doesn't exist
@@ -89,6 +99,7 @@ describe('useEditorPdpSync', () => {
         documentSelector: lev14Selector,
         editorRef,
         usjSentToPdp,
+        lastLocalEditTimestamp,
         setEditorUsj,
         saveUsjToPdpIfUpdated,
       });
@@ -125,6 +136,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -196,6 +208,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -265,6 +278,7 @@ describe('useEditorPdpSync', () => {
           documentSelector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -319,6 +333,7 @@ describe('useEditorPdpSync', () => {
           documentSelector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -374,6 +389,7 @@ describe('useEditorPdpSync', () => {
           documentSelector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -414,6 +430,7 @@ describe('useEditorPdpSync', () => {
         documentSelector: lev14Selector,
         editorRef,
         usjSentToPdp,
+        lastLocalEditTimestamp,
         setEditorUsj,
         saveUsjToPdpIfUpdated,
       });
@@ -470,6 +487,7 @@ describe('useEditorPdpSync', () => {
           documentSelector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -507,6 +525,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -573,6 +592,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -640,6 +660,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
           isEditingSessionActive: () => true,
@@ -694,6 +715,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -742,6 +764,7 @@ describe('useEditorPdpSync', () => {
           documentSelector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -802,6 +825,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -843,6 +867,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -889,6 +914,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -934,6 +960,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -1027,6 +1054,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -1143,6 +1171,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -1237,6 +1266,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -1322,6 +1352,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -1386,6 +1417,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -1482,6 +1514,7 @@ describe('useEditorPdpSync', () => {
           documentSelector: lev14Selector,
           editorRef,
           usjSentToPdp,
+          lastLocalEditTimestamp,
           setEditorUsj,
           saveUsjToPdpIfUpdated,
         });
@@ -1504,5 +1537,113 @@ describe('useEditorPdpSync', () => {
     const messages = mockLoggerWarn.mock.calls.map((call) => String(call[0]));
     expect(messages.some((message) => message.includes('alpha'))).toBe(true);
     expect(messages.some((message) => message.includes('beta'))).toBe(true);
+  });
+
+  // The ownership contract: the focused editor owns the chapter's data for
+  // EDITOR_OWNERSHIP_WINDOW_MS after the user's last LOCAL edit. Inside the window, a differing
+  // same-document incoming defers to the editor and pushes local content up; past it, focus alone
+  // confers nothing — the incoming applies as if the editor were unfocused, so a parked caret can
+  // no longer overwrite a Send/Receive merge or another app's concurrent write indefinitely.
+  describe('focused-editor ownership window', () => {
+    const externalChange = makeChapterUsj('14', 'Externally merged text.');
+    const newerEditorContent = makeChapterUsj('14', 'This is the law of the leper. typed more');
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Renders the hook focused on LEV 14 with `levUsj` applied, ready for a second delivery. */
+    function renderFocusedHook() {
+      const setUsjSpy = vi.fn();
+      const saveUsjToPdpIfUpdated = vi.fn();
+      const editorRef: { current: EditorRef | null } = {
+        // EditorRef has many members; casting from a minimal stub is intentional in tests
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        current: {
+          setUsj: setUsjSpy,
+          getUsj: () => newerEditorContent,
+          isFocused: () => true,
+        } as unknown as EditorRef,
+      };
+      const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+      const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+      const { rerender } = renderHook(
+        ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+          useEditorPdpSync({
+            usjFromPdp,
+            documentSelector: lev14Selector,
+            editorRef,
+            usjSentToPdp,
+            lastLocalEditTimestamp,
+            setEditorUsj,
+            saveUsjToPdpIfUpdated,
+          });
+        },
+        { initialProps: { usjFromPdp: levUsj } },
+      );
+      setUsjSpy.mockClear();
+      saveUsjToPdpIfUpdated.mockClear();
+      return { rerender, setUsjSpy, saveUsjToPdpIfUpdated };
+    }
+
+    it('still defers and pushes back while the last local edit is recent', () => {
+      const { rerender, setUsjSpy, saveUsjToPdpIfUpdated } = renderFocusedHook();
+      lastLocalEditTimestamp.current = Date.now();
+
+      // Nearly the whole window elapses — but the edit is still inside it.
+      vi.advanceTimersByTime(EDITOR_OWNERSHIP_WINDOW_MS - 1);
+      act(() => rerender({ usjFromPdp: externalChange }));
+
+      expect(setUsjSpy).not.toHaveBeenCalled(); // deferred: the editor still owns the data
+      expect(saveUsjToPdpIfUpdated).toHaveBeenCalled(); // local content pushed back up
+    });
+
+    it('applies the incoming update (no push-back) when the last local edit is older than the window', () => {
+      const { rerender, setUsjSpy, saveUsjToPdpIfUpdated } = renderFocusedHook();
+      lastLocalEditTimestamp.current = Date.now();
+
+      vi.advanceTimersByTime(EDITOR_OWNERSHIP_WINDOW_MS);
+      act(() => rerender({ usjFromPdp: externalChange }));
+
+      expect(setUsjSpy).toHaveBeenCalledOnce(); // applied exactly as if unfocused
+      expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
+      expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled(); // stale content NOT pushed over it
+    });
+
+    it('never defers on focus alone when no local edit was ever recorded', () => {
+      const { rerender, setUsjSpy, saveUsjToPdpIfUpdated } = renderFocusedHook();
+      lastLocalEditTimestamp.current = undefined;
+
+      act(() => rerender({ usjFromPdp: externalChange }));
+
+      expect(setUsjSpy).toHaveBeenCalledOnce();
+      expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
+      expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+    });
+
+    it('does not treat applying an external update as an edit — the window is not extended', () => {
+      const { rerender, setUsjSpy, saveUsjToPdpIfUpdated } = renderFocusedHook();
+      lastLocalEditTimestamp.current = Date.now();
+      vi.advanceTimersByTime(EDITOR_OWNERSHIP_WINDOW_MS);
+
+      // First external update applies (window expired)...
+      act(() => rerender({ usjFromPdp: externalChange }));
+      expect(setUsjSpy).toHaveBeenCalledOnce();
+      // ...and applying it must not refresh the last-local-edit stamp: only a LOCAL edit does.
+      expect(lastLocalEditTimestamp.current).toBe(Date.now() - EDITOR_OWNERSHIP_WINDOW_MS);
+
+      // So a second external update arriving right after (still no local edit) also applies
+      // instead of being deferred behind a window the apply would have re-armed.
+      const secondExternalChange = makeChapterUsj('14', 'Second external write.');
+      setUsjSpy.mockClear();
+      act(() => rerender({ usjFromPdp: secondExternalChange }));
+      expect(setUsjSpy).toHaveBeenCalledOnce();
+      expect(setUsjSpy).toHaveBeenCalledWith(secondExternalChange);
+      expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+    });
   });
 });

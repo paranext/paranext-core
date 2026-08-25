@@ -27,6 +27,7 @@ import {
 } from '@eten-tech-foundation/platform-editor';
 import type { MarkerMenuItem } from 'platform-bible-react';
 import type { ScriptureEditorViewType } from 'platform-scripture-editor';
+import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
 /**
  * Resolves the display title for a stylesheet-sourced marker-menu item.
@@ -197,4 +198,71 @@ export function restoreSelectionIfLost(
 ): void {
   if (!editor || editor.getSelection()) return;
   if (lastFocusOutSelection) editor.setSelection(lastFocusOutSelection);
+}
+
+/**
+ * How long, in milliseconds, a footnote-popover editing session may sit without any interaction
+ * (opening it or saving from it) before the PDP-sync deferral treats it as STALE — abandoned
+ * bookkeeping rather than a live session — and stops letting it hold incoming updates at bay.
+ *
+ * Deliberately the same value as {@link WRITE_GUARD_RELEASE_AFTER_MS}: both bound how long one piece
+ * of orphaned state (an unsettled write there, an editing-session key here) may wedge the editor's
+ * save/sync pipeline before the pipeline recovers on its own.
+ */
+export const STALE_NOTE_EDITING_SESSION_MS = WRITE_GUARD_RELEASE_AFTER_MS;
+
+/** Inputs to {@link resolveEditingSessionActivity}. */
+export interface EditingSessionActivityInput {
+  /** Whether a marker-palette session is currently open for the editor. */
+  hasPaletteSession: boolean;
+  /**
+   * Lexical node key of the note whose footnote-popover editing session is open, or `undefined`
+   * when no note is being edited.
+   */
+  editingNoteKey: string | undefined;
+  /**
+   * `Date.now()` when the note-editing session was opened or last saved from, or `undefined` when
+   * that was never recorded. An open session with no recorded time cannot prove it is live, so it
+   * counts as stale.
+   */
+  noteSessionRefreshedAtMs: number | undefined;
+  /** `Date.now()` at the moment of the decision. */
+  nowMs: number;
+}
+
+/**
+ * Decides whether an editing SESSION (marker palette or footnote-popover note edit) should keep the
+ * PDP-sync deferral open, applying the {@link STALE_NOTE_EDITING_SESSION_MS} time bound to the note
+ * session.
+ *
+ * The note-session bound exists because the session key alone is not proof of a live session: if
+ * the popover dies without cleanup, the orphaned key would otherwise defer every incoming PDP
+ * update until the user happens to click another note caller (the only other stale-session recovery
+ * path is click-triggered). A session the user is actively working in refreshes its timestamp on
+ * every save from the popover, so a live long edit never trips the bound; a session older than the
+ * bound is reported stale so the caller can clear it (via the normal footnote-editor close path,
+ * keeping popover state consistent) and stop deferring.
+ *
+ * A palette session carries no time bound here: its lifecycle is owned by the overlay service's
+ * show promise, which always settles (select, dismiss, or replacement rejection).
+ *
+ * @returns `isActive` — whether any live session should keep deferring incoming PDP updates;
+ *   `isNoteSessionStale` — whether an open note session exceeded the bound (the caller must clear
+ *   it even when a palette session keeps `isActive` true)
+ */
+export function resolveEditingSessionActivity({
+  hasPaletteSession,
+  editingNoteKey,
+  noteSessionRefreshedAtMs,
+  nowMs,
+}: EditingSessionActivityInput): { isActive: boolean; isNoteSessionStale: boolean } {
+  const isNoteSessionOpen = editingNoteKey !== undefined;
+  const isNoteSessionStale =
+    isNoteSessionOpen &&
+    (noteSessionRefreshedAtMs === undefined ||
+      nowMs - noteSessionRefreshedAtMs >= STALE_NOTE_EDITING_SESSION_MS);
+  return {
+    isActive: hasPaletteSession || (isNoteSessionOpen && !isNoteSessionStale),
+    isNoteSessionStale,
+  };
 }

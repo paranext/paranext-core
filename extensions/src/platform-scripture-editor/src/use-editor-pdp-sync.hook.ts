@@ -21,6 +21,27 @@ import {
 export const NON_CONVERGENCE_WARN_THRESHOLD = 25;
 
 /**
+ * How long, in milliseconds, the focused editor OWNS the chapter's data after the user's last LOCAL
+ * edit — the ownership contract for the focused-editor deferral below.
+ *
+ * While the editor is focused and the last local edit is more recent than this window, an incoming
+ * same-document PDP update that differs from the editor is deferred (kept unapplied) and the
+ * editor's content is pushed back up instead: mid-typing, the editor is the authority, and the
+ * differing incoming is almost always the editor's own USFM-normalized echo.
+ *
+ * Once the last local edit is OLDER than this window, focus alone no longer confers ownership: an
+ * incoming update is applied exactly as if the editor were unfocused. Without this bound, a user
+ * who left the caret parked in the editor deferred every external write indefinitely — a
+ * Send/Receive merge or another app's concurrent edit was overwritten by the focused editor's
+ * pre-merge content no matter how long ago they last typed.
+ *
+ * Sized far above the real echo round-trip (700ms save debounce + save + echo, low seconds) so a
+ * typing pause never lets an echo clobber the caret, while still bounding how long a parked caret
+ * can hold external data at bay.
+ */
+export const EDITOR_OWNERSHIP_WINDOW_MS = 15_000;
+
+/**
  * The identity of the chapter document a `ChapterUSJ` subscription serves — the fields of the data
  * selector that determine WHICH document the data is (the selector's `verseNum` does not
  * participate in identity; it never changes which chapter the subscription delivers).
@@ -88,6 +109,7 @@ export function useEditorPdpSync({
   setEditorUsj,
   saveUsjToPdpIfUpdated,
   isEditingSessionActive,
+  lastLocalEditTimestamp,
 }: {
   usjFromPdp: Usj | undefined;
   /**
@@ -121,6 +143,16 @@ export function useEditorPdpSync({
    * different-document update (navigation) always replaces, exactly as for live typing.
    */
   isEditingSessionActive?: () => boolean;
+  /**
+   * `Date.now()` of the last LOCAL editor edit (a change the user originated in this editor —
+   * stamped where the web view schedules the debounced PDP save for a `'local'`-source change), or
+   * `undefined` when none has happened yet. Applying an incoming PDP update must NOT refresh this:
+   * the editor loads external content under a change-suppression tag, so external applies never
+   * reach the stamping path (see the web view's `handleEditorialUsjChange`). Drives the
+   * {@link EDITOR_OWNERSHIP_WINDOW_MS} ownership contract — focus alone, with no local edit inside
+   * the window, no longer defers incoming updates.
+   */
+  lastLocalEditTimestamp: MutableRefObject<number | undefined>;
 }): void {
   // Counts consecutive incoming updates deferred to the actively-edited chapter without the
   // round-trip converging (the editor's content matching the echo). Reset whenever an update is
@@ -207,25 +239,44 @@ export function useEditorPdpSync({
       // in flight" flag cannot classify them. Hard-replacing the editor with such an echo while
       // the user is typing nulls the Lexical selection and eats the keystrokes typed during the
       // round trip (observed live: `\q1<space>` type-through lost q/1/space ~150-250ms after the
-      // `\`). While the user is ACTIVELY EDITING — asked of the editor instance itself via
-      // `editorRef.current.isFocused()`, so the answer is scoped to THIS editor's own
-      // content-editable root rather than a global `document.querySelector('.editor-input')` that
-      // couples to the CSS class name and to DOM order (a footnote-editor popover renders its own
-      // `.editor-input`) — the editor owns the freshest content: an echo that equals it is a pure
-      // confirmation (nothing to do — replacing would still reset the selection), and an echo that
-      // differs defers to the editor and pushes the newer local content up instead. Once typing
-      // rests, well-formed USJ round-trips stably, the echo matches the editor, and this settles.
-      // When the editor is NOT focused (idle, blurred, popover open), the PDP echo replaces as
-      // before — including genuine external co-edits, whose replace-while-focused case is
-      // deliberately deferred to the next update that arrives outside active typing.
+      // `\`).
+      //
+      // THE CONTRACT: the editor owns the chapter's data for EDITOR_OWNERSHIP_WINDOW_MS after the
+      // user's last LOCAL edit, while focused. Inside that window a differing same-document
+      // incoming is deferred (kept unapplied) and the editor's newer content is pushed back up
+      // instead; an incoming that equals the editor is a pure confirmation (nothing to do —
+      // replacing would still reset the selection). Once typing rests, well-formed USJ round-trips
+      // stably, the echo matches the editor, and this settles. Focus is asked of the editor
+      // instance itself via `editorRef.current.isFocused()`, so the answer is scoped to THIS
+      // editor's own content-editable root rather than a global
+      // `document.querySelector('.editor-input')` that couples to the CSS class name and to DOM
+      // order (a footnote-editor popover renders its own `.editor-input`).
+      //
+      // Once the last local edit is OLDER than the window, focus alone confers nothing: the
+      // incoming update is applied exactly as if the editor were unfocused, and nothing is pushed
+      // back. A parked caret used to defer external writes INDEFINITELY — a Send/Receive merge or
+      // another app's concurrent write was overwritten by the focused editor's pre-merge content
+      // however long ago the user last typed. An active editing SESSION (marker palette, footnote
+      // popover — `isEditingSessionActive`) still defers regardless of the window: typing inside
+      // the popover's own editor never stamps the main editor's local-edit timestamp, and
+      // replacing the main editor mid-session regenerates every Lexical key and kills the session.
+      // The session predicate carries its own staleness bound web-view-side, so a wedged session
+      // cannot hold this deferral open forever either.
+      //
+      // When the editor is NOT focused (idle, blurred) and no session is active, the PDP update
+      // replaces as before — genuine external co-edits land immediately.
       //
       // Regression guard: the deferral applies ONLY to the SAME document. When the
       // incoming USJ is a DIFFERENT book/chapter (navigation via the BookChapter control while
       // focus sits in the editor), deferring would keep the editor on the OLD chapter forever —
       // and, worse, save-back would write the old chapter's content through the NEW chapter's
       // data selector. A different-document update always replaces.
+      const lastLocalEditAt = lastLocalEditTimestamp.current;
+      const editorOwnsContent =
+        lastLocalEditAt !== undefined && Date.now() - lastLocalEditAt < EDITOR_OWNERSHIP_WINDOW_MS;
       const isActivelyEditing =
-        editorRef.current.isFocused() || (isEditingSessionActive?.() ?? false);
+        (editorRef.current.isFocused() && editorOwnsContent) ||
+        (isEditingSessionActive?.() ?? false);
       if (isActivelyEditing) {
         const editorUsj = editorRef.current.getUsj();
         // Same document when the incoming update's selector (== documentSelector, per the pairing
@@ -384,6 +435,7 @@ export function useEditorPdpSync({
     documentSelector,
     editorRef,
     isEditingSessionActive,
+    lastLocalEditTimestamp,
     nonConvergingDeferralCount,
     saveUsjToPdpIfUpdated,
     setEditorUsj,
