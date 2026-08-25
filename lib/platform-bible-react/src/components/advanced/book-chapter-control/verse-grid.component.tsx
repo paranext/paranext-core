@@ -1,4 +1,4 @@
-import { ALL_ENGLISH_BOOK_NAMES } from '@/components/shared/book.utils';
+import { verseItemValue } from '@/components/shared/book-item.utils';
 import { NumberedItemGrid } from './numbered-item-grid.component';
 
 export interface VerseGridProps {
@@ -42,9 +42,7 @@ export function VerseGrid({
   return (
     <NumberedItemGrid
       count={endVerse}
-      valueBuilder={(verse) =>
-        `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapterNum}:${verse}`
-      }
+      valueBuilder={(verse) => verseItemValue(bookId, chapterNum, verse)}
       onSelect={onVerseSelect}
       itemRef={setVerseRef}
       isDisabled={isVerseDisabled}

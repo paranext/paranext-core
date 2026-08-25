@@ -432,9 +432,9 @@ This test verifies:
 1. Opens the component and activates the search input
 2. Tests complete reference parsing by typing "John 3:16" and verifying "John 3:16" appears as top match
 3. Confirms selection submits correct reference (JHN 3:16)
-4. Tests partial book name parsing by typing "Roma 8" and verifying "ROM 8:1" appears as top match
+4. Tests partial book name parsing by typing "Roma 8" and verifying "Romans 8:1" appears as top match
 5. Confirms selection submits correct reference (ROM 8:1)
-6. Tests book ID parsing by typing "1 co 13:4" and verifying "1CO 13:4" appears as top match
+6. Tests book ID parsing by typing "1 co 13:4" and verifying "1 Corinthians 13:4" appears as top match
 7. Confirms selection submits correct reference (1CO 13:4)
 8. Validates that all selections properly call handleSubmit with the expected SerializedVerseRef objects
         `,
