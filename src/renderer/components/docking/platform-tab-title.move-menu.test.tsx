@@ -17,6 +17,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
       '%tab_aria_tab%': 'tab',
       '%tab_contextMenu_floatPanel%': 'Float Tab',
       '%tab_contextMenu_moveTabToNewWindow%': 'Move tab to new window',
+      '%window_label_empty%': 'Empty window',
     },
   ]),
   useData: vi.fn(() => ({
@@ -79,6 +80,8 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   floatTab: vi.fn(),
   updateTabPartialSync: vi.fn(),
+  // Two web views open, so a tab is never the only one in its window unless a test says otherwise
+  getAllOpenWebViewDefinitionsSync: vi.fn(() => [{ id: 'web-view-1' }, { id: 'web-view-2' }]),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -104,11 +107,32 @@ vi.mock('platform-bible-react', async (importOriginal) => {
   const actual = await importOriginal<object>();
   return {
     ...actual,
-    ContextMenu: ({ children }: { children: React.ReactNode }) => (
-      <div data-testid="context-menu">{children}</div>
+    // Opening is explicit rather than automatic so tests that do not care about the window list
+    // behave exactly as they did before the menu started reading it on open
+    ContextMenu: ({
+      children,
+      onOpenChange,
+    }: {
+      children: React.ReactNode;
+      onOpenChange?: (isOpen: boolean) => void;
+    }) => (
+      <div data-testid="context-menu">
+        <button type="button" data-testid="open-menu" onClick={() => onOpenChange?.(true)}>
+          open
+        </button>
+        {children}
+      </div>
     ),
     ContextMenuTrigger: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
     ContextMenuContent: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    ContextMenuSeparator: () => <hr />,
+    ContextMenuSub: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
+    ContextMenuSubTrigger: ({ children }: { children: React.ReactNode }) => (
+      <span data-testid="submenu-trigger">{children}</span>
+    ),
+    ContextMenuSubContent: ({ children }: { children: React.ReactNode }) => (
+      <span data-testid="submenu-content">{children}</span>
+    ),
     ContextMenuItem: ({
       children,
       onClick,
@@ -338,5 +362,160 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
       expect(sendCommand).toHaveBeenCalledWith('platform.moveWebViewToNewWindow', 'web-view-1'),
     );
     expect(notificationService.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('PlatformTabTitle keyboard access to the tab menu', () => {
+  /**
+   * The tab title inside a stand-in for the focusable `role="tab"` element rc-tabs wraps it in.
+   * Shift+F10 and the Menu key fire `contextmenu` at that element, not at the trigger inside it.
+   */
+  const renderInTab = () =>
+    render(
+      <div role="tab" tabIndex={0} data-testid="tab">
+        <PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />
+      </div>,
+    );
+
+  afterEach(() => {
+    cleanup();
+    vi.mocked(useIsPowerMode).mockReturnValue(true);
+    vi.mocked(sendCommand).mockReset();
+  });
+
+  it('forwards a contextmenu raised on the tab into the trigger', () => {
+    const { container } = renderInTab();
+    const title = container.querySelector('.platform-tab-title');
+    const received: EventTarget[] = [];
+    title?.addEventListener('contextmenu', (event) => received.push(event.target!));
+
+    fireEvent.contextMenu(screen.getByTestId('tab'));
+
+    // Exactly one forwarded event, and it arrived inside the trigger where Radix can see it
+    expect(received).toHaveLength(1);
+    expect(title?.contains(received[0] as Node)).toBe(true);
+  });
+
+  it('leaves a contextmenu raised inside the trigger alone', () => {
+    // The positive control for the guard: an ordinary right-click on the title already reaches the
+    // trigger by bubbling, so forwarding it would double it
+    const { container } = renderInTab();
+    const title = container.querySelector('.platform-tab-title');
+    let count = 0;
+    title?.addEventListener('contextmenu', () => {
+      count += 1;
+    });
+
+    fireEvent.contextMenu(title!);
+
+    expect(count).toBe(1);
+  });
+
+  it('does not forward in Simple mode, where the tab menu is not offered', () => {
+    vi.mocked(useIsPowerMode).mockReturnValue(false);
+    const { container } = renderInTab();
+    const title = container.querySelector('.platform-tab-title');
+    let count = 0;
+    title?.addEventListener('contextmenu', () => {
+      count += 1;
+    });
+
+    fireEvent.contextMenu(screen.getByTestId('tab'));
+
+    expect(count).toBe(0);
+  });
+});
+
+describe('PlatformTabTitle "Move tab to window" submenu', () => {
+  const MAIN_WINDOW = { windowId: 1, label: 'MRK — wgPIDGIN', isMain: true };
+  const OTHER_WINDOW = { windowId: 2, label: 'Biblical Terms', isMain: false };
+
+  /** Mount a web view tab and open its menu, which is when the window list is read */
+  const openMenuOn = async (windows: unknown[]) => {
+    vi.mocked(sendCommand).mockImplementation(async (command: string) =>
+      command === 'platform.getWindows' ? windows : undefined,
+    );
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    fireEvent.click(screen.getByTestId('open-menu'));
+    await waitFor(() => expect(sendCommand).toHaveBeenCalledWith('platform.getWindows'));
+  };
+
+  afterEach(() => {
+    cleanup();
+    vi.mocked(sendCommand).mockReset();
+    vi.mocked(logger.warn).mockClear();
+    vi.mocked(notificationService.send).mockClear();
+    globalThis.windowId = undefined;
+  });
+
+  it('offers every window except the one the tab is in', async () => {
+    globalThis.windowId = '2';
+    await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
+
+    const submenu = await screen.findByTestId('submenu-content');
+    expect(submenu.textContent).toContain('MRK — wgPIDGIN');
+    expect(submenu.textContent).not.toContain('Biblical Terms');
+  });
+
+  it('moves the tab into the window that was chosen', async () => {
+    globalThis.windowId = '2';
+    await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
+
+    fireEvent.click(await screen.findByText('MRK — wgPIDGIN'));
+
+    await waitFor(() =>
+      expect(sendCommand).toHaveBeenCalledWith('platform.moveWebViewToWindow', 'web-view-1', 1),
+    );
+  });
+
+  it('says where a failed move left the tab', async () => {
+    globalThis.windowId = '2';
+    vi.mocked(sendCommand).mockImplementation(async (command: string) => {
+      if (command === 'platform.getWindows') return [MAIN_WINDOW, OTHER_WINDOW];
+      throw new Error('[webViewMoveFailure:reopened-in-focused-window] nope');
+    });
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+    fireEvent.click(screen.getByTestId('open-menu'));
+
+    fireEvent.click(await screen.findByText('MRK — wgPIDGIN'));
+
+    await waitFor(() =>
+      expect(notificationService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: '%tab_contextMenu_moveTab_failedReopenedElsewhere%',
+          severity: 'error',
+        }),
+      ),
+    );
+  });
+
+  it('hides the submenu when this is the only window', async () => {
+    globalThis.windowId = '1';
+    await openMenuOn([MAIN_WINDOW]);
+
+    expect(screen.queryByTestId('submenu-content')).toBeNull();
+    // Positive control: the rest of the menu is there, so this is not an empty render
+    expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
+  });
+
+  it('names a window that is showing nothing titled', async () => {
+    globalThis.windowId = '2';
+    await openMenuOn([{ windowId: 1, label: '', isMain: true }, OTHER_WINDOW]);
+
+    const submenu = await screen.findByTestId('submenu-content');
+    expect(submenu.textContent).toContain('Empty window');
+  });
+
+  it('leaves the submenu out when the window list cannot be read', async () => {
+    globalThis.windowId = '2';
+    vi.mocked(sendCommand).mockRejectedValue(new Error('no windows for you'));
+    render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
+
+    fireEvent.click(screen.getByTestId('open-menu'));
+
+    await waitFor(() => expect(logger.warn).toHaveBeenCalled());
+    expect(screen.queryByTestId('submenu-content')).toBeNull();
+    // An empty target list would read as "there are no other windows", which is a different claim
+    expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
   });
 });
