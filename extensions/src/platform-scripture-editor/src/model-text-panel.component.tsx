@@ -28,7 +28,7 @@ import { isDblResourceReference, getRefLabel } from './resource-reference.utils'
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
-import { RetryableErrorView, LoadingView } from './panel-state-views.component';
+import { ExpandableInfo, RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
@@ -492,6 +492,13 @@ export function ModelTextPanel({
         )}
         loadingLabel={localize(localizedStrings, '%webView_modelTextPanel_loading%')}
         emptyPrompt={localize(localizedStrings, '%webView_modelTextPanel_emptyState_prompt%')}
+        moreInfo={
+          <ExpandableInfo
+            moreLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo%')}
+            lessLabel={localize(localizedStrings, '%webView_modelTextPanel_emptyState_lessInfo%')}
+            body={localize(localizedStrings, '%webView_modelTextPanel_emptyState_moreInfo_body%')}
+          />
+        }
         pickLabel={localize(localizedStrings, '%webView_modelTextPanel_pickModelText%')}
         retryLabel={localize(localizedStrings, '%webView_modelTextPanel_retry%')}
         onPick={() => handlePickModelText()}
