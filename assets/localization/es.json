@@ -572,12 +572,13 @@
   "%some_localization_key%": "Esto es el texto en español para %some_localization_key%.",
   "%submitButton%": "Enviar",
   "%tab_aria_tab%": "Pestaña",
-  "%tab_contextMenu_floatTab%": "Abrir como ventana flotante",
+  "%tab_contextMenu_floatPanel%": "Pestaña flotante",
   "%tab_contextMenu_moveTabToNewWindow%": "Mover la pestaña a una ventana nueva",
-  "%tab_contextMenu_moveTabToNewWindow_failed%": "No se pudo mover la pestaña a una ventana nueva.",
-  "%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%": "No se pudo mover la pestaña a una ventana nueva. Es posible que la pestaña se haya cerrado; sus detalles están en el registro.",
-  "%tab_contextMenu_moveTabToNewWindow_failedNotReopened%": "No se pudo mover la pestaña a una ventana nueva y no se pudo volver a abrir en ninguna parte, por lo que ahora está cerrada. Sus detalles están en el registro.",
-  "%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%": "No se pudo mover la pestaña a una ventana nueva. Se volvió a abrir en una ventana diferente.",
+  "%tab_contextMenu_moveTabToWindow%": "Mover la pestaña a la ventana",
+  "%tab_contextMenu_moveTab_failed%": "No se pudo mover la pestaña.",
+  "%tab_contextMenu_moveTab_failedMayHaveClosed%": "No se pudo mover la pestaña. Es posible que la pestaña se haya cerrado; sus detalles están en el registro.",
+  "%tab_contextMenu_moveTab_failedNotReopened%": "No se pudo mover la pestaña y no se pudo volver a abrir en ninguna parte, por lo que ahora está cerrada. Sus detalles están en el registro.",
+  "%tab_contextMenu_moveTab_failedReopenedElsewhere%": "No se pudo mover la pestaña. Se volvió a abrir en una ventana diferente.",
   "%tab_title_error%": "Error",
   "%tab_title_unknown%": "Desconocido",
   "%test_deprecated_string%": "Test Deprecated String (obsoleto - sin traducir intencionalmente)",
@@ -633,5 +634,6 @@
   "%webView_project%": "Proyecto",
   "%webView_projectAssignmentsAndProgress%": "Asignaciones y progreso",
   "%webView_title_type_formatString%": "{type} {defaultTitle}",
-  "%wordList%": "Lista de palabras"
+  "%wordList%": "Lista de palabras",
+  "%window_label_empty%": "Ventana vacía"
 }
