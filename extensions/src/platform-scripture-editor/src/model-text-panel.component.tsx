@@ -27,7 +27,7 @@ import { isDblResourceReference, getRefLabel } from './resource-reference.utils'
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useIsOnline } from './use-is-online.hook';
-import { RetryableErrorView, LoadingView } from './panel-state-views.component';
+import { ExpandableInfo, RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
@@ -64,6 +64,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_settingsUnavailable%',
   '%webView_modelTextPanel_loading%',
   '%webView_modelTextPanel_catalogUnavailable%',
+  '%webView_modelTextPanel_emptyState_moreInfo%',
+  '%webView_modelTextPanel_emptyState_lessInfo%',
+  '%webView_modelTextPanel_emptyState_moreInfo_body%',
 ] as const);
 
 type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];
@@ -409,6 +412,13 @@ export function ModelTextPanel({
         catalogErrorMessage={localizedStrings['%webView_modelTextPanel_catalogUnavailable%']}
         loadingLabel={localizedStrings['%webView_modelTextPanel_loading%']}
         emptyPrompt={localizedStrings['%webView_modelTextPanel_emptyState_prompt%']}
+        moreInfo={
+          <ExpandableInfo
+            moreLabel={localizedStrings['%webView_modelTextPanel_emptyState_moreInfo%']}
+            lessLabel={localizedStrings['%webView_modelTextPanel_emptyState_lessInfo%']}
+            body={localizedStrings['%webView_modelTextPanel_emptyState_moreInfo_body%']}
+          />
+        }
         pickLabel={localizedStrings['%webView_modelTextPanel_pickModelText%']}
         retryLabel={localizedStrings['%webView_modelTextPanel_retry%']}
         onPick={() => handlePickModelText()}
