@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom';
 import { Canon } from '@sillsdev/scripture';
+import { Section } from 'platform-bible-utils';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, test, vi } from 'vitest';
@@ -47,7 +48,10 @@ const localizedStrings: SelectBooksLocalizedStrings = {
   '%webView_book_selector_no_book_found%': 'No book found',
 };
 
-async function renderOpenPicker(availableBookInfo: string) {
+async function renderOpenPicker(
+  availableBookInfo: string,
+  disabledSectionExplanations?: Partial<Record<Section, string>>,
+) {
   const onChangeSelectedBookIds = vi.fn();
   const user = userEvent.setup({ pointerEventsCheck: 0 });
   render(
@@ -56,6 +60,7 @@ async function renderOpenPicker(availableBookInfo: string) {
       selectedBookIds={['GEN', 'EXO']}
       onChangeSelectedBookIds={onChangeSelectedBookIds}
       localizedStrings={localizedStrings}
+      disabledSectionExplanations={disabledSectionExplanations}
     />,
   );
   await user.click(screen.getByRole('combobox'));
@@ -85,5 +90,69 @@ describe('SelectBooksPicker — "Select all" with no books known', () => {
 
     await user.click(selectAllButton);
     expect(onChangeSelectedBookIds).not.toHaveBeenCalled();
+  });
+});
+
+describe('SelectBooksPicker — explanations for omitted sections', () => {
+  test('Explains a section that renders no group, so a search for one of its books is not a dead end', async () => {
+    // Only OT books are on offer, so the Extra group is absent entirely and searching "glossary"
+    // otherwise lands on the bare "No book found" with nothing saying why.
+    const { user } = await renderOpenPicker(booksPresentFor(['GEN', 'EXO']), {
+      [Section.Extra]: "Find can't include extra material",
+    });
+
+    expect(screen.getByText("Find can't include extra material")).toBeInTheDocument();
+
+    await user.type(screen.getByPlaceholderText('Search books'), 'glossary');
+
+    expect(screen.getByText('No book found')).toBeInTheDocument();
+    expect(screen.getByText("Find can't include extra material")).toBeInTheDocument();
+  });
+
+  test('Stays quiet about a section that does have books', async () => {
+    await renderOpenPicker(booksPresentFor(['GEN', 'GLO']), {
+      [Section.Extra]: "Find can't include extra material",
+    });
+
+    expect(screen.queryByText("Find can't include extra material")).not.toBeInTheDocument();
+  });
+});
+
+/** Builds a `booksPresent` flag string of full canon length with the given books flagged present */
+function booksPresentFor(bookIds: string[]): string {
+  const flags = Array.from({ length: Canon.allBookIds.length }, () => '0');
+  bookIds.forEach((bookId) => {
+    const bookNumber = Canon.bookIdToNumber(bookId);
+    if (bookNumber <= 0) throw new Error(`booksPresentFor: '${bookId}' is not a canon book id`);
+    flags[bookNumber - 1] = '1';
+  });
+  return flags.join('');
+}
+
+describe('SelectBooksPicker — section separators', () => {
+  /** Counts the rules actually in the DOM. The popover portals out of the render container. */
+  function separatorCount() {
+    return document.body.querySelectorAll('[data-slot="command-separator"]').length;
+  }
+
+  test('Divides the rendered groups, and keeps doing so while the user is searching', async () => {
+    // Two sections with books, so exactly one interior separator is warranted in both states.
+    const { user } = await renderOpenPicker(booksPresentFor(['GEN', 'EXO', 'JHN', 'MRK']));
+
+    expect(separatorCount()).toBe(1);
+
+    // cmdk hides separators whenever its search box is non-empty, assuming cmdk did the filtering.
+    // This picker sets `shouldFilter={false}` and filters itself, so the groups survive the query
+    // and the rule between them has to survive with them.
+    await user.type(screen.getByPlaceholderText('Search books'), 'n');
+
+    expect(document.body.querySelectorAll('[cmdk-group]')).toHaveLength(2);
+    expect(separatorCount()).toBe(1);
+  });
+
+  test('Leaves no dangling rule when only one section has books', async () => {
+    await renderOpenPicker(booksPresentFor(['GEN', 'EXO']));
+
+    expect(separatorCount()).toBe(0);
   });
 });

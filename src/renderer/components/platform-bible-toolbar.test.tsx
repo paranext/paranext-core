@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
@@ -10,7 +10,6 @@ import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service
 import { sendCommand } from '@shared/services/command.service';
 import { getNetworkEvent } from '@shared/services/network.service';
 import { menuDataService } from '@shared/services/menu-data.service';
-import { notificationService } from '@shared/services/notification.service';
 import {
   SEND_RECEIVE_UNKNOWN_GRACE_MS,
   useSendReceiveAvailability,
@@ -218,7 +217,14 @@ beforeEach(() => {
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
 });
 
-const mockSendCommand = (isSendReceiveAvailable: boolean) => {
+const mockSendCommand = (
+  isSendReceiveAvailable: boolean,
+  /**
+   * What `getSyncState` answers. The sync status refuses to report success without evidence of it,
+   * so a test driving a sync to completion has to supply the results that say it succeeded.
+   */
+  syncState?: unknown,
+) => {
   vi.mocked(sendCommand).mockImplementation(
     // sendCommand has a complex generic signature; cast is required for the mock implementation
     // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
@@ -227,6 +233,7 @@ const mockSendCommand = (isSendReceiveAvailable: boolean) => {
         return isSendReceiveAvailable;
       if (commandName === 'platform.getOSPlatform') return 'win32';
       if (commandName === 'platform.isFullScreen') return false;
+      if (commandName === 'paratextBibleSendReceive.getSyncState') return syncState;
       return undefined;
       // sendCommand has a complex generic signature; cast is required for the mock implementation
       // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
@@ -238,11 +245,12 @@ describe('PlatformBibleToolbar — Sync button', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // `clearAllMocks()` clears call history but does not reset `mockReturnValue`, so restore the
-    // default `useSetting` value explicitly to prevent a per-test `mockReturnValue` from leaking
-    // (see the "Scroll group selector visibility" describe block below for precedent). Availability
-    // defaults to `true` in the file-wide `beforeEach` above. The Sync button is simple-mode-only
-    // and shown when send/receive is available, so tests state only their deviation from that.
+    // defaults explicitly to prevent a per-test `mockReturnValue` from leaking (see the "Scroll
+    // group selector visibility" describe block below for precedent). The Sync button is
+    // simple-mode-only and shown when send/receive is available, so tests state only their
+    // deviation from that.
     vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
   });
 
   it('is not rendered when send/receive is unavailable', async () => {
@@ -361,17 +369,11 @@ describe('PlatformBibleToolbar — Sync button', () => {
     });
   });
 
-  it('calls openSyncStatus command when clicked', async () => {
-    mockSendCommand(true);
-    render(<PlatformBibleToolbar />);
-    const btn = await screen.findByRole('button', { name: 'Sync' });
-    fireEvent.click(btn);
-    await waitFor(() => {
-      expect(vi.mocked(sendCommand)).toHaveBeenLastCalledWith(
-        'paratextBibleSendReceive.openSyncStatus',
-      );
-    });
-  });
+  // The button's own behavior — the popover, Cancel, project names, failure reporting — is covered
+  // by sync-status-button.component.test.tsx, which drives the real component. What stays here is
+  // the toolbar's question: whether the button appears at all, and whether the status the toolbar
+  // renders it with tracks the sync-state event, since the toolbar is what mounts it (and mounts it
+  // before send/receive availability has settled).
 
   it('shows Syncing label when onSyncStateChanged fires with isSyncing: true', async () => {
     let capturedSyncStateCallback: ((arg: { isSyncing: boolean }) => void) | undefined;
@@ -428,17 +430,46 @@ describe('PlatformBibleToolbar — Sync button', () => {
       }) as any,
     );
 
-    mockSendCommand(true);
+    // Seeded MID-SYNC, so the label has to change for this to pass: a seed that already said
+    // "Synced" would render the asserted label whether or not the event was ever delivered.
+    // `syncingProjectIds` absent on purpose: a build predating that field still reports a running
+    // sync, and the bare "Syncing" label it produces is all this test needs to change.
+    let syncState: unknown = { isSyncing: true, lastRequestedProjectIds: [] };
+    mockSendCommand(true, undefined);
+    vi.mocked(sendCommand).mockImplementation(
+      // sendCommand has a complex generic signature; cast is required for the mock implementation
+      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      (async (commandName: string) => {
+        if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
+        if (commandName === 'platform.getOSPlatform') return 'win32';
+        if (commandName === 'platform.isFullScreen') return false;
+        if (commandName === 'paratextBibleSendReceive.getSyncState') return syncState;
+        return undefined;
+        // sendCommand has a complex generic signature; cast is required for the mock implementation
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+      }) as any,
+    );
     render(<PlatformBibleToolbar />);
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Sync' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Test Syncing' })).toBeInTheDocument();
     });
 
     expect(capturedSyncStateCallback).toBeDefined();
     if (!capturedSyncStateCallback)
       throw new Error('capturedSyncStateCallback was not set by mock');
 
+    // A sync that ENDED is only "Synced" if it succeeded, which the results are what establish. The
+    // event carries no outcome, so the follow-up read is what has to supply it.
+    syncState = {
+      isSyncing: false,
+      lastRequestedProjectIds: ['proj1'],
+      syncingProjectIds: [],
+      lastResults: {
+        sendReceiveDate: '2026-08-19T00:00:00Z',
+        resultsInfo: { proj1: { id: 'proj1', resultStatus: 'succeeded' } },
+      },
+    };
     const syncStateCallback = capturedSyncStateCallback;
     act(() => {
       syncStateCallback({ isSyncing: false });
@@ -455,50 +486,6 @@ describe('PlatformBibleToolbar — Sync button', () => {
     await waitFor(() => {
       expect(screen.getByTestId('user-profile-popover-stub')).toBeInTheDocument();
     });
-  });
-
-  it('tells the user when the sync status view cannot be opened', async () => {
-    // The button shows whenever send/receive is part of the build, which includes the moment before
-    // its commands finish registering. A click then has to say something — otherwise the button
-    // just appears broken.
-    const { logger } = await import('@shared/services/logger.service');
-    vi.mocked(sendCommand).mockImplementation(
-      // sendCommand has a complex generic signature; cast is required for the mock implementation
-      // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      (async (commandName: string) => {
-        if (commandName === 'paratextBibleSendReceive.openSyncStatus')
-          throw new Error('Sync failed');
-        if (commandName === 'platformGetResources.isSendReceiveAvailable') return true;
-        if (commandName === 'platform.getOSPlatform') return 'win32';
-        if (commandName === 'platform.isFullScreen') return false;
-        return undefined;
-        // sendCommand has a complex generic signature; cast is required for the mock implementation
-        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-      }) as any,
-    );
-    render(<PlatformBibleToolbar />);
-    const btn = await screen.findByRole('button', { name: 'Sync' });
-    fireEvent.click(btn);
-    await waitFor(() => {
-      expect(vi.mocked(notificationService.send)).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: '%toolbar_sync_unavailable%',
-          severity: 'warning',
-        }),
-      );
-    });
-    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
-      expect.stringContaining('Toolbar caught an error while trying to open sync status:'),
-    );
-
-    // A second click replaces that toast rather than stacking another copy of it
-    fireEvent.click(btn);
-    await waitFor(() => {
-      expect(vi.mocked(notificationService.send)).toHaveBeenCalledTimes(2);
-    });
-    const [[first], [second]] = vi.mocked(notificationService.send).mock.calls;
-    expect(first.notificationId).toBeDefined();
-    expect(second.notificationId).toBe(first.notificationId);
   });
 });
 

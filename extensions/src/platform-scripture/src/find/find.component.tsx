@@ -50,6 +50,7 @@ import {
   LanguageStrings,
   LocalizedStringValue,
   ScrollGroupId,
+  Section,
 } from 'platform-bible-utils';
 import { FindJobStatus, WordRestriction } from 'platform-scripture';
 import React, { useCallback, useMemo, useRef } from 'react';
@@ -88,6 +89,7 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   '%webView_find_capitalization%',
   '%webView_find_clearSearch%',
   '%webView_find_errorOccurred%',
+  '%webView_find_extraMaterialNotSearched%',
   '%webView_find_findTab%',
   '%webView_find_matchCase%',
   '%webView_find_matchContentIn%',
@@ -132,6 +134,16 @@ export const FIND_LOCALIZED_STRING_KEYS = [
   // Preview-options keys live with their component; spread them so the two lists can't drift.
   ...REPLACE_PREVIEW_OPTIONS_STRING_KEYS,
 ] as const;
+
+/**
+ * Key for the tooltip explaining why the book picker's Extra section is unavailable.
+ *
+ * Bound to {@link FIND_LOCALIZED_STRING_KEYS} rather than spelled inline at the read site:
+ * `localizedStrings` is an open index signature, so an unrequested key reads as `undefined` with no
+ * compile error and the tooltip would silently vanish.
+ */
+const EXTRA_MATERIAL_NOT_SEARCHED_KEY =
+  '%webView_find_extraMaterialNotSearched%' satisfies (typeof FIND_LOCALIZED_STRING_KEYS)[number];
 
 /**
  * A search result paired with its index in the complete (ungrouped) results array, as produced by
@@ -238,8 +250,21 @@ export type FindProps = {
   scope: Scope;
   /** The current scroll-group verse ref, used to label the chapter/book scope (e.g. "Genesis 1"). */
   verseRef: SerializedVerseRef;
-  /** The string of present books (from the `booksPresent` project setting) for the scope selector. */
+  /**
+   * The string of present books (from the `booksPresent` project setting) for the scope selector.
+   *
+   * Expected to already have extra material cleared — Find does not search it, and the scope
+   * selector builds its book picker straight from this string, so a host passing the project's raw
+   * setting would offer books the search never covers. Callers derive it with
+   * `deriveFindBookLists`.
+   */
   booksPresent: string;
+  /**
+   * Whether {@link booksPresent} had extra material to withhold, i.e. the project has some. Drives
+   * the explanation on the book picker's disabled Extra section, which would otherwise tell a
+   * project with no extra material why its (nonexistent) extra material is unavailable.
+   */
+  hasExcludedExtraMaterial: boolean;
   /** Ids of the books selected for the `selectedBooks` scope. */
   selectedBookIds: string[];
   /** Map of available book ids to their localized display names. */
@@ -406,6 +431,7 @@ export function Find({
   scope,
   verseRef,
   booksPresent,
+  hasExcludedExtraMaterial,
   selectedBookIds,
   localizedBookData,
   shouldMatchCase,
@@ -614,11 +640,15 @@ export function Find({
     | 'invalidQueryPrompt'
     | 'none' = useMemo(() => {
     if (noOpenProjects) return 'noOpenProjectsPrompt';
+    // Outranks the results still on screen. They belong to the last query that DID run, so leaving
+    // them up with no message dead-ends a selection the user has since emptied — the state reads as
+    // a working search that simply stopped responding.
+    if (searchTerm.trim() !== '' && !isSearchQueryValid) return 'invalidQueryPrompt';
     if (results.length > 0) return 'none';
     if (searchStatus === 'running') return 'skeleton';
     if (searchStatus !== undefined) return 'none';
     if (searchTerm.trim() === '') return 'idlePrompt';
-    return isSearchQueryValid ? 'skeleton' : 'invalidQueryPrompt';
+    return 'skeleton';
   }, [noOpenProjects, results.length, searchStatus, searchTerm, isSearchQueryValid]);
 
   const resultsMessage = useMemo(() => {
@@ -635,6 +665,16 @@ export function Find({
       totalNumber: totalNumberOfResults.toString(),
     });
   }, [results, numberOfHiddenResults, totalNumberOfResults, searchStatus, localizedStrings]);
+
+  // Only offered when the project actually has extra material. Telling a project with none that
+  // Find "can't include" it explains an absence that isn't Find's doing.
+  const extraMaterialNotSearchedExplanation = useMemo(
+    () =>
+      hasExcludedExtraMaterial
+        ? { [Section.Extra]: localizedStrings[EXTRA_MATERIAL_NOT_SEARCHED_KEY] }
+        : undefined,
+    [hasExcludedExtraMaterial, localizedStrings],
+  );
 
   /** Text shown in the scope popover trigger, e.g. "GEN 1", "GEN, EXO, JHN", or "All books" */
   const scopeDisplayText = useMemo(() => {
@@ -684,7 +724,12 @@ export function Find({
   }
   // Both Replace and Replace All additionally disable while a search is running, a replace is
   // already in flight, or the action is blocked (above) — only their own precondition differs.
-  const isReplaceUnavailable = searchStatus === 'running' || isReplacing || isReplaceActionBlocked;
+  //
+  // An unrunnable query counts as blocked too. Results outlive the query that produced them, so
+  // emptying the book selection leaves rows on screen that no longer correspond to a search Find
+  // would run; replacing against them writes to character offsets nothing has re-verified.
+  const isReplaceUnavailable =
+    searchStatus === 'running' || isReplacing || isReplaceActionBlocked || !isSearchQueryValid;
 
   // Map the flat localized-string bag into the shape the preview-options picker expects.
   const previewOptionsStrings: ReplacePreviewOptionsStrings = {
@@ -1057,6 +1102,10 @@ export function Find({
                 onSelectedBookIdsChange={onSelectedBookIdsChange}
                 localizedStrings={scopeSelectorLocalizedStrings}
                 localizedBookNames={localizedBookData}
+                // Find withholds extra material from `availableBookInfo`, which leaves the Extra
+                // quick-select button disabled on a project that has some. Say why, so it doesn't
+                // read as "this project has no extra material".
+                disabledSectionExplanations={extraMaterialNotSearchedExplanation}
               />
             </PopoverContent>
           </Popover>

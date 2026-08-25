@@ -115,6 +115,7 @@ function buildProps(overrides: Partial<FindProps> = {}): FindProps {
     scope: 'chapter',
     verseRef: VERSE_REF,
     booksPresent: '1'.repeat(123),
+    hasExcludedExtraMaterial: false,
     selectedBookIds: [],
     localizedBookData: LOCALIZED_BOOK_DATA,
     shouldMatchCase: false,
@@ -740,5 +741,47 @@ describe('Find — books-scope summary in the "Showing" trigger', () => {
     render(<Find {...buildBooksScopeProps(['MRK', 'GEN', 'EXO', 'LEV', 'NUM', 'DEU', 'MAT'])} />);
     await user.click(screen.getByText('GEN - MRK'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+});
+
+describe('Find — an unrunnable query with results still on screen', () => {
+  /**
+   * The state this suite covers: a search ran over selected books, then the selection was emptied —
+   * by a project switch pruning it, or by the user clearing it. The results belong to a query Find
+   * would no longer run, but nothing has cleared them.
+   */
+  function buildEmptiedSelectionProps(overrides: Partial<FindProps> = {}): FindProps {
+    return buildLifecycleProps({
+      scope: 'selectedBooks',
+      selectedBookIds: [],
+      results: [RESULT],
+      resultsByBook: RESULTS_BY_BOOK,
+      searchStatus: 'completed',
+      totalNumberOfResults: 1,
+      activeMode: 'replace',
+      replaceTerm: 'replacement',
+      ...overrides,
+    });
+  }
+
+  it('says why nothing will happen instead of dead-ending on stale results', () => {
+    render(<Find {...buildEmptiedSelectionProps()} />);
+
+    expect(screen.getByText('Select at least one book to search')).toBeInTheDocument();
+  });
+
+  // Replace All writes at the character offsets the results carry. Those offsets were resolved by a
+  // query Find would no longer run, and nothing has re-verified them.
+  it('blocks Replace all against results the current query would not produce', () => {
+    render(<Find {...buildEmptiedSelectionProps()} />);
+
+    expect(screen.getByRole('button', { name: 'Replace all' })).toBeDisabled();
+  });
+
+  it('leaves Replace all available once the selection names a book again', () => {
+    render(<Find {...buildEmptiedSelectionProps({ selectedBookIds: ['GEN'] })} />);
+
+    expect(screen.getByRole('button', { name: 'Replace all' })).toBeEnabled();
+    expect(screen.queryByText('Select at least one book to search')).not.toBeInTheDocument();
   });
 });

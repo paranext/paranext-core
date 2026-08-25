@@ -5,8 +5,12 @@ import { getErrorMessage } from 'platform-bible-utils';
 import { useEvent } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-/** Delay between re-checks while the answer is still being reported as unknown. */
-const UNSETTLED_RECHECK_INTERVAL_MS = 2000;
+/**
+ * Delay between re-checks while the answer is still being reported as unknown. Exported so
+ * `use-sync-status.hook.ts` can pace its own seed retries off the same value rather than restating
+ * it — both are waiting out the same send/receive activation race.
+ */
+export const UNSETTLED_RECHECK_INTERVAL_MS = 2000;
 /**
  * Delay between re-checks after the answer has settled. Slower because by then the UI is already
  * showing the settled answer and these re-checks only exist to catch a late arrival.
