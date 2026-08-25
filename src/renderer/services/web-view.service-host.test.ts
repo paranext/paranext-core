@@ -962,7 +962,16 @@ describe('handleSwitchToSimpleMode', () => {
       expect.objectContaining({ builtForProjectId: expect.anything() }),
     );
     const { logger } = await import('@shared/services/logger.service');
-    expect(logger.warn).toHaveBeenCalled();
+    // Both warnings genuinely fire on this path: `runProjectBoundSimpleSwitch`'s own catch logs and
+    // rethrows, then `handleSwitchToSimpleMode`'s outer catch logs again before calling
+    // `loadLayoutWithWarning` (the actual bare-layout recovery). A bare `toHaveBeenCalled()` here
+    // would still pass with either one deleted — pin both specifically instead.
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Dock layout failed to load project-bound Simple-mode layout'),
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Switching to Simple mode failed unexpectedly'),
+    );
     const { getWorkspaceUpdating } = await import('@renderer/services/workspace-updating-store');
     expect(getWorkspaceUpdating()).toBe(false);
   });

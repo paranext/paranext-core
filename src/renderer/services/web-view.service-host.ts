@@ -1575,10 +1575,10 @@ export async function handleSwitchToSimpleMode(
     await runProjectBoundSimpleSwitch(resolvedId, generation);
     switchedProjectId = resolvedId;
   } catch (err) {
-    // Belt-and-suspenders: `runProjectBoundSimpleSwitch` already recovers from its own failures
-    // internally (see its try/catch/finally), so this is only reached if something upstream of it
-    // throws unexpectedly. Either way, a settings-subscription callback must never produce an
-    // unhandled rejection, and the dock must never be left stuck on the pre-switch layout while
+    // Not a rare "upstream" case: `runProjectBoundSimpleSwitch` logs its own warning and
+    // deliberately rethrows on failure (see its own catch/comment) specifically so this outer catch
+    // performs the actual recovery. Either way, a settings-subscription callback must never produce
+    // an unhandled rejection, and the dock must never be left stuck on the pre-switch layout while
     // `platform.interfaceMode` already reads `'simple'`.
     logger.warn(
       `Switching to Simple mode failed unexpectedly (${getErrorMessage(err)}); falling back to the bare layout.`,
