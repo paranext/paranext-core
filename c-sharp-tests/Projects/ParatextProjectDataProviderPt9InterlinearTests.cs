@@ -254,14 +254,25 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     public void GetPt9InterlinearManifest_UnreadableProjectDirectory_ThrowsInsteadOfReadingEmpty()
     {
         // A file where the project directory should be makes enumeration fail with an IO error on
-        // every platform, standing in for an unreadable or unreachable directory.
-        string fileAsDirectory = Path.GetTempFileName();
+        // Windows. Unix maps that state to directory-not-found, which legitimately reads as a
+        // project with no data, so there a directory with no permissions provides the unreadable
+        // state instead.
+        string unreadablePath;
+        if (OperatingSystem.IsWindows())
+        {
+            unreadablePath = Path.GetTempFileName();
+        }
+        else
+        {
+            unreadablePath = Directory.CreateTempSubdirectory().FullName;
+            File.SetUnixFileMode(unreadablePath, UnixFileMode.None);
+        }
         try
         {
             var details = new ProjectDetails(
                 "BadDir",
                 new ProjectMetadata(HexId.CreateNew().ToString(), []),
-                fileAsDirectory
+                unreadablePath
             );
             using var scrText = new DummyScrText(details);
             ParatextProjects.FakeAddProject(details, scrText);
@@ -280,7 +291,18 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
         }
         finally
         {
-            File.Delete(fileAsDirectory);
+            if (OperatingSystem.IsWindows())
+            {
+                File.Delete(unreadablePath);
+            }
+            else
+            {
+                File.SetUnixFileMode(
+                    unreadablePath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                );
+                Directory.Delete(unreadablePath, true);
+            }
         }
     }
 
