@@ -72,6 +72,8 @@ vi.mock('@renderer/hooks/use-is-power-mode.hook', () => ({
 vi.mock('@renderer/services/web-view.service-shard', () => ({
   floatTab: vi.fn(),
   updateTabPartialSync: vi.fn(),
+  // Two web views open, so a tab is never the only one in its window unless a test says otherwise
+  getAllOpenWebViewDefinitionsSync: vi.fn(() => [{ id: 'web-view-1' }, { id: 'web-view-2' }]),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
