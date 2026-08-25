@@ -94,6 +94,7 @@ import {
   pollUntil,
   quitAndExpectCleanExit,
   waitForRendererRegistered,
+  webViewTabTitle,
 } from './multi-window.util';
 
 // #region move commands
@@ -542,18 +543,14 @@ test.describe('moving a web view between windows', () => {
     // Located by the id window 2 minted for its own Home tab, not by `homeTabTitle`, which builds
     // the FIXED-id spelling only window 1's fallback-layout tab carries
     const expectedWindowName = (
-      await page2
-        .locator(`.platform-tab-title[data-web-view-id="${window2OwnHomeWebViewId}"]`)
-        .innerText()
+      await webViewTabTitle(page2, window2OwnHomeWebViewId).innerText()
     ).trim();
     await expect(page2).toHaveTitle(expectedWindowName, { timeout: 30_000 });
     await expect(page3).toHaveTitle(expectedWindowName, { timeout: 30_000 });
     const window2Title = await page2.title();
     logStep(`both windows are named after the tab they show: "${window2Title}"`);
 
-    await page3
-      .locator(`.platform-tab-title[data-web-view-id="${idAfterSecondMove}"]`)
-      .click({ button: 'right' });
+    await webViewTabTitle(page3, idAfterSecondMove).click({ button: 'right' });
     const moveToWindowItem = page3.getByRole('menuitem', { name: 'Move tab to window' });
     await expect(moveToWindowItem).toBeVisible({ timeout: 30_000 });
     await moveToWindowItem.hover();

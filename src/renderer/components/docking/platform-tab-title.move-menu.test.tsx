@@ -557,6 +557,22 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     expect(submenu.textContent).toContain('Empty window');
   });
 
+  it('keeps the target list when counting this window`s web views fails', async () => {
+    // The count throws before the dock layout registers, which says nothing about the windows. A
+    // shared catch would have thrown away a window list that arrived perfectly well and reported
+    // the failure as one the open windows could not be read
+    globalThis.windowId = '2';
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockImplementation(() => {
+      throw new Error('dock layout is not registered yet');
+    });
+    await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
+
+    expect(await screen.findByTestId('submenu-content')).toBeInTheDocument();
+    // Offering the action is the safe way to be wrong when the count is unknown
+    expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
+    expect(vi.mocked(logger.warn).mock.calls.flat().join(' ')).toContain('web views');
+  });
+
   it('leaves the submenu out when the window list cannot be read', async () => {
     globalThis.windowId = '2';
     vi.mocked(sendCommand).mockRejectedValue(new Error('no windows for you'));
