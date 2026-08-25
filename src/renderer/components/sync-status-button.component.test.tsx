@@ -42,6 +42,9 @@ vi.mock('@shared/services/command.service', () => ({ sendCommand: vi.fn() }));
 
 vi.mock('@shared/services/network.service', () => ({
   getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())),
+  // network-object.service subscribes to this at module load to clean up a departed window's
+  // registrations, and this component's import graph reaches it
+  onDidDisconnectClient: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
