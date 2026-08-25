@@ -666,6 +666,7 @@ describe('Find — clear search button', () => {
 
     function ClearingFindHarness() {
       const [searchTerm, setSearchTerm] = useState('God');
+      // useRef requires null as the initial value when used with a DOM element ref
       // eslint-disable-next-line no-null/no-null
       const searchInputRef = useRef<HTMLInputElement>(null);
       return (
