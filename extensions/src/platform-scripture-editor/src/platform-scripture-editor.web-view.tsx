@@ -113,6 +113,11 @@ import { useMarkerSettleDelay } from './use-marker-settle-delay.hook';
 import { useStructureProtectionState } from './use-structure-protection-state.hook';
 import { EmptyChapterView, EMPTY_CHAPTER_VIEW_STRING_KEYS } from './empty-chapter-view.component';
 import {
+  BookNotAvailableView,
+  BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
+  type ManageBooksDisabledReason,
+} from './book-not-available-view.component';
+import {
   ShareLayoutButton,
   SHARE_LAYOUT_BUTTON_STRING_KEYS,
 } from './share-layout-button.component';
@@ -125,6 +130,9 @@ import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.
 import { createFlushableDebouncer } from './flushable-debouncer.util';
 import { performDebouncedPdpSave, resolveUsjToSaveToPdp } from './debounced-pdp-save.util';
 import { withWriteInFlightGuard } from './write-in-flight-guard.util';
+import { resolveFindSelectionText } from './find-trigger.util';
+import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
+import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { useProjectStylesheet } from './use-project-stylesheet.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
@@ -206,6 +214,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...MARKER_MENU_STRING_KEYS,
   ...STRUCTURE_PROTECTION_BUTTON_STRING_KEYS,
   ...EMPTY_CHAPTER_VIEW_STRING_KEYS,
+  ...BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS,
   ...SHARE_LAYOUT_BUTTON_STRING_KEYS,
   ...SYNC_BLOCKED_BANNER_STRING_KEYS,
   // Not read by this file. Loaded here so that whichever component mounts the character-marker menu
@@ -228,7 +237,6 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   '%paragraphMenu_misc_markerDescription%',
   '%versionHistoryCommit_beforeInsertFootnote%',
   '%versionHistoryCommit_beforeInsertCrossReference%',
-  '%webView_platformScriptureEditor_error_bookNotFoundProject%',
   '%webView_platformScriptureEditor_error_bookNotFoundResource%',
   '%webView_platformScriptureEditor_emptyState_noProject%',
   '%webView_platformScriptureEditor_error_permissions_format%',
@@ -521,7 +529,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // `platform.interfaceMode` is read here (rather than down by its other consumers, `bcvControls`
   // etc.) because the `viewType` state below needs `isPowerMode` for its default value.
-  const [interfaceModePossiblyError, , , isLoadingInterfaceMode] = useSetting(
+  const [interfaceModePossiblyError, , , isInterfaceModeLoading] = useSetting(
     'platform.interfaceMode',
     'simple',
   );
@@ -579,7 +587,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // confirmed (not merely the not-yet-loaded default).
     if (hasAppliedInitialPowerDefaultRef.current) return;
     if (hadPersistedViewTypeAtMount) return;
-    if (isLoadingInterfaceMode) return;
+    if (isInterfaceModeLoading) return;
     if (!isPowerMode) return;
     // Re-probe the store fresh at fire time -- the mount snapshot above is only a fast path. The
     // user could have persisted a genuine choice (e.g. `changeScriptureView`; `setViewType`
@@ -593,7 +601,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // This write is intentionally sticky: it persists 'standard', so future reloads of this web
     // view see a persisted value and skip this whole correction dance.
     setViewType('standard');
-  }, [hadPersistedViewTypeAtMount, isLoadingInterfaceMode, isPowerMode, setViewType]);
+  }, [hadPersistedViewTypeAtMount, isInterfaceModeLoading, isPowerMode, setViewType]);
 
   // Standard view must never be shown in simple mode: simple mode pairs with structure
   // protection, which intentionally blocks the paragraph-marker edits standard view's editing
@@ -608,7 +616,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // writes the store. Waits for `platform.interfaceMode` to resolve because `isPowerMode` is
   // always `false` while the setting loads — coercing then would hide a power user's persisted
   // standard view on every mount's first frames.
-  const viewType = isLoadingInterfaceMode
+  const viewType = isInterfaceModeLoading
     ? persistedViewType
     : resolveViewTypeForInterfaceMode(persistedViewType, isPowerMode);
 
@@ -649,6 +657,84 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // Using || to make sure we get default if it is an empty string or if it is undefined
     return textDirectionPossiblyError || defaultTextDirection;
   }, [textDirectionPossiblyError]);
+
+  // The next two reactive signals gate whether the Scripture Editor is writable: whether the
+  // project itself is editable (`platform.isEditable`) and whether the current user has a
+  // non-Observer Scripture-edit role. Both fail OPEN below (return `true`, i.e. don't block
+  // editing) on a read error, because these are LIVE signals that self-correct on the next
+  // successful PAPI update — unlike the one-shot `CanUserEditScripture()` C# method and its
+  // `pdp.canUserEditScripture()` TS caller in this extension's utils.ts (used for the
+  // non-recoverable, one-time default-project-picker decision), which both fail closed instead.
+  const [isProjectEditablePossiblyError, , , isProjectEditableLoading] = useProjectSetting(
+    projectId,
+    'platform.isEditable',
+    true,
+  );
+
+  const isProjectEditable = useMemo(() => {
+    if (isPlatformError(isProjectEditablePossiblyError)) {
+      logger.warn(
+        `Error getting project editable setting: ${getErrorMessage(isProjectEditablePossiblyError)}`,
+      );
+      // Fail open — see comment above.
+      return true;
+    }
+    return isProjectEditablePossiblyError;
+  }, [isProjectEditablePossiblyError]);
+
+  const [canUserEditScripturePossiblyError, , canUserEditScriptureLoading] = useProjectData(
+    'platformScripture.scriptureEditPermissions',
+    projectId,
+  ).CanUserEditScripture(undefined, true);
+
+  const canUserEditScripture = useMemo(() => {
+    if (isPlatformError(canUserEditScripturePossiblyError)) {
+      logger.warn(
+        `Error getting Scripture edit permission: ${getErrorMessage(canUserEditScripturePossiblyError)}`,
+      );
+      // Fail open — see comment above.
+      return true;
+    }
+    return canUserEditScripturePossiblyError;
+  }, [canUserEditScripturePossiblyError]);
+
+  // `canUserEditScriptureLoading` above can never become `false` for a project whose PDP doesn't
+  // advertise `platformScripture.scriptureEditPermissions`: no subscription is ever created, so the
+  // hook's `isLoading` latches `true` forever (a `usePromise`/`useProjectDataProvider` limitation —
+  // `usePromise` has no rejection handling at all — not specific to this data type). Independently
+  // check whether the project actually supports the interface so "still resolving" can be told apart
+  // from "will never resolve", instead of treating the latter as a permanent loading state.
+  const checkScriptureEditPermissionsSupported = useCallback(async () => {
+    // No `projectId` means no project to check support for — and, like the catch below,
+    // `canUserEditScriptureLoading` can be permanently stuck in this case too (no `projectId` means
+    // no PDP source, so no subscription ever fires). Don't feed that back into "still resolving".
+    if (!projectId) return false;
+    try {
+      const matchingMetadata = await papi.projectLookup.getMetadataForAllProjects({
+        includeProjectIds: projectId,
+        includeProjectInterfaces: ['platformScripture.scriptureEditPermissions'],
+      });
+      return matchingMetadata.length > 0;
+    } catch (e) {
+      logger.warn(`Error checking Scripture edit permissions support: ${getErrorMessage(e)}`);
+      // Stop waiting rather than assume supported: returning `true` here would fall back to
+      // trusting `canUserEditScriptureLoading` directly — the exact signal this check exists to
+      // work around, which can be the same permanently-stuck state. This promise never rejects
+      // (we catch our own errors), so `usePromise` always resolves it promptly either way;
+      // returning `false` falls through to `canUserEditScripture`'s own fail-open default and
+      // self-corrects if the underlying subscription later resolves on its own.
+      return false;
+    }
+  }, [projectId]);
+  const [isScriptureEditPermissionsSupported] = usePromise(
+    checkScriptureEditPermissionsSupported,
+    true,
+  );
+
+  // Whether `canUserEditScripture` is genuinely still resolving, as opposed to latched because the
+  // project will never advertise the interface (see comment above).
+  const isCanUserEditScriptureUnresolved =
+    canUserEditScriptureLoading && isScriptureEditPermissionsSupported;
 
   const textDirectionEffective = useMemo(() => {
     // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
@@ -902,6 +988,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return parseCallerSequenceSetting(crossRefCallersPossiblyError) ?? ['†'];
   }, [crossRefCallersPossiblyError]);
 
+  /**
+   * Whether the editor is effectively read-only, considering the isReadOnly flag, the project's
+   * `platform.isEditable` setting, the user's Scripture-edit permission, sync-blocked state, and
+   * view type. The markers-view clause is the one placeholder piece here: once editing is allowed
+   * in markers view, that clause can be dropped, but the rest of this combination stays.
+   *
+   * Fails CLOSED (read-only) while `isProjectEditable`/`canUserEditScripture` are genuinely still
+   * resolving — see `isCanUserEditScriptureUnresolved` above — rather than relying on their
+   * fail-open default values during that window: a briefly-writable editor is worse than a
+   * briefly-read-only one.
+   */
+  const isReadOnlyEffective = useMemo(
+    () =>
+      isReadOnly ||
+      isProjectEditableLoading ||
+      !isProjectEditable ||
+      isCanUserEditScriptureUnresolved ||
+      !canUserEditScripture ||
+      isSyncBlocked ||
+      (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
+    [
+      isReadOnly,
+      isProjectEditableLoading,
+      isProjectEditable,
+      isCanUserEditScriptureUnresolved,
+      canUserEditScripture,
+      isSyncBlocked,
+      viewType,
+    ],
+  );
+
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
       chapterVerseSeparator,
@@ -912,77 +1029,73 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // editor's built-in default is the same a-z sequence PT9's GetNthCaller falls back to.
       noteCallers: footnoteCallers,
       crossRefCallers,
-      // Also disabled while sync-blocked: opening a note caller can create/edit a note, which is a
-      // project write that must be frozen during an automatic Send/Receive.
-      noteCallerOnClick:
-        isReadOnly || isSyncBlocked
-          ? undefined
-          : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps, getNoteIndex) => {
-              // The caller-click flow has historically failed silently (dead click); keep the inputs
-              // of every click diagnosable from a debug log.
-              logger.debug(
-                `noteCallerOnClick: noteNodeKey=${noteNodeKey} isCollapsed=${isCollapsed} ` +
-                  `editingNoteKey=${editingNoteKey.current} popoverShown=${showFootnoteEditorRef.current} ` +
-                  `paneVisible=${footnotesPaneVisibleRef.current} paneRendered=${footnotesPaneRenderedRef.current}`,
+      // Gated on isReadOnlyEffective (not the narrower isReadOnly): it folds in the project's
+      // editability, the user's Scripture-edit permission, AND the sync-blocked freeze — opening a
+      // note caller can create/edit a note, a project write every one of those must block.
+      noteCallerOnClick: isReadOnlyEffective
+        ? undefined
+        : (event, noteNodeKey, isCollapsed, _getCaller, _setCaller, getNoteOps, getNoteIndex) => {
+            // The caller-click flow has historically failed silently (dead click); keep the inputs
+            // of every click diagnosable from a debug log.
+            logger.debug(
+              `noteCallerOnClick: noteNodeKey=${noteNodeKey} isCollapsed=${isCollapsed} ` +
+                `editingNoteKey=${editingNoteKey.current} popoverShown=${showFootnoteEditorRef.current} ` +
+                `paneVisible=${footnotesPaneVisibleRef.current} paneRendered=${footnotesPaneRenderedRef.current}`,
+            );
+            const decision = decideNoteCallerClickAction({
+              isCollapsed,
+              editingNoteKey: editingNoteKey.current,
+              popoverShown: showFootnoteEditorRef.current,
+              // The render condition, not just the toggle: the pane only consumes focus
+              // requests when it is actually rendered.
+              paneRendered: footnotesPaneRenderedRef.current,
+            });
+            if (decision.clearStaleEditingSession) {
+              // A prior session's key survived without its popover — orphaned bookkeeping that
+              // would otherwise dead-end every caller click from here on.
+              logger.warn(
+                `noteCallerOnClick: clearing stale editing session for note ${editingNoteKey.current}`,
               );
-              const decision = decideNoteCallerClickAction({
-                isCollapsed,
-                editingNoteKey: editingNoteKey.current,
-                popoverShown: showFootnoteEditorRef.current,
-                // The render condition, not just the toggle: the pane only consumes focus
-                // requests when it is actually rendered.
-                paneRendered: footnotesPaneRenderedRef.current,
-              });
-              if (decision.clearStaleEditingSession) {
-                // A prior session's key survived without its popover — orphaned bookkeeping that
-                // would otherwise dead-end every caller click from here on.
+              editingNoteIsNew.current = false;
+              editingNoteKey.current = undefined;
+              editingNoteOps.current = undefined;
+              editingNoteSessionRefreshedAt.current = undefined;
+            }
+            if (decision.action === 'ignore-expanded' || decision.action === 'ignore-popover-open')
+              return;
+
+            // Pane rendered → focus/highlight the note there (PT9 navigate-to-note) instead of
+            // opening the popover, regardless of the auto-show setting. The pane addresses notes
+            // by document-order index, which the editor computes exactly at click time.
+            if (decision.action === 'focus-pane') {
+              const index = getNoteIndex();
+              if (index !== undefined) setFootnotePaneFocusRequest({ index });
+              else
                 logger.warn(
-                  `noteCallerOnClick: clearing stale editing session for note ${editingNoteKey.current}`,
+                  'noteCallerOnClick: clicked note is no longer attached; pane focus request dropped',
                 );
-                editingNoteIsNew.current = false;
-                editingNoteKey.current = undefined;
-                editingNoteOps.current = undefined;
-                editingNoteSessionRefreshedAt.current = undefined;
-              }
-              if (
-                decision.action === 'ignore-expanded' ||
-                decision.action === 'ignore-popover-open'
-              )
-                return;
+              return;
+            }
 
-              // Pane rendered → focus/highlight the note there (PT9 navigate-to-note) instead of
-              // opening the popover, regardless of the auto-show setting. The pane addresses notes
-              // by document-order index, which the editor computes exactly at click time.
-              if (decision.action === 'focus-pane') {
-                const index = getNoteIndex();
-                if (index !== undefined) setFootnotePaneFocusRequest({ index });
-                else
-                  logger.warn(
-                    'noteCallerOnClick: clicked note is no longer attached; pane focus request dropped',
-                  );
-                return;
-              }
+            // Pane hidden → open the popover (existing behavior).
+            const noteOp = getNoteOps()?.at(0);
+            if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) {
+              logger.warn('noteCallerOnClick: clicked note produced no valid note op; ignoring');
+              return;
+            }
 
-              // Pane hidden → open the popover (existing behavior).
-              const noteOp = getNoteOps()?.at(0);
-              if (!noteOp || !isInsertEmbedOpOfType('note', noteOp)) {
-                logger.warn('noteCallerOnClick: clicked note produced no valid note op; ignoring');
-                return;
-              }
-
-              const targetRect = event.currentTarget.getBoundingClientRect();
-              setNotePopoverAnchorX(targetRect.left);
-              setNotePopoverAnchorY(targetRect.top);
-              setNotePopoverAnchorHeight(targetRect.height);
-              editingNoteKey.current = noteNodeKey;
-              editingNoteOps.current = [noteOp];
-              editingNoteSessionRefreshedAt.current = Date.now();
-              setShowFootnoteEditor(true);
-            },
+            const targetRect = event.currentTarget.getBoundingClientRect();
+            setNotePopoverAnchorX(targetRect.left);
+            setNotePopoverAnchorY(targetRect.top);
+            setNotePopoverAnchorHeight(targetRect.height);
+            editingNoteKey.current = noteNodeKey;
+            editingNoteOps.current = [noteOp];
+            editingNoteSessionRefreshedAt.current = Date.now();
+            setShowFootnoteEditor(true);
+          },
     }),
     [
-      isReadOnly,
-      isSyncBlocked,
+      isReadOnlyEffective,
       editingNoteKey,
       chapterVerseSeparator,
       verseRangeSeparator,
@@ -993,19 +1106,45 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     ],
   );
 
-  /**
-   * Whether the editor is effectively read-only, considering both the isReadOnly flag and the view
-   * type. This can probably be removed and replaced with `isReadOnly` once we allow editing in
-   * markers view
-   */
-  const isReadOnlyEffective = useMemo(
+  // The "durable" reasons the editor is read-only — excludes isSyncBlocked, a transient freeze
+  // during an automatic Send/Receive, not a real read-only state. Used for the title instead of
+  // isReadOnlyEffective so the tab doesn't relabel "(Read-only)" and back on every scheduled sync;
+  // SyncBlockedBanner already communicates that transient state.
+  const isDurablyReadOnly = useMemo(
     () =>
       isReadOnly ||
-      // An automatic Send/Receive is syncing this project — freeze editing until it finishes.
-      isSyncBlocked ||
+      !isProjectEditable ||
+      !canUserEditScripture ||
       (viewType === 'markers' && localStorage.getItem('dev-editableMarkersView') !== 'true'),
-    [isReadOnly, isSyncBlocked, viewType],
+    [isReadOnly, isProjectEditable, canUserEditScripture, viewType],
   );
+
+  // `undefined` means isProjectEditable/canUserEditScripture are still genuinely resolving (not
+  // latched — see isCanUserEditScriptureUnresolved above). The title effect below skips its update
+  // in that case instead of pushing a title, so the previously-persisted title stays showing.
+  const isReadOnlyForTitle = useMemo(
+    () =>
+      isProjectEditableLoading || isCanUserEditScriptureUnresolved ? undefined : isDurablyReadOnly,
+    [isProjectEditableLoading, isCanUserEditScriptureUnresolved, isDurablyReadOnly],
+  );
+
+  /**
+   * Why the "Manage books" action on the book-not-available zero-state cannot be taken right now,
+   * or `undefined` when it can.
+   *
+   * Deliberately NOT derived from `isReadOnlyEffective`, which folds in `viewType === 'markers'`
+   * because the editor CANVAS is not editable in that view. Manage Books is a separate floating
+   * dialog, and its ability to create a book does not depend on which view the editor is showing —
+   * so gating on the effective flag disabled an action that would have worked fine. Only the two
+   * conditions that genuinely prevent adding a book are listed, checked in the order in which the
+   * user can do something about them: a read-only project is a standing state they must get
+   * changed, while a sync is transient and about to end on its own.
+   */
+  const manageBooksDisabledReason = useMemo<ManageBooksDisabledReason | undefined>(() => {
+    if (isReadOnly) return 'readOnly';
+    if (isSyncBlocked) return 'syncInProgress';
+    return undefined;
+  }, [isReadOnly, isSyncBlocked]);
 
   // Effective structure-protection state for this project/user, used to gate keyboard edits to
   // paragraph/verse markers in the editor (fed into EditorOptions.structureProtectionMode below). The
@@ -1027,12 +1166,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Get the updated title. Note this is NO_UPDATE_TITLE if no update is needed
   const [newTitleIfUpdated] = usePromise(
     useCallback(async () => {
-      if (unformattedTitle === NO_UPDATE_TITLE || projectName === defaultProjectName)
+      if (
+        unformattedTitle === NO_UPDATE_TITLE ||
+        projectName === defaultProjectName ||
+        isReadOnlyForTitle === undefined
+      )
         return NO_UPDATE_TITLE;
       const updatedTitle = await formatEditorTitle(
         unformattedTitle,
         projectId,
-        isReadOnlyEffective,
+        isReadOnlyForTitle,
         async () => projectName,
         papi.localization.getLocalizedStrings,
       );
@@ -1041,7 +1184,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       if (updatedTitle === title) return NO_UPDATE_TITLE;
 
       return updatedTitle;
-    }, [isReadOnlyEffective, title, projectId, projectName, unformattedTitle]),
+    }, [isReadOnlyForTitle, title, projectId, projectName, unformattedTitle]),
     NO_UPDATE_TITLE,
   );
 
@@ -2033,8 +2176,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // #region Keydown Routing
 
-  // Listen for Ctrl+F to open find dialog, for the marker menu trigger to open the marker menu,
-  // for Ctrl+T / Ctrl+Shift+T to insert a footnote/cross-reference, and for
+  // Ctrl+F opens Find for this editor's own project. Uses the same hook as the read-only reference
+  // panels so there is a single Ctrl+F→openFind implementation across every scripture tab type.
+  useOpenFindShortcut(webViewId, projectId);
+
+  // `.editor-input` is the Lexical content element (the same selector the marker-menu handler uses).
+  const getSelectionBeforePointerPress = useSelectionSnapshot('.editor-input');
+
+  /**
+   * The text the tab menu's Find item should search for: the live selection, or — when the click
+   * that opened the menu has already collapsed it — what was selected just before that click.
+   *
+   * Only the menu path consults the snapshot, because only a pointer press destroys the selection
+   * it is about to act on. Ctrl+F (`useOpenFindShortcut`) reads the live selection directly and
+   * deliberately does NOT fall back here: a keystroke destroys nothing, so the live value is always
+   * the honest answer. Falling back would let a selection made much earlier pre-fill and
+   * immediately re-run a search, overwriting whatever term the user already had in an open Find
+   * panel.
+   */
+  const getMenuFindSelectionText = useCallback(
+    () =>
+      resolveFindSelectionText(window.getSelection()?.toString(), getSelectionBeforePointerPress()),
+    [getSelectionBeforePointerPress],
+  );
+
+  // Listen for the marker menu trigger to open the marker menu, for Ctrl+T / Ctrl+Shift+T to
+  // insert a footnote/cross-reference, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
     // CAPTURE phase: the Standard-view `\`/Enter marker palettes must run BEFORE Lexical's own
@@ -2119,11 +2286,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }
       }
 
-      // Find dialog trigger listener
-      if (event.ctrlKey && event.key.toLowerCase() === 'f') {
+      const isInsertCommentHotkey = isMac
+        ? event.metaKey &&
+          event.altKey &&
+          // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
+          (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
+        : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
+          (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
+      if (isInsertCommentHotkey) {
         event.preventDefault();
-        const selectedText = window.getSelection()?.toString() ?? '';
-        papi.commands.sendCommand('platformScripture.openFind', webViewId, selectedText);
+        event.stopPropagation();
+        insertCommentAtCurrentSelection();
       } else if (
         !isReadOnlyEffective &&
         viewType === 'standard' &&
@@ -2155,19 +2328,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             `Error inserting ${isCrossReference ? 'cross-reference' : 'footnote'} from keyboard shortcut: ${getErrorMessage(error)}`,
           );
         });
-      } else {
-        const isInsertCommentHotkey = isMac
-          ? event.metaKey &&
-            event.altKey &&
-            // In some cases, Mac interprets Option+M as 'µ', so check both 'm' just in case
-            (event.key.toLowerCase() === 'm' || event.key.toLowerCase() === 'µ')
-          : (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'm') ||
-            (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === 'n');
-        if (isInsertCommentHotkey) {
-          event.preventDefault();
-          event.stopPropagation();
-          insertCommentAtCurrentSelection();
-        }
       }
     };
 
@@ -2179,7 +2339,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [
-    webViewId,
     insertCommentAtCurrentSelection,
     insertFootnoteAtCurrentSelection,
     insertCrossReferenceAtCurrentSelection,
@@ -2244,9 +2403,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      // Preserve versificationStr: ScriptureReferencePlugin returns {book, chapterNum, verseNum}
-      // without versificationStr, so falling back to scrRef keeps the versification consistent and
-      // prevents the PDP selector from changing on every click.
+      // Preserve versificationStr so the PDP selector doesn't change on every click. Against
+      // platform-editor 0.8.15 the fallback is a no-op: `positionToScrRef` carries the host's
+      // `versificationStr` on every position report (a document states no versification of its
+      // own), and that plugin is the sole caller of this handler. Kept as cheap insurance in case
+      // that contract changes — versions before 0.8.15 reported positions without it.
       const preservedLocation: SerializedVerseRef = {
         ...newVerseLocation,
         versificationStr: newVerseLocation.versificationStr ?? scrRef.versificationStr,
@@ -2383,9 +2544,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return;
     }
     pendingScaffoldInsertRef.current = true;
-    // KNOWN CAVEAT: undo reliability for this insert depends on unreleased fixes in the vendored
-    // `@eten-tech-foundation/platform-editor` package — this extension's package.json still pins an
-    // older version, so don't assume undo works cleanly here until that pin is bumped.
+    // Undo for this insert depends on the editor keeping its history across the `onUsjChange` round
+    // trip this call sets off: the editor's state-load effect fires Lexical's
+    // `CLEAR_HISTORY_COMMAND` unconditionally, so anything that re-runs it moments after an edit
+    // wipes the undo stack. `@eten-tech-foundation/platform-editor` 0.8.15 is the first published
+    // version that holds that effect's inputs stable BY VALUE rather than by reference; 0.8.14 does
+    // not. The pin is `~0.8.15`, so a patch release could regress it without a bump review, and no
+    // test here or upstream covers undo for this path — re-check it by hand when the pin moves.
     editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
   }, [scrRef.book, scrRef.chapterNum, lastVerse, isStructureProtected, notifyStructureProtected]);
 
@@ -3152,6 +3317,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     BOOKS_PRESENT_DEFAULT,
   );
 
+  // `platform.isPublished` is the project-kind classification (resource vs project); `isReadOnly` /
+  // `platform.isEditable` is Scripture-text edit PERMISSION and says nothing about kind. Only the
+  // former may decide whether the user is told "this book is not in this resource", which is a
+  // statement of fact with no remedy. Same distinction the open path draws in this extension's
+  // `main.ts`, where the comment on `isPublished` spells out why the two must not be conflated.
+  // Defaults to false so an unresolved setting shows the actionable project message rather than
+  // wrongly telling a project owner their project is a resource.
+  const [isPublishedPossiblyError, , , isIsPublishedLoading] = useProjectSetting(
+    projectId,
+    'platform.isPublished',
+    false,
+  );
+
+  const isResource = useMemo(() => {
+    if (isPlatformError(isPublishedPossiblyError)) {
+      logger.warn(
+        `Error getting whether the project is published: ${getErrorMessage(isPublishedPossiblyError)}`,
+      );
+      return false;
+    }
+    return isPublishedPossiblyError;
+  }, [isPublishedPossiblyError]);
+
   const booksPresent = useMemo(() => {
     if (isPlatformError(booksPresentPossiblyError)) {
       logger.warn(`Error getting books present: ${getErrorMessage(booksPresentPossiblyError)}`);
@@ -3169,11 +3357,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
+      // Find is the one menu command that needs more than the tab id: it carries this tab's current
+      // text selection so the Find panel pre-fills and searches it, matching Ctrl+F. The source
+      // project is deliberately left off — `openFind` resolves it from this editor's own web view
+      // definition, which is the same project this component renders. (When neither yields a
+      // project, `openFind` fronts an already-open Find as-is and creates nothing, so the selection
+      // is dropped on that path rather than pre-filling a panel pointed at some other project.)
+      // Hidden-target case: the Find panel may be an inactive (display:none) tab when this fires.
+      // Nothing here is layout-dependent — the text travels as web view state (findSearchTerm) and
+      // openFind brings the panel to front — so a hidden Find catches up on activation by
+      // construction, with no deferred side effect to replay.
+      if (projectMenuCommand.command === 'platformScripture.openFind') {
+        papi.commands
+          .sendCommand('platformScripture.openFind', webViewId, getMenuFindSelectionText())
+          .catch((e) =>
+            logger.warn(`Failed to open Find from the editor tab menu: ${getErrorMessage(e)}`),
+          );
+        return;
+      }
       // Assuming that the project menu command is one of the registered command handlers in papi
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       papi.commands.sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId);
     },
-    [webViewId],
+    [getMenuFindSelectionText, webViewId],
   );
 
   function renderEditor() {
@@ -3195,13 +3401,55 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       );
     }
     if (!bookExists) {
+      // Each branch below picks DIFFERENT advice, so none of them may render off a setting's default:
+      //   - `platform.interfaceMode` decides Simple's "ask your project administrator" against Power's
+      //     actionable zero-state. Showing Simple's advice to a Power user tells them to go ask
+      //     someone for something they can do themselves in two clicks.
+      //   - `platform.isPublished` decides the resource message against the zero-state. Either default
+      //     is wrong for someone: a resource reader would briefly get an add-this-book button, or a
+      //     project owner would briefly be told their project is a resource.
+      // Both hooks serve their default until the real value arrives, which makes the default
+      // indistinguishable from an answer — `isLoading` is the only thing that separates them. The code
+      // this replaced rendered one string for all of these cases, which is why the hazard is new here.
+      // Same class of problem this file guards `CharacterMarkerBarOverlay` against further down.
+      if (isInterfaceModeLoading || isIsPublishedLoading) {
+        return (
+          <div className="tw:flex tw:items-center tw:justify-center tw:h-full">
+            {workaround}
+            <Spinner />
+          </div>
+        );
+      }
+      // A resource keeps its own message: "not in this resource" is a statement of fact with no
+      // remedy, whereas a project's missing book is actionable (Manage Books) for Donna. Branching on
+      // `isResource` (`platform.isPublished`) rather than on editability is what keeps a read-only
+      // PROJECT — a real and common case — out of this branch: it is not a resource, so it gets the
+      // zero-state, with the Manage books button disabled and a tooltip saying the project is
+      // read-only.
+      if (isResource) {
+        return (
+          <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+            {workaround}
+            {localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']}
+          </div>
+        );
+      }
       return (
-        <div className="tw:flex tw:items-center tw:justify-center tw:h-full tw:px-4">
+        <>
           {workaround}
-          {isReadOnly
-            ? localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundResource%']
-            : localizedStrings['%webView_platformScriptureEditor_error_bookNotFoundProject%']}
-        </div>
+          <BookNotAvailableView
+            localizedStrings={localizedStrings}
+            isPowerMode={isPowerMode}
+            manageBooksDisabledReason={manageBooksDisabledReason}
+            onOpenManageBooks={() => {
+              papi.commands
+                .sendCommand('platformScripture.openManageBooks', webViewId, 'createMissingBook')
+                .catch((e) =>
+                  logger.warn(`Failed to open Manage Books from the book-not-available view: ${e}`),
+                );
+            }}
+          />
+        </>
       );
     }
     if (!usjFromPdp || usjFromPdp === defaultUsj) {
@@ -3221,7 +3469,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             onScrRefChange={setScrRefNoScroll}
             options={options}
             logger={logger}
-            onUsjChange={isReadOnly ? undefined : handleEditorialUsjChange}
+            onUsjChange={isReadOnlyEffective ? undefined : handleEditorialUsjChange}
             onSelectionChange={handleSelectionChange}
             onStateChange={(state) => {
               setCanUndo(state.canUndo);

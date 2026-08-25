@@ -196,7 +196,7 @@ export const VerseReady: Story = {
   ),
 };
 
-/** Verse mode, empty — no text for the focused verse (e.g. verse 0). */
+/** Verse mode, empty — this resource has no text for the focused verse. */
 export const VerseEmpty: Story = {
   render: () => (
     <CellBox>

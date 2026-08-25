@@ -4,7 +4,11 @@ import { defineConfig } from '@playwright/test';
  * Playwright configuration for paranext-core E2E tests.
  *
  * - `smoke` (default): tests share a single Electron instance per worker — fast, for CI.
- * - `isolated`: each test gets a fresh Electron restart — for state-mutating tests.
+ * - `isolated`: each suite gets its own Electron, but how varies by fixture —
+ *   `fixtures/isolated.fixture.ts` launches one per test, `comment.fixture`/`find.fixture` one per
+ *   worker, and the `title-bar/` and `navigation-history/` subsets launch nothing at all: they use
+ *   `fixtures/cdp.fixture.ts` and attach to an app started separately. See the note on that project
+ *   below.
  */
 const config = defineConfig({
   testDir: './tests',
@@ -48,16 +52,27 @@ const config = defineConfig({
     {
       // The common set of locally-runnable tests, organized in subdirectories by feature.
       // `npm run test:e2e:isolated` (via e2e-tests/run-isolated.mjs) lists the subsets;
-      // `npm run test:e2e:isolated <subset>` runs one; `... all` runs everything.
+      // `npm run test:e2e:isolated <subset>` runs one; `... all` runs every subset.
+      //
+      // `... all` cannot currently pass. The `title-bar/` and `navigation-history/` subsets use
+      // fixtures/cdp.fixture.ts, which attaches to an already-running app, but this config's
+      // globalSetup aborts when port 8876 is bound — so there is no state in which both they and
+      // their launch-based neighbours run. playwright-cdp.config.ts cannot run them either; it
+      // testIgnores **/isolated/**. Run the other subsets individually until those two move out
+      // of this project or globalSetup grows an opt-out.
       name: 'isolated',
       testDir: './tests/isolated',
     },
     {
       // Local-only - NOT wired into CI's `test:e2e:smoke`. The ER tests need real
       // Marble resources (e.g., ESV16UK+) which are not available in CI. There is no dedicated
-      // npm script; run the project directly (after booting the app once with CDP enabled):
+      // npm script. These specs use fixtures/cdp.fixture.ts, so run them through the CDP config,
+      // which has no globalSetup; running them through THIS config fails, because its globalSetup
+      // rejects the very app they need to attach to:
       //   ./.erb/scripts/refresh.sh
-      //   npx playwright test --config e2e-tests/playwright.config.ts --project=enhanced-resources
+      //   npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/
+      // The entry below therefore only registers the directory with this config; its practical
+      // effect is that `test:e2e:all` (this config, no --project) cannot pass either.
       name: 'enhanced-resources',
       testDir: './tests/enhanced-resources',
     },

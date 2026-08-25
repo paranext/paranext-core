@@ -5,13 +5,20 @@ import {
   applyPreserveCase,
   armBoundedWait,
   buildSearchRegex,
+  callControllerSafely,
   CharacterCategorizer,
   classifyPollAttempt,
   gateStartSearch,
+  isDifferentProjectSelection,
   isFindQueryValid,
   isSimpleInterfaceMode,
   MAX_CONSECUTIVE_POLL_MISSES,
   nextPollMissState,
+  OpenScrollGroupTab,
+  prunePresentBookIds,
+  resolveScrollGroupForPickedProject,
+  resolveSelectedProjectScrollGroup,
+  shouldClearResultsForInvalidQuery,
 } from './find.utils';
 
 /** Default character categorizer matching the project-settings defaults used in production */
@@ -529,5 +536,339 @@ describe('gateStartSearch', () => {
     expect(
       gateStartSearch({ isSearchQueryValid: true, hasPdp: false, isAlreadyStarting: false }),
     ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: true });
+  });
+});
+
+describe('shouldClearResultsForInvalidQuery', () => {
+  // THE REGRESSION THIS EXISTS FOR. Emptying the box with the keyboard (select-all + delete, or
+  // backspacing) only changes the term: the auto-search that follows is gated off as an invalid
+  // query, so the previous search's results stayed on screen with nothing in the box.
+  it('clears when the query goes invalid while results are still showing', () => {
+    expect(
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: false,
+        hasResults: true,
+        searchStatus: 'completed',
+      }),
+    ).toBe(true);
+  });
+
+  it('clears a search still in flight when the query goes invalid', () => {
+    expect(
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: false,
+        hasResults: false,
+        searchStatus: 'running',
+      }),
+    ).toBe(true);
+  });
+
+  it('does nothing on an invalid query with nothing to clear, so mount does not fire it', () => {
+    expect(
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: false,
+        hasResults: false,
+        searchStatus: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it('leaves results alone while the query is still valid', () => {
+    expect(
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: true,
+        hasResults: true,
+        searchStatus: 'completed',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('resolveSelectedProjectScrollGroup', () => {
+  const tab = (
+    projectId: string,
+    scrollGroupId: number,
+    webViewId: string,
+  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId });
+
+  it('keeps the current selection unchanged when its tab is still open', () => {
+    const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 1, 'wv-2')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 0,
+    });
+  });
+
+  it('matches the open tab case-insensitively against the current project id', () => {
+    const openTabs = [tab('proj-a', 0, 'wv-1')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 0,
+    });
+  });
+
+  it('falls back to another open tab of the same project when the current pair closed', () => {
+    const openTabs = [tab('PROJ-A', 1, 'wv-2')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 1,
+    });
+  });
+
+  it('prefers the tab matching preferredWebViewId over other tabs of the same project', () => {
+    const openTabs = [tab('PROJ-A', 1, 'wv-2'), tab('PROJ-A', 2, 'wv-3')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, 'wv-3')).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 2,
+    });
+  });
+
+  it('ignores preferredWebViewId when it belongs to a different project', () => {
+    const openTabs = [tab('PROJ-A', 1, 'wv-2'), tab('PROJ-B', 2, 'wv-3')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, 'wv-3')).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 1,
+    });
+  });
+
+  it('resolves an initial (undefined) scroll group by preferring preferredWebViewId', () => {
+    const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-A', 1, 'wv-2')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', undefined, openTabs, 'wv-2')).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 1,
+    });
+  });
+
+  it('falls back to a different project entirely once the current project has no open tabs', () => {
+    const openTabs = [tab('PROJ-B', 3, 'wv-9')];
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-B',
+      scrollGroupId: 3,
+    });
+  });
+
+  it('returns undefined when no tabs are open anywhere', () => {
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, [], undefined)).toBeUndefined();
+  });
+
+  // `openTabs` arrives in web-view-event arrival order (`[...tabsMap.values()]`), so picking
+  // `openTabs[0]` made which project Find fell back to depend on event timing — two sessions with the
+  // same tabs open could land on different projects. The fallback is ordered so it cannot drift.
+  it('picks the SAME cross-project fallback regardless of the order tabs arrived in', () => {
+    const tabs = [tab('PROJ-C', 2, 'wv-c'), tab('PROJ-B', 1, 'wv-b'), tab('PROJ-D', 1, 'wv-d')];
+    const expected = { projectId: 'PROJ-B', scrollGroupId: 1 };
+
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, tabs, undefined)).toEqual(expected);
+    expect(resolveSelectedProjectScrollGroup('PROJ-A', 0, [...tabs].reverse(), undefined)).toEqual(
+      expected,
+    );
+    expect(
+      resolveSelectedProjectScrollGroup('PROJ-A', 0, [tabs[2], tabs[0], tabs[1]], undefined),
+    ).toEqual(expected);
+  });
+});
+
+describe('isDifferentProjectSelection', () => {
+  it('reports a genuinely different project as a switch', () => {
+    expect(isDifferentProjectSelection('PROJ-B', 'PROJ-A')).toBe(true);
+  });
+
+  it('reports the same project as NOT a switch', () => {
+    expect(isDifferentProjectSelection('PROJ-A', 'PROJ-A')).toBe(false);
+  });
+
+  // The regression this guards: `useOpenProjectTabs` reports lowercased ids while canonical ids are
+  // UPPERCASE, so the reassignment effect can hand back the same project in different casing. A
+  // case-sensitive comparison treated that as a switch, which abandoned the running job, cleared the
+  // results the user was reading, and started a second identical search.
+  it('does NOT treat a casing-only correction of the same project as a switch', () => {
+    expect(isDifferentProjectSelection('WEB', 'web')).toBe(false);
+    expect(isDifferentProjectSelection('web', 'WEB')).toBe(false);
+    expect(isDifferentProjectSelection('WeB', 'wEb')).toBe(false);
+  });
+
+  it('treats the initial selection (no current project) as a switch', () => {
+    expect(isDifferentProjectSelection('PROJ-A', undefined)).toBe(true);
+  });
+
+  it('treats an empty current project id as a switch', () => {
+    expect(isDifferentProjectSelection('PROJ-A', '')).toBe(true);
+  });
+
+  it('still distinguishes projects whose ids differ by more than casing', () => {
+    expect(isDifferentProjectSelection('web', 'WEBBT')).toBe(true);
+  });
+});
+
+describe('prunePresentBookIds', () => {
+  it('removes books the project does not have', () => {
+    expect(prunePresentBookIds(['GEN', 'EXO'], ['GEN', 'LEV', 'EXO'])).toEqual(['GEN', 'EXO']);
+  });
+
+  it('returns the ORIGINAL array reference when nothing needs removing', () => {
+    // Identity, not just equality: the caller skips its state write on `!==`, which is what stops the
+    // effect from re-triggering itself.
+    const selectedBookIds = ['GEN', 'EXO'];
+    expect(prunePresentBookIds(['GEN', 'EXO', 'LEV'], selectedBookIds)).toBe(selectedBookIds);
+  });
+
+  // The regression this guards: the project setting is still resolving after a switch, so the book
+  // list is not known. Pruning against it would wipe the user's entire book selection rather than
+  // narrowing it. "Not known yet" != "no books".
+  it('leaves the selection untouched when the available books are not known yet', () => {
+    const selectedBookIds = ['GEN', 'EXO'];
+    expect(prunePresentBookIds(undefined, selectedBookIds)).toBe(selectedBookIds);
+  });
+
+  // The other half of that distinction: Find excludes extra material, so a project holding
+  // nothing else has a genuinely empty searchable book list. Treating that as "not known yet" would
+  // leave a stale selection live and searchable.
+  it('empties the selection when the project has no searchable books at all', () => {
+    expect(prunePresentBookIds([], ['GLO', 'FRT'])).toEqual([]);
+  });
+
+  it('empties the selection when the project genuinely shares no books with it', () => {
+    expect(prunePresentBookIds(['MAT', 'MRK'], ['GEN', 'EXO'])).toEqual([]);
+  });
+
+  it('preserves the selection order rather than the available-books order', () => {
+    expect(prunePresentBookIds(['GEN', 'EXO', 'LEV'], ['LEV', 'GEN'])).toEqual(['LEV', 'GEN']);
+  });
+
+  it('handles an empty selection', () => {
+    const selectedBookIds: string[] = [];
+    expect(prunePresentBookIds(['GEN'], selectedBookIds)).toBe(selectedBookIds);
+  });
+
+  it('is case-sensitive on book ids, which are canonical uppercase', () => {
+    expect(prunePresentBookIds(['GEN'], ['gen'])).toEqual([]);
+  });
+});
+
+describe('callControllerSafely', () => {
+  it('invokes the call and reports nothing when the controller is healthy', async () => {
+    const call = vi.fn(async () => 'ok');
+    const onError = vi.fn();
+    callControllerSafely(call, onError);
+    await vi.waitFor(() => expect(call).toHaveBeenCalledTimes(1));
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('swallows a rejected call and reports the reason', async () => {
+    const reason = new Error('network gone');
+    const onError = vi.fn();
+    expect(() => callControllerSafely(() => Promise.reject(reason), onError)).not.toThrow();
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(reason));
+  });
+
+  // The regression this guards, reproduced with a REAL revoked proxy — exactly what disposing a
+  // network object does to a web-view controller. Reading the method off it throws SYNCHRONOUSLY, so
+  // the previous `controller?.method(...).catch(() => {})` shape could not contain it: `.catch` only
+  // sees rejections. That uncaught TypeError crashed the Find web view whenever the selected
+  // project's editor tab closed and the annotation-cleanup effect fired on the disposed controller.
+  it('swallows the SYNCHRONOUS throw from reading a method off a revoked proxy', () => {
+    const { proxy, revoke } = Proxy.revocable<{ runAnnotationAction: () => Promise<void> }>(
+      { runAnnotationAction: async () => {} },
+      {},
+    );
+    revoke();
+    const onError = vi.fn();
+
+    expect(() => callControllerSafely(() => proxy.runAnnotationAction(), onError)).not.toThrow();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(String(onError.mock.calls[0][0])).toContain('revoked');
+  });
+
+  it('does not throw on a revoked proxy even with no error handler supplied', () => {
+    const { proxy, revoke } = Proxy.revocable<{ runAnnotationAction: () => Promise<void> }>(
+      { runAnnotationAction: async () => {} },
+      {},
+    );
+    revoke();
+
+    expect(() => callControllerSafely(() => proxy.runAnnotationAction())).not.toThrow();
+  });
+
+  it('tolerates a call that returns undefined rather than a promise', () => {
+    const onError = vi.fn();
+    expect(() => callControllerSafely(() => undefined, onError)).not.toThrow();
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveScrollGroupForPickedProject', () => {
+  const tab = (
+    projectId: string,
+    scrollGroupId: number,
+    webViewId: string,
+  ): OpenScrollGroupTab => ({ projectId, scrollGroupId, webViewId });
+
+  // The regression this pins: the simple-mode picker reports only a project id, so re-picking the
+  // project Find is ALREADY on must not move which of its tabs Find targets. Resolving with an
+  // undefined current group skipped straight to "the project's first tab" and silently moved
+  // Find from group 1 to group 0.
+  it('keeps the tab Find already targets when the same project is picked again', () => {
+    const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-A', 1, 'wv-2')];
+    expect(resolveScrollGroupForPickedProject('PROJ-A', 1, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 1,
+    });
+  });
+
+  // `openTabs` arrives as `[...tabsMap.values()]` — web-view-event arrival order. Two sessions with
+  // the same tabs open must resolve identically, so the result cannot depend on that order.
+  it('resolves identically no matter what order the open tabs arrive in', () => {
+    const tabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-A', 1, 'wv-2'), tab('PROJ-B', 2, 'wv-3')];
+    const expected = { projectId: 'PROJ-A', scrollGroupId: 1 };
+    expect(resolveScrollGroupForPickedProject('PROJ-A', 1, tabs, undefined)).toEqual(expected);
+    expect(resolveScrollGroupForPickedProject('PROJ-A', 1, [...tabs].reverse(), undefined)).toEqual(
+      expected,
+    );
+  });
+
+  // Matches what `projectScrollGroup` mode does for a not-open-project row: the newly picked
+  // project lands in the group the user was already reading in.
+  it('inherits the current scroll group when the newly picked project has a tab there', () => {
+    const openTabs = [tab('PROJ-A', 2, 'wv-1'), tab('PROJ-B', 2, 'wv-2'), tab('PROJ-B', 5, 'wv-3')];
+    expect(resolveScrollGroupForPickedProject('PROJ-B', 2, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-B',
+      scrollGroupId: 2,
+    });
+  });
+
+  it('prefers the tab shown in the triggering editor when the current group has none', () => {
+    const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 4, 'wv-2'), tab('PROJ-B', 7, 'wv-3')];
+    expect(resolveScrollGroupForPickedProject('PROJ-B', 0, openTabs, 'wv-3')).toEqual({
+      projectId: 'PROJ-B',
+      scrollGroupId: 7,
+    });
+  });
+
+  it('falls back to the picked project’s own tab when neither the group nor the editor matches', () => {
+    const openTabs = [tab('PROJ-A', 0, 'wv-1'), tab('PROJ-B', 4, 'wv-2')];
+    expect(resolveScrollGroupForPickedProject('PROJ-B', 0, openTabs, 'wv-1')).toEqual({
+      projectId: 'PROJ-B',
+      scrollGroupId: 4,
+    });
+  });
+
+  it('matches the picked project case-insensitively', () => {
+    const openTabs = [tab('proj-a', 3, 'wv-1')];
+    expect(resolveScrollGroupForPickedProject('PROJ-A', undefined, openTabs, undefined)).toEqual({
+      projectId: 'PROJ-A',
+      scrollGroupId: 3,
+    });
+  });
+
+  // The wrapped resolver falls back to ANOTHER open project when the picked one has no tab left.
+  // That is right for the reassignment effect but wrong for a click: it would retarget Find at a
+  // project the user did not pick. Rejecting it here leaves the reassignment effect to choose.
+  it('returns undefined rather than retargeting a project the user did not pick', () => {
+    const openTabs = [tab('PROJ-B', 3, 'wv-9')];
+    expect(resolveScrollGroupForPickedProject('PROJ-A', 0, openTabs, undefined)).toBeUndefined();
+  });
+
+  it('returns undefined when no tabs are open anywhere', () => {
+    expect(resolveScrollGroupForPickedProject('PROJ-A', 0, [], undefined)).toBeUndefined();
   });
 });

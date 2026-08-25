@@ -1,13 +1,16 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import type {
   ResourceReferenceList,
   ITextConnectionSettingsProjectDataProvider,
 } from 'platform-scripture';
 import { useProjectSetting, useProjectDataProvider } from '@papi/frontend/react';
-import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import {
+  useEffectiveResourceReferenceList,
+  type EffectiveResourceReferenceListState,
+} from './use-effective-resource-reference-list.hook';
 
 vi.mock('@papi/frontend/react', () => ({
   useProjectSetting: vi.fn(),
@@ -16,7 +19,7 @@ vi.mock('@papi/frontend/react', () => ({
 
 vi.mock('@papi/frontend', () => ({
   default: { network: { getNetworkEvent: vi.fn(() => 'event-token') } },
-  logger: { warn: vi.fn() },
+  logger: { warn: vi.fn(), error: vi.fn() },
 }));
 
 // Capture the re-arm handler so buffering can be exercised.
@@ -30,6 +33,13 @@ vi.mock('platform-bible-react', () => ({
 /** Minimal PlatformError shape — matches the `isPlatformError` runtime check */
 function makePlatformError(): object {
   return { platformErrorVersion: 1, message: 'test error' };
+}
+
+/** Narrows to the ready list, failing loudly if the hook has not finished loading. */
+function readyList(state: EffectiveResourceReferenceListState) {
+  if (state.status !== 'ready')
+    throw new Error(`expected status 'ready' but got '${state.status}'`);
+  return state.list;
 }
 
 const mockUseProjectSetting = vi.mocked(useProjectSetting);
@@ -66,7 +76,7 @@ describe('useEffectiveResourceReferenceList', () => {
     capturedApplyHandler = undefined;
   });
 
-  it('returns undefined while project setting is loading', () => {
+  it('reports loading while the project setting is loading', () => {
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
     const mockPdp = makeMockPdp(emptyList(), 'subscribeUserModelTexts');
     mockUseProjectDataProvider.mockReturnValue(mockPdp);
@@ -75,10 +85,13 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current[0]).toBeUndefined();
+    expect(result.current.status).toBe('loading');
   });
 
-  it('returns undefined while user setting is loading', () => {
+  it('reports loading while the user setting subscription is still pending', () => {
+    // The project setting has resolved, but the user-layer PDP has not arrived yet. This is the
+    // normal interleaving on essentially every mount: the user layer needs the PDP to resolve, then
+    // an explicit subscribe, then a first delivery — strictly more hops than the project setting.
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
     mockUseProjectDataProvider.mockReturnValue(undefined);
 
@@ -86,7 +99,7 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current[0]).toBeUndefined();
+    expect(result.current.status).toBe('loading');
   });
 
   it('returns project-only list when user list is empty', () => {
@@ -102,9 +115,9 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current[0]).toBeDefined();
-    expect(result.current[0]?.items).toHaveLength(1);
-    expect(result.current[0]?.items[0]).toEqual({
+    expect(result.current.status).toBe('ready');
+    expect(readyList(result.current).items).toHaveLength(1);
+    expect(readyList(result.current).items[0]).toEqual({
       type: 'project',
       name: 'My Project',
       id: 'abc123',
@@ -125,9 +138,9 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current[0]).toBeDefined();
-    expect(result.current[0]?.items).toHaveLength(1);
-    expect(result.current[0]?.items[0]).toEqual({
+    expect(result.current.status).toBe('ready');
+    expect(readyList(result.current).items).toHaveLength(1);
+    expect(readyList(result.current).items[0]).toEqual({
       type: 'enhancedResource',
       name: 'My Resource',
       source: 'user',
@@ -154,14 +167,14 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current[0]?.items).toHaveLength(2);
-    expect(result.current[0]?.items[0]).toEqual({
+    expect(readyList(result.current).items).toHaveLength(2);
+    expect(readyList(result.current).items[0]).toEqual({
       type: 'project',
       name: 'Project A',
       id: 'id-001',
       source: 'admin',
     });
-    expect(result.current[0]?.items[1]).toEqual({
+    expect(readyList(result.current).items[1]).toEqual({
       type: 'project',
       name: 'Project B',
       id: 'id-002',
@@ -189,13 +202,13 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current[0]?.items).toHaveLength(2);
-    expect(result.current[0]?.items[0]).toEqual({
+    expect(readyList(result.current).items).toHaveLength(2);
+    expect(readyList(result.current).items[0]).toEqual({
       type: 'enhancedResource',
       name: 'Greek NT',
       source: 'admin',
     });
-    expect(result.current[0]?.items[1]).toEqual({
+    expect(readyList(result.current).items[1]).toEqual({
       type: 'enhancedResource',
       name: 'Hebrew OT',
       source: 'user',
@@ -219,14 +232,14 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current[0]?.items).toHaveLength(2);
-    expect(result.current[0]?.items[0]).toEqual({
+    expect(readyList(result.current).items).toHaveLength(2);
+    expect(readyList(result.current).items[0]).toEqual({
       type: 'project',
       name: 'Project A',
       id: 'id-001',
       source: 'admin',
     });
-    expect(result.current[0]?.items[1]).toEqual({
+    expect(readyList(result.current).items[1]).toEqual({
       type: 'dblResource',
       name: 'DBL Resource',
       id: 'dbl-001',
@@ -234,15 +247,18 @@ describe('useEffectiveResourceReferenceList', () => {
     });
   });
 
-  it('returns undefined when projectId is undefined', () => {
-    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
+  it('reports loading when projectId is undefined', () => {
+    // The project setting is settled on purpose. With `isLoading: true` the first guard fired and
+    // `projectId` was never consulted, so this pinned nothing: without a project there is no user
+    // PDP, and that is what must keep the hook out of `ready`.
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
     mockUseProjectDataProvider.mockReturnValue(undefined);
 
     const { result } = renderHook(() =>
       useEffectiveResourceReferenceList(undefined, 'platformScripture.modelTexts'),
     );
 
-    expect(result.current[0]).toBeUndefined();
+    expect(result.current.status).toBe('loading');
   });
 
   it('uses subscribeUserReferencedProjectsAndResources for referencedProjectsAndResources setting', () => {
@@ -265,13 +281,13 @@ describe('useEffectiveResourceReferenceList', () => {
       ),
     );
 
-    expect(result.current[0]?.items).toHaveLength(2);
-    expect(result.current[0]?.items[0]).toEqual({
+    expect(readyList(result.current).items).toHaveLength(2);
+    expect(readyList(result.current).items[0]).toEqual({
       type: 'xmlResource',
       name: 'Xml Ref',
       source: 'admin',
     });
-    expect(result.current[0]?.items[1]).toEqual({
+    expect(readyList(result.current).items[1]).toEqual({
       type: 'sourceLanguageResource',
       name: 'Hebrew',
       source: 'user',
@@ -308,12 +324,12 @@ describe('useEffectiveResourceReferenceList', () => {
     );
 
     // Should fall back to project-level list, not return undefined
-    expect(result.current[0]).toBeDefined();
-    expect(result.current[0]?.items).toHaveLength(1);
-    expect(result.current[0]?.items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
+    expect(result.current.status).toBe('ready');
+    expect(readyList(result.current).items).toHaveLength(1);
+    expect(readyList(result.current).items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
   });
 
-  it('returns undefined when projectSettingValue is a PlatformError', () => {
+  it('reports error when the project setting cannot be read', () => {
     const platformError = makePlatformError();
     mockUseProjectSetting.mockReturnValue([
       // Cast through unknown because the mock returns a PlatformError where a ResourceReferenceList
@@ -331,7 +347,116 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current[0]).toBeUndefined();
+    // An unreadable setting is NOT "nothing configured" and NOT "still loading" — it is its own
+    // state, so the panel can say so and offer a way out instead of spinning or lying.
+    expect(result.current.status).toBe('error');
+  });
+
+  it('reports error when the project setting fails after the initial loading window', () => {
+    // Mount while the setting is still loading, so the buffered copy holds the placeholder.
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
+    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+
+    const { result, rerender } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    // The setting now resolves to a read error. The held copy is still the empty placeholder, so
+    // the failure is indistinguishable from "nothing configured" unless the error is reported on
+    // its own channel — that gap is what rendered a permanent empty state.
+    mockUseProjectSetting.mockReturnValue([
+      // Cast through unknown to put a PlatformError where a ResourceReferenceList is expected.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      makePlatformError() as unknown as ResourceReferenceList,
+      undefined,
+      undefined,
+      false,
+    ]);
+    rerender();
+
+    expect(result.current.status).toBe('error');
+  });
+
+  it('recovers to ready once an unreadable setting becomes readable again', () => {
+    mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, true]);
+    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+
+    const { result, rerender } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    mockUseProjectSetting.mockReturnValue([
+      // Cast through unknown to put a PlatformError where a ResourceReferenceList is expected.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      makePlatformError() as unknown as ResourceReferenceList,
+      undefined,
+      undefined,
+      false,
+    ]);
+    rerender();
+    expect(result.current.status).toBe('error');
+
+    // The setting becomes readable. Recovery must be automatic: the buffered layer stays armed
+    // through the failure, so nothing should depend on the user pressing retry.
+    const projectList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'ESV', id: 'abc' }],
+    };
+    mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
+    rerender();
+
+    expect(result.current.status).toBe('ready');
+    expect(readyList(result.current).items[0]).toMatchObject({ name: 'ESV' });
+  });
+
+  it('falls back to the project-level list when the user subscription itself rejects', async () => {
+    // The hook's doc promises "if the user setting cannot be retrieved, the project-level items are
+    // returned tagged as 'admin'". That held only for a PlatformError delivered THROUGH the
+    // callback; a rejected `subscribe` call left the user list undefined, so the memo reported
+    // `loading` forever — an unresolvable spinner on the primary path.
+    const projectList: ResourceReferenceList = {
+      dataVersion: '1.0.0',
+      items: [{ type: 'project', name: 'ESV', id: 'abc' }],
+    };
+    mockUseProjectSetting.mockReturnValue([projectList, undefined, undefined, false]);
+
+    const mockSubscribe = vi.fn(async () => {
+      throw new Error('subscribe rejected');
+    });
+    // Mock object literal cannot satisfy the full PDP interface — cast needed for test isolation
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    mockUseProjectDataProvider.mockReturnValue({
+      subscribeUserModelTexts: mockSubscribe,
+    } as unknown as ReturnType<typeof useProjectDataProvider>);
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    expect(readyList(result.current).items[0]).toMatchObject({ name: 'ESV', source: 'admin' });
+  });
+
+  it('survives a malformed items field rather than crashing the panel', () => {
+    // `items` comes from a project file that reaches us via send/receive without passing through
+    // `resourceReferenceListValidator` (which runs on write only). A non-array `items` makes
+    // `items.filter` throw inside the memo, which unmounts the panel's React tree with no error
+    // boundary — the opposite of the graceful `error` state this hook exists to provide.
+    const malformed = {
+      dataVersion: '1.0.0',
+      // Cast through unknown to simulate a malformed list that passed the type boundary at runtime.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      items: 'not-an-array' as unknown as ResourceReferenceList['items'],
+    };
+    mockUseProjectSetting.mockReturnValue([malformed, undefined, undefined, false]);
+    mockUseProjectDataProvider.mockReturnValue(makeMockPdp(emptyList(), 'subscribeUserModelTexts'));
+
+    const { result } = renderHook(() =>
+      useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
+    );
+
+    expect(result.current.status).toBe('ready');
+    expect(readyList(result.current).items).toEqual([]);
   });
 
   it('discards name-based items that are missing a string name', () => {
@@ -352,8 +477,8 @@ describe('useEffectiveResourceReferenceList', () => {
     );
 
     // The nameless item is discarded; only the valid one survives
-    expect(result.current[0]?.items).toHaveLength(1);
-    expect(result.current[0]?.items[0]).toEqual({
+    expect(readyList(result.current).items).toHaveLength(1);
+    expect(readyList(result.current).items[0]).toEqual({
       type: 'enhancedResource',
       name: 'Valid',
       source: 'admin',
@@ -380,7 +505,7 @@ describe('useEffectiveResourceReferenceList', () => {
     );
 
     // Unknown types are excluded from the merged collection — they exist only for storage round-trips
-    expect(result.current[0]?.items).toHaveLength(0);
+    expect(readyList(result.current).items).toHaveLength(0);
   });
 
   it('tags items by source and lists admin items before user items', () => {
@@ -405,19 +530,19 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    const items = result.current[0]?.items;
+    const { items } = readyList(result.current);
     expect(items).toHaveLength(3);
     // Admin items come first
-    expect(items?.[0]).toEqual({
+    expect(items[0]).toEqual({
       type: 'project',
       name: 'Admin Only',
       id: 'a-001',
       source: 'admin',
     });
     // Duplicate resolved in favour of admin (name from admin copy, source: 'admin')
-    expect(items?.[1]).toEqual({ type: 'project', name: 'In Both', id: 'b-001', source: 'admin' });
+    expect(items[1]).toEqual({ type: 'project', name: 'In Both', id: 'b-001', source: 'admin' });
     // User-only item comes last
-    expect(items?.[2]).toEqual({ type: 'enhancedResource', name: 'User Only', source: 'user' });
+    expect(items[2]).toEqual({ type: 'enhancedResource', name: 'User Only', source: 'user' });
   });
 
   it('holds admin-layer changes until re-armed, while the user layer stays live', () => {
@@ -435,15 +560,15 @@ describe('useEffectiveResourceReferenceList', () => {
     const { result, rerender } = renderHook(() =>
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
-    expect(result.current[0]?.items[0]).toMatchObject({ name: 'Admin V1' });
+    expect(readyList(result.current).items[0]).toMatchObject({ name: 'Admin V1' });
 
     // Admin setting changes (as if a manual sync landed) — must be held.
     mockUseProjectSetting.mockReturnValue([adminV2, undefined, undefined, false]);
     rerender();
-    expect(result.current[0]?.items[0]).toMatchObject({ name: 'Admin V1' });
+    expect(readyList(result.current).items[0]).toMatchObject({ name: 'Admin V1' });
 
     // Re-arm → now the new admin layout is applied.
     act(() => capturedApplyHandler?.({ projectId: 'proj-1' }));
-    expect(result.current[0]?.items[0]).toMatchObject({ name: 'Admin V2' });
+    expect(readyList(result.current).items[0]).toMatchObject({ name: 'Admin V2' });
   });
 });

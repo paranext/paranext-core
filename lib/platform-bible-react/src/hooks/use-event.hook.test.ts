@@ -25,6 +25,7 @@ function createControlledEvent<T>({ throwOnUnsubscribe = false } = {}) {
     event,
     emitTo: (index: number, data: T) => registrations[index].handler(data),
     getUnsubscribeCallCount: (index: number) => registrations[index].unsubscribeCallCount,
+    getSubscribeCount: () => registrations.length,
   };
 }
 
@@ -73,6 +74,50 @@ describe('useEvent', () => {
     expect(eventHandler).toHaveBeenCalledExactlyOnceWith('fresh');
   });
 
+  it('does not deliver from a superseded subscription after the event handler changes', () => {
+    const controlled = createControlledEvent<string>();
+    const firstHandler = vi.fn();
+    const secondHandler = vi.fn();
+    const { rerender } = renderHook(
+      ({ eventHandler }: { eventHandler: PlatformEventHandler<string> }) =>
+        useEvent(controlled.event, eventHandler),
+      { initialProps: { eventHandler: firstHandler } },
+    );
+
+    rerender({ eventHandler: secondHandler });
+
+    // A handler identity change resubscribes just like an event change, so a provider still holding
+    // the first registration must reach neither the old handler nor the new one
+    controlled.emitTo(0, 'stale');
+    expect(firstHandler).not.toHaveBeenCalled();
+    expect(secondHandler).not.toHaveBeenCalled();
+    expect(controlled.getUnsubscribeCallCount(0)).toBe(1);
+
+    act(() => controlled.emitTo(1, 'fresh'));
+    expect(secondHandler).toHaveBeenCalledExactlyOnceWith('fresh');
+  });
+
+  it('subscribes nothing while the event is undefined, then subscribes once it arrives', () => {
+    const controlled = createControlledEvent<string>();
+    const eventHandler = vi.fn();
+    const initialProps: { event: PlatformEvent<string> | undefined } = { event: undefined };
+    const { rerender, unmount } = renderHook(
+      ({ event }: { event: PlatformEvent<string> | undefined }) => useEvent(event, eventHandler),
+      { initialProps },
+    );
+
+    expect(controlled.getSubscribeCount()).toBe(0);
+
+    // Re-running the effect tears down the never-subscribed one first; that must be a no-op rather
+    // than a call through a missing unsubscriber
+    expect(() => rerender({ event: controlled.event })).not.toThrow();
+    expect(controlled.getSubscribeCount()).toBe(1);
+
+    act(() => controlled.emitTo(0, 'arrived'));
+    expect(eventHandler).toHaveBeenCalledExactlyOnceWith('arrived');
+    expect(() => unmount()).not.toThrow();
+  });
+
   it('runs the unsubscriber exactly once on unmount', () => {
     const controlled = createControlledEvent<string>();
     const { unmount } = renderHook(() => useEvent(controlled.event, vi.fn()));
@@ -82,13 +127,16 @@ describe('useEvent', () => {
     expect(controlled.getUnsubscribeCallCount(0)).toBe(1);
   });
 
-  it('warns instead of throwing when the unsubscriber fails during cleanup', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('logs instead of throwing when the unsubscriber fails during cleanup', () => {
+    const logError = vi.spyOn(console, 'error').mockImplementation(() => {});
     const controlled = createControlledEvent<string>({ throwOnUnsubscribe: true });
     const { unmount } = renderHook(() => useEvent(controlled.event, vi.fn()));
 
     expect(() => unmount()).not.toThrow();
     expect(controlled.getUnsubscribeCallCount(0)).toBe(1);
-    expect(warn).toHaveBeenCalledOnce();
+    expect(logError).toHaveBeenCalledWith(
+      'useEvent: error while unsubscribing from event',
+      expect.objectContaining({ message: 'unsubscribe failed' }),
+    );
   });
 });

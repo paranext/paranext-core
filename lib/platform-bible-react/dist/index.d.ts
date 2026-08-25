@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PaletteItem, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
 import { ForwardedPaletteKeyEvent, PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
@@ -1775,6 +1775,11 @@ interface ScopeSelectorProps {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/**
+	 * Optional explanations, by section, for why that section has no available books. Forwarded to
+	 * {@link SelectBooks} and shown as a tooltip on that section's disabled quick-select button.
+	 */
+	disabledSectionExplanations?: Partial<Record<Section, string>>;
 	/** Optional ID that is applied to the root element of this component */
 	id?: string;
 	/**
@@ -1841,7 +1846,7 @@ interface ScopeSelectorProps {
  * chosen, two BookChapterControl pickers are displayed for selecting the start and end verse of the
  * range.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, disabledSectionExplanations, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the SelectBooks component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -1888,6 +1893,13 @@ type SelectBooksProps = {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/**
+	 * Optional explanations, by section, for why that section has no available books. Each is shown
+	 * as a tooltip on that section's quick-select button while it is disabled. Supply one for any
+	 * section whose books the consumer withholds deliberately, so the disabled button reads as "not
+	 * searched here" rather than "this project has none".
+	 */
+	disabledSectionExplanations?: Partial<Record<Section, string>>;
 };
 /**
  * A component for selecting multiple books from the Bible canon. It provides:
@@ -1897,7 +1909,7 @@ type SelectBooksProps = {
  * - Support for shift-click range selection
  * - Visual feedback with badges showing selected books
  */
-export declare function SelectBooks({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksProps): import("react/jsx-runtime").JSX.Element;
+export declare function SelectBooks({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, disabledSectionExplanations, }: SelectBooksProps): import("react/jsx-runtime").JSX.Element;
 type SelectBooksPickerProps = {
 	/**
 	 * Information about available books, formatted as a 123 character long string as defined in a
@@ -1921,6 +1933,12 @@ type SelectBooksPickerProps = {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/**
+	 * Optional explanations, by section, for why that section has no available books. A section with
+	 * no books renders no group at all, so its explanation is shown as a note under the list —
+	 * otherwise a search for one of its books lands on the bare "no book found".
+	 */
+	disabledSectionExplanations?: Partial<Record<Section, string>>;
 };
 /**
  * A searchable dropdown (combobox) for picking multiple books from the Bible canon. It provides:
@@ -1933,7 +1951,7 @@ type SelectBooksPickerProps = {
  * This is the standalone picker used by {@link SelectBooks}, which additionally renders section
  * quick-select buttons and badges for the current selection.
  */
-export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
+export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, disabledSectionExplanations, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
@@ -2242,6 +2260,11 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  * A customizable toolbar component with a menubar, content area, and configure area.
  *
  * This component is designed to be used in the window title bar of an electron application.
+ *
+ * Two `data-testid` hooks are relied on by end-to-end tests outside this package, so they are part
+ * of this component's contract: `toolbar-content-row` (the row that clips when contents do not fit)
+ * and `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking
+ * change.
  *
  * @param {ToolbarProps} props - The props for the component.
  */
@@ -3745,8 +3768,8 @@ export declare function ToggleGroupItem({ className, children, variant, size, ..
  * Delivery is guarded per subscription: once the subscription is superseded (the `event` or
  * `eventHandler` reference changed) or the component unmounts, an emission that still arrives from
  * it — e.g. an emitter walking a snapshot of its handler list — is ignored rather than delivered to
- * `eventHandler`. An unsubscriber that throws during cleanup is logged as a warning rather than
- * thrown, since nothing can catch an error thrown from an effect cleanup.
+ * `eventHandler`. An unsubscriber that throws during cleanup is logged rather than thrown, since
+ * nothing can catch an error thrown from an effect cleanup.
  *
  * @param event The event to subscribe to.
  *
@@ -3770,8 +3793,8 @@ export declare const useEvent: <T>(event: PlatformEvent<T> | undefined, eventHan
  * it — e.g. one already in flight over the network — is ignored rather than delivered to
  * `eventHandler`. If the subscribe promise resolves only after the subscription was already
  * superseded, the resolved unsubscriber is invoked immediately so the subscription does not leak.
- * Subscribe and unsubscribe failures are logged as warnings rather than thrown — neither has a
- * caller that could catch them.
+ * Subscribe and unsubscribe failures are logged rather than thrown — neither has a caller that
+ * could catch them. A failed unsubscribe is logged, not retried.
  *
  * @param event The asynchronously (un)subscribing event to subscribe to.
  *
@@ -3872,6 +3895,34 @@ export declare function useExtraValidMarkers(usj: Usj | undefined): string[];
  * @returns `true` when the web view is rendered (visible), `false` while its tab is hidden
  */
 export declare const useViewVisibility: () => boolean;
+/**
+ * Defers work that should not happen while this web view's tab is inactive, and runs it once when
+ * the tab is shown again.
+ *
+ * Rc-dock keeps an inactive tab's pane mounted under `display: none`: the iframe keeps running, so
+ * React effects, subscriptions, and reactions to shared state all continue firing at full rate for
+ * a view nobody can see. For cheap, data-driven work that is fine, and this hook would only add
+ * latency. It is for the two cases where it is not fine: work whose result depends on layout, which
+ * a `display: none` pane does not have, and work expensive enough that spending it on a hidden view
+ * is a waste — a per-reference search or fetch that a permanently-mounted panel would otherwise
+ * launch on every reference change through the whole session.
+ *
+ * Requests made while hidden collapse into a single pending catch-up rather than queueing, which
+ * suits the shape of work this is for: "bring the view up to date with the current state", where
+ * only the last request's result would have survived anyway. Work whose every invocation matters
+ * (appending to a log, counting events) needs a queue, not this hook.
+ *
+ * Pair it with `useViewVisibility`, which reports whether the calling view is rendered. See
+ * `.claude/rules/cross-view-sync-hidden-views.md` for the wider rule this implements.
+ *
+ * @param isViewVisible Whether the web view is currently rendered — pass `useViewVisibility()`.
+ * @param run The work to perform. Always invoked at its latest identity, so callers need not
+ *   memoize it.
+ * @returns A stable callback that runs `run` now when visible, or arms the catch-up when hidden.
+ *   Its identity never changes, so callers can safely list it in effect dependencies without the
+ *   effect re-firing on every visibility flip.
+ */
+export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */

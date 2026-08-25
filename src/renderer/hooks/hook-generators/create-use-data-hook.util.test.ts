@@ -4,9 +4,10 @@
 // CHECKED-IN BUILD OUTPUT. The subscribe/teardown race behavior these tests pin therefore comes
 // from the built bundle, not from `lib/platform-bible-react/src/hooks/use-event-async.hook.ts`:
 // editing that source leaves these tests green until the library is rebuilt
-// (`npm run build --workspace=lib/platform-bible-react`) and the refreshed `dist` is committed.
+// (`npm run build:basic --workspace=lib/platform-bible-react`) and the refreshed `dist` is
+// committed. Nothing in CI enforces that freshness, so keep this in mind when editing the library.
 import { act, renderHook } from '@testing-library/react';
-import { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+import { PlatformError, newPlatformError, UnsubscriberAsync } from 'platform-bible-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataProviderDataType } from '@shared/models/data-provider.model';
 import { IDataProvider } from '@shared/models/data-provider.interface';
@@ -188,6 +189,42 @@ describe('createUseDataHook', () => {
     expect(result.current[2]).toBe(false);
     expect(harness.subscriptions[0].getUnsubscribeCallCount()).toBe(1);
     expect(harness.subscriptions[1].getUnsubscribeCallCount()).toBe(1);
+  });
+
+  it('stays loading and subscribes nothing until the data provider resolves', async () => {
+    // The generator's factory is itself a hook, so the provider starts undefined the way a real
+    // `useDataProvider` does before its lookup resolves
+    let currentProvider: IDataProvider | undefined;
+    const useLateProvider = createUseDataHook<[]>(() => currentProvider);
+    const { result, rerender } = renderHook(() =>
+      useLateProvider<TestDataProvider>().Stuff(selectorGen1, 'default'),
+    );
+
+    expect(result.current[0]).toBe('default');
+    expect(result.current[1]).toBeUndefined();
+    expect(result.current[2]).toBe(true);
+    expect(harness.subscriptions).toHaveLength(0);
+
+    currentProvider = harness.provider;
+    rerender();
+    await act(async () => harness.subscriptions[0].resolveSubscribe());
+    act(() => harness.subscriptions[0].deliver('genesis 1'));
+
+    expect(result.current[0]).toBe('genesis 1');
+    expect(result.current[2]).toBe(false);
+  });
+
+  it('passes a delivered PlatformError through as the data and clears isLoading', async () => {
+    const { result } = renderUseStuff(selectorGen1);
+    await act(async () => harness.subscriptions[0].resolveSubscribe());
+
+    // The PDP reports failures by delivering a PlatformError in place of the data, so it must ride
+    // the same guarded path rather than being swallowed or leaving the hook stuck loading
+    const error = newPlatformError('provider could not read the chapter');
+    act(() => harness.subscriptions[0].deliver(error));
+
+    expect(result.current[0]).toBe(error);
+    expect(result.current[2]).toBe(false);
   });
 
   it('calls the setter with the current selector', async () => {

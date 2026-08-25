@@ -67,10 +67,15 @@ function isMarkerRowInert(
   canRemove: boolean,
   canChange: boolean,
 ): boolean {
-  // Extending a partially-covering marker over the rest of the selection needs an extend operation
-  // the editor does not expose yet.
+  // Extending a partially-covering marker over the rest of the selection needs the editor's extend
+  // operation. The editor exposes one, but nothing here reaches it: `characterMarkerOptions` has no
+  // extend entry and this function takes no `canExtend`, so the row is inert unconditionally and no
+  // caller can make it live.
+  // TODO(PT-4394): add an extend option and a `canExtend` branch, wired to
+  // `EditorRef.extendCharacterMarker`.
   if (selectionState === 'partial') return true;
-  // Covers everything, so the action is a toggle-off — inert only if removal does not exist yet.
+  // Covers everything, so the action is a toggle-off — inert only if no remove operation was
+  // supplied.
   if (selectionState === 'all') return !canRemove;
   // Nothing applied: picking a marker adds it, which always works.
   if (!currentCharacterMarker) return false;
@@ -98,9 +103,10 @@ function isMarkerRowInert(
  *   marker.
  * @param characterMarkerOptions The character marker applied at the current selection, the
  *   selection's per-marker coverage, plus the optional editor operations for acting on them. Each
- *   operation is optional because the editor does not expose all of them yet; omit an operation to
- *   disable the actions that need it. With no `changeCharacterMarker`, picking a marker while one
- *   is applied does nothing — it never falls back to adding, because adding nests.
+ *   operation is optional so a caller can offer only the actions it supports; omit an operation to
+ *   disable the actions that need it. The one production caller supplies `removeCharacterMarker`
+ *   only, so with no `changeCharacterMarker`, picking a marker while one is applied does nothing —
+ *   it never falls back to adding, because adding nests.
  * @returns The list of character marker menu items, sorted by marker code. Empty when
  *   `parentMarker` is absent or contributes no character markers — whether it has no children at
  *   all (e.g. `c`) or only non-character children (e.g. `mt`). That wins over the remove row, so
@@ -125,18 +131,22 @@ export function generateCharacterMarkerMenuListItems(
      * menu is closed, and when the selection cannot be resolved against the editor's USJ.
      *
      * It decides both what each row DOES and what it shows: a row whose marker covers the whole
-     * selection removes it, a partially-covering row is inert (extending it needs an editor
-     * operation that does not exist yet), and a mixed selection swaps the single remove row for a
-     * remove-all row. Both halves of that live here rather than being stamped on afterwards, so one
-     * decision is not split across two files.
+     * selection removes it, a partially-covering row is inert (extending it needs the editor's
+     * extend operation, which this menu has no option for), and a mixed selection swaps the single
+     * remove row for a remove-all row. Both halves of that live here rather than being stamped on
+     * afterwards, so one decision is not split across two files.
      */
     coverage?: CharacterMarkerCoverage;
     /**
-     * Replaces the applied character marker with the picked one. `EditorRef` exposes no
-     * replace-character-marker operation yet, so supply this only once it does; while it is absent,
+     * Replaces the applied character marker with the picked one. `EditorRef` exposes a
+     * replace-character-marker operation, but no caller wires this to it; while this is absent,
      * every marker row is inert whenever a character marker is applied. It does **not** fall back
      * to `insertMarker`, because inserting over an existing character marker nests it rather than
      * replacing it (verified against the editor package — see the comment at the call site).
+     *
+     * TODO(PT-4394): wire this to `EditorRef.replaceCharacterMarker`. Note that operation throws in
+     * readonly mode and on unsupported markers, so the caller needs the same error handling the
+     * remove path has.
      */
     changeCharacterMarker?: (fromMarker: string, toMarker: string) => void;
     /**
@@ -221,8 +231,8 @@ export function generateCharacterMarkerMenuListItems(
             // selection state is excluded by default rather than falling into the insert path.
             //
             // The two states it excludes, and why: 'partial' — extending the marker over the rest of
-            // the selection needs an editor operation that does not exist yet, and `insertMarker`
-            // would nest rather than extend. 'all' — handled above, but without a
+            // the selection needs the editor's extend operation, which this menu has no option for,
+            // and `insertMarker` would nest rather than extend. 'all' — handled above, but without a
             // `removeCharacterMarker` (the option is typed optional) it would otherwise fall through
             // here and nest a duplicate marker.
             else if (selectionState === 'none' || selectionState === undefined) {

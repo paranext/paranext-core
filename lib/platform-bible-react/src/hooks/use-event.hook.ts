@@ -8,8 +8,8 @@ import { useEffect } from 'react';
  * Delivery is guarded per subscription: once the subscription is superseded (the `event` or
  * `eventHandler` reference changed) or the component unmounts, an emission that still arrives from
  * it — e.g. an emitter walking a snapshot of its handler list — is ignored rather than delivered to
- * `eventHandler`. An unsubscriber that throws during cleanup is logged as a warning rather than
- * thrown, since nothing can catch an error thrown from an effect cleanup.
+ * `eventHandler`. An unsubscriber that throws during cleanup is logged rather than thrown, since
+ * nothing can catch an error thrown from an effect cleanup.
  *
  * @param event The event to subscribe to.
  *
@@ -37,13 +37,17 @@ export const useEvent = <T>(
       if (!isCancelled) eventHandler(eventData);
     };
 
+    // Subscribing synchronously is deliberately NOT wrapped, unlike useEventAsync's subscribe: a
+    // throw here happens during the effect itself, where React's error boundaries can see and
+    // report it. Only the teardown below is wrapped, since nothing can catch a throw from an
+    // effect cleanup.
     const unsubscriber = event(guardedHandler);
     return () => {
       isCancelled = true;
       try {
         unsubscriber();
       } catch (error) {
-        console.warn('useEvent: error while unsubscribing from event', error);
+        console.error('useEvent: error while unsubscribing from event', error);
       }
     };
   }, [event, eventHandler]);

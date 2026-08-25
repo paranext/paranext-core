@@ -35,6 +35,7 @@ import {
 } from './checks/checks-side-panel/checks-side-panel.component';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
 import { isSyncEditBlockedError, notifySyncEditBlocked } from './sync-edit-blocked.util';
+import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 
 /**
  * Gets the short and full names of a project from its ID. Kept in the webview (not the shared,
@@ -53,7 +54,7 @@ async function getProjectNames(projectId: string): Promise<ProjectOption> {
  * in a user-meaningful way. Without this filter, every project-bound web view (including the checks
  * side panel itself) would falsely mark a project as open.
  */
-const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
+const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>([SCRIPTURE_EDITOR_WEBVIEW_TYPE]);
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -136,7 +137,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
 
   const editorWebViewController = useWebViewController(
-    'platformScriptureEditor.react',
+    SCRIPTURE_EDITOR_WEBVIEW_TYPE,
     editorWebViewId,
   );
 
