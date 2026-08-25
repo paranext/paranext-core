@@ -108,6 +108,9 @@ const booksPresent = Canon.allBookIds
   .map((bookId) => (availableBookIds.includes(bookId) ? '1' : '0'))
   .join('');
 
+// The story project is scripture-only, so Find has no extra material to explain withholding.
+const hasExcludedExtraMaterial = false;
+
 const localizedBookData = new Map<string, LocalizedBookData>([
   ['GEN', { localizedId: 'Genesis', localizedName: 'Genesis' }],
   ['JHN', { localizedId: 'John', localizedName: 'John' }],
@@ -508,6 +511,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       scope={scope}
       verseRef={verseRef}
       booksPresent={booksPresent}
+      hasExcludedExtraMaterial={hasExcludedExtraMaterial}
       selectedBookIds={selectedBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}

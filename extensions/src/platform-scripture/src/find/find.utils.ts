@@ -321,22 +321,24 @@ export function isDifferentProjectSelection(
  * crash — but with the `selectedBooks` scope the search would silently cover fewer books than the
  * checkbox list shows.
  *
- * An EMPTY `availableBookIds` means "not known yet", NOT "the project has no books": `booksPresent`
- * sits at its all-zero default while the project setting resolves, and pruning against that
- * transient empty set would wipe the whole selection instead of narrowing it. In that case the
- * selection is returned untouched.
+ * Pass `undefined` for `availableBookIds` while the project's book list is still being read, and
+ * the selection is returned untouched: pruning against a not-yet-known list would wipe the whole
+ * selection instead of narrowing it. An EMPTY array is a real answer — a project with no searchable
+ * books — and does empty the selection. The distinction matters because Find excludes extra
+ * material, so a project holding nothing else genuinely has nothing to search, and treating that as
+ * "not known yet" would leave a stale selection live.
  *
- * @param availableBookIds Book ids the selected project has, or empty when not yet known.
+ * @param availableBookIds Book ids the selected project has, or `undefined` when not yet known.
  * @param selectedBookIds The currently selected book ids.
  * @returns The pruned ids, or the ORIGINAL `selectedBookIds` array reference when nothing needed
  *   removing — so callers can compare by identity to skip a redundant state write (which also keeps
  *   an effect that depends on this from re-triggering itself).
  */
 export function prunePresentBookIds(
-  availableBookIds: readonly string[],
+  availableBookIds: readonly string[] | undefined,
   selectedBookIds: string[],
 ): string[] {
-  if (availableBookIds.length === 0) return selectedBookIds;
+  if (!availableBookIds) return selectedBookIds;
   const availableBookIdSet = new Set(availableBookIds);
   const prunedBookIds = selectedBookIds.filter((bookId) => availableBookIdSet.has(bookId));
   return prunedBookIds.length === selectedBookIds.length ? selectedBookIds : prunedBookIds;

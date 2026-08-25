@@ -1227,3 +1227,40 @@ step, no automation. Just a record.
      action. This decision establishes the contradiction rather than causing it. Owner: core.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
+
+## ADR-0025: Find excludes extra material by narrowing its book lists, not by gating its scopes
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** Find reports a result's location by walking the `\c` and `\v` markers of the book it
+  matched in. Extra material (GLO, FRT, INT, XXA, … — `Canon.nonCanonicalIds`) is organized by
+  paragraph markers rather than verses, so every match in one resolves to the same useless reference
+  (`GLO 1:0`), and the platform cannot open such a book to act on the result anyway. Find had three
+  independent paths to those books: the flag string the book picker offers, the book ids the search
+  runs over, and the `book`/`chapter` scopes, which build their scope from the current scripture
+  reference rather than from any book list.
+- **Decision:** Exclude extra material by clearing its flags in the `booksPresent` string Find
+  derives its lists from (`deriveFindBookLists`), which covers the picker and the search together.
+  Flags are cleared **in place** rather than removed, because consumers index into the string by
+  book number and reject a length that does not match the canon. The `book`/`chapter` scopes are
+  **deliberately not gated** in this change; PT-4415 covers them, and PT-4414 covers dropping the
+  whole exclusion once extra material can be opened and addressed.
+- **Alternatives considered:**
+  - **Filter `findScope` before the search runs**, as a second line of defence behind the prune.
+    Rejected here: it half-solves the `book`/`chapter` bypass, which would make PT-4415's real fix
+    harder to reason about — two partial filters in different layers rather than one gate.
+  - **Drop the excluded positions from the flag string.** Rejected: it breaks the canon-length
+    invariant every downstream decoder relies on.
+  - **Filter at each consumer.** Rejected: filtering the search but not the picker (or the reverse)
+    lets a user pick a book the search never covers.
+- **Consequences:** Find now needs two book lists where it had one — `availableBookIds` (what the
+  search covers) and `localizableBookIds` (every book, so a scope label reading from the current
+  reference can still name a book the search excludes). That split exists only to compensate for
+  the exclusion and collapses back to one list under PT-4414. Because a project can now hold
+  nothing but extra material, "no searchable books" became a real answer, which forced the
+  unknown-vs-empty distinction below to be explicit: `deriveFindBookLists(undefined)` reports
+  `availableBookIds: undefined` while the setting is unread OR its read errored, and only a genuine
+  empty list prunes the user's persisted selection. Treating a delivered `PlatformError` as an
+  answer would have wiped that selection permanently — `useProjectSetting` reports an error as
+  loaded, so the error branch has to be recognized on its own.
+- **Source:** PT-3299, review of #2708.
