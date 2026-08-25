@@ -49,7 +49,14 @@ class NoSilentSkipsReporter implements Reporter {
   async onEnd(result: FullResult): Promise<{ status?: FullResult['status'] } | undefined> {
     if (!this.rootSuite) return undefined;
 
-    const lost = this.rootSuite.allTests().filter(NoSilentSkipsReporter.neverRan);
+    const allTests = this.rootSuite.allTests();
+
+    // If nothing executed at all, this is `--list` (or an abort before the first test, which
+    // already fails loudly on its own). The signal worth reporting is that SOME tests ran while
+    // others were lost, so require at least one test to have produced a result.
+    if (!allTests.some((test) => test.results.length > 0)) return undefined;
+
+    const lost = allTests.filter(NoSilentSkipsReporter.neverRan);
     if (lost.length === 0) return undefined;
 
     const listed = lost

@@ -10,15 +10,25 @@
  *
  * ## Viewport / Screenshot Dimension Enforcement
  *
- * Reviewer experience requires screenshots taken at a consistent, large viewport (1920x1080) so the
- * full UI layout is captured. Two failure modes have been observed in the past and are now actively
- * defended against:
+ * Two separate concerns, deliberately kept apart:
+ *
+ * - **Layout** is decided by the window size the spec declares with `test.use({ windowSize })`,
+ *   asserted here against the real OS window. The fixture cannot resize a window it did not create,
+ *   so it requires the app to have been started at that size.
+ * - **Evidence quality** is enforced where screenshots are written, by the `page.screenshot` wrapper
+ *   below. Note this floor is a fixed Full HD minimum, so a spec that writes evidence screenshots
+ *   must declare `windowSize: { width: 1920, height: 1080 }` — the fixture no longer emulates a
+ *   viewport that would satisfy it regardless of the real window.
+ *
+ * Two failure modes have been observed in the past and are defended against:
  *
  * 1. **Small renderer window** — Electron defaults to a 1024x728 window which yields a ~675x728 usable
  *    viewport; screenshots at that size hide most of the UI and produce reviews-by-vibes.
  * 2. **DevTools panel open** — when DevTools is docked-bottom or docked-right, the renderer area
  *    shrinks to the remaining sliver (~300x768 typical), producing useless screenshots that pass
- *    `toBeVisible` checks but are visually unreviewable.
+ *    `toBeVisible` checks but are visually unreviewable. Note the window-size assertion does NOT
+ *    catch this: `outerWidth` is unchanged by a docked panel. It is handled by launching with
+ *    `PT_NO_DEVTOOLS=true`, which `.erb/scripts/refresh.sh` and the launch fixtures now do.
  *
  * Mitigations applied here:
  *

@@ -24,6 +24,8 @@ import {
   ElectronAppContext,
   teardownElectronApp,
   preConfigureSettings,
+  DEFAULT_WINDOW_SIZE,
+  WindowSize,
 } from './helpers';
 
 export { expect } from '@playwright/test';
@@ -37,6 +39,11 @@ interface CommentWorkerFixtures {
 
 /** Test-scoped fixtures — each test gets its own page reference and listeners. */
 interface CommentTestFixtures {
+  /**
+   * Window size this suite's layout is written against; set with `test.use({ windowSize: { width,
+   * height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
+   */
+  windowSize: WindowSize;
   mainPage: Page;
 }
 
@@ -74,17 +81,18 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
   ],
 
   // Test-scoped: each test gets the first window with its own listeners.
-  mainPage: async ({ commentElectronApp }, use, testInfo: TestInfo) => {
+  windowSize: [DEFAULT_WINDOW_SIZE, { option: true }],
+  mainPage: async ({ commentElectronApp, windowSize }, use, testInfo: TestInfo) => {
     const page = await commentElectronApp.firstWindow({ timeout: 90_000 });
 
     // Ensure the window is large enough for WebView content to be visible.
-    await commentElectronApp.evaluate(({ BrowserWindow }) => {
+    await commentElectronApp.evaluate(({ BrowserWindow }, size) => {
       const win = BrowserWindow.getAllWindows()[0];
       if (win) {
         if (win.isMaximized()) win.unmaximize();
-        win.setSize(1280, 800);
+        win.setSize(size.width, size.height);
       }
-    });
+    }, windowSize);
 
     console.log(`Window URL: ${page.url()}`);
     const onPageError = (err: Error) => console.error(`Page error: ${err.message}`);

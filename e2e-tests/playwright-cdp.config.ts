@@ -14,7 +14,15 @@ const config = defineConfig({
   // both here — run the isolated suite (which includes the find tests under isolated/find) via
   // `npm run test:e2e:isolated`.
   // _example/ contains reference templates, not runnable tests.
-  testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**'],
+  // manage-books is excluded because a bare `npm run test:e2e-cdp` would otherwise run it against
+  // whatever app is live, and two of its specs mutate real projects with no restore:
+  // manage-books-journey.spec.ts bulk-selects every visible book and clicks "Replace entire books"
+  // (:507, :530) against a rotation pool of real local projects — zzz7, wgPIDGIN, MP1, RH2, ROT
+  // (:161) — and manage-books-functional-WP-001.spec.ts:394 deletes GEN. Those projects exist on
+  // developer machines under ~/.platform.bible/projects, so this is data loss, not test noise.
+  // Re-enable per-spec once the suite owns a throwaway project root (isolatedProjectRoot), the way
+  // find.fixture does.
+  testIgnore: ['**/smoke/**', '**/isolated/**', '**/_example/**', '**/manage-books/**'],
   fullyParallel: false,
   workers: 1,
   reporter: [
