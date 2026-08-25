@@ -587,53 +587,6 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
 }
 
 /**
- * Path to the platform-scripture extension's persisted recently-opened-projects list.
- * `papi.storage`'s user-data files are named for the base64 of the storage key with padding
- * stripped, so this is `recentlyOpenedProjects` encoded — see
- * `RECENTLY_OPENED_PROJECTS_STORAGE_KEY` in
- * `extensions/src/platform-scripture/src/recently-opened-projects.service.ts`.
- */
-const DEV_APPDATA_RECENT_PROJECTS_PATH = path.resolve(
-  __dirname,
-  '../../dev-appdata/extensions/platformScripture/user-data/cmVjZW50bHlPcGVuZWRQcm9qZWN0cw',
-);
-
-/**
- * Replaces the persisted recently-opened-projects list before the app launches.
- *
- * SIMPLE-MODE TESTS NEED THIS. Simple mode auto-fills its empty Scripture editor slot with the
- * first project from this list that will open (`openDefaultActiveProjectIfApplicable` in
- * `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). That open is
- * asynchronous and slow — it can land AFTER a test has opened its own project, replacing the editor
- * tab and re-pointing every Column 3 panel at the auto-opened project. Left alone the list holds
- * whatever the developer last opened, so which project wins is a coin flip. Naming the project the
- * test wants makes the auto-open agree with the test's own open, so it no longer matters which
- * lands first.
- *
- * Must be called BEFORE `launchElectronApp`.
- *
- * @param projectIds Project ids, most recent first. An empty list leaves the picker nothing to open
- *   from recents, so it falls through to Send/Receive's shared projects.
- * @returns A restore function that writes the file back to its exact pre-call contents (or deletes
- *   it if it did not exist). Call it AFTER the app has closed — the app rewrites this file whenever
- *   a project is opened.
- */
-export function preConfigureRecentlyOpenedProjects(projectIds: string[]): () => void {
-  let originalContents: string | undefined;
-  if (fs.existsSync(DEV_APPDATA_RECENT_PROJECTS_PATH))
-    originalContents = fs.readFileSync(DEV_APPDATA_RECENT_PROJECTS_PATH, 'utf-8');
-
-  fs.mkdirSync(path.dirname(DEV_APPDATA_RECENT_PROJECTS_PATH), { recursive: true });
-  fs.writeFileSync(DEV_APPDATA_RECENT_PROJECTS_PATH, JSON.stringify(projectIds));
-
-  return () => {
-    if (originalContents !== undefined)
-      fs.writeFileSync(DEV_APPDATA_RECENT_PROJECTS_PATH, originalContents);
-    else fs.rmSync(DEV_APPDATA_RECENT_PROJECTS_PATH, { force: true });
-  };
-}
-
-/**
  * Adds the given usernames as team members of the specified Paratext project so they appear in the
  * "Assign to" dropdown.
  *
