@@ -483,27 +483,38 @@ export function PlatformBibleToolbar() {
         appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
-            {!isPowerMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
-              // Simple mode only — power users send/receive per project from the Home
-              // view. Fail open on availability: `undefined` means not known yet (the extension
-              // host is busy, or send/receive is still activating), and the button must not hinge
-              // on that resolving. A settled `false` hides it — unless the backend has reported a
-              // sync, which is a surface the user needs regardless of what the extension probe says
-              // (see `hasBackendSynced` above).
-              //
-              // The cost of failing open is one seed-retry loop for the extension's CLAIM in builds
-              // with no send/receive at all, restarted on each Simple/Power toggle since that unmounts
-              // and remounts this. An unregistered command is not cheap to fail: `sendCommand` routes
-              // through `requestWithRetry`, so one read rejects only after `MAX_REQUEST_ATTEMPTS`
-              // attempts at `REQUEST_ATTEMPT_WAIT_TIME_MS` apart (~10s, `rpc.model.ts`). Availability
-              // settles to `false` within `SEND_RECEIVE_UNKNOWN_GRACE_MS` (5s) there, so this unmounts
-              // while that loop's FIRST read is still retrying. The backend activity signal costs
-              // nothing here either way: it is seeded once at startup by `initSyncActivityService`
-              // and read from a store, not re-seeded per mount.
-              // TODO(PT-4233): A one-shot capability probe would fit a permanently-absent claim
-              // command better than a retry loop does.
-              <SyncStatusButton />
-            )}
+            {/* toolbar-sync-area: always in the DOM so onboarding-tour step 4
+                (onboarding-tour.component.tsx) can target [data-testid="toolbar-sync-area"]
+                regardless of whether the sync button itself renders — that button is still
+                conditional so the toolbar stays compact when sync is unavailable.
+                shrink-0 because this wrapper, not the Button, is now the flex item in the
+                config area's `min-w-0` row — without it a narrow window compresses the Sync
+                button. empty:hidden keeps the wrapper out of the flex flow when the button is
+                not rendered, so it contributes no gap-2 spacing; it stays in the DOM (and stays
+                zero-size, which is how Tour already skips the step) either way. */}
+            <div data-testid="toolbar-sync-area" className="tw:shrink-0 tw:empty:hidden">
+              {!isPowerMode && (isSendReceiveAvailable !== false || hasBackendSynced) && (
+                // Simple mode only — power users send/receive per project from the Home
+                // view. Fail open on availability: `undefined` means not known yet (the extension
+                // host is busy, or send/receive is still activating), and the button must not hinge
+                // on that resolving. A settled `false` hides it — unless the backend has reported a
+                // sync, which is a surface the user needs regardless of what the extension probe says
+                // (see `hasBackendSynced` above).
+                //
+                // The cost of failing open is one seed-retry loop for the extension's CLAIM in builds
+                // with no send/receive at all, restarted on each Simple/Power toggle since that unmounts
+                // and remounts this. An unregistered command is not cheap to fail: `sendCommand` routes
+                // through `requestWithRetry`, so one read rejects only after `MAX_REQUEST_ATTEMPTS`
+                // attempts at `REQUEST_ATTEMPT_WAIT_TIME_MS` apart (~10s, `rpc.model.ts`). Availability
+                // settles to `false` within `SEND_RECEIVE_UNKNOWN_GRACE_MS` (5s) there, so this unmounts
+                // while that loop's FIRST read is still retrying. The backend activity signal costs
+                // nothing here either way: it is seeded once at startup by `initSyncActivityService`
+                // and read from a store, not re-seeded per mount.
+                // TODO(PT-4233): A one-shot capability probe would fit a permanently-absent claim
+                // command better than a retry loop does.
+                <SyncStatusButton />
+              )}
+            </div>
             {marketingVersion !== '' && (
               <TooltipProvider delayDuration={TOOLTIP_DELAY}>
                 <Tooltip>
