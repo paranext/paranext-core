@@ -12,8 +12,7 @@
  * `createCommentTestProject` copies the bundled WEB project into a temp directory under the
  * Platform.Bible projects folder, gives it a unique random hex "Guid", and adds synthetic test
  * users so the "Assign to" dropdown is populated. Call `cleanupCommentTestProject` in `afterAll` to
- * remove the copy. `removeRevelationFromProject` shapes a copy's book list, for tests that need one
- * project to be missing a book another project has.
+ * remove the copy.
  *
  * ## Seeding comment threads
  *
@@ -88,16 +87,10 @@ export interface CommentTestProject {
  * via `HexId.FromStr`. This avoids collisions with the real WEB project (or other test copies).
  *
  * @param users Usernames to add as project team members (e.g. ['Alice', 'Bob', 'Charlie'])
- * @param shortNameSuffix Appended to the generated short name. Pass distinct values when one test
- *   creates several projects, so their short names (and therefore their folders and dock tab
- *   titles) stay distinct even when the copies are created within the same millisecond.
  * @returns Metadata about the created project
  */
-export async function createCommentTestProject(
-  users: string[],
-  shortNameSuffix = '',
-): Promise<CommentTestProject> {
-  const shortName = `testComment_${Date.now()}${shortNameSuffix}`;
+export async function createCommentTestProject(users: string[]): Promise<CommentTestProject> {
+  const shortName = `testComment_${Date.now()}`;
   const projectDir = path.join(PARATEXT_PROJECTS_ROOT, shortName);
 
   // 1. Copy the WEB project directory
@@ -151,54 +144,6 @@ export function cleanupCommentTestProject(project: CommentTestProject | undefine
   if (fs.existsSync(project.projectDir)) {
     fs.rmSync(project.projectDir, { recursive: true, force: true });
   }
-}
-
-/**
- * Revelation's USFM file in the bundled WEB project. The `67` prefix is the USFM file-naming
- * number, which is one higher than the canon book number for every New Testament book.
- */
-const REVELATION_SFM_FILE_NAME = '67REVengWEBUS.SFM';
-
-/**
- * Index of Revelation in `Settings.xml`'s `BooksPresent` bit string. The string is indexed by canon
- * book number minus one, and Revelation is canon book 66.
- */
-const REVELATION_BOOKS_PRESENT_INDEX = 65;
-
-/**
- * Removes Revelation from a project copy: both the book file and the `BooksPresent` bit, because
- * `platformScripture.booksPresent` is served from `ScrText.BooksPresentSet`, which reconciles the
- * two. Use it to make a project copy that lacks a book some other project has, so a test can prove
- * a book is reachable only through the other project.
- *
- * Throws if either input does not look the way this expects, so a changed WEB asset surfaces as a
- * setup failure instead of a test that quietly stops discriminating.
- *
- * @param project The test project copy to strip Revelation from
- */
-export function removeRevelationFromProject(project: CommentTestProject): void {
-  const sfmPath = path.join(project.projectDir, REVELATION_SFM_FILE_NAME);
-  if (!fs.existsSync(sfmPath))
-    throw new Error(`Expected ${REVELATION_SFM_FILE_NAME} in the WEB project copy at ${sfmPath}`);
-  fs.rmSync(sfmPath);
-
-  const settingsPath = path.join(project.projectDir, 'Settings.xml');
-  const settingsXml = fs.readFileSync(settingsPath, 'utf8');
-  const booksPresentMatch = settingsXml.match(/<BooksPresent>([01]+)<\/BooksPresent>/);
-  const booksPresent = booksPresentMatch?.[1];
-  if (!booksPresentMatch || !booksPresent)
-    throw new Error(`No <BooksPresent> bit string found in ${settingsPath}`);
-  if (booksPresent[REVELATION_BOOKS_PRESENT_INDEX] !== '1')
-    throw new Error(
-      `Expected Revelation to be present at index ${REVELATION_BOOKS_PRESENT_INDEX} of BooksPresent, got "${booksPresent}"`,
-    );
-
-  const withoutRevelation = `${booksPresent.slice(0, REVELATION_BOOKS_PRESENT_INDEX)}0${booksPresent.slice(REVELATION_BOOKS_PRESENT_INDEX + 1)}`;
-  fs.writeFileSync(
-    settingsPath,
-    settingsXml.replace(booksPresentMatch[0], `<BooksPresent>${withoutRevelation}</BooksPresent>`),
-    'utf8',
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
