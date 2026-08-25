@@ -51,6 +51,7 @@ import { useFocusSearchOnInvoke } from './find/use-focus-search-on-invoke.hook';
 import {
   applyPreserveCase,
   armBoundedWait,
+  buildFindOptions,
   callControllerSafely,
   classifyPollAttempt,
   GIVE_UP_AFTER_MS,
@@ -1173,14 +1174,16 @@ global.webViewComponent = function FindWebView({
         await abandonFindJob();
         if (!isMountedRef.current) return;
 
-        await beginFindJob({
-          scope: findScope,
-          searchString: searchTerm,
-          caseInsensitive: !shouldMatchCase,
-          useRegex: isRegexAllowed,
-          verseTextOnly: searchTextType === 'verseOnly',
-          wordRestriction,
-        });
+        await beginFindJob(
+          buildFindOptions({
+            searchTerm,
+            findScope,
+            shouldMatchCase,
+            isRegexAllowed,
+            searchTextType,
+            wordRestriction,
+          }),
+        );
         if (!isMountedRef.current) return;
 
         setSearchStatus('running');

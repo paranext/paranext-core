@@ -2350,3 +2350,109 @@ describe('ScriptureFinderProjectDataProviderEngine ignoreDiacritics', () => {
     expect(results.some((t) => t === '\u00E9')).toBe(false);
   });
 });
+
+describe('ScriptureFinderProjectDataProviderEngine ignoreWhitespaceDifferences', () => {
+  // Verse text as it exists on disk: ParatextData's UsfmToken.NormalizeUsfm regularizes runs of
+  // whitespace to a single space on every write, so a saved book can never hold consecutive
+  // spaces. A query typed with extra spaces must still match this single-spaced text.
+  const SINGLE_SPACED_CHAPTER_USX = `<?xml version="1.0" encoding="utf-8"?>
+<usx version="3.0">
+  <book code="MAT" style="id">Matthew</book>
+  <chapter number="1" style="c" sid="MAT 1"/>
+  <para style="p">
+    <verse number="1" style="v" sid="MAT 1:1"/>In the beginning was the Word.<verse eid="MAT 1:1"/>
+  </para>
+  <chapter eid="MAT 1"/>
+</usx>`;
+
+  let engine: ScriptureFinderProjectDataProviderEngine;
+
+  beforeEach(() => {
+    // Mock PDPs are plain objects cast to the interface type for test setup convenience.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const mockPdps = {
+      'platform.base': {
+        getSetting: vi.fn().mockImplementation((key: string) => {
+          if (key === 'platformScripture.baseCharacterClassRegex')
+            return Promise.resolve('\\p{Lu}\\p{Ll}\\p{Lt}\\p{Lo}\\p{Cn}');
+          if (key === 'platformScripture.diacriticCharacterClassRegex')
+            return Promise.resolve('\\p{Mn}\\p{Mc}\\p{Lm}');
+          if (key === 'platformScripture.wordMedialCharacterRegex') return Promise.resolve('');
+          if (key === 'platformScripture.allowInvisibleCharacters') return Promise.resolve(false);
+          if (key === 'platformScripture.wordBreakRegex') return Promise.resolve('\\s+');
+          return Promise.resolve(undefined);
+        }),
+        subscribeSetting: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USX_Book': {
+        getBookUSX: vi.fn().mockResolvedValue(SINGLE_SPACED_CHAPTER_USX),
+        setBookUSX: vi.fn().mockResolvedValue(true),
+        subscribeBookUSX: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USX_Chapter': {
+        getChapterUSX: vi.fn().mockResolvedValue(SINGLE_SPACED_CHAPTER_USX),
+        setChapterUSX: vi.fn().mockResolvedValue(true),
+        subscribeChapterUSX: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USFM_Book': {
+        getBookUSFM: vi.fn().mockResolvedValue(''),
+        setBookUSFM: vi.fn().mockResolvedValue(true),
+        subscribeBookUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+      'platformScripture.USFM_Chapter': {
+        getChapterUSFM: vi.fn().mockResolvedValue(''),
+        setChapterUSFM: vi.fn().mockResolvedValue(true),
+        subscribeChapterUSFM: vi.fn().mockResolvedValue(() => Promise.resolve(true)),
+      },
+    } as unknown as ScriptureFinderOverlayPDPs;
+    engine = new ScriptureFinderProjectDataProviderEngine(mockPdps);
+  });
+
+  async function findTexts(
+    searchString: string,
+    options?: Partial<Omit<Parameters<typeof engine.beginFindJob>[0], 'searchString' | 'scope'>>,
+  ): Promise<string[]> {
+    const jobId = await engine.beginFindJob({
+      searchString,
+      scope: [{ bookId: 'MAT', chapter: 1 }],
+      ...options,
+    });
+    let report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    while (report.status === 'running') {
+      // Polling requires sequential awaits; parallelizing would race against job completion.
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise((resolve) => {
+        setTimeout(resolve, 10);
+      });
+      // Sequential await required to get updated status after each polling delay.
+      // eslint-disable-next-line no-await-in-loop
+      report = await engine.retrieveFindJobUpdate(jobId, 1000);
+    }
+    return (report.nextResults ?? []).map((r) => r.text);
+  }
+
+  it('finds single-spaced text when the query is padded with extra spaces', async () => {
+    const results = await findTexts('   beginning    ', {
+      ignoreWhitespaceDifferences: true,
+      caseInsensitive: true,
+    });
+    expect(results.some((t) => t.includes('beginning'))).toBe(true);
+  });
+
+  it('finds single-spaced text when the query has extra spaces between words', async () => {
+    const results = await findTexts('the   Word', {
+      ignoreWhitespaceDifferences: true,
+      caseInsensitive: true,
+    });
+    expect(results.some((t) => t.includes('the') && t.includes('Word'))).toBe(true);
+  });
+
+  it('requires an exact whitespace match in regex mode, where the option does not apply', async () => {
+    const results = await findTexts('the {2}Word', {
+      ignoreWhitespaceDifferences: true,
+      useRegex: true,
+      caseInsensitive: true,
+    });
+    expect(results).toEqual([]);
+  });
+});

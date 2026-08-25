@@ -8,8 +8,15 @@ import {
   ScrollGroupId,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
-import { FindJobStatus, FindJobStatusReport, FindOptions } from 'platform-scripture';
+import {
+  FindJobStatus,
+  FindJobStatusReport,
+  FindOptions,
+  FindScope,
+  WordRestriction,
+} from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
+import type { SearchTextType } from './find-types';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
@@ -705,4 +712,43 @@ export function buildSearchRegex(
   const flags = `${caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}`;
 
   return new RegExp(regexStr, flags);
+}
+
+/** The Find UI state that determines how a search is performed */
+export type FindOptionsInput = {
+  /** The text or regex pattern the user typed, passed through verbatim */
+  searchTerm: string;
+  /** The books and chapters to search, in order */
+  findScope: FindScope[];
+  /** Whether the user asked for a case-sensitive search */
+  shouldMatchCase: boolean;
+  /** Whether the user enabled regex mode */
+  isRegexAllowed: boolean;
+  /** Which text the user chose to search — all text, or verse text only */
+  searchTextType: SearchTextType;
+  /** Whether matches are restricted to word boundaries */
+  wordRestriction: WordRestriction;
+};
+
+/**
+ * Translates the Find UI's state into the {@link FindOptions} sent to the find PDP.
+ *
+ * `ignoreWhitespaceDifferences` is always enabled. Saved USFM can never contain consecutive spaces
+ * — ParatextData regularizes runs of whitespace to a single space on every write — so a query typed
+ * with extra spaces would otherwise be unsatisfiable. The find engine treats the option as a no-op
+ * in regex mode, where the user-supplied pattern is used as-is.
+ *
+ * @param input The current Find UI state
+ * @returns The options describing the search to run
+ */
+export function buildFindOptions(input: FindOptionsInput): FindOptions {
+  return {
+    scope: input.findScope,
+    searchString: input.searchTerm,
+    caseInsensitive: !input.shouldMatchCase,
+    useRegex: input.isRegexAllowed,
+    verseTextOnly: input.searchTextType === 'verseOnly',
+    wordRestriction: input.wordRestriction,
+    ignoreWhitespaceDifferences: true,
+  };
 }

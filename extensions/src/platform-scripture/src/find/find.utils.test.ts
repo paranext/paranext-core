@@ -4,6 +4,7 @@ import { FindJobStatusReport } from 'platform-scripture';
 import {
   applyPreserveCase,
   armBoundedWait,
+  buildFindOptions,
   buildSearchRegex,
   callControllerSafely,
   CharacterCategorizer,
@@ -870,5 +871,57 @@ describe('resolveScrollGroupForPickedProject', () => {
 
   it('returns undefined when no tabs are open anywhere', () => {
     expect(resolveScrollGroupForPickedProject('PROJ-A', 0, [], undefined)).toBeUndefined();
+  });
+});
+
+describe('buildFindOptions', () => {
+  const BASE_ARGS = {
+    searchTerm: 'beginning',
+    findScope: [{ bookId: 'MAT', chapter: 1 }],
+    shouldMatchCase: false,
+    isRegexAllowed: false,
+    searchTextType: 'all',
+    wordRestriction: 'none',
+  } as const;
+
+  // Saved USFM can never contain consecutive spaces — ParatextData regularizes runs of whitespace
+  // to a single space on every write — so a query typed with extra spaces would otherwise be
+  // unsatisfiable. Find always forgives whitespace differences to keep such queries meaningful.
+  it('always ignores whitespace differences', () => {
+    expect(buildFindOptions(BASE_ARGS).ignoreWhitespaceDifferences).toBe(true);
+  });
+
+  it('ignores whitespace differences even in regex mode, where the engine treats it as a no-op', () => {
+    expect(
+      buildFindOptions({ ...BASE_ARGS, isRegexAllowed: true }).ignoreWhitespaceDifferences,
+    ).toBe(true);
+  });
+
+  it('passes the search term and scope through unchanged', () => {
+    const options = buildFindOptions({ ...BASE_ARGS, searchTerm: '   beginning    ' });
+    expect(options.searchString).toBe('   beginning    ');
+    expect(options.scope).toEqual([{ bookId: 'MAT', chapter: 1 }]);
+  });
+
+  it('inverts shouldMatchCase into caseInsensitive', () => {
+    expect(buildFindOptions({ ...BASE_ARGS, shouldMatchCase: true }).caseInsensitive).toBe(false);
+    expect(buildFindOptions({ ...BASE_ARGS, shouldMatchCase: false }).caseInsensitive).toBe(true);
+  });
+
+  it('maps searchTextType to verseTextOnly', () => {
+    expect(buildFindOptions({ ...BASE_ARGS, searchTextType: 'verseOnly' }).verseTextOnly).toBe(
+      true,
+    );
+    expect(buildFindOptions({ ...BASE_ARGS, searchTextType: 'all' }).verseTextOnly).toBe(false);
+  });
+
+  it('passes useRegex and wordRestriction through', () => {
+    const options = buildFindOptions({
+      ...BASE_ARGS,
+      isRegexAllowed: true,
+      wordRestriction: 'wholeWord',
+    });
+    expect(options.useRegex).toBe(true);
+    expect(options.wordRestriction).toBe('wholeWord');
   });
 });
