@@ -400,12 +400,24 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       const typedWebViewName = webViewName as ReferencedItem;
       const webViewMenu = retVal.webViewMenus[typedWebViewName];
 
-      // Check if we need to fold the default menus into this web view's menus
-      if (!webViewMenu.includeDefaults) return;
       const options: DocumentCombinerOptions = {
         copyDocuments: false,
         ignoreDuplicateProperties: true,
       };
+
+      // The tab menu folds in regardless of `includeDefaults`. Its items act on the tab frame
+      // rather than on the web view's contents, so they apply to a tab whatever the web view
+      // contributes — a web view opting out of platform menus is saying something about its own
+      // toolbar and content menu, not about whether its tab can be moved.
+      const startingTabMenu = webViewMenu.tabMenu ?? {};
+      const tabMenuCombiner = new NonValidatingDocumentCombiner(startingTabMenu, options);
+      tabMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewTabMenu);
+      // Assert the type that schema validation should have already sorted out
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      webViewMenu.tabMenu = tabMenuCombiner.output as SingleColumnMenu | undefined;
+
+      // Check if we need to fold the remaining default menus into this web view's menus
+      if (!webViewMenu.includeDefaults) return;
 
       const startingTopMenu = webViewMenu.topMenu ?? {};
       const topMenuCombiner = new NonValidatingDocumentCombiner(startingTopMenu, options);
@@ -420,13 +432,6 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       // Assert the type that schema validation should have already sorted out
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       webViewMenu.contextMenu = contextMenuCombiner.output as SingleColumnMenu | undefined;
-
-      const startingTabMenu = webViewMenu.tabMenu ?? {};
-      const tabMenuCombiner = new NonValidatingDocumentCombiner(startingTabMenu, options);
-      tabMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewTabMenu);
-      // Assert the type that schema validation should have already sorted out
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      webViewMenu.tabMenu = tabMenuCombiner.output as SingleColumnMenu | undefined;
     });
     return retVal;
   }
