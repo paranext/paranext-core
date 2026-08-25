@@ -16,6 +16,11 @@ vi.mock('@renderer/services/first-run-store', async (importActual) => {
   return { ...actual, resolveFirstRunState: vi.fn().mockResolvedValue(undefined) };
 });
 // Stub heavy children so the test isolates the first-run wiring.
+// OnboardingTour is stubbed because it transitively imports papi-hooks → papi-frontend.service.ts
+// which calls window.matchMedia at module init time (not supported by jsdom without a stub).
+vi.mock('./components/onboarding-tour/onboarding-tour.component', () => ({
+  OnboardingTour: () => undefined,
+}));
 vi.mock('@renderer/components/docking/platform-dock-layout.component', () => ({
   PlatformDockLayout: () => undefined,
 }));
