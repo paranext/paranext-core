@@ -46,9 +46,9 @@ export function LoadingView({ label }: { label: ReactNode }) {
  * re-drive that read, so it renders a message alone (see `PanelReadinessView`) rather than offering
  * an inert button.
  *
- * Composes the shadcn `Empty` primitive per ADR-0016 rather than hand-rolling a container, and
- * carries `role="alert"` so a screen-reader user sitting on the panel is told when it flips out of
- * the loading state, which announces through its own live region.
+ * Composes the shadcn `Empty` primitive per adr-empty-is-zero-state-primitive rather than
+ * hand-rolling a container, and carries `role="alert"` so a screen-reader user sitting on the panel
+ * is told when it flips out of the loading state, which announces through its own live region.
  *
  * The icon is the state's visual signature. Without one this and the pick prompt render as the same
  * centred text plus a button — two identical screens whose buttons do opposite things (retry vs.

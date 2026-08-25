@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
  * assigned in `reloadExtensions` before any activation begins), not from `activeExtensions`, which
  * only fills in as extensions finish activating one by one. Deriving it from activation state makes
  * "is extension X part of this build?" answer `false` for anything that hasn't activated yet — which
- * hid the Send/Receive toolbar button for entire sessions across two shipped releases. See ADR-0013
+ * hid the Send/Receive toolbar button for entire sessions across two shipped releases. See adr-packaged-extensions-are-discovered
  * in `.context/standards/Architecture-Decisions.md` and `derivePackagedExtensionIdentifiers`.
  *
  * This reads the source rather than calling the function because the inputs are module-private:

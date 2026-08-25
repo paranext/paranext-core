@@ -22,8 +22,8 @@ export type ResourcePanelReadinessInput = {
    *
    * Taking `listStatus` and `configuredCount` separately let them disagree — `'loading'` alongside
    * a count of five, or `'ready'` alongside zero when a list was never delivered — which is the
-   * shape the union exists to forbid (see ADR-0028). The count is derived here from the narrowed
-   * union instead.
+   * shape the union exists to forbid (see adr-async-hook-state-shape). The count is derived here
+   * from the narrowed union instead.
    */
   listState: EffectiveResourceReferenceListState;
   /** Whether the DBL resource catalog has finished loading and delivered. */

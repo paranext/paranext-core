@@ -30,7 +30,7 @@ const REMOVE_CHARACTER_MARKER_KEY: LocalizeKey =
  * mixes marked and unmarked text.
  *
  * Deliberately NOT "Remove all character markers" — one activation peels a single nesting layer, so
- * "all" would overstate it. ADR-0011 has the full rationale.
+ * "all" would overstate it. adr-character-marker-removal-peels-one-layer has the full rationale.
  */
 const REMOVE_CHARACTER_MARKERS_KEY: LocalizeKey =
   '%webView_platformScriptureEditor_characterMarkerMenu_removeMarkers%';
@@ -152,7 +152,7 @@ export function generateCharacterMarkerMenuListItems(
     /**
      * Removes character markers, keeping their content. Called with a marker to remove that one,
      * and with no argument to peel one nesting layer from every run the selection covers
-     * (ADR-0011). Omit to offer no remove row at all.
+     * (adr-character-marker-removal-peels-one-layer). Omit to offer no remove row at all.
      */
     removeCharacterMarker?: (marker?: string) => void;
   },
@@ -279,7 +279,7 @@ export function generateCharacterMarkerMenuListItems(
   //
   // Removing the character markers a selection covers is ONE argument-less call, not a loop, so a
   // nested OUTER marker survives the pass and the per-marker rows are the exact path for it. See
-  // ADR-0011 for why looping was rejected.
+  // adr-character-marker-removal-peels-one-layer for why looping was rejected.
   const removeRow: MarkerMenuItem = isMixedCoverage
     ? {
         title: localizedStrings[REMOVE_CHARACTER_MARKERS_KEY] ?? REMOVE_CHARACTER_MARKERS_KEY,
