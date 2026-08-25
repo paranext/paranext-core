@@ -17,6 +17,15 @@
  *   An id, not a bare resolve: the command answers `undefined` when it created no web view, which
  *   the button treats as a failure exactly like a rejection.
  *
+ * A story can also claim commands for itself by installing a responder through
+ * `mocks/command-service-mock-channel.ts`, which is consulted FIRST and so wins over both
+ * Send/Receive overrides below. That channel is how a story answers a PAPI command at all:
+ * `spyOn(commandService, 'sendCommand')` cannot work in Storybook 9, because the module namespace
+ * is a non-configurable ESM namespace and spying on it throws "Module namespace is not configurable
+ * in ESM". A responder that throws on a command it does not list is the point — an unlisted command
+ * should fail loudly rather than be answered by accident — so a story that installs one and also
+ * renders the sync button must answer `cancelSync`/`openSyncStatus` itself.
+ *
  * Both overrides are GLOBAL to the whole Storybook build, unlike the `useSyncStatus` mock beside
  * them in `.storybook/mocks/`, which is scoped per story through a React context. Any future story
  * that fires the same commands inherits this behavior whether it wants it or not — most obviously a
@@ -25,6 +34,7 @@
  * new override through the mocks directory; add one here only when it must hold for every story,
  * and say so when you do.
  */
+import { getCommandServiceMock } from '../mocks/command-service-mock-channel';
 import * as realCommandService from '../../src/shared/services/command.service';
 
 export const { registerCommand, createSendCommandFunction } = realCommandService;
@@ -38,6 +48,10 @@ const NEVER_SETTLES = new Promise<never>(() => {});
 const STUB_SYNC_STATUS_WEB_VIEW_ID = 'storybook-sync-status-web-view';
 
 const sendCommandStub = (commandName: string, ...args: unknown[]) => {
+  // A story that installed a responder owns every command, including the two below: it opted in
+  // explicitly, so its answers — and its refusals — are authoritative.
+  const responder = getCommandServiceMock();
+  if (responder) return Promise.resolve().then(() => responder(commandName, ...args));
   if (commandName === 'paratextBibleSendReceive.cancelSync') return NEVER_SETTLES;
   if (commandName === 'paratextBibleSendReceive.openSyncStatus')
     return Promise.resolve(STUB_SYNC_STATUS_WEB_VIEW_ID);

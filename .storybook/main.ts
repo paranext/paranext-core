@@ -205,7 +205,11 @@ const config: StorybookConfig = {
       ),
       // Delegates every command to the real service (which answers "no backend" through the inert
       // rpc handler) except the two Send/Receive commands whose rejection would otherwise make the
-      // sync button's accepted-cancel state unreachable in Storybook. See the stub for details.
+      // sync button's accepted-cancel state unreachable in Storybook, and any command a story has
+      // claimed through `mocks/command-service-mock-channel.ts`. That channel exists because
+      // `spyOn(commandService, 'sendCommand')` cannot work in Storybook 9 — the module namespace is
+      // a non-configurable ESM namespace, so spying throws "Module namespace is not configurable in
+      // ESM". See the stub for details.
       new NormalModuleReplacementPlugin(
         /^@shared\/services\/command\.service$/,
         join(__dirname, 'papi-stubs/command.service.ts'),
