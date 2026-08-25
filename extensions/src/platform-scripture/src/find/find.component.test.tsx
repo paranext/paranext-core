@@ -882,3 +882,35 @@ describe('Find — whitespace and diacritic tolerance toggles', () => {
     },
   );
 });
+
+const RECENT_SEARCHES_LABEL_KEY = '%webView_find_showRecentSearches%';
+
+// `recentSearches: []` in `buildProps` means every other suite in this file renders
+// `RecentSearches` with an empty list, which makes it return `undefined` and never mount — so
+// nothing else here exercises the menu it opens. These are the only tests that do.
+describe('Find — recent searches menu', () => {
+  const RECENT_SEARCH_TERMS = ['first search', 'second search'];
+
+  it('opens the recent searches menu and lists recent search terms', async () => {
+    const user = setupUser();
+    render(<Find {...buildProps({ recentSearches: RECENT_SEARCH_TERMS })} />);
+
+    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL_KEY }));
+
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByText('first search')).toBeInTheDocument();
+    expect(within(menu).getByText('second search')).toBeInTheDocument();
+  });
+
+  it('selecting a recent search item applies it and closes the menu', async () => {
+    const user = setupUser();
+    const onSearchTermChange = vi.fn();
+    render(<Find {...buildProps({ recentSearches: RECENT_SEARCH_TERMS, onSearchTermChange })} />);
+
+    await user.click(screen.getByRole('button', { name: RECENT_SEARCHES_LABEL_KEY }));
+    await user.click(await screen.findByText('first search'));
+
+    expect(onSearchTermChange).toHaveBeenCalledWith('first search');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+});

@@ -1,7 +1,8 @@
 import { Direction } from '@/utils/dir-helper.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronUp } from 'lucide-react';
 import { ComponentType, useCallback, useMemo } from 'react';
+import { LanguageStrings } from 'platform-bible-utils';
 import {
   getNextChapterRef,
   getNextVerseRef,
@@ -14,6 +15,7 @@ export interface QuickNavButton {
   disabled?: boolean;
   title: string;
   icon: ComponentType<{ className?: string }>;
+  group: 'chapter' | 'verse';
 }
 
 /** Whether stepping to `newRef` would do nothing: there is no target, or it equals `scrRef`. */
@@ -34,6 +36,7 @@ export function useQuickNavButtons(
   availableBooks: string[],
   direction: Direction,
   handleSubmit: (scrRef: SerializedVerseRef) => void,
+  localizedStrings?: LanguageStrings,
 ): QuickNavButton[] {
   // The buttons pass availableBooks (so navigation honors books-present and rolls across book
   // boundaries the way the keyboard commands do) but intentionally pass no ScriptureBounds — there
@@ -72,26 +75,31 @@ export function useQuickNavButtons(
       {
         onClick: () => submitIfChanged(previousChapterRef),
         disabled: isNoOpNavigation(scrRef, previousChapterRef),
-        title: 'Previous chapter',
+        title:
+          localizedStrings?.['%webView_bookChapterControl_previousChapter%'] ?? 'Previous chapter',
         icon: direction === 'ltr' ? ChevronsLeft : ChevronsRight,
-      },
-      {
-        onClick: () => submitIfChanged(previousVerseRef),
-        disabled: isNoOpNavigation(scrRef, previousVerseRef),
-        title: 'Previous verse',
-        icon: direction === 'ltr' ? ChevronLeft : ChevronRight,
-      },
-      {
-        onClick: () => submitIfChanged(nextVerseRef),
-        disabled: isNoOpNavigation(scrRef, nextVerseRef),
-        title: 'Next verse',
-        icon: direction === 'ltr' ? ChevronRight : ChevronLeft,
+        group: 'chapter' as const,
       },
       {
         onClick: () => submitIfChanged(nextChapterRef),
         disabled: isNoOpNavigation(scrRef, nextChapterRef),
-        title: 'Next chapter',
+        title: localizedStrings?.['%webView_bookChapterControl_nextChapter%'] ?? 'Next chapter',
         icon: direction === 'ltr' ? ChevronsRight : ChevronsLeft,
+        group: 'chapter' as const,
+      },
+      {
+        onClick: () => submitIfChanged(previousVerseRef),
+        disabled: isNoOpNavigation(scrRef, previousVerseRef),
+        title: localizedStrings?.['%webView_bookChapterControl_previousVerse%'] ?? 'Previous verse',
+        icon: ChevronUp,
+        group: 'verse' as const,
+      },
+      {
+        onClick: () => submitIfChanged(nextVerseRef),
+        disabled: isNoOpNavigation(scrRef, nextVerseRef),
+        title: localizedStrings?.['%webView_bookChapterControl_nextVerse%'] ?? 'Next verse',
+        icon: ChevronDown,
+        group: 'verse' as const,
       },
     ];
   }, [
@@ -102,5 +110,6 @@ export function useQuickNavButtons(
     previousVerseRef,
     nextVerseRef,
     nextChapterRef,
+    localizedStrings,
   ]);
 }

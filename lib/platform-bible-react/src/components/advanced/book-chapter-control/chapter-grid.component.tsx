@@ -1,4 +1,4 @@
-import { ALL_ENGLISH_BOOK_NAMES } from '@/components/shared/book.utils';
+import { chapterItemValue } from '@/components/shared/book-item.utils';
 import { fetchEndChapter } from './book-chapter-control.utils';
 import { NumberedItemGrid } from './numbered-item-grid.component';
 
@@ -37,7 +37,7 @@ export function ChapterGrid({
   return (
     <NumberedItemGrid
       count={fetchEndChapter(bookId)}
-      valueBuilder={(chapter) => `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapter}`}
+      valueBuilder={(chapter) => chapterItemValue(bookId, chapter)}
       onSelect={onChapterSelect}
       itemRef={setChapterRef}
       isDisabled={isChapterDisabled}
