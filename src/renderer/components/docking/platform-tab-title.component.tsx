@@ -279,21 +279,40 @@ export function PlatformTabTitle({
   );
 
   /**
-   * The open windows, read when the menu opens rather than subscribed to. The menu needs them at
-   * that moment and never again, and their names are already kept current as window titles.
+   * What this tab can currently do, read when the menu opens rather than subscribed to. The menu
+   * needs it at that moment and never again, and the window names are already kept current as
+   * window titles.
+   *
+   * Read on open rather than during render because both halves are expensive to establish: the
+   * window list is a round trip to the main process, and counting this window's web views walks
+   * every open definition and touches their state. Neither belongs in the render of every tab title
+   * on every layout change.
    */
-  const [otherWindows, setOtherWindows] = useState<WindowSummary[]>([]);
+  const [menuTargets, setMenuTargets] = useState<{
+    otherWindows: WindowSummary[];
+    isOnlyTabInSecondaryWindow: boolean;
+  }>({ otherWindows: [], isOnlyTabInSecondaryWindow: false });
 
   const handleMenuOpenChange = async (isOpen: boolean) => {
     if (!isOpen) return;
     try {
       const windows = await sendCommand('platform.getWindows');
-      setOtherWindows(windows.filter((window) => `${window.windowId}` !== globalThis.windowId));
+      const otherWindows = windows.filter((window) => `${window.windowId}` !== globalThis.windowId);
+      // Moving the only web view out of a window that is not the primary one would build an
+      // identical window and empty this one, which is the no-op Paratext 9 hides its float item for
+      const isThisWindowSecondary = !windows.some(
+        (window) => `${window.windowId}` === globalThis.windowId && window.isMain,
+      );
+      setMenuTargets({
+        otherWindows,
+        isOnlyTabInSecondaryWindow:
+          isThisWindowSecondary && getAllOpenWebViewDefinitionsSync().length <= 1,
+      });
     } catch (error) {
       // Leave the target list empty, which hides the submenu rather than offering an empty one. An
       // empty list would read as "there are no other windows", which is a different claim
       logger.warn(`Could not read the open windows for the tab menu: ${getErrorMessage(error)}`);
-      setOtherWindows([]);
+      setMenuTargets({ otherWindows: [], isOnlyTabInSecondaryWindow: false });
     }
   };
 
@@ -480,28 +499,19 @@ export function PlatformTabTitle({
     const tabElement = containerElement?.closest('[role="tab"]');
     if (!containerElement || !tabElement) return undefined;
 
-    let isForwarding = false;
     const forwardToTrigger = (event: Event) => {
-      // The forwarded event bubbles back through here on its way up; letting it through would
-      // forward it again forever
-      if (isForwarding) return;
-      // Anything raised inside the trigger already reaches it by bubbling, so leave it alone. This
-      // is every ordinary right-click on the tab's title
+      // Anything raised inside the trigger already reaches it by bubbling, so leave it alone: every
+      // ordinary right-click on the tab's title, and the forwarded event below on its way back up,
+      // whose target is the element it was dispatched on
       if (event.target instanceof Node && containerElement.contains(event.target)) return;
 
       event.preventDefault();
-      isForwarding = true;
-      try {
-        // Carry the position across so the menu opens where the event said, which for a keyboard
-        // press is the focused tab rather than wherever the pointer happens to rest
-        const { clientX, clientY } =
-          event instanceof MouseEvent ? event : { clientX: 0, clientY: 0 };
-        containerElement.dispatchEvent(
-          new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY }),
-        );
-      } finally {
-        isForwarding = false;
-      }
+      // Carry the position across so the menu opens where the event said, which for a keyboard
+      // press is the focused tab rather than wherever the pointer happens to rest
+      const { clientX, clientY } = event instanceof MouseEvent ? event : { clientX: 0, clientY: 0 };
+      containerElement.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX, clientY }),
+      );
     };
 
     tabElement.addEventListener('contextmenu', forwardToTrigger);
@@ -703,13 +713,7 @@ export function PlatformTabTitle({
 
   const menuContext: TabMenuContext = {
     webViewId,
-    otherWindows,
-    // Moving the only web view out of a window that is not the primary one would build an identical
-    // window and empty this one, which is the no-op Paratext 9 hides its float item for
-    isOnlyTabInSecondaryWindow:
-      !otherWindows.some((window) => `${window.windowId}` === globalThis.windowId) &&
-      otherWindows.some((window) => window.isMain) &&
-      getAllOpenWebViewDefinitionsSync().length <= 1,
+    ...menuTargets,
   };
 
   const contributedItems = isPlatformError(webViewMenuPossiblyError)

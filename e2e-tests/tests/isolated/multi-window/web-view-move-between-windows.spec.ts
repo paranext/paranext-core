@@ -535,10 +535,14 @@ test.describe('moving a web view between windows', () => {
     // both are called "Home": the design tolerates that collision deliberately, since nothing
     // disambiguates two windows showing the same thing. So this asserts each window is named after
     // its content — never that the two names differ, which would contradict the rule.
+    // Auto-retrying, because the title is published asynchronously: a layout change localizes the
+    // label before assigning it, and until that resolves the window still shows the document's
+    // initial title. The expected value is read from the tab each window is showing rather than
+    // written as a literal, which is both the claim being made and immune to an English-string edit
+    const expectedWindowName = (await homeTabTitle(page2, window2Id).innerText()).trim();
+    await expect(page2).toHaveTitle(expectedWindowName, { timeout: 30_000 });
+    await expect(page3).toHaveTitle(expectedWindowName, { timeout: 30_000 });
     const window2Title = await page2.title();
-    const window3Title = await page3.title();
-    expect(window2Title).toBe('Home');
-    expect(window3Title).toBe('Home');
     logStep(`both windows are named after the tab they show: "${window2Title}"`);
 
     await page3
@@ -570,7 +574,28 @@ test.describe('moving a web view between windows', () => {
       (heldId) => heldId !== window2OwnHomeWebViewId,
     );
     expect(idsMovedWebViewMayAnswerTo(idAfterSecondMove)).toContain(idMovedBySubmenu);
+
+    // Held EXACTLY, with the settle the count poll above cannot give: a wrongly-cloned layout
+    // arrives as an extra tab after the count momentarily reads right, which is the whole reason
+    // this file asserts destinations this way rather than by shape
+    await expectWindowToHoldExactly(
+      page2,
+      [window2OwnHomeWebViewId, idMovedBySubmenu],
+      120_000,
+      `window ${window2Id} received the tab back through the submenu`,
+    );
     logStep(`tab moved back into window ${window2Id} through the submenu as ${idMovedBySubmenu}`);
+
+    // The source side, by the same rule the earlier moves assert: this move emptied window 3 while
+    // window 2 was standing, so window 3 closes rather than docking a Home tab of its own
+    await expectAppWindowCount(
+      electronApp,
+      1,
+      120_000,
+      `window ${window3Id} to close after the submenu move emptied it`,
+    );
+    expect(page3.isClosed()).toBe(true);
+    logStep(`window ${window3Id} closed after the submenu move emptied it`);
 
     // A real quit after all of that: the app must still go down cleanly, and the epilogue sweeps
     // everything captured — both moves included — for faults and duplicate registrations, with the

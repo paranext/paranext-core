@@ -555,8 +555,9 @@ describe('Tab menu', () => {
     expect(commandsIn(result.tabMenu)).toContain('platform.floatTab');
   });
 
-  test('a web view contributing its own tab menu keeps it', async () => {
-    // The positive control for the case above: the fallback fills a gap, it does not overwrite
+  test('a web view carries through whatever tab menu the combiner handed it', async () => {
+    // The engine's fallback fills a gap; it does not overwrite. Folding the platform items into a
+    // web view's own tab menu is the combiner's job, pinned in menu-document-combiner.test.ts
     const ownTabMenu = {
       groups: { 'videoExtension.tabGroup': { order: 1 } },
       items: [
