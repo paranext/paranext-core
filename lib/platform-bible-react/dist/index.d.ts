@@ -67,7 +67,8 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 	"%webView_bookChapterControl_bookNotInProject%",
 	"%webView_bookChapterControl_selectChapter%",
 	"%webView_bookChapterControl_selectVerse%",
-	"%webView_bookChapterControl_showAllBooks%"
+	"%webView_bookChapterControl_showAllBooks%",
+	"%webView_bookChapterControl_showProjectBooksOnly%"
 ];
 /** Type definition for the localized strings used in the BookChapterControl component */
 export type BookChapterControlLocalizedStrings = {

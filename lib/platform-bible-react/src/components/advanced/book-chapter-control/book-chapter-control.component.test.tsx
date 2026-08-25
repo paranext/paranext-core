@@ -472,14 +472,17 @@ describe('BookChapterControl additional books', () => {
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
 
     await userEvent.type(getSearchInput(), 'rev');
+    // Neither label may be on screen: which one would render depends on the expansion state.
     await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'Show all books' })).not.toBeInTheDocument(),
+      expect(
+        screen.queryByRole('button', { name: /Show all books|Show project books only/ }),
+      ).not.toBeInTheDocument(),
     );
 
     await userEvent.clear(getSearchInput());
 
     // Typing never touches the expansion state, so clearing returns to exactly the prior view.
-    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    const toggle = await screen.findByRole('button', { name: 'Show project books only' });
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
   });
@@ -497,7 +500,7 @@ describe('BookChapterControl additional books', () => {
 
     await user.click(getTrigger());
 
-    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    const toggle = await screen.findByRole('button', { name: 'Show project books only' });
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
   });
@@ -515,7 +518,7 @@ describe('BookChapterControl additional books', () => {
 
     await user.click(getTrigger());
 
-    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    const toggle = await screen.findByRole('button', { name: 'Show project books only' });
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
 
     await user.click(toggle);
@@ -582,5 +585,72 @@ describe('BookChapterControl additional books', () => {
     const toggle = await screen.findByRole('button', { name: 'Show all books' });
     await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'false'));
     expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+  });
+
+  test('the toggle label names the state it switches to', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+
+    await user.click(toggle);
+    await waitFor(() => expect(toggle).toHaveAccessibleName('Show project books only'));
+
+    await user.click(toggle);
+    await waitFor(() => expect(toggle).toHaveAccessibleName('Show all books'));
+  });
+
+  test('quick navigation stops at the project while the list is collapsed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 28, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+
+    // MAT 28 is the last chapter of the project's last book, so stepping forward from here would
+    // have to leave the project — which the collapsed list does not offer.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Next chapter' })).toBeDisabled(),
+    );
+  });
+
+  test('quick navigation reaches a book outside the project once the list is expanded', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const handleSubmit = vi.fn();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 28, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+    await user.click(await screen.findByRole('button', { name: 'Show all books' }));
+
+    const nextChapter = await screen.findByRole('button', { name: 'Next chapter' });
+    await waitFor(() => expect(nextChapter).toBeEnabled());
+
+    await user.click(nextChapter);
+
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'REV', chapterNum: 1, verseNum: 1 }),
+    );
   });
 });
