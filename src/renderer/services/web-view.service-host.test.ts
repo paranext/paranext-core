@@ -176,6 +176,17 @@ vi.mock('@shared/utils/util', async (importOriginal) => {
   return { ...actual, newNonce: newNonceMock };
 });
 
+// Spies on the real `startWorkspaceUpdate` (rather than replacing it) so the many tests that assert
+// on real overlay state via `getWorkspaceUpdating()` keep working unchanged; only the one test that
+// needs `startWorkspaceUpdate` itself to throw overrides this with `mockImplementationOnce`.
+const { startWorkspaceUpdateMock } = vi.hoisted(() => ({ startWorkspaceUpdateMock: vi.fn() }));
+vi.mock('@renderer/services/workspace-updating-store', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@renderer/services/workspace-updating-store')>();
+  startWorkspaceUpdateMock.mockImplementation(actual.startWorkspaceUpdate);
+  return { ...actual, startWorkspaceUpdate: startWorkspaceUpdateMock };
+});
+
 // Capturing `buildSimpleLayoutForProject`'s `projectId` argument is the primary assertion point
 // below. `SIMPLE_LAYOUT_TAB_IDS` is mocked to `[]` so the (real, separately-tested) tabs-resolved
 // tracker resolves immediately instead of waiting on webview open/update events that never fire in
@@ -912,6 +923,32 @@ describe('handleSwitchToSimpleMode', () => {
     expect(getWorkspaceUpdating()).toBe(true);
 
     await switchPromise;
+    expect(getWorkspaceUpdating()).toBe(false);
+  });
+
+  it('catches a throw from startWorkspaceUpdate itself rather than letting it escape as an unhandled rejection', async () => {
+    // Regression test: `startWorkspaceUpdate()` and the paint wait right after it used to sit
+    // BEFORE the try block, so a throw here would skip catch/finally entirely - never releasing
+    // the overlay (though in this exact case nothing was raised yet either) and, more importantly,
+    // producing an unhandled rejection in the `platform.interfaceMode` subscription callback that
+    // calls this function instead of the "failed unexpectedly" warning + bare-layout fallback every
+    // other failure in this switch goes through.
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-1' });
+    startWorkspaceUpdateMock.mockImplementationOnce(() => {
+      throw new Error('workspace-updating-store exploded');
+    });
+
+    await expect(host.handleSwitchToSimpleMode()).resolves.toBeUndefined();
+
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining('Switching to Simple mode failed unexpectedly'),
+    );
+    const { getWorkspaceUpdating } = await import('@renderer/services/workspace-updating-store');
     expect(getWorkspaceUpdating()).toBe(false);
   });
 

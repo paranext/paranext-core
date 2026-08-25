@@ -1526,23 +1526,30 @@ async function withTimeout<T>(
 export async function handleSwitchToSimpleMode(
   generation: number = startNewSwitchGeneration(),
 ): Promise<void> {
-  // Raised here, before any lookup - not just before the layout swap inside
-  // `runProjectBoundSimpleSwitch` - so the still-visible Power layout is blocked from interaction
-  // for the whole switch, including the cold-start path's recents lookup, which otherwise gives no
-  // feedback that a switch is even happening. A live per-webview "editing disabled" signal on the
-  // active Power editor would be more targeted, but has no reactive channel today
-  // (`setFullWebViewStateById` only seeds state before a webview mounts, not for an already-mounted
-  // one) - raising the overlay this early is the practical stand-in.
-  const releaseWorkspaceUpdate = startWorkspaceUpdate();
-  // Force React to commit + browser to paint the overlay BEFORE any lookup, otherwise the show can
-  // batch with later state changes and the overlay never actually appears on screen. Bounded: see
-  // waitForNextPaint's doc comment for the hidden/occluded-window case this guards against.
-  await withTimeout(waitForNextPaint, PAINT_WAIT_TIMEOUT_MS);
+  // Declared here, assigned inside `try` below (not called here directly) - so a throw from
+  // `startWorkspaceUpdate()` itself, or from the paint wait right after it, still reaches `catch`/
+  // `finally` instead of escaping as an unhandled rejection in the `platform.interfaceMode`
+  // subscription callback that calls this function, and `finally` can tell (via `?.`) whether the
+  // overlay actually needs releasing.
+  let releaseWorkspaceUpdate: (() => void) | undefined;
   // Set right before returning from a successful `runProjectBoundSimpleSwitch` call, so `finally`
   // below knows whether (and for which project) to finalize the switch's side effects. Left
   // `undefined` for every path that didn't actually load a project-bound layout.
   let switchedProjectId: string | undefined;
   try {
+    // Raised here, before any lookup - not just before the layout swap inside
+    // `runProjectBoundSimpleSwitch` - so the still-visible Power layout is blocked from interaction
+    // for the whole switch, including the cold-start path's recents lookup, which otherwise gives no
+    // feedback that a switch is even happening. A live per-webview "editing disabled" signal on the
+    // active Power editor would be more targeted, but has no reactive channel today
+    // (`setFullWebViewStateById` only seeds state before a webview mounts, not for an already-mounted
+    // one) - raising the overlay this early is the practical stand-in.
+    releaseWorkspaceUpdate = startWorkspaceUpdate();
+    // Force React to commit + browser to paint the overlay BEFORE any lookup, otherwise the show can
+    // batch with later state changes and the overlay never actually appears on screen. Bounded: see
+    // waitForNextPaint's doc comment for the hidden/occluded-window case this guards against.
+    await withTimeout(waitForNextPaint, PAINT_WAIT_TIMEOUT_MS);
+
     const cached = getLastOpenedProject();
     if (cached) {
       await runProjectBoundSimpleSwitch(cached.id, generation);
@@ -1583,7 +1590,9 @@ export async function handleSwitchToSimpleMode(
     // a hidden/occluded window would leave the overlay stuck up until the workspace-updating
     // store's own 30s leash (see waitForNextPaint's doc comment).
     await withTimeout(waitForNextPaint, PAINT_WAIT_TIMEOUT_MS);
-    releaseWorkspaceUpdate();
+    // Optional: `startWorkspaceUpdate()` above may never have run (or may have thrown before
+    // assigning) if something upstream failed first - nothing to release in that case.
+    releaseWorkspaceUpdate?.();
     // Fire non-blocking, after the overlay has already released above, and only if this switch
     // actually loaded a project-bound layout and is still current (not superseded by a newer
     // switch while the above was in flight). This has to live in `finally` rather than after the
