@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import DockLayout from 'rc-dock';
 import { Filter } from 'rc-dock/lib/Algorithm';
 
@@ -53,6 +53,7 @@ import {
 } from '@renderer/components/docking/docking-framework-internal.model';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { getDockLayoutOuterInset } from '@renderer/components/docking/platform-dock-layout-positioning.util';
+import { updateWindowTitle } from '@renderer/components/docking/window-label.util';
 
 export function PlatformDockLayout() {
   // This ref will always be defined
@@ -74,11 +75,34 @@ export function PlatformDockLayout() {
 
   const isPowerMode = useIsPowerMode();
 
+  /** Look a tab up the way the label reader needs it, carrying the `tabTitle` this component sets */
+  const findTabForTitle = useCallback((tabId: string) => {
+    const tab = dockLayoutRef.current.find(tabId);
+    // Tabs in this dock layout are the `RCDockTabInfo` this component builds, so they hold `tabTitle`
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return isTab(tab) ? (tab as RCDockTabInfo) : undefined;
+  }, []);
+
+  /**
+   * Re-read the window's name from the layout the dock is currently showing.
+   *
+   * For the paths rc-dock does not report: `loadLayout` explicitly does not fire `onLayoutChange`,
+   * and neither does the first render of `defaultLayout`, so a window that restores its layout and
+   * is never touched would otherwise keep the document's initial title.
+   */
+  const refreshWindowTitle = useCallback(
+    () => updateWindowTitle(dockLayoutRef.current.getLayout(), findTabForTitle),
+    [findTabForTitle],
+  );
+
   useEffect(() => {
     // Register with `web-view.service.ts` so it can perform operations on us
     const unsub = registerDockLayout({
       onLayoutChangeRef,
-      loadLayout: (layout: LayoutInfo) => loadLayout(dockLayoutRef.current, layout),
+      loadLayout: (layout: LayoutInfo) => {
+        loadLayout(dockLayoutRef.current, layout);
+        refreshWindowTitle();
+      },
       findFirstWebViewDefinitionByType: (webViewType: string, projectId?: string) =>
         findFirstWebViewDefinitionByType(dockLayoutRef.current, webViewType, projectId),
       addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout, shouldBringToFront = true) =>
@@ -125,6 +149,10 @@ export function PlatformDockLayout() {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       simpleLayout: simpleLayout as unknown as LayoutInfo,
     });
+
+    // Name the window from whatever it renders first, before any layout change has happened
+    refreshWindowTitle();
+
     return () => {
       unsub();
       // This is not a component ref but just a timeout. We don't want to save the value from when
@@ -133,7 +161,7 @@ export function PlatformDockLayout() {
       clearTimeout(focusTabAfterCloseTimeoutRef.current);
     };
     // Is there any situation where dockLayoutRef will change? We need to add to dependencies if so
-  }, []);
+  }, [refreshWindowTitle]);
 
   return (
     <DockLayoutWrapper
@@ -218,6 +246,14 @@ export function PlatformDockLayout() {
               }
           }
         }
+
+        // What this window is called follows what it is showing, so it is recomputed whenever the
+        // layout moves: a tab switch, or a tab opening, closing or moving between windows. It does
+        // not change on navigation or typing, so this stays cheap.
+        //
+        // Reads the layout rc-dock passes rather than asking the dock for it: this fires before the
+        // dock adopts the new layout, so `getLayout()` would still describe the previous one
+        updateWindowTitle(layout, findTabForTitle);
 
         (async () => {
           if (onLayoutChangeRef.current) {
