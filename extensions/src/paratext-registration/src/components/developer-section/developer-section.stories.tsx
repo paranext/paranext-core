@@ -49,6 +49,19 @@ export const TestActive: Story = {
 };
 
 /**
+ * Section expanded — Quality Assurance is the active server. QA is its own ParatextData
+ * environment: it shares the registry and DBL servers with Development, but has its own
+ * Send/Receive archive and Paratext Live server.
+ */
+export const QualityAssuranceActive: Story = {
+  args: { selectedServer: 'QualityAssurance' },
+  play: async ({ canvasElement, userEvent }) => {
+    const header = canvasElement.querySelector('button');
+    if (header) await userEvent.click(header);
+  },
+};
+
+/**
  * `disabled={true}` — header still clickable, but the server toggle is greyed out and
  * non-interactive.
  */

@@ -18,7 +18,9 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%internetSettings_button_retry%': 'Retry',
+      '%firstRun_step_internetSettings_body%': 'Body sentinel',
       '%firstRun_step_internetSettings_connecting%': 'Getting things ready…',
+      '%firstRun_step_internetSettings_heading%': 'Heading sentinel',
       '%firstRun_step_internetSettings_loadError%':
         "We couldn't get things ready. Please try again in a moment.",
     },
@@ -58,13 +60,16 @@ vi.mock('platform-bible-react/experimental', () => ({
   InternetAccessOptionList: ({
     value,
     onChange,
+    showFooter,
   }: {
     value: string;
     onChange: (value: string) => void;
+    showFooter?: boolean;
   }) => (
     <button
       data-testid="option-list"
       data-value={value}
+      data-show-footer={String(showFooter)}
       type="button"
       onClick={() => onChange('Enabled')}
     >
@@ -125,6 +130,29 @@ function renderStep(setCanProceed = vi.fn()) {
 describe('InternetSettingsStep', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('shows the heading and description while the provider is still undefined', () => {
+    configureHooks({ provider: undefined });
+    renderStep();
+
+    expect(screen.getByRole('heading', { name: 'Heading sentinel' })).toBeInTheDocument();
+    expect(screen.getByText('Body sentinel')).toBeInTheDocument();
+  });
+
+  it('keeps the heading and description once the settings have loaded', () => {
+    configureHooks({ value: MOCK_SETTINGS });
+    renderStep();
+
+    expect(screen.getByRole('heading', { name: 'Heading sentinel' })).toBeInTheDocument();
+    expect(screen.getByText('Body sentinel')).toBeInTheDocument();
+  });
+
+  it('hides the option list footer so the wizard Next button stays above the fold', () => {
+    configureHooks({ value: MOCK_SETTINGS });
+    renderStep();
+
+    expect(screen.getByTestId('option-list')).toHaveAttribute('data-show-footer', 'false');
   });
 
   it('shows a spinner and no error while the provider is undefined', () => {

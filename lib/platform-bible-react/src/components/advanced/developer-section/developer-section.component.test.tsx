@@ -24,6 +24,7 @@ beforeAll(() => {
 const mockLocalizedStrings: LanguageStrings = {
   '%paratextRegistration_developer_section_label%': 'Developer only',
   '%paratextRegistration_label_serverType_option_Production%': 'Production',
+  '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance',
   '%paratextRegistration_label_serverType_option_Development%': 'Development',
   '%paratextRegistration_label_serverType_option_Test%': 'Test',
 };
@@ -86,16 +87,26 @@ describe('DeveloperSection', () => {
     renderSection({ disabled: true });
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
     expect(screen.getByTestId('server-type-production')).toBeDisabled();
+    expect(screen.getByTestId('server-type-quality-assurance')).toBeDisabled();
     expect(screen.getByTestId('server-type-development')).toBeDisabled();
     expect(screen.getByTestId('server-type-test')).toBeDisabled();
   });
 
-  test('QualityAssurance selectedServer displays as Production being active', () => {
+  test('Quality Assurance item is active when selectedServer is QualityAssurance', () => {
     renderSection({ selectedServer: 'QualityAssurance' });
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
-    expect(screen.getByTestId('server-type-production')).toHaveAttribute('data-state', 'on');
+    expect(screen.getByTestId('server-type-quality-assurance')).toHaveAttribute('data-state', 'on');
+    expect(screen.getByTestId('server-type-production')).toHaveAttribute('data-state', 'off');
     expect(screen.getByTestId('server-type-development')).toHaveAttribute('data-state', 'off');
     expect(screen.getByTestId('server-type-test')).toHaveAttribute('data-state', 'off');
+  });
+
+  test('clicking Quality Assurance calls onServerChange with QualityAssurance', () => {
+    const onServerChange = vi.fn();
+    renderSection({ onServerChange });
+    fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
+    fireEvent.click(screen.getByTestId('server-type-quality-assurance'));
+    expect(onServerChange).toHaveBeenCalledWith('QualityAssurance');
   });
 
   test('shows the Test item as active when selectedServer is Test', () => {
@@ -114,23 +125,47 @@ describe('DeveloperSection', () => {
     expect(onServerChange).toHaveBeenCalledWith('Test');
   });
 
-  test('clicking the already-active Test item does not switch servers (Test is visible, not hidden)', () => {
+  test('clicking the already-active Test item does not switch servers', () => {
     const onServerChange = vi.fn();
     renderSection({ selectedServer: 'Test', onServerChange });
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
-    // Radix fires deselect (value='') when the active item is clicked. Unlike a hidden QA value,
-    // Test is directly re-selectable, so it must NOT be re-routed to Production.
+    // Radix fires deselect (value='') when the active item is clicked. There is no "no server"
+    // state, so the deselect is ignored rather than re-routed to another server.
     fireEvent.click(screen.getByTestId('server-type-test'));
     expect(onServerChange).not.toHaveBeenCalled();
   });
 
-  test('clicking Production while on hidden QA calls onServerChange with Production (escape hatch)', () => {
+  test('clicking the already-active Quality Assurance item does not switch servers', () => {
     const onServerChange = vi.fn();
     renderSection({ selectedServer: 'QualityAssurance', onServerChange });
     fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
-    // Clicking the already-active Production item triggers Radix deselect (value='').
-    // The component must intercept this and call onServerChange('Production').
-    fireEvent.click(screen.getByTestId('server-type-production'));
-    expect(onServerChange).toHaveBeenCalledWith('Production');
+    fireEvent.click(screen.getByTestId('server-type-quality-assurance'));
+    expect(onServerChange).not.toHaveBeenCalled();
+  });
+
+  test('every ServerType value keeps exactly one item active', () => {
+    const testIdsByServer = {
+      Production: 'server-type-production',
+      QualityAssurance: 'server-type-quality-assurance',
+      Development: 'server-type-development',
+      Test: 'server-type-test',
+    } as const;
+
+    Object.entries(testIdsByServer).forEach(([server, activeTestId]) => {
+      const { unmount } = renderSection({
+        // The keys of testIdsByServer are exactly the ServerType union, but Object.entries widens
+        // them to string, and ServerType is not exported for a narrowing guard.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion -- see comment above
+        selectedServer: server as DeveloperSectionProps['selectedServer'],
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Developer only/ }));
+      Object.values(testIdsByServer).forEach((testId) => {
+        expect(screen.getByTestId(testId)).toHaveAttribute(
+          'data-state',
+          testId === activeTestId ? 'on' : 'off',
+        );
+      });
+      unmount();
+    });
   });
 });

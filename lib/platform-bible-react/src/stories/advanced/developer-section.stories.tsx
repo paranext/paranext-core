@@ -4,6 +4,7 @@ import { DeveloperSection } from '@/components/advanced/developer-section/develo
 const localizedStrings = {
   '%paratextRegistration_developer_section_label%': 'Developer only',
   '%paratextRegistration_label_serverType_option_Production%': 'Production',
+  '%paratextRegistration_label_serverType_option_QualityAssurance%': 'Quality Assurance',
   '%paratextRegistration_label_serverType_option_Development%': 'Development',
   '%paratextRegistration_label_serverType_option_Test%': 'Test',
 };
@@ -53,9 +54,9 @@ export const TestActive: Story = {
 };
 
 /**
- * A QualityAssurance server is persisted even though this toggle never offers it — it can arrive
- * from the internet-settings API or a pre-existing settings file. The UI displays it as Production;
- * clicking Production switches the user to actual Production.
+ * Section expanded — Quality Assurance is the active server. QA is its own ParatextData
+ * environment: it shares the registry and DBL servers with Development, but has its own
+ * Send/Receive archive and Paratext Live server.
  */
 export const QualityAssuranceActive: Story = {
   args: { selectedServer: 'QualityAssurance' },

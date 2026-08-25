@@ -598,9 +598,16 @@ export type InternetAccessOptionListProps = {
 	onChange: (value: InternetUse) => void;
 	/** When true, all rows are non-interactive (loading or saving in progress). */
 	disabled: boolean;
+	/**
+	 * Whether to show the "disabled options are planned for future updates" note below the rows.
+	 * Defaults to true. Set false where vertical space is tight (the first-run wizard step, whose
+	 * heading and Next button compete for the same fold) — the per-row "Coming soon" badges still
+	 * convey that those options are not yet available.
+	 */
+	showFooter?: boolean;
 };
 /** @experimental This export is unstable and may change shape or disappear without notice */
-export declare function InternetAccessOptionList({ localizedStrings, value, onChange, disabled, }: InternetAccessOptionListProps): import("react/jsx-runtime").JSX.Element;
+export declare function InternetAccessOptionList({ localizedStrings, value, onChange, disabled, showFooter, }: InternetAccessOptionListProps): import("react/jsx-runtime").JSX.Element;
 type ServerType = "Production" | "QualityAssurance" | "Development" | "Test";
 /** @experimental This export is unstable and may change shape or disappear without notice */
 export declare const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[];
@@ -608,9 +615,9 @@ export declare const DEVELOPER_SECTION_STRING_KEYS: LocalizeKey[];
 export type DeveloperSectionProps = {
 	/** Localized strings; pass strings resolved from `DEVELOPER_SECTION_STRING_KEYS`. */
 	localizedStrings: LanguageStrings;
-	/** The currently selected server type. QA values display as Production; Test displays as Test. */
+	/** The currently selected server type. Every `ServerType` has its own item in the toggle. */
 	selectedServer: ServerType;
-	/** Called when the user switches to Production, Development, or Test. */
+	/** Called when the user switches to a different server type. */
 	onServerChange: (server: ServerType) => void;
 	/** When true, the toggle items are non-interactive (loading or saving in progress). */
 	disabled: boolean;
