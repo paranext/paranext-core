@@ -113,7 +113,9 @@ import {
   removeDecorations,
 } from './decorations.util';
 import { runOnFirstLoad, scrollToAnnotation, scrollToVerse } from './editor-dom.util';
+import { resolveFindSelectionText } from './find-trigger.util';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
+import { useSelectionSnapshot } from './use-selection-snapshot.hook';
 import { useEditorPdpSync } from './use-editor-pdp-sync.hook';
 import { FootnotesLayout } from './platform-scripture-editor-footnotes.component';
 import {
@@ -1285,6 +1287,26 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // panels so there is a single Ctrl+F→openFind implementation across every scripture tab type.
   useOpenFindShortcut(webViewId, projectId);
 
+  // `.editor-input` is the Lexical content element (the same selector the marker-menu handler uses).
+  const getSelectionBeforePointerPress = useSelectionSnapshot('.editor-input');
+
+  /**
+   * The text the tab menu's Find item should search for: the live selection, or — when the click
+   * that opened the menu has already collapsed it — what was selected just before that click.
+   *
+   * Only the menu path consults the snapshot, because only a pointer press destroys the selection
+   * it is about to act on. Ctrl+F (`useOpenFindShortcut`) reads the live selection directly and
+   * deliberately does NOT fall back here: a keystroke destroys nothing, so the live value is always
+   * the honest answer. Falling back would let a selection made much earlier pre-fill and
+   * immediately re-run a search, overwriting whatever term the user already had in an open Find
+   * panel.
+   */
+  const getMenuFindSelectionText = useCallback(
+    () =>
+      resolveFindSelectionText(window.getSelection()?.toString(), getSelectionBeforePointerPress()),
+    [getSelectionBeforePointerPress],
+  );
+
   // Listen for the marker menu trigger to open the marker menu, and for
   // Cmd+Alt+M (macOS) or Ctrl+Alt+M / Ctrl+Shift+N (Windows/Linux) to insert comment at selection
   useEffect(() => {
@@ -1490,9 +1512,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return;
     }
     pendingScaffoldInsertRef.current = true;
-    // KNOWN CAVEAT: undo reliability for this insert depends on unreleased fixes in the vendored
-    // `@eten-tech-foundation/platform-editor` package — this extension's package.json still pins an
-    // older version, so don't assume undo works cleanly here until that pin is bumped.
+    // Undo for this insert depends on the editor keeping its history across the `onUsjChange` round
+    // trip this call sets off: the editor's state-load effect fires Lexical's
+    // `CLEAR_HISTORY_COMMAND` unconditionally, so anything that re-runs it moments after an edit
+    // wipes the undo stack. `@eten-tech-foundation/platform-editor` 0.8.15 is the first published
+    // version that holds that effect's inputs stable BY VALUE rather than by reference; 0.8.14 does
+    // not. The pin is `~0.8.15`, so a patch release could regress it without a bump review, and no
+    // test here or upstream covers undo for this path — re-check it by hand when the pin moves.
     editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
   }, [scrRef.book, scrRef.chapterNum, lastVerse, isStructureProtected, notifyStructureProtected]);
 
@@ -2040,11 +2066,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const menuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
+      // Find is the one menu command that needs more than the tab id: it carries this tab's current
+      // text selection so the Find panel pre-fills and searches it, matching Ctrl+F. The source
+      // project is deliberately left off — `openFind` resolves it from this editor's own web view
+      // definition, which is the same project this component renders. (When neither yields a
+      // project, `openFind` fronts an already-open Find as-is and creates nothing, so the selection
+      // is dropped on that path rather than pre-filling a panel pointed at some other project.)
+      // Hidden-target case: the Find panel may be an inactive (display:none) tab when this fires.
+      // Nothing here is layout-dependent — the text travels as web view state (findSearchTerm) and
+      // openFind brings the panel to front — so a hidden Find catches up on activation by
+      // construction, with no deferred side effect to replay.
+      if (projectMenuCommand.command === 'platformScripture.openFind') {
+        papi.commands
+          .sendCommand('platformScripture.openFind', webViewId, getMenuFindSelectionText())
+          .catch((e) =>
+            logger.warn(`Failed to open Find from the editor tab menu: ${getErrorMessage(e)}`),
+          );
+        return;
+      }
       // Assuming that the project menu command is one of the registered command handlers in papi
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       papi.commands.sendCommand(projectMenuCommand.command as keyof CommandHandlers, webViewId);
     },
-    [webViewId],
+    [getMenuFindSelectionText, webViewId],
   );
 
   function renderEditor() {

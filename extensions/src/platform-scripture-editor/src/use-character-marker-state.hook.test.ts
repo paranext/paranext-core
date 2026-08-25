@@ -345,7 +345,7 @@ describe('useCharacterMarkerState — disabled rows', () => {
   // `insertMarker` nests rather than replaces. These assert that the inert rows are also marked
   // unavailable, so a click is refused visibly instead of being silently swallowed.
 
-  it('disables every marker row while a marker is applied and replacement does not exist yet', () => {
+  it('disables every marker row while a marker is applied and no change operation was supplied', () => {
     const { result } = renderHook(() => useCharacterMarkerState(options()));
 
     const markerRows = result.current.markerMenuItems.filter((item) => item.marker);
@@ -353,7 +353,7 @@ describe('useCharacterMarkerState — disabled rows', () => {
     expect(markerRows.every((item) => item.isDisabled)).toBe(true);
   });
 
-  it('disables only the applied marker once replacement exists', () => {
+  it('disables only the applied marker once a change operation is supplied', () => {
     const { result } = renderHook(() =>
       useCharacterMarkerState(options({ changeCharacterMarker: vi.fn() })),
     );
