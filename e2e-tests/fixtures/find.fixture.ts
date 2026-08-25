@@ -10,15 +10,29 @@
  *
  * The tests use a worker-scoped Electron instance (one launch per worker) rather than a test-scoped
  * one, which avoids the cost of 20+ separate Electron launches.
+ *
+ * ## Declared, not inherited
+ *
+ * Interface mode, interface language, and window size are all pinned here rather than inherited
+ * from the developer's checkout, because each one silently changes what the Find UI renders. See
+ * the comments on `preConfigureSettings` and `windowSize` below.
  */
 
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { ElectronApplication } from '@playwright/test';
+import { ElectronApplication, expect } from '@playwright/test';
 import WebSocket from 'ws';
 import { test as appTest } from './app.fixture';
-import { launchElectronApp, preConfigureSettings, teardownElectronApp } from './helpers';
+import {
+  assertDeclaredWindowSize,
+  DEFAULT_WINDOW_SIZE,
+  launchElectronApp,
+  preConfigureSettings,
+  PROCESS_READY_TIMEOUT,
+  teardownElectronApp,
+  WindowSize,
+} from './helpers';
 
 /**
  * Fixed project ID for the testWEB copy used by find/replace tests. A deterministic GUID distinct
@@ -69,11 +83,17 @@ function setupWEBCopyProject(projectsDir: string): void {
 // Without this override, helloRock3 opens 3 webviews on startup with DEV_NOISY=true,
 // causing `iframe.web-view nth(0)` to point to a helloRock3 iframe instead of the
 // scripture editor.
-export const test = appTest.extend<{}, { electronApp: ElectronApplication }>({
+export const test = appTest.extend<
+  {},
+  { electronApp: ElectronApplication; windowSize: WindowSize }
+>({
+  // Option fixture, worker-scoped because the window it sizes belongs to the worker-scoped
+  // `electronApp` below. A spec declares the layout it was written against with
+  // `test.use({ windowSize: { width, height } })`.
+  windowSize: [DEFAULT_WINDOW_SIZE, { option: true, scope: 'worker' }],
+
   electronApp: [
-    // Playwright fixtures require destructured parameter even when no dependencies are needed
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use) => {
+    async ({ windowSize }, use) => {
       // Build an isolated, throwaway project root and populate it with a fresh, editable testWEB.
       // Pointing the app at it via PLATFORM_BIBLE_PROJECT_ROOT_FOLDER keeps the suite from ever
       // reading or writing the developer's real projects, and the fresh copy each worker run
@@ -82,16 +102,52 @@ export const test = appTest.extend<{}, { electronApp: ElectronApplication }>({
       setupWEBCopyProject(projectsDir);
       // DEV_NOISY=false so test extensions (helloRock3, etc.) don't open webviews and shift the
       // `iframe.web-view nth(0)` selectors; envOverrides is spread last so both win over the defaults.
-      // Seed platform.firstRunComplete before launch, exactly as app.fixture does. This fixture
-      // replaces app.fixture's worker-scoped electronApp wholesale, so without seeding here the app
-      // starts on the first-run wizard — a full-screen modal that aria-hides the rest of the app and
-      // intercepts pointer events, which blocks this suite's beforeAll before it can warm the
-      // findInScripture PDP.
-      const restoreSettings = preConfigureSettings({ 'platform.firstRunComplete': true });
+      // Pin every setting this suite's selectors depend on. `preConfigureSettings` MERGES into the
+      // shared dev-appdata settings file and preserves keys it does not set, so anything left
+      // unpinned is inherited from whatever the checkout happens to hold — which is why this
+      // suite's result used to differ between machines.
+      //
+      // - firstRunComplete: without it the app starts on the first-run wizard, a full-screen modal
+      //   that aria-hides the rest of the app and intercepts pointer events, blocking beforeAll
+      //   before it can warm the findInScripture PDP. app.fixture seeds this; this fixture replaces
+      //   app.fixture's worker-scoped electronApp wholesale, so it must seed it too.
+      // - interfaceMode: the Find UI differs by mode — Simple mode hides the Find/Replace toggle
+      //   and the whole Replace surface (`hideModeToggle`), and makes Find a permanent,
+      //   non-closable tab. This suite is written against Simple mode and must declare it rather
+      //   than inherit it.
+      // - interfaceLanguage: every text-based selector here is English-only.
+      const restoreSettings = preConfigureSettings({
+        'platform.firstRunComplete': true,
+        'platform.interfaceMode': 'simple',
+        'platform.interfaceLanguage': ['en'],
+      });
       const ctx = await launchElectronApp({
         envOverrides: { DEV_NOISY: 'false', PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: projectsDir },
       });
       try {
+        // Size the window before any test runs. app.fixture (unlike isolated.fixture) never
+        // resizes, so without this the suite runs at whatever size the platform hands out — under a
+        // bare Xvfb that is not the 1280x800 the layout assertions are written against.
+        const page = await ctx.electronApp.firstWindow({ timeout: PROCESS_READY_TIMEOUT });
+        await ctx.electronApp.evaluate(({ BrowserWindow }, size) => {
+          const win = BrowserWindow.getAllWindows()[0];
+          if (win) {
+            if (win.isMaximized()) win.unmaximize();
+            win.setSize(size.width, size.height);
+          }
+        }, windowSize);
+        // Confirm the OS honoured it; a spec that silently ran at another size would be testing a
+        // layout nobody wrote. Retried because `setSize` returns before the renderer's
+        // `outerWidth`/`outerHeight` reflect the new size, so a single read can race the resize.
+        await expect(async () => {
+          await assertDeclaredWindowSize(
+            page,
+            windowSize,
+            'The find fixture sets this size at launch; check that the window manager is not ' +
+              'overriding it.',
+          );
+        }).toPass({ timeout: 15_000 });
+
         await use(ctx.electronApp);
       } finally {
         await teardownElectronApp(ctx);
