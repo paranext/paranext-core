@@ -104,10 +104,10 @@ const handleFloatTab = async (tabId: string) => {
  * {@link WebViewMoveFailureDisposition} fails to compile here until it has copy of its own.
  */
 const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeKey> = {
-  'reopened-in-source-window': '%tab_contextMenu_moveTabToNewWindow_failed%',
-  'reopened-in-focused-window': '%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%',
-  'not-reopened': '%tab_contextMenu_moveTabToNewWindow_failedNotReopened%',
-  'possibly-closed': '%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%',
+  'reopened-in-source-window': '%tab_contextMenu_moveTab_failed%',
+  'reopened-in-focused-window': '%tab_contextMenu_moveTab_failedReopenedElsewhere%',
+  'not-reopened': '%tab_contextMenu_moveTab_failedNotReopened%',
+  'possibly-closed': '%tab_contextMenu_moveTab_failedMayHaveClosed%',
 };
 
 /**
@@ -116,7 +116,7 @@ const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeK
  * not be read — so nothing about where the tab lives has changed. A failure from a step that does
  * touch the tab names where it left it, including when that answer is "it may be gone".
  */
-const MOVE_FAILURE_DEFAULT_MESSAGE_KEY: LocalizeKey = '%tab_contextMenu_moveTabToNewWindow_failed%';
+const MOVE_FAILURE_DEFAULT_MESSAGE_KEY: LocalizeKey = '%tab_contextMenu_moveTab_failed%';
 
 const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
   try {
@@ -172,7 +172,7 @@ export function PlatformTabTitle({
   const containerRef = useRef<HTMLDivElement>(undefined!);
 
   const tabAria: LocalizeKey = '%tab_aria_tab%';
-  const floatTabKey: LocalizeKey = '%tab_contextMenu_floatTab%';
+  const floatTabKey: LocalizeKey = '%tab_contextMenu_floatPanel%';
   const moveTabToNewWindowKey: LocalizeKey = '%tab_contextMenu_moveTabToNewWindow%';
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
