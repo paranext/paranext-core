@@ -29,7 +29,7 @@ function describeArgs(args: readonly unknown[]): string {
 
 /** Reduce a result to comparable plain data: GraphemeString becomes its text, arrays map through. */
 function unwrap(value: unknown): unknown {
-  if (value instanceof GraphemeString) return value.string;
+  if (value instanceof GraphemeString) return value.toString();
   if (Array.isArray(value)) return value.map(unwrap);
   return value;
 }
@@ -318,7 +318,7 @@ describe('native parity: split', () => {
   // separator, so the native half of the comparison will not compile.
   it('with no separator returns the whole string, like native', () => {
     SPLIT_STRINGS.forEach((string) => {
-      expect(new GraphemeString(string).split().map((part) => part?.string)).toEqual([string]);
+      expect(new GraphemeString(string).split().map((part) => part?.toString())).toEqual([string]);
     });
   });
 });
@@ -352,9 +352,9 @@ describe('graphemes are the unit, not UTF-16 code units', () => {
   });
 
   it('slice and substring never cut a grapheme in half', () => {
-    expect(family.slice(1, 2).string).toEqual('👨‍👩‍👧‍👦');
-    expect(family.substring(0, 2).string).toEqual('a👨‍👩‍👧‍👦');
-    expect(family.slice(-1).string).toEqual('b');
+    expect(family.slice(1, 2).toString()).toEqual('👨‍👩‍👧‍👦');
+    expect(family.substring(0, 2).toString()).toEqual('a👨‍👩‍👧‍👦');
+    expect(family.slice(-1).toString()).toEqual('b');
   });
 
   it('codePointAt reports the first code point of the grapheme', () => {
@@ -384,22 +384,49 @@ describe('graphemes are the unit, not UTF-16 code units', () => {
   it('padding adds whole graphemes rather than filling UTF-16 slots', () => {
     // Native emits a stripped-down officer: wrong skin tone, wrong gender.
     expect('abc'.padEnd(5, OFFICER)).toEqual('abc👮');
-    expect(new GraphemeString('abc').padEnd(5, OFFICER).string).toEqual(`abc${OFFICER}${OFFICER}`);
-    expect(new GraphemeString('abc').padStart(5, OFFICER).string).toEqual(
+    expect(new GraphemeString('abc').padEnd(5, OFFICER).toString()).toEqual(
+      `abc${OFFICER}${OFFICER}`,
+    );
+    expect(new GraphemeString('abc').padStart(5, OFFICER).toString()).toEqual(
       `${OFFICER}${OFFICER}abc`,
     );
   });
 
   it('splitting on the empty string yields graphemes', () => {
-    expect(new GraphemeString(MIXED).split('').map((part) => part?.string)).toEqual(
+    expect(new GraphemeString(MIXED).split('').map((part) => part?.toString())).toEqual(
       MIXED_GRAPHEMES,
     );
   });
 
   it('splitting keeps graphemes intact around separators', () => {
     expect(
-      new GraphemeString('Look𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome').split('𐐷').map((part) => part?.string),
+      new GraphemeString('Look𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome')
+        .split('𐐷')
+        .map((part) => part?.toString()),
     ).toEqual(['Look', 'At🦄This', 'Thing👮🏽‍♀️Its', 'Awesome']);
+  });
+});
+
+describe('toString', () => {
+  it('returns the original string', () => {
+    expect(new GraphemeString(MIXED).toString()).toEqual(MIXED);
+    expect(new GraphemeString('').toString()).toEqual('');
+  });
+
+  it('drops into a template literal without an accessor', () => {
+    const gs = new GraphemeString(FAMILY);
+    expect(`${gs}`).toEqual(FAMILY);
+    expect(`<${gs.slice(1, 2)}>`).toEqual('<👨‍👩‍👧‍👦>');
+  });
+
+  it('works with String() and string concatenation', () => {
+    const gs = new GraphemeString('abc');
+    expect(String(gs)).toEqual('abc');
+    expect(`${gs}d`).toEqual('abcd');
+  });
+
+  it('a derived instance stringifies to its own text, not the whole parent', () => {
+    expect(`${new GraphemeString(MIXED).slice(0, 4)}`).toEqual('Look');
   });
 });
 
@@ -415,7 +442,7 @@ describe('derived values keep the parent segmentation', () => {
 
   it('a derived instance indexes correctly without re-segmenting', () => {
     const tail = new GraphemeString(MIXED).slice(4);
-    expect(tail.string).toEqual('𐐷At👨‍👩‍👧‍👦👮🏽‍♀️');
+    expect(tail.toString()).toEqual('𐐷At👨‍👩‍👧‍👦👮🏽‍♀️');
     expect(tail.length).toEqual(5);
     expect(tail.at(0)).toEqual('𐐷');
     expect(tail.at(-1)).toEqual('👮🏽‍♀️');
