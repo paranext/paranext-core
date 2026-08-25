@@ -640,9 +640,9 @@ test.describe('Search History', () => {
     await firstResultCard(frame).click();
 
     await openHistoryDropdown(frame);
-    // Use getByRole('option') to scope the match to the history dropdown's CommandItem elements
-    // (which have role="option"), not the many result card texts that also contain the search term.
-    await expect(frame.getByRole('option', { name: COMMON_SEARCH_TERM })).toBeVisible({
+    // Scope the match to the history menu's items (role="menuitem"), not the many result card
+    // texts that also contain the search term.
+    await expect(frame.getByRole('menuitem', { name: COMMON_SEARCH_TERM })).toBeVisible({
       timeout: 5_000,
     });
 
@@ -668,9 +668,8 @@ test.describe('Search History', () => {
     await expect(frame2.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     await openHistoryDropdown(frame2);
-    // Use getByRole('option') to scope to the history dropdown CommandItem elements
-    // (role="option"), consistent with other history tests.
-    await expect(frame2.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
+    // Scope to the history menu's items (role="menuitem"), consistent with other history tests.
+    await expect(frame2.getByRole('menuitem', { name: term })).toBeVisible({ timeout: 5_000 });
 
     await closeFindPanel(mainPage);
   });

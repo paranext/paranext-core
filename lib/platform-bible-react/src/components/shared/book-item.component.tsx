@@ -1,5 +1,9 @@
 import { CommandItem } from '@/components/shadcn-ui/command';
-import { getLocalizedBookId, getLocalizedBookName } from '@/components/shared/book.utils';
+import {
+  getLocalizedBookId,
+  getLocalizedBookName,
+  LIST_ITEM_KEYBOARD_FOCUS_RING,
+} from '@/components/shared/book.utils';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon } from '@sillsdev/scripture';
 import { Check } from 'lucide-react';
@@ -146,12 +150,27 @@ export function BookItem({
       aria-label={ariaLabel}
       disabled={disabled}
       className={cn(
+        LIST_ITEM_KEYBOARD_FOCUS_RING,
+        // Suppress CommandItem's own data-selected background and text color so the keyboard
+        // highlight is the ring alone. Book rows and grid cells belong to one control and share one
+        // highlight language; a background here would make the same keyboard state look different
+        // depending on which view the user is in.
+        'tw:data-selected:bg-transparent tw:data-selected:text-inherit',
+        // Hover keeps its own background so pointer feedback stays distinct from the ring, which
+        // marks the item Enter will submit.
+        'tw:hover:bg-muted',
+        // Hide CommandItem's own trailing check icon — this component's own `showCheck` icon
+        // (rendered as the first child below, so it is never the last child) is the one shown.
+        'tw:[&>svg:last-child]:hidden',
         className,
         disabled && 'tw:cursor-not-allowed tw:opacity-50',
         // Mirrors NumberedItemGrid's dimmed-vs-disabled split — same tokens, so chapter/verse cells
         // and book rows grey identically inside one popover: dimmed is presentation only, so it
-        // never sets aria-disabled or blocks onSelect, and it yields to disabled.
-        isDimmed && 'tw:bg-muted/50 tw:text-muted-foreground/50',
+        // never sets aria-disabled or blocks onSelect, and it yields to disabled. Restated under
+        // data-selected so a dimmed row keeps its dimming while the keyboard highlight is on it,
+        // rather than losing it to the suppression rule above.
+        isDimmed &&
+          'tw:bg-muted/50 tw:text-muted-foreground/50 tw:data-selected:bg-muted/50 tw:data-selected:text-muted-foreground/50',
       )}
     >
       {showCheck && (

@@ -13,12 +13,10 @@ const FORWARD_KEY = isMac ? 'Meta+BracketRight' : 'Alt+ArrowRight';
 /**
  * Navigate the top toolbar BCV control to a typed reference (e.g. 'MRK 4').
  *
- * After typing, the control shows a "top match" CommandItem rendered with the book ID and
- * chapter:verse (e.g. typing "MRK 4" shows an item "MRK 4:1" — the full English book name only
- * appears on the trigger after committing). Commit with Enter, but only AFTER cmdk's highlighted
- * (`data-selected`) item is the top match: cmdk moves its highlight asynchronously after the input
- * changes, so an immediate Enter can race it and activate the previously-highlighted book instead
- * (observed flake). Mouse-clicking the item is also unreliable — the list auto-scrolls (deferred
+ * After typing, the control shows a "top match" row rendered with the DISPLAY spelling of the
+ * reference (e.g. typing "MRK 4" shows "Mark 4:1"). Commit with Enter, but only AFTER that row
+ * shows the expected reference: the control parses the input asynchronously, so an immediate Enter
+ * can race the parse. Mouse-clicking the item is also unreliable — the list auto-scrolls (deferred
  * `setTimeout(0)` + smooth scroll) on every input change, which can shift the layout under the
  * pointer between Playwright's stability check and the actual click (observed to hit the
  * next-chapter quick-nav button instead).
@@ -34,16 +32,19 @@ async function navigateToRef(mainPage: Page, refText: string, expectedRef: RegEx
   const commandInput = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await expect(commandInput).toBeVisible({ timeout: 5_000 });
   await commandInput.fill(refText);
-  // Wait for cmdk to highlight the top match. Only then is Enter guaranteed to activate it. The
-  // match uses `expectedRef` — the DISPLAY spelling — because the item renders through
+  // Wait for the top-match row to display the reference it will submit. The match uses
+  // `expectedRef` — the DISPLAY spelling — because the row renders through
   // `formatScrRef(..., 'English')`, so the typed book code ("MRK") never appears in it. Its `\b`
-  // anchor keeps a wrong-chapter highlight from false-passing: /Mark 4\b/ accepts "Mark 4:1" but
-  // rejects "Mark 12:1" (and a hypothetical "Mark 40:1").
-  const highlightedTopMatch = mainPage.locator(
-    '[data-radix-popper-content-wrapper] [cmdk-item][data-selected="true"]',
-    { hasText: expectedRef },
-  );
-  await expect(highlightedTopMatch).toBeVisible({ timeout: 5_000 });
+  // anchor keeps a wrong-chapter row from false-passing: /Mark 4\b/ accepts "Mark 4:1" but rejects
+  // "Mark 12:1" (and a hypothetical "Mark 40:1").
+  //
+  // Deliberately NOT keyed on cmdk's `data-selected` highlight: that highlight sits on a cell of
+  // the chapter preview grid below this row, never on the row itself, and Enter submits the row's
+  // reference rather than whatever cmdk has highlighted.
+  const topMatchRow = mainPage.locator('[data-radix-popper-content-wrapper] [cmdk-item]', {
+    hasText: expectedRef,
+  });
+  await expect(topMatchRow).toBeVisible({ timeout: 5_000 });
   await commandInput.press('Enter');
   await expect(commandInput).not.toBeVisible({ timeout: 5_000 });
   await expect(trigger).toContainText(expectedRef, { timeout: 10_000 });

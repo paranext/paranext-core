@@ -39,6 +39,7 @@
     "biblionexus",
     "blockable",
     "camelcase",
+    "cmdk",
     "consts",
     "cooldown",
     "dedup",

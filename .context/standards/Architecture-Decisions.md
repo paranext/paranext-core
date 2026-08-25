@@ -2497,3 +2497,105 @@ step, no automation. Just a record.
   worse than a badly-timed foreground.
 - **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
   which carries the design, the call-site table and the `show` hazard in full.
+
+## adr-bcv-item-value-contract: BookChapterControl owns the cmdk item-value contract; activation reads component state, not cmdk's DOM internals
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** `BookChapterControl`'s chapter and verse grids render as cmdk `CommandItem`s
+  (`lib/platform-bible-react/src/components/advanced/book-chapter-control/`), and its
+  Enter/Space activation previously read the highlighted cell straight off cmdk's own DOM state —
+  `commandRef.current?.querySelector('[cmdk-item][data-selected="true"]:not([data-disabled="true"])')`,
+  then `.click()` on whatever it found. Those attribute names (`cmdk-item`, `data-selected`,
+  `data-disabled`) are cmdk implementation details, not a contract the `cmdk` package documents or
+  versions; nothing in this codebase pinned them, so a `cmdk` upgrade could rename or drop one and
+  the Enter/Space handler would silently stop finding a highlighted cell, with no compiler or type
+  error to catch it. Separately, the cmdk `CommandItem` `value` string that both drives the
+  highlight and gets parsed back into a chapter/verse number was hand-built inline at six call
+  sites (`git diff main...HEAD -- book-chapter-control.component.tsx` shows the six
+  `` `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ...` `` templates this branch replaced) and
+  parsed back with two ad hoc regexes (`commandValue.match(/:(\d+)$/)` and
+  `commandValue.match(/(\d+)$/)`), each of which had to agree with every builder site by
+  convention alone.
+- **Decision:** Keep cmdk (`Command`/`CommandItem`/`CommandList`/`CommandInput`) for list
+  rendering and filtering, but own the item-value contract: `chapterItemValue` / `verseItemValue`
+  build the `CommandItem` value, `parseChapterFromItemValue` / `parseVerseFromItemValue` read it
+  back, and `TOP_MATCH_ITEM_VALUE` is a fixed sentinel for the top-match row — all in one place,
+  `lib/platform-bible-react/src/components/shared/book-item.utils.ts`, consumed by both the grid
+  components and the keyboard handler. Enter/Space activation in `handleCommandKeyDown`
+  (`book-chapter-control.component.tsx`) reads the highlighted item number out of the
+  `commandValue` state the component already owns and calls the same `handleVerseSelect` /
+  `handleChapterSelect` callback the grid's own `onSelect` would call — never reading a cmdk DOM
+  attribute, never synthesizing a click.
+- **Alternatives:** (a) **keep steering cmdk through its private DOM attributes** — rejected:
+  nothing pins those attributes across `cmdk` versions, and a break would be silent (no type error,
+  no failing build — just Enter/Space quietly doing nothing). (b) **replace the grids with a
+  roving-`tabindex` native-focus grid** (the WAI-ARIA grid pattern) — the structurally honest fix,
+  since cmdk is a 1-D listbox primitive being asked to render and drive a 2-D grid (6 columns,
+  wrap-around horizontal movement, RTL mirroring); deferred as a follow-up rather than built here,
+  since it would replace `ChapterGrid`/`VerseGrid`'s rendering model, not just their keyboard
+  wiring.
+- **Consequences:** The grids and the keyboard handler cannot drift apart — both read and write
+  through the same builder/parser pair instead of six independently-formatted template strings.
+  Disabled-item filtering, which the removed `:not([data-disabled="true"])` DOM selector provided
+  for free, now has to be checked explicitly (`makeIsChapterDisabled` / `makeIsVerseDisabled`) in
+  the activation branch — an easy thing to forget when adding a new activation path. Grid movement
+  arithmetic (wrap-around horizontal, clamp vertical, RTL mirroring) is now one pure function,
+  `computeTargetGridItem` in `book-chapter-control.utils.ts`, shared by both grids instead of two
+  near-duplicate `switch` statements that had already drifted from each other before this branch.
+- **Source:** This branch's BookChapterControl keyboard-navigation rework (PT-4345); the removed
+  DOM-query activation and the six inline value-builders are visible in `git diff main...HEAD --
+  lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx`.
+
+## adr-z-index-ordering-invariants: The z-index scale is defined by ordering invariants, pinned by tests — not by the individual numbers
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** PR #2365 raised `Z_INDEX_ABOVE_DOCK`
+  (`lib/platform-bible-react/src/components/z-index.ts`) from 250 to 600 for an unrelated
+  combobox-in-a-modal fix. That silently put every tooltip (550 at the time) behind every popover,
+  select, context menu, and the menubar, which all sit on `Z_INDEX_ABOVE_DOCK`. Nothing failed: no
+  test asserted the relative order between tiers, only their existence. Separately,
+  `Z_INDEX_OVERLAY`'s doc comment claimed the shadcn popovers used it, when in fact every shadcn
+  overlay (`dropdown-menu.tsx`, `tooltip.tsx`, `select.tsx`, `popover.tsx`, `dialog.tsx`,
+  `context-menu.tsx`) sets `Z_INDEX_ABOVE_DOCK`, not `Z_INDEX_OVERLAY` — a stale comment that is
+  what led PR #2229 to place a menu at `Z_INDEX_OVERLAY` (400) underneath its own 600-tier host.
+- **Decision:** Define the scale by **ordering invariants**, not the individual numbers:
+  backdrop (`Z_INDEX_MODAL_BACKDROP`, 450) < modal (`Z_INDEX_MODAL`, 500) < overlay content
+  (`Z_INDEX_ABOVE_DOCK`, 600) < content portalled out of a popover (`Z_INDEX_ABOVE_POPOVER`, 650) <
+  tooltip (`Z_INDEX_TOOLTIP`, 675) < first-run gate (`Z_INDEX_FIRST_RUN`, 700). Pin these with
+  order-only assertions in `lib/platform-bible-react/src/components/z-index.test.tsx` (e.g.
+  `expect(Z_INDEX_TOOLTIP).toBeGreaterThan(Z_INDEX_ABOVE_POPOVER)`), plus rendered-stacking tests that
+  render a tooltip inside a popover and a dropdown menu on its own, and assert the resulting
+  `style.zIndex` values. Overlay components own their own z-index — every shadcn overlay sets the
+  shared `Z_INDEX_ABOVE_DOCK` constant itself — rather than leaving each consumer to pick a value,
+  closing the PR #2229 failure mode. Overlays nested inside other overlays (a tooltip inside a
+  popover, a menu inside a dialog) share the overlay tier and resolve by DOM/paint document order
+  rather than getting a tier of their own.
+- **Alternatives:** (a) **a dedicated numeric tier per nesting level** — rejected: does not compose
+  past one level (a third nesting depth needs a fourth number, in perpetuity), and every new tier
+  needs a name nobody can define ahead of the UI that will eventually need it. (b) **a React
+  context threading the host's z-index down to descendants** so a child can compute "host + 1" —
+  more machinery than the problem warrants; the document-order rule already gives the same visual
+  result once both layers share a tier. (c) **rename `Z_INDEX_ABOVE_DOCK`** to describe what it
+  actually is now (the general overlay tier, not "the value that clears the dock") — rejected here
+  only because it is exported public API from `lib/platform-bible-react/src/index.ts`, so a rename
+  is a breaking change for any extension importing it; worth doing at the next breaking-change
+  window.
+- **Consequences:** Re-tiering the scale (moving every layer's absolute number to make room)
+  stays cheap, but *reordering* it (swapping which tier sits above which) now fails a test
+  immediately instead of shipping a silent visual regression like PR #2365's.
+  `src/renderer/styles/_vars.scss` restates the scale for SCSS consumers, and a test reads that file
+  to assert it still agrees with the TypeScript constants — a twin that drifts is worse than a
+  duplicated one, because neither copy can then be trusted to say what a layer's value is.
+  `Z_INDEX_OVERLAY`
+  (400) itself was left untouched as out of scope for this work: it has ten `zIndex:` call sites
+  across seven consumer files (`overlay-popover.component.tsx`, `overlay-context-menu.component.tsx`
+  (×2), `overlay-command-palette.component.tsx` (×2), `settings-sidebar.component.tsx`,
+  `project-selector.component.tsx` (×2), `manage-books-dialog.component.tsx`,
+  `character-marker-bar-overlay.component.tsx`), sits below `Z_INDEX_MODAL_BACKDROP` in the scale,
+  and is not covered by any ordering test above — it may warrant its own review.
+- **Source:** PT-4345 (BCV styling/keyboard-nav epic, the z-index repair task), which reconciles the
+  drift left by PR #2365 (silently raised `Z_INDEX_ABOVE_DOCK` 250 → 600, burying every tooltip) and
+  PR #2229 (placed a menu at `Z_INDEX_OVERLAY` underneath its own `Z_INDEX_ABOVE_DOCK` host) by
+  adding the ordering tests in `z-index.test.tsx` and this decision record.

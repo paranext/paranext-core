@@ -22,6 +22,12 @@ export const BOOK_CHAPTER_CONTROL_STRING_KEYS = Object.freeze([
   '%webView_bookChapterControl_selectVerse%',
   '%webView_bookChapterControl_showMoreBooks%',
   '%webView_bookChapterControl_showProjectBooksOnly%',
+  '%webView_bookChapterControl_previousChapter%',
+  '%webView_bookChapterControl_nextChapter%',
+  '%webView_bookChapterControl_previousVerse%',
+  '%webView_bookChapterControl_nextVerse%',
+  '%webView_bookChapterControl_backToBooks%',
+  '%webView_bookChapterControl_backToChapters%',
 ] as const);
 
 /** Type definition for the localized strings used in the BookChapterControl component */
