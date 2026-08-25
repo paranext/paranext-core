@@ -2216,7 +2216,7 @@ step, no automation. Just a record.
   for a typed surface rather than a state key.
 - **Source:** PT-4346, global BCV control showing books from open resources.
 
-## ADR-0023: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
+## ADR-0030: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
 - **Date:** 2026-08-11
 - **Status:** Accepted
