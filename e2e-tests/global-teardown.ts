@@ -31,12 +31,21 @@ export default async function globalTeardown(_config: FullConfig): Promise<void>
     }
   }
 
-  // Run the stop script to ensure all Electron processes are terminated
-  console.log('Running cleanup: npm run stop');
-  try {
-    execSync('npm run stop', { cwd: rootDir, stdio: 'pipe', timeout: 10_000 });
-    console.log('Cleanup completed.');
-  } catch {
-    console.log('Cleanup: No processes to stop or already stopped.');
+  // Sweep up any Electron left behind by a crashed fixture. `npm run stop` matches by process
+  // name and kills every electron and dotnet process on the machine, so it is safe only where the
+  // machine belongs to the run. On a developer box it would also kill the app they are working in,
+  // any app a CDP-based suite is attached to, and unrelated dotnet processes. The launch fixtures
+  // already tear down what they started; if something does leak, the port check in global-setup
+  // names `npm run stop` as the manual remedy.
+  if (process.env.CI) {
+    console.log('Running cleanup: npm run stop');
+    try {
+      execSync('npm run stop', { cwd: rootDir, stdio: 'pipe', timeout: 10_000 });
+      console.log('Cleanup completed.');
+    } catch {
+      console.log('Cleanup: No processes to stop or already stopped.');
+    }
+  } else {
+    console.log('Skipping machine-wide process sweep outside CI. Run `npm run stop` if needed.');
   }
 }
