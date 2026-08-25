@@ -204,11 +204,10 @@ export type BookChapterControlBookLists = {
    */
   reachableBooks: string[];
   /**
-   * The project's books plus the current one, flattened — the navigation universe while the list is
-   * collapsed. The current book is always included so a reference on a book the project lacks can
-   * still be stepped through; the project's other books are the only ones the user has opted into.
+   * `projectBooksBySection` flattened — the navigation universe while the list is collapsed. Only
+   * the project's books, so quick navigation stays inside the books the user has opted into.
    */
-  projectAndCurrentBooks: string[];
+  projectBooks: string[];
   /** Reachable books the project does not have. These render greyed but stay selectable. */
   booksOutsideProject: ReadonlySet<string>;
 };
@@ -223,20 +222,19 @@ function groupBooksBySection(bookIds: string[]): Record<Section, string[]> {
 }
 
 /**
- * Derives every book list the control renders from the three inputs that determine them.
+ * Derives every book list the control renders from the two inputs that determine them.
  *
- * `currentBookId` is always reachable, so a reference in neither the project nor any open resource
- * stays visible rather than silently absent.
+ * Purely a function of its inputs: a book is reachable only if the caller passes it. A caller that
+ * wants the book of the current reference reachable while the project lacks it must include that
+ * book in `additionalBookIds`.
  *
  * @param projectBookIds Books the active project has
  * @param additionalBookIds Books reachable elsewhere, e.g. present in an open resource. Ids the
  *   project already has are ignored — this arrives from a public callback that may include them.
- * @param currentBookId The book of the control's current reference
  */
 export function deriveBookChapterControlBookLists(
   projectBookIds: string[],
   additionalBookIds: string[],
-  currentBookId: string,
 ): BookChapterControlBookLists {
   const projectBookIdSet = new Set(projectBookIds);
   const extraBookIds = additionalBookIds.filter((bookId) => !projectBookIdSet.has(bookId));
@@ -245,34 +243,21 @@ export function deriveBookChapterControlBookLists(
   // Canon-ordered so an extra book lands among its neighbours instead of after the project's books.
   // The fast path preserves the caller's array when nothing widens the list.
   const reachableBookIds =
-    extraBookIdSet.size === 0 && projectBookIdSet.has(currentBookId)
+    extraBookIdSet.size === 0
       ? projectBookIds
-      : ALL_BOOK_IDS.filter(
-          (bookId) =>
-            projectBookIdSet.has(bookId) || extraBookIdSet.has(bookId) || bookId === currentBookId,
-        );
+      : ALL_BOOK_IDS.filter((bookId) => projectBookIdSet.has(bookId) || extraBookIdSet.has(bookId));
 
   const reachableBooksBySection = groupBooksBySection(reachableBookIds);
   const reachableBooks = Object.values(reachableBooksBySection).flat();
 
   const projectBooksBySection = groupBooksBySection(projectBookIds);
 
-  // Canon-ordered on the same terms as the reachable list, so the current book lands among the
-  // project's books rather than after them, then grouped and flattened like `reachableBooks` so it
-  // inherits the same peripheral-id exclusion.
-  const projectAndCurrentBooks = projectBookIdSet.has(currentBookId)
-    ? Object.values(projectBooksBySection).flat()
-    : Object.values(
-        groupBooksBySection(
-          ALL_BOOK_IDS.filter((bookId) => projectBookIdSet.has(bookId) || bookId === currentBookId),
-        ),
-      ).flat();
-
   return {
     projectBooksBySection,
     reachableBooksBySection,
     reachableBooks,
-    projectAndCurrentBooks,
+    // Grouped and flattened like `reachableBooks`, so it inherits the same peripheral-id exclusion.
+    projectBooks: Object.values(projectBooksBySection).flat(),
     // Derived from the grouped-and-flattened list, so a peripheral id that grouping dropped can
     // never be marked dimmed for a list it is not part of.
     booksOutsideProject: new Set(reachableBooks.filter((bookId) => !projectBookIdSet.has(bookId))),
