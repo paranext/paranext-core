@@ -77,6 +77,11 @@ export function getToolbarOSReservedSpaceClassName(
  *
  * This component is designed to be used in the window title bar of an electron application.
  *
+ * Two `data-testid` hooks are relied on by end-to-end tests outside this package, so they are part
+ * of this component's contract: `toolbar-content-row` (the row that clips when contents do not fit)
+ * and `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking
+ * change.
+ *
  * @param {ToolbarProps} props - The props for the component.
  */
 export function Toolbar({
@@ -103,6 +108,10 @@ export function Toolbar({
       id={id}
     >
       <div
+        /* The element that clips when the bar's contents do not fit, so it is also the one whose
+           `scrollWidth > clientWidth` proves an overflow regression (see the narrow-title-bar e2e
+           test). */
+        data-testid="toolbar-content-row"
         className="tw:flex tw:h-full tw:w-full tw:justify-between tw:overflow-hidden"
         /* @ts-ignore Electron-only property */
         style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
@@ -129,7 +138,14 @@ export function Toolbar({
 
         {/* Content area */}
         <div
-          className="tw:flex tw:items-center tw:gap-2 tw:px-2"
+          /* `min-w-0` defeats the `min-width: auto` a flex item gets by default, which floors this
+             area at its content's intrinsic width. Without it the area cannot shrink at all, so a
+             narrow window pushes the trailing controls under the `overflow-hidden` above and they
+             are silently clipped rather than shrunk (PT-4218). The app menu area intentionally does
+             NOT get the same treatment: it holds the menubar, which has nowhere to shrink to, and
+             its `basis-0` already keeps it from claiming space it does not need. */
+          data-testid="toolbar-content-area"
+          className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:px-2"
           /* @ts-ignore Electron-only property */
           style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
         >
