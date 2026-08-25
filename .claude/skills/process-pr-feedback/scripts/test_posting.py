@@ -218,8 +218,8 @@ def test_prose_openers_do_not_trip_the_loud_warning():
 def test_the_documented_entry_shapes_warn_when_written_without_backticks():
     """The shapes the docs teach as examples are the ones that must not vanish quietly.
 
-    A narrower head test kept firing on a bare literal id while silently dropping these, so the
-    test asserting the bare case passed with the regression sitting beside it.
+    A head test that excludes regex characters still fires on a bare literal id while dropping
+    these, which reads as coverage and is not.
     """
     import io
     import contextlib
@@ -379,7 +379,7 @@ def test_report_lines_renders_a_truncated_row_without_crashing():
     `verify_posted.py`'s pre-scan report prints exactly what `report_lines` returns, so this
     covers those loops. It does NOT cover the FAIL-branch summary further down, which is open-coded
     over `unknown` and `malformed` — that one renders through `describe_row` and is safe, but this
-    test does not exercise it, and saying otherwise is the overstatement the last round made.
+    test does not exercise it.
     """
     from posting_lib import report_lines
     rows = [["PENDING"], ["FAIL", "R5-07", "2659", "reply", "-", "-", "t"]]

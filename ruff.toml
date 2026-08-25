@@ -3,22 +3,19 @@
 # The rule selection is deliberately narrow. Ruff's default set reports 31 findings on those
 # files — import ordering, `re.I` vs `re.IGNORECASE`, context managers, explicit `check=` — and
 # not one of them is a defect; `ruff format` would additionally rewrite all of them, discarding
-# hand-wrapped prose in comments that is there to be read. `F` (pyflakes) and `E9` (syntax and
-# runtime errors) are the subset that reports actual bugs: undefined names, unused imports,
-# f-strings missing their placeholders, redefinitions that shadow.
+# hand-wrapped prose in comments that is there to be read. `F` (pyflakes) is the subset that
+# reports actual bugs: undefined names, unused imports, f-strings missing their placeholders,
+# redefinitions that shadow. `E9` adds `E902` (unreadable file) and is kept because it is free.
 #
 # Scope this up only with evidence that the extra rules catch something. Measured 2026-08-25,
 # `F,E9` reports zero findings on the current tree, so this is a tripwire for Python added
 # later rather than a cleanup of what is here.
 #
-# What each piece actually earns, since the first version of this comment got it wrong:
-#   * Syntax errors are reported REGARDLESS of selection — `ruff check --select F` on `def f(:`
-#     still fails. Running ruff at all is what covers them; `E9` is not why.
-#   * `E9` in 0.16.4 is `E902` (io-error) plus the removed `E999`, so it adds an unreadable-file
-#     error and little else. Kept because it is free, not because it is the syntax tripwire.
-#   * `target-version` IS load-bearing: it enforces the 3.9 syntax floor these scripts are
-#     written to, which the `ast.parse` gate it replaced did not check. Verified — ruff rejects
-#     `match` and `type` statements against this target.
+# Syntax errors are reported REGARDLESS of selection — `ruff check --select F` on `def f(:` still
+# fails — so running ruff at all is what covers them, not any selector.
+#
+# `target-version` is load-bearing: it enforces the 3.9 syntax floor these scripts are written to.
+# Verified — ruff rejects `match` and `type` statements against this target.
 target-version = "py39"
 
 [lint]

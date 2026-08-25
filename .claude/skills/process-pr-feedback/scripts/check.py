@@ -53,12 +53,11 @@ def internal_labels(packet):
         # An entry is a BACKTICKED token, optionally followed by `— prose`. Everything else in
         # the section is prose.
         #
-        # This is a convention rather than an inference on purpose. Three rounds of trying to
-        # tell an entry from a sentence by shape got it wrong in both directions: `Note — …` and
-        # `NOTE — …` were stopped on (with a remedy that would deny-list an everyday word), while
-        # `e.g. — …` and `P2 — …` were transcribed as live regexes that would hard-FAIL any
-        # approved body containing them. A backtick is unambiguous, is what markdown authors
-        # already write around a pattern, and is checkable.
+        # A convention rather than an inference, on purpose. Telling an entry from a sentence by
+        # shape fails in both directions: `Note — …` reads as an entry whose remedy would
+        # deny-list an everyday word, while `e.g. — …` and `P2 — …` read as patterns and would
+        # hard-FAIL any approved body containing them. A backtick is unambiguous, is what markdown
+        # authors already write around a pattern, and is checkable.
         # The backticked token must be the WHOLE first field: end of line, or a `— prose`
         # separator after it. Otherwise prose that merely opens with an inline-code span —
         # "`check.py` reads this section and uses each token" — reads as an entry.
@@ -73,11 +72,10 @@ def internal_labels(packet):
             # version), and a warning that fires on prose the classifier deliberately skips
             # stops being the one loud line in the output.
             head = entry.split(" ")[0]
-            # An id-shaped head is one carrying a digit. Deliberately permissive about the
-            # rest: a narrower test excluded regex characters, which silently dropped the
-            # warning for the exact shapes the docs use as examples - `2659-\d\d`,
-            # `\bD[1-7]\b`, `T2-0[1-9]` - while still firing on a bare literal id, so the
-            # test asserting the bare case passed with the regression beside it.
+            # An id-shaped head is one carrying a digit, and deliberately permissive about the
+            # rest: excluding regex characters would drop the warning for the shapes the docs
+            # teach as examples — `2659-\d\d`, `\bD[1-7]\b`, `T2-0[1-9]` — while still firing
+            # on a bare literal id, which looks like coverage and is not.
             #
             # The cost is a false positive on a prose opener whose first word carries a digit
             # ("P2 — writes this file.", a bare date). That is the right way round: the warning
