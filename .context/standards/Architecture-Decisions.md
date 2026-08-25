@@ -1079,177 +1079,126 @@ step, no automation. Just a record.
 
 - **Date:** 2026-08-17
 - **Status:** Accepted
-- **Context:** PT-4336 asks that the user only ever see a single, truthful Send/Receive
-  notification at a time for the sync currently running, and be able to cancel any sync with a
-  single click — the fourth non-negotiable of the PRD "Simple — Saroj (and Donna) can trust the
-  app". Two
-  obstacles surfaced while implementing PT-4348. First, the existing toolbar button's only action was
-  `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface — a web view that
-  updates on its own schedule — alongside the button, which is exactly the "two messages that seem to
-  contradict each other" that requirement exists to remove. Second, the ticket specified naming the syncing
-  projects from `SyncState.lastRequestedProjectIds`, but that field is written only by the Send/Receive
-  extension's `setResults` (on completion), never at `beginSync` — deliberately, so a failed sync
-  cannot pair its ids with the previous run's results. Read during a sync it names the PREVIOUS
-  sync's projects, so implementing the ticket as written would have shipped a confidently wrong label.
+- **Context:** PT-4336 asks that the user only ever see a single, truthful Send/Receive notification
+  at a time for the sync currently running, and be able to cancel any sync with a single click —
+  non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can trust the app". Two obstacles surfaced
+  while implementing PT-4348. First, the toolbar button's only action was
+  `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface alongside the button —
+  exactly the "two messages that seem to contradict each other" the requirement exists to remove.
+  Second, the ticket specified naming the syncing projects from `SyncState.lastRequestedProjectIds`,
+  but that field is written only by the Send/Receive extension's `setResults` (on completion), never
+  at `beginSync` — deliberately, so a failed sync cannot pair its ids with the previous run's
+  results. Read during a sync it names the PREVIOUS sync's projects.
 - **Decision:** The status lives entirely in the renderer: `SyncStatusButton` renders a
   `platform-bible-react` `Popover` in place (no overlay service, no web view) with the project list
   and a single-shot Cancel wired to `paratextBibleSendReceive.cancelSync`. `useSyncStatus` seeds from
   a one-shot `paratextBibleSendReceive.getSyncState` on mount, because `onSyncStateChanged` fires on
   transitions only and a consumer mounting mid-sync would otherwise read idle until that sync ended.
   For the names, a companion change to `paratext-bible-internal-extensions` adds
-  `SyncState.syncingProjectIds` (derived from the live claim map, so it cannot drift from `isSyncing`),
-  and core declares that field **optional** in its mirrored `src/@types/paratext-bible-send-receive`
-  copy so core merges independently of the upstream release. Absent field ⇒ a bare "Syncing" that
-  names no project.
+  `SyncState.syncingProjectIds` (derived from the live claim map, so it cannot drift from
+  `isSyncing`), which core declares **optional** in its mirrored
+  `src/@types/paratext-bible-send-receive` copy so core merges independently of the upstream release.
+  Absent field ⇒ a bare "Syncing" that names no project.
 - **Alternatives:** **Read `lastRequestedProjectIds` during a sync** (the ticket as written) —
-  rejected: names the wrong projects, which is the specific failure the single-truthful-status
-  requirement exists to fix. **Derive names
-  from `onSyncProgress.progressText`** — rejected: it carries the current *item*, not the set, and for
-  indeterminate progress it is a full localized sentence, so the label's meaning would change shape
-  mid-sync. **Ship without names** — viable and fully truthful, but misses that requirement's
-  explicit "shows
-  which project(s) are syncing". **Declare `syncingProjectIds` required in core** — rejected: it would
-  make core's types lie for any Studio build predating the upstream change.
-- **Consequences:** Core now ships a type declaration for a field that only exists once the companion
-  extension PR lands; the optional marker plus a fallback path is what makes that safe, and the same
-  pattern is available the next time core needs to consume an upstream contract addition ahead of its
-  release. `getSyncState` reflects only syncs run through the Send/Receive extension's own wrappers —
-  callers reaching the dotnet commands directly stay invisible (upstream PT-4214) — so this status is
-  best-effort, not ground truth. Routing through `runScheduledSessionSync` leaves core's startup
-  syncs unaffected in Power mode only. In Simple mode — the only mode this
-  button renders in — `main/startup-tasks.ts` calls the dotnet `syncProjects` command directly, and
-  the picker's `syncOnProjectSwitch` (`platform-scripture-editor`) does the same, so neither raises a
-  claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: the
-  requirement's "status is
-  correct from app startup" is met for manual and scheduled syncs, but the Simple-mode startup sync
-  still shows no status. Closing that needs either PT-4214 or routing those two call sites through a
-  claiming wrapper (e.g. `runManualSync`); this decision deliberately does neither, since both are
-  changes to sync behavior rather than to how status is reported. PT-4214 is Done, but it does not
-  close this gap — it shipped a _gate_-derived signal
-  (`paratextBibleSendReceive.onSyncWriteLockChanged`, backed by `SendReceiveWriteLock`), not a signal
-  derived from the sync run itself, and the gate cannot see the window this paragraph is about.
-  Studio's patch deliberately suppresses the gate's initial arm on the scheduled path — `if
-  (!isScheduledSync)` guards the `SetSyncing(...)` call in `RunWithSyncNotification` — because the
-  sync-all case passes `null` project ids, and arming with an empty `SetSyncing([])` would be
-  toothless, would waste a full drain on nothing, and would trip the gate's "no valid project ids"
-  warning. The Simple-mode startup sync **is** the scheduled path, so the gate stays silent through
-  its entire share-resolution phase — precisely the window this paragraph identifies as unclosed.
-  What actually closed it is PT-4398 (ADR-0027): a new run-marker-derived signal
-  (`onSyncActivityChanged` / `getSyncActivity`) taken from the `BeginSyncRun`/`EndSync` bracket, which
-  is entered before the suppression branch above and held across the whole resolution phase, so it
-  sees the startup sync from the moment it starts. Of the four richer UX
-  states in the design for that non-negotiable, three ("Connection problem", "Unsaved changes", "Unsynced changes") are
-  deferred and marked as such in `sync-status-button.component.tsx`: none is derivable from what
-  Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this work
-  removes. Sync FAILURE is the exception and IS reported, because it is derivable: the snapshot's
-  `lastResults.resultsInfo` carries a per-project `resultStatus`, so a completed sync that did not
-  succeed everywhere shows a failure state rather than a green check. A user-cancelled sync lands
-  there too, which is the case that most obviously must not read as "Synced". The detail behind a
-  failure (per-project conflicts, `failureMessage`, warnings) lives only in the sync status web view,
-  so the popover keeps a link to it via `paratextBibleSendReceive.openSyncStatus` — this decision
-  removes that command from the button's CLICK, not from the product. **A second sync surface exists outside core's tree, and it overlaps this one on most
-  syncs.** As of 2026-08-18, Paratext 10 Studio carries (in its unmerged `repo-patches/paranext-core.patch`)
-  a C#-side sync toast in `ParatextProjectSendReceiveService`, tracked by `_syncNotificationId` and
-  created by `RunWithSyncNotification`. Traced through that patch: `RunWithSyncNotification` defaults
-  `showNotification` to `true`; `SyncProjects` omits the argument entirely, so the `syncProjects` path
-  always toasts; and `SendReceiveProjects` derives it from a `suppressNotification` parameter that
-  defaults to `false`. Only the open S/R dialog opts out. The toast is `Duration = 0` (persistent) with
-  `ClickCommand = "paratextBibleSendReceive.cancelSync"`, i.e. the same cancel affordance this popover
-  offers. The resulting overlap in Simple mode:
+  rejected: names the wrong projects, the specific failure this requirement exists to fix. **Derive
+  names from `onSyncProgress.progressText`** — rejected: it carries the current *item*, not the set,
+  and for indeterminate progress it is a full localized sentence, so the label would change shape
+  mid-sync. **Ship without names** — truthful, but misses the requirement's "shows which project(s)
+  are syncing". **Declare `syncingProjectIds` required in core** — rejected: core's types would lie
+  for any Studio build predating the upstream change.
+- **Consequences:**
+  - Core ships a declaration for a field that exists only once the companion extension PR lands; the
+    optional marker plus a fallback path is what makes that safe, and the pattern is reusable the next
+    time core consumes an upstream contract addition ahead of its release.
+  - `getSyncState` reflects only syncs run through the Send/Receive extension's wrappers, so this
+    status is best-effort, not ground truth. In Simple mode — the only mode this button renders in —
+    `main/startup-tasks.ts` and the picker's `syncOnProjectSwitch` call the dotnet `syncProjects`
+    command directly, raise no claim, and were therefore invisible here. PT-4214 does NOT close that
+    gap: it shipped a _gate_-derived signal (`onSyncWriteLockChanged`), and Studio's patch
+    deliberately suppresses the gate's initial arm on the scheduled path (`if (!isScheduledSync)`
+    guards `SetSyncing(...)` in `RunWithSyncNotification`), which is precisely the startup sync. What
+    closed it is PT-4398 (ADR-0027): a run-marker signal taken from the `BeginSyncRun`/`EndSync`
+    bracket, entered before that suppression branch and held across the whole resolution phase.
+  - Of the four richer UX states in the design for that non-negotiable, three ("Connection problem",
+    "Unsaved changes", "Unsynced changes") are deferred and marked as such in
+    `sync-status-button.component.tsx`: none is derivable from what Send/Receive emits, and inventing
+    them would reintroduce the untruthfulness this work removes. Failure IS reported, because
+    `lastResults.resultsInfo` carries a per-project `resultStatus` — and a user-cancelled sync lands
+    there, the case that most obviously must not read as "Synced". The detail behind a failure lives
+    only in the sync status web view, so the popover keeps a link to it: this decision removes
+    `openSyncStatus` from the button's CLICK, not from the product.
+  - Because the green check is decided by the _complement_ of a three-value failure set, any value
+    outside `ResultStatus` would read as success. The validator therefore checks `resultStatus` for
+    membership in the known union, and an unrecognised status reports `unknown` rather than a
+    possibly-false `synced`. The cost is deliberate: a seventh status added upstream degrades this
+    button to `unknown` until core's mirrored declaration is re-synced.
+  - **A second sync surface exists outside core's tree, and overlaps this one on most syncs.** As of
+    2026-08-18, Paratext 10 Studio's unmerged `repo-patches/paranext-core.patch` carries a persistent
+    (`Duration = 0`) C# sync toast in `ParatextProjectSendReceiveService`, created by
+    `RunWithSyncNotification` and wired to the same `paratextBibleSendReceive.cancelSync`. Only the
+    open S/R dialog opts out. The Simple-mode overlap:
 
-  | Sync | C# toast | This button | Result |
-  | --- | --- | --- | --- |
-  | Simple-mode startup (`startup-tasks.ts` → `syncProjects`) | yes | no claim | toast only |
-  | Picker `syncOnProjectSwitch` (direct dotnet) | yes | no claim | toast only |
-  | Scheduled / auto-sync engine (`runSync` → `syncProjects`) | yes | claims | **both** |
-  | Manual hamburger / background (`sendReceiveProjects`) | yes | claims | **both** |
-  | Open S/R dialog (`suppressNotification: true`) | no | claims | button only |
+    | Sync | C# toast | This button | Result |
+    | --- | --- | --- | --- |
+    | Simple-mode startup (`startup-tasks.ts` → `syncProjects`) | yes | no claim | toast only |
+    | Picker `syncOnProjectSwitch` (direct dotnet) | yes | no claim | toast only |
+    | Scheduled / auto-sync engine (`runSync` → `syncProjects`) | yes | claims | **both** |
+    | Manual hamburger / background (`sendReceiveProjects`) | yes | claims | **both** |
+    | Open S/R dialog (`suppressNotification: true`) | no | claims | button only |
 
-  **A second cancel surface also exists INSIDE core.**
-  `extensions/src/platform-scripture-editor/src/sync-blocked-banner.component.tsx` renders its own
-  `role="status"` region with a single-shot Cancel wired to the same
-  `paratextBibleSendReceive.cancelSync`, shown while a sync is blocking the editor. During a blocking
-  scheduled sync in Simple mode both it and this popover can be on screen at once: two live regions,
-  two differently-labelled Cancel buttons, and neither aware the other was clicked, so cancelling in
-  one leaves the other reading as armed. They are not merged here because they answer different
-  questions — the banner explains why the editor is unavailable *right now* and is modal to that
-  editor, while the popover is an ambient whole-app indicator the user opens deliberately — and
-  because a shared cancel state would have to live in a service neither currently uses. The concrete
-  defect (a spent cancel still reading as armed in the other surface) is what a follow-up should fix,
-  by having both read one piece of cancel-requested state.
-
-  Two consequences worth carrying forward. First, the C# service is *broader* coverage than this
-  button, not narrower: it sits where every sync converges on the `_sendReceiveSemaphore`, so it sees
-  the direct-command syncs this button is blind to — which is the same reason a semaphore-derived
-  signal is the proper general fix. Second, each surface is individually sound; Power mode does not
-  render this button at all, so the toast is its sole truthful indicator there. The defect is
-  specifically the **Simple-mode overlap**, not the toast's existence. Note also that suppressing the
-  toast is only wired for `sendReceiveProjects`; `syncProjects` has no such parameter, so quieting the
-  scheduled path needs a C# change in Studio's patch plus a contract addition in both copies of the
-  Send/Receive declaration. The "single, truthful notification" requirement is therefore not
-  achieved in the
-  shipped product by this decision alone, and the remaining work is cross-repo rather than a change to
-  this component.
-  One more consequence of the status resting on `resultStatus`: the green check is decided by the
-  *complement* of a three-value failure set, so any value outside `ResultStatus` would read as a
-  success. Because this contract is demonstrably still moving — `syncingProjectIds` was added to it by
-  this very work — the snapshot validator checks `resultStatus` for membership in the known union
-  rather than merely for being a string, and a snapshot carrying an unrecognised status reports
-  `unknown` instead of a possibly-false `synced`. `unknown` carries no icon and shares the plain
-  "Sync" label with `idle` — it is distinguished only in the popover text and the live region, which
-  is deliberate: a degraded read is not an error worth a persistent badge in the toolbar, and the
-  honest answer is available the moment the user asks for it. The cost is deliberate: a seventh
-  status added upstream degrades this button to `unknown` until core's mirrored declaration is
-  re-synced, which is the failure direction this whole entry chooses everywhere else.
-
-  **A pending Cancel cannot be settled by the project ids.** Upstream derives `syncingProjectIds`
-  from live, ref-counted per-project claims (`sync-state.ts` `initSyncState`), and a single
-  continuous `isSyncing: true` window spans however many overlapping claims the sync paths take out.
-  A project can therefore release and re-claim without a new sync having started, so "an id this
-  cancel did not cover" is not evidence of a different sync and cannot re-arm Cancel. The button
-  settles a pending cancel on the two signals that are sound — the status leaving `syncing`, and the
-  popover being reopened — and accepts the cost: a genuinely new overlapping sync keeps a dim
-  "Cancelling…" until the whole union goes idle. That is the safe half of the trade, since the
-  alternative offers a live Cancel while a cancel is still in flight. Settling this properly needs a
-  monotonic sync-episode identifier in `SyncState`, which is an upstream contract change.
-
-- **Follow-up (needs tickets under PT-4336, none filed as of this entry):** the items above are
-  deliberately out of this decision's scope and will not happen on their own.
-  1. *Close the Simple-mode startup-sync blind spot* — route `main/startup-tasks.ts` and the picker's
+    Each surface is individually sound — Power mode does not render this button, so the toast is its
+    sole indicator there — and the C# service is _broader_ coverage than this button, not narrower,
+    since it sits where every sync converges on the `_sendReceiveSemaphore`. The defect is
+    specifically the Simple-mode overlap. Suppression is wired only for `sendReceiveProjects`, so
+    quieting the scheduled path needs a C# change in Studio's patch plus a contract addition in both
+    copies of the declaration; the "single, truthful notification" requirement is therefore not met by
+    this decision alone, and the remaining work is cross-repo.
+  - **A second cancel surface exists INSIDE core.** `sync-blocked-banner.component.tsx` renders its
+    own `role="status"` region with a single-shot Cancel on the same command, shown while a sync is
+    blocking the editor. During a blocking scheduled sync in Simple mode both can be on screen: two
+    live regions, two differently-labelled Cancel buttons, neither aware the other was clicked. They
+    are not merged because they answer different questions — the banner explains why the editor is
+    unavailable right now and is modal to it, while the popover is an ambient whole-app indicator the
+    user opens deliberately — and a shared cancel state would need a service neither uses.
+  - **A pending Cancel cannot be settled by the project ids.** Upstream derives `syncingProjectIds`
+    from live, ref-counted per-project claims (`sync-state.ts` `initSyncState`), and one continuous
+    `isSyncing: true` window spans however many overlapping claims the sync paths take out, so a
+    project can release and re-claim without a new sync having started and "an id this cancel did not
+    cover" is not evidence of a different sync. The button settles a pending cancel only on the status
+    leaving `syncing` and on the popover being reopened, accepting that a genuinely new overlapping
+    sync keeps a dim "Cancelling…" until the union goes idle — the safe half of the trade, since the
+    alternative offers a live Cancel while one is still in flight. Settling it positively needs a
+    monotonic sync-episode id in `SyncState`, an upstream contract change.
+- **Follow-up (needs tickets under PT-4336, none filed as of this entry):**
+  1. _Close the Simple-mode startup-sync blind spot_ — route `startup-tasks.ts` and
      `syncOnProjectSwitch` through a claiming wrapper, or land upstream PT-4214. Owner: core.
-  2. *Achieve the "single, truthful notification" requirement* — suppress the C# toast on the paths this
-     button covers. Needs a `suppressNotification` parameter on `syncProjects` in Studio's
-     `repo-patches/paranext-core.patch`, plus the matching contract addition in BOTH copies of the
-     Send/Receive declaration. Owner: whoever owns Studio's patch — this cannot be done from core.
-  3. *Reconcile the two in-core cancel surfaces* — share one piece of cancel-requested state between
+  2. _Achieve the "single, truthful notification" requirement_ — suppress the C# toast on the paths
+     this button covers; needs a `suppressNotification` parameter on `syncProjects` in Studio's patch
+     plus the matching contract addition in BOTH copies of the declaration. Owner: Studio's patch.
+  3. _Reconcile the two in-core cancel surfaces_ — share one piece of cancel-requested state between
      this popover and `sync-blocked-banner.component.tsx`. Owner: core.
-  4. *Make a new sync episode provable* — add a monotonic episode id to `SyncState` so a pending
-     Cancel can be settled positively rather than waited out. Owner: upstream Send/Receive, then
-     core. Unblocks the "dim Cancelling…" cost recorded above.
-  5. ~~*Validate the snapshot field-by-field rather than all-or-nothing*~~ — **Done (PT-4398).**
-     `isValidSyncState` no longer validates `lastResults` at all, so an unreadable historical
-     `resultStatus` no longer discards the live `isSyncing`/`syncingProjectIds` alongside it. The
-     completed-sync question is answered where it is asked instead: `deriveOutcomeFromResults`
-     returns `undefined` for results it cannot classify, which the caller reports as `unknown`.
-  6. *Close the remaining sync-status timing holes* — a newer sync starting before a finished sync's
-     follow-up read returns swallows that sync's `failed`; a cancel rejected just as the sync ends
-     can toast beside a popover that says it finished; a cancel accepted but not acted on leaves the
-     button wedged. All need a specific timing collision. Owner: core. (The fourth hole originally
-     listed here — the first event ending the seed's retry budget whether or not it applied anything
-     — was closed by PT-4398: the flag now means "an event's state was applied", so an event whose
-     own read failed leaves the seed alive with its budget intact.)
-  7. *Debounce the syncing-project metadata lookup* — it calls the retrying
+  4. _Make a new sync episode provable_ — add a monotonic episode id to `SyncState` so a pending
+     Cancel can be settled positively rather than waited out. Owner: upstream, then core.
+  5. ~~_Validate the snapshot field-by-field rather than all-or-nothing_~~ — **Done (PT-4398).**
+     `isValidSyncState` no longer validates `lastResults`, so an unreadable historical `resultStatus`
+     no longer discards the live `isSyncing`/`syncingProjectIds`; `deriveOutcomeFromResults` answers
+     the completed-sync question where it is asked, returning `undefined` when it cannot classify.
+  6. _Close the remaining sync-status timing holes_ — a newer sync starting before a finished sync's
+     follow-up read returns swallows that sync's `failed`; a cancel rejected just as the sync ends can
+     toast beside a popover that says it finished; a cancel accepted but not acted on leaves the
+     button wedged. All need a specific timing collision. Owner: core.
+  7. _Debounce the syncing-project metadata lookup_ — it calls the retrying
      `getMetadataForAllProjects` on every id-set change, including the transient blank each event
      produces, and this component is mounted in every window's toolbar.
      `use-project-picker-data.hook.ts` debounces the identical call. Owner: core.
-  8. *Resolve the shared-layout contradiction* — `shared-layout-receiver.model.ts` rests on
+  8. _Resolve the shared-layout contradiction_ — `shared-layout-receiver.model.ts` rests on
      "`onSyncStateChanged` only fires for manual Send/Receives", while this work's declaration says
-     the state controller also covers `runScheduledSessionSync` and the auto-sync engine. Under the
-     new semantics a background sync raises the interactive "Apply now" prompt to someone who took no
-     action. This decision establishes the contradiction rather than causing it. Owner: core.
+     the state controller also covers `runScheduledSessionSync` and the auto-sync engine, so a
+     background sync raises the interactive "Apply now" prompt to someone who took no action. This
+     decision establishes the contradiction rather than causing it. Owner: core.
 - **Source:** PT-4348, under PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can
-  trust the app"; `sync-state.ts` in `paratext-bible-internal-extensions` for
-  the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
+  trust the app"; `sync-state.ts` in `paratext-bible-internal-extensions` for the
+  `lastRequestedProjectIds` and `syncingProjectIds` contracts.
 
 ## ADR-0025: Find excludes extra material by narrowing its book lists, not by gating its scopes
 
@@ -1345,147 +1294,104 @@ step, no automation. Just a record.
 
 - **Date:** 2026-08-20
 - **Status:** Accepted
-- **Context:** ADR-0024 recorded, and then corrected above, that PT-4214's write-gate signal cannot
-  report the Simple-mode startup sync: the gate's initial arm is deliberately suppressed on the
-  scheduled path, so it stays silent through exactly the window (share resolution) that startup sync
-  spends before it knows which projects it is syncing. Separately, Paratext 10 Studio's
-  `repo-patches/paranext-core.patch` carries a persistent C# toast
-  (`RunWithSyncNotification` / `ShowSyncNotification`) that overlaps the toolbar indicator on most
-  syncs in Simple mode — two live regions, two Cancel buttons wired to the same
-  `paratextBibleSendReceive.cancelSync`, for one sync. PT-4398 (a sub-task of PT-4336, which carries non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can trust the app") closes both:
-  give every sync path a truthful signal, and stop showing it twice in the same mode.
-- **Decision:** Sync activity is reported from a **run-marker-derived** signal, not the gate. Studio's
-  patch already holds a better bracket than the raw semaphore: `RunWithSyncNotification` calls
-  `BeginSyncRun()` at entry and `EndSync()` in its `finally`, entered before the gate-arm suppression
-  branch and held across the whole scheduled-path resolution. Raising a `SyncActivityChanged` event on
-  that bracket (plus at `ReArmSyncGate`, when the scheduled path resolves its merge set) therefore sees
-  every command path, including the two that call the dotnet commands directly
-  (`main/startup-tasks.ts`, and `platform-scripture-editor`'s `syncOnProjectSwitch`) and raise no
-  extension claim. The signal is forwarded to PAPI by a notifier service that mirrors
-  `SendReceiveBlockNotifierService` exactly — subscribe to the source event first, register the
-  network event with main's central registry best-effort, emit fire-and-forget, and expose a pull
-  command (`getSyncActivity`) so a renderer mounting mid-sync can seed instead of waiting for a
-  transition — following the established wire-naming pair (`onSyncWriteLockChanged` /
-  `getAutoSyncBlocking` → `onSyncActivityChanged` / `getSyncActivity`). Core's `useSyncStatus` takes
-  this as a **second input**, unioned with the existing claim-derived status as one derived predicate
-  computed in one place: `syncing = claimSaysSyncing || activitySaysSyncing`. Detail (project names)
-  still comes from the claim's `syncingProjectIds` when it has an answer; the activity signal's
-  `projectIds` fills in only when the claim has none (e.g. the startup sync before resolution), and the
-  two are never merged into one shared piece of state — each seeds and retries independently on its
-  own effect, so neither claim's clear-then-reread window can race the other's write.
+- **Context:** ADR-0024 recorded that PT-4214's write-gate signal cannot report the Simple-mode
+  startup sync: the gate's initial arm is deliberately suppressed on the scheduled path, so it stays
+  silent through exactly the share-resolution window that sync spends before it knows which projects
+  it is touching. Separately, Paratext 10 Studio's `repo-patches/paranext-core.patch` carries a
+  persistent C# toast (`RunWithSyncNotification` / `ShowSyncNotification`) that overlaps the toolbar
+  indicator on most syncs in Simple mode — two live regions, two Cancel buttons wired to the same
+  `paratextBibleSendReceive.cancelSync`, for one sync. PT-4398 (under PT-4336, non-negotiable 4 of
+  the PRD "Simple — Saroj (and Donna) can trust the app") closes both: give every sync path a
+  truthful signal, and stop showing it twice in the same mode.
+- **Decision:** Sync activity is reported from a **run-marker-derived** signal, not the gate.
+  Studio's patch already holds a better bracket than the raw semaphore: `RunWithSyncNotification`
+  calls `BeginSyncRun()` at entry and `EndSync()` in its `finally`, entered before the gate-arm
+  suppression branch and held across the whole scheduled-path resolution. Raising a
+  `SyncActivityChanged` event on that bracket (plus at `ReArmSyncGate`, when the scheduled path
+  resolves its merge set) therefore sees every command path, including the two that call the dotnet
+  commands directly and raise no extension claim. The signal is forwarded to PAPI by a notifier
+  service mirroring `SendReceiveBlockNotifierService` exactly, and exposes a pull command
+  (`getSyncActivity`) so a renderer mounting mid-sync can seed instead of waiting for a transition —
+  following the established wire-naming pair (`onSyncWriteLockChanged` / `getAutoSyncBlocking` →
+  `onSyncActivityChanged` / `getSyncActivity`). Core's `useSyncStatus` takes this as a **second
+  input**, unioned with the claim-derived status as one derived predicate computed in one place:
+  `syncing = claimSaysSyncing || activitySaysSyncing`. Project names still come from the claim's
+  `syncingProjectIds` when it has an answer; the activity signal's `projectIds` fills in only when
+  the claim has none. The two are never merged into one shared piece of state — each seeds and
+  retries on its own effect, so neither claim's clear-then-reread window can race the other's write.
 
   The union is deliberately asymmetric on OUTCOME. The activity signal reports only that a sync is
-  running, never how one finished, so a sync only it could see has no verdict to be had — and the
+  running, never how one finished, so a sync only it could see has no verdict to be had and the
   claim's last verdict describes a different sync entirely. That case reports `unknown` rather than
-  inheriting it: `unknown` exists precisely to say "a sync happened and how it went is not knowable",
-  and inheriting would put an unrelated sync's green check on it (or hide that this one failed). The
-  reverse direction is NOT wired: the activity signal reporting `isSyncing: false` does not clear a
-  claim that says `syncing`. The two disagree that way for an ordinary reason — a claim event can
-  arrive before the backend's run marker is set — so treating the disagreement as a stranded claim
-  would flicker every normal sync through a wrong state at its start. Distinguishing a stranded claim
-  from that skew needs a signal neither input carries today.
+  inheriting: `unknown` exists precisely to say "a sync happened and how it went is not knowable".
+  The reverse direction is NOT wired — `isSyncing: false` from the activity signal does not clear a
+  claim that says `syncing`, because the two disagree that way for an ordinary reason (a claim event
+  can arrive before the backend's run marker is set), and treating that skew as a stranded claim
+  would flicker every normal sync through a wrong state at its start.
 
-  Each interface mode keeps **exactly one** persistent sync surface: Simple mode → the toolbar
-  indicator; Power mode → the C# toast. This is not symmetric by default — the indicator is rendered
-  only `!isPowerMode`, so gating the toast off in Power mode as well would leave Power mode with no
-  sync surface at all. `RunWithSyncNotification` actually carries **four** separate toast surfaces,
-  and the mode gate — a single predicate, `ShouldShowPersistentSyncToast()` — is consulted at exactly
-  ONE of them:
-  - `ShowSyncNotification` — the persistent, cancellable in-progress toast. **Gated off** in Simple
-    mode, because it is the one the indicator's `syncing` state and popover Cancel already cover. The
-    gate sits **inside** `ShowSyncNotification` rather than at its call sites, so it covers every
-    caller — including the ones that pass no notification argument at all — without any of them
-    needing to know the gate exists.
-  - `NotifyIfSyncFailed` — the plain-failure toast. **Kept** in both modes; see the first bullet
-    under Consequences for why it is not gated alongside `ShowSyncNotification`.
-  - `NotifyIfRoleChanged` — **kept** in both modes; the indicator has no state for a role change.
-  - The thrown-failure toast in the `catch` block, including its connection-failure variant —
-    **kept** in both modes; the indicator has no state for a connection problem, and the requirement's
-    "Connection problem" UX remains explicitly deferred (ADR-0024).
-
-  Interface mode is read on the toast-gate path from a cached value (seeded at startup, refreshed
-  from `SettingsService`'s `onDidUpdate`) rather than a live round trip, because `ShowSyncNotification`
-  runs under the held sync semaphore and a blocking `GetSetting` there would compete with the same
-  10-second budget `WaitUntilAvailableAsync` already protects. Donna, in Power mode, is served by the
-  toast rather than by the indicator, which never renders for her.
+  Each interface mode keeps **exactly one** persistent sync surface: Simple → the toolbar indicator;
+  Power → the C# toast. Not symmetric by default: the indicator renders only `!isPowerMode`, so
+  gating the toast off in Power mode too would leave it with no sync surface at all.
+  `RunWithSyncNotification` carries **four** toast surfaces, and the mode gate — a single predicate,
+  `ShouldShowPersistentSyncToast()` — is consulted at exactly ONE: `ShowSyncNotification`, the
+  persistent cancellable in-progress toast, gated off in Simple mode because the indicator's
+  `syncing` state and popover Cancel already cover it. The gate sits **inside**
+  `ShowSyncNotification` rather than at its call sites, so it covers every caller without any of them
+  knowing it exists. The other three — `NotifyIfSyncFailed`, `NotifyIfRoleChanged`, and the
+  thrown/connection-failure toast in the `catch` block — are **kept** in both modes; the indicator
+  has no state for a role change or a connection problem, and see the first Consequence for why
+  plain failure is not gated alongside. Interface mode is read on the toast-gate path from a cached
+  value (seeded at startup, refreshed from `SettingsService`'s `onDidUpdate`) rather than a live
+  round trip, because `ShowSyncNotification` runs under the held sync semaphore where a blocking
+  `GetSetting` would compete with the same 10-second budget `WaitUntilAvailableAsync` protects.
 - **Alternatives:**
   - **Gate-derived signal only (`onSyncWriteLockChanged`).** Rejected: silent through the scheduled
-    path's resolution phase, i.e. broken at exactly the moment — app startup — the requirement cares most about.
-    See ADR-0024's correction above for the mechanism.
-  - **Route `startup-tasks.ts` and `syncOnProjectSwitch` through a claiming wrapper** (e.g.
-    `runManualSync`), as ADR-0024 first floated. Rejected for the same reason ADR-0024 declined it:
-    it covers today's two direct-call sites but leaves the next one dark, it recruits `runManualSync`
-    — designed for a manual, foreground sync — for a background sync it was never shaped for, and,
-    most importantly, it fixes a **reporting** problem by changing sync **behavior**. This design's
-    stated non-goal is "no change to sync behavior," which the run-marker signal satisfies and this
-    alternative does not.
+    path's resolution phase — broken at app startup, the moment the requirement cares most about.
+  - **Route `startup-tasks.ts` and `syncOnProjectSwitch` through a claiming wrapper.** Rejected for
+    ADR-0024's reasons: it covers today's two direct-call sites but leaves the next one dark, it
+    recruits `runManualSync` for a background sync it was never shaped for, and it fixes a
+    **reporting** problem by changing sync **behavior**, which this design's stated non-goal forbids.
   - **Two independent authorities for `isSyncing`.** Rejected on the strength of PT-4214 finding 16,
-    which was exactly this mistake once already: two consistency models (the claim map's ref-counted
-    set vs. the gate's set-replace) wired by two separate events, which drifted apart. The fix here is
-    deliberately the opposite shape — one derived boolean, computed by ORing two inputs in a single
-    module (`useSyncStatus`), never two competing booleans exposed separately. An OR of two inputs is
-    monotone: it cannot contradict itself, and its only failure mode is clearing a beat late (showing
-    "syncing" slightly past the true end), never reporting idle while a sync is actually running.
+    which was this mistake once already: two consistency models wired by two events, which drifted
+    apart. The fix here is the opposite shape — one derived boolean ORing two inputs in a single
+    module, never two competing booleans exposed separately. An OR is monotone: it cannot contradict
+    itself, and its only failure mode is clearing a beat late, never reporting idle mid-sync.
   - **Thread a `suppressNotification` flag to every call site.** Rejected: `syncProjects` has no such
-    parameter today, so this would mean changing the C# signature, the extension's own `.d.ts`, core's
-    mirrored `src/@types/paratext-bible-send-receive/index.d.ts`, and every call site — for a flag
-    whose only job is "don't show this one toast in this one mode." Placing the mode check inside the
-    gated toast function itself — `ShowSyncNotification` alone; see the first bullet under
-    Consequences, below, for why `NotifyIfSyncFailed` is not gated with it —
-    achieves the same effect with none of that surface area, and no call site needs to change.
+    parameter, so this means changing the C# signature, the extension's `.d.ts`, core's mirrored
+    copy, and every call site — for a flag whose only job is "don't show this one toast in this one
+    mode". The gate inside the toast function achieves the same with none of that surface area.
 - **Consequences:**
-  - **Only ONE of the four toast surfaces is gated, not two.** Gating `NotifyIfSyncFailed` as well as
-    `ShowSyncNotification` on `ShouldShowPersistentSyncToast()` would rest on the toolbar indicator's
-    `failed` state (derived from `lastResults.resultsInfo`, ADR-0024) already covering a plain sync
-    failure in Simple mode. That is false for precisely the syncs this decision exists to cover: `main/startup-tasks.ts` and the picker's `syncOnProjectSwitch` call the dotnet
-    commands directly, so the Send/Receive extension raises no claim and there is no `lastResults` for
-    those syncs — the indicator's `failed` state cannot exist for them. The activity signal that DOES
-    see those paths (this ADR's whole point) carries no outcome, only `{isSyncing, projectIds}`. So
-    gating `NotifyIfSyncFailed` left a non-throwing failure on the startup or project-switch sync with
-    **zero** surfaces — worse than the double-surface problem this decision set out to remove, and a
-    direct violation of the "fail toward showing something" principle this same ADR uses to justify
-    showing the toast on an unreadable interface mode (see the next bullet). `NotifyIfSyncFailed` is
-    now **not** gated at all — it is one of the three kept surfaces, alongside role-change and
-    thrown/connection-failure. The accepted cost: for a claim-VISIBLE failure (a manual sync through
-    the extension), Simple mode shows both this toast and the indicator's `failed` state — accepted,
-    since a terminal failure notification beside a status badge is not the double-surface problem two
-    persistent, separately-cancellable in-progress surfaces are. `ShouldShowPersistentSyncToast()`
-    therefore has exactly one call site.
+  - **Only ONE of the four toast surfaces is gated.** Gating `NotifyIfSyncFailed` too would rest on
+    the indicator's `failed` state covering a plain sync failure in Simple mode — false for precisely
+    the syncs this decision exists to cover, since `startup-tasks.ts` and `syncOnProjectSwitch` raise
+    no claim and so have no `lastResults`, and the activity signal that DOES see them carries no
+    outcome. Gating it left a non-throwing failure on those syncs with **zero** surfaces, worse than
+    the double-surface problem this removes. The accepted cost: for a claim-visible failure, Simple
+    mode shows both that toast and the indicator's `failed` state — a terminal failure notification
+    beside a status badge is not the problem two persistent, separately-cancellable in-progress
+    surfaces are.
   - **A cached-mode read and a fail-open renderer hook disagree by design on a failed settings read.**
-    `useIsPowerMode` (`src/renderer/hooks/use-is-power-mode.hook.ts`) falls back to `false` (Simple)
-    when reading the interface-mode setting fails, so the renderer renders the indicator in that case.
-    The C# toast gate, reading its own cached copy of the same setting, is understood to fail toward
-    "show the toast" on an unknown mode (see design rationale above; the gate lives in Studio's patch,
-    outside this repo). The two sides are not required to agree, and on this one failure path they
-    don't: a failed interface-mode read yields **both** surfaces at once rather than the intended one,
-    which is the exact duplicate-surface condition this work otherwise removes — chosen deliberately,
-    because the opposite default on either side risks combining with the other side's failure mode to
-    leave the user with **no** sync feedback at all. Anyone hardening this further should preserve
-    "fail toward showing something," not "fail toward showing exactly one thing."
-  - **`useSyncStatus` now runs two independent seed-retry loops instead of one.** The claim
-    (`getSyncState`) and the activity signal (`getSyncActivity`) each seed in their own effect with
-    their own `SYNC_SEED_RETRY_WINDOW_MS` budget, because the two must retry and clear independently —
-    a claim event, or a claim seed that gives up, must not end the activity seed's retries, and vice
-    versa. A full budget is only actually spent on a Studio build predating `getSyncActivity`, where
-    the command rejects for the life of the hook while send/receive is otherwise present. Public
-    Platform.Bible pays far less: nothing there implements the command, so `isSendReceiveAvailable`
-    settles to a real `false` and the toolbar unmounts this control after
-    `SEND_RECEIVE_UNKNOWN_GRACE_MS`, tearing both loops down after three or four attempts. The cost is
-    cold-start warn-level log volume, not behavior — the hook degrades to claim-only once both loops
-    give up, per the seam's optional declaration.
+    `useIsPowerMode` falls back to Simple, so the renderer renders the indicator; the C# gate fails
+    toward showing the toast. On that one path both surfaces appear at once — chosen deliberately,
+    because the opposite default on either side risks combining with the other's failure mode to
+    leave the user with **no** sync feedback. Preserve "fail toward showing something", not "fail
+    toward showing exactly one thing".
+  - **`useSyncStatus` runs two independent seed-retry loops.** Each has its own
+    `SYNC_SEED_RETRY_WINDOW_MS` budget, because a claim event or a claim seed that gives up must not
+    end the activity seed's retries, and vice versa. A full budget is spent only on a Studio build
+    predating `getSyncActivity`. Public Platform.Bible pays far less: nothing implements the command,
+    so `isSendReceiveAvailable` settles to a real `false` and the toolbar unmounts this control after
+    `SEND_RECEIVE_UNKNOWN_GRACE_MS`, tearing both loops down after three or four attempts. The cost
+    is cold-start warn-level log volume, not behavior.
   - **The two halves only compose in a real build.** The signal, the union, and the toast gate split
-    across two repositories — core (the `useSyncStatus` union and the optional seam declaration in
-    `src/@types/paratext-bible-send-receive/index.d.ts`) and Paratext 10 Studio's
-    `repo-patches/paranext-core.patch` (the `SyncActivityChanged` event, its notifier, and the toast
-    gate). Neither half is independently useful: core's union degrades cleanly to claim-only behavior
-    when the patch is absent (older Studio build, or public Platform.Bible), by the same
-    declare-it-optional pattern ADR-0024 established for `syncingProjectIds`, but the invisible-path
-    gap and the double-toast overlap are only actually closed once both halves ship. As with PT-4214
-    (core #2574 / studio #164), the core PR and the studio PR carrying this work must merge in the same
-    window; landing one without the other leaves the product in an intermediate, ADR-0024-documented
-    state rather than a broken one.
-- **Source:** PT-4398, sub-task of PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna) can trust the app"; ADR-0024's "second sync surface" finding and its
-  correction above; `src/renderer/hooks/use-sync-status.hook.ts` for the union and seed-retry
-  behavior; `c-sharp/Projects/SendReceive/SendReceiveBlockNotifierService.cs` for the mirrored notifier
-  pattern; Paratext 10 Studio's `repo-patches/paranext-core.patch` for `RunWithSyncNotification`,
+    across core and Studio's patch. Core's union degrades cleanly to claim-only when the patch is
+    absent, by the declare-it-optional pattern ADR-0024 established — but the invisible-path gap and
+    the double-toast overlap close only once both halves ship. As with PT-4214 (core #2574 / studio
+    #164), the two PRs must merge in the same window; landing one without the other leaves the
+    product in an intermediate, ADR-0024-documented state rather than a broken one.
+- **Source:** PT-4398, sub-task of PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna)
+  can trust the app"; ADR-0024's "second sync surface" finding;
+  `src/renderer/hooks/use-sync-status.hook.ts` for the union and seed-retry behavior;
+  `c-sharp/Projects/SendReceive/SendReceiveBlockNotifierService.cs` for the mirrored notifier pattern;
+  Paratext 10 Studio's `repo-patches/paranext-core.patch` for `RunWithSyncNotification`,
   `BeginSyncRun`/`EndSync`, and `ShowSyncNotification` (not in this repo).
