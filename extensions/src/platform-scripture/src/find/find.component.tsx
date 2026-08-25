@@ -235,6 +235,13 @@ export type FindProps = {
    * editor hands `MarkerMenu` its `searchRef`.
    */
   searchInputRef?: React.Ref<HTMLInputElement>;
+  /**
+   * Puts the caret back in the search box. Called after the clear button empties the term, because
+   * that button only renders while there is a term to clear: emptying it unmounts the element the
+   * user just activated, which would otherwise drop focus to the document body and strand a
+   * keyboard user with nothing focused.
+   */
+  onFocusSearchInput?: () => void;
   /** The current search term. */
   searchTerm: string;
   /** Recent search terms shown in the recent-searches dropdown. */
@@ -328,8 +335,8 @@ export type FindProps = {
   onSearchTermChange: (term: string) => void;
   /** Called to start a search. `isExplicitSearch` is true for Enter/Find-button-initiated searches. */
   onStartSearch: (isExplicitSearch?: boolean) => void;
-  /** Called to stop the current search. `shouldClearResults` clears results and resets state. */
-  onStopSearch: (shouldClearResults?: boolean) => void;
+  /** Called to stop the running search, leaving the results it has already found on screen. */
+  onStopSearch: () => void;
   /** Called when the user changes the scope. */
   setScope: (scope: Scope) => void;
   /** Called when the selected books for the `selectedBooks` scope change. */
@@ -418,6 +425,7 @@ export function Find({
   onSelectProject,
   onOpenProjectInGroup,
   searchInputRef,
+  onFocusSearchInput,
   searchTerm,
   recentSearches,
   scope,
@@ -628,9 +636,12 @@ export function Find({
     | 'none' = useMemo(() => {
     if (noOpenProjects) return 'noOpenProjectsPrompt';
     // Outranks the results still on screen. They belong to the last query that DID run, so leaving
-    // them up with no message dead-ends a selection the user has since emptied — the state reads as
-    // a working search that simply stopped responding.
-    if (searchTerm.trim() !== '' && !isSearchQueryValid) return 'invalidQueryPrompt';
+    // them up with no message dead-ends a query the user has since emptied — the state reads as a
+    // working search that simply stopped responding. Deciding it here, ahead of the results, is what
+    // makes an invalid query show the right thing by construction: no container effect has to land
+    // first, so there is no window in which stale results are on screen under a query that cannot
+    // produce them.
+    if (!isSearchQueryValid) return searchTerm.trim() === '' ? 'idlePrompt' : 'invalidQueryPrompt';
     if (results.length > 0) return 'none';
     if (searchStatus === 'running') return 'skeleton';
     if (searchStatus !== undefined) return 'none';
@@ -898,9 +909,13 @@ export function Find({
                     <button
                       type="button"
                       aria-label={localizedStrings['%webView_find_clearSearch%']}
+                      // Emptying the term is itself what clears the results and abandons a running
+                      // job, so every route to an empty box behaves the same — see the container's
+                      // invalid-query effect. Focus is handed back to the search box because
+                      // emptying the term unmounts this button.
                       onClick={() => {
                         onSearchTermChange('');
-                        onStopSearch(true);
+                        onFocusSearchInput?.();
                       }}
                       className="tw:absolute tw:end-2 tw:top-1/2 tw:-translate-y-1/2 tw:text-muted-foreground tw:hover:text-foreground tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer"
                     >
@@ -1192,6 +1207,9 @@ export function Find({
           // inert. The no-open-projects placeholder replaces them rather than rendering alongside,
           // so a click can't silently do nothing.
           if (noOpenProjects) return undefined;
+          // Same reasoning for a query that can no longer produce these rows: the placeholder is
+          // meant to replace them, not sit above them.
+          if (!isSearchQueryValid) return undefined;
           // Only the first book that has a replaced result gets the cancel handler.
           // All replaced rows share one pending operation, so only one Cancel button
           // should appear to avoid implying per-row granularity.
@@ -1255,7 +1273,7 @@ export function Find({
           {searchStatus === 'running' && (activeMode !== 'replace' || !isPostReplaceSearch) && (
             <div className="tw:flex tw:items-center tw:gap-4">
               <Progress value={searchProgress} className="tw:w-64" />
-              <Button onClick={() => onStopSearch(false)}>
+              <Button onClick={() => onStopSearch()}>
                 {localizedStrings['%webView_find_cancelSearch%']}
               </Button>
             </div>
