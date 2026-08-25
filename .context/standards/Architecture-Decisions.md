@@ -2359,7 +2359,10 @@ step, no automation. Just a record.
   grapheme cluster instead of UTF-16 code unit, with a search additionally required to begin and end
   on cluster boundaries. Two additions are kept (`normalize('none')`, `ordinalCompare`), plus
   `toArray`. Range and padding methods still return `GraphemeString` rather than `string` so derived
-  values inherit the parent's segmentation — a type-level difference, not a behavioral one. Then
+  values inherit the parent's segmentation — a type-level difference, not a behavioral one. The raw
+  text comes back from `toString()` rather than a `.string` getter, so an instance drops straight into
+  a template literal or `String(...)`; `length` is the sole remaining getter, kept as a property
+  precisely because that is what makes `gs.length` read like `str.length`. Then
   **`string-util`'s functions become thin wrappers over the class** and the `@deprecated` tags are
   removed: every existing caller gets the faster implementation with no source change, and the
   documented advice becomes "doing more than one operation on the same string? construct one
