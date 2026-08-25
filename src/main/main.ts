@@ -104,6 +104,7 @@ import {
 } from '@main/services/window-state.service';
 import {
   assignEntryToWindow,
+  getMainWindowId,
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
   isWindowPendingContent,
@@ -117,6 +118,7 @@ import {
   writeNow,
 } from '@main/services/window-layout-persistence.service';
 import { createWindowEmptinessHandler } from '@main/services/window-emptiness.util';
+import { summarizeWindows } from '@main/window-summary.util';
 import {
   DEFAULT_WINDOW_HEIGHT,
   DEFAULT_WINDOW_WIDTH,
@@ -1787,6 +1789,39 @@ async function main() {
         result: {
           name: 'return value',
           schema: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.getWindows',
+    async () => {
+      // Read on call rather than pushed on change: callers want this at the moment they offer the
+      // user a choice of windows and never again, so there is nothing to keep in sync
+      return summarizeWindows(getWindows(), getMainWindowId());
+    },
+    {
+      method: {
+        'x-experimental': true,
+        summary:
+          'List every open window with the title it is currently showing, for offering the user ' +
+          'a choice of window. Titles follow each window’s own content, so they can repeat',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                windowId: { type: 'number' },
+                label: { type: 'string' },
+                isMain: { type: 'boolean' },
+              },
+              required: ['windowId', 'label', 'isMain'],
+            },
+          },
         },
       },
     },

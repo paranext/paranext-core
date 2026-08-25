@@ -196,3 +196,23 @@ export type IWindowService = {
 } & OnDidDispose &
   typeof windowServiceObjectToProxy &
   IDataProvider<WindowDataTypes>;
+
+/**
+ * One open application window, as a caller choosing a window to act on needs to see it.
+ *
+ * @experimental This type is unstable and may change or disappear without notice
+ */
+export type WindowSummary = {
+  /** Runtime id of the window. Not stable across restarts */
+  windowId: number;
+  /**
+   * The window's title, which follows its own content. Two windows showing the same thing carry the
+   * same label, and nothing disambiguates them.
+   */
+  label: string;
+  /**
+   * Whether this window currently holds the primary role. The role is reassignable, so this follows
+   * the role rather than which window happened to be created first.
+   */
+  isMain: boolean;
+};
