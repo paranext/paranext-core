@@ -418,4 +418,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
     ],
   },
+  {
+    id: 'tab-context-menu',
+    purpose: 'Open the context menu for the focused tab',
+    category: 'Menus',
+    // Not a shortcut the app registers: the browser raises `contextmenu` at the focused tab, which
+    // the tab title forwards into the menu's trigger. macOS has no Menu key and no Shift+F10
+    // equivalent for this, so the menu is reached there by right-clicking (or Control-clicking) the
+    // tab. Power mode only — Simple mode offers no tab menu.
+    context: 'Renderer (focused tab, Power mode)',
+    keys: { macOS: '—', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
+    locations: ['src/renderer/components/docking/platform-tab-title.component.tsx'],
+  },
 ];
