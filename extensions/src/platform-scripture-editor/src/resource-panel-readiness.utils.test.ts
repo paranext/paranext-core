@@ -1,22 +1,40 @@
 import { describe, it, expect } from 'vitest';
+import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
+import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
 
-/** Defaults describing a resolved list, an arrived catalog, and one matching configured item. */
+/** A `ready` state carrying `count` configured items. */
+function readyWith(count: number): EffectiveResourceReferenceListState {
+  const list: EffectiveResourceReferenceList = {
+    dataVersion: '1.0.0',
+    items: Array.from({ length: count }, (_unused, index) => ({
+      type: 'project' as const,
+      name: `Project ${index}`,
+      id: `id-${index}`,
+      source: 'admin' as const,
+    })),
+  };
+
+  return { status: 'ready', list };
+}
+
+/** A resolved list, an arrived catalog, and one matching configured item. */
 const READY = {
-  listStatus: 'ready',
+  listState: readyWith(1),
   isCatalogReady: true,
   hasCatalogError: false,
-  configuredCount: 1,
   matchingCount: 1,
-} as const;
+};
 
 describe('getResourcePanelReadiness', () => {
   it('reports loading while the configured list is still resolving', () => {
-    expect(getResourcePanelReadiness({ ...READY, listStatus: 'loading' })).toBe('loading');
+    expect(getResourcePanelReadiness({ ...READY, listState: { status: 'loading' } })).toBe(
+      'loading',
+    );
   });
 
   it('reports error when the configured list could not be read', () => {
-    expect(getResourcePanelReadiness({ ...READY, listStatus: 'error' })).toBe('error');
+    expect(getResourcePanelReadiness({ ...READY, listState: { status: 'error' } })).toBe('error');
   });
 
   it('reports loading while the catalog has not arrived and something is configured', () => {
@@ -33,8 +51,8 @@ describe('getResourcePanelReadiness', () => {
     expect(
       getResourcePanelReadiness({
         ...READY,
+        listState: readyWith(0),
         isCatalogReady: false,
-        configuredCount: 0,
         matchingCount: 0,
       }),
     ).toBe('empty');
@@ -45,9 +63,21 @@ describe('getResourcePanelReadiness', () => {
   });
 
   it('reports configured when the resolved list has matching items', () => {
-    expect(getResourcePanelReadiness({ ...READY, configuredCount: 2, matchingCount: 2 })).toBe(
+    expect(getResourcePanelReadiness({ ...READY, listState: readyWith(2), matchingCount: 2 })).toBe(
       'configured',
     );
+  });
+
+  it('treats every configured item as matching when the panel does not filter', () => {
+    // The Model Text panel omits `matchingCount` because it shows the first configured item
+    // whatever its type; the count must then fall back to the configured total rather than zero.
+    expect(
+      getResourcePanelReadiness({
+        listState: readyWith(1),
+        isCatalogReady: true,
+        hasCatalogError: false,
+      }),
+    ).toBe('configured');
   });
 
   it('reports a catalog error rather than spinning when the catalog fetch failed', () => {
@@ -68,9 +98,9 @@ describe('getResourcePanelReadiness', () => {
     expect(
       getResourcePanelReadiness({
         ...READY,
+        listState: readyWith(0),
         isCatalogReady: false,
         hasCatalogError: true,
-        configuredCount: 0,
         matchingCount: 0,
       }),
     ).toBe('empty');
@@ -80,7 +110,7 @@ describe('getResourcePanelReadiness', () => {
     expect(
       getResourcePanelReadiness({
         ...READY,
-        listStatus: 'error',
+        listState: { status: 'error' },
         isCatalogReady: false,
         hasCatalogError: true,
       }),

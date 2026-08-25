@@ -83,4 +83,25 @@ describe('PanelReadinessView', () => {
 
     expect(screen.queryByText('No Bible text selected.')).not.toBeInTheDocument();
   });
+
+  it('gives each front state its own icon so they are distinguishable at a glance', () => {
+    // AC-4. Before this, `empty` and `catalogError` rendered character-identical containers —
+    // centred text plus a button — while their buttons did opposite things (reconfigure vs. retry).
+    const iconOf = (readiness: 'error' | 'catalogError' | 'empty') => {
+      const { container, unmount } = renderView(readiness);
+      const icon = container.querySelector('[data-slot="empty-icon"] svg');
+      const name = icon?.getAttribute('class') ?? undefined;
+      unmount();
+      return name;
+    };
+
+    const settingsError = iconOf('error');
+    const catalogError = iconOf('catalogError');
+    const empty = iconOf('empty');
+
+    expect(settingsError).toBeDefined();
+    expect(catalogError).toBeDefined();
+    expect(empty).toBeDefined();
+    expect(new Set([settingsError, catalogError, empty]).size).toBe(3);
+  });
 });
