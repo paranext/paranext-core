@@ -147,6 +147,57 @@ export interface LaunchElectronAppOptions {
  * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the
  * user-data directory path, and a promise that resolves when the app closes.
  */
+/** The window size a spec's layout is written against. */
+export type WindowSize = { width: number; height: number };
+
+/**
+ * Default window every e2e spec gets unless it declares otherwise with `test.use({ windowSize: ...
+ * })`.
+ *
+ * 1280x800 because that is what the launch fixtures have always applied, so it is the layout the
+ * existing specs were written against. It is deliberately NOT the Full HD minimum used for
+ * screenshot evidence: window size decides layout, and screenshot quality is enforced separately
+ * where screenshots are written (`assertFullHdScreenshot`). Conflating the two meant a spec's
+ * result depended on which fixture happened to own the window.
+ */
+export const DEFAULT_WINDOW_SIZE: WindowSize = { width: 1280, height: 800 };
+
+/**
+ * A window asked for NxM under a bare Xvfb comes back as (N-1)x(M-1) — there is no window manager
+ * to grant the last pixel. Tolerate that; the failures worth catching are an order of magnitude
+ * larger (a default-sized or DevTools-squeezed window reports 469 or 725).
+ */
+export const WINDOW_SIZE_TOLERANCE_PX = 8;
+
+/**
+ * Fail loudly when the real OS window does not match what the spec declared.
+ *
+ * Reads `outerWidth`/`outerHeight`, never `innerWidth`/`innerHeight`: `setViewportSize()` on a
+ * CDP-attached page applies an emulation override that sets `innerWidth`, so an inner-based check
+ * reads back its own request and can never fail. Measured: a 1024px window reports `innerWidth` 469
+ * before such a call and 1280 after, while `outerWidth` stays 1024.
+ */
+export async function assertDeclaredWindowSize(
+  page: Page,
+  declared: WindowSize,
+  howToFix: string,
+): Promise<void> {
+  const actual = await page.evaluate(() => ({
+    width: window.outerWidth,
+    height: window.outerHeight,
+  }));
+  if (
+    actual.width < declared.width - WINDOW_SIZE_TOLERANCE_PX ||
+    actual.height < declared.height - WINDOW_SIZE_TOLERANCE_PX
+  ) {
+    throw new Error(
+      `e2e precondition: this spec declares a ${declared.width}x${declared.height} window but the ` +
+        `Electron window is ${actual.width}x${actual.height}. Layout-sensitive assertions would run ` +
+        `against a window the spec was not written for, and screenshots would be cropped. ${howToFix}`,
+    );
+  }
+}
+
 export async function launchElectronApp(
   opts: LaunchElectronAppOptions = {},
 ): Promise<ElectronAppContext> {

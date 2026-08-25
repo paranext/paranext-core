@@ -6,10 +6,12 @@ import {
   ConsoleMessage,
 } from '@playwright/test';
 import {
+  DEFAULT_WINDOW_SIZE,
   launchElectronApp,
   LaunchElectronAppOptions,
   preConfigureSettings,
   teardownElectronApp,
+  WindowSize,
 } from './helpers';
 
 export { expect } from '@playwright/test';
@@ -71,6 +73,11 @@ export interface IsolatedFixtures {
    * leak both restores exist to prevent.
    */
   seedSettings: Record<string, unknown>;
+  /**
+   * Window size this suite's layout is written against; set with `test.use({ windowSize: { width,
+   * height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
+   */
+  windowSize: WindowSize;
   electronApp: ElectronApplication;
   mainPage: Page;
 }
@@ -78,6 +85,7 @@ export interface IsolatedFixtures {
 export const test = base.extend<IsolatedFixtures>({
   // Option fixture: suites override via test.use(); default launches with no special options.
   electronLaunchOptions: [{}, { option: true }],
+  windowSize: [DEFAULT_WINDOW_SIZE, { option: true }],
 
   // Option fixture: see the IsolatedFixtures doc for why the default is 'power'.
   interfaceMode: ['power', { option: true }],
@@ -119,19 +127,19 @@ export const test = base.extend<IsolatedFixtures>({
     }
   },
 
-  mainPage: async ({ electronApp }, use, testInfo: TestInfo) => {
+  mainPage: async ({ electronApp, windowSize }, use, testInfo: TestInfo) => {
     const page = await electronApp.firstWindow({ timeout: 90_000 });
 
     // Ensure the window is large enough for WebView content to be visible.
     // On headless Linux (xvfb) or WSL2 the default window can be very small,
     // causing elements inside WebView iframes to be clipped or hidden.
-    await electronApp.evaluate(({ BrowserWindow }) => {
+    await electronApp.evaluate(({ BrowserWindow }, size) => {
       const win = BrowserWindow.getAllWindows()[0];
       if (win) {
         if (win.isMaximized()) win.unmaximize();
-        win.setSize(1280, 800);
+        win.setSize(size.width, size.height);
       }
-    });
+    }, windowSize);
 
     console.log(`Window URL: ${page.url()}`);
     const onPageError = (err: Error) => console.error(`Page error: ${err.message}`);
