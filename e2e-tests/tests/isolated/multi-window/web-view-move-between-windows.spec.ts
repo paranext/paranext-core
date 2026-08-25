@@ -19,8 +19,12 @@
  * 2. The COMMAND routes, where the id a move answers with is observable: `moveWebViewToWindow` into an
  *    already-open window, then `moveWebViewToNewWindow` back out of it. The first move empties its
  *    source window while another window is standing, so that window closes; the second move leaves
- *    its source window holding its other tab, so that window stays. Ends with a graceful quit, so
- *    the whole flow is also swept for faults and duplicate registrations.
+ *    its source window holding its other tab, so that window stays. It then moves the tab back in
+ *    through the tab menu's "Move tab to window" submenu — the user's route to docking a tab back,
+ *    and the only route that needs a window to be NAMED, so it also pins that each window is called
+ *    after what it is showing and that a window is never offered as a target for a tab it already
+ *    holds. That rides this instance because two windows are already standing by then. Ends with a
+ *    graceful quit, so the whole flow is also swept for faults and duplicate registrations.
  *
  * ## Asserting identity, not shape
  *
@@ -517,6 +521,52 @@ test.describe('moving a web view between windows', () => {
       60_000,
       'the app to end the second move with exactly two windows',
     );
+
+    // MOVE BACK IN THROUGH THE SUBMENU — the user's route to what the requirement calls docking a
+    // tab back, and the only one of the three routes that needs a window to be NAMED. Two windows
+    // are already standing at this point, which is what the submenu needs, so this rides the same
+    // Electron instance rather than paying for another launch.
+    //
+    // Each window is named after what it is showing, so the two names differ here: window 2 shows
+    // its own Home tab and window 3 shows the moved web view. Identical names are allowed by design
+    // — nothing disambiguates two windows showing the same thing — so this asserts the target is
+    // offered and the tab arrives, never that a name is unique.
+    const window2Title = await page2.title();
+    const window3Title = await page3.title();
+    expect(window2Title).not.toBe('');
+    // The OS switcher entry, NN-3: every window used to inherit the same document title
+    expect(window3Title).not.toBe(window2Title);
+    logStep(
+      `window ${window2Id} is called "${window2Title}", window ${window3Id} "${window3Title}"`,
+    );
+
+    await page3.locator(`[data-web-view-id="${idAfterSecondMove}"]`).click({ button: 'right' });
+    const moveToWindowItem = page3.getByRole('menuitem', { name: 'Move tab to window' });
+    await expect(moveToWindowItem).toBeVisible({ timeout: 30_000 });
+    await moveToWindowItem.hover();
+
+    // The window the tab is already in is left out: moving it there would do nothing
+    await expect(page3.getByRole('menuitem', { name: window2Title })).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page3.getByRole('menuitem', { name: window3Title })).toHaveCount(0);
+    logStep(`the submenu offers "${window2Title}" and not this window`);
+
+    await page3.getByRole('menuitem', { name: window2Title }).click();
+
+    // Window 2 holds both again, which is the requirement met through the menu rather than the API.
+    // The moved web view's id is asserted against the spellings the contract allows rather than
+    // pinned, for the same reason the API moves above accept either.
+    await expect
+      .poll(async () => (await getHeldWebViewIds(page2)).length, { timeout: 120_000 })
+      .toBe(2);
+    const idsInWindow2AfterSubmenuMove = await getHeldWebViewIds(page2);
+    expect(idsInWindow2AfterSubmenuMove).toContain(window2OwnHomeWebViewId);
+    const [idMovedBySubmenu] = idsInWindow2AfterSubmenuMove.filter(
+      (heldId) => heldId !== window2OwnHomeWebViewId,
+    );
+    expect(idsMovedWebViewMayAnswerTo(idAfterSecondMove)).toContain(idMovedBySubmenu);
+    logStep(`tab moved back into window ${window2Id} through the submenu as ${idMovedBySubmenu}`);
 
     // A real quit after all of that: the app must still go down cleanly, and the epilogue sweeps
     // everything captured — both moves included — for faults and duplicate registrations, with the
