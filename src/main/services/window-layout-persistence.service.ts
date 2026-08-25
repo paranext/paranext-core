@@ -325,6 +325,17 @@ export function setMainWindowId(windowId: number): void {
   mainSlot.entry.isMain = true;
 }
 
+/**
+ * Which live window currently holds the main role, or `undefined` if none does.
+ *
+ * Undefined is a real answer, not only an error case: main-ness belongs to the entry rather than to
+ * a window, so it outlives the window that held it and the role can sit on an entry with no window
+ * living in it.
+ */
+export function getMainWindowId(): number | undefined {
+  return fileSlots.find((slot) => slot.entry.isMain === true)?.windowId;
+}
+
 /** Merge captured bounds into a window's entry and schedule a write */
 export function updateWindowBounds(windowId: number, boundsState: WindowBoundsState): void {
   const slot = findSlotByWindowId(windowId);
