@@ -1,0 +1,16 @@
+# Ruff config for the repo's Python, which today is the agent tooling under `.claude/skills/`.
+#
+# The rule selection is deliberately narrow. Ruff's default set reports 31 findings on those
+# files — import ordering, `re.I` vs `re.IGNORECASE`, context managers, explicit `check=` — and
+# not one of them is a defect; `ruff format` would additionally rewrite all of them, discarding
+# hand-wrapped prose in comments that is there to be read. `F` (pyflakes) and `E9` (syntax and
+# runtime errors) are the subset that reports actual bugs: undefined names, unused imports,
+# f-strings missing their placeholders, redefinitions that shadow.
+#
+# Scope this up only with evidence that the extra rules catch something. Measured 2026-08-25,
+# `F,E9` reports zero findings on the current tree, so this is a tripwire for Python added
+# later rather than a cleanup of what is here.
+target-version = "py39"
+
+[lint]
+select = ["F", "E9"]

@@ -1181,11 +1181,17 @@ review at once. Two things follow, and both are already available in this repo:
 - **The posting layer is executable files with tests** (`scripts/`, run `test_posting.py` before
   trusting a batch), not a template. Anything else in this skill that becomes load-bearing enough
   to have a failure mode belongs there too, not in a code fence.
-- **CI runs the tests.** `.github/workflows/test.yml` § *Agent script checks* compiles the
-  scripts, runs `test_posting.py`, and `bash -n`s every tracked `.sh` in the repo — Linux-only,
-  on the runner's preinstalled `python3`, with no config file and no new dependency, because the
-  scripts are stdlib-only and parse under 3.9. A test suite nothing runs is a suite that goes
-  green while rotting.
+- **CI lints and runs the tests.** `.github/workflows/test.yml` § *Agent script checks* runs
+  `ruff` over every tracked `.py`, then `test_posting.py`, then `bash -n` over every tracked
+  shell script — Linux-only. A test suite nothing runs is a suite that goes green while rotting.
+
+  `ruff.toml` selects **`F` and `E9` only**, and the reasoning is in that file: ruff's default
+  set reports 31 findings on these scripts and not one is a defect, while `ruff format` would
+  rewrite all of them including hand-wrapped comment prose. `F,E9` is the subset that reports
+  real bugs — undefined names, unused imports, f-strings without placeholders, shadowing
+  redefinitions, syntax errors — and it reports zero today, so it is a tripwire for Python added
+  later rather than a cleanup of what is here. The ruff version is pinned; an unpinned linter
+  turns an unrelated PR red when upstream adds a rule.
 - **The gated actions are gated by the harness, not only by this document.**
   `.claude/settings.json` already denies `git commit --no-verify` and `git push --force`/`-f` and
   asks on `--force-with-lease`, and `.claude/agents/*.md` restrict what a role can reach with
