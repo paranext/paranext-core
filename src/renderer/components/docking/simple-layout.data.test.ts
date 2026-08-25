@@ -1,7 +1,13 @@
 import { vi } from 'vitest';
 import { BoxData, PanelData } from 'rc-dock';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
-import { RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX, simpleLayout } from './simple-layout.data';
+import {
+  RC_DOCK_DIVIDER_MIN_WIDTH_RESERVE_PX,
+  simpleLayout,
+  SIMPLE_PANEL_ID_MODEL_TEXT,
+  SIMPLE_PANEL_ID_PROJECT,
+  SIMPLE_PANEL_ID_RESOURCES,
+} from './simple-layout.data';
 import { HEADLESS_GROUP, TAB_GROUP_RESOURCES } from './platform-dock-layout-positioning.util';
 
 vi.mock('../../../shared/services/logger.service');
@@ -110,6 +116,23 @@ describe('simple-layout.data', () => {
           const data = (tab as unknown as SavedTabInfo).data as { isClosable?: boolean };
           expect(data.isClosable).toBe(false);
         });
+      });
+    });
+
+    it('each column panel has the expected onboarding-tour panel ID', () => {
+      // The onboarding tour targets [data-dockid="<id>"] to spotlight each column.
+      // rc-dock propagates PanelData.id to the DOM as data-dockid, so these IDs must stay in sync
+      // with SIMPLE_PANEL_ID_* exports — if they drift the tour's querySelector finds nothing.
+      const expectedIds = [
+        SIMPLE_PANEL_ID_MODEL_TEXT,
+        SIMPLE_PANEL_ID_PROJECT,
+        SIMPLE_PANEL_ID_RESOURCES,
+      ];
+      columns.forEach((col, index) => {
+        // Narrowing column to BoxData and its first child to PanelData to read its id.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const panel = (col as BoxData).children[0] as PanelData;
+        expect(panel.id).toBe(expectedIds[index]);
       });
     });
 
