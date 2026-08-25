@@ -204,17 +204,33 @@ export const test = base.extend<CdpFixtures>({
     // than the requested viewport (CDP can't grow a viewport past the OS window size). The only
     // reliable signal is reading `window.innerWidth` / `window.innerHeight` IN the renderer via
     // `page.evaluate()` — those properties reflect the actual rendered viewport.
+    // Read `outerWidth`/`outerHeight`, NOT `innerWidth`/`innerHeight`. `setViewportSize()` on a
+    // CDP-attached page applies an emulation override, and that override changes `innerWidth`
+    // itself — so checking `innerWidth` reads back the value we just asked for and can never
+    // fail, however small the real window is. Measured: a 1024px-wide window with DevTools
+    // docked reports `innerWidth` 469 before the call and 1280 after it, while `outerWidth`
+    // stays 1024 throughout. `outerWidth` is the OS window, and it is what bounds a screenshot.
     const actualSize = await page.evaluate(() => ({
-      width: window.innerWidth,
-      height: window.innerHeight,
+      width: window.outerWidth,
+      height: window.outerHeight,
     }));
-    if (actualSize.width < MIN_SCREENSHOT_WIDTH || actualSize.height < MIN_SCREENSHOT_HEIGHT) {
+    // Allow a few pixels of shortfall. A window asked for 1920x1080 under a bare Xvfb comes back
+    // as 1919x1079 (measured) — there is no window manager to grant the last pixel, and nothing is
+    // meaningfully cropped by it. The failure this guard exists for is an order of magnitude
+    // larger: a default-sized or DevTools-squeezed window reports 469 or 725.
+    const WINDOW_SIZE_TOLERANCE_PX = 8;
+    if (
+      actualSize.width < MIN_SCREENSHOT_WIDTH - WINDOW_SIZE_TOLERANCE_PX ||
+      actualSize.height < MIN_SCREENSHOT_HEIGHT - WINDOW_SIZE_TOLERANCE_PX
+    ) {
       throw new Error(
-        `cdp.fixture: viewport enforcement failed — renderer reports ${actualSize.width}x${actualSize.height}, ` +
-          `expected at least ${MIN_SCREENSHOT_WIDTH}x${MIN_SCREENSHOT_HEIGHT}. Likely cause: the ` +
-          `Electron window itself is smaller than the requested viewport (CDP cannot grow a viewport ` +
-          `past the OS window size). Resize the Electron window before running tests, or restart the ` +
-          `app via ./.erb/scripts/refresh.sh which sizes the window to 1920x1080.`,
+        `cdp.fixture: the Electron window is ${actualSize.width}x${actualSize.height}, smaller than the ` +
+          `required ${MIN_SCREENSHOT_WIDTH}x${MIN_SCREENSHOT_HEIGHT}. CDP cannot grow a viewport past ` +
+          `the OS window, so screenshots would be cropped and layout-sensitive assertions would run ` +
+          `against a window no user has. Start the app sized, e.g. MAIN_ARGS="--remote-debugging-port=9223 ` +
+          `--window-size ${MIN_SCREENSHOT_WIDTH}x${MIN_SCREENSHOT_HEIGHT}" npm start. Note --maximize is a ` +
+          `no-op under a bare Xvfb (no window manager), and --window-size needs WIDTHxHEIGHT — a comma ` +
+          `is silently ignored.`,
       );
     }
 

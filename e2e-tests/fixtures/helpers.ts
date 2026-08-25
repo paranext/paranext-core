@@ -176,6 +176,10 @@ export async function launchElectronApp(
     // Only set if not already defined, so other E2E suites can override (e.g. a suite that needs a
     // clean layout passes `envOverrides: { DEV_NOISY: 'false' }`, which is spread last below).
     DEV_NOISY: process.env.DEV_NOISY ?? 'true',
+    // Keep DevTools out of the window so the renderer is the size the test asked for.
+    // Docked DevTools eats ~555px of a 1280px window, leaving specs interacting with a dock
+    // they were never sized for. Honored in src/main/main.ts.
+    PT_NO_DEVTOOLS: process.env.PT_NO_DEVTOOLS ?? 'true',
     // Placing the project root inside userDataDir means the existing teardown rmSync cleans it up.
     ...(opts.isolatedProjectRoot
       ? { PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: path.join(userDataDir, 'projects') }
