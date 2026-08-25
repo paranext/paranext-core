@@ -174,9 +174,10 @@ Reference implementations: `extensions/src/platform-scripture/src/find.web-view-
 Two shapes are both correct; pick by whether the payload is **state-specific**. See
 [`adr-async-hook-state-shape`](Architecture-Decisions.md) for the full rationale.
 
-> **Provisional.** `adr-async-hook-state-shape` is **Proposed**, not Accepted: the rule is drawn from exactly two hooks,
-> both introduced by PT-4347. Follow it as the default for new async hook state, but a hook that
-> fits neither shape should reopen the decision rather than contort to satisfy it.
+> **Provisional.** `adr-async-hook-state-shape` is **Proposed**, not Accepted: the rule is drawn
+> from exactly two hooks, both introduced by PT-4347. Follow it as the default for new async hook
+> state, but a hook that fits neither shape should reopen the decision rather than contort to
+> satisfy it.
 
 **Discriminated union** — when data exists in only one state, so the type can make the other
 combinations unrepresentable:
