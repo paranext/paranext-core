@@ -2,7 +2,24 @@ import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
 import { useLastFocusedTabId } from '@renderer/hooks/use-last-focused-tab-id.hook';
 import { useLastSelectedScriptureNavigableWebViewId } from '@renderer/hooks/use-last-selected-scripture-navigable-web-view-id.hook';
-import { floatTab, updateTabPartialSync } from '@renderer/services/web-view.service-shard';
+import {
+  floatTab,
+  getAllOpenWebViewDefinitionsSync,
+  updateTabPartialSync,
+} from '@renderer/services/web-view.service-shard';
+import {
+  buildTabMenuItems,
+  FLOAT_TAB_COMMAND,
+  getMoveTargetWindowId,
+  MOVE_TO_NEW_WINDOW_COMMAND,
+  type TabMenuContext,
+} from '@renderer/components/docking/tab-menu.util';
+import { EMPTY_WINDOW_LABEL_KEY } from '@renderer/components/docking/window-label.util';
+import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
+import { menuDataService } from '@shared/services/menu-data.service';
+import type { WindowSummary } from '@shared/services/window.service-model';
+import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
+import { convertContributionToContextMenuItems } from '@renderer/services/overlays/overlay-menu-converter';
 import {
   getWebViewMoveFailureDisposition,
   WebViewMoveFailureDisposition,
@@ -16,6 +33,10 @@ import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
   Tooltip,
   TooltipContent,
@@ -23,7 +44,7 @@ import {
   TooltipTrigger,
 } from 'platform-bible-react';
 import { getErrorMessage, isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
 
@@ -60,6 +81,11 @@ type PlatformTabTitleProps = {
    * locale-independent selector.
    */
   webViewId?: string;
+  /**
+   * Type of the WebView this tab hosts, used to look up the menu contributed for it. `undefined`
+   * for tabs hosting no WebView, which are answered with the platform's own tab menu.
+   */
+  webViewType?: string;
 };
 
 // CSS classes for highlighting the active tab header and content
@@ -84,6 +110,43 @@ const cssClassTabContentLastSelected = 'platform-dock-tabpane-last-selected';
 
 // This duration must be ≥ the tabTitleBarFlash animation duration in dock-layout-wrapper.component.scss
 const cssHighlightDurationMilliseconds = 3000;
+
+/** A tab menu with nothing in it, for a tab whose menu has not loaded or failed to */
+const EMPTY_TAB_MENU = Object.freeze({ groups: {}, items: [] });
+
+/** What `useData` shows while the contributed menu is still loading */
+const TAB_MENU_DEFAULT = Object.freeze({
+  includeDefaults: false,
+  topMenu: undefined,
+  contextMenu: undefined,
+  tabMenu: undefined,
+});
+
+/** Render converted menu items into the context-menu primitives, submenus and all */
+function renderTabMenuItems(
+  items: OverlayContextMenuItem[],
+  onSelect: (itemId: string) => void,
+  keyPrefix = '',
+): ReactNode[] {
+  return items.map((item, index) => {
+    const key = `${keyPrefix}${index}`;
+    if (item.type === 'separator') return <ContextMenuSeparator key={key} />;
+    if (item.type === 'submenu')
+      return (
+        <ContextMenuSub key={key}>
+          <ContextMenuSubTrigger>{item.label}</ContextMenuSubTrigger>
+          <ContextMenuSubContent>
+            {renderTabMenuItems(item.items, onSelect, `${key}-`)}
+          </ContextMenuSubContent>
+        </ContextMenuSub>
+      );
+    return (
+      <ContextMenuItem key={key} onClick={() => onSelect(item.id)}>
+        {item.label}
+      </ContextMenuItem>
+    );
+  });
+}
 
 const handleFloatTab = async (tabId: string) => {
   try {
@@ -118,6 +181,38 @@ const MOVE_FAILURE_MESSAGE_KEYS: Record<WebViewMoveFailureDisposition, LocalizeK
  */
 const MOVE_FAILURE_DEFAULT_MESSAGE_KEY: LocalizeKey = '%tab_contextMenu_moveTab_failed%';
 
+/**
+ * Tell the user where a failed move left the tab, since the rejection is the only signal that it is
+ * not where they asked. Shared by both move actions: the dispositions describe where the tab ended
+ * up, which does not depend on where it was headed.
+ */
+const reportMoveFailure = async (webViewIdToMove: WebViewId, error: unknown) => {
+  const disposition = getWebViewMoveFailureDisposition(error);
+  try {
+    await notificationService.send({
+      message: disposition
+        ? MOVE_FAILURE_MESSAGE_KEYS[disposition]
+        : MOVE_FAILURE_DEFAULT_MESSAGE_KEY,
+      severity: 'error',
+    });
+  } catch (notificationError) {
+    logger.warn(
+      `Could not notify the user that moving web view ${webViewIdToMove} failed: ${getErrorMessage(notificationError)}`,
+    );
+  }
+};
+
+const handleMoveTabToWindow = async (webViewIdToMove: WebViewId, targetWindowId: number) => {
+  try {
+    await sendCommand('platform.moveWebViewToWindow', webViewIdToMove, targetWindowId);
+  } catch (error) {
+    logger.error(
+      `Failed to move web view ${webViewIdToMove} to window ${targetWindowId}: ${getErrorMessage(error)}`,
+    );
+    await reportMoveFailure(webViewIdToMove, error);
+  }
+};
+
 const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
   try {
     await sendCommand('platform.moveWebViewToNewWindow', webViewIdToMove);
@@ -128,19 +223,7 @@ const handleMoveTabToNewWindow = async (webViewIdToMove: WebViewId) => {
     // This menu item is a user action, and the move's rejection is the only signal that the tab is
     // not where they asked, so the failure has to reach the user and not only the log — saying
     // which failure it was, because each one calls for a different reaction
-    const disposition = getWebViewMoveFailureDisposition(error);
-    try {
-      await notificationService.send({
-        message: disposition
-          ? MOVE_FAILURE_MESSAGE_KEYS[disposition]
-          : MOVE_FAILURE_DEFAULT_MESSAGE_KEY,
-        severity: 'error',
-      });
-    } catch (notificationError) {
-      logger.warn(
-        `Could not notify the user that moving web view ${webViewIdToMove} failed: ${getErrorMessage(notificationError)}`,
-      );
-    }
+    await reportMoveFailure(webViewIdToMove, error);
   }
 };
 
@@ -162,6 +245,7 @@ export function PlatformTabTitle({
   flashTriggerTime,
   id,
   webViewId,
+  webViewType,
 }: PlatformTabTitleProps) {
   const isPowerMode = useIsPowerMode();
 
@@ -172,21 +256,46 @@ export function PlatformTabTitle({
   const containerRef = useRef<HTMLDivElement>(undefined!);
 
   const tabAria: LocalizeKey = '%tab_aria_tab%';
-  const floatTabKey: LocalizeKey = '%tab_contextMenu_floatPanel%';
-  const moveTabToNewWindowKey: LocalizeKey = '%tab_contextMenu_moveTabToNewWindow%';
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
       () =>
         isLocalizeKey(text)
-          ? [text, tabAria, floatTabKey, moveTabToNewWindowKey]
-          : [tabAria, floatTabKey, moveTabToNewWindowKey],
+          ? [text, tabAria, EMPTY_WINDOW_LABEL_KEY]
+          : [tabAria, EMPTY_WINDOW_LABEL_KEY],
       [text],
     ),
   );
   const title = isLocalizeKey(text) ? localizedStrings[text] : text;
   const tabLabel = localizedStrings[tabAria];
-  const floatTabText = localizedStrings[floatTabKey];
-  const moveTabToNewWindowText = localizedStrings[moveTabToNewWindowKey];
+  const emptyWindowLabel = localizedStrings[EMPTY_WINDOW_LABEL_KEY];
+
+  // Every tab has a tab menu. One hosting no web view has no type to look a contributed menu up by,
+  // and the data provider answers an unrecognized name with the platform's own items
+  const [webViewMenuPossiblyError] = useData(menuDataService.dataProviderName).WebViewMenu(
+    // Assume the web view type is correctly formatted; it has already been checked where it is set
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    (webViewType as `${string}.${string}`) ?? 'platform.tab',
+    TAB_MENU_DEFAULT,
+  );
+
+  /**
+   * The open windows, read when the menu opens rather than subscribed to. The menu needs them at
+   * that moment and never again, and their names are already kept current as window titles.
+   */
+  const [otherWindows, setOtherWindows] = useState<WindowSummary[]>([]);
+
+  const handleMenuOpenChange = async (isOpen: boolean) => {
+    if (!isOpen) return;
+    try {
+      const windows = await sendCommand('platform.getWindows');
+      setOtherWindows(windows.filter((window) => `${window.windowId}` !== globalThis.windowId));
+    } catch (error) {
+      // Leave the target list empty, which hides the submenu rather than offering an empty one. An
+      // empty list would read as "there are no other windows", which is a different claim
+      logger.warn(`Could not read the open windows for the tab menu: ${getErrorMessage(error)}`);
+      setOtherWindows([]);
+    }
+  };
 
   // Handle applying and removing the CSS styles for flashing
   useEffect(() => {
@@ -550,19 +659,48 @@ export function PlatformTabTitle({
   // from being shown.
   if (!isPowerMode) return titleWithTooltip;
 
+  const menuContext: TabMenuContext = {
+    webViewId,
+    otherWindows,
+    // Moving the only web view out of a window that is not the primary one would build an identical
+    // window and empty this one, which is the no-op Paratext 9 hides its float item for
+    isOnlyTabInSecondaryWindow:
+      !otherWindows.some((window) => `${window.windowId}` === globalThis.windowId) &&
+      otherWindows.some((window) => window.isMain) &&
+      getAllOpenWebViewDefinitionsSync().length <= 1,
+  };
+
+  const contributedItems = isPlatformError(webViewMenuPossiblyError)
+    ? []
+    : convertContributionToContextMenuItems(webViewMenuPossiblyError.tabMenu ?? EMPTY_TAB_MENU);
+
+  const handleSelect = (itemId: string) => {
+    if (itemId === FLOAT_TAB_COMMAND) {
+      handleFloatTab(id);
+      return;
+    }
+    if (itemId === MOVE_TO_NEW_WINDOW_COMMAND) {
+      if (webViewId) handleMoveTabToNewWindow(webViewId);
+      return;
+    }
+    const targetWindowId = getMoveTargetWindowId(itemId);
+    if (targetWindowId !== undefined) {
+      if (webViewId) handleMoveTabToWindow(webViewId, targetWindowId);
+      return;
+    }
+    // Anything else is an extension's own item, run the way every other contributed menu runs it
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    handleMenuCommand({ command: itemId } as Parameters<typeof handleMenuCommand>[0], id);
+  };
+
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={handleMenuOpenChange}>
       <ContextMenuTrigger>{titleWithTooltip}</ContextMenuTrigger>
       <ContextMenuContent>
-        <ContextMenuItem onClick={() => handleFloatTab(id)}>{floatTabText}</ContextMenuItem>
-        {/* Windows are a Power-mode feature; Simple mode's move command path is a no-op, so the
-            item would be a dead button there. Non-WebView tabs (webViewId undefined) have nothing
-            to move. */}
-        {isPowerMode && webViewId ? (
-          <ContextMenuItem onClick={() => handleMoveTabToNewWindow(webViewId)}>
-            {moveTabToNewWindowText}
-          </ContextMenuItem>
-        ) : undefined}
+        {renderTabMenuItems(
+          buildTabMenuItems(contributedItems, menuContext, emptyWindowLabel),
+          handleSelect,
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );

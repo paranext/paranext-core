@@ -644,6 +644,6 @@
   "%webView_project%": "Proyecto",
   "%webView_projectAssignmentsAndProgress%": "Asignaciones y progreso",
   "%webView_title_type_formatString%": "{type} {defaultTitle}",
-  "%wordList%": "Lista de palabras",
-  "%window_label_empty%": "Ventana vacía"
+  "%window_label_empty%": "Ventana vacía",
+  "%wordList%": "Lista de palabras"
 }

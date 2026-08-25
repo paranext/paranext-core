@@ -1361,10 +1361,13 @@ export type WebViewMenu = {
 	 * Menu that opens when you right click on the tab itself, rather than on its contents.
 	 *
 	 * Items here act on the tab, so they are offered on every tab — including tabs that host no web
-	 * view, which receive the platform defaults alone.
+	 * view. Absent means this web view contributes nothing of its own, and the tab shows the platform
+	 * items alone; unlike the menus above, there is no opting out of those.
 	 *
-	 * Optional, unlike the menus above, so that adding this channel did not have to churn every
-	 * existing web view menu.
+	 * Some platform items in this menu carry a `command` that names an action the tab menu performs
+	 * itself rather than a registered PAPI command — `platform.floatTab` moves the tab into a float
+	 * panel within its own window, which never leaves the renderer. Treat a `command` here as the
+	 * name of the action, not as something to invoke through the command service.
 	 *
 	 * @experimental This menu is unstable and may change or disappear without notice
 	 */

@@ -91,6 +91,7 @@ import {
   getTargetWindowId,
   getWindows,
   handleWindowBlurred,
+  isWindowAbandoned,
   isWindowClosing as isWindowMarkedClosing,
   isWindowTracked,
   isWindowReady,
@@ -1798,8 +1799,17 @@ async function main() {
     'platform.getWindows',
     async () => {
       // Read on call rather than pushed on change: callers want this at the moment they offer the
-      // user a choice of windows and never again, so there is nothing to keep in sync
-      return summarizeWindows(getWindows(), getMainWindowId());
+      // user a choice of windows and never again, so there is nothing to keep in sync.
+      //
+      // Offered windows are ones that can still take the work: a window whose close has begun is
+      // on its way out, and one whose renderer is dead with no reload coming can never receive
+      // anything. Picking either sends the user's action nowhere. A window that has not finished
+      // starting is deliberately still offered — it is on screen, the user can see it, and work
+      // sent to it lands once it is ready.
+      const availableWindows = getWindows().filter(
+        (window) => !isWindowMarkedClosing(window.id) && !isWindowAbandoned(window.id),
+      );
+      return summarizeWindows(availableWindows, getMainWindowId());
     },
     {
       method: {
