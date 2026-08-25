@@ -16,8 +16,8 @@
  * Find/Replace mode toggle and the entire Replace surface (`hideModeToggle`), every text-based
  * selector here is English-only, and the tab bar's overflow behaviour depends on window width.
  *
- * Replace is therefore untestable from here. The Replace-mode tests this file used to carry were
- * removed rather than ported — see the note above "Search Filters" below.
+ * Replace is therefore untestable from here; covering it needs a separate suite running in Power
+ * interface mode — see the note above "Search Filters" below.
  *
  * ## A permanent tab, not a panel you open and close
  *
@@ -701,10 +701,10 @@ test.describe('Search History', () => {
 // ---------------------------------------------------------------------------
 // Tests: Search Filters
 //
-// The nine Replace-mode tests that used to sit here (mode switching, Preserve Case, per-result and
-// Replace All operations) were REMOVED rather than ported. Simple mode hides the Find/Replace
-// toggle and renders no Replace surface at all, so there is nothing for them to drive. Covering
-// Replace needs a separate suite running in Power interface mode.
+// No Replace-mode tests belong here. Simple mode hides the Find/Replace toggle and renders no
+// Replace surface at all (`hideModeToggle`), so mode switching, Preserve Case, per-result replace
+// and Replace All have nothing to drive. Covering any of them needs a separate suite running in
+// Power interface mode.
 // ---------------------------------------------------------------------------
 
 test.describe('Search Filters', () => {
