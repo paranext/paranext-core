@@ -33,6 +33,66 @@ internal class ParatextProjectSendReceiveService(
 
     #region Public properties and methods
 
+    /// <summary>
+    /// Raised whenever this service's sync run bracket opens, resolves its project set, or closes.
+    /// Forwarded to the PAPI by <see cref="SyncActivityNotifierService"/>.
+    /// <para>
+    /// Scaffolding: nothing in open-source Platform.Bible opens a run bracket (the sync stub bodies
+    /// below throw), so this never fires here. The Paratext 10 Studio patch, which replaces those
+    /// bodies with real implementations, raises it through
+    /// <see cref="RaiseSyncActivityChanged"/> at each transition. Do not remove — removing it breaks
+    /// the patch.
+    /// </para>
+    /// <para>
+    /// Deliberately derived from the run marker rather than from
+    /// <see cref="SendReceiveWriteLock"/>'s block state: the gate's initial arm is suppressed on the
+    /// scheduled path, which would leave a Simple-mode startup sync unannounced for its whole
+    /// resolution phase.
+    /// </para>
+    /// </summary>
+    public event Action<SyncActivityState>? SyncActivityChanged;
+
+    /// <summary>
+    /// The current sync-activity snapshot. Bound directly as the <c>getSyncActivity</c> command
+    /// handler and read live by <see cref="SyncActivityNotifierService"/>'s baseline emit, so both
+    /// surfaces report present state rather than a cached copy of the last transition.
+    /// <para>
+    /// Scaffolding, as with <see cref="SyncActivityChanged"/>: no sync can run in open-source
+    /// Platform.Bible, so this is always idle here. The Paratext 10 Studio patch replaces the body
+    /// with a real read of its run state.
+    /// </para>
+    /// </summary>
+    public SyncActivityState GetSyncActivity() => new(false, Array.Empty<string>());
+
+    /// <summary>
+    /// Raises <see cref="SyncActivityChanged"/> with <paramref name="snapshot"/>, invoking each
+    /// subscriber under its own try/catch.
+    /// <para>
+    /// The guard is not defensive nicety: the patch raises this from inside <c>finally</c> blocks on
+    /// the sync worker, where an exception escaping a subscriber would REPLACE the in-flight sync
+    /// failure with the subscriber's error — losing the real diagnosis. Callers are also expected to
+    /// snapshot their state under whatever lock guards it and then call this OUTSIDE that lock, since
+    /// subscribers do papi sends.
+    /// </para>
+    /// </summary>
+    protected void RaiseSyncActivityChanged(SyncActivityState snapshot)
+    {
+        Action<SyncActivityState>? handlers = SyncActivityChanged;
+        if (handlers is null)
+            return;
+        foreach (Delegate handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                ((Action<SyncActivityState>)handler)(snapshot);
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"A {nameof(SyncActivityChanged)} handler threw: {ex}");
+            }
+        }
+    }
+
     public async Task InitializeAsync()
     {
         // Set up commands on the PAPI

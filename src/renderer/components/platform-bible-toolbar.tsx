@@ -1,6 +1,7 @@
 import logo from '@assets/icon.png';
 import { ReferenceHistoryButtons } from '@renderer/components/reference-history-buttons.component';
 import { SyncStatusButton } from '@renderer/components/sync-status-button.component';
+import { useBackendSyncActivity } from '@renderer/hooks/use-backend-sync-activity.hook';
 import { UserProfilePopover } from '@renderer/components/user-profile-popover/user-profile-popover.component';
 import {
   useData,
@@ -279,6 +280,14 @@ export function PlatformBibleToolbar() {
   // `undefined` while unknown — the render gate below treats that as available (fail open). Only
   // checked in simple mode, since that gate is the only thing the answer feeds.
   const isSendReceiveAvailable = useSendReceiveAvailability({ enabled: !isPowerMode });
+  // Fail open a second way: even a settled `false` must not hide the indicator while the backend
+  // says a sync is genuinely running. `useSendReceiveAvailability` asks whether the send/receive
+  // EXTENSION is present, but syncs also start from paths that never touch it — `startup-tasks.ts`
+  // calls the dotnet `syncProjects` command directly — so an extension that is missing or failed to
+  // activate would otherwise leave a multi-minute sync with no surface at all in Simple mode, where
+  // the persistent toast is suppressed in favour of this indicator. Subscription-only, so it costs
+  // nothing in builds that never sync. See `useBackendSyncActivity`.
+  const isBackendSyncing = useBackendSyncActivity();
 
   const openHome = useCallback(async () => {
     try {
@@ -312,11 +321,13 @@ export function PlatformBibleToolbar() {
         appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
         configAreaChildren={
           <>
-            {!isPowerMode && isSendReceiveAvailable !== false && (
+            {!isPowerMode && (isSendReceiveAvailable !== false || isBackendSyncing) && (
               // Simple mode only — power users send/receive per project from the Home
               // view. Fail open on availability: `undefined` means not known yet (the extension
               // host is busy, or send/receive is still activating), and the button must not hinge
-              // on that resolving. Only a settled `false` hides it.
+              // on that resolving. A settled `false` hides it — unless the backend is reporting a
+              // live sync, which is a surface the user needs regardless of what the extension
+              // probe says (see `isBackendSyncing` above).
               //
               // The cost of failing open is that mounting starts two seed-retry loops in builds with
               // no send/receive at all, and each toggle between Simple and Power mode unmounts and

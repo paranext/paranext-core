@@ -1309,8 +1309,15 @@ step, no automation. Just a record.
   suppression branch and held across the whole scheduled-path resolution. Raising a
   `SyncActivityChanged` event on that bracket (plus at `ReArmSyncGate`, when the scheduled path
   resolves its merge set) therefore sees every command path, including the two that call the dotnet
-  commands directly and raise no extension claim. The signal is forwarded to PAPI by a notifier
-  service mirroring `SendReceiveBlockNotifierService` exactly, and exposes a pull command
+  commands directly and raise no extension claim. The seam for it lives in **core**, not in the
+  patch: `SyncActivityState`, the `SyncActivityChanged` event, `GetSyncActivity()`, and
+  `SyncActivityNotifierService` are all public scaffolding (inert here, since no sync can run in
+  plain Platform.Bible), and the patch only fills in the run bracket that raises it. Both this
+  notifier and `SendReceiveBlockNotifierService` are thin wrappers over one shared
+  `SendReceiveSnapshotNotifierService<TSnapshot>` rather than two copies of the same 200 lines — the
+  subtle parts (subscribe-before-register, best-effort registry registration, the awaited live
+  baseline emit, observing the fire-and-forget forward) are written once. The notifier exposes a pull
+  command
   (`getSyncActivity`) so a renderer mounting mid-sync can seed instead of waiting for a transition —
   following the established wire-naming pair (`onSyncWriteLockChanged` / `getAutoSyncBlocking` →
   `onSyncActivityChanged` / `getSyncActivity`). Core's `useSyncStatus` takes this as a **second
@@ -1341,9 +1348,14 @@ step, no automation. Just a record.
   thrown/connection-failure toast in the `catch` block — are **kept** in both modes; the indicator
   has no state for a role change or a connection problem, and see the first Consequence for why
   plain failure is not gated alongside. Interface mode is read on the toast-gate path from a cached
-  value (seeded at startup, refreshed from `SettingsService`'s `onDidUpdate`) rather than a live
+  value (seeded at startup, refreshed from `SettingsService.SettingsChanged`) rather than a live
   round trip, because `ShowSyncNotification` runs under the held sync semaphore where a blocking
-  `GetSetting` would compete with the same 10-second budget `WaitUntilAvailableAsync` protects.
+  `GetSetting` would compete with the same 10-second budget `WaitUntilAvailableAsync` protects. The
+  refresh subscribes to that fan-out rather than registering its own handler for
+  `platform.settingsServiceDataProvider-data:onDidUpdate`: JSON-RPC permits ONE local method per name
+  and parameter list, so a second registration throws out of backend startup. The announcement names
+  no key (a data provider's `onDidUpdate` carries data-type names, not the setting that changed), so
+  the refresh re-reads — asynchronously, never blocking the dispatch thread it is raised on.
 - **Alternatives:**
   - **Gate-derived signal only (`onSyncWriteLockChanged`).** Rejected: silent through the scheduled
     path's resolution phase — broken at app startup, the moment the requirement cares most about.
@@ -1383,8 +1395,16 @@ step, no automation. Just a record.
     so `isSendReceiveAvailable` settles to a real `false` and the toolbar unmounts this control after
     `SEND_RECEIVE_UNKNOWN_GRACE_MS`, tearing both loops down after three or four attempts. The cost
     is cold-start warn-level log volume, not behavior.
-  - **The two halves only compose in a real build.** The signal, the union, and the toast gate split
-    across core and Studio's patch. Core's union degrades cleanly to claim-only when the patch is
+  - **A settled "send/receive unavailable" must not hide a live sync.** The toolbar gates the
+    indicator on `useSendReceiveAvailability`, which asks whether the send/receive EXTENSION is
+    present — but syncs start from paths that never touch it, so a settled `false` while the backend
+    is mid-sync would leave a Simple-mode sync with no surface at all, which is the exact failure
+    this ADR exists to prevent. `useBackendSyncActivity` closes that: a subscription-only read of
+    `onSyncActivityChanged` (no pull, no seed retries, no availability probe) that can only ever
+    reveal the indicator, never hide it, and costs one never-firing subscription in builds that never
+    sync.
+  - **The two halves only compose in a real build.** The run bracket that raises the signal, and the
+    toast gate, live in Studio's patch; the seam, the notifier, and the union live here. Core's union degrades cleanly to claim-only when the patch is
     absent, by the declare-it-optional pattern ADR-0024 established — but the invisible-path gap and
     the double-toast overlap close only once both halves ship. As with PT-4214 (core #2574 / studio
     #164), the two PRs must merge in the same window; landing one without the other leaves the
@@ -1392,6 +1412,7 @@ step, no automation. Just a record.
 - **Source:** PT-4398, sub-task of PT-4336 — non-negotiable 4 of the PRD "Simple — Saroj (and Donna)
   can trust the app"; ADR-0024's "second sync surface" finding;
   `src/renderer/hooks/use-sync-status.hook.ts` for the union and seed-retry behavior;
-  `c-sharp/Projects/SendReceive/SendReceiveBlockNotifierService.cs` for the mirrored notifier pattern;
+  `c-sharp/Projects/SendReceive/SendReceiveSnapshotNotifierService.cs` for the shared notifier both
+  S/R snapshot signals are built on;
   Paratext 10 Studio's `repo-patches/paranext-core.patch` for `RunWithSyncNotification`,
   `BeginSyncRun`/`EndSync`, and `ShowSyncNotification` (not in this repo).

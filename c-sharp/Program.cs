@@ -144,6 +144,13 @@ public static class Program
             // critical barrier below so it is serving before extension activation.
             var sendReceiveBlockNotifierService = new SendReceiveBlockNotifierService(papi);
 
+            // Bridge sync-run activity to the PAPI (event + getSyncActivity). Initialized in the
+            // critical barrier below so it is serving before extension activation.
+            var syncActivityNotifierService = new SyncActivityNotifierService(
+                papi,
+                paratextSendReceiveService
+            );
+
             StartupTiming.Mark("init-barrier-start");
             // Critical path: everything the renderer needs to list projects and open an editor.
             await Task.WhenAll(
@@ -153,7 +160,8 @@ public static class Program
                 paratextRegistrationService.InitializeAsync(),
                 paratextSendReceiveService.InitializeAsync(),
                 dblResources.RegisterDataProviderAsync(),
-                sendReceiveBlockNotifierService.InitializeAsync()
+                sendReceiveBlockNotifierService.InitializeAsync(),
+                syncActivityNotifierService.InitializeAsync()
             );
             StartupTiming.Mark("init-barrier-end");
 

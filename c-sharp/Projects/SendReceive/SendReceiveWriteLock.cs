@@ -349,6 +349,27 @@ internal static class SendReceiveWriteLock
         );
 
     /// <summary>
+    /// The exact transformation <see cref="SetSyncing"/> applies to a caller's project ids before
+    /// arming: empty/null ids dropped, the rest collapsed case-insensitively into a set.
+    /// <para>
+    /// Public so bracket code can announce the SAME ids the gate will actually block. Anything that
+    /// publishes a "these projects are syncing" signal alongside an arm must run its ids through
+    /// here first; announcing the caller's raw list instead lets the two signals disagree — a blank
+    /// entry or a <c>proj1</c>/<c>PROJ1</c> pair reaches the UI as rows that name nothing and
+    /// duplicate each other, while the gate blocks a single normalized id.
+    /// </para>
+    /// </summary>
+    /// <param name="projectIds">Ids to normalize. Enumerated exactly once.</param>
+    /// <returns>The normalized, case-insensitive set of ids.</returns>
+    public static ImmutableHashSet<string> NormalizeProjectIds(IEnumerable<string> projectIds)
+    {
+        ArgumentNullException.ThrowIfNull(projectIds);
+        return projectIds
+            .Where(projectId => !string.IsNullOrEmpty(projectId))
+            .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Marks the given projects as being synced, then waits (bounded by <see cref="DrainTimeout"/>)
     /// for any already-in-flight writes to drain before returning. From the moment this arms the
     /// gate, new <see cref="EnterWrite"/> calls for a project IN THIS BATCH fail fast (the
@@ -393,9 +414,7 @@ internal static class SendReceiveWriteLock
 
         // Build the set BEFORE touching any state, so an exception while enumerating (or a
         // defective batch) can never leave a torn arm.
-        var armedProjectIds = projectIds
-            .Where(projectId => !string.IsNullOrEmpty(projectId))
-            .ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
+        ImmutableHashSet<string> armedProjectIds = NormalizeProjectIds(projectIds);
 
         // An all-invalid batch is almost certainly a caller bug (e.g. a failed project lookup).
         // Still arm, and the drain still runs and returns a valid token — none of that machinery
