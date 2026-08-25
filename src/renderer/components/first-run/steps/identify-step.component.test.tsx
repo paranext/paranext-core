@@ -5,6 +5,11 @@ import userEvent from '@testing-library/user-event';
 import { ChangeEvent, ReactNode } from 'react';
 import * as commandService from '@shared/services/command.service';
 import * as firstRunStore from '@renderer/services/first-run-store';
+import {
+  getRegistrationValidity,
+  publishRegistrationValidity,
+  resetRegistrationValidityStore,
+} from '@renderer/services/registration-validity-store';
 import { settingsService } from '@shared/services/settings.service';
 import {
   IdentifyStep,
@@ -222,6 +227,38 @@ describe('IdentifyStep', () => {
       'paratextRegistration.setParatextRegistrationData',
       expect.objectContaining({ name: 'Test User', code: VALID_CODE }),
     );
+  });
+
+  it('clears a cached invalid registration in this session once the save succeeds', async () => {
+    const user = setupUser();
+    // The toolbar mounts behind the wizard and has already cached a definitive answer.
+    resetRegistrationValidityStore();
+    publishRegistrationValidity('invalid');
+    mockSendCommand
+      .mockResolvedValueOnce(true) // validateParatextRegistrationData
+      .mockResolvedValueOnce(undefined); // setParatextRegistrationData
+    // A restart that never settles models the best-effort restart failing to take the process down.
+    const onRestartAfterSave = vi.fn().mockReturnValue(new Promise<never>(() => {}));
+
+    render(
+      <IdentifyStep
+        onNext={onNext}
+        setCanProceed={setCanProceed}
+        onRestartAfterSave={onRestartAfterSave}
+      />,
+    );
+
+    await user.type(screen.getByLabelText(/registration name/i), 'Test User');
+    await user.type(screen.getByLabelText(/registration code/i), VALID_CODE);
+    vi.advanceTimersByTime(VALIDATION_DEBOUNCE_MS + 1);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /save and restart/i })).not.toBeDisabled(),
+    );
+
+    await user.click(screen.getByRole('button', { name: /save and restart/i }));
+
+    // Without this the reminder dot would nag about the registration the user just fixed.
+    await waitFor(() => expect(getRegistrationValidity()).toBe('valid'));
   });
 
   it('calls onRestartAfterSave instead of platform.restart when provided', async () => {

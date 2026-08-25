@@ -25,6 +25,7 @@ import {
   useSetting,
 } from '@renderer/hooks/papi-hooks';
 import { useInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { useRegistrationValidity } from '@renderer/hooks/use-registration-validity.hook';
 import { sendCommand } from '@shared/services/command.service';
 import { localizationService } from '@shared/services/localization.service';
 import { logger } from '@shared/services/logger.service';
@@ -41,6 +42,7 @@ import './user-profile-popover.component.css';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_userProfile_label%',
+  '%toolbar_userProfile_label_registrationNeeded%',
   '%userProfile_header_defaultName%',
   '%userProfile_header_notRegistered%',
   '%userProfile_interfaceMode_simple_label%',
@@ -48,6 +50,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%userProfile_interfaceMode_power_label%',
   '%userProfile_interfaceMode_power_description%',
   '%userProfile_profileAndRegistration%',
+  '%userProfile_registrationNeeded%',
   '%userProfile_networkSettings_2%',
   '%userProfile_language%',
   '%userProfile_appearance%',
@@ -89,16 +92,57 @@ function sortLanguageEntries<T>(entries: [string, T][]): [string, T][] {
 }
 
 /**
+ * Small primary dot marking something that needs attention. Decorative on purpose — every caller
+ * pairs it with text carrying the same meaning, so assistive tech is never told twice.
+ *
+ * Local rather than from `platform-bible-react` because neither existing option fits: `Badge`'s
+ * `blueIndicator`/`mutedIndicator` variants hardcode `bg-blue-400`/`bg-zinc-400` and so ignore the
+ * theme, and `AvatarBadge` is sized off `Avatar`'s group data-attributes and is not exported. That
+ * makes this the third dot treatment in the app — promoting a themed, exported indicator (and
+ * fixing those Badge variants) is worth its own change, since it touches every consumer. Until
+ * then, prefer extending this rather than copying the class string.
+ */
+function ReminderDot({ testId, className }: { testId: string; className?: string }) {
+  return (
+    <span
+      data-testid={testId}
+      aria-hidden="true"
+      className={cn(
+        'tw:size-2 tw:rounded-full tw:bg-primary',
+        // Raw class, not a `tw:forced-colors:` utility — that variant emits no CSS in this build
+        // (verified against the built stylesheet). See the rule in the companion .css file.
+        'user-profile-popover-reminder-dot',
+        className,
+      )}
+    />
+  );
+}
+
+/**
  * Popover triggered from the top-right of the toolbar that surfaces the user's profile (name,
  * email), interface mode, registration / network settings shortcuts, language, and appearance
  * (theme) controls. Replaces the previous standalone theme-toggle, internet-settings, and
  * Paratext-registration buttons in the toolbar.
+ *
+ * When the user's Paratext registration is missing or invalid, an unobtrusive reminder dot appears
+ * on the toolbar trigger and on the "Profile & registration" row (PT-4325). The dot is never the
+ * only signal: the trigger's accessible label and tooltip change to match, and the popover row
+ * carries screen-reader-only text.
  */
 export function UserProfilePopover() {
   const [isOpen, setIsOpen] = useState(false);
   const [registrationData, setRegistrationData] = useState<RegistrationData | undefined>(undefined);
   const [isRegistrationLoading, setIsRegistrationLoading] = useState(false);
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
+
+  const { validity: registrationValidity, refresh: refreshRegistration } =
+    useRegistrationValidity();
+  // Only a definitive 'invalid' nags: 'unknown' means the probe could not complete, never that the
+  // registration is bad.
+  const showRegistrationReminder = registrationValidity === 'invalid';
+  const userProfileLabel = showRegistrationReminder
+    ? localizedStrings['%toolbar_userProfile_label_registrationNeeded%']
+    : localizedStrings['%toolbar_userProfile_label%'];
 
   const [safeInterfaceMode, setInterfaceMode] = useInterfaceMode();
 
@@ -214,6 +258,16 @@ export function UserProfilePopover() {
     };
   }, [isOpen]);
 
+  // Separate from the profile fetch above: this one owns no state and needs no cleanup, so keeping
+  // it out of that effect keeps the `cancelled` flag's scope obviously limited to the fetch.
+  // Re-checks on EVERY open, which is what makes the dot recoverable: registering from here closes
+  // the popover, and saving normally restarts the app — but that restart is best-effort (the form
+  // only logs a warning if it fails), so when it doesn't happen the dot clears on the next open
+  // rather than this one.
+  useEffect(() => {
+    if (isOpen) refreshRegistration();
+  }, [isOpen, refreshRegistration]);
+
   // "Not registered" is a state of the whole header — show it only when neither the name nor the
   // email are populated. When the user has a name but no email, the email line is omitted entirely
   // so we don't imply the user is unregistered just because the email field happens to be blank.
@@ -226,7 +280,10 @@ export function UserProfilePopover() {
       : localizedStrings['%userProfile_header_defaultName%'];
   let emailText: string | undefined;
   if (registeredEmail.length > 0) emailText = registeredEmail;
-  else if (!isRegistered) emailText = localizedStrings['%userProfile_header_notRegistered%'];
+  // Suppressed while the reminder shows: the warning line below already says the registration needs
+  // attention, and two near-identical messages read as two separate problems.
+  else if (!isRegistered && !showRegistrationReminder)
+    emailText = localizedStrings['%userProfile_header_notRegistered%'];
   else emailText = undefined;
 
   return (
@@ -238,16 +295,28 @@ export function UserProfilePopover() {
               <Button
                 variant="ghost"
                 size="icon"
-                className="pr-twp tw:h-8 tw:shrink-0"
-                aria-label={localizedStrings['%toolbar_userProfile_label%']}
+                // `tw:relative` positions the reminder dot below; buttonVariants has no `relative`.
+                className="pr-twp tw:relative tw:h-8 tw:shrink-0"
+                aria-label={userProfileLabel}
                 data-testid="user-profile-popover-trigger"
               >
                 <CircleUserRound />
+                {showRegistrationReminder && (
+                  // `end-1` (not `right-1`) so the dot mirrors in RTL. The ring separates the dot
+                  // from the icon it overlaps, so it has to match whatever is behind it: the ghost
+                  // button turns `muted` on hover AND stays `muted` while the popover is open
+                  // (`aria-expanded`), so a fixed `ring-background` would sit there as an off-color
+                  // halo for exactly as long as the user is looking at it.
+                  <ReminderDot
+                    testId="user-profile-registration-dot"
+                    className="tw:absolute tw:end-1 tw:top-1 tw:ring-2 tw:ring-background tw:group-hover/button:ring-muted tw:group-aria-expanded/button:ring-muted"
+                  />
+                )}
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
           <TooltipContent>
-            <p className="tw:font-light">{localizedStrings['%toolbar_userProfile_label%']}</p>
+            <p className="tw:font-light">{userProfileLabel}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -275,6 +344,18 @@ export function UserProfilePopover() {
                   className="user-profile-popover-text-2xs tw:leading-tight"
                 >
                   {emailText}
+                </PopoverDescription>
+              )}
+              {showRegistrationReminder && (
+                // The identity above stays as-is; this line is what keeps the header from implying
+                // all is well while the dots say otherwise. Visible text, not `sr-only`, so a
+                // sighted user who clicks straight into the popover still gets an explanation.
+                <PopoverDescription
+                  data-testid="user-profile-registration-warning"
+                  className="user-profile-popover-text-2xs tw:mt-1 tw:flex tw:items-center tw:gap-1.5 tw:leading-tight"
+                >
+                  <ReminderDot testId="user-profile-registration-warning-dot" />
+                  {localizedStrings['%userProfile_registrationNeeded%']}
                 </PopoverDescription>
               )}
             </>
@@ -344,6 +425,18 @@ export function UserProfilePopover() {
           >
             <User className="tw:size-3.5" />
             {localizedStrings['%userProfile_profileAndRegistration%']}
+            {showRegistrationReminder && (
+              <>
+                <ReminderDot
+                  testId="user-profile-action-registration-dot"
+                  className="tw:ms-auto tw:shrink-0"
+                />
+                {/* Puts the state into the row's accessible name, since the dot is hidden from it. */}
+                <span className="tw:sr-only">
+                  {localizedStrings['%userProfile_registrationNeeded%']}
+                </span>
+              </>
+            )}
           </Button>
           <Button
             variant="ghost"

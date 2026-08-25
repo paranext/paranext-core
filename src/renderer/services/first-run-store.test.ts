@@ -6,6 +6,10 @@ import { logger } from '@shared/services/logger.service';
 import * as resolver from './resolve-registration-validity';
 import { RegistrationValidity } from './first-run.model';
 import {
+  getRegistrationValidity,
+  resetRegistrationValidityStore,
+} from './registration-validity-store';
+import {
   completeFirstRun,
   continueWithoutRegistration,
   getFirstRunStatus,
@@ -68,6 +72,10 @@ beforeEach(() => {
   // @ts-expect-error ts(2345) - mock returns undefined but DataProviderUpdateInstructions is boolean | string | ...
   mockSet.mockResolvedValue(undefined);
   resetFirstRunStore();
+  // Required, not hygiene: the gate now resolves registration through the shared store, which caches
+  // a definitive answer for the session. Without this reset a value cached by one test would be
+  // reused by the next, which would silently stop probing and make `mockResolveReg` assertions lie.
+  resetRegistrationValidityStore();
 });
 afterEach(() => localStorage.clear());
 
@@ -189,6 +197,13 @@ describe('resolveFirstRunState', () => {
     mockResolveReg.mockResolvedValue('invalid');
     await Promise.all([resolveFirstRunState(), resolveFirstRunState()]);
     expect(mockResolveReg).toHaveBeenCalledTimes(1);
+    // Assert the whole resolution ran once, not just that the probe was deduped: the shared
+    // registration-validity store dedupes the probe by itself, so a probe-count assertion alone
+    // passes even with this store's guard removed. resolveInternal's settings reads are the part
+    // only the guard can prevent from repeating — and with them, its durable writes.
+    expect(mockGet.mock.calls.filter(([key]) => key === 'platform.firstRunComplete')).toHaveLength(
+      1,
+    );
   });
 
   it('does not falsely gate a completed user when the setting read fails (no cache clobber)', async () => {
@@ -401,6 +416,11 @@ describe('retryFirstRunResolution', () => {
     await Promise.all([first, second]);
 
     expect(mockResolveReg).toHaveBeenCalledTimes(1);
+    // See the StrictMode test above: the probe count alone no longer proves the `resolving` guard
+    // works, because the shared store dedupes the probe regardless.
+    expect(mockGet.mock.calls.filter(([key]) => key === 'platform.firstRunComplete')).toHaveLength(
+      1,
+    );
   });
 
   it('reaches wizard status on a successful retry after an initial error', async () => {
@@ -576,8 +596,12 @@ describe('background registration re-check (completed simple-mode user)', () => 
     // Flag consumed on first launch.
     expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
 
-    // Simulate a new launch (flag already consumed — reads false this time).
+    // Simulate a new launch (flag already consumed — reads false this time). A real relaunch is a
+    // new process, so every piece of per-process module state has to be cleared — including the
+    // registration-validity store, whose whole job is to cache one probe per session. Leaving it
+    // would hand this second launch the first launch's suppressed 'valid' instead of re-probing.
     resetFirstRunStore();
+    resetRegistrationValidityStore();
     stubSettings({ firstRunComplete: true, showReminder: true });
     mockResolveReg.mockResolvedValue('invalid');
     await resolveFirstRunState();
@@ -705,5 +729,91 @@ describe('OS-language default on fresh first-run', () => {
     // but the skip fired because best 'en' === currentPrimary 'en' read from the real array
     expect(mockSet).not.toHaveBeenCalledWith('platform.interfaceLanguage', expect.anything());
     expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+  });
+});
+
+describe('registration validity published to the shared store', () => {
+  it('publishes the probe result so registration-dependent UI agrees with the gate', async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+
+    await resolveFirstRunState();
+
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'language' });
+    expect(getRegistrationValidity()).toBe('invalid');
+  });
+
+  it("publishes 'valid' when the fresh-user path suppresses a just-registered transient 'invalid'", async () => {
+    localStorage.setItem('platform-bible.firstRunWizardActive', 'true');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('invalid');
+
+    await resolveFirstRunState();
+
+    // The gate treated the transient as valid; the store must not contradict it and re-nag.
+    expect(getFirstRunStatus()).toEqual({ kind: 'wizard', step: 'syncConsent' });
+    expect(getRegistrationValidity()).toBe('valid');
+  });
+
+  it("publishes 'valid' when the background re-check suppresses a just-registered transient 'invalid'", async () => {
+    stubSettings({ firstRunComplete: true, showReminder: true });
+    mockResolveReg.mockResolvedValue('invalid');
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+
+    await resolveFirstRunState();
+    await vi.waitFor(() => expect(mockResolveReg).toHaveBeenCalled());
+
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    await vi.waitFor(() => expect(getRegistrationValidity()).toBe('valid'));
+  });
+
+  it("leaves the store at 'invalid' when the background re-check genuinely raises the wizard", async () => {
+    stubSettings({ firstRunComplete: true, showReminder: true });
+    mockResolveReg.mockResolvedValue('invalid');
+
+    await resolveFirstRunState();
+    await vi.waitFor(() =>
+      expect(getFirstRunStatus()).toEqual({
+        kind: 'wizard',
+        step: 'identify',
+        allowContinueWithoutRegistration: true,
+      }),
+    );
+
+    expect(getRegistrationValidity()).toBe('invalid');
+  });
+
+  it("publishes 'valid' when the reminder is suppressed and the user just re-registered", async () => {
+    stubSettings({ firstRunComplete: true, showReminder: false });
+    localStorage.setItem('platform-bible.firstRunJustRegistered', 'true');
+
+    await resolveFirstRunState();
+
+    // This path never probes, so nothing else can correct the toolbar's own transient 'invalid'.
+    // Without the publish the spent flag would leave the dot nagging about a fixed registration.
+    await vi.waitFor(() => expect(getRegistrationValidity()).toBe('valid'));
+    expect(getFirstRunStatus()).toEqual({ kind: 'app' });
+    expect(mockResolveReg).not.toHaveBeenCalled();
+    expect(localStorage.getItem('platform-bible.firstRunJustRegistered')).toBe('false');
+  });
+
+  it('leaves the store alone when the reminder is suppressed and nothing was just registered', async () => {
+    stubSettings({ firstRunComplete: true, showReminder: false });
+
+    await resolveFirstRunState();
+
+    expect(getRegistrationValidity()).toBe('unknown');
+    expect(mockResolveReg).not.toHaveBeenCalled();
+  });
+
+  it("leaves the store at 'unknown' when the probe cannot resolve, so no UI nags", async () => {
+    stubSettings({ firstRunComplete: false });
+    mockResolveReg.mockResolvedValue('unknown');
+
+    await resolveFirstRunState();
+
+    expect(getFirstRunStatus()).toEqual({ kind: 'error' });
+    expect(getRegistrationValidity()).toBe('unknown');
   });
 });
