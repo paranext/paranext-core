@@ -75,15 +75,19 @@ const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 
 // Simple mode packs a project selector, the reference-history buttons and the BCV control into the
-// title bar. Together they need more room than the app's minimum window width leaves once the OS
-// caption buttons are reserved, so the trailing controls used to be clipped outright by the
-// Toolbar's `overflow-hidden`.
+// title bar. Together they want more room than the app's minimum window width leaves once the OS
+// caption buttons are reserved, so two mechanisms share the job of fitting them — and neither one
+// hides a control, because the Toolbar's `overflow-hidden` would clip it silently rather than
+// signal it.
 //
-// The fix here is confined to letting the bar's contents SHRINK: `min-w-0` on the Toolbar's content
-// area (see toolbar.component.tsx) plus a smaller floor on the project selector below. Nothing is
-// hidden. Width-driven collapse of individual controls — abbreviating labels, dropping to icon-only
-// — is deliberately out of scope here and belongs to `useShrinkStep` per ADR-0016, which rejects
-// CSS container queries for this job (their failure mode is silent) and PT-4344 implements.
+// The bar's contents SHRINK: `min-w-0` on the Toolbar's content area (see toolbar.component.tsx)
+// defeats the `min-width: auto` floor a flex item gets by default, so the row can absorb the
+// squeeze instead of pushing its trailing controls under that clip.
+//
+// Individual controls then COLLAPSE by width: `useShrinkStep` publishes a discrete step from a
+// measured width and the labels below pick a shorter form at each one. ADR-0029 records why that
+// measurement is done in JS rather than with CSS container queries — their failure mode here is
+// silent.
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
