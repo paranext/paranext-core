@@ -21,10 +21,11 @@ Keep the round's notes in `.review/<pr>[-<pr>…]-<YYYY-MM-DD>/`. `.review` is a
 git, prettier and eslint, so the notes stay out of the diff under review and out of step 7's
 `format:check`. A second round the same day gets `-2`.
 
-Four files, written as you go: `findings.md` (steps 1–3), `rulings.md` (step 4, verbatim),
-`replies.md` (step 8), `approval.md` (step 9, verbatim). The gates can take days, and the session
-that takes a ruling is rarely the one that implements it — step 10 pushes and posts under the
-user's name on the strength of `approval.md`, so its absence has to mean "ask again".
+Four files, written as you go: `findings.md` (steps 0–3, opening with step 0's branch table),
+`rulings.md` (step 4, verbatim), `replies.md` (step 8), `approval.md` (step 9, verbatim). The
+gates can take days, and the session that takes a ruling is rarely the one that implements it —
+step 10 pushes and posts under the user's name on the strength of `approval.md`, so its absence
+has to mean "ask again".
 
 ---
 
@@ -36,8 +37,10 @@ gh api repos/paranext/paranext-core/compare/<base>...<headRefOid> --jq '{ahead_b
 git rev-parse origin/<branch>    # step 10's lease pin — record it now, per branch
 ```
 
-Run this per PR the round covers and record a row each: PR · branch · base · head SHA · the
-`origin/<branch>` SHA · behind-count · mergeable.
+Run this per PR the round covers and record a row each **in `findings.md`**: PR · branch · base ·
+head SHA · the `origin/<branch>` SHA · behind-count · mergeable. The `origin/<branch>` SHA is what
+step 10 leases against, and the gates can take days — a pin that lives only in this session's
+context is one the session running step 10 cannot read.
 
 `behind_by > 0` or `mergeable: CONFLICTING` → **rebase before anything else**; every fix estimate is
 against a tree that will change. On a stack each PR's base is the branch below it, not `main`.
@@ -48,8 +51,9 @@ Three traps:
   re-query until it settles. `behind_by` from the compare call is always computed, so prefer it.
   On a merged or closed PR (`state`, which is why it is in the query) `UNKNOWN` is permanent and
   correct.
-- **`mergeStateStatus` cannot answer the behind-question.** It reports `BEHIND` only under a branch
-  protection this repo does not use, so a badly stale branch reads `BLOCKED` or `CLEAN`.
+- **`mergeStateStatus` cannot answer the behind-question.** It reports `BEHIND` only where branch
+  protection requires branches to be up to date; where that is not enabled, a badly stale branch
+  reads `BLOCKED` or `CLEAN` instead. `behind_by` from the compare call is the authority.
 - **A conflicted PR silently stops CI.** GitHub cannot compute a merge ref, so no `pull_request`
   workflow runs at all. "No checks reported" is not "checks passed".
 
@@ -106,6 +110,13 @@ Per item: the smallest change that answers the concern, and **which branch it la
 stack, often not the PR the comment appeared on. Sort into: fixes · design preferences (you
 recommend, the user rules) · cross-reviewer conflicts (present both, never pick a side) · declines
 and deferrals, each with where the residue is recorded.
+
+Before sizing a reviewer's "do it properly" suggestion, check whether anything needs it. A reviewer
+proposing a general mechanism — a config knob, an interface, a second implementation — is reasoning
+from the diff in front of them, not from the call sites. Grep for real usage first, and where there
+is exactly one, "the specific fix, plus a note that the general one is a one-caller change if a
+second arrives" belongs at step 4 alongside the general one. It is an **option to present, never a
+decline to take** — the reviewer asked, so the user rules.
 
 A deferral needs a not-yet-started ticket. **Never create a Jira ticket** — propose it.
 
@@ -211,11 +222,13 @@ SHA that is not on GitHub is a broken citation in public. Approval here also cov
 3. **Post** — and only now, because a rebase orphans every SHA a reply cites. They still resolve,
    but they leave the PR's commit list, and anything *renumbered* such as an
    `Architecture-Decisions.md` entry now points at something else entirely. One comment at a time,
-   no retries, **spaced a second or two apart**. Around 40 rapid comment POSTs trip GitHub's
-   secondary rate limit, which answers `HTTP 422` with `"code":"abuse"` in the body — not the 403
-   you would expect, and it reads like a bad body. If one fails: stop,
-   read the live state back, and only re-post once you have a clean stray list. A `gh` failure does
-   **not** prove nothing was created.
+   no retries, **spaced a second or two apart**. A batch posted as fast as the API answers trips
+   GitHub's secondary rate limit, which answers `HTTP 422 Validation Failed` with `"code":"abuse"`
+   in the body, rather than the `403` the primary limit returns. Read as "validation failed" it
+   looks like a malformed body — which invites editing a reply the user already approved in order
+   to get past it. It is neither malformed nor rejected on content. If one fails: stop, read the
+   live state back, and only re-post once you have a clean stray list. A `gh` failure does **not**
+   prove nothing was created.
 4. **Read back** what landed and compare it against what you meant to post. "Posted successfully"
    without a read-back is not a result.
 
