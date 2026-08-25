@@ -370,6 +370,9 @@ const expectedOutput = {
   webViewMenus: {
     'videoExtension.playEditWebView': {
       includeDefaults: false,
+      // Folded in despite `includeDefaults: false` — the tab menu is not opt-out. Empty here only
+      // because this document's `defaultWebViewTabMenu` is
+      tabMenu: { groups: {}, items: [] },
       topMenu: {
         columns: {
           'videoExtension.video': { label: '%video%', order: 1 },
@@ -924,4 +927,63 @@ test('Web view menu defaults are combined', () => {
     },
   };
   expect(deepEqual(menuCombiner.rawOutput, expectedWebViewOutput)).toBeTruthy();
+});
+
+test('Tab menu defaults reach a web view that opted out of the other defaults', () => {
+  // The tab menu's items act on the tab frame rather than the web view's contents, so
+  // `includeDefaults: false` — which almost every shipped web view leaves implied — must not take
+  // them away. Without this the tab menu would be empty on nearly every tab.
+  const menuCombiner = new MenuDocumentCombiner({
+    mainMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewTopMenu: { columns: {}, groups: {}, items: [] },
+    defaultWebViewTabMenu: {
+      groups: { 'platform.tabGroup': { order: 1, isExtensible: true } },
+      items: [
+        { label: '%float%', group: 'platform.tabGroup', order: 1, command: 'platform.floatTab' },
+      ],
+    },
+    defaultWebViewContextMenu: {
+      groups: { 'platform.contextGroup': { order: 1, isExtensible: true } },
+      items: [
+        {
+          label: '%note%',
+          group: 'platform.contextGroup',
+          order: 1,
+          command: 'platform.insertNote',
+        },
+      ],
+    },
+    webViewMenus: {},
+  });
+
+  menuCombiner.addOrUpdateContribution('optOut', {
+    webViewMenus: {
+      'optOut.optOut': {
+        includeDefaults: false,
+        tabMenu: {
+          groups: { 'optOut.tabGroup': { order: 2 } },
+          items: [
+            { label: '%rewind%', group: 'optOut.tabGroup', order: 1, command: 'optOut.rewind' },
+          ],
+        },
+      },
+    },
+  });
+
+  // The combiner's output type is intentionally opaque; read the one entry this asserts on
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const output = menuCombiner.rawOutput as unknown as {
+    webViewMenus: Record<
+      string,
+      { tabMenu?: { items: { command?: string }[] }; contextMenu?: unknown }
+    >;
+  };
+  const optOutMenu = output.webViewMenus['optOut.optOut'];
+
+  expect(optOutMenu.tabMenu?.items.map((item) => item.command)).toEqual(
+    expect.arrayContaining(['optOut.rewind', 'platform.floatTab']),
+  );
+  // The positive control for the opt-out itself: the context menu default is still withheld, so
+  // this is the tab channel behaving differently rather than includeDefaults being ignored
+  expect(optOutMenu.contextMenu).toBeUndefined();
 });
