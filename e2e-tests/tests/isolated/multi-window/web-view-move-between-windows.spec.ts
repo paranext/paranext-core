@@ -22,9 +22,12 @@
  *    its source window holding its other tab, so that window stays. It then moves the tab back in
  *    through the tab menu's "Move tab to window" submenu — the user's route to docking a tab back,
  *    and the only route that needs a window to be NAMED, so it also pins that each window is called
- *    after what it is showing and that a window is never offered as a target for a tab it already
- *    holds. That rides this instance because two windows are already standing by then. Ends with a
- *    graceful quit, so the whole flow is also swept for faults and duplicate registrations.
+ *    after the tab it shows and that a window is never offered as a target for a tab it already
+ *    holds. Both windows show a Home tab there, so both are named "Home"; that collision is the
+ *    designed behaviour, and it is what makes the target COUNT rather than the target's label the
+ *    assertion that catches a window wrongly offering itself. That rides this instance because two
+ *    windows are already standing by then. Ends with a graceful quit, so the whole flow is also
+ *    swept for faults and duplicate registrations.
  *
  * ## Asserting identity, not shape
  *
@@ -527,32 +530,33 @@ test.describe('moving a web view between windows', () => {
     // are already standing at this point, which is what the submenu needs, so this rides the same
     // Electron instance rather than paying for another launch.
     //
-    // Each window is named after what it is showing, so the two names differ here: window 2 shows
-    // its own Home tab and window 3 shows the moved web view. Identical names are allowed by design
-    // — nothing disambiguates two windows showing the same thing — so this asserts the target is
-    // offered and the tab arrives, never that a name is unique.
+    // Each window is named after the tab it is showing, which is what gives it its own OS switcher
+    // entry (NN-3) and what the submenu names its targets by. BOTH windows here show a Home tab, so
+    // both are called "Home": the design tolerates that collision deliberately, since nothing
+    // disambiguates two windows showing the same thing. So this asserts each window is named after
+    // its content — never that the two names differ, which would contradict the rule.
     const window2Title = await page2.title();
     const window3Title = await page3.title();
-    expect(window2Title).not.toBe('');
-    // The OS switcher entry, NN-3: every window used to inherit the same document title
-    expect(window3Title).not.toBe(window2Title);
-    logStep(
-      `window ${window2Id} is called "${window2Title}", window ${window3Id} "${window3Title}"`,
-    );
+    expect(window2Title).toBe('Home');
+    expect(window3Title).toBe('Home');
+    logStep(`both windows are named after the tab they show: "${window2Title}"`);
 
-    await page3.locator(`[data-web-view-id="${idAfterSecondMove}"]`).click({ button: 'right' });
+    await page3
+      .locator(`.platform-tab-title[data-web-view-id="${idAfterSecondMove}"]`)
+      .click({ button: 'right' });
     const moveToWindowItem = page3.getByRole('menuitem', { name: 'Move tab to window' });
     await expect(moveToWindowItem).toBeVisible({ timeout: 30_000 });
     await moveToWindowItem.hover();
 
-    // The window the tab is already in is left out: moving it there would do nothing
-    await expect(page3.getByRole('menuitem', { name: window2Title })).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect(page3.getByRole('menuitem', { name: window3Title })).toHaveCount(0);
-    logStep(`the submenu offers "${window2Title}" and not this window`);
+    // Exactly ONE target with two windows open: the window the tab is already in is left out,
+    // because moving it there would do nothing. The COUNT is what proves that rule here — both
+    // windows carry the same name, so a submenu wrongly offering this one would show two entries
+    // reading "Home" rather than an entry with a label to tell apart.
+    const targetItems = page3.getByRole('menuitem', { name: window2Title, exact: true });
+    await expect(targetItems).toHaveCount(1, { timeout: 30_000 });
+    logStep(`the submenu offers one target, "${window2Title}", and not the window the tab is in`);
 
-    await page3.getByRole('menuitem', { name: window2Title }).click();
+    await targetItems.click();
 
     // Window 2 holds both again, which is the requirement met through the menu rather than the API.
     // The moved web view's id is asserted against the spellings the contract allows rather than
