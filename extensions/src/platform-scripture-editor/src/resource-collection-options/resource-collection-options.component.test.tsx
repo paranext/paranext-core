@@ -161,10 +161,13 @@ describe('ResourceCollectionOptions — TEXTS list', () => {
 });
 
 describe('ResourceCollectionOptions — Get Resources', () => {
-  it('fires onGetResources when the button is clicked', () => {
+  it('fires onGetResources when the button is clicked, with no arguments', () => {
     const props = renderComponent();
     fireEvent.click(screen.getByRole('button', { name: 'Get resources…' }));
     expect(props.onGetResources).toHaveBeenCalledTimes(1);
+    // Verify no React event is forwarded — passing the event over the PAPI websocket causes a
+    // circular-JSON error that silently drops the dialog-open RPC payload.
+    expect(props.onGetResources).toHaveBeenCalledWith();
   });
 });
 
