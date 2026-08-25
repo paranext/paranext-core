@@ -2332,3 +2332,65 @@ step, no automation. Just a record.
   writing it is deferred rather than done.
 - **Source:** PT-2626 review (PR #2727), finding 7 — "the current standard tells the next author to
   do the opposite of what this PR establishes."
+
+
+## ADR-0029: `GraphemeString` mirrors native `String` semantics one-for-one; `string-util` is a thin wrapper over it
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** `lib/platform-bible-utils/src/string-util.ts` exposes ~19 grapheme-aware string
+  functions that re-segment their input with `stringz` on **every** call, and a few
+  (`formatReplacementString`, `lastIndexOf`, `endsWith`) segment per character, making them
+  quadratic — one `formatReplacementString` call costs ~48ms on a 1000-character string.
+  `GraphemeString` segments once in its constructor and reuses that work. Two questions had to be
+  settled to land it: what semantics the class should have where they could differ from native
+  `String`, and how existing callers get the speedup. An earlier iteration of this work chose
+  **uniform indexing** — negative indexes counting from the end in *every* method (`charAt`,
+  `indexOf`, `lastIndexOf`, not just `at`), a backwards `substring` range returning empty rather
+  than swapping, and an empty search needle reporting "not found" — on the theory that one internally
+  consistent rule is easier to learn than native's per-method inconsistencies. It also planned to
+  leave `string-util` in place marked `@deprecated`, migrating call sites over time.
+- **Decision:** **Match the native `String` API exactly**, including the parts that are arguably
+  inconsistent: `charAt`/`indexOf`/`lastIndexOf`/`startsWith`/`endsWith` clamp a negative position to
+  0 while only `at` counts from the end; `substring` swaps a backwards range while `slice` does not;
+  an empty needle is found at the clamped position; `split`'s limit discards the remainder past it
+  and is converted with `ToUint32`. Index arguments go through the spec's `ToIntegerOrInfinity`, so
+  fractional and `NaN` arguments behave as native does. The single substitution is the **unit**:
+  grapheme cluster instead of UTF-16 code unit, with a search additionally required to begin and end
+  on cluster boundaries. Two additions are kept (`normalize('none')`, `ordinalCompare`), plus
+  `toArray`. Range and padding methods still return `GraphemeString` rather than `string` so derived
+  values inherit the parent's segmentation — a type-level difference, not a behavioral one. Then
+  **`string-util`'s functions become thin wrappers over the class** and the `@deprecated` tags are
+  removed: every existing caller gets the faster implementation with no source change, and the
+  documented advice becomes "doing more than one operation on the same string? construct one
+  `GraphemeString`", not "this function is going away".
+- **Alternatives:** **Uniform indexing** (the earlier choice) — rejected: the utility's whole
+  premise is being a drop-in for `String` with a corrected unit, so every semantic departure is a
+  trap for a reader who knows JavaScript, and the departures are invisible at the call site.
+  Consistency was also not free of surprise: it made `charAt(-1)` silently return the *last*
+  character where native returns `''`, which is a wrong answer rather than a different convention.
+  **Keep `string-util` deprecated and migrate call sites** — rejected: ~200 call sites across four
+  repos, of which the export-swap majority need no edit at all; deprecation puts the work on every
+  consumer to get a speedup that a wrapper delivers for free, and leaves two implementations of the
+  same semantics alive to drift. **Return plain `string` from range methods** for total native
+  parity — rejected: it re-segments on every chained operation, discarding the class's main
+  advantage, and the difference surfaces as a compile error rather than a silent behavior change.
+  **Route `normalize`/`ordinalCompare` through the class too**, for uniformity — rejected: neither
+  needs segmentation, so wrapping them would add construction cost to 30+ call sites for no benefit;
+  they stay direct native calls.
+- **Consequences:** Native is now the test oracle: for ASCII input one grapheme is exactly one code
+  unit, so the suite compares `GraphemeString` against `String.prototype` across a matrix of
+  edge-case arguments rather than hand-written expectations — which is what surfaced native's
+  `ToUint32` limit conversion and the `NaN`-means-`+Infinity` rule in `lastIndexOf`. The wrapper swap
+  moves the old API's behavior to native as a side effect, which fixes five long-standing bugs
+  (`endsWith` ignoring its position, `padStart`/`padEnd` overshooting with a multi-grapheme pad,
+  `slice(1, 0)` returning most of the string, `split` throwing on a limit above the match count,
+  `lastIndexOf('')` off by one) and changes one behavior in a data-losing direction: `split` with a
+  limit now discards the remainder instead of keeping it as a final piece. No in-repo call site
+  passes a `split` limit, and a scan for the other changed shapes (negative index arguments, an
+  `indexOf` result reused as a position, multi-grapheme pads) found no site whose behavior changes —
+  `stringz` had clamped negative positions to 0 just as native does. External extension authors are
+  the residual exposure. The previously-flagged hazard of a `-1` sentinel being read as
+  "count from the end" is gone, because negative positions now clamp.
+- **Source:** PT-2626 grapheme-string-util work; perf investigation in
+  `~/repos/test/platform-bible-utils-perf/` (`GRAPHEME-STRING-FINDINGS.md`, `PERF-RESULTS.md`).

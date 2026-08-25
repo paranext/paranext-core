@@ -18,7 +18,6 @@ import {
   substring,
   toArray,
   ordinalCompare,
-  testingStringUtils,
   transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,
   formatReplacementStringToArray,
@@ -114,71 +113,6 @@ describe('endsWith', () => {
   it('endsWith with position', () => {
     const result = endsWith(LONG_SURROGATE_PAIRS_STRING, 'At🦄', 8);
     expect(result).toEqual(true);
-  });
-});
-
-describe('indexOfClosestClosingCurlyBrace', () => {
-  const curlyString =
-    //           1           2
-    // 23 456 78901 2 345678901 23456
-    'Thi\\{s👮🏽‍♀️{is}👨‍👩‍👧‍👦\\}a {stri\\}ng}!';
-
-  it('gets the closest un-escaped curly brace', () => {
-    let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 0, false);
-    expect(result).toBe(10);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 4, false);
-    expect(result).toBe(10);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 10, false);
-    expect(result).toBe(10);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 11, false);
-    expect(result).toBe(25);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 16, false);
-    expect(result).toBe(25);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 23, false);
-    expect(result).toBe(25);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 25, false);
-    expect(result).toBe(25);
-  });
-
-  it('gets the closest escaped curly brace', () => {
-    let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 0, true);
-    expect(result).toBe(13);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 4, true);
-    expect(result).toBe(13);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 10, true);
-    expect(result).toBe(13);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 11, true);
-    expect(result).toBe(13);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 13, true);
-    expect(result).toBe(13);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 16, true);
-    expect(result).toBe(22);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 22, true);
-    expect(result).toBe(22);
-  });
-
-  it('returns -1 when out of bounds or no more curly braces are found', () => {
-    const strLength = stringLength(curlyString);
-    let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -1, true);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -1, false);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -10, true);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -10, false);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength, true);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength, false);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength + 5, true);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, strLength + 5, false);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 26, false);
-    expect(result).toBe(-1);
-    result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 23, true);
-    expect(result).toBe(-1);
   });
 });
 
@@ -548,13 +482,11 @@ describe('padEnd', () => {
     expect(result).toEqual(LONG_SURROGATE_PAIRS_STRING + SEVEN_XS);
   });
 
-  // Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
-  // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
-  // limit only works when length(padString) = 1
-  // ('padEnd with padString', () => {
-  //   const result = padEnd(TEXT_STRING, TEST_STRING_LENGTH + 10, 'ha');
-  //   expect(result).toEqual(`${TEXT_STRING}hahahahaha`);
-  // });
+  it('padEnd truncates a multi-grapheme padString to the target length', () => {
+    const target = stringLength(MEDIUM_SURROGATE_PAIRS_STRING) + 10;
+    const result = padEnd(MEDIUM_SURROGATE_PAIRS_STRING, target, 'ha');
+    expect(result).toEqual(`${MEDIUM_SURROGATE_PAIRS_STRING}hahahahaha`);
+  });
 });
 
 describe('padStart', () => {
@@ -572,13 +504,11 @@ describe('padStart', () => {
     expect(result).toEqual(SEVEN_XS + LONG_SURROGATE_PAIRS_STRING);
   });
 
-  // Note: Limit with padString only works when length(padString) = 1, will be fixed with https://github.com/sallar/stringz/pull/59
-  // It expects 10 'ha' but it should only give 5 'ha' because that would be length 10
-  // limit only works when length(padString) = 1
-  // ('padStart with padString', () => {
-  //   const result = padStart(TEST_STRING, TEST_STRING_LENGTH + 10, 'ha');
-  //   expect(result).toEqual(`hahahahaha${TEST_STRING}`);
-  // });
+  it('padStart truncates a multi-grapheme padString to the target length', () => {
+    const target = stringLength(MEDIUM_SURROGATE_PAIRS_STRING) + 10;
+    const result = padStart(MEDIUM_SURROGATE_PAIRS_STRING, target, 'ha');
+    expect(result).toEqual(`hahahahaha${MEDIUM_SURROGATE_PAIRS_STRING}`);
+  });
 });
 
 describe('slice', () => {
@@ -685,9 +615,9 @@ describe('split', () => {
     expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_ARRAY);
   });
 
-  it('split with splitLimit', () => {
-    const result = split(MEDIUM_SURROGATE_PAIRS_STRING, '𐐷', 2);
-    expect(result).toEqual(['Look', 'At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
+  it('split with splitLimit discards the remainder, as native does', () => {
+    const result = split(MEDIUM_SURROGATE_PAIRS_STRING, '\u{10437}', 2);
+    expect(result).toEqual(['Look', 'At\u{1F984}This']);
   });
 
   it('split by empty string', () => {
