@@ -466,12 +466,13 @@
   "%some_localization_key%": "This is the English text for %some_localization_key%.",
   "%submitButton%": "Submit",
   "%tab_aria_tab%": "Tab",
-  "%tab_contextMenu_floatTab%": "Float tab",
+  "%tab_contextMenu_floatPanel%": "Float tab",
   "%tab_contextMenu_moveTabToNewWindow%": "Move tab to new window",
-  "%tab_contextMenu_moveTabToNewWindow_failed%": "Could not move the tab to a new window.",
-  "%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%": "Could not move the tab to a new window. The tab may have closed; its details are in the log.",
-  "%tab_contextMenu_moveTabToNewWindow_failedNotReopened%": "Could not move the tab to a new window, and it could not be reopened anywhere, so it is now closed. Its details are in the log.",
-  "%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%": "Could not move the tab to a new window. It was reopened in a different window.",
+  "%tab_contextMenu_moveTabToWindow%": "Move tab to window",
+  "%tab_contextMenu_moveTab_failed%": "Could not move the tab.",
+  "%tab_contextMenu_moveTab_failedMayHaveClosed%": "Could not move the tab. The tab may have closed; its details are in the log.",
+  "%tab_contextMenu_moveTab_failedNotReopened%": "Could not move the tab, and it could not be reopened anywhere, so it is now closed. Its details are in the log.",
+  "%tab_contextMenu_moveTab_failedReopenedElsewhere%": "Could not move the tab. It was reopened in a different window.",
   "%tab_title_error%": "Error",
   "%tab_title_unknown%": "Unknown",
   "%test_deprecated_string%": "Test Deprecated String",
@@ -533,5 +534,6 @@
   "%webView_project%": "Project",
   "%webView_projectAssignmentsAndProgress%": "Assignments and Progress",
   "%webView_title_type_formatString%": "{type} {defaultTitle}",
-  "%wordList%": "Word List"
+  "%wordList%": "Word List",
+  "%window_label_empty%": "Empty window"
 }
