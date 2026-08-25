@@ -1376,7 +1376,10 @@ step, no automation. Just a record.
   `useBufferedLayoutSetting` must check the third tuple element, not just the held value.
   `RetryableErrorView` (renamed from `InstallFailedView` and moved to
   `panel-state-views.component.tsx`) is scoped to failures a retry can act on — a failed install or a
-  failed catalog fetch. The settings-read failure is not one, so it renders a message alone. Panels that grow a third async source must extend the readiness
+  failed catalog fetch. The settings-read failure is not one, so it renders a message alone. All
+  four front states compose the shadcn `Empty` primitive per ADR-0016, each with its own icon:
+  without one, the pick prompt and the catalog error rendered as identical screens whose buttons did
+  opposite things (reconfigure vs. retry), which is what AC-4 asks these states to prevent. Panels that grow a third async source must extend the readiness
   signal rather than add another flag — the bug class here is precisely one guard being unaware of
   one source.
 - **Source:** PT-4347 (NN 5C Resource panel shows correct loading state), whose named root cause —
@@ -1386,7 +1389,10 @@ step, no automation. Just a record.
 ## ADR-0023: Async hook state shape — discriminated union when the payload is state-specific, flat object otherwise
 
 - **Date:** 2026-08-21
-- **Status:** Accepted
+- **Status:** Proposed — the rule is drawn from exactly two hooks, both introduced by PT-4347. It
+  stands as the default for new async hook state, but the next hook that does not fit either shape
+  should reopen it rather than contort to satisfy it. Promote to Accepted once a third hook has
+  exercised it independently.
 - **Context:** PT-4347 introduced `useEffectiveResourceReferenceList`'s
   `EffectiveResourceReferenceListState` — the repo's first discriminated-union async state. A review
   grep confirmed no other exists: siblings use a tuple (`useBufferedLayoutSetting` →

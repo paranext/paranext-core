@@ -16,22 +16,26 @@ export type ResourcePanelReadiness = 'loading' | 'error' | 'catalogError' | 'emp
 
 /** The two independent async sources a panel's readiness is derived from. */
 export type ResourcePanelReadinessInput = {
-  /** Status of the effective resource reference list (see `useEffectiveResourceReferenceList`). */
-  listStatus: EffectiveResourceReferenceListState['status'];
+  /**
+   * The effective resource reference list's state (see `useEffectiveResourceReferenceList`), passed
+   * whole rather than as a status plus a separate count.
+   *
+   * Taking `listStatus` and `configuredCount` separately let them disagree — `'loading'` alongside
+   * a count of five, or `'ready'` alongside zero when a list was never delivered — which is the
+   * shape the union exists to forbid (see ADR-0023). The count is derived here from the narrowed
+   * union instead.
+   */
+  listState: EffectiveResourceReferenceListState;
   /** Whether the DBL resource catalog has finished loading and delivered. */
   isCatalogReady: boolean;
   /** Whether the catalog fetch failed. Recoverable by re-fetching. */
   hasCatalogError: boolean;
   /**
-   * How many items are configured in total. Catalog-independent, so it alone can answer "is
-   * anything configured at all?".
-   */
-  configuredCount: number;
-  /**
    * How many configured items belong to this panel's resource type. Meaningful only once the
-   * catalog has arrived.
+   * catalog has arrived, and not derivable here because filtering needs the catalog and the panel's
+   * resource type. Omit for a panel that does not filter, where every configured item matches.
    */
-  matchingCount: number;
+  matchingCount?: number;
 };
 
 /**
@@ -43,19 +47,22 @@ export type ResourcePanelReadinessInput = {
  * rendered as "nothing selected" for the whole fetch. Readiness must therefore be decided from
  * whether the sources have _arrived_, never from whether the result came out empty.
  *
- * Takes an options object rather than positional arguments: `configuredCount` and `matchingCount`
- * are both numbers with different meanings, and transposing them silently changes the answer.
+ * Takes an options object rather than positional arguments: the counts are numbers with different
+ * meanings, and transposing them silently changes the answer.
  *
  * @param input See {@link ResourcePanelReadinessInput}.
  * @returns Which of the five front states the panel should render.
  */
 export function getResourcePanelReadiness({
-  listStatus,
+  listState,
   isCatalogReady,
   hasCatalogError,
-  configuredCount,
   matchingCount,
 }: ResourcePanelReadinessInput): ResourcePanelReadiness {
+  const listStatus = listState.status;
+  const configuredCount = listState.status === 'ready' ? listState.list.items.length : 0;
+  const matching = matchingCount ?? configuredCount;
+
   // An unreadable setting is its own answer — never hide it behind a spinner that cannot end. It
   // outranks a catalog failure because it is the more fundamental of the two.
   if (listStatus === 'error') return 'error';
@@ -73,5 +80,5 @@ export function getResourcePanelReadiness({
   // Deciding "empty" before it arrives is the premature empty state.
   if (!isCatalogReady) return 'loading';
 
-  return matchingCount === 0 ? 'empty' : 'configured';
+  return matching === 0 ? 'empty' : 'configured';
 }
