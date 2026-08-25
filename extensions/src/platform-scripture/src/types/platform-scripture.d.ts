@@ -2828,6 +2828,25 @@ declare module 'papi-shared-types' {
      * to `DefaultCrossRefCaller` in Paratext's `Settings.xml`.
      */
     'platformScripture.defaultCrossRefCaller': string;
+
+    /**
+     * The auto-generated footnote caller sequence for the project's LANGUAGE: a space-separated
+     * character-set string (e.g. `a b c ... z`), possibly empty. LANGUAGE-backed — Paratext 9
+     * stores it as a writing-system character set (`ScrLanguage.FootnoteCallers`, Paratext repo,
+     * ParatextData/Languages/ScrLanguage.cs:290-300), NOT a `Settings.xml` tag — and read-only
+     * through the settings surface. Empty means "no sequence defined": consumers apply PT9's own
+     * fallback of `a`–`z` (`UsfmXsltExtensions.GetNthCaller`).
+     */
+    'platformScripture.footnoteCallers': string;
+
+    /**
+     * The auto-generated cross-reference caller sequence for the project's LANGUAGE: a
+     * space-separated character-set string, possibly empty. LANGUAGE-backed
+     * (`ScrLanguage.CrossReferenceCallers`), NOT a `Settings.xml` tag, and read-only through the
+     * settings surface. Empty means "no sequence defined": consumers apply PT9's own fallback of
+     * `†` (ViewUsfmXhtmlConverter.cs:73-74).
+     */
+    'platformScripture.crossRefCallers': string;
   }
 
   export interface NetworkEvents {

@@ -151,6 +151,7 @@ import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control
 import {
   generateInlineMarkerMenuListItems,
   markerMenuItemsToResolvedPaletteItems,
+  parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
@@ -797,9 +798,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // ':'), so a read error and an unset setting render the same reference. Each memo also guards
   // the empty string: `GetProjectSetting` returns ParametersDictionary values verbatim, so an
   // empty `<ChapterVerseSeparator/>` in Settings.xml would otherwise yield '' and render
-  // `Mt 13` — the same guard the `textDirection` memo above applies. `noteCallers` is
-  // intentionally left unset so the editor's built-in default (lowercase Latin a-z) applies;
-  // `crossRefCallers` has no corresponding Paratext setting and stays hard-coded.
+  // `Mt 13` — the same guard the `textDirection` memo above applies.
+  //
+  // The auto-generated caller SEQUENCES are Paratext settings too, but LANGUAGE-backed rather
+  // than Settings.xml tags: PT9 stores them as per-language character sets
+  // (`ScrLanguage.FootnoteCallers` / `.CrossReferenceCallers`, Paratext repo,
+  // ParatextData/Languages/ScrLanguage.cs:290-300, space-separated and possibly empty) and its
+  // Standard view passes them to the renderer with a '†' fallback for an empty cross-reference
+  // sequence (ViewUsfmXhtmlConverter.cs:73-74), while `GetNthCaller`
+  // (ParatextInternalShared/ScriptureEditor/UsfmXsltExtensions.cs:322) cycles the sequence modulo
+  // its length and defaults to a-z when it is empty. They reach this web view through the
+  // language-backed `platformScripture.footnoteCallers` / `platformScripture.crossRefCallers`
+  // project settings; an empty/unset footnote sequence leaves `noteCallers` unset so the editor's
+  // built-in a-z default applies (matching GetNthCaller), and an empty cross-reference sequence
+  // keeps PT9's exact '†' fallback.
   const [chapterVerseSeparatorPossiblyError] = useProjectSetting(
     projectId,
     'platformScripture.chapterVerseSeparator',
@@ -860,13 +872,46 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return defaultCrossRefCallerPossiblyError || HIDDEN_NOTE_CALLER;
   }, [defaultCrossRefCallerPossiblyError]);
 
+  const [footnoteCallersPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.footnoteCallers',
+    '',
+  );
+  const footnoteCallers = useMemo(() => {
+    if (isPlatformError(footnoteCallersPossiblyError)) {
+      logger.warn(
+        `Error getting footnote caller sequence: ${getErrorMessage(footnoteCallersPossiblyError)}`,
+      );
+      return undefined;
+    }
+    return parseCallerSequenceSetting(footnoteCallersPossiblyError);
+  }, [footnoteCallersPossiblyError]);
+
+  const [crossRefCallersPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.crossRefCallers',
+    '',
+  );
+  const crossRefCallers = useMemo(() => {
+    if (isPlatformError(crossRefCallersPossiblyError)) {
+      logger.warn(
+        `Error getting cross-reference caller sequence: ${getErrorMessage(crossRefCallersPossiblyError)}`,
+      );
+      return ['†'];
+    }
+    return parseCallerSequenceSetting(crossRefCallersPossiblyError) ?? ['†'];
+  }, [crossRefCallersPossiblyError]);
+
   const nodeOptions = useMemo<UsjNodeOptions>(
     () => ({
       chapterVerseSeparator,
       verseRangeSeparator,
       defaultFootnoteCaller,
       defaultCrossRefCaller,
-      crossRefCallers: ['†'],
+      // Unset (rather than an explicit a-z array) when the language defines no sequence: the
+      // editor's built-in default is the same a-z sequence PT9's GetNthCaller falls back to.
+      noteCallers: footnoteCallers,
+      crossRefCallers,
       // Also disabled while sync-blocked: opening a note caller can create/edit a note, which is a
       // project write that must be frozen during an automatic Send/Receive.
       noteCallerOnClick:
@@ -943,6 +988,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       verseRangeSeparator,
       defaultFootnoteCaller,
       defaultCrossRefCaller,
+      footnoteCallers,
+      crossRefCallers,
     ],
   );
 

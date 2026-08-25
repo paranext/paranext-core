@@ -39,6 +39,13 @@ namespace TestParanextDataProvider.Projects;
 /// <c>ParatextProjectDataProvider.GetProjectSetting</c> — no dedicated per-setting branch was added
 /// for them, so these tests exercise the shared fall-through/registered-default plumbing rather than
 /// any new production code path.
+///
+/// Also covers the two LANGUAGE-backed caller-SEQUENCE settings
+/// (<c>platformScripture.footnoteCallers</c> / <c>platformScripture.crossRefCallers</c>), which
+/// unlike the four above are NOT Settings.xml tags: they resolve from the project language's
+/// writing-system character sets (<c>ScrLanguage.FootnoteCallers</c> /
+/// <c>CrossReferenceCallers</c>) through a dedicated branch in <c>GetProjectSetting</c>, returned
+/// verbatim (possibly "") without consulting <c>ProjectSettingsService.GetDefault</c>.
 /// </summary>
 [ExcludeFromCodeCoverage]
 [TestFixture]
@@ -193,6 +200,11 @@ internal class NoteCallerAndSeparatorSettingTests : PapiTestBase
     [TestCase(ProjectSettingsNames.PB_VERSE_RANGE_SEPARATOR, "-")]
     [TestCase(ProjectSettingsNames.PB_DEFAULT_FOOTNOTE_CALLER, "+")]
     [TestCase(ProjectSettingsNames.PB_DEFAULT_CROSS_REF_CALLER, "-")]
+    // The caller-sequence defaults are "" — "no sequence defined in the language" — so consumers
+    // apply PT9's own fallbacks (a-z for footnotes, "†" for cross-references) rather than a
+    // registered literal.
+    [TestCase(ProjectSettingsNames.PB_FOOTNOTE_CALLERS, "")]
+    [TestCase(ProjectSettingsNames.PB_CROSS_REF_CALLERS, "")]
     public void PlatformScriptureContribution_RegisteredDefault_IsExpectedLiteral(
         string pbSettingName,
         string expectedDefault
@@ -232,6 +244,81 @@ internal class NoteCallerAndSeparatorSettingTests : PapiTestBase
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(pbSettingName);
 
         Assert.That(ptSettingName, Is.EqualTo(expectedParatextSettingName));
+    }
+
+    #endregion
+
+    #region Language-backed caller sequences
+
+    [Test]
+    [Description(
+        "The caller-sequence settings resolve from the project LANGUAGE's writing-system"
+            + " character sets (ScrLanguage.FootnoteCallers / CrossReferenceCallers), the same"
+            + " accessors PT9's Standard view reads (ViewUsfmXhtmlConverter passes them to its"
+            + " renderer), returned verbatim as space-separated strings."
+    )]
+    public void GetProjectSetting_CallerSequences_ResolveFromScrLanguageCharacterSets()
+    {
+        _scrText.Language.FootnoteCallers = "๑ ๒ ๓";
+        _scrText.Language.CrossReferenceCallers = "* † ‡";
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                _provider.GetProjectSetting(ProjectSettingsNames.PB_FOOTNOTE_CALLERS),
+                Is.EqualTo("๑ ๒ ๓")
+            );
+            Assert.That(
+                _provider.GetProjectSetting(ProjectSettingsNames.PB_CROSS_REF_CALLERS),
+                Is.EqualTo("* † ‡")
+            );
+        });
+    }
+
+    [Test]
+    [Description(
+        "A language that defines no caller sequence yields \"\" VERBATIM — the value is served"
+            + " from ScrLanguage, never falling through to ProjectSettingsService.GetDefault (the"
+            + " getDefault stub registered in setup throws for these names, so an accidental"
+            + " fall-through fails loudly, not silently)."
+    )]
+    public void GetProjectSetting_CallerSequencesUnset_ReturnEmptyStringVerbatim()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                _provider.GetProjectSetting(ProjectSettingsNames.PB_FOOTNOTE_CALLERS),
+                Is.EqualTo("")
+            );
+            Assert.That(
+                _provider.GetProjectSetting(ProjectSettingsNames.PB_CROSS_REF_CALLERS),
+                Is.EqualTo("")
+            );
+        });
+    }
+
+    [Test]
+    [Description(
+        "Unlike the four Settings.xml-backed settings above, the caller sequences are"
+            + " LANGUAGE-backed and intentionally have NO Paratext Settings.xml tag mapping."
+    )]
+    public void GetParatextSettingNameFromPlatformBibleSettingName_CallerSequences_HaveNoMapping()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(
+                ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(
+                    ProjectSettingsNames.PB_FOOTNOTE_CALLERS
+                ),
+                Is.Null
+            );
+            Assert.That(
+                ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(
+                    ProjectSettingsNames.PB_CROSS_REF_CALLERS
+                ),
+                Is.Null
+            );
+        });
     }
 
     #endregion

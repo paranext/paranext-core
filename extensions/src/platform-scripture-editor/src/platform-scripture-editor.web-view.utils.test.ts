@@ -12,6 +12,7 @@ import { isLocalizeKey } from 'platform-bible-utils';
 import {
   generateInlineMarkerMenuListItems,
   markerMenuItemsToResolvedPaletteItems,
+  parseCallerSequenceSetting,
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
@@ -571,5 +572,25 @@ describe('markerMenuItemsToResolvedPaletteItems', () => {
       muted: true,
     });
     expect(items[0].badge).toBeUndefined();
+  });
+});
+
+describe('parseCallerSequenceSetting', () => {
+  it('splits a space-separated sequence into individual callers', () => {
+    expect(parseCallerSequenceSetting('a b c')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('drops empty entries from extra/leading/trailing whitespace (PT9 GetNthCaller splits with RemoveEmptyEntries)', () => {
+    expect(parseCallerSequenceSetting('  a   b\tc ')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('returns undefined for an empty or whitespace-only value so callers apply their own PT9 default', () => {
+    expect(parseCallerSequenceSetting('')).toBeUndefined();
+    expect(parseCallerSequenceSetting('   ')).toBeUndefined();
+  });
+
+  it('keeps multi-character and non-Latin callers verbatim', () => {
+    expect(parseCallerSequenceSetting('๑ ๒ ๓')).toEqual(['๑', '๒', '๓']);
+    expect(parseCallerSequenceSetting('aa bb')).toEqual(['aa', 'bb']);
   });
 });

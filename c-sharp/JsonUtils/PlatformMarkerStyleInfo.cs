@@ -32,8 +32,13 @@ public class PlatformMarkerStyleInfo(ScrTag tag)
     public string[]? OccursUnder =>
         tag.OccursUnderList.Count > 0 ? tag.OccursUnderList.ToArray() : null;
 
+    // Numeric properties read ScrTag's nullable Raw* twins (e.g. ScrTag.RawRank), whose null means
+    // "not specified in the stylesheet" and whose 0 means "explicitly zero" — the folded properties
+    // (e.g. ScrTag.Rank) collapse both to 0. Presence reads keep an authored explicit zero on the
+    // wire (an explicit \FirstLineIndent 0 must override a base-sheet indent downstream) while a
+    // genuinely unspecified property is still omitted.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? Rank => tag.Rank != 0 ? tag.Rank : null;
+    public int? Rank => tag.RawRank;
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? TextType =>
@@ -52,7 +57,7 @@ public class PlatformMarkerStyleInfo(ScrTag tag)
     public string? FontName => string.IsNullOrEmpty(tag.Fontname) ? null : tag.Fontname;
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? FontSize => tag.FontSize != 0 ? tag.FontSize : null;
+    public int? FontSize => tag.RawFontSize;
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public bool? Bold => tag.Bold ? true : null;
@@ -85,22 +90,23 @@ public class PlatformMarkerStyleInfo(ScrTag tag)
     /// <summary>Inches (ScrTag stores thousandths; TS StyleInfo units are .sty inches)</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public double? FirstLineIndent =>
-        tag.FirstLineIndent != 0 ? tag.FirstLineIndent / 1000.0 : null;
+        tag.RawFirstLineIndent is int firstLineIndent ? firstLineIndent / 1000.0 : null;
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public double? LeftMargin => tag.LeftMargin != 0 ? tag.LeftMargin / 1000.0 : null;
+    public double? LeftMargin => tag.RawLeftMargin is int leftMargin ? leftMargin / 1000.0 : null;
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public double? RightMargin => tag.RightMargin != 0 ? tag.RightMargin / 1000.0 : null;
+    public double? RightMargin =>
+        tag.RawRightMargin is int rightMargin ? rightMargin / 1000.0 : null;
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? SpaceBefore => tag.SpaceBefore != 0 ? tag.SpaceBefore : null;
+    public int? SpaceBefore => tag.RawSpaceBefore;
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? SpaceAfter => tag.SpaceAfter != 0 ? tag.SpaceAfter : null;
+    public int? SpaceAfter => tag.RawSpaceAfter;
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public int? LineSpacing => tag.LineSpacing != 0 ? tag.LineSpacing : null;
+    public int? LineSpacing => tag.RawLineSpacing;
 
     // Fully qualified because the enum type name `TextProperties` collides with this class's own
     // `TextProperties` instance property — a bare `TextProperties.scParagraph` here binds to the

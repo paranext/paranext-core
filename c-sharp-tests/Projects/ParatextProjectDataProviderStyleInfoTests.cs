@@ -225,6 +225,68 @@ namespace TestParanextDataProvider.Projects
             });
         }
 
+        [Test]
+        [Description(
+            "Explicit-zero fidelity: a stylesheet marker that AUTHORS a zero (e.g."
+                + " \\FirstLineIndent 0 overriding a base sheet's indent) must serialize 0, not be"
+                + " folded into the omitted case. Setting the ScrTag properties stores the value"
+                + " in the nullable Raw* twins (ScrTag.RawFirstLineIndent etc., whose null means"
+                + " 'not specified'), exactly as parsing \\FirstLineIndent 0 does, and"
+                + " PlatformMarkerStyleInfo now reads those Raw* twins. The unset case (property"
+                + " never assigned -> null/omitted) is pinned by"
+                + " GetStyleInfo_UnsetOptionalProperties_AreNull and re-asserted on the wire here."
+        )]
+        public void GetStyleInfo_ExplicitZeroNumericValues_SurviveToTheWire()
+        {
+            AddStylesheetTag(
+                new ScrTag("zzero")
+                {
+                    StyleType = ScrStyleType.scParagraphStyle,
+                    FirstLineIndent = 0,
+                    LeftMargin = 0,
+                    RightMargin = 0,
+                    SpaceBefore = 0,
+                    SpaceAfter = 0,
+                    LineSpacing = 0,
+                    FontSize = 0,
+                    Rank = 0,
+                }
+            );
+
+            var result = _provider.GetStyleInfo(GenesisBookNum);
+
+            var zzero = result.Markers["zzero"];
+            Assert.Multiple(() =>
+            {
+                Assert.That(zzero.FirstLineIndent, Is.EqualTo(0));
+                Assert.That(zzero.LeftMargin, Is.EqualTo(0));
+                Assert.That(zzero.RightMargin, Is.EqualTo(0));
+                Assert.That(zzero.SpaceBefore, Is.EqualTo(0));
+                Assert.That(zzero.SpaceAfter, Is.EqualTo(0));
+                Assert.That(zzero.LineSpacing, Is.EqualTo(0));
+                Assert.That(zzero.FontSize, Is.EqualTo(0));
+                Assert.That(zzero.Rank, Is.EqualTo(0));
+            });
+
+            // The explicit zero must reach the WIRE (WhenWritingNull only omits genuine nulls),
+            // while a marker that never sets the property still omits it entirely.
+            string zeroJson = JsonSerializer.Serialize(
+                zzero,
+                SerializationOptions.CreateSerializationOptions()
+            );
+            string unsetJson = JsonSerializer.Serialize(
+                result.Markers["v"],
+                SerializationOptions.CreateSerializationOptions()
+            );
+            Assert.Multiple(() =>
+            {
+                Assert.That(zeroJson, Does.Contain("\"firstLineIndent\":0"));
+                Assert.That(zeroJson, Does.Contain("\"spaceBefore\":0"));
+                Assert.That(unsetJson, Does.Not.Contain("firstLineIndent"));
+                Assert.That(unsetJson, Does.Not.Contain("spaceBefore"));
+            });
+        }
+
         [TestCase(ScrJustificationType.scCenter, "center")]
         [TestCase(ScrJustificationType.scRight, "right")]
         [TestCase(ScrJustificationType.scBoth, "both")]

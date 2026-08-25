@@ -165,6 +165,27 @@ public sealed class ProjectSettingsNames
     public const string PT_DEFAULT_CROSS_REF_CALLER = "DefaultCrossRefCaller";
 
     /// <summary>
+    /// The auto-generated footnote caller sequence for the project's LANGUAGE: a space-separated
+    /// character-set string (e.g. "a b c ... z"), possibly empty. LANGUAGE-backed — it reads the
+    /// writing system's character set via ScrLanguage.FootnoteCallers (Paratext repo,
+    /// ParatextData/Languages/ScrLanguage.cs:290-300), NOT a Settings.xml tag — so it is
+    /// intentionally not in s_platformBibleToParatextSettingsNames; ParatextProjectDataProvider
+    /// serves it from ScrText.Language, and it is read-only through the settings surface (like
+    /// platform.textDirection). Empty means "no sequence defined": consumers apply PT9's own
+    /// fallback of a-z (UsfmXsltExtensions.GetNthCaller).
+    /// </summary>
+    public const string PB_FOOTNOTE_CALLERS = "platformScripture.footnoteCallers";
+
+    /// <summary>
+    /// The auto-generated cross-reference caller sequence for the project's LANGUAGE: a
+    /// space-separated character-set string, possibly empty. LANGUAGE-backed
+    /// (ScrLanguage.CrossReferenceCallers character set), NOT a Settings.xml tag — see
+    /// PB_FOOTNOTE_CALLERS. Empty means "no sequence defined": consumers apply PT9's own fallback
+    /// of "†" (ViewUsfmXhtmlConverter.cs:73-74).
+    /// </summary>
+    public const string PB_CROSS_REF_CALLERS = "platformScripture.crossRefCallers";
+
+    /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
     private static readonly HashSet<string> s_ptSettingBooleans =

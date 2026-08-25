@@ -305,3 +305,22 @@ export function markerMenuItemsToResolvedPaletteItems(
     };
   });
 }
+
+/**
+ * Parses a PT9 caller-sequence project setting value (`platformScripture.footnoteCallers` /
+ * `platformScripture.crossRefCallers`) — a space-separated character-set string from the project's
+ * LANGUAGE (`ScrLanguage.FootnoteCallers` / `.CrossReferenceCallers`, Paratext repo,
+ * ParatextData/Languages/ScrLanguage.cs:290-300) — into the caller array the editor's
+ * `UsjNodeOptions` takes.
+ *
+ * Mirrors PT9's own parsing (`UsfmXsltExtensions.GetNthCaller`, Paratext repo,
+ * ParatextInternalShared/ScriptureEditor/UsfmXsltExtensions.cs:322): split on whitespace, dropping
+ * empty entries. Returns `undefined` for an empty or whitespace-only value so each consumer can
+ * apply the matching PT9 default (`a`–`z` for footnotes — GetNthCaller's own fallback, which the
+ * editor's built-in default matches — and `†` for cross-references, the fallback PT9's view
+ * converter passes at ViewUsfmXhtmlConverter.cs:73-74).
+ */
+export function parseCallerSequenceSetting(value: string): string[] | undefined {
+  const callers = value.split(/\s+/).filter((caller) => caller.length > 0);
+  return callers.length > 0 ? callers : undefined;
+}
