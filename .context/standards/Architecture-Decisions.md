@@ -1846,7 +1846,7 @@ step, no automation. Just a record.
   and still builds `${name}-${targetWindowId}` strings; it keeps no index. That module is
   transitional — each of its commands moves into the router for its own service — so it is expected
   to go away rather than to be converted.
-- **Amended 2026-08-07 (ADR-0022):** `command.service-router.ts` is gone, so the exception above is
+- **Amended 2026-08-07 (ADR-0029):** `command.service-router.ts` is gone, so the exception above is
   spent — every ROUTER now discovers its shards through an index. The index also answers with the id
   a shard ANNOUNCED (`getShardNetworkObjectId`), which is what lets a router name one of a shard's
   methods — `object:{id}.{method}`, for a request timeout — without that being a second rebuild of
@@ -1865,7 +1865,7 @@ step, no automation. Just a record.
   startup, teardown and quit. That is its own change with its own tests, not a rename.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
 
-## ADR-0020: The scroll group service is hosted in main, and each renderer keeps a predicting cache
+## ADR-0027: The scroll group service is hosted in main, and each renderer keeps a predicting cache
 
 - **Date:** 2026-08-07
 - **Status:** Accepted
@@ -1932,11 +1932,11 @@ step, no automation. Just a record.
   replays that URL, and the pre-host store a reloaded document would otherwise fall back to has been
   handed over by then, so a URL left as old as the window would put a reloaded window
   back on the reference it opened on — which for a restored Scripture editor is the extra chapter
-  load the seed exists to avoid. The theme service is hosted the same way in ADR-0021.
+  load the seed exists to avoid. The theme service is hosted the same way in ADR-0028.
 - **Source:** PT-4275 epic (multi-window architecture plan §6).
 
 
-## ADR-0021: The theme service is hosted in main, and each window caches the current theme
+## ADR-0028: The theme service is hosted in main, and each window caches the current theme
 
 - **Date:** 2026-08-07
 - **Status:** Accepted
@@ -1959,7 +1959,7 @@ step, no automation. Just a record.
   answer. Main's own consumer (the Windows title-bar overlay colours) reads and subscribes locally
   rather than through the provider its own process registers.
 - **Alternatives:** (a) Leave the engine in a renderer and give the app a way to move it to another
-  window when that one closes — rejected for the same reason as in ADR-0020, and the theme would
+  window when that one closes — rejected for the same reason as in ADR-0027, and the theme would
   have been the second service to need that machinery, which is what made hosting both in main
   better than building it once. (b) Fix the §9.2 staleness in place and leave the engine in a
   renderer — rejected: it treats the symptom of state living somewhere closable. (c) Keep the OS
@@ -1976,7 +1976,7 @@ step, no automation. Just a record.
   leave it for another window to claim. A window that is RELOADED replays the URL main built when the
   window was created, whose theme would otherwise be as old as the window, so the renderer rewrites
   its own query parameter on every change — the same
-  mechanism the scroll group uses (ADR-0020), rather than a second seed source and a navigation-type
+  mechanism the scroll group uses (ADR-0027), rather than a second seed source and a navigation-type
   sniff to choose between them. `shouldMatchSystem` is computed in main only; a renderer that starts
   applying its own `matchMedia` would double-apply it. `hasOwnThemeState` — what makes the host
   refuse a migration offer — is seeded from a DEDICATED marker key that only the three public
@@ -2010,7 +2010,7 @@ step, no automation. Just a record.
 - **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
   closes).
 
-## ADR-0022: Renderer platform code registers no command or request names; routers call shard methods
+## ADR-0029: Renderer platform code registers no command or request names; routers call shard methods
 
 - **Date:** 2026-08-07
 - **Status:** Accepted
