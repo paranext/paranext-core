@@ -32,6 +32,7 @@ import {
   LocalizeKey,
   ResourceType,
 } from 'platform-bible-utils';
+import { NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY } from 'platform-bible-utils/experimental';
 import { Canon } from '@sillsdev/scripture';
 import { ChevronDown } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -69,6 +70,10 @@ import {
 } from './resource-panel-strings.utils';
 import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
+import {
+  areNavigableProjectSourcesReady,
+  resolveNavigableProjectIdsWrite,
+} from './navigable-project-ids.utils';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -371,6 +376,45 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Ctrl+F opens Find for the displayed resource.
   useOpenFindShortcut(webViewId, resourceProjectId);
+
+  // Declare the project this panel displays so global navigation UI can offer its books. This web
+  // view's definition `projectId` is the container project whose reference list is shown, so nothing
+  // reading open web view definitions can see the displayed resource otherwise. See
+  // NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY.
+  const [publishedNavigableProjectIds, setPublishedNavigableProjectIds] = useWebViewState<string[]>(
+    NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
+    [],
+  );
+  useEffect(() => {
+    // Don't publish until the reference list and the cached DBL list have both loaded:
+    // `resourceProjectId` is transiently undefined before then, which is indistinguishable from "no
+    // resource is displayed" and would wipe a correct persisted list on remount.
+    if (
+      !areNavigableProjectSourcesReady({
+        hasReferenceList: effectiveResourcesState.status === 'ready',
+        isReferenceListLoading: effectiveResourcesState.status === 'loading',
+        hasCachedResources: resourcesPossiblyUndefined !== undefined,
+        isLoadingCachedResources: isLoadingResources,
+      })
+    )
+      return;
+    const toPublish = resolveNavigableProjectIdsWrite(
+      resourceProjectId ? [resourceProjectId] : [],
+      publishedNavigableProjectIds,
+    );
+    if (toPublish) setPublishedNavigableProjectIds(toPublish);
+    // Hidden case: intentionally handled by doing nothing special. This publishing is data-driven,
+    // not geometry-driven, so the effect keeps running while this tab is inactive (rc-dock hides
+    // panes with display:none but leaves them mounted) and the declared ids stay current. There is
+    // nothing to defer and nothing to catch up on activation.
+  }, [
+    effectiveResourcesState,
+    resourcesPossiblyUndefined,
+    isLoadingResources,
+    resourceProjectId,
+    publishedNavigableProjectIds,
+    setPublishedNavigableProjectIds,
+  ]);
 
   // #endregion
 
