@@ -171,9 +171,10 @@ test.describe('Title bar at narrow window widths', () => {
     // separate mechanism owned by the dock layout, not the title bar — rc-dock sums each Simple
     // mode column's `panelLock.minWidth` and adds a per-divider reserve, so the columns and the
     // window minimum have to be derived from each other or the dock demands more width than the
-    // narrowest permitted window can give (see `simple-layout.data.ts` and ADR-0030). Keeping that
-    // out of this spec is deliberate: it would wire these toolbar assertions to a failure they do
-    // not own, and `simple-layout.data.test.ts` already pins the column arithmetic directly.
+    // narrowest permitted window can give (see `simple-layout.data.ts` and
+    // ADR-simple-mode-column-minimums). Keeping that out of this spec is deliberate: it would wire
+    // these toolbar assertions to a failure they do not own, and `simple-layout.data.test.ts`
+    // already pins the column arithmetic directly.
   });
 
   test('essential Simple-mode controls stay visible and in-bounds when narrow', async ({

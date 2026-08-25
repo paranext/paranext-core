@@ -20,23 +20,28 @@ step, no automation. Just a record.
   fold the rule into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
   `.claude/rules/` file — that is what the agents read and enforce on the next feature. This log
   keeps the rationale and history; the standards keep the current rule.
-- **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-NNNN` instead of deleting
-  it; add the new decision as a new entry.
-- **Append at the end**, newest last. Number entries `ADR-NNNN`.
-- **Numbers are claimed at merge, not at write.** Several branches in flight at once each append the
-  next free number as of the day they branched, so two unmerged branches routinely carry the SAME
-  number for different decisions — and because the file is append-only, nothing catches it: the
-  second merge simply leaves `main` with two identical headings. Before merging a PR that adds an
-  entry, re-read the last heading on `main` and renumber yours to follow it, updating any
-  cross-references. Whoever merges second does the renumbering.
+- **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-<slug>` instead of
+  deleting it; add the new decision as a new entry.
+- **Append at the end**, newest last. Identify entries `ADR-<slug>`, where the slug is a short
+  kebab-case name for the decision's subject — 3 to 5 words, the same style as the repo's rule and
+  skill names (`ADR-toolbar-shrink-measurement`, `ADR-simple-mode-column-minimums`). The heading
+  still carries the full title after it.
+- **A slug is claimed at write and never has to move.** This replaces sequential `ADR-NNNN`
+  numbering, which collided constantly: several branches in flight each appended the next free
+  number as of the day they branched, so two unmerged branches routinely carried the SAME number for
+  different decisions, and because the file is append-only nothing caught it — the second merge just
+  left `main` with two identical headings, and whoever merged second had to renumber the entry and
+  chase its cross-references. Two branches picking the same slug would mean they are describing the
+  same decision, which is worth catching rather than papering over. Entries written before this
+  keep their numbers; don't renumber them.
 
 ### Entry template
 
 ```markdown
-## ADR-NNNN: {short title}
+## ADR-{slug}: {short title}
 
 - **Date:** YYYY-MM-DD
-- **Status:** Proposed | Accepted | Superseded by ADR-NNNN
+- **Status:** Proposed | Accepted | Superseded by ADR-{slug}
 - **Context:** what situation forced a decision (with file:line / source where useful).
 - **Decision:** what we chose.
 - **Alternatives:** what we considered and why we rejected/deferred them.
@@ -1430,7 +1435,7 @@ step, no automation. Just a record.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
 
-## ADR-0029: Responsive toolbars measure their own width in JS, not with CSS container queries
+## ADR-toolbar-shrink-measurement: Responsive toolbars measure their own width in JS, not with CSS container queries
 
 - **Date:** 2026-08-19
 - **Status:** Accepted
@@ -1462,7 +1467,7 @@ step, no automation. Just a record.
   and could migrate later.
 - **Source:** PT-4344.
 
-## ADR-0030: Simple-mode column minimums are derived from the window minimum, dividers included
+## ADR-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
 
 - **Date:** 2026-08-19
 - **Status:** Accepted
