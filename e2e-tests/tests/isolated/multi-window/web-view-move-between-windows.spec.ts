@@ -539,7 +539,13 @@ test.describe('moving a web view between windows', () => {
     // label before assigning it, and until that resolves the window still shows the document's
     // initial title. The expected value is read from the tab each window is showing rather than
     // written as a literal, which is both the claim being made and immune to an English-string edit
-    const expectedWindowName = (await homeTabTitle(page2, window2Id).innerText()).trim();
+    // Located by the id window 2 minted for its own Home tab, not by `homeTabTitle`, which builds
+    // the FIXED-id spelling only window 1's fallback-layout tab carries
+    const expectedWindowName = (
+      await page2
+        .locator(`.platform-tab-title[data-web-view-id="${window2OwnHomeWebViewId}"]`)
+        .innerText()
+    ).trim();
     await expect(page2).toHaveTitle(expectedWindowName, { timeout: 30_000 });
     await expect(page3).toHaveTitle(expectedWindowName, { timeout: 30_000 });
     const window2Title = await page2.title();
