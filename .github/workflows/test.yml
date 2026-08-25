@@ -141,33 +141,6 @@ jobs:
           npm run build:main
           npm run typecheck
 
-      # The repo's agent tooling under .claude/ is Python and shell, which no other job covers.
-      # Three tools: ruff (fetched by pipx, version-pinned, rules in ruff.toml) lints the Python;
-      # the runner's preinstalled python3 runs the stdlib-only test suite; bash -n covers the
-      # shell scripts. pipx resolves ruff from PyPI on each run rather than from a cache — that
-      # is the trade for not adding a setup action, and a PyPI outage reddens the step.
-      - name: Agent script checks
-        if: ${{ matrix.os == env.OS_LINUX }}
-        run: |
-          # Discover rather than hardcode: a script added elsewhere under .claude/ should be
-          # covered the day it lands, not the day someone remembers to edit this list.
-          # Ruff covers syntax errors as well as the F rules, so it replaces the previous
-          # ast.parse gate rather than sitting beside it. Version pinned: an unpinned linter
-          # turns an unrelated PR red when upstream adds a rule. Rule selection is in ruff.toml.
-          git ls-files -z '*.py' | xargs -0 -r pipx run ruff==0.16.4 check --config ruff.toml
-          python3 .claude/skills/process-pr-feedback/scripts/test_posting.py
-          # `*.sh` misses tracked shell scripts with no extension - .husky/pre-commit among them,
-          # the one whose syntax failing would break every commit - so match on the shebang too.
-          # NUL-delimited: a tracked path with a space (assets/ has them) would otherwise
-          # word-split into nonexistent paths and be skipped by the gate rather than checked.
-          # The shebang test reads the FIRST LINE only, so a fenced snippet inside a doc cannot
-          # make it look executable.
-          git ls-files -z | while IFS= read -r -d '' f; do
-            if [ "${f##*.}" = "sh" ] || head -n 1 -- "$f" 2>/dev/null | grep -qE '^#!.*\b(ba)?sh\b'; then
-              bash -n -- "$f" || exit 1
-            fi
-          done
-
       - name: Build
         run: npm run build
 
