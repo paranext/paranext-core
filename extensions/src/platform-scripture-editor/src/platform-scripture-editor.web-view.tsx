@@ -78,6 +78,7 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import {
+  ABORTED,
   compareScrRefs,
   formatReplacementString,
   getErrorMessage,
@@ -389,6 +390,23 @@ const defaultMarkersMenuTrigger = '\\';
  * per-chapter manual override. One helper so those two can never disagree about what counts as the
  * same chapter.
  */
+/**
+ * Logs a marker-palette open failure, EXCEPT the routine one: a newer palette request replacing an
+ * older one rejects the older show promise with `ABORTED`, which the `\` reopen flow does on every
+ * keystroke that commits and reopens.
+ *
+ * Everything else reaching a palette `.catch` means the palette did not open at all — the request
+ * failed validation (too many items for a large project stylesheet, a malformed anchor), or the web
+ * view was not visible. Without this the palette silently does nothing and there is no record of
+ * why.
+ */
+function warnUnlessReplaced(paletteDescription: string, error: unknown): void {
+  if (isPlatformError(error) && error.code === ABORTED) return;
+  logger.warn(
+    `platform-scripture-editor: the ${paletteDescription} did not open: ${getErrorMessage(error)}`,
+  );
+}
+
 function getChapterKey(book: string, chapterNum: number): string {
   return `${book}|${chapterNum}`;
 }
@@ -2077,11 +2095,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           }
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           // Replaced by a newer overlay request (PlatformError code ABORTED) or any other rejection
           // — treat the same as an explicit dismissal.
           clearPaletteSessionIfCurrent(paletteSession, token);
           if (!passive) editorRef.current?.focus();
+          warnUnlessReplaced('marker palette', error);
         });
     },
     [webViewId, localizedStrings],
@@ -2186,9 +2205,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           editorRef.current?.focus();
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           clearPaletteSessionIfCurrent(paletteSession, token);
           editorRef.current?.focus();
+          warnUnlessReplaced('Enter palette', error);
         });
     },
     [webViewId, localizedStrings],

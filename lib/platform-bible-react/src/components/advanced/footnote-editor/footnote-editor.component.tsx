@@ -35,7 +35,7 @@ import {
   RefObject,
 } from 'react';
 import '@/components/advanced/footnote-editor/editor-overrides.css';
-import type { PaletteItem } from 'platform-bible-utils';
+import { ABORTED, getErrorMessage, isPlatformError, type PaletteItem } from 'platform-bible-utils';
 import type { PaletteDriver, PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -159,14 +159,18 @@ export function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem): Palette
 /**
  * Function to convert a footnote/endnote type node to a cross-reference type node
  *
+ * An op with no `char` attributes carries no style to convert — a note whose content is bare text
+ * (`\f + plain text\f*`) has one, and `isTypeSwitchable` deliberately treats such an op as
+ * switchable, so this must tolerate it rather than assume the attributes are there.
+ *
  * @param op The node to be converted
  */
 function footnoteToCrossReferenceOp(op: DeltaOp) {
   // The built-in type for the delta note ops does not contain the types for the attributes
   // so have to cast it here
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const opCharAttribute = op.attributes?.char as Record<string, string>;
-  if (opCharAttribute.style) {
+  const opCharAttribute = op.attributes?.char as Record<string, string> | undefined;
+  if (opCharAttribute?.style) {
     if (opCharAttribute.style === 'ft') {
       opCharAttribute.style = 'xt';
     }
@@ -184,14 +188,16 @@ function footnoteToCrossReferenceOp(op: DeltaOp) {
 /**
  * Function to convert a cross-reference type node to a footnote/endnote type node
  *
- * @param op THe node to be converted
+ * Tolerates an op with no `char` attributes for the same reason as its footnote twin above.
+ *
+ * @param op The node to be converted
  */
 function crossReferenceToFootnoteOp(op: DeltaOp) {
   // The built-in type for the delta note ops does not contain the types for the attributes
   // so have to cast it here
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const opCharAttribute = op.attributes?.char as Record<string, string>;
-  if (opCharAttribute.style) {
+  const opCharAttribute = op.attributes?.char as Record<string, string> | undefined;
+  if (opCharAttribute?.style) {
     if (opCharAttribute.style === 'xt') {
       opCharAttribute.style = 'ft';
     }
@@ -727,11 +733,19 @@ export default function FootnoteEditor({
           }
           return undefined;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           // Replaced by a newer overlay request (PlatformError code ABORTED) or any other
           // rejection — treat the same as an explicit dismissal.
           clearPaletteSessionIfCurrent(paletteSession, token);
           if (!passive) editorRef.current?.focus();
+          // ABORTED is routine — the `\` commit key reopens the palette, which replaces the
+          // previous one. Anything else means the palette never opened (a request the host
+          // rejected, e.g. more items than its cap allows), and swallowing that leaves a `\` that
+          // silently does nothing with no record of why.
+          if (!isPlatformError(error) || error.code !== ABORTED)
+            console.warn(
+              `FootnoteEditor: the marker palette did not open: ${getErrorMessage(error)}`,
+            );
         });
     },
     [markerPalette],

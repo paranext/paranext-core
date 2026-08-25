@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 import { forwardRef, useImperativeHandle } from 'react';
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type {
   EditorOptions,
@@ -56,7 +57,7 @@ beforeAll(() => {
  * `useImperativeHandle`. Declared with `vi.hoisted` so the `vi.mock` factory (itself hoisted to the
  * top of the file by Vitest) can close over it.
  */
-const { mockEditorRefHolder, mockGetMarkerMenuItems } = vi.hoisted(() => ({
+const { mockEditorRefHolder, mockGetMarkerMenuItems, mockRegisterOnUsjChange } = vi.hoisted(() => ({
   mockEditorRefHolder: {
     // Placeholder only — every test overwrites this with a full mock (see `renderFootnoteEditor`)
     // before rendering, so the empty object is never actually read as an `EditorRef`.
@@ -64,6 +65,10 @@ const { mockEditorRefHolder, mockGetMarkerMenuItems } = vi.hoisted(() => ({
     current: {} as EditorRef,
   },
   mockGetMarkerMenuItems: vi.fn(),
+  // Records the `onUsjChange` the stubbed `Editorial` was handed, so a test can fire the editor
+  // change the real editor would have: that is what evaluates note-type switchability, and so what
+  // enables the note-type dropdown.
+  mockRegisterOnUsjChange: vi.fn(),
 }));
 
 // Replaces the real `Editorial` with a minimal stub exposing `.editor-input` (queried by the
@@ -76,14 +81,17 @@ vi.mock('@eten-tech-foundation/platform-editor', async (importOriginal) => {
   return {
     ...actual,
     getMarkerMenuItems: mockGetMarkerMenuItems,
-    Editorial: forwardRef<EditorRef>((_props, ref) => {
-      useImperativeHandle(ref, () => mockEditorRefHolder.current);
-      // This stub only stands in for the real editor in tests that dispatch keydown events at
-      // `document` and check `document.activeElement`; it's never navigated via Tab/keyboard, so
-      // it doesn't need the interaction handlers a real focusable non-form element would.
-      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-      return <div className="editor-input" tabIndex={0} data-testid="popover-editor-input" />;
-    }),
+    Editorial: forwardRef<EditorRef, { onUsjChange?: (usj: unknown) => void }>(
+      ({ onUsjChange }, ref) => {
+        mockRegisterOnUsjChange(onUsjChange);
+        useImperativeHandle(ref, () => mockEditorRefHolder.current);
+        // This stub only stands in for the real editor in tests that dispatch keydown events at
+        // `document` and check `document.activeElement`; it's never navigated via Tab/keyboard, so
+        // it doesn't need the interaction handlers a real focusable non-form element would.
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+        return <div className="editor-input" tabIndex={0} data-testid="popover-editor-input" />;
+      },
+    ),
   };
 });
 
@@ -1491,5 +1499,62 @@ describe('markerMenuItemToPaletteItem', () => {
     expect(
       markerMenuItemToPaletteItem({ marker: 'wj', kind: 'character', isBasic: true }).muted,
     ).toBe(false);
+  });
+});
+
+describe('note-type switch over content the note carries without char attributes', () => {
+  /**
+   * A note whose content is bare text — no `\\ft`/`\\fr` span, so its delta op carries no `char`
+   * attributes at all. `\\f + plain text\\f*` is a legal footnote and Paratext writes it, so this
+   * is not a malformed shape.
+   */
+  function makePlainTextNoteOp() {
+    return {
+      insert: {
+        note: {
+          style: 'f',
+          caller: '+',
+          contents: { ops: [{ insert: 'plain text with no char span' }] },
+        },
+      },
+    };
+  }
+
+  it('converts to a cross-reference without throwing on the attribute-less op', async () => {
+    // `isTypeSwitchable` treats an op with no `char` attributes as switchable
+    // (`if (!op.attributes?.char) return true`), so the dropdown ENABLES for exactly the notes the
+    // two op converters could not read: both dereferenced `op.attributes.char.style` through a
+    // cast that assumed the attributes were there, and choosing a type threw a TypeError out of
+    // the click handler, leaving the note untouched with no message.
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const { editorRef, getByRole } = renderFootnoteEditor({
+      view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true },
+    });
+    vi.mocked(editorRef.getNoteOps).mockReturnValue([makePlainTextNoteOp()]);
+
+    // Drive the editor change the real editor would emit: it is what evaluates switchability and
+    // so what enables the dropdown item clicked below.
+    await act(async () => {
+      const onUsjChange = mockRegisterOnUsjChange.mock.calls.at(-1)?.[0];
+      onUsjChange?.({ type: 'USJ', version: '3.1', content: [] });
+    });
+
+    await user.click(getByRole('button', { name: /noteType/i }));
+    await user.click(getByRole('menuitemcheckbox', { name: /crossReference/i }));
+
+    // The switch went through: the note style was rewritten, the replacement applied, and the
+    // attribute-less op came through untouched rather than gaining a phantom `char`.
+    expect(vi.mocked(editorRef.applyUpdate)).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          insert: expect.objectContaining({
+            note: expect.objectContaining({
+              style: 'x',
+              contents: { ops: [{ insert: 'plain text with no char span' }] },
+            }),
+          }),
+        }),
+      ]),
+    );
   });
 });
