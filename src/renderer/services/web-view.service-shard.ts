@@ -3578,7 +3578,18 @@ async function openSettingsTab(projectIdToLimitSettings?: string): Promise<Layou
 async function captureAndCloseWebView(
   webViewId: WebViewId,
 ): Promise<SavedWebViewDefinition | undefined> {
+  if (typeof webViewId !== 'string' || !webViewId)
+    throw new Error(
+      `captureAndCloseWebView needs a web view id; got ${typeof webViewId}. This method is reachable from any process, so it checks rather than trusts.`,
+    );
   const dockLayout = await getDockLayout();
+  // The dock-entering paths all wait for a load in flight; this is the dock-LEAVING half of the
+  // same move and needs it for the same reason. A capture that removes the tab while a load is
+  // still running can have that load put the web view back from the entry it was loaded with,
+  // while the adopt opens it in the target — one id, two windows, which is exactly what the
+  // timed-out-adopt machinery exists to prevent. Waiting first means a load that drops this web
+  // view leaves nothing to capture and the move fails cleanly instead.
+  await waitForLayoutLoadToSettle();
   const webViewDefinition = dockLayout.getWebViewDefinition(webViewId);
   if (!webViewDefinition) return undefined;
 
@@ -3603,6 +3614,23 @@ async function captureAndCloseWebView(
 async function adoptWebView(
   savedWebViewDefinition: SavedWebViewDefinition,
 ): Promise<WebViewId | undefined> {
+  // Ahead of the seeding below, and of anything that reads the bundle: this method is reachable
+  // from any process, so an unvalidated bundle would let an arbitrary caller write a state blob
+  // under any web view id it names — and because the seed happens before the provider runs, a
+  // bundle that fails later still leaves that blob behind. Check first, write second.
+  if (
+    !savedWebViewDefinition ||
+    typeof savedWebViewDefinition !== 'object' ||
+    typeof savedWebViewDefinition.id !== 'string' ||
+    !savedWebViewDefinition.id ||
+    typeof savedWebViewDefinition.webViewType !== 'string' ||
+    !savedWebViewDefinition.webViewType ||
+    (savedWebViewDefinition.state !== undefined &&
+      (typeof savedWebViewDefinition.state !== 'object' || savedWebViewDefinition.state === null))
+  )
+    throw new Error(
+      'adoptWebView needs a web view definition carrying a non-empty id and webViewType, and state must be an object when present',
+    );
   // Ahead of everything, including the state seeding below: a move that lands in a window on its
   // way out loses the web view outright, since its source tab closed before this window was asked
   throwIfWindowIsClosing(`adopt web view ${savedWebViewDefinition.id}`);
