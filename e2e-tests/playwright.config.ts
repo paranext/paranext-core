@@ -17,7 +17,13 @@ const config = defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 1, // Retry once locally to handle flaky DataProvider timeouts
   workers: 1, // Single worker for Electron to avoid port conflicts
-  reporter: [['html', { outputFolder: 'playwright-report' }], ['list']],
+  reporter: [
+    ['html', { outputFolder: 'playwright-report' }],
+    ['list'],
+    // Fails the run when a test is reported skipped that nobody asked to skip — i.e. it never
+    // ran. See the reporter for why that distinction matters.
+    ['./reporters/no-silent-skips.reporter.ts'],
+  ],
   timeout: 120_000, // 2 minutes per test (app initialization can be slow)
   expect: {
     timeout: 10_000,

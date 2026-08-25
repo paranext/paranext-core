@@ -24,11 +24,13 @@
  *
  * - The fixture explicitly excludes `devtools://` URLs when finding the renderer page (so connecting
  *   to a DevTools page is impossible).
- * - The fixture calls `setViewportSize({ width: 1920, height: 1080 })` after connecting AND verifies
- *   the actual rendered viewport via `page.evaluate(() => ({ width: window.innerWidth, height:
- *   window.innerHeight }))`. The `evaluate()` reading runs IN the renderer and reflects the real
- *   constrained-by-OS-window viewport, unlike `page.viewportSize()` which only echoes Playwright's
- *   cached requested-value.
+ * - The fixture asserts the real OS window is at least the size the spec declared with `test.use({
+ *   windowSize })`, reading `window.outerWidth`/`outerHeight`. It deliberately does NOT call
+ *   `setViewportSize()`: on a CDP-attached page that applies an emulation override which sets
+ *   `innerWidth` itself, so an inner-based check reads back its own request and can never fail.
+ *   Note this size check covers the small-window case only — `outerWidth` is unchanged by a docked
+ *   DevTools panel, so the squeezed-renderer case is handled by launching with PT_NO_DEVTOOLS
+ *   instead (see `.erb/scripts/refresh.sh` and `helpers.ts`).
  * - The fixture wraps `page.screenshot` to auto-validate PNG dimensions against the Full HD minimum
  *   the moment the file lands on disk. Tests do NOT need to call `assertFullHdScreenshot` manually
  *   — it runs automatically for every `screenshot({ path })` whose path is OUTSIDE Playwright's
@@ -215,9 +217,10 @@ export const test = base.extend<CdpFixtures>({
       page,
       windowSize,
       `Start the app at that size, e.g. MAIN_ARGS="--remote-debugging-port=9223 --window-size ` +
-        `${windowSize.width}x${windowSize.height}" npm start. --maximize is a no-op under a bare ` +
-        `Xvfb (no window manager), --window-size needs WIDTHxHEIGHT rather than a comma, and ` +
-        `PT_NO_DEVTOOLS=true stops docked DevTools eating roughly 555px of the window.`,
+        `${windowSize.width}x${windowSize.height}" npm start — or just ./.erb/scripts/refresh.sh, ` +
+        `which does exactly that. --maximize is a no-op under a bare Xvfb, since nothing is there to ` +
+        `honour it, and the size must be its own argv token: --window-size=WxH never matches, ` +
+        `because the flag is looked up by exact token (src/node/utils/command-line.util.ts:104).`,
     );
 
     // AUTO-VALIDATE screenshot dimensions. Wrap `page.screenshot` so every screenshot taken via

@@ -25,13 +25,23 @@ unset ELECTRON_RUN_AS_NODE
 
 # Start with CDP enabled. On Linux, use xvfb for headless operation.
 # On macOS (and other platforms without xvfb), show the GUI window.
+# PT_NO_DEVTOOLS keeps the docked DevTools panel closed. It takes roughly 555px of the window, so
+# an app started for automation otherwise hands every CDP-based suite a renderer about half the
+# width a user sees, with dock tabs ending up underneath web views. F12 still opens it on demand.
+#
+# --window-size rather than --maximize under xvfb: a bare Xvfb has no window manager, so there is
+# nothing to honour a maximize request and the window stays at its default (~1024px). The value
+# must be a separate argv token — `--window-size 1920x1080`, never `--window-size=1920x1080` —
+# because the parser matches the flag by exact token (src/node/utils/command-line.util.ts:104).
 if command -v xvfb-run >/dev/null 2>&1; then
-  echo "Starting with CDP enabled (headless via xvfb)..."
+  echo "Starting with CDP enabled (headless via xvfb, 1920x1080, DevTools closed)..."
   xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
-      env MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
+      env PT_NO_DEVTOOLS=true \
+      MAIN_ARGS="--remote-debugging-port=9223 --window-size 1920x1080" npm start &
 else
+  # A real window manager honours --maximize, and a visible window is what a human wants here.
   echo "Starting with CDP enabled (visible window — xvfb not available)..."
-  env MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
+  env PT_NO_DEVTOOLS=true MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
 fi
 APP_PID=$!
 
