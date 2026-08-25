@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   getNavigableProjectIdsToPublish,
   resolveNavigableProjectIdsWrite,
-} from './scripture-text-grid-navigable-ids.utils';
+} from './navigable-project-ids.utils';
 
 describe('getNavigableProjectIdsToPublish', () => {
   test('publishes the displayed ids when nothing is published yet', () => {
