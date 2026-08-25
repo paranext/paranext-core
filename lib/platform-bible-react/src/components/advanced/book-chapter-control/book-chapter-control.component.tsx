@@ -8,7 +8,14 @@ import {
   CommandList,
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
+import { getKeyCharacterType, isArrowKey } from '@/utils/keyboard.util';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
@@ -24,7 +31,6 @@ import {
   getLocalizedBookName,
   getLocalizedBookId,
   ALL_BOOK_IDS,
-  ALL_ENGLISH_BOOK_NAMES,
   doesBookMatchQuery,
 } from '@/components/shared/book.utils';
 import {
@@ -39,15 +45,22 @@ import {
 } from 'react';
 import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
 import { ToolbarCompoundLabel } from '@/components/advanced/toolbar-compound-label/toolbar-compound-label.component';
-import { generateCommandValue } from '@/components/shared/book-item.utils';
+import {
+  chapterItemValue,
+  generateCommandValue,
+  parseChapterFromItemValue,
+  parseVerseFromItemValue,
+  TOP_MATCH_ITEM_VALUE,
+  verseItemValue,
+} from '@/components/shared/book-item.utils';
 import RecentSearches from '../recent-searches.component';
 import { useQuickNavButtons } from './book-chapter-control.navigation';
 import { BookChapterControlProps, ViewMode } from './book-chapter-control.types';
 import {
   calculateTopMatch,
   deriveBookChapterControlBookLists,
+  computeTargetGridItem,
   fetchEndChapter,
-  getKeyCharacterType,
   groupBooksBySection,
   hasChapterVerseSeparator,
   isBookBefore,
@@ -212,6 +225,28 @@ export function BookChapterControl({
     [inputValue, reachableBooks, localizedBookNames],
   );
 
+  // The reference the top-match row shows, and the one selecting that row submits. Both read this
+  // single value so the row can never submit something other than what it displays. The highlighted
+  // preview cell is the more specific of the two sources — the user moved the highlight there — so
+  // it wins over the chapter/verse parsed out of the typed query.
+  const topMatchReference = useMemo((): SerializedVerseRef | undefined => {
+    if (!topMatch) return undefined;
+    // Only a highlight on this book's own grid refines the reference. A value left over from an
+    // earlier query names another book's cell, and mixing it in would compose a reference that was
+    // never on screen.
+    const highlight = commandValue.startsWith(`${topMatch.book} `) ? commandValue : '';
+    const highlightedVerse = parseVerseFromItemValue(highlight);
+    const highlightedChapter = parseChapterFromItemValue(highlight);
+    return {
+      book: topMatch.book,
+      chapterNum:
+        highlightedVerse !== undefined
+          ? (topMatch.chapterNum ?? 1)
+          : (highlightedChapter ?? topMatch.chapterNum ?? 1),
+      verseNum: highlightedVerse ?? topMatch.verseNum ?? 1,
+    };
+  }, [topMatch, commandValue]);
+
   // Surface open/close transitions to the parent. Fires only on the true boolean flip, not on
   // internal back-navigation (verses → chapters → books) which is handled without closing the
   // popover. Skip the initial mount run so callers don't see a spurious `onOpenChange(false)`
@@ -230,26 +265,23 @@ export function BookChapterControl({
   // #region Submitting references
 
   const handleTopMatchSelect = useCallback(() => {
-    // If we have a top match (smart parsed or single book filter), use its specific chapter/verse
-    if (topMatch) {
-      const effectiveChapter = topMatch.chapterNum ?? 1;
-      const effectiveVerse = topMatch.verseNum ?? 1;
-      if (
-        disableReferencesUpTo &&
-        isVerseBefore(topMatch.book, effectiveChapter, effectiveVerse, disableReferencesUpTo)
-      ) {
-        return;
-      }
-      handleSubmitAndAddToRecent({
-        book: topMatch.book,
-        chapterNum: effectiveChapter,
-        verseNum: effectiveVerse,
-      });
-      setIsCommandOpen(false);
-      setInputValue('');
-      setCommandValue(''); // Reset command value
+    if (!topMatchReference) return;
+    if (
+      disableReferencesUpTo &&
+      isVerseBefore(
+        topMatchReference.book,
+        topMatchReference.chapterNum,
+        topMatchReference.verseNum,
+        disableReferencesUpTo,
+      )
+    ) {
+      return;
     }
-  }, [handleSubmitAndAddToRecent, topMatch, disableReferencesUpTo]);
+    handleSubmitAndAddToRecent(topMatchReference);
+    setIsCommandOpen(false);
+    setInputValue('');
+    setCommandValue(''); // Reset command value
+  }, [handleSubmitAndAddToRecent, topMatchReference, disableReferencesUpTo]);
 
   const handleVerseSelect = useCallback(
     (verseNumber: number) => {
@@ -344,6 +376,7 @@ export function BookChapterControl({
     isShowingMoreBooks ? reachableBooks : projectBooks,
     direction,
     handleSubmit,
+    localizedStrings,
   );
 
   const handleBackToBooks = useCallback(() => {
@@ -354,9 +387,7 @@ export function BookChapterControl({
 
     // Focus the search input when returning to book view
     setTimeout(() => {
-      if (commandInputRef.current) {
-        commandInputRef.current.focus();
-      }
+      commandInputRef.current?.focus();
     }, 0);
   }, []);
 
@@ -552,6 +583,10 @@ export function BookChapterControl({
     localizedStrings?.['%webView_bookChapterControl_selectChapter%'] || 'Select chapter';
   const selectVerseTitle =
     localizedStrings?.['%webView_bookChapterControl_selectVerse%'] || 'Select verse';
+  const backLabel =
+    viewMode === 'verses'
+      ? localizedStrings?.['%webView_bookChapterControl_backToChapters%'] || 'Back to chapters'
+      : localizedStrings?.['%webView_bookChapterControl_backToBooks%'] || 'Back to books';
   const bookNotInProjectLabel =
     localizedStrings?.['%webView_bookChapterControl_bookNotInProject%'] || 'Not in project';
   const bookNotInProjectDescriptionTemplate =
@@ -640,13 +675,60 @@ export function BookChapterControl({
           event.stopPropagation();
           return;
         }
-        const highlighted = commandRef.current?.querySelector<HTMLElement>(
-          '[cmdk-item][data-selected="true"]:not([data-disabled="true"])',
-        );
-        if (highlighted) {
+        // Activate the highlighted cell by calling the same handler its onSelect would, using the
+        // item number we already hold in `commandValue`. Reading cmdk's private DOM attributes
+        // (`cmdk-item`, `data-selected`, `data-disabled`) and synthesizing a click would tie
+        // activation to library internals that nothing of ours pins.
+        const activation = (() => {
+          if (viewMode === 'verses') {
+            const bookId = selectedBookForVersesView;
+            const chapterNum = selectedChapterForVersesView;
+            const verse = parseVerseFromItemValue(commandValue);
+            if (!bookId || !chapterNum || verse === undefined) return undefined;
+            return {
+              isDisabled: makeIsVerseDisabled(bookId, chapterNum)(verse),
+              activate: () => handleVerseSelect(verse),
+            };
+          }
+          const bookId = selectedBookForChaptersView;
+          const chapter = parseChapterFromItemValue(commandValue);
+          if (!bookId || chapter === undefined) return undefined;
+          return {
+            isDisabled: makeIsChapterDisabled(bookId)(chapter),
+            activate: () => handleChapterSelect(chapter),
+          };
+        })();
+
+        if (activation) {
           event.preventDefault();
           event.stopPropagation();
-          highlighted.click();
+          // Skip activation when the cell is disabled, checking the same predicate the grid
+          // renders it with — activation has no DOM node here to read a disabled state from.
+          if (!activation.isDisabled) activation.activate();
+          return;
+        }
+      }
+
+      // Enter over a top match submits the reference its row displays. The preview grid owns the
+      // highlight, so cmdk would otherwise dispatch Enter at the highlighted cell — which knows
+      // only a chapter and would drop the verse the user typed. Space is deliberately not included:
+      // the books view is a text field, where a space is a character.
+      if (viewMode === 'books' && topMatch && event.key === 'Enter') {
+        const target = event.target instanceof HTMLElement ? event.target : undefined;
+        // The header's own controls (quick navigation, recent searches) keep their activation, and
+        // so does any input that isn't this picker's search box. `menuitem` covers the recent
+        // searches list: it portals out of this popover but stays a React child, so its keystrokes
+        // still reach this capture-phase handler, and its items are focusable `div`s rather than
+        // buttons.
+        const isTargetInteractive =
+          target !== commandInputRef.current &&
+          !!target?.closest(
+            'button, a, input, select, textarea, [role="button"], [role="menuitem"]',
+          );
+        if (!isTargetInteractive) {
+          event.preventDefault();
+          event.stopPropagation();
+          handleTopMatchSelect();
           return;
         }
       }
@@ -683,143 +765,110 @@ export function BookChapterControl({
         }
       }
 
-      // Handle grid navigation for arrow keys in chapter/verse views
-      const isGridNav = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key);
+      // Narrows `event.key` to `ArrowKey` for `computeTargetGridItem` below, and leaves every
+      // non-arrow key to cmdk.
+      if (!isArrowKey(event.key)) return;
 
-      if (viewMode === 'verses' && isGridNav) {
-        const bookId = selectedBookForVersesView;
-        const chapterNum = selectedChapterForVersesView;
-        if (!bookId || !chapterNum || !getEndVerse) return;
+      // Chapters and verses differ only in where the item count comes from and how an item's
+      // cmdk value is spelled. Everything else — reading the current highlight, computing the
+      // target, writing it back, scrolling it into view — is identical, so it lives in one place
+      // and a fix cannot land in only one grid.
+      //
+      // Select by the grid that is actually rendered, not by view mode: the books view shows a
+      // VERSE preview grid whenever the query carries a chapter-verse separator, and driving that
+      // with chapter arithmetic writes a value no verse cell can match, blanking the highlight.
+      const grid = (() => {
+        const versePreviewInBooksView =
+          viewMode === 'books' && topMatch && shouldShowVerseGridForTopMatch && topMatch.chapterNum
+            ? { bookId: topMatch.book, chapterNum: topMatch.chapterNum }
+            : undefined;
+        const verseTarget =
+          viewMode === 'verses'
+            ? { bookId: selectedBookForVersesView, chapterNum: selectedChapterForVersesView }
+            : versePreviewInBooksView;
 
-        const maxVerse = getEndVerse(bookId, chapterNum);
-        if (!maxVerse) return;
+        if (verseTarget) {
+          const { bookId, chapterNum } = verseTarget;
+          if (!bookId || !chapterNum || !getEndVerse) return undefined;
+          return {
+            max: getEndVerse(bookId, chapterNum),
+            current: parseVerseFromItemValue(commandValue) ?? 0,
+            buildValue: (item: number) => verseItemValue(bookId, chapterNum, item),
+            refs: verseRefs,
+            // In books view focus stays on the CommandInput so the user can keep typing; only
+            // the dedicated grid views pull focus off the back button.
+            takeFocus: viewMode === 'verses',
+          };
+        }
 
-        // Arrow keys drive the grid now — pull focus off the back button (the only
-        // natively focusable element in this view) so its lingering focus ring doesn't
-        // compete visually with the grid's `data-selected` highlight. The Command root
-        // has `tabIndex={-1}` (cmdk sets it), so it's a valid focus target and keeps
-        // our PopoverContent capture-phase key handling working unchanged.
+        // The books view renders its chapter preview only for books with more than one chapter, so
+        // a single-chapter top match (Jude, Obadiah, Philemon, 2-3 John) has no grid to drive. Claim
+        // the keystroke there and it would write a chapter value no rendered item carries, blanking
+        // the highlight; let it fall through to cmdk so the list stays navigable instead.
+        if (
+          viewMode === 'chapters' ||
+          (viewMode === 'books' && topMatch && fetchEndChapter(topMatch.book) > 1)
+        ) {
+          const bookId = viewMode === 'chapters' ? selectedBookForChaptersView : topMatch?.book;
+          if (!bookId) return undefined;
+          return {
+            max: fetchEndChapter(bookId),
+            current: parseChapterFromItemValue(commandValue) ?? 0,
+            buildValue: (item: number) => chapterItemValue(bookId, item),
+            refs: chapterRefs,
+            takeFocus: viewMode === 'chapters',
+          };
+        }
+        return undefined;
+      })();
+
+      if (!grid) return;
+
+      // A non-positive count means the Scripture data has no chapter/verse count for this book
+      // (deuterocanonical books come back as -1). Navigating with it produces a highlight value
+      // no grid cell can match, which silently blanks the highlight.
+      if (grid.max <= 0) return;
+
+      if (grid.takeFocus) {
+        // Arrow keys drive the grid now — pull focus off the back button (the only natively
+        // focusable element in these views) so its focus ring doesn't compete with the grid's
+        // highlight. The Command root carries tabIndex={-1} from cmdk, so it is a valid focus
+        // target and PopoverContent's capture-phase key handling keeps working.
         commandRef.current?.focus();
-
-        const currentVerse = (() => {
-          if (!commandValue) return 1;
-          const match = commandValue.match(/:(\d+)$/);
-          return match ? parseInt(match[1], 10) : 0;
-        })();
-
-        let targetVerse = currentVerse;
-        const GRID_COLS = 6;
-
-        switch (event.key) {
-          case 'ArrowLeft':
-            if (currentVerse !== 0) targetVerse = currentVerse > 1 ? currentVerse - 1 : maxVerse;
-            break;
-          case 'ArrowRight':
-            if (currentVerse !== 0) targetVerse = currentVerse < maxVerse ? currentVerse + 1 : 1;
-            break;
-          case 'ArrowUp':
-            targetVerse = currentVerse === 0 ? maxVerse : Math.max(1, currentVerse - GRID_COLS);
-            break;
-          case 'ArrowDown':
-            targetVerse = currentVerse === 0 ? 1 : Math.min(maxVerse, currentVerse + GRID_COLS);
-            break;
-          default:
-            return;
-        }
-
-        if (targetVerse !== currentVerse) {
-          event.preventDefault();
-          event.stopPropagation();
-
-          setCommandValue(
-            `${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId] || ''} ${chapterNum}:${targetVerse}`,
-          );
-
-          setTimeout(() => {
-            const targetElement = verseRefs.current[targetVerse];
-            if (targetElement) {
-              targetElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            }
-          }, 0);
-        }
-        return;
       }
 
-      if ((viewMode === 'chapters' || (viewMode === 'books' && topMatch)) && isGridNav) {
-        // Extract current chapter from commandValue
-        const currentBookId =
-          viewMode === 'chapters' ? selectedBookForChaptersView : topMatch?.book;
-        if (!currentBookId) return;
+      const target = computeTargetGridItem({
+        current: grid.current,
+        key: event.key,
+        max: grid.max,
+        direction,
+      });
 
-        // See the verses grid above — pull focus off the back button when arrow
-        // navigation starts so its focus ring doesn't shadow the `data-selected`
-        // highlight in the grid. Skipped for the `books` + topMatch branch where focus
-        // already lives on the CommandInput.
-        if (viewMode === 'chapters') {
-          commandRef.current?.focus();
-        }
+      // An arrow key aimed at the grid belongs to the grid even when the highlight does not move.
+      // The Command root navigates with `loop`, so releasing a clamped keystroke to it would wrap
+      // the highlight to the opposite edge — precisely what clamping exists to prevent.
+      event.preventDefault();
+      event.stopPropagation();
 
-        // Parse chapter from current command value
-        const currentChapter = (() => {
-          if (!commandValue) return 1;
-          const match = commandValue.match(/(\d+)$/);
-          return match ? parseInt(match[1], 10) : 0;
-        })();
+      if (target === grid.current) return;
 
-        const maxChapter = fetchEndChapter(currentBookId);
+      setCommandValue(grid.buildValue(target));
 
-        if (!maxChapter) return;
-
-        let targetChapter = currentChapter;
-        const GRID_COLS = 6;
-
-        switch (event.key) {
-          case 'ArrowLeft':
-            if (currentChapter !== 0)
-              targetChapter = currentChapter > 1 ? currentChapter - 1 : maxChapter;
-            break;
-          case 'ArrowRight':
-            if (currentChapter !== 0)
-              targetChapter = currentChapter < maxChapter ? currentChapter + 1 : 1;
-            break;
-          case 'ArrowUp':
-            targetChapter =
-              currentChapter === 0 ? maxChapter : Math.max(1, currentChapter - GRID_COLS);
-            break;
-          case 'ArrowDown':
-            targetChapter =
-              currentChapter === 0 ? 1 : Math.min(maxChapter, currentChapter + GRID_COLS);
-            break;
-          default:
-            return;
-        }
-
-        if (targetChapter !== currentChapter) {
-          event.preventDefault();
-          event.stopPropagation();
-
-          // Match ChapterGrid's CommandItem value exactly (no localized parts) — using
-          // generateCommandValue here would diverge when localizedBookNames is provided and
-          // cmdk wouldn't find a matching item to highlight.
-          setCommandValue(
-            `${currentBookId} ${ALL_ENGLISH_BOOK_NAMES[currentBookId] || ''} ${targetChapter}`,
-          );
-
-          // Scroll the target chapter into view using refs
-          setTimeout(() => {
-            const targetElement = chapterRefs.current[targetChapter];
-            if (targetElement) {
-              targetElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-            }
-          }, 0);
-        }
-      }
+      const targetElement = grid.refs.current[target];
+      if (targetElement) targetElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     },
     [
       viewMode,
       topMatch,
+      shouldShowVerseGridForTopMatch,
+      direction,
       handleBackToBooks,
       handleBackToChapters,
+      handleChapterSelect,
+      handleTopMatchSelect,
+      handleVerseSelect,
+      makeIsChapterDisabled,
+      makeIsVerseDisabled,
       selectedBookForChaptersView,
       selectedBookForVersesView,
       selectedChapterForVersesView,
@@ -861,7 +910,7 @@ export function BookChapterControl({
       event.preventDefault();
 
       setInputValue((prevValue) => prevValue + event.key);
-      commandInputRef.current.focus();
+      commandInputRef.current?.focus();
 
       setIsCommandListHidden(false);
     }
@@ -914,10 +963,8 @@ export function BookChapterControl({
       // Seed commandValue to the starting chapter so arrow-key navigation has a concrete
       // starting point (see handleCommandKeyDown) and cmdk visibly highlights that chapter
       // even when focus is pinned on the PopoverContent wrapper by Radix's FocusScope in
-      // modal mode. Format must match ChapterGrid's CommandItem `value`.
-      setCommandValue(
-        `${selectedBookForChaptersView} ${ALL_ENGLISH_BOOK_NAMES[selectedBookForChaptersView] || ''} ${initialChapter}`,
-      );
+      // modal mode.
+      setCommandValue(chapterItemValue(selectedBookForChaptersView, initialChapter));
 
       // Reset scroll position to top, except when viewing the currently selected book
       setTimeout(() => {
@@ -956,9 +1003,8 @@ export function BookChapterControl({
 
       // Seed commandValue so arrow-key navigation has a concrete starting verse and cmdk
       // highlights it when focus is pinned on the PopoverContent wrapper (modal FocusScope).
-      // Format must match VerseGrid's CommandItem `value`.
       setCommandValue(
-        `${selectedBookForVersesView} ${ALL_ENGLISH_BOOK_NAMES[selectedBookForVersesView] || ''} ${selectedChapterForVersesView}:${initialVerse}`,
+        verseItemValue(selectedBookForVersesView, selectedChapterForVersesView, initialVerse),
       );
 
       setTimeout(() => {
@@ -981,6 +1027,101 @@ export function BookChapterControl({
     viewMode,
     selectedBookForVersesView,
     selectedChapterForVersesView,
+    scrRef.book,
+    scrRef.chapterNum,
+    scrRef.verseNum,
+  ]);
+
+  // Identity of the reference the preview grid is seeded from. Built out of the parsed reference
+  // and the kind of grid on screen, so it changes exactly when a fresh seed is wanted — editing
+  // the query to a different reference — and not when the highlight merely moves.
+  const previewSeedKey = topMatch
+    ? `${topMatch.book} ${topMatch.chapterNum ?? ''} ${topMatch.verseNum ?? ''} ${shouldShowVerseGridForTopMatch}`
+    : '';
+  const seededPreviewKeyRef = useRef('');
+  // The cmdk value of the preview cell the highlight last named.
+  const highlightedPreviewCellRef = useRef('');
+
+  // The books view shows a chapter (or verse) preview grid under the top-match row. Seed its
+  // highlight the same way the chapters and verses views seed theirs, so every grid surface obeys
+  // the same rule: exactly one cell is highlighted for as long as the grid is on screen, and arrow
+  // keys only ever move it.
+  //
+  // The seed also has to be defended, not just written once. cmdk moves its own highlight to the
+  // first item in the list — the top-match row, whose value names no cell — whenever the filter
+  // text changes and whenever the pointer crosses that row, so the highlight is put back on the
+  // cell it last named (remembered here) rather than left off the grid. A new parsed reference
+  // seeds afresh; a highlight the user moved survives.
+  useLayoutEffect(() => {
+    if (viewMode !== 'books' || !topMatch) {
+      seededPreviewKeyRef.current = '';
+      return;
+    }
+
+    const { book, chapterNum, verseNum } = topMatch;
+    const previewGrid = (() => {
+      if (shouldShowVerseGridForTopMatch && chapterNum && getEndVerse) {
+        return {
+          max: getEndVerse(book, chapterNum),
+          initial:
+            verseNum ??
+            (book === scrRef.book && chapterNum === scrRef.chapterNum ? scrRef.verseNum : 1),
+          parse: parseVerseFromItemValue,
+          buildValue: (item: number) => verseItemValue(book, chapterNum, item),
+        };
+      }
+      // A single-chapter book renders no chapter preview, so there is no cell for a seed to land
+      // on; writing one would blank the highlight instead of placing it.
+      const endChapter = fetchEndChapter(book);
+      if (endChapter <= 1) return undefined;
+      return {
+        max: endChapter,
+        initial: chapterNum ?? (book === scrRef.book ? scrRef.chapterNum : 1),
+        parse: parseChapterFromItemValue,
+        buildValue: (item: number) => chapterItemValue(book, item),
+      };
+    })();
+
+    if (!previewGrid || previewGrid.max <= 0) {
+      seededPreviewKeyRef.current = '';
+      return;
+    }
+
+    const { max, initial, parse, buildValue } = previewGrid;
+    // Only a value this grid actually renders can carry the highlight, so anything out of range or
+    // belonging to another book counts as "off the grid".
+    const cellNamedBy = (value: string) => {
+      const item = parse(value);
+      return item !== undefined && item >= 1 && item <= max && value === buildValue(item)
+        ? item
+        : undefined;
+    };
+
+    if (seededPreviewKeyRef.current !== previewSeedKey) {
+      seededPreviewKeyRef.current = previewSeedKey;
+      const seeded = buildValue(Math.min(Math.max(initial, 1), max));
+      highlightedPreviewCellRef.current = seeded;
+      setCommandValue(seeded);
+      return;
+    }
+
+    if (cellNamedBy(commandValue) !== undefined) {
+      highlightedPreviewCellRef.current = commandValue;
+      return;
+    }
+
+    setCommandValue(
+      cellNamedBy(highlightedPreviewCellRef.current) !== undefined
+        ? highlightedPreviewCellRef.current
+        : buildValue(Math.min(Math.max(initial, 1), max)),
+    );
+  }, [
+    viewMode,
+    topMatch,
+    previewSeedKey,
+    shouldShowVerseGridForTopMatch,
+    getEndVerse,
+    commandValue,
     scrRef.book,
     scrRef.chapterNum,
     scrRef.verseNum,
@@ -1092,289 +1233,314 @@ export function BookChapterControl({
         }}
         onCloseAutoFocus={onCloseAutoFocus}
       >
-        <Command
-          ref={commandRef}
-          loop
-          value={commandValue}
-          onValueChange={setCommandValue}
-          shouldFilter={false}
-        >
-          {/* Header: Input (with quick nav buttons) for book view, fixed header for chapter view */}
-          {viewMode === 'books' ? (
-            <div className="tw:flex tw:items-end">
-              <div className="tw:relative tw:flex-1">
-                <CommandInput
-                  ref={commandInputRef}
-                  value={inputValue}
-                  onValueChange={setInputValue}
-                  onKeyDown={handleInputKeyDown}
-                  onFocus={() => setIsCommandListHidden(false)}
-                  className={recentSearches && recentSearches.length > 0 ? 'tw:!pr-10' : ''}
-                  // Picker semantics: with nothing typed, Space picks the highlighted book (the
-                  // Enter UX). Neither of this control's own Space handlers covers that state —
-                  // `handleInputKeyDown` claims a key only for a FULLY-qualified `submitKeys`
-                  // match (an empty input has no top match at all), and the `data-selected` grid
-                  // pick in `handleCommandKeyDown` is gated on the chapters and verses views,
-                  // while this input exists only in the books view. Space is still an ordinary
-                  // character once anything is typed, so "1 Samuel" stays searchable.
-                  spaceSelectsHighlightedItem
-                />
-                {recentSearches && recentSearches.length > 0 && (
-                  <RecentSearches
-                    recentSearches={recentSearches}
-                    onSearchItemSelect={handleRecentItemSelect}
-                    renderItem={(verseRef) => formatScrRef(verseRef, 'English')}
-                    getItemKey={(verseRef) =>
-                      `${verseRef.book}-${verseRef.chapterNum}-${verseRef.verseNum}`
-                    }
-                    ariaLabel={localizedStrings?.['%history_recentSearches_ariaLabel%']}
-                    groupHeading={localizedStrings?.['%history_recent%']}
+        <TooltipProvider>
+          <Command
+            ref={commandRef}
+            loop
+            value={commandValue}
+            onValueChange={setCommandValue}
+            shouldFilter={false}
+          >
+            {/* Header: Input (with quick nav buttons) for book view, fixed header for chapter view */}
+            {viewMode === 'books' ? (
+              <div className={cn('tw:flex tw:items-end', isCommandListHidden && 'tw:pb-1')}>
+                <div className="tw:relative tw:flex-1">
+                  <CommandInput
+                    ref={commandInputRef}
+                    value={inputValue}
+                    onValueChange={setInputValue}
+                    onKeyDown={handleInputKeyDown}
+                    onFocus={() => setIsCommandListHidden(false)}
+                    className={recentSearches && recentSearches.length > 0 ? 'tw:pe-8!' : ''}
+                    // Picker semantics: with nothing typed, Space picks the highlighted book (the
+                    // Enter UX). Neither of this control's own Space handlers covers that state —
+                    // `handleInputKeyDown` claims a key only for a FULLY-qualified `submitKeys`
+                    // match (an empty input has no top match at all), and the `data-selected` grid
+                    // pick in `handleCommandKeyDown` is gated on the chapters and verses views,
+                    // while this input exists only in the books view. Space is still an ordinary
+                    // character once anything is typed, so "1 Samuel" stays searchable.
+                    spaceSelectsHighlightedItem
                   />
-                )}
+                  {recentSearches && recentSearches.length > 0 && (
+                    <RecentSearches
+                      recentSearches={recentSearches}
+                      onSearchItemSelect={handleRecentItemSelect}
+                      renderItem={(verseRef) => formatScrRef(verseRef, 'English')}
+                      getItemKey={(verseRef) =>
+                        `${verseRef.book}-${verseRef.chapterNum}-${verseRef.verseNum}`
+                      }
+                      ariaLabel={localizedStrings?.['%history_recentSearches_ariaLabel%']}
+                      groupHeading={localizedStrings?.['%history_recent%']}
+                      buttonClassName="tw:absolute tw:end-1 tw:top-1"
+                    />
+                  )}
+                </div>
+                {/* Navigation buttons for previous/next chapter/verse */}
+                <div className="tw:flex tw:translate-y-px tw:items-center tw:gap-1 tw:pe-2">
+                  {quickNavButtons.map(
+                    (
+                      { onClick, disabled: isQuickNavDisabled, title, icon: Icon, group },
+                      index,
+                    ) => (
+                      <div key={title} className="tw:flex tw:items-center">
+                        {index > 0 && group !== quickNavButtons[index - 1].group && (
+                          <div className="tw:mx-1 tw:h-5 tw:w-px tw:bg-border" aria-hidden="true" />
+                        )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setIsCommandListHidden(true);
+                                onClick();
+                              }}
+                              disabled={isQuickNavDisabled}
+                              className="tw:h-8.5 tw:w-6 tw:p-0"
+                              aria-label={title}
+                              onKeyDown={handleQuickNavButtonKeyDown}
+                            >
+                              <Icon />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{title}</TooltipContent>
+                        </Tooltip>
+                      </div>
+                    ),
+                  )}
+                </div>
               </div>
-              {/* Navigation buttons for previous/next chapter/book */}
-              <div className="tw:flex tw:items-center tw:gap-1 tw:border-b tw:pe-2">
-                {quickNavButtons.map(
-                  ({ onClick, disabled: isQuickNavDisabled, title, icon: Icon }) => (
+            ) : (
+              <div className="tw:flex tw:items-center tw:border-b tw:px-3 tw:py-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <Button
-                      key={title}
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        setIsCommandListHidden(true);
-                        onClick();
-                      }}
-                      disabled={isQuickNavDisabled}
-                      className="tw:h-10 tw:w-4 tw:p-0"
-                      title={title}
-                      onKeyDown={handleQuickNavButtonKeyDown}
+                      onClick={viewMode === 'verses' ? handleBackToChapters : handleBackToBooks}
+                      className="tw:me-2 tw:h-6 tw:w-6 tw:p-0"
+                      tabIndex={-1}
+                      aria-label={backLabel}
                     >
-                      <Icon />
+                      {direction === 'ltr' ? (
+                        <ArrowLeft className="tw:h-4 tw:w-4" />
+                      ) : (
+                        <ArrowRight className="tw:h-4 tw:w-4" />
+                      )}
                     </Button>
-                  ),
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="tw:flex tw:items-center tw:border-b tw:px-3 tw:py-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={viewMode === 'verses' ? handleBackToChapters : handleBackToBooks}
-                className="tw:mr-2 tw:h-6 tw:w-6 tw:p-0"
-                tabIndex={-1}
-              >
-                {direction === 'ltr' ? (
-                  <ArrowLeft className="tw:h-4 tw:w-4" />
-                ) : (
-                  <ArrowRight className="tw:h-4 tw:w-4" />
-                )}
-              </Button>
-              {viewMode === 'chapters' && selectedBookForChaptersView && (
-                <span tabIndex={-1} className="tw:text-sm tw:font-medium">
-                  {getLocalizedBookName(selectedBookForChaptersView, localizedBookNames)}
-                </span>
-              )}
-              {viewMode === 'verses' &&
-                selectedBookForVersesView &&
-                selectedChapterForVersesView !== undefined && (
+                  </TooltipTrigger>
+                  <TooltipContent>{backLabel}</TooltipContent>
+                </Tooltip>
+                {viewMode === 'chapters' && selectedBookForChaptersView && (
                   <span tabIndex={-1} className="tw:text-sm tw:font-medium">
-                    {`${getLocalizedBookName(selectedBookForVersesView, localizedBookNames)} ${selectedChapterForVersesView}`}
+                    {getLocalizedBookName(selectedBookForChaptersView, localizedBookNames)}
                   </span>
                 )}
-              <span
-                tabIndex={-1}
-                className="tw:ms-auto tw:text-sm tw:font-medium tw:text-muted-foreground"
-              >
-                {viewMode === 'verses' ? selectVerseTitle : selectChapterTitle}
-              </span>
-            </div>
-          )}
-
-          {/** Body */}
-          {!isCommandListHidden && (
-            <CommandList ref={commandListRef}>
-              {/** Book list mode (also used in case of top matches) */}
-              {viewMode === 'books' && (
-                <>
-                  {/* Book List - Show when we don't have a top match */}
-                  {!topMatch &&
-                    Object.entries(filteredBooksByType).map(([type, books]) => {
-                      if (books.length === 0) return undefined;
-
-                      return (
-                        // We are mapping over filteredBooksByType, which uses Section as key type
-                        // eslint-disable-next-line no-type-assertion/no-type-assertion
-                        <CommandGroup key={type} heading={getSectionLabel(type as Section)}>
-                          {books.map((bookId) => (
-                            <BookItem
-                              key={bookId}
-                              bookId={bookId}
-                              onSelect={(selectedBookId: string) =>
-                                handleBookSelect(selectedBookId)
-                              }
-                              section={getSectionForBook(bookId)}
-                              commandValue={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
-                              ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
-                              localizedBookNames={localizedBookNames}
-                              disabled={isBookDisabled(bookId)}
-                              dimmedReason={
-                                booksOutsideProject.has(bookId) ? bookNotInProjectLabel : undefined
-                              }
-                              dimmedDescription={
-                                booksOutsideProject.has(bookId)
-                                  ? getBookNotInProjectDescription(bookId)
-                                  : undefined
-                              }
-                            />
-                          ))}
-                        </CommandGroup>
-                      );
-                    })}
-
-                  {/* Top match scripture reference */}
-                  {topMatch && (
-                    <CommandGroup>
-                      <CommandItem
-                        key="top-match"
-                        value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
-                          topMatch.chapterNum || ''
-                        }:${topMatch.verseNum || ''})}`}
-                        onSelect={handleTopMatchSelect}
-                        disabled={
-                          !!disableReferencesUpTo &&
-                          isVerseBefore(
-                            topMatch.book,
-                            topMatch.chapterNum ?? 1,
-                            topMatch.verseNum ?? 1,
-                            disableReferencesUpTo,
-                          )
-                        }
-                        className="tw:font-semibold tw:text-primary"
-                      >
-                        {formatScrRef(
-                          {
-                            book: topMatch.book,
-                            chapterNum: topMatch.chapterNum ?? 1,
-                            verseNum: topMatch.verseNum ?? 1,
-                          },
-                          // 'English', matching the trigger formatter's fallback above: with no
-                          // localizedBookNames prop (no app code passes one today), `undefined`
-                          // made formatScrRef render the raw book CODE ("OBA 1:1") here while the
-                          // trigger showed "Obadiah 1:1" — the same reference in two spellings in
-                          // one control.
-                          localizedBookNames
-                            ? getLocalizedBookId(topMatch.book, localizedBookNames)
-                            : 'English',
-                        )}
-                      </CommandItem>
-                    </CommandGroup>
+                {viewMode === 'verses' &&
+                  selectedBookForVersesView &&
+                  selectedChapterForVersesView !== undefined && (
+                    <span tabIndex={-1} className="tw:text-sm tw:font-medium">
+                      {`${getLocalizedBookName(selectedBookForVersesView, localizedBookNames)} ${selectedChapterForVersesView}`}
+                    </span>
                   )}
+                <span
+                  tabIndex={-1}
+                  className="tw:ms-auto tw:text-sm tw:font-medium tw:text-muted-foreground"
+                >
+                  {viewMode === 'verses' ? selectVerseTitle : selectChapterTitle}
+                </span>
+              </div>
+            )}
 
-                  {/* Verse selector - when chapter-verse separator is present in the input */}
-                  {topMatch &&
-                    shouldShowVerseGridForTopMatch &&
-                    topMatch.chapterNum &&
-                    getEndVerse && (
-                      <>
-                        <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
-                          <span>
-                            {`${getLocalizedBookName(topMatch.book, localizedBookNames)} ${topMatch.chapterNum}`}
+            {/** Body */}
+            {!isCommandListHidden && (
+              <CommandList ref={commandListRef}>
+                {/** Book list mode (also used in case of top matches) */}
+                {viewMode === 'books' && (
+                  <>
+                    {/* Book List - Show when we don't have a top match */}
+                    {!topMatch &&
+                      Object.entries(filteredBooksByType).map(([type, books]) => {
+                        if (books.length === 0) return undefined;
+
+                        return (
+                          // We are mapping over filteredBooksByType, which uses Section as key type
+                          // eslint-disable-next-line no-type-assertion/no-type-assertion
+                          <CommandGroup key={type} heading={getSectionLabel(type as Section)}>
+                            {books.map((bookId) => (
+                              <BookItem
+                                key={bookId}
+                                bookId={bookId}
+                                onSelect={(selectedBookId: string) =>
+                                  handleBookSelect(selectedBookId)
+                                }
+                                section={getSectionForBook(bookId)}
+                                commandValue={generateCommandValue(bookId)}
+                                ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
+                                localizedBookNames={localizedBookNames}
+                                disabled={isBookDisabled(bookId)}
+                                dimmedReason={
+                                  booksOutsideProject.has(bookId)
+                                    ? bookNotInProjectLabel
+                                    : undefined
+                                }
+                                dimmedDescription={
+                                  booksOutsideProject.has(bookId)
+                                    ? getBookNotInProjectDescription(bookId)
+                                    : undefined
+                                }
+                              />
+                            ))}
+                          </CommandGroup>
+                        );
+                      })}
+
+                    {/* Top match scripture reference */}
+                    {topMatch && topMatchReference && (
+                      <CommandGroup>
+                        <CommandItem
+                          key="top-match"
+                          value={TOP_MATCH_ITEM_VALUE}
+                          onSelect={handleTopMatchSelect}
+                          disabled={
+                            !!disableReferencesUpTo &&
+                            isVerseBefore(
+                              topMatchReference.book,
+                              topMatchReference.chapterNum,
+                              topMatchReference.verseNum,
+                              disableReferencesUpTo,
+                            )
+                          }
+                          // The preview grid keeps the cmdk highlight, so `data-selected` never
+                          // lands here; a hover rule of its own gives the row pointer feedback.
+                          // Hiding CommandItem's trailing check icon keeps this row's book-id
+                          // column aligned with the book rows below, which hide it too.
+                          className="tw:font-semibold tw:text-primary tw:hover:bg-muted/50 tw:[&>svg:last-child]:hidden"
+                        >
+                          <span className="tw:min-w-0 tw:flex-1">
+                            {formatScrRef(
+                              topMatchReference,
+                              getLocalizedBookName(topMatch.book, localizedBookNames),
+                            )}
                           </span>
-                          <span>{selectVerseTitle}</span>
-                        </div>
-                        <VerseGrid
-                          bookId={topMatch.book}
-                          chapterNum={topMatch.chapterNum}
-                          endVerse={getEndVerse(topMatch.book, topMatch.chapterNum)}
-                          scrRef={scrRef}
-                          onVerseSelect={handleVerseSelect}
-                          setVerseRef={setVerseRef}
-                          isVerseDisabled={makeIsVerseDisabled(topMatch.book, topMatch.chapterNum)}
-                          className="tw:px-4 tw:pb-4"
-                        />
-                      </>
+                          <span className="tw:ms-2 tw:shrink-0 tw:text-xs tw:text-muted-foreground">
+                            {getLocalizedBookId(topMatch.book, localizedBookNames)}
+                          </span>
+                        </CommandItem>
+                      </CommandGroup>
                     )}
 
-                  {/* Chapter Selector - Show when we have a top match without a verse separator */}
-                  {topMatch &&
-                    !shouldShowVerseGridForTopMatch &&
-                    fetchEndChapter(topMatch.book) > 1 && (
-                      <>
-                        <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
-                          <span>{getLocalizedBookName(topMatch.book, localizedBookNames)}</span>
-                          <span>{selectChapterTitle}</span>
-                        </div>
-                        <ChapterGrid
-                          bookId={topMatch.book}
-                          scrRef={scrRef}
-                          onChapterSelect={handleChapterSelect}
-                          setChapterRef={setChapterRef}
-                          isChapterDimmed={doesChapterMatch}
-                          isChapterDisabled={makeIsChapterDisabled(topMatch.book)}
-                          className="tw:px-4 tw:pb-4"
-                        />
-                      </>
-                    )}
-                </>
-              )}
+                    {/* Verse selector - when chapter-verse separator is present in the input */}
+                    {topMatch &&
+                      shouldShowVerseGridForTopMatch &&
+                      topMatch.chapterNum &&
+                      getEndVerse && (
+                        <>
+                          <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
+                            <span>
+                              {`${getLocalizedBookName(topMatch.book, localizedBookNames)} ${topMatch.chapterNum}`}
+                            </span>
+                            <span>{selectVerseTitle}</span>
+                          </div>
+                          <VerseGrid
+                            bookId={topMatch.book}
+                            chapterNum={topMatch.chapterNum}
+                            endVerse={getEndVerse(topMatch.book, topMatch.chapterNum)}
+                            scrRef={scrRef}
+                            onVerseSelect={handleVerseSelect}
+                            setVerseRef={setVerseRef}
+                            isVerseDisabled={makeIsVerseDisabled(
+                              topMatch.book,
+                              topMatch.chapterNum,
+                            )}
+                            className="tw:px-4 tw:pb-4"
+                          />
+                        </>
+                      )}
 
-              {/* Basic chapter view mode */}
-              {viewMode === 'chapters' && selectedBookForChaptersView && (
-                <ChapterGrid
-                  bookId={selectedBookForChaptersView}
-                  scrRef={scrRef}
-                  onChapterSelect={handleChapterSelect}
-                  setChapterRef={setChapterRef}
-                  isChapterDisabled={makeIsChapterDisabled(selectedBookForChaptersView)}
-                  className="tw:p-4"
-                />
-              )}
+                    {/* Chapter Selector - Show when we have a top match without a verse separator */}
+                    {topMatch &&
+                      !shouldShowVerseGridForTopMatch &&
+                      fetchEndChapter(topMatch.book) > 1 && (
+                        <>
+                          <div className="tw:mb-2 tw:flex tw:items-center tw:justify-between tw:px-3 tw:text-sm tw:font-medium tw:text-muted-foreground">
+                            <span>{getLocalizedBookName(topMatch.book, localizedBookNames)}</span>
+                            <span>{selectChapterTitle}</span>
+                          </div>
+                          <ChapterGrid
+                            bookId={topMatch.book}
+                            scrRef={scrRef}
+                            onChapterSelect={handleChapterSelect}
+                            setChapterRef={setChapterRef}
+                            isChapterDimmed={doesChapterMatch}
+                            isChapterDisabled={makeIsChapterDisabled(topMatch.book)}
+                            className="tw:px-4 tw:pb-4"
+                          />
+                        </>
+                      )}
+                  </>
+                )}
 
-              {/* Verse view mode */}
-              {viewMode === 'verses' &&
-                selectedBookForVersesView &&
-                selectedChapterForVersesView !== undefined &&
-                getEndVerse && (
-                  <VerseGrid
-                    bookId={selectedBookForVersesView}
-                    chapterNum={selectedChapterForVersesView}
-                    endVerse={getEndVerse(selectedBookForVersesView, selectedChapterForVersesView)}
+                {/* Basic chapter view mode */}
+                {viewMode === 'chapters' && selectedBookForChaptersView && (
+                  <ChapterGrid
+                    bookId={selectedBookForChaptersView}
                     scrRef={scrRef}
-                    onVerseSelect={handleVerseSelect}
-                    setVerseRef={setVerseRef}
-                    isVerseDisabled={makeIsVerseDisabled(
-                      selectedBookForVersesView,
-                      selectedChapterForVersesView,
-                    )}
+                    onChapterSelect={handleChapterSelect}
+                    setChapterRef={setChapterRef}
+                    isChapterDisabled={makeIsChapterDisabled(selectedBookForChaptersView)}
                     className="tw:p-4"
                   />
                 )}
-            </CommandList>
-          )}
 
-          {/* Outside CommandList on purpose: inside it, cmdk would register this as an option —
-              arrow-navigable and matched by typing — instead of a control. */}
-          {canShowMoreBooksToggle && (
-            <div className="tw:border-t tw:p-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="tw:w-full tw:justify-start tw:font-normal"
-                // No aria-expanded: the label names the action and so already carries the state,
-                // and the two encode it in opposite directions — "Show project books only" plus
-                // `aria-expanded="true"` reads as a contradiction.
-                //
-                // No aria-controls either: cmdk's List spreads incoming props before setting its
-                // own `id`, so an id passed to CommandList never reaches the DOM and the attribute
-                // would reference nothing. cmdk does not expose the id it generates.
-                onClick={() => setIsShowingMoreBooks((wasShowing) => !wasShowing)}
-              >
-                {isShowingMoreBooks ? showProjectBooksOnlyLabel : showMoreBooksLabel}
-              </Button>
-            </div>
-          )}
-        </Command>
+                {/* Verse view mode */}
+                {viewMode === 'verses' &&
+                  selectedBookForVersesView &&
+                  selectedChapterForVersesView !== undefined &&
+                  getEndVerse && (
+                    <VerseGrid
+                      bookId={selectedBookForVersesView}
+                      chapterNum={selectedChapterForVersesView}
+                      endVerse={getEndVerse(
+                        selectedBookForVersesView,
+                        selectedChapterForVersesView,
+                      )}
+                      scrRef={scrRef}
+                      onVerseSelect={handleVerseSelect}
+                      setVerseRef={setVerseRef}
+                      isVerseDisabled={makeIsVerseDisabled(
+                        selectedBookForVersesView,
+                        selectedChapterForVersesView,
+                      )}
+                      className="tw:p-4"
+                    />
+                  )}
+              </CommandList>
+            )}
+
+            {/* Outside CommandList on purpose: inside it, cmdk would register this as an option —
+                arrow-navigable and matched by typing — instead of a control. */}
+            {canShowMoreBooksToggle && (
+              <div className="tw:border-t tw:p-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="tw:w-full tw:justify-start tw:font-normal"
+                  // No aria-expanded: the label names the action and so already carries the state,
+                  // and the two encode it in opposite directions — "Show project books only" plus
+                  // `aria-expanded="true"` reads as a contradiction.
+                  //
+                  // No aria-controls either: cmdk's List spreads incoming props before setting its
+                  // own `id`, so an id passed to CommandList never reaches the DOM and the attribute
+                  // would reference nothing. cmdk does not expose the id it generates.
+                  onClick={() => setIsShowingMoreBooks((wasShowing) => !wasShowing)}
+                >
+                  {isShowingMoreBooks ? showProjectBooksOnlyLabel : showMoreBooksLabel}
+                </Button>
+              </div>
+            )}
+          </Command>
+        </TooltipProvider>
       </PopoverContent>
     </Popover>
   );

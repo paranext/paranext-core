@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
 import { BookChapterControl } from './book-chapter-control.component';
 import { BookChapterControlHandle } from './book-chapter-control.types';
+import { GRID_COLUMNS } from './book-chapter-control.utils';
 
 // jsdom doesn't ship a ResizeObserver, and `Element.prototype.scrollTo` is unimplemented.
 // cmdk (used inside BookChapterControl's popover) instantiates a ResizeObserver on mount,
@@ -871,5 +872,372 @@ describe('BookChapterControl additional books', () => {
     await waitFor(() =>
       expect(handleSubmit).toHaveBeenCalledWith({ book: 'REV', chapterNum: 1, verseNum: 1 }),
     );
+  });
+});
+
+describe('BookChapterControl grid keyboard navigation', () => {
+  async function openChapterGridForCurrentBook() {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    return { handleSubmit, user };
+  }
+
+  test('the grid opens with the current chapter already highlighted', async () => {
+    await openChapterGridForCurrentBook();
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('ArrowRight moves the highlight to the next chapter', async () => {
+    const { user } = await openChapterGridForCurrentBook();
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '13' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('ArrowDown moves the highlight one full row', async () => {
+    const { user } = await openChapterGridForCurrentBook();
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '18' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('Enter submits the highlighted chapter, not the seeded one', async () => {
+    const { handleSubmit, user } = await openChapterGridForCurrentBook();
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowRight}{Enter}');
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ book: 'MAT', chapterNum: 13 }),
+      ),
+    );
+  });
+
+  test('arrow keys move the verse highlight in the verse grid', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.click(await screen.findByRole('option', { name: '12' }));
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '1' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '7' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('the grid renders the column count the arrow arithmetic assumes', async () => {
+    // Tailwind's JIT cannot see an interpolated class name, so the grid sets gridTemplateColumns
+    // from GRID_COLUMNS instead of a grid-cols-N class. If the two ever drift, ArrowDown lands on
+    // the wrong cell and nothing else fails.
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    const cell = await screen.findByRole('option', { name: '1' });
+    // The grid container carries the layout but has no role of its own, so no accessible query
+    // reaches it — walk up from a cell instead.
+    expect(cell.parentElement).toHaveStyle({
+      gridTemplateColumns: `repeat(${GRID_COLUMNS}, minmax(0, 1fr))`,
+    });
+  });
+
+  test('arrows still reach the list for a book whose grid is never rendered', async () => {
+    // A single-chapter book shows no chapter grid, so there is nothing for the arrow keys to
+    // drive. Claiming the keystroke anyway would write a chapter value no rendered item carries,
+    // blanking the highlight and leaving the list un-navigable.
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Jude');
+    const topMatchRow = await screen.findByRole('option', { name: /JUD/ });
+    await waitFor(() => expect(topMatchRow).toHaveAttribute('data-selected', 'true'));
+
+    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowLeft}');
+
+    // Name the trigger: once the popover is open the search input carries the combobox role too.
+    expect(screen.getByRole('combobox', { name: 'book-chapter-trigger' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByRole('option', { name: /JUD/ })).toHaveAttribute('data-selected', 'true');
+  });
+});
+
+describe('BookChapterControl selection activation', () => {
+  test('Space activates the highlighted chapter', async () => {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard(' ');
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ book: 'MAT', chapterNum: 12 }),
+      ),
+    );
+  });
+
+  test('Enter does not activate a disabled chapter', async () => {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        // Everything before Matthew 20:1 is out of bounds, so chapter 12 is disabled.
+        disableReferencesUpTo={{ book: 'MAT', chapterNum: 20, verseNum: 1 }}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.keyboard('{Enter}');
+    expect(handleSubmit).not.toHaveBeenCalled();
+  });
+
+  test('Enter activates the highlighted verse', async () => {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.click(await screen.findByRole('option', { name: '12' }));
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '1' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowRight}{Enter}');
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'MAT', chapterNum: 12, verseNum: 2 }),
+    );
+  });
+});
+
+describe('BookChapterControl top-match preview', () => {
+  // Every keystroke re-renders the whole picker, so these type the shortest query that still
+  // resolves to a single book and move the highlight with one keypress rather than several.
+  test('typing a book seeds the preview grid at the current chapter', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Matt');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('typing a book and chapter seeds the preview grid at that chapter', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Matt 5');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '5' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('arrow keys move the highlight in the verse preview grid', async () => {
+    // A chapter-verse separator in the query swaps the chapter preview for a verse preview, so the
+    // arrow keys have to drive verse arithmetic rather than chapter arithmetic.
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Matt 12:');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '1' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '2' })).toHaveAttribute('data-selected', 'true'),
+    );
+  });
+
+  test('activating the top-match row submits the highlighted chapter, not the parsed one', async () => {
+    // The row must submit what it displays. Drive the ROW, not a bare Enter: with no `submitKeys`
+    // prop, Enter over a highlighted grid cell goes through cmdk's own onSelect to
+    // handleChapterSelect and never reaches handleTopMatchSelect.
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Matt 1');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '1' })).toHaveAttribute('data-selected', 'true'),
+    );
+    // One row down from chapter 1 is chapter 7.
+    await user.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '7' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.click(screen.getByRole('option', { name: /Matthew 7/ }));
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ book: 'MAT', chapterNum: 7 }),
+      ),
+    );
+  });
+
+  test('Enter submits the typed verse, not just the highlighted chapter', async () => {
+    // The main toolbar passes neither `getEndVerse` nor `submitKeys`, so a chapter preview is the
+    // only grid on screen. Enter has to reach the top-match row: the highlighted chapter cell knows
+    // no verse, and activating it would silently navigate to verse 1.
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('mat 12:5');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'MAT', chapterNum: 12, verseNum: 5 }),
+    );
+  });
+
+  test('Enter keeps the typed verse when an arrow key has moved the chapter', async () => {
+    const handleSubmit = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={handleSubmit}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('mat 12:5');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '12' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{ArrowRight}');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: '13' })).toHaveAttribute('data-selected', 'true'),
+    );
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(handleSubmit).toHaveBeenCalledWith({ book: 'MAT', chapterNum: 13, verseNum: 5 }),
+    );
+  });
+
+  test('the row displays the reference it will submit', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.keyboard('Matt 1');
+    await user.keyboard('{ArrowDown}');
+    expect(await screen.findByRole('option', { name: /Matthew 7/ })).toBeInTheDocument();
+  });
+});
+
+describe('BookChapterControl back button', () => {
+  test('is labelled for returning to books while in chapters view', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    expect(await screen.findByRole('button', { name: 'Back to books' })).toBeInTheDocument();
+  });
+
+  test('is labelled for returning to chapters while in verses view', async () => {
+    const user = userEvent.setup();
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'MAT', chapterNum: 12, verseNum: 1 }}
+        handleSubmit={vi.fn()}
+        getEndVerse={() => 30}
+      />,
+    );
+    await user.click(screen.getByRole('combobox'));
+    await user.click(await screen.findByRole('option', { name: /Matthew/ }));
+    await user.click(await screen.findByRole('option', { name: '12' }));
+    expect(await screen.findByRole('button', { name: 'Back to chapters' })).toBeInTheDocument();
   });
 });

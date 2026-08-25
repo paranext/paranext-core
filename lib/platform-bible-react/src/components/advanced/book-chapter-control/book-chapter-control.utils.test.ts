@@ -1,9 +1,11 @@
 import { ALL_BOOK_IDS, ALL_ENGLISH_BOOK_NAMES } from '@/components/shared/book.utils';
 import { Section } from 'platform-bible-utils';
 import {
+  computeTargetGridItem,
   fetchEndChapter,
   calculateTopMatch,
   deriveBookChapterControlBookLists,
+  GRID_COLUMNS,
   SCRIPTURE_REGEX_PATTERNS,
 } from './book-chapter-control.utils';
 
@@ -441,6 +443,121 @@ describe('book-chapter-control.utils', () => {
       expect(reachableBooksBySection[Section.NT]).toEqual(['REV']);
       expect(reachableBooksBySection[Section.DC]).toEqual(['TOB']);
       expect(reachableBooksBySection[Section.Extra]).toEqual([]);
+    });
+  });
+
+  describe('computeTargetGridItem', () => {
+    // A Matthew-shaped grid: 28 items across 6 columns, so the last row is a partial row of 4.
+    //   1  2  3  4  5  6
+    //   7  8  9 10 11 12
+    //  13 14 15 16 17 18
+    //  19 20 21 22 23 24
+    //  25 26 27 28
+    const max = 28;
+
+    describe('horizontal movement (LTR)', () => {
+      test('ArrowLeft moves back one', () => {
+        expect(computeTargetGridItem({ current: 5, key: 'ArrowLeft', max })).toBe(4);
+      });
+
+      test('ArrowRight moves forward one', () => {
+        expect(computeTargetGridItem({ current: 5, key: 'ArrowRight', max })).toBe(6);
+      });
+
+      test('ArrowLeft wraps from the first item to the last', () => {
+        expect(computeTargetGridItem({ current: 1, key: 'ArrowLeft', max })).toBe(28);
+      });
+
+      test('ArrowRight wraps from the last item to the first', () => {
+        expect(computeTargetGridItem({ current: 28, key: 'ArrowRight', max })).toBe(1);
+      });
+    });
+
+    describe('horizontal movement (RTL)', () => {
+      // The grid flows right-to-left, so the cell drawn to the LEFT of item n is n + 1.
+      test('ArrowLeft moves forward one', () => {
+        expect(computeTargetGridItem({ current: 5, key: 'ArrowLeft', max, direction: 'rtl' })).toBe(
+          6,
+        );
+      });
+
+      test('ArrowRight moves back one', () => {
+        expect(
+          computeTargetGridItem({ current: 5, key: 'ArrowRight', max, direction: 'rtl' }),
+        ).toBe(4);
+      });
+
+      test('ArrowLeft wraps from the last item to the first', () => {
+        expect(
+          computeTargetGridItem({ current: 28, key: 'ArrowLeft', max, direction: 'rtl' }),
+        ).toBe(1);
+      });
+    });
+
+    describe('vertical movement is not mirrored', () => {
+      test('ArrowUp moves up one row in LTR and RTL alike', () => {
+        expect(computeTargetGridItem({ current: 13, key: 'ArrowUp', max })).toBe(7);
+        expect(computeTargetGridItem({ current: 13, key: 'ArrowUp', max, direction: 'rtl' })).toBe(
+          7,
+        );
+      });
+
+      test('ArrowDown moves down one row in LTR and RTL alike', () => {
+        expect(computeTargetGridItem({ current: 7, key: 'ArrowDown', max })).toBe(13);
+        expect(computeTargetGridItem({ current: 7, key: 'ArrowDown', max, direction: 'rtl' })).toBe(
+          13,
+        );
+      });
+
+      test('ArrowUp clamps at the first item rather than wrapping', () => {
+        expect(computeTargetGridItem({ current: 3, key: 'ArrowUp', max })).toBe(1);
+      });
+
+      test('ArrowDown clamps at the last item rather than wrapping', () => {
+        expect(computeTargetGridItem({ current: 25, key: 'ArrowDown', max })).toBe(28);
+      });
+
+      test('ArrowDown out of the partial last row clamps to the last item', () => {
+        expect(computeTargetGridItem({ current: 24, key: 'ArrowDown', max })).toBe(28);
+      });
+    });
+
+    describe('degenerate input', () => {
+      test('an unseeded highlight lands on the first item instead of moving', () => {
+        // Callers seed a valid highlight before any arrow key can arrive; this is the fallback.
+        expect(computeTargetGridItem({ current: 0, key: 'ArrowUp', max })).toBe(1);
+        expect(computeTargetGridItem({ current: 0, key: 'ArrowDown', max })).toBe(1);
+        expect(computeTargetGridItem({ current: 0, key: 'ArrowLeft', max })).toBe(1);
+        expect(computeTargetGridItem({ current: 0, key: 'ArrowRight', max })).toBe(1);
+      });
+
+      test('a highlight past the end lands on the first item', () => {
+        expect(computeTargetGridItem({ current: 99, key: 'ArrowRight', max })).toBe(1);
+      });
+
+      test('a non-positive max leaves the highlight alone', () => {
+        // fetchEndChapter returns -1 for deuterocanonical books.
+        expect(computeTargetGridItem({ current: 3, key: 'ArrowRight', max: -1 })).toBe(3);
+        expect(computeTargetGridItem({ current: 3, key: 'ArrowRight', max: 0 })).toBe(3);
+      });
+
+      test('a single-item grid stays put on every arrow', () => {
+        expect(computeTargetGridItem({ current: 1, key: 'ArrowRight', max: 1 })).toBe(1);
+        expect(computeTargetGridItem({ current: 1, key: 'ArrowLeft', max: 1 })).toBe(1);
+        expect(computeTargetGridItem({ current: 1, key: 'ArrowDown', max: 1 })).toBe(1);
+      });
+    });
+
+    describe('column count', () => {
+      test('respects a non-default column count', () => {
+        expect(computeTargetGridItem({ current: 1, key: 'ArrowDown', max: 20, columns: 4 })).toBe(
+          5,
+        );
+      });
+
+      test('defaults to GRID_COLUMNS', () => {
+        expect(computeTargetGridItem({ current: 1, key: 'ArrowDown', max })).toBe(1 + GRID_COLUMNS);
+      });
     });
   });
 });
