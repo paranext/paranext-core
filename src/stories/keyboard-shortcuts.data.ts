@@ -115,6 +115,50 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     locations: ['src/main/main.ts', 'src/main/verse-navigation-shortcuts.util.ts'],
   },
   {
+    id: 'book-chapter-control-move-grid-highlight',
+    purpose:
+      'Move the highlighted chapter or verse in the Book Chapter Control grid (mirrored horizontally in right-to-left layouts)',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: {
+      macOS: '↑ / ↓ / ← / →',
+      windows: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
+      linux: 'Up Arrow / Down Arrow / Left Arrow / Right Arrow',
+    },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.utils.ts',
+    ],
+  },
+  {
+    id: 'book-chapter-control-activate-grid-item',
+    purpose:
+      'Go to the highlighted chapter or verse in the Book Chapter Control grid (in the books view, which has no dedicated grid page, Enter alone submits the top-match reference — Space is only handled in the chapters and verses views)',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⏎ / ␣', windows: 'Enter / Space', linux: 'Enter / Space' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  {
+    id: 'book-chapter-control-back',
+    purpose:
+      'Go back one level in the Book Chapter Control — verses to chapters, chapters to books',
+    category: 'Navigation',
+    context: 'Book Chapter Control popover',
+    keys: { macOS: '⌫', windows: 'Backspace', linux: 'Backspace' },
+    locations: [
+      'lib/platform-bible-react/src/components/advanced/book-chapter-control/book-chapter-control.component.tsx',
+    ],
+  },
+  // Escape closing the popover is intentionally not catalogued here: there is no explicit
+  // `Escape` branch in book-chapter-control.component.tsx (Radix's PopoverContent dismissable
+  // layer owns it — see the `handleOpenChange` comment, which confirms any Radix-initiated
+  // dismiss always closes the whole control rather than stepping back one view). With no
+  // app-specific handling to document, this falls under keyboard-shortcuts.mdx's "Not
+  // catalogued" policy for plain Escape-to-dismiss as standard within-widget interaction.
+  {
     id: 'reference-history-back',
     purpose: 'Go back one Scripture reference in the active scroll group’s history',
     category: 'Navigation',

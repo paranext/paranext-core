@@ -70,7 +70,13 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 	"%webView_bookChapterControl_selectChapter%",
 	"%webView_bookChapterControl_selectVerse%",
 	"%webView_bookChapterControl_showMoreBooks%",
-	"%webView_bookChapterControl_showProjectBooksOnly%"
+	"%webView_bookChapterControl_showProjectBooksOnly%",
+	"%webView_bookChapterControl_previousChapter%",
+	"%webView_bookChapterControl_nextChapter%",
+	"%webView_bookChapterControl_previousVerse%",
+	"%webView_bookChapterControl_nextVerse%",
+	"%webView_bookChapterControl_backToBooks%",
+	"%webView_bookChapterControl_backToChapters%"
 ];
 /** Type definition for the localized strings used in the BookChapterControl component */
 export type BookChapterControlLocalizedStrings = {
@@ -320,9 +326,9 @@ export interface RecentSearchesProps<T> {
 	ariaLabel?: string;
 	/** Heading text for the recent searches group */
 	groupHeading?: string;
-	/** Optional ID for the popover content for accessibility */
+	/** Optional ID for the dropdown menu content for accessibility */
 	id?: string;
-	/** Class name for styling the `CommandItem` for each recent search result */
+	/** Class name for styling the `DropdownMenuItem` for each recent search result */
 	classNameForItems?: string;
 	/**
 	 * Class name for the trigger button. Defaults to absolute positioning inside an input field. Pass
@@ -331,14 +337,14 @@ export interface RecentSearchesProps<T> {
 	buttonClassName?: string;
 	/** Variant for the trigger button. Defaults to `"ghost"` */
 	buttonVariant?: ButtonProps["variant"];
-	/** Controlled open state of the popover. If provided, the component becomes controlled. */
+	/** Controlled open state of the dropdown menu. If provided, the component becomes controlled. */
 	open?: boolean;
 	/** Called when the open state changes. Required when `open` is provided. */
 	onOpenChange?: (open: boolean) => void;
 }
 /**
- * Generic component that displays a button to show recent searches in a popover. Only renders if
- * there are recent searches available. Works with any data type T.
+ * Generic component that displays a button to show recent searches in a dropdown menu. Only renders
+ * if there are recent searches available. Works with any data type T.
  */
 export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, open: openProp, onOpenChange, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
@@ -3202,7 +3208,7 @@ export declare function DropdownMenuPortal({ ...props }: React$1.ComponentProps<
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuTrigger({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Trigger>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuContent({ className, align, sideOffset, children, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuContent({ className, align, sideOffset, style, children, ...props }: DropdownMenuContentProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuGroup({ ...props }: React$1.ComponentProps<typeof DropdownMenuPrimitive.Group>): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
@@ -3224,7 +3230,7 @@ export declare function DropdownMenuSub({ ...props }: React$1.ComponentProps<typ
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuSubTrigger({ className, inset, children, ...props }: DropdownMenuSubTriggerProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
-export declare function DropdownMenuSubContent({ className, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
+export declare function DropdownMenuSubContent({ className, style, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Empty component displays a centered zero-state message — typically a title, description, and
  * an optional action — for when there is no content to show. The component is built and styled by
@@ -4008,11 +4014,10 @@ export declare function useShrinkStepValue(): number;
  * Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200)
  * — the menubar, and every `PopoverContent`.
  *
- * At 600 this sits above the overlay, modal, and tooltip layers, which is why content portalled out
- * of a popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. Two consequences are unresolved
- * and deliberately not papered over here: a tooltip triggered from inside a popover
- * (`Z_INDEX_TOOLTIP`, 550) renders BEHIND it, and a popover renders OVER a modal dialog
- * ({@link Z_INDEX_MODAL}, 500). Both want the scale re-ordered rather than another constant raised.
+ * At 600 this sits above the overlay and modal layers, which is why content portalled out of a
+ * popover needs {@link Z_INDEX_ABOVE_POPOVER} to stay visible. One consequence is unresolved and
+ * deliberately not papered over here: a popover renders OVER a modal dialog ({@link Z_INDEX_MODAL},
+ * 500). That wants the scale re-ordered rather than another constant raised.
  */
 export declare const Z_INDEX_ABOVE_DOCK = 600;
 /**
@@ -4023,12 +4028,15 @@ export declare const Z_INDEX_ABOVE_DOCK = 600;
  * two become stacking SIBLINGS: the popover's own {@link Z_INDEX_ABOVE_DOCK} competes directly with
  * whatever the portalled child asks for, and anything lower renders behind the popover it belongs
  * to. Must therefore stay above {@link Z_INDEX_ABOVE_DOCK} and below {@link Z_INDEX_FIRST_RUN}, which
- * gates the whole app. Pinned by `z-index.test.ts`.
+ * gates the whole app. Pinned by `z-index.test.tsx`.
  *
  * Note this is only needed because {@link Z_INDEX_ABOVE_DOCK} sits so high; see its own doc.
  */
 export declare const Z_INDEX_ABOVE_POPOVER = 650;
-/** Z-index for overlay popovers and context menus */
+/**
+ * Z-index for the renderer's in-page overlay service (`src/renderer/components/overlays/`) and the
+ * character-marker bar.
+ */
 export declare const Z_INDEX_OVERLAY = 400;
 /** Z-index for the semi-transparent backdrop behind modal dialogs */
 export declare const Z_INDEX_MODAL_BACKDROP = 450;
@@ -4036,8 +4044,8 @@ export declare const Z_INDEX_MODAL_BACKDROP = 450;
 export declare const Z_INDEX_MODAL = 500;
 /**
  * Z-index for the first-run setup wizard gate. Must sit above every other layer (including the
- * menubar at Z_INDEX_ABOVE_DOCK=600 and tooltips at 550) so the wizard fully gates the app at
- * startup and nothing behind it remains clickable or focusable.
+ * popover layers and tooltips) so the wizard fully gates the app at startup and nothing behind it
+ * remains clickable or focusable.
  */
 export declare const Z_INDEX_FIRST_RUN = 700;
 /**

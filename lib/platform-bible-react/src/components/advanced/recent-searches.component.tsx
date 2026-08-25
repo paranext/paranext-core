@@ -1,8 +1,19 @@
 import { Clock } from 'lucide-react';
-import { Button, ButtonProps } from '@/components/shadcn-ui/button';
-import { Command, CommandGroup, CommandItem, CommandList } from '@/components/shadcn-ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { useState } from 'react';
+import { Button, ButtonProps } from '@/components/shadcn-ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui/utils';
 
 /** Interface defining the properties for the RecentSearches component */
@@ -19,9 +30,9 @@ export interface RecentSearchesProps<T> {
   ariaLabel?: string;
   /** Heading text for the recent searches group */
   groupHeading?: string;
-  /** Optional ID for the popover content for accessibility */
+  /** Optional ID for the dropdown menu content for accessibility */
   id?: string;
-  /** Class name for styling the `CommandItem` for each recent search result */
+  /** Class name for styling the `DropdownMenuItem` for each recent search result */
   classNameForItems?: string;
   /**
    * Class name for the trigger button. Defaults to absolute positioning inside an input field. Pass
@@ -30,15 +41,15 @@ export interface RecentSearchesProps<T> {
   buttonClassName?: string;
   /** Variant for the trigger button. Defaults to `"ghost"` */
   buttonVariant?: ButtonProps['variant'];
-  /** Controlled open state of the popover. If provided, the component becomes controlled. */
+  /** Controlled open state of the dropdown menu. If provided, the component becomes controlled. */
   open?: boolean;
   /** Called when the open state changes. Required when `open` is provided. */
   onOpenChange?: (open: boolean) => void;
 }
 
 /**
- * Generic component that displays a button to show recent searches in a popover. Only renders if
- * there are recent searches available. Works with any data type T.
+ * Generic component that displays a button to show recent searches in a dropdown menu. Only renders
+ * if there are recent searches available. Works with any data type T.
  */
 export default function RecentSearches<T>({
   recentSearches,
@@ -49,7 +60,7 @@ export default function RecentSearches<T>({
   groupHeading = 'Recent',
   id,
   classNameForItems,
-  buttonClassName = 'tw:absolute tw:right-0 tw:top-0 tw:h-full tw:px-3 tw:py-2',
+  buttonClassName = 'tw:absolute tw:end-0 tw:top-0 tw:h-full tw:px-3 tw:py-2',
   buttonVariant = 'ghost',
   open: openProp,
   onOpenChange,
@@ -71,37 +82,46 @@ export default function RecentSearches<T>({
     setIsOpen(false);
   };
 
+  const button = (
+    <Button variant={buttonVariant} size="icon" className={buttonClassName} aria-label={ariaLabel}>
+      <Clock className="tw:h-4 tw:w-4" />
+    </Button>
+  );
+
+  // `modal={false}` because Radix menus default to modal, which traps focus and sets
+  // `pointer-events: none` on the body for as long as the list is open. This list opens beside a
+  // search input the user is still working in — usually inside another popover — so the
+  // surrounding controls have to stay clickable.
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant={buttonVariant}
-          size="icon"
-          className={buttonClassName}
-          aria-label={ariaLabel}
-        >
-          <Clock className="tw:h-4 tw:w-4" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent id={id} className="tw:w-[300px] tw:p-0" align="start">
-        <Command>
-          <CommandList>
-            <CommandGroup heading={groupHeading}>
-              {recentSearches.map((item) => (
-                <CommandItem
-                  key={getItemKey(item)}
-                  onSelect={() => handleSearchItemSelect(item)}
-                  className={cn('tw:flex tw:items-center', classNameForItems)}
-                >
-                  <Clock className="tw:mr-2 tw:h-4 tw:w-4 tw:opacity-50" />
-                  <span>{renderItem(item)}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen} modal={false}>
+      {/* This component is exported standalone and may be rendered anywhere, so it carries its
+          own TooltipProvider rather than assuming a host tree already has one. */}
+      <TooltipProvider>
+        {ariaLabel ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent>{ariaLabel}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <DropdownMenuTrigger asChild>{button}</DropdownMenuTrigger>
+        )}
+      </TooltipProvider>
+      <DropdownMenuContent id={id} className="tw:w-[300px]" align="start">
+        <DropdownMenuLabel>{groupHeading}</DropdownMenuLabel>
+        {recentSearches.map((item) => (
+          <DropdownMenuItem
+            key={getItemKey(item)}
+            onSelect={() => handleSearchItemSelect(item)}
+            className={cn('tw:flex tw:items-center', classNameForItems)}
+          >
+            <Clock className="tw:me-2 tw:h-4 tw:w-4 tw:opacity-50" />
+            <span>{renderItem(item)}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
