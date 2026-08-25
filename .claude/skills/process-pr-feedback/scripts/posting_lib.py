@@ -98,6 +98,23 @@ def describe_row(row):
     return f"{item} [{chr(9).join(row)!r}]"
 
 
+def report_lines(unknown, failed):
+    """The operator-facing report for unsettled and failed rows.
+
+    Lives here, not open-coded in `verify_posted.py`, so a test can run the CONSUMER rather than
+    only the row walkers that feed it. Re-open-coding `r[1]` at a print site is what reintroduced
+    an IndexError twice; with the rendering behind one function a test over a truncated-row log
+    covers every site at once.
+    """
+    lines = []
+    for r in unknown:
+        lines.append(f"  !! UNKNOWN OUTCOME: {describe_row(r)} has a PENDING row with no OK or "
+                     f"FAIL after it — a comment may be live. Resolve it before re-posting.")
+    for r in failed:
+        lines.append(f"  NOTE failed and never re-posted: {describe_row(r)}")
+    return lines
+
+
 def code_spans(body):
     """(start, end) spans of fenced blocks and inline code spans."""
     spans = []

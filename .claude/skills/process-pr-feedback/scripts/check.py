@@ -36,7 +36,7 @@ def internal_labels(packet):
     if not os.path.exists(path):
         sys.exit(f"STOP: {path} is missing. P2 writes it; it is the configuration for the "
                  f"internal-label check and must not be re-derived here.")
-    out, bad, skipped, in_internal = [], [], [], False
+    out, bad, skipped, suspicious, in_internal = [], [], [], [], False
     for line in open(path, encoding="utf-8"):
         if re.match(r"^##\s+Internal", line, re.I):
             in_internal = True
@@ -46,31 +46,38 @@ def internal_labels(packet):
             continue
         if not (in_internal and line.strip()) or line.startswith(("#", ">")):
             continue
-        # An entry is `<pattern> — <prose>`, and a pattern contains no whitespace. Prose
-        # paragraphs inside the section are normal and must not be scraped as patterns: a
-        # sentence taken as a regex either throws or silently matches nothing, and either way it
-        # dilutes a deny-list whose whole job is to be exact. Skipped lines are printed so a real
-        # entry written in the wrong shape is visible rather than dropped.
-        # `shared-vocabulary.md` is markdown written by hand, so a bullet marker is the natural
-        # form and must not silently disqualify a real entry.
+        # A markdown list marker is stripped first; the file is written by hand.
         entry = re.sub(r"^(?:[-*+]|\d+[.)])\s+", "", line.strip())
-        parts = re.split(r"\s+—\s+|\s+-\s+", entry, maxsplit=1)
-        token = parts[0].strip()
 
-        # Classification, in this order. Every branch below is pinned by a test, because this
-        # rule has been got wrong in both directions: a version that stopped on prose, and a
-        # version that silently dropped a usable pattern.
+        # An entry is a BACKTICKED token, optionally followed by `— prose`. Everything else in
+        # the section is prose.
         #
-        #   token is empty or contains whitespace   -> prose      (skip + print)
-        #   token is a schema placeholder           -> bad        (hard stop)
-        #   token carries a metacharacter or digit  -> pattern    (transcribe; prose optional)
-        #   token is a bare word, id-shaped         -> bad        (hard stop)
-        #   token is a bare word, ordinary English  -> prose      (skip + print)
-        if not token or re.search(r"\s", token):
+        # This is a convention rather than an inference on purpose. Three rounds of trying to
+        # tell an entry from a sentence by shape got it wrong in both directions: `Note — …` and
+        # `NOTE — …` were stopped on (with a remedy that would deny-list an everyday word), while
+        # `e.g. — …` and `P2 — …` were transcribed as live regexes that would hard-FAIL any
+        # approved body containing them. A backtick is unambiguous, is what markdown authors
+        # already write around a pattern, and is checkable.
+        # The backticked token must be the WHOLE first field: end of line, or a `— prose`
+        # separator after it. Otherwise prose that merely opens with an inline-code span —
+        # "`check.py` reads this section and uses each token" — reads as an entry.
+        m = re.match(r"`([^`]+)`\s*(?:$|—\s|-\s)", entry)
+        if not m:
+            skipped.append(line.strip()[:70])
+            # A single bare token before a separator is the shape a mis-written entry takes.
+            # Say so loudly: dropping a real entry silently is how the deny-list ends up testing
+            # nothing while the run prints PASS.
+            head = entry.split(" ")[0]
+            if re.match(r"^\S+\s+(—|-)\s+", entry) and (head.isupper() or re.search(r"[-_:\d]", head)):
+                suspicious.append(entry[:70])
+            continue
+        token = m.group(1).strip()
+
+        if not token:
             skipped.append(line.strip()[:70])
             continue
-        # Anchored on standalone uppercase runs and bracketed slots. An unanchored `nn` rejected
-        # legitimate patterns like `\bannotation-\d+\b`.
+        # Anchored on standalone uppercase runs and bracketed slots, so a legitimate pattern like
+        # `\bannotation-\d+\b` is not rejected for containing "nn".
         if re.search(r"(?<![A-Za-z])(NN+|XX+)(?![A-Za-z])|<[^>]*>|\.\.", token):
             bad.append(f"{token} (a schema placeholder, not a pattern)")
             continue
@@ -79,24 +86,13 @@ def internal_labels(packet):
         except re.error as e:
             bad.append(f"{token} (not a valid regex: {e})")
             continue
-        # A usable pattern needs no prose half. Requiring one silently dropped `2659-\d\d`
-        # written on its own, which takes the label out of the deny-list while the run prints
-        # PASS — the same "tested nothing" asymmetry the placeholder branch stops on.
-        if re.search(r"[\\\[\](){}*+?|^$.\d]", token):
-            out.append(token)
-            continue
-        # A bare word. Id-shaped ones (ALL-CAPS, or carrying `-`, `_`, `:`) are entries written
-        # wrong and must stop rather than vanish. An ordinary capitalised English word opening a
-        # sentence — "Note — the reviewer never saw these ids." — is prose; stopping on it would
-        # be worse than skipping, since the remedy it suggests (`\bNote\b`) would deny-list an
-        # everyday word and hard-FAIL any approved body containing it.
-        if token.isupper() or re.search(r"[-_:]", token):
-            bad.append(f"{token} (a bare literal; write it as a pattern, e.g. \\b{token}\\b)")
-        else:
-            skipped.append(line.strip()[:70])
-        continue
+        out.append(token)
+
     for sk in skipped:
         print(f"[labels] not an entry, skipped: {sk!r}")
+    for sp in suspicious:
+        print(f"[labels] !! looks like an entry but is not backticked, so it was NOT "
+              f"transcribed: {sp!r}")
     if bad:
         sys.exit("STOP: shared-vocabulary.md Internal entries are not usable patterns:\n"
                  + "\n".join(f"  - {b}" for b in bad)

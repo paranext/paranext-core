@@ -137,39 +137,78 @@ def _vocab(tmp, internal):
     return tmp
 
 
-def test_schema_shaped_internal_entry_is_rejected_not_silently_escaped():
-    """`2659-NN` is a literal that matches no real id — the check would report PASS."""
+def _labels(entry):
     import tempfile
     from check import internal_labels
-    d = _vocab(tempfile.mkdtemp(), "2659-NN — our packet ids")
+    return internal_labels(_vocab(tempfile.mkdtemp(), entry + "\n" + "`2659-\\d\\d` — our ids"))
+
+
+def _stops(entry):
+    from check import internal_labels
+    import tempfile
     try:
-        internal_labels(d)
+        internal_labels(_vocab(tempfile.mkdtemp(), entry))
     except SystemExit as e:
-        assert "not usable patterns" in str(e) and "2659-NN" in str(e)
-    else:
-        raise AssertionError("a placeholder entry was accepted")
+        return str(e)
+    return None
 
 
-def test_real_regex_internal_entry_is_used_verbatim():
+def test_a_backticked_pattern_is_transcribed_verbatim():
     import tempfile
     from check import internal_labels
-    d = _vocab(tempfile.mkdtemp(), r"2659-\d\d — our packet ids")
-    assert internal_labels(d) == [r"2659-\d\d"]
+    assert internal_labels(_vocab(tempfile.mkdtemp(), "`2659-\\d\\d` — ids")) == [r"2659-\d\d"]
 
 
-def test_internal_pattern_catches_a_real_id_in_link_text():
-    hits = scan_denylist("see [2659-38](https://ex.com/a)[docs](https://ex.com/b)", [r"2659-\d\d"])
-    assert hits, "a real packet id in link text was allowed"
-
-
-def test_prose_inside_the_internal_section_is_not_scraped_as_a_pattern():
-    """A sentence taken as a regex either throws or matches nothing; both dilute the deny-list."""
+def test_a_backticked_pattern_needs_no_prose_half():
     import tempfile
     from check import internal_labels
-    d = _vocab(tempfile.mkdtemp(),
-               "Write real patterns, not schemas, or the check tests nothing.\n"
-               r"2659-\d\d — our packet item ids")
-    assert internal_labels(d) == [r"2659-\d\d"]
+    assert internal_labels(_vocab(tempfile.mkdtemp(), "`2659-\\d\\d`")) == [r"2659-\d\d"]
+
+
+def test_a_backticked_entry_may_be_a_markdown_bullet():
+    assert _labels("- `\\b55\\b` — an id") == [r"\b55\b", r"2659-\d\d"]
+
+
+def test_schema_shaped_entry_is_rejected_not_silently_escaped():
+    """`2659-NN` is a literal matching the characters NN, so it would test nothing."""
+    msg = _stops("`2659-NN` — our packet ids")
+    assert msg and "schema placeholder" in msg
+
+
+def test_an_invalid_regex_entry_stops(): 
+    msg = _stops("`[unclosed` — a broken pattern")
+    assert msg and "not a valid regex" in msg
+
+
+def test_placeholder_rejector_accepts_a_real_regex_containing_nn():
+    assert _labels("`\\bannotation-\\d+\\b` — contains nn but is a real pattern") == [
+        r"\bannotation-\d+\b", r"2659-\d\d"]
+
+
+def test_prose_openers_are_never_transcribed_whatever_their_shape():
+    """Three rounds of inferring intent from shape got this wrong in both directions.
+
+    `Note`/`NOTE` were stopped on with a remedy that would deny-list an everyday word; `e.g.`
+    and `P2` were transcribed as live regexes that would hard-FAIL any body containing them.
+    None of them is backticked, so none is an entry.
+    """
+    for prose in ("Note — the reviewer never saw these ids.",
+                  "NOTE — the reviewer never saw these ids.",
+                  "e.g. — an example opener here.",
+                  "P2 — writes this file.",
+                  "The reviewer never saw these ids.",
+                  "`check.py` reads this section and uses each token"):
+        assert _labels(prose) == [r"2659-\d\d"], f"{prose!r} was treated as an entry"
+
+
+def test_an_unbackticked_id_shaped_line_is_reported_not_silently_dropped(capsys=None):
+    """Dropping a mis-written entry silently is how the deny-list ends up testing nothing."""
+    import io
+    import contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        _labels("CODENAME — an internal codename")
+    assert "looks like an entry but is not backticked" in buf.getvalue()
 
 
 def test_missing_vocabulary_file_is_a_hard_stop():
@@ -258,38 +297,7 @@ def test_markdown_link_with_parenthesised_url_does_not_false_positive():
     assert scan_body(body, PLACEHOLDERS, []) == [], "a balanced-paren link target was truncated"
 
 
-def test_vocabulary_entry_may_be_a_markdown_bullet():
-    import tempfile
-    from check import internal_labels
-    d = _vocab(tempfile.mkdtemp(), r"- 2659-\d\d — our packet item ids")
-    assert internal_labels(d) == [r"2659-\d\d"]
 
-
-def test_bare_literal_entry_hard_stops_rather_than_being_dropped():
-    """A one-token entry with no regex character is unusable, and dropping it reports PASS.
-
-    Silently skipping it removes the label from the deny-list and the id it was written to catch
-    goes public — the same "PASS having tested nothing" asymmetry the placeholder branch treats
-    as a stop, so this is a stop too.
-    """
-    import tempfile
-    from check import internal_labels
-    d = _vocab(tempfile.mkdtemp(), "CODENAME — an internal codename")
-    try:
-        internal_labels(d)
-    except SystemExit as e:
-        assert "bare literal" in str(e) and r"\bCODENAME\b" in str(e)
-    else:
-        raise AssertionError("a bare literal entry was accepted or silently skipped")
-
-
-def test_prose_without_a_separator_is_skipped_not_stopped():
-    """Real prose has no `— prose` half to sit after, so it is skipped and printed."""
-    import tempfile
-    from check import internal_labels
-    d = _vocab(tempfile.mkdtemp(),
-               "The reviewer never saw these ids.\n" + r"2659-\d\d — our ids")
-    assert internal_labels(d) == [r"2659-\d\d"]
 
 
 def test_preamble_before_the_first_item_is_not_stray_content():
@@ -297,13 +305,6 @@ def test_preamble_before_the_first_item_is_not_stray_content():
     text = ("# Drafts\n\nnotes here\n\n## item: X\nkind: issue\npr: 1\n"
             "--- body ---\nb\n--- end ---\n")
     assert [i["item"] for i in extract_bodies.parse(text)] == ["X"]
-
-
-def test_placeholder_rejector_accepts_a_real_regex_containing_nn():
-    import tempfile
-    from check import internal_labels
-    d = _vocab(tempfile.mkdtemp(), r"\bannotation-\d+\b — a real pattern that contains nn")
-    assert internal_labels(d) == [r"\bannotation-\d+\b"]
 
 
 def test_repo_flag_accepts_both_forms():
@@ -359,32 +360,20 @@ def test_describe_row_names_a_truncated_row_without_indexing_past_it():
     assert describe_row(["OK", "R5-01", "1", "r", "9", "u", "t"]).startswith("R5-01")
 
 
-def _labels(entry):
-    import tempfile
-    from check import internal_labels
-    return internal_labels(_vocab(tempfile.mkdtemp(), entry + "\n" + r"2659-\d\d — our ids"))
 
 
-def test_a_usable_pattern_needs_no_prose_half():
-    """Requiring `— prose` silently dropped a valid pattern, and the run still printed PASS."""
-    import tempfile
-    from check import internal_labels
-    assert internal_labels(_vocab(tempfile.mkdtemp(), r"2659-\d\d")) == [r"2659-\d\d"]
 
+def test_no_test_or_helper_is_defined_twice():
+    """A duplicate def silently shadows the earlier one, and the shadowed tests still "pass".
 
-def test_one_word_prose_before_an_em_dash_is_skipped_not_stopped():
-    """`Note — …` is a sentence. Stopping on it would suggest deny-listing an everyday word."""
-    assert _labels("Note — the reviewer never saw these ids.") == [r"2659-\d\d"]
-
-
-def test_an_id_shaped_bare_word_stops_rather_than_vanishing():
-    for entry in ("CODENAME — an internal codename", "feature-x — our codename"):
-        try:
-            _labels(entry)
-        except SystemExit as e:
-            assert "bare literal" in str(e)
-        else:
-            raise AssertionError(f"{entry!r} was accepted or silently skipped")
+    That is how a stale non-backticked `_labels` helper kept four vocabulary tests exercising the
+    old convention after the new one shipped.
+    """
+    import re
+    src = open(__file__, encoding="utf-8").read()
+    names = re.findall(r"^def (\w+)\(", src, re.M)
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    assert not dupes, f"duplicate top-level definitions shadow each other: {dupes}"
 
 
 def main():
@@ -398,11 +387,11 @@ def main():
         except AssertionError as e:
             failed.append((name, e))
             print(f"  FAIL  {name}: {e}")
-        except BaseException as e:  # noqa: BLE001 - a crash is a failure, not a reason to stop
-            # BaseException, not Exception: every STOP in these scripts is a `sys.exit`, and
-            # SystemExit does not derive from Exception. Catching only Exception left the most
-            # likely crash in this suite - an unexpected STOP - ending the run with no tally,
-            # which is the exact failure this handler exists to prevent.
+        except (Exception, SystemExit) as e:  # noqa: BLE001 - a crash is a failure
+            # SystemExit alongside Exception: every STOP in these scripts is a `sys.exit`, and
+            # SystemExit does not derive from Exception, so catching only Exception left the most
+            # likely crash - an unexpected STOP - ending the run with no tally. Not BaseException,
+            # which would swallow KeyboardInterrupt and make Ctrl-C take one press per test.
             failed.append((name, e))
             print(f"  ERROR {name}: {type(e).__name__}: {e}")
     print(f"\n{len(tests) - len(failed)}/{len(tests)} passed")

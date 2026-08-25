@@ -244,29 +244,29 @@ artifact under test cannot catch anything at all.
 
 ### What `shared-vocabulary.md`'s Internal list must look like
 
-`check.py` transcribes each Internal line and uses the leading token **verbatim as a regex**. A
-markdown list marker is stripped first, and the `— prose` half is optional. Write real patterns:
+**An Internal entry is a backticked pattern**, optionally preceded by a list marker and followed
+by `— prose`. Everything else in the section is prose and is skipped.
 
 ```
-2659-\d\d — our packet item ids
-\bD[1-7]\b — our G1 decision numbers
+- `2659-\d\d` — our packet item ids
+- `\bD[1-7]\b` — our G1 decision numbers
 ```
 
-The classification, in order — every branch is pinned by a test, because this rule has been got
-wrong in both directions:
+The backticks are a convention rather than something inferred, and deliberately so. Three attempts
+to tell an entry from a sentence by *shape* got it wrong in both directions: `Note — …` and
+`NOTE — …` were stopped on, with a suggested remedy that would have deny-listed an everyday word,
+while `e.g. — …` and `P2 — …` were transcribed as live regexes that would hard-FAIL any approved
+body containing them. A backtick is unambiguous, is what a markdown author already writes around a
+pattern, and is checkable.
 
-| The leading token | Treated as | Why |
-|---|---|---|
-| empty, or contains whitespace | **prose** — skipped and printed | a sentence, not an entry |
-| a schema slot (`2659-NN`, `R5-XX`, `<…>`, `..`) | **hard stop** | a literal that matches no real id, so the run would report PASS having tested nothing |
-| not a valid regex | **hard stop** | it can only fail at match time |
-| carries a metacharacter or a digit | **pattern** — transcribed | usable as written, with or without prose |
-| a bare word, ALL-CAPS or carrying `-` `_` `:` | **hard stop** | an entry written wrong; skipping it drops the label and prints PASS |
-| a bare ordinary word (`Note — …`) | **prose** — skipped and printed | stopping would suggest deny-listing an everyday word, which would hard-FAIL any body containing it |
+The token must be the **whole first field** — end of line, or a separator after it — so prose that
+merely opens with an inline-code span (`` `check.py` reads this section… ``) is not an entry.
 
-Two asymmetries are deliberate. A usable pattern needs **no** prose half — requiring one silently
-dropped `2659-\d\d` written alone, which takes the label out of the deny-list while the run still
-prints PASS. And skipped lines are printed **before** every hard stop, so the operator sees what
-was dropped on exactly the path that explains why nothing parsed.
-A leading markdown list marker is accepted, and an entry must look like a pattern — carry a regex
-metacharacter or a digit — so a one-word prose opener is not transcribed as a literal.
+`check.py` then applies two hard stops to what it transcribed: a schema slot (`2659-NN`, `R5-XX`,
+anything with `<…>` or `..`) is a literal that matches no real id, and an invalid regex can only
+fail at match time. Both would let the run report PASS having tested nothing.
+
+Two reporting rules make the failure modes visible rather than silent. Skipped lines are printed
+**before** every hard stop, so the operator sees what was dropped on exactly the path that explains
+why nothing parsed. And a non-backticked line whose head looks like an id is called out
+separately — dropping a mis-written entry quietly is how a deny-list ends up testing nothing.
