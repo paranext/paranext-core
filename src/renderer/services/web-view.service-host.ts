@@ -100,6 +100,7 @@ import {
   wait,
 } from 'platform-bible-utils';
 import withWindowScopedWebViewIds, {
+  stripWindowScopeFromWebViewId,
   withWindowScopedWebViewIdInTab,
 } from '@renderer/components/docking/window-scoped-web-view-ids.util';
 import {
@@ -1236,7 +1237,15 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
   // TODO: retire this content-based guard in favor of the structural `layoutLoadGenerationInDock`
   // check above once its coverage is verified — see the doc comment above for context.
   const containedWebViewIds = collectWebViewIdsFromLayoutInfo(layout);
-  if (SIMPLE_LAYOUT_TAB_IDS.some((id) => containedWebViewIds.has(id))) {
+  // `SIMPLE_LAYOUT_TAB_IDS` is always unscoped (derived from the static `simpleLayout` at module
+  // load, before any window id is involved), but a contaminating tab's live id may carry this
+  // window's scope suffix (e.g. it arrived via `loadLayout`'s no-arg branch, which scopes every id
+  // it loads) — strip it from each contained id before comparing, or a scoped contaminant would
+  // silently slip past this guard.
+  const normalizedContainedWebViewIds = new Set(
+    [...containedWebViewIds].map(stripWindowScopeFromWebViewId),
+  );
+  if (SIMPLE_LAYOUT_TAB_IDS.some((id) => normalizedContainedWebViewIds.has(id))) {
     logger.warn(
       `Refused to persist a ${interfaceMode}-mode layout that still contains a Simple-mode tab id; leaving the previously-saved layout untouched.`,
     );
@@ -1275,13 +1284,19 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
  */
 /**
  * Every webview id that has ever been the Simple-mode Scripture Editor tab's real id during this
- * renderer session. Seeded with the tab's fixed id from `simpleLayout`
+ * renderer session, always stored **unscoped** (see {@link stripWindowScopeFromWebViewId}) — the
+ * fixed id from `simpleLayout` and every id `trackSimpleEditorReplaceTab` adds are compared against
+ * this set, and a live id may or may not carry this window's scope suffix depending on which
+ * `loadLayout` branch loaded it (the no-arg branch scopes every id it loads; the fast path
+ * (`buildSimpleLayoutForProject`) does not, and a `newGuid()`-minted replace-tab id never does
+ * either). Normalizing everything to unscoped on the way in is what lets every lookup below use a
+ * plain, scope-agnostic `.has()`. Seeded with the tab's fixed id from `simpleLayout`
  * (`SIMPLE_LAYOUT_EDITOR_TAB_ID`) — reused every time a fresh Simple layout loads, whether via the
- * Power → Simple fast path (`buildSimpleLayoutForProject`) or the no-arg Simple-mode load
- * (`simpleLayout` itself) — and grown by `trackSimpleEditorReplaceTab` whenever an in-Simple
- * project switch replaces the tab's content with a freshly-generated webview id instead. Ids are
- * never removed: they're random GUIDs, so unbounded growth over a session is negligible and safer
- * than guessing when it would be safe to prune.
+ * Power → Simple fast path or the no-arg Simple-mode load (`simpleLayout` itself) — and grown by
+ * `trackSimpleEditorReplaceTab` whenever an in-Simple project switch replaces the tab's content
+ * with a freshly-generated webview id instead. Ids are never removed: they're random GUIDs, so
+ * unbounded growth over a session is negligible and safer than guessing when it would be safe to
+ * prune.
  */
 const simpleEditorTabIds = new Set<string>([SIMPLE_LAYOUT_EDITOR_TAB_ID]);
 
@@ -1289,14 +1304,15 @@ const simpleEditorTabIds = new Set<string>([SIMPLE_LAYOUT_EDITOR_TAB_ID]);
  * Keeps `simpleEditorTabIds` current across an in-Simple project switch, which does NOT reuse the
  * Simple layout's fixed Scripture Editor tab id. `resolveOpenEditorDispatch`
  * (`platform-scripture-editor.utils.ts`) dispatches that switch as `{ kind: 'replace-tab',
- * targetTabId }` against whichever id is _currently_ the Simple editor's; `addWebViewToDock`'s
- * `replace-tab` case (`platform-dock-layout-storage.util.ts`) then swaps that tab's whole
- * `SavedTabInfo` — including its `id` — for the new webview's. So the position that used to answer
- * to a tracked id now answers to a freshly-generated one, and a filter keyed on a fixed id (or even
- * a fixed id list) alone stops matching after the very first in-Simple switch, permanently. Called
- * from `openOrReloadWebView` right after the dock placement lands, so the retirement of the old id
- * and the tracking of the new one happen atomically with the switch itself — no window where an
- * event for the new id could arrive before it's tracked.
+ * targetTabId }` against whichever id is _currently_ the Simple editor's — window-scoped or not,
+ * depending on how the current layout was loaded (see {@link simpleEditorTabIds}) —
+ * `addWebViewToDock`'s `replace-tab` case (`platform-dock-layout-storage.util.ts`) then swaps that
+ * tab's whole `SavedTabInfo` — including its `id` — for the new webview's. So the position that
+ * used to answer to a tracked id now answers to a freshly-generated one, and a filter keyed on a
+ * fixed id (or even a fixed id list) alone stops matching after the very first in-Simple switch,
+ * permanently. Called from `openOrReloadWebView` right after the dock placement lands, so the
+ * retirement of the old id and the tracking of the new one happen atomically with the switch itself
+ * — no window where an event for the new id could arrive before it's tracked.
  *
  * Deliberately does nothing when `targetTabId` isn't already tracked (e.g. a Power-mode replace-tab
  * on some other editor tab): only replacements that land on a tab this set already recognizes as
@@ -1305,8 +1321,8 @@ const simpleEditorTabIds = new Set<string>([SIMPLE_LAYOUT_EDITOR_TAB_ID]);
  */
 function trackSimpleEditorReplaceTab(layout: Layout, newTabId: WebViewId): void {
   if (layout.type !== 'replace-tab') return;
-  if (!simpleEditorTabIds.has(layout.targetTabId)) return;
-  simpleEditorTabIds.add(newTabId);
+  if (!simpleEditorTabIds.has(stripWindowScopeFromWebViewId(layout.targetTabId))) return;
+  simpleEditorTabIds.add(stripWindowScopeFromWebViewId(newTabId));
 }
 
 /**
@@ -1322,7 +1338,7 @@ function trackSimpleEditorReplaceTab(layout: Layout, newTabId: WebViewId): void 
  */
 function cacheLastOpenedSimpleProject(webView: SavedWebViewDefinition): void {
   if (webView.webViewType !== SCRIPTURE_EDITOR_WEBVIEW_TYPE) return;
-  if (!simpleEditorTabIds.has(webView.id)) return;
+  if (!simpleEditorTabIds.has(stripWindowScopeFromWebViewId(webView.id))) return;
   const { projectId } = webView;
   if (!projectId) return;
   projectLookupService

@@ -937,6 +937,41 @@ describe('handleSwitchToSimpleMode', () => {
     expect(logger.warn).toHaveBeenCalled();
   });
 
+  it('refuses to persist a layout containing a window-scoped Simple-mode tab id', async () => {
+    // Regression test: `SIMPLE_LAYOUT_TAB_IDS` is always unscoped, but a contaminating tab's live
+    // id may carry this window's scope suffix (e.g. it arrived via `loadLayout`'s no-arg branch,
+    // which scopes every id it loads) - the guard must strip that suffix before comparing, or a
+    // scoped contaminant slips past it.
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    simpleLayoutTabIdsMock.push('simple-fixed-tab-1');
+    settingsGetMock.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'power' : false,
+    );
+    host.registerDockLayout(fakeDockLayout);
+    await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalled());
+    mocks.networkRequest.mockClear();
+
+    // `globalThis.windowId` is `'2'` (file-wide beforeEach), matching the `-w2` suffix
+    // `withWindowScopedWebViewIds` would have appended to this id had it come through a real scoped
+    // load.
+    const contaminatedLayout = {
+      dockbox: {
+        mode: 'horizontal',
+        children: [{ tabs: [{ id: 'simple-fixed-tab-1-w2', tabType: 'webView', data: {} }] }],
+      },
+    };
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    await fakeDockLayout.onLayoutChangeRef.current?.(contaminatedLayout as never, '', undefined);
+
+    const saveCalls = mocks.networkRequest.mock.calls.filter(
+      ([requestType]) => requestType === SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
+    );
+    expect(saveCalls).toEqual([]);
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).toHaveBeenCalled();
+  });
+
   it('recovers to the bare layout and releases the overlay when the project-bound layout fails to load', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
@@ -1273,6 +1308,72 @@ describe('Scripture Editor tab events keep last-opened-project-cache current', (
     });
 
     await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-switched' }));
+  });
+
+  it('caches the project when the fixed Simple editor tab opens with a window-scoped id', async () => {
+    // Regression test: the fixed tab id opens window-scoped whenever the current layout was loaded
+    // via `loadLayout`'s no-arg branch (which scopes every id it loads) rather than the fast path -
+    // e.g. a session that starts directly in Simple mode, or the bare-layout fallback. The tracked
+    // id set must recognize the scoped id, not just the raw one it was seeded with.
+    const host = await importHost();
+    host.registerDockLayout(createFakeDockLayout());
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+      webView: {
+        id: `${FIXED_SIMPLE_EDITOR_TAB_ID}-w2`,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-scoped-opened',
+      },
+    });
+
+    await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-scoped-opened' }));
+  });
+
+  it('keeps caching after an in-Simple project switch replaces a window-scoped editor tab id (replace-tab)', async () => {
+    // Regression test: `resolveOpenEditorDispatch` dispatches `targetTabId` as whichever id is
+    // CURRENTLY the Simple editor's - if the current layout loaded via the no-arg branch, that id
+    // is window-scoped. The tracked id set must recognize the scoped `targetTabId` in order to add
+    // the replacement's id, or tracking silently stops for the rest of the session (same failure
+    // mode as the unscoped case above, triggered by a different starting condition).
+    const host = await importHost();
+    host.registerDockLayout(createFakeDockLayout());
+    const { getLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    const SCOPED_EDITOR_TAB_ID = `${FIXED_SIMPLE_EDITOR_TAB_ID}-w2`;
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+      webView: {
+        id: SCOPED_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-scoped-initial',
+      },
+    });
+    await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-scoped-initial' }));
+
+    const NEW_EDITOR_TAB_ID = 'freshly-generated-guid-2';
+    getWebViewProviderMock.mockResolvedValue({
+      getWebView: vi.fn(async () => ({
+        id: NEW_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        content: '',
+      })),
+    });
+
+    await host.openOrReloadWebView(
+      { id: NEW_EDITOR_TAB_ID, webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE },
+      { type: 'replace-tab', targetTabId: SCOPED_EDITOR_TAB_ID },
+      {},
+    );
+
+    emitNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW, {
+      webView: {
+        id: NEW_EDITOR_TAB_ID,
+        webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+        projectId: 'proj-scoped-switched',
+      },
+    });
+
+    await vi.waitFor(() => expect(getLastOpenedProject()).toEqual({ id: 'proj-scoped-switched' }));
   });
 });
 
