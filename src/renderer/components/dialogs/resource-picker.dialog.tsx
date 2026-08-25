@@ -26,9 +26,16 @@ function ResourcePickerDialogWrapper({
 }: DialogTypes[typeof RESOURCE_PICKER_DIALOG_TYPE]['props']) {
   const [localizedStrings] = useLocalizedStrings(STRING_KEYS);
 
-  // Fetches DBL catalog resources
+  // Fetches DBL catalog resources. The try/catch prevents usePromise from hanging on isLoading=true
+  // forever when the command rejects (e.g. if the extension hasn't registered yet).
   const [dblResources, isDblLoading] = usePromise(
-    useCallback(async () => sendCommand('platformGetResources.getCachedResources'), []),
+    useCallback(async () => {
+      try {
+        return await sendCommand('platformGetResources.getCachedResources');
+      } catch {
+        return undefined;
+      }
+    }, []),
     undefined,
   );
 

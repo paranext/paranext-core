@@ -156,6 +156,35 @@ describe('buildPickerResources', () => {
       reference: { type: 'dblResource', id: 'uid-comm' },
     });
   });
+
+  it('classifies a synthetic non-DBL entry (dblEntryUid === projectId) as ProjectReference', () => {
+    // Local non-DBL resources (e.g. VULGP83, TNN installed as .p8z) are represented in the
+    // dblResources array with dblEntryUid === projectId as a synthetic marker. downloadedToRow
+    // must fall through to ProjectReference for these, not wrap them in a DblResourceReference.
+    const dblResources: DblResourceData[] = [
+      {
+        dblEntryUid: 'tnn-proj-id',
+        displayName: 'TNN',
+        fullName: "Translator's Notes",
+        bestLanguageName: 'English',
+        type: 'CommentaryResource',
+        size: 0,
+        installed: true,
+        updateAvailable: false,
+        projectId: 'tnn-proj-id', // same as dblEntryUid — synthetic non-DBL marker
+      },
+    ];
+    const rows = buildPickerResources(
+      [],
+      [downloaded({ projectId: 'tnn-proj-id', name: 'TNN' })],
+      dblResources,
+    );
+    expect(rows[0]).toMatchObject({
+      source: 'downloaded',
+      type: 'CommentaryResource',
+      reference: { type: 'project', id: 'tnn-proj-id' },
+    });
+  });
 });
 
 describe('fetchDownloadedResources', () => {

@@ -466,7 +466,10 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
 
   const showResourcePicker = useDialogCallback(
     'platform.resourcePicker',
-    useMemo(() => ({ selectedResourceIds, isModal: true }), [selectedResourceIds]),
+    useMemo(
+      () => ({ resourceType: 'ScriptureResource' as const, selectedResourceIds, isModal: true }),
+      [selectedResourceIds],
+    ),
     useCallback(
       (resource: DblResourceData | undefined) => {
         if (!resource) return;

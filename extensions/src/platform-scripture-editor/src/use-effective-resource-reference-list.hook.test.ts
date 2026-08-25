@@ -88,10 +88,9 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(result.current.status).toBe('loading');
   });
 
-  it('reports loading while the user setting subscription is still pending', () => {
-    // The project setting has resolved, but the user-layer PDP has not arrived yet. This is the
-    // normal interleaving on essentially every mount: the user layer needs the PDP to resolve, then
-    // an explicit subscribe, then a first delivery — strictly more hops than the project setting.
+  it('returns project-level result immediately when user PDP is unavailable', () => {
+    // When useProjectDataProvider returns undefined, the hook treats it as "no user list" and
+    // falls back to DEFAULT_LIST so callers don't wait forever on a spinner.
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
     mockUseProjectDataProvider.mockReturnValue(undefined);
 
@@ -99,7 +98,8 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current.status).toBe('loading');
+    expect(result.current[0]).not.toBeUndefined();
+    expect(result.current[1]).toBe(false);
   });
 
   it('returns project-only list when user list is empty', () => {

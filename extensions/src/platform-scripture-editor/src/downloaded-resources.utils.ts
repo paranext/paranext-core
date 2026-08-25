@@ -7,7 +7,11 @@ import type {
   ProjectReference,
   ResourceReference,
 } from 'platform-scripture';
-import { isDblResourceReference, isProjectReference } from './resource-reference.utils';
+import {
+  isDblResourceReference,
+  isNonDblResource,
+  isProjectReference,
+} from './resource-reference.utils';
 
 /** A locally-installed scripture project, with its display metadata resolved. */
 export type DownloadedResource = {
@@ -44,10 +48,7 @@ export type PickerResource = {
 export async function fetchDownloadedResources(): Promise<DownloadedResource[]> {
   try {
     // Filter to `platform.base` rather than `platformScripture.USJ_Chapter` so that
-    // commentary/notes resources that do not implement USJ are included. Using `platform.base`
-    // guarantees the C# Paratext factory has registered before the call resolves (the retry
-    // mechanism waits for non-empty results — a plain unfiltered call could settle on
-    // TypeScript-only PDPFs before the C# factory appears).
+    // commentary/notes resources that do not implement USJ are included.
     // Then filter to `isEditable === false`: DBL resources always have this flag; locally-installed
     // read-only resources (VULGP83, TNN, TND, HBK) have `Editable=F` in their Settings.xml and
     // therefore also get `isEditable: false`, even though `isPublished` is `false` for them.
@@ -131,7 +132,7 @@ function downloadedToRow(
       (r.dblEntryUid !== '' &&
         project.projectId.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
   );
-  if (dbl) {
+  if (dbl && !isNonDblResource(dbl)) {
     const reference: DblResourceReference = {
       type: 'dblResource',
       name: dbl.fullName,
@@ -155,7 +156,7 @@ function downloadedToRow(
     reference,
     source: 'downloaded',
     isAdminLocked: false,
-    type: 'ScriptureResource',
+    type: dbl?.type ?? 'ScriptureResource',
     installed: true,
     projectId: project.projectId,
   };

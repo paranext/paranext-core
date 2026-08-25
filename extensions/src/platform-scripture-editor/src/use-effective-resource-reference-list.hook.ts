@@ -108,7 +108,8 @@ export function useEffectiveResourceReferenceList(
 
   useEffect(() => {
     if (!userPdp) {
-      setUserResourceReferenceList(undefined);
+      // No PDP available for this project — treat as empty user list so callers don't wait forever.
+      setUserResourceReferenceList(DEFAULT_LIST);
       return;
     }
 
@@ -135,6 +136,8 @@ export function useEffectiveResourceReferenceList(
       })
       .catch((err) => {
         logger.error(`Failed to subscribe to user text connection settings: ${err}`);
+        // Fall back to the default list so callers don't spin on an undefined result forever.
+        if (!disposed) setUserResourceReferenceList(DEFAULT_LIST);
       });
 
     return () => {
@@ -143,18 +146,15 @@ export function useEffectiveResourceReferenceList(
     };
   }, [userPdp, settingName]);
 
-  return useMemo(() => {
-    // Readiness must account for BOTH sources. The user layer needs `useProjectDataProvider` to
-    // resolve, then an explicit subscribe, then a first delivery — strictly more hops than the
-    // project setting — so "project setting resolved, user list still undefined" is the normal
-    // window on essentially every mount, not a narrow race. Reporting that window as anything other
-    // than `loading` is what let panels render a premature empty state.
-    if (isProjectSettingLoading) return { status: 'loading' };
+  const value = useMemo(() => {
+    if (isProjectSettingLoading) return undefined;
+    if (isPlatformError(projectResourceReferenceList)) return undefined;
+    if (userResourceReferenceList === undefined) return undefined;
 
-      return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
-    }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]),
-    isProjectSettingLoading || (userPdp !== undefined && userResourceReferenceList === undefined),
-  ];
+    return mergeResourceReferenceLists(projectResourceReferenceList, userResourceReferenceList);
+  }, [isProjectSettingLoading, projectResourceReferenceList, userResourceReferenceList]);
+
+  return [value, isProjectSettingLoading || value === undefined];
 }
 
 export default useEffectiveResourceReferenceList;
