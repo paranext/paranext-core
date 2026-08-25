@@ -23,9 +23,10 @@ PREFIX = "\U0001f916 Claude: "
 def internal_labels(packet):
     """Transcribe the Internal list from shared-vocabulary.md — P2's artifact, read-only here.
 
-    Each Internal line is `<regex>  — prose`, and the regex is used VERBATIM. It is not escaped
-    and not guessed at, because a heuristic that sometimes escapes and sometimes does not is how
-    an entry silently matches nothing.
+    An entry is a BACKTICKED pattern, used verbatim as a regex; anything else in the section is
+    prose. The convention is specified in `references/posting-mechanics.md`
+    § *What `shared-vocabulary.md`'s Internal list must look like*, which is the single place
+    that rule lives — do not restate it here, it has drifted three times already.
 
     Schema-shaped entries are rejected rather than transcribed. `2659-NN` looks like a rule and
     is a literal: it matches the four characters `2659-` followed by `NN`, so every real id
@@ -67,8 +68,17 @@ def internal_labels(packet):
             # A single bare token before a separator is the shape a mis-written entry takes.
             # Say so loudly: dropping a real entry silently is how the deny-list ends up testing
             # nothing while the run prints PASS.
+            # Narrow: an id-shaped head, not merely one containing a digit or hyphen. A bare
+            # `[-_:\d]` test fires on ordinary prose ("P2 — writes this file.", a date, a
+            # version), and a warning that fires on prose the classifier deliberately skips
+            # stops being the one loud line in the output.
             head = entry.split(" ")[0]
-            if re.match(r"^\S+\s+(—|-)\s+", entry) and (head.isupper() or re.search(r"[-_:\d]", head)):
+            # An id-shaped head carries a digit and nothing but id characters. Every id this
+            # vocabulary uses is numbered (2659-38, R5-01, T2-01, D1). A purely alphabetic
+            # codename is indistinguishable from an ordinary capitalised word ("NOTE"), so it
+            # does not warn - it is still listed in the quiet skipped line above.
+            id_shaped = re.fullmatch(r"[\w:-]+", head) and re.search(r"\d", head)
+            if re.match(r"^\S+\s+(—|-)\s+", entry) and id_shaped:
                 suspicious.append(entry[:70])
             continue
         token = m.group(1).strip()
@@ -91,8 +101,8 @@ def internal_labels(packet):
     for sk in skipped:
         print(f"[labels] not an entry, skipped: {sk!r}")
     for sp in suspicious:
-        print(f"[labels] !! looks like an entry but is not backticked, so it was NOT "
-              f"transcribed: {sp!r}")
+        print(f"[labels] !! looks like an entry but is not a single backticked pattern, so "
+              f"it was NOT transcribed: {sp!r}")
     if bad:
         sys.exit("STOP: shared-vocabulary.md Internal entries are not usable patterns:\n"
                  + "\n".join(f"  - {b}" for b in bad)

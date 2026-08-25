@@ -100,7 +100,9 @@ inside this packet. `references/reply-conventions.md` rule 6 governs what belong
 
 P7's dry-run check in `references/posting-mechanics.md` is where it bites: that check's deny-list
 is **transcribed by hand** from this file's Internal list — nothing parses it — so write the
-entries in a form that transcribes cleanly, and expect the poster to quote what it transcribed.
+entries as **backticked patterns** per `references/posting-mechanics.md`
+§ *What `shared-vocabulary.md`'s Internal list must look like*, and expect the poster to
+quote what it transcribed.
 Write it at **P2**, while the inventory's provenance is still in front of you, and treat it as
 read-only from then on; reconstructing it at P7 from the reply drafts is how a packet-internal id
 reaches a reviewer.
@@ -1059,8 +1061,8 @@ file means something. Record what was approved, what was explicitly *not*, and t
 Both halves are governed by what G2 approved. If approval covered the replies but not the push,
 post and stop — but re-check the bodies first. Posting without pushing leaves the remote at the
 pre-restack commit, so every SHA a reply cites from the local restacked tip names an object that
-is not on GitHub, which is the orphaned-SHA failure `references/reply-conventions.md` rule 5
-forbids. New inline comments still anchor correctly (the anchor and its `commit_id` both come
+is not on GitHub, which is the **unpushed**-SHA failure `references/reply-conventions.md` rule 5
+forbids (distinct from a SHA a later restack orphans, which still resolves). New inline comments still anchor correctly (the anchor and its `commit_id` both come
 from the remote head), but they anchor at code that does not yet contain the fix the reply
 describes. Either hold those replies until the push is approved, or reword them to state what
 landed locally without citing an unpushed SHA.

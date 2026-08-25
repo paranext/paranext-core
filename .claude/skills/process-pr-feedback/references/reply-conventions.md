@@ -37,9 +37,21 @@ the user's name, in public, on a repo the whole team reads.
    link in the reply still opens. What is lost is *context*: the commit no longer appears in the
    PR's commit list, so a reader cannot place it in the branch's history, and the object is
    eventually collectable. So a restack after posting is a degradation, not a broken link, and it
-   is not a reason to avoid a rebase the branch needs — but it is a reason to prefer posting
-   *after* the restack rather than before, and never to cite a SHA that has not been pushed at
-   all, which genuinely does not resolve.
+   is not a reason to avoid a rebase the branch needs.
+
+   **None of that relaxes the drafting-time rule**, which is about a different moment: a SHA that
+   is *already* orphaned when the draft is written must not go into it, and a SHA that has not
+   been pushed at all genuinely does not resolve. Re-derive every SHA at drafting and re-check it
+   at posting. The measurement above is about what a restack costs a SHA already public — it is
+   not a licence to cite a dead one.
+
+   **The same staleness reaches more than SHAs.** Anything a reply names that a later rebase can
+   renumber goes stale the same way and is not recoverable by re-reading the branch — an
+   `Architecture-Decisions.md` entry number is the case this skill has hit, three times on one
+   branch, because the file is append-only and numbered off a shared counter. A reply that cited
+   `ADR-0022` pointed at an unrelated decision within a day. Prefer naming the entry by **title**
+   rather than number in a public reply, and when a rebase renumbers something already cited,
+   that is a correction owed to the reviewer, not a silent edit.
 6. **No labels the reviewer has never seen.** The test is visibility, not format. An id the
    reviewer themselves assigned — their own review's finding numbers — is the clearest possible
    way to say which item you are answering, and Example 3 below uses exactly that. An id that
@@ -56,7 +68,7 @@ the user's name, in public, on a repo the whole team reads.
    - `FIX-B`, `FIX-D` — named in the design doc sent to them on 2026-08-09
 
    ## Internal — this packet only, never in a body
-   - `T2-01`..`T2-09` — our inventory ids
+   - `T2-0[1-9]` — our inventory ids
    - `H1` — our working name for the hypothesis in 01-verification/
    ```
 

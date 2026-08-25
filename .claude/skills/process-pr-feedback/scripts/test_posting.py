@@ -201,14 +201,26 @@ def test_prose_openers_are_never_transcribed_whatever_their_shape():
         assert _labels(prose) == [r"2659-\d\d"], f"{prose!r} was treated as an entry"
 
 
+def test_prose_openers_do_not_trip_the_loud_warning():
+    """A warning that fires on prose the classifier deliberately skips stops being a signal."""
+    import io
+    import contextlib
+    for prose in ("NOTE — the reviewer never saw these ids.", "e.g. — an example opener.",
+                  "The reviewer never saw these ids."):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _labels(prose)
+        assert "!!" not in buf.getvalue(), f"{prose!r} tripped the loud warning"
+
+
 def test_an_unbackticked_id_shaped_line_is_reported_not_silently_dropped(capsys=None):
     """Dropping a mis-written entry silently is how the deny-list ends up testing nothing."""
     import io
     import contextlib
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        _labels("CODENAME — an internal codename")
-    assert "looks like an entry but is not backticked" in buf.getvalue()
+        _labels("R5-01 — an inventory id")
+    assert "not a single backticked pattern" in buf.getvalue()
 
 
 def test_missing_vocabulary_file_is_a_hard_stop():
@@ -342,16 +354,25 @@ def test_a_truncated_pending_is_still_reported_not_swallowed():
     assert len(unsettled_pendings(rows)) == 1, "the unknown-outcome row was dropped"
 
 
-def test_every_row_a_walker_returns_can_be_rendered():
-    """The producer may return a row too short to name its item; the consumer must survive it.
+def test_report_lines_renders_a_truncated_row_without_crashing():
+    """Runs the CONSUMER, not just the row walkers that feed it.
 
-    Hardening the library alone moved the crash into `verify_posted.py`'s reporting loop, because
-    that loop indexed `r[1]` directly. This exercises the consumer contract, not just the producer.
+    `verify_posted.py` prints exactly what `report_lines` returns, so this covers all of its
+    report loops at once. A test that calls `describe_row` directly leaves those loops
+    unexercised, which is how re-open-coding `r[1]` at a print site went unnoticed twice.
     """
-    from posting_lib import describe_row
-    for rows in ([["PENDING"]], [["PENDING"], ["OK", "X", "1", "r", "9", "u", "t"]], [[""]]):
-        for r in unsettled_pendings(rows) + unresolved_failures(rows):
-            assert isinstance(describe_row(r), str)
+    from posting_lib import report_lines
+    rows = [["PENDING"], ["FAIL", "R5-07", "2659", "reply", "-", "-", "t"]]
+    lines = report_lines(unsettled_pendings(rows), unresolved_failures(rows))
+    assert any("<truncated row>" in ln for ln in lines), lines
+    assert any("R5-07" in ln for ln in lines), lines
+    assert any("UNKNOWN OUTCOME" in ln for ln in lines), lines
+
+
+def test_report_lines_is_empty_for_a_clean_log():
+    from posting_lib import report_lines
+    rows = [["PENDING", "X", "1", "r", "-", "-", "t"], ["OK", "X", "1", "r", "9", "u", "t"]]
+    assert report_lines(unsettled_pendings(rows), unresolved_failures(rows)) == []
 
 
 def test_describe_row_names_a_truncated_row_without_indexing_past_it():

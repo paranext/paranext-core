@@ -88,8 +88,9 @@ Run every check over the extracted bodies:
    missing, **stop and say so**: a deny-list assembled at posting time tests only the labels
    whoever assembled it happened to think of, and the poster is the one role forbidden from
    touching bodies. Transcribe its Internal entries into `INTERNAL_LABELS` below as regexes; write
-   them in `shared-vocabulary.md` in a form that transcribes cleanly (a literal token or an obvious
-   pattern per line, prose after an em-dash), because nothing parses that file automatically.
+   them in `shared-vocabulary.md` as **backticked patterns** — the convention is specified in
+   § *What `shared-vocabulary.md`'s Internal list must look like* below, and is the single place
+   that rule lives.
    Allow a match only when **the
    match itself** sits inside a URL — not merely inside a token that contains one. Testing the
    whole token waves through `[<label>](https://…)`, where the label is the link *text*: the most
@@ -149,10 +150,12 @@ Note the shape of that failure — a **422 Validation Failed**, not the 403 the 
 returns, and with `code: "abuse"` buried in the body rather than in the status line. Read as
 "validation failed", it looks like a bad body or a dead target and invites editing an approved
 reply to get past it; it is neither. Sleep a second or two between posts on any batch beyond a
-handful, and if one does trip it, **stop, verify, wait, and resume from the log** — the guard in
-`post.py` allows a re-post after a `FAIL` row precisely because `gh` reporting a failure means
-nothing was created. Confirm that with `verify_posted.py` before resuming: a clean stray list is
-what makes the remaining items safe to post.
+handful, and if one does trip it, **stop, verify, wait, and resume from the log**. The guard in
+`post.py` allows a re-post after a `FAIL` row, but **`gh` failing does not by itself prove nothing
+was created** — a 422/abuse rejection happens before creation, while a kill or a timeout may land
+after it. `verify_posted.py` carries that same premise, which is why it queries every PR the log
+touches including ones whose every row failed. So the licence to resume is not the `FAIL` row: it
+is `verify_posted.py` reporting a **clean stray list**. Run it before re-posting anything.
 
 One item per invocation. No loops that continue past an error, and no automatic retries — a
 retry after an ambiguous failure is how a comment gets double-posted.
