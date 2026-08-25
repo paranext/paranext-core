@@ -20,23 +20,26 @@ step, no automation. Just a record.
   fold the rule into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
   `.claude/rules/` file — that is what the agents read and enforce on the next feature. This log
   keeps the rationale and history; the standards keep the current rule.
-- **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-NNNN` instead of deleting
-  it; add the new decision as a new entry.
-- **Append at the end**, newest last. Number entries `ADR-NNNN`.
-- **Numbers are claimed at merge, not at write.** Several branches in flight at once each append the
-  next free number as of the day they branched, so two unmerged branches routinely carry the SAME
-  number for different decisions — and because the file is append-only, nothing catches it: the
-  second merge simply leaves `main` with two identical headings. Before merging a PR that adds an
-  entry, re-read the last heading on `main` and renumber yours to follow it, updating any
-  cross-references. Whoever merges second does the renumbering.
+- **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-{slug}` instead of
+  deleting it; add the new decision as a new entry.
+- **Append at the end**, newest last. Identify entries by a kebab-case slug — `ADR-{slug}` — rather
+  than by a number. The slug is a short name for the decision itself
+  (`ADR-startup-sync-readiness-gate`), stable enough to cite from code, and it never has to change
+  once written.
+- **Slugs, not numbers, because a number can only be claimed at merge.** Several branches are in
+  flight at once and each appends to the end, so two of them routinely picked the same next-free
+  number for different decisions — and because the file is append-only, nothing caught it until
+  `main` held two identical headings. A slug is claimed at write time and collides only when two
+  branches name the same decision. Entries written before this convention keep their `ADR-NNNN`
+  headings; leave them as they are.
 
 ### Entry template
 
 ```markdown
-## ADR-NNNN: {short title}
+## ADR-{kebab-case-slug}: {short title}
 
 - **Date:** YYYY-MM-DD
-- **Status:** Proposed | Accepted | Superseded by ADR-NNNN
+- **Status:** Proposed | Accepted | Superseded by ADR-{slug}
 - **Context:** what situation forced a decision (with file:line / source where useful).
 - **Decision:** what we chose.
 - **Alternatives:** what we considered and why we rejected/deferred them.
@@ -1430,7 +1433,7 @@ step, no automation. Just a record.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
 
-## ADR-0027: Core owns startup-sync ordering and gates it on project-data-provider readiness
+## ADR-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
 
 - **Date:** 2026-08-16
 - **Status:** Accepted
