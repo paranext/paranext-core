@@ -11,7 +11,7 @@ import {
   useProjectSetting,
 } from '@renderer/hooks/papi-hooks';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
-import { useOpenResourceBookIds } from '@renderer/hooks/use-open-resource-book-ids.hook';
+import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids.hook';
 import { useSendReceiveAvailability } from '@renderer/hooks/use-send-receive-availability.hook';
 import { useProjectPickerData } from '@renderer/hooks/use-project-picker-data.hook';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
@@ -97,9 +97,6 @@ const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
-// Copied into a mutable array because useLocalizedStrings takes LocalizeKey[] while the exported
-// constant is readonly. Module scope keeps the identity stable, which useLocalizedStrings needs to
-// avoid resubscribing on every render.
 const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
@@ -263,33 +260,35 @@ export function PlatformBibleToolbar() {
     }
     return booksPresentPossiblyError;
   }, [booksPresentPossiblyError]);
+  const projectBookIds = useMemo(() => getBookIdsFromBooksPresent(booksPresent), [booksPresent]);
   // Stable identity per booksPresent value — BookChapterControl memoizes its book list (and the
   // filtering/matching derived from it) on this function's identity, so a fresh closure every
   // render would recompute all of that on every toolbar render
-  const fetchActiveBookIds = useCallback(
-    () => getBookIdsFromBooksPresent(booksPresent),
-    [booksPresent],
-  );
+  const fetchActiveBookIds = useCallback(() => projectBookIds, [projectBookIds]);
   const getActiveBookIds = booksPresent ? fetchActiveBookIds : undefined;
 
-  const openResourceBookIds = useOpenResourceBookIds(resolvedWebView?.definition.projectId);
   // Simple mode is the only mode this ships in: it has a single, global book/chapter/verse control,
   // so widening its book list is unambiguous. Power mode's own controls are left as they are for
-  // that team to decide on; the component API stays open to them either way.
+  // that team to decide on; the component API stays open to them either way. Disabled outright in
+  // Power mode so it opens no data providers and no booksPresent subscriptions for a result nothing
+  // there reads.
+  const openProjectBookIds = useOpenProjectBookIds(
+    resolvedWebView?.definition.projectId,
+    !isPowerMode,
+  );
   const additionalBookIds = useMemo(() => {
     if (isPowerMode) return EMPTY_BOOK_IDS;
-    const projectBookIds = getBookIdsFromBooksPresent(booksPresent);
     // BookChapterControl renders exactly the book list it is given, so the current book has to come
     // from here or a reference on a book the active project lacks would be missing from its own
     // picker.
-    if (projectBookIds.includes(scrRef.book) || openResourceBookIds.includes(scrRef.book))
-      return openResourceBookIds;
-    return [...openResourceBookIds, scrRef.book];
-  }, [isPowerMode, booksPresent, openResourceBookIds, scrRef.book]);
+    if (projectBookIds.includes(scrRef.book) || openProjectBookIds.includes(scrRef.book))
+      return openProjectBookIds;
+    return [...openProjectBookIds, scrRef.book];
+  }, [isPowerMode, projectBookIds, openProjectBookIds, scrRef.book]);
   // Stable identity per value, for the same reason fetchActiveBookIds is memoized above:
   // BookChapterControl memoizes its book list on this function's identity.
   const fetchAdditionalBookIds = useCallback(() => additionalBookIds, [additionalBookIds]);
-  // Undefined rather than a function returning an empty list: the control offers no "show all
+  // Undefined rather than a function returning an empty list: the control offers no "show more
   // books" toggle when there is nothing extra to offer.
   const getAdditionalBookIds = additionalBookIds.length > 0 ? fetchAdditionalBookIds : undefined;
 

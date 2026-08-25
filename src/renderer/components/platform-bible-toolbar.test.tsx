@@ -9,7 +9,7 @@ import {
   useSetting,
 } from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
-import { useOpenResourceBookIds } from '@renderer/hooks/use-open-resource-book-ids.hook';
+import { useOpenProjectBookIds } from '@renderer/hooks/use-open-project-book-ids.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
 import { ResolvedWebView } from '@renderer/services/navigation-target.util';
 import { updateWebViewDefinitionSync } from '@renderer/services/web-view.service-host';
@@ -79,8 +79,8 @@ vi.mock('@renderer/hooks/use-send-receive-availability.hook', async (importOrigi
   return { ...actual, useSendReceiveAvailability: vi.fn((): boolean | undefined => true) };
 });
 
-vi.mock('@renderer/hooks/use-open-resource-book-ids.hook', () => ({
-  useOpenResourceBookIds: vi.fn(() => ['REV']),
+vi.mock('@renderer/hooks/use-open-project-book-ids.hook', () => ({
+  useOpenProjectBookIds: vi.fn(() => ['REV']),
 }));
 
 vi.mock('@renderer/hooks/use-window-controls-overlay.hook', () => ({
@@ -238,7 +238,7 @@ vi.mock('platform-bible-react', async (importOriginal) => {
 // Sync-button block last set would leak into every describe that follows.
 beforeEach(() => {
   vi.mocked(useSendReceiveAvailability).mockReturnValue(true);
-  vi.mocked(useOpenResourceBookIds).mockReturnValue(['REV']);
+  vi.mocked(useOpenProjectBookIds).mockReturnValue(['REV']);
 });
 
 const mockSendCommand = (
@@ -829,7 +829,7 @@ describe('PlatformBibleToolbar — books beyond the active project', () => {
       false,
     ]);
     mockCurrentBook('GEN');
-    vi.mocked(useOpenResourceBookIds).mockReturnValue(['REV']);
+    vi.mocked(useOpenProjectBookIds).mockReturnValue(['REV']);
   });
 
   it('offers books from open resources to the book chapter control', async () => {
@@ -850,7 +850,7 @@ describe('PlatformBibleToolbar — books beyond the active project', () => {
   it('offers the current book when the active project does not have it', async () => {
     // BookChapterControl renders exactly the book list it is given, so a reference on a book the
     // active project lacks is only in its own picker because the toolbar adds it.
-    vi.mocked(useOpenResourceBookIds).mockReturnValue([]);
+    vi.mocked(useOpenProjectBookIds).mockReturnValue([]);
     mockCurrentBook('JHN');
     render(<PlatformBibleToolbar />);
     const control = await screen.findByTestId('book-chapter-control');
@@ -858,7 +858,7 @@ describe('PlatformBibleToolbar — books beyond the active project', () => {
   });
 
   it('passes no additional books callback when there are none', async () => {
-    vi.mocked(useOpenResourceBookIds).mockReturnValue([]);
+    vi.mocked(useOpenProjectBookIds).mockReturnValue([]);
     render(<PlatformBibleToolbar />);
     const control = await screen.findByTestId('book-chapter-control');
     expect(control).not.toHaveAttribute('data-additional-books');

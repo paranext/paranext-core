@@ -401,6 +401,36 @@ describe('book-chapter-control.utils', () => {
       expect(projectBooks).toEqual(['GEN', 'MAT']);
     });
 
+    // `booksPresent` can claim an id the Canon library marks obsolete, and the collapsed list
+    // offers it. Guards against the widened list being ordered from a canon list that omits those
+    // ids, which would make a project's own book vanish the moment anything widened the list.
+    test('A project book the Canon library marks obsolete stays reachable once the list widens', () => {
+      const { projectBooks, reachableBooks, booksOutsideProject } =
+        deriveBookChapterControlBookLists(['GEN', 'JSA'], ['TOB']);
+
+      expect(projectBooks).toContain('JSA');
+      expect(reachableBooks).toContain('JSA');
+      expect(booksOutsideProject.has('JSA')).toBe(false);
+    });
+
+    test('An obsolete book reachable only through an open resource is reachable and dimmed', () => {
+      const { projectBooks, reachableBooks, booksOutsideProject } =
+        deriveBookChapterControlBookLists(['GEN'], ['JSA']);
+
+      expect(projectBooks).not.toContain('JSA');
+      expect(reachableBooks).toContain('JSA');
+      expect(booksOutsideProject.has('JSA')).toBe(true);
+    });
+
+    test('Every browsable book stays reachable when the list widens', () => {
+      const projectBookIds = ['GEN', 'JSA', 'TOB', 'MAT'];
+      const { projectBooks, reachableBooks } = deriveBookChapterControlBookLists(projectBookIds, [
+        'REV',
+      ]);
+
+      projectBooks.forEach((bookId) => expect(reachableBooks).toContain(bookId));
+    });
+
     test('With no extras, the project list is grouped as-is', () => {
       const { reachableBooksBySection } = deriveBookChapterControlBookLists(
         ['REV', 'GEN', 'TOB'],

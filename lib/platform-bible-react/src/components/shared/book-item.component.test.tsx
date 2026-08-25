@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
@@ -51,14 +51,25 @@ function renderBookItem(props: Partial<Parameters<typeof BookItem>[0]> = {}) {
 describe('BookItem dimmed state', () => {
   test('is not dimmed by default', () => {
     renderBookItem();
-    expect(screen.getByRole('option')).not.toHaveClass('tw:text-muted-foreground/50');
+    expect(screen.getByRole('option')).not.toHaveClass('tw:opacity-70');
   });
 
-  test('applies the muted classes when a dimmed reason is given', () => {
+  test('applies the dimmed classes when a dimmed reason is given', () => {
     renderBookItem({ dimmedReason: 'not in this project' });
     const option = screen.getByRole('option');
-    expect(option).toHaveClass('tw:bg-muted/50');
-    expect(option).toHaveClass('tw:text-muted-foreground/50');
+    expect(option).toHaveClass('tw:opacity-70');
+    // The row the user is actually on reads at full contrast, like any other book
+    expect(option).toHaveClass('tw:data-selected:opacity-100');
+  });
+
+  // A dimmed item is selectable, so it must not read as less available than a disabled one
+  test('a dimmed item is less dimmed than a disabled one', () => {
+    const { unmount } = renderBookItem({ dimmedReason: 'not in this project' });
+    expect(screen.getByRole('option')).toHaveClass('tw:opacity-70');
+    unmount();
+
+    renderBookItem({ disabled: true });
+    expect(screen.getByRole('option')).toHaveClass('tw:opacity-50');
   });
 
   test('a dimmed item is still selectable', async () => {
@@ -88,7 +99,7 @@ describe('BookItem dimmed state', () => {
     renderBookItem({ dimmedReason: 'not in this project', disabled: true });
     const option = screen.getByRole('option');
     expect(option).toHaveClass('tw:cursor-not-allowed');
-    expect(option).not.toHaveClass('tw:bg-muted/50');
+    expect(option).not.toHaveClass('tw:opacity-70');
   });
 
   test('appends the dimmed reason to the accessible name', () => {
@@ -103,8 +114,52 @@ describe('BookItem dimmed state', () => {
     expect(screen.getByRole('option', { name: 'Revelation (REV)' })).toBeInTheDocument();
   });
 
+  // The reason arrives localized, so the name it is appended to has to be localized too
+  test('announces a localized name and reason in one language', () => {
+    renderBookItem({
+      dimmedReason: 'no está en este proyecto',
+      localizedBookNames: new Map([['REV', { localizedId: 'APO', localizedName: 'Apocalipsis' }]]),
+    });
+
+    expect(
+      screen.getByRole('option', { name: 'Apocalipsis (APO), no está en este proyecto' }),
+    ).toBeInTheDocument();
+  });
+
   test('a disabled item does not announce the dimmed reason', () => {
     renderBookItem({ dimmedReason: 'not in this project', disabled: true });
     expect(screen.getByRole('option', { name: 'Revelation (REV)' })).toBeInTheDocument();
+  });
+
+  // Radix opens its tooltip from a pointermove carrying a non-touch pointerType, which
+  // userEvent.hover does not produce under jsdom — these have to be fired directly.
+  function hoverWithPointer(element: HTMLElement) {
+    fireEvent.pointerEnter(element, { pointerType: 'mouse' });
+    fireEvent.pointerMove(element, { pointerType: 'mouse' });
+  }
+
+  // Without this the greying is a colour-only signal for a sighted user
+  test('shows the dimmed reason in a tooltip on hover', async () => {
+    renderBookItem({ dimmedReason: 'not in this project' });
+
+    hoverWithPointer(screen.getByRole('option'));
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('not in this project');
+  });
+
+  test('shows no tooltip when the item is not dimmed', async () => {
+    renderBookItem();
+
+    hoverWithPointer(screen.getByRole('option'));
+
+    await expect(screen.findByRole('tooltip')).rejects.toThrow();
+  });
+
+  test('shows no tooltip on a disabled item', async () => {
+    renderBookItem({ dimmedReason: 'not in this project', disabled: true });
+
+    hoverWithPointer(screen.getByRole('option'));
+
+    await expect(screen.findByRole('tooltip')).rejects.toThrow();
   });
 });

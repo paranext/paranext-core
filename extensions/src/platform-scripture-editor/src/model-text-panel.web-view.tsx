@@ -9,7 +9,6 @@ import {
 } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatReplacementString, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY } from 'platform-bible-utils/experimental';
 import type {
   DblResourceReference,
   EffectiveResourceReference,
@@ -22,7 +21,7 @@ import { isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
-import { resolveNavigableProjectIdsWrite } from './navigable-project-ids.utils';
+import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
 
@@ -122,37 +121,17 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   // Ctrl+F opens Find for the displayed model resource.
   useOpenFindShortcut(webViewId, modelResourceProjectId);
 
-  // Declare the project this panel displays so global navigation UI can offer its books. This web
-  // view's definition `projectId` is the editable project whose model-text setting is read, so
-  // nothing reading open web view definitions can see the displayed resource otherwise. See
-  // NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY.
-  const [publishedNavigableProjectIds, setPublishedNavigableProjectIds] = useWebViewState<string[]>(
-    NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY,
-    [],
+  // This web view's definition `projectId` is the editable project whose model-text setting is
+  // read, so the displayed resource is invisible to global navigation UI unless declared here.
+  // `modelResourceProjectId` is undefined until the model-text list is `ready` and the DBL catalog
+  // is ready, which is indistinguishable from "no resource is displayed". A catalog error is also
+  // not readiness: the configured resource cannot be resolved, so its id is unknown rather than
+  // absent, and `isCatalogReady` already excludes that case.
+  usePublishNavigableProjectIds(
+    useWebViewState,
+    modelResourceProjectId ? [modelResourceProjectId] : [],
+    effectiveModelTextsState.status === 'ready' && isCatalogReady,
   );
-  useEffect(() => {
-    // Only publish once both sources have arrived. `modelResourceProjectId` is undefined until the
-    // model-text list is `ready` and the DBL catalog is ready, and that is indistinguishable from
-    // "no resource is displayed" — publishing then would wipe a correct persisted list on remount.
-    // A catalog error is also not readiness: the configured resource cannot be resolved, so its id
-    // is unknown rather than absent, and `isCatalogReady` already excludes that case.
-    if (effectiveModelTextsState.status !== 'ready' || !isCatalogReady) return;
-    const toPublish = resolveNavigableProjectIdsWrite(
-      modelResourceProjectId ? [modelResourceProjectId] : [],
-      publishedNavigableProjectIds,
-    );
-    if (toPublish) setPublishedNavigableProjectIds(toPublish);
-    // Hidden case: intentionally handled by doing nothing special. This publishing is data-driven,
-    // not geometry-driven, so the effect keeps running while this tab is inactive (rc-dock hides
-    // panes with display:none but leaves them mounted) and the declared ids stay current. There is
-    // nothing to defer and nothing to catch up on activation.
-  }, [
-    effectiveModelTextsState,
-    isCatalogReady,
-    modelResourceProjectId,
-    publishedNavigableProjectIds,
-    setPublishedNavigableProjectIds,
-  ]);
 
   // --- Operation callbacks ---
 
