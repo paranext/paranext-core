@@ -25,9 +25,13 @@
  * `isClosable: false`, so:
  *
  * - There is no close button. Any teardown that waits for `.dock-tab-close-btn` waits forever.
- * - The panel never unmounts, so its state (search term, filters, scope, history) LEAKS between
- *   tests. Every test starts by calling {@link openFindPanel}, which activates the tab and resets
- *   that state.
+ * - The panel never unmounts, so its state (search term, filters, scope) LEAKS between tests. Every
+ *   test starts by calling {@link openFindPanel}, which activates the tab and resets that state.
+ * - The search history leaks FURTHER than that. It is not panel state at all: the find WebView reads
+ *   and writes it through the `platformScripture.findHistory` data provider, which persists it in
+ *   extension user data, so it also survives the Electron process and every previous run of this
+ *   suite on the same machine. {@link resetFindPanel} empties it through the data provider — the
+ *   panel offers no clear-history control.
  * - "Opening" Find fronts the tab that already exists. A test that asserts the Find tab is _visible_
  *   therefore proves nothing — it is visible from startup. Assertions key off tab ACTIVATION
  *   (`.dock-tab-active`) or in-panel state instead.
@@ -52,6 +56,7 @@ import { Frame, FrameLocator, Locator, Page } from '@playwright/test';
 import {
   test,
   expect,
+  clearFindHistory,
   getAvailableProjects,
   openScriptureEditor,
   WEB_COPY_PROJECT_ID,
@@ -125,6 +130,19 @@ const CLEAR_SEARCH_LABEL = 'Clear search';
  * data; `beforeAll` warms it, but a loaded worker can still be slow.
  */
 const SEARCH_TIMEOUT_MS = 150_000;
+
+// ---------------------------------------------------------------------------
+// Suite state
+// ---------------------------------------------------------------------------
+
+/**
+ * The project this suite opened a scripture editor for, set in `beforeAll`.
+ *
+ * The find WebView keys its history by the scroll group's source project, which is this one, so
+ * this is the project whose history {@link resetFindPanel} has to clear for the panel to see the
+ * change.
+ */
+let openedProjectId: string | undefined;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -265,11 +283,13 @@ async function invokeFindFromHamburger(mainPage: Page): Promise<void> {
 }
 
 /**
- * Return the Find panel to a known state.
+ * Return the Find panel to a known state: empty search term, default filters, book scope, and empty
+ * search history.
  *
  * The panel is a permanent tab that never unmounts, so the search term, the filters, and the scope
- * all survive from one test to the next. Without this, a test's result depends on which tests ran
- * before it.
+ * all survive from one test to the next, and the history survives even longer (see the note on
+ * {@link clearFindHistory}). Without this, a test's result depends on which tests ran before it —
+ * and, for the history, on what earlier RUNS of the suite left behind.
  *
  * Must run while the tab is ACTIVE: an inactive rc-dock pane is `display: none`, and clicks into a
  * hidden subtree do nothing.
@@ -313,6 +333,14 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   await expect(frame.locator('[data-testid="find-idle-placeholder"]')).toBeVisible({
     timeout: 30_000,
   });
+
+  // Empty the search history LAST, once the search term is already blank. Clearing the term above
+  // cancels the pending 5 s history debounce (the effect re-runs with an empty term and clears its
+  // timer), so nothing left over from the previous test can push an entry back in after this point.
+  await clearFindHistory(openedProjectId);
+  // The panel is subscribed to the history data provider, so waiting for its button to disappear
+  // confirms the empty list actually reached the panel rather than just landing in storage.
+  await expect(recentSearchesButton(frame)).toHaveCount(0, { timeout: 15_000 });
 }
 
 /**
@@ -346,11 +374,20 @@ async function clickClearSearch(frame: FrameLocator): Promise<void> {
   await clearButton.click();
 }
 
+/**
+ * The button that opens the recent searches dropdown.
+ *
+ * `RecentSearches` renders nothing at all while the history is empty, so this locator matching
+ * nothing means "the history is empty", not "the button is hidden".
+ */
+function recentSearchesButton(frame: FrameLocator): Locator {
+  return frame.getByRole('button', { name: /show recent searches/i });
+}
+
 /** Open the recent searches history dropdown. */
 async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
-  const historyButton = frame.getByRole('button', { name: /show recent searches/i });
-  await expect(historyButton).toBeVisible({ timeout: 5_000 });
-  await historyButton.click();
+  await expect(recentSearchesButton(frame)).toBeVisible({ timeout: 5_000 });
+  await recentSearchesButton(frame).click();
 }
 
 /** Open the filters dropdown (the SlidersHorizontal / Toggle filters button). */
@@ -433,6 +470,7 @@ test.beforeAll(async ({ electronApp }) => {
     `[find tests] Opening project: ${scriptureProject.id} (interfaces: ${scriptureProject.projectInterfaces?.join(', ') ?? 'unknown'})`,
   );
 
+  openedProjectId = scriptureProject.id;
   await openScriptureEditor(scriptureProject.id);
 
   // Wait for the editor's Project hamburger button to confirm the editor is ready.
