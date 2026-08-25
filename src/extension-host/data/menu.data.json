@@ -41,6 +41,14 @@
         "command": "platform.quit"
       },
       {
+        "label": "%mainMenu_openNewWindow%",
+        "localizeNotes": "Application main menu > Project > Open new window",
+        "group": "platform.projectMisc",
+        "order": 1,
+        "command": "platform.createWindow",
+        "hiddenInterfaceModes": ["simple"]
+      },
+      {
         "label": "%mainMenu_helpInfo_visitGettingStartedPage%",
         "localizeNotes": "Application main menu > Help > Visit Getting Started Page",
         "group": "platform.helpInfo",

@@ -39,6 +39,8 @@ import {
   persistUserRemoval,
 } from './scripture-text-grid-persistence.utils';
 import { useTextCollectionSources } from './use-text-collection-sources.hook';
+import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
+import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { resolveTextCollectionProjectId } from './scripture-text-grid-project.utils';
 import {
   ResourceCollectionOptions,
@@ -129,6 +131,7 @@ const TAB_ICON_URLS: TabIconUrls = {
  * `handleReorder`.
  */
 globalThis.webViewComponent = function ScriptureTextGridWebView({
+  id: webViewId,
   projectId,
   updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
@@ -252,6 +255,19 @@ globalThis.webViewComponent = function ScriptureTextGridWebView({
       ),
     [sources, cachedResources],
   );
+
+  // Ctrl+F opens Find for the resource the caret is in. Unlike the single-resource reference panels,
+  // this view shows several texts at once, so there is no "displayed resource" to fall back to —
+  // before the user has put the caret in a cell, Ctrl+F is a logged no-op.
+  const displayedProjectIds = useMemo(
+    () =>
+      resources
+        .map((resource) => resource.projectId)
+        .filter((id): id is string => id !== undefined),
+    [resources],
+  );
+  const caretResourceProjectId = useFocusedResourceProjectId(displayedProjectIds);
+  useOpenFindShortcut(webViewId, caretResourceProjectId);
 
   // Latch the displayed project. Each grid resource cell is itself a Scripture editor, so focusing
   // one (e.g. clicking a verse in Chapter view) makes that resource the active editor. Never switch

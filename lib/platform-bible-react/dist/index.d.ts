@@ -7,7 +7,7 @@ import { Column, ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSort
 import { ClassValue } from 'clsx';
 import { Command as CommandPrimitive } from 'cmdk';
 import { LucideProps } from 'lucide-react';
-import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId } from 'platform-bible-utils';
+import { CommentStatus, ConflictResolutionOptions, LanguageStrings, LegacyComment, LegacyCommentThread, Localized, LocalizedStringValue, MenuItemContainingCommand, MultiColumnMenu, PlatformEvent, PlatformEventAsync, PlatformEventHandler, ScriptureSelection, ScrollGroupId, Section } from 'platform-bible-utils';
 import { Avatar as AvatarPrimitive, Checkbox as CheckboxPrimitive, ContextMenu as ContextMenuPrimitive, Dialog as DialogPrimitive, DropdownMenu as DropdownMenuPrimitive, Label as LabelPrimitive, Popover as PopoverPrimitive, Progress as ProgressPrimitive, RadioGroup as RadioGroupPrimitive, Select as SelectPrimitive, Separator as SeparatorPrimitive, Slider as SliderPrimitive, Switch as SwitchPrimitive, Tabs as RadixTabs, Tabs as TabsPrimitive, ToggleGroup as ToggleGroupPrimitive, Tooltip as TooltipPrimitive } from 'radix-ui';
 import React$1 from 'react';
 import { CSSProperties, ChangeEventHandler, ComponentProps, ComponentPropsWithRef, ComponentPropsWithoutRef, FC, FocusEventHandler, LegacyRef, MutableRefObject, PropsWithChildren, ReactNode, Ref, RefObject } from 'react';
@@ -34,7 +34,7 @@ type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | null | undefined;
+	variant?: "link" | "default" | "outline" | "secondary" | "ghost" | "destructive" | "subtle" | null | undefined;
 	size?: "default" | "icon" | "xs" | "sm" | "lg" | "icon-xs" | "icon-sm" | "icon-lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
@@ -303,13 +303,17 @@ export interface RecentSearchesProps<T> {
 	 */
 	buttonClassName?: string;
 	/** Variant for the trigger button. Defaults to `"ghost"` */
-	buttonVariant?: "ghost" | "outline" | "default" | "destructive" | "secondary" | "link";
+	buttonVariant?: ButtonProps["variant"];
+	/** Controlled open state of the popover. If provided, the component becomes controlled. */
+	open?: boolean;
+	/** Called when the open state changes. Required when `open` is provided. */
+	onOpenChange?: (open: boolean) => void;
 }
 /**
  * Generic component that displays a button to show recent searches in a popover. Only renders if
  * there are recent searches available. Works with any data type T.
  */
-export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
+export function RecentSearches<T>({ recentSearches, onSearchItemSelect, renderItem, getItemKey, ariaLabel, groupHeading, id, classNameForItems, buttonClassName, buttonVariant, open: openProp, onOpenChange, }: RecentSearchesProps<T>): import("react/jsx-runtime").JSX.Element | undefined;
 /** Generic hook for managing recent searches state and operations. */
 export declare function useRecentSearches<T>(recentSearches: T[], setRecentSearches: (items: T[]) => void, areItemsEqual?: (a: T, b: T) => boolean, maxItems?: number): (item: T) => void;
 /**
@@ -1523,6 +1527,11 @@ interface ScopeSelectorProps {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/**
+	 * Optional explanations, by section, for why that section has no available books. Forwarded to
+	 * {@link SelectBooks} and shown as a tooltip on that section's disabled quick-select button.
+	 */
+	disabledSectionExplanations?: Partial<Record<Section, string>>;
 	/** Optional ID that is applied to the root element of this component */
 	id?: string;
 	/**
@@ -1589,7 +1598,7 @@ interface ScopeSelectorProps {
  * chosen, two BookChapterControl pickers are displayed for selecting the start and end verse of the
  * range.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, disabledSectionExplanations, id, variant, rangeStart, rangeEnd, onRangeStartChange, onRangeEndChange, currentScrRef, onCurrentScrRefChange, bookChapterControlLocalizedStrings, getEndVerse, hideLabel, buttonClassName, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in the SelectBooks component. If you're using
  * this component in an extension, you can pass it into the useLocalizedStrings hook to easily
@@ -1636,6 +1645,13 @@ type SelectBooksProps = {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/**
+	 * Optional explanations, by section, for why that section has no available books. Each is shown
+	 * as a tooltip on that section's quick-select button while it is disabled. Supply one for any
+	 * section whose books the consumer withholds deliberately, so the disabled button reads as "not
+	 * searched here" rather than "this project has none".
+	 */
+	disabledSectionExplanations?: Partial<Record<Section, string>>;
 };
 /**
  * A component for selecting multiple books from the Bible canon. It provides:
@@ -1645,7 +1661,7 @@ type SelectBooksProps = {
  * - Support for shift-click range selection
  * - Visual feedback with badges showing selected books
  */
-export declare function SelectBooks({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksProps): import("react/jsx-runtime").JSX.Element;
+export declare function SelectBooks({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, disabledSectionExplanations, }: SelectBooksProps): import("react/jsx-runtime").JSX.Element;
 type SelectBooksPickerProps = {
 	/**
 	 * Information about available books, formatted as a 123 character long string as defined in a
@@ -1669,6 +1685,12 @@ type SelectBooksPickerProps = {
 		localizedId: string;
 		localizedName: string;
 	}>;
+	/**
+	 * Optional explanations, by section, for why that section has no available books. A section with
+	 * no books renders no group at all, so its explanation is shown as a note under the list —
+	 * otherwise a search for one of its books lands on the bare "no book found".
+	 */
+	disabledSectionExplanations?: Partial<Record<Section, string>>;
 };
 /**
  * A searchable dropdown (combobox) for picking multiple books from the Bible canon. It provides:
@@ -1681,7 +1703,7 @@ type SelectBooksPickerProps = {
  * This is the standalone picker used by {@link SelectBooks}, which additionally renders section
  * quick-select buttons and badges for the current selection.
  */
-export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
+export declare function SelectBooksPicker({ availableBookInfo, selectedBookIds, onChangeSelectedBookIds, localizedStrings, localizedBookNames, disabledSectionExplanations, }: SelectBooksPickerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
@@ -2533,6 +2555,10 @@ export type EmptyStateProps = {
  * A presentational empty-state message for a list, grid, or panel that currently has nothing to
  * show. Renders the localized `message` in a `role="status"` region so screen readers announce it
  * when the surrounding content becomes empty. Layout is left to the caller via `className`.
+ *
+ * For a richer zero-state that needs media, a heading, or an action, use the `Empty` composition
+ * (`Empty`, `EmptyHeader`, `EmptyMedia`, `EmptyTitle`, `EmptyDescription`, `EmptyContent`)
+ * instead.
  */
 export declare function EmptyState({ message, id, className }: EmptyStateProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
@@ -3025,6 +3051,60 @@ export declare function DropdownMenuSubTrigger({ className, inset, children, ...
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuSubContent({ className, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * The Empty component displays a centered zero-state message — typically a title, description, and
+ * an optional action — for when there is no content to show. The component is built and styled by
+ * Shadcn UI.
+ *
+ * Use this composition when the zero-state needs media, a heading, or an action. For a plain
+ * one-line "nothing to show" message inside a list, grid, or panel, use {@link EmptyState} instead —
+ * it takes a single localized `message` and renders it in a `role="status"` region. These
+ * primitives set no ARIA role, so pass `role="status"` yourself before the zero-state appears.
+ *
+ * Two things the caller controls: the root sets `border-dashed` but no border width —
+ * Platform.Bible's scoped Tailwind Preflight zeroes borders, so pass `className="tw:border"` to
+ * draw the dashed outline — and {@link EmptyTitle} renders a `<div>`, not a heading, so nest your
+ * own heading element inside it when the zero-state is a region's entire content.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function Empty({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the Empty component's icon/media, title, and description. The component is built
+ * and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+declare const emptyMediaVariants: (props?: ({
+	variant?: "default" | "icon" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Container for the Empty component's icon or other media, e.g. an illustration or avatar. The
+ * component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyMedia({ className, variant, ...props }: React$1.ComponentProps<"div"> & VariantProps<typeof emptyMediaVariants>): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component's title text. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyTitle({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component's description text. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyDescription({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the Empty component's main content, typically actions such as buttons. The
+ * component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyContent({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
  * Input component displays a form input field or a component that looks like an input field. Built
  * and styled with Shadcn UI.
  *
@@ -3415,6 +3495,12 @@ export declare function ToggleGroupItem({ className, children, variant, size, ..
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
  *
+ * Delivery is guarded per subscription: once the subscription is superseded (the `event` or
+ * `eventHandler` reference changed) or the component unmounts, an emission that still arrives from
+ * it — e.g. an emitter walking a snapshot of its handler list — is ignored rather than delivered to
+ * `eventHandler`. An unsubscriber that throws during cleanup is logged rather than thrown, since
+ * nothing can catch an error thrown from an effect cleanup.
+ *
  * @param event The event to subscribe to.
  *
  *   - If event is a `PlatformEvent`, that event will be used
@@ -3431,6 +3517,14 @@ export declare const useEvent: <T>(event: PlatformEvent<T> | undefined, eventHan
  * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
  * runs when the event is emitted. Use `papi.network.getNetworkEvent` to use a networked event with
  * this hook.
+ *
+ * Delivery is guarded per subscription: once a subscription is superseded (the `event` or
+ * `eventHandler` reference changed) or the component unmounts, an emission that still arrives from
+ * it — e.g. one already in flight over the network — is ignored rather than delivered to
+ * `eventHandler`. If the subscribe promise resolves only after the subscription was already
+ * superseded, the resolved unsubscriber is invoked immediately so the subscription does not leak.
+ * Subscribe and unsubscribe failures are logged rather than thrown — neither has a caller that
+ * could catch them. A failed unsubscribe is logged, not retried.
  *
  * @param event The asynchronously (un)subscribing event to subscribe to.
  *
@@ -3531,6 +3625,34 @@ export declare function useExtraValidMarkers(usj: Usj | undefined): string[];
  * @returns `true` when the web view is rendered (visible), `false` while its tab is hidden
  */
 export declare const useViewVisibility: () => boolean;
+/**
+ * Defers work that should not happen while this web view's tab is inactive, and runs it once when
+ * the tab is shown again.
+ *
+ * Rc-dock keeps an inactive tab's pane mounted under `display: none`: the iframe keeps running, so
+ * React effects, subscriptions, and reactions to shared state all continue firing at full rate for
+ * a view nobody can see. For cheap, data-driven work that is fine, and this hook would only add
+ * latency. It is for the two cases where it is not fine: work whose result depends on layout, which
+ * a `display: none` pane does not have, and work expensive enough that spending it on a hidden view
+ * is a waste — a per-reference search or fetch that a permanently-mounted panel would otherwise
+ * launch on every reference change through the whole session.
+ *
+ * Requests made while hidden collapse into a single pending catch-up rather than queueing, which
+ * suits the shape of work this is for: "bring the view up to date with the current state", where
+ * only the last request's result would have survived anyway. Work whose every invocation matters
+ * (appending to a log, counting events) needs a queue, not this hook.
+ *
+ * Pair it with `useViewVisibility`, which reports whether the calling view is rendered. See
+ * `.claude/rules/cross-view-sync-hidden-views.md` for the wider rule this implements.
+ *
+ * @param isViewVisible Whether the web view is currently rendered — pass `useViewVisibility()`.
+ * @param run The work to perform. Always invoked at its latest identity, so callers need not
+ *   memoize it.
+ * @returns A stable callback that runs `run` now when visible, or arms the catch-up when hidden.
+ *   Its identity never changes, so callers can safely list it in effect dependencies without the
+ *   effect re-firing on every visibility flip.
+ */
+export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */

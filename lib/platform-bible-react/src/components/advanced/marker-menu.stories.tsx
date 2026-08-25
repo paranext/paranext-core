@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Eraser } from 'lucide-react';
-import { fn } from 'storybook/test';
+import { ClipboardPaste, Eraser, RemoveFormatting } from 'lucide-react';
+import { expect, fn } from 'storybook/test';
 import { MarkerMenu, MarkerMenuItem } from './marker-menu.component';
 
 const localizedStrings = {
@@ -208,6 +208,8 @@ export const DeprecatedAndDisallowed: Story = {
         isDeprecated: true,
         action: fn(),
       },
+      // The play function types `q`, so this must stay the only item matching that query by marker
+      // code or title — otherwise the `option` assertion below stops being unambiguous.
       {
         marker: 'q',
         title: 'Poetry',
@@ -216,6 +218,18 @@ export const DeprecatedAndDisallowed: Story = {
         action: fn(),
       },
     ],
+  },
+  play: async ({ canvas, userEvent, step }) => {
+    await step('Search for the disallowed "Poetry" (q) marker', async () => {
+      const searchInput = canvas.getByPlaceholderText('Type a style or search.');
+      await userEvent.type(searchInput, 'q');
+    });
+
+    await step('Verify the disallowed marker is revealed, disabled, with its badge', async () => {
+      const item = await canvas.findByRole('option', { name: /Poetry/ });
+      await expect(item).toHaveAttribute('aria-disabled', 'true');
+      await expect(canvas.getByText('Disallowed')).toBeInTheDocument();
+    });
   },
   parameters: {
     docs: {
@@ -289,6 +303,95 @@ export const NarrowWithLongTitles: Story = {
         story:
           'At the 200px width consumers pin the popover to, long titles and subtitles truncate ' +
           'rather than wrap, per the Responsiveness guideline. Hover a row to see the full text.',
+      },
+    },
+  },
+};
+
+export const CharacterMarkerRemoveRow: Story = {
+  args: {
+    searchPlaceholder: 'Search character markers',
+    markerMenuItems: [
+      {
+        icon: RemoveFormatting,
+        title: 'Remove character marker',
+        action: fn(),
+      },
+      {
+        marker: 'bd',
+        title: 'Bold',
+        subtitle: 'A character style, use bold text',
+        action: fn(),
+      },
+      {
+        marker: 'nd',
+        title: 'Name of God',
+        subtitle: 'For name of deity',
+        action: fn(),
+      },
+    ],
+  },
+  play: async ({ canvas, step }) => {
+    await step('Verify the remove row renders first and is selectable', async () => {
+      const options = await canvas.findAllByRole('option');
+      await expect(options[0]).toHaveTextContent('Remove character marker');
+      await expect(options[0]).not.toHaveAttribute('aria-disabled', 'true');
+    });
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The character-marker menu leads with a remove row: an icon-and-title command row with ' +
+          'no marker code, which takes the character marker off the selected text and leaves the ' +
+          'text itself in place. It appears only while a character marker is applied to the ' +
+          'selection. `MarkerMenu` does no sorting of its own — it renders `markerMenuItems` in ' +
+          'the order given, so the consumer is the one that puts the remove row ahead of the ' +
+          'marker rows and sorts those by marker code.\n\n' +
+          "Note that the row's icon must be passed explicitly. With `icon` absent, `MarkerMenu` " +
+          'falls back to a `Ban` glyph, which reads as "disallowed" rather than "remove" in a ' +
+          'menu that already renders a disallowed affordance.',
+      },
+    },
+  },
+};
+
+export const ParagraphMarkersAndCommands: Story = {
+  args: {
+    searchPlaceholder: 'Search to change paragraph style.',
+    markerMenuItems: [
+      {
+        marker: 'p',
+        title: 'Paragraph',
+        subtitle: 'normal (with indent first line)',
+        action: fn(),
+      },
+      { icon: ClipboardPaste, title: 'Paste', action: fn() },
+      { icon: ClipboardPaste, title: 'Paste as plaintext', action: fn() },
+      {
+        marker: 'pi',
+        title: 'Indented Paragraph',
+        subtitle: 'indent level 1 (with first line indent)',
+        isDisallowed: true,
+        action: fn(),
+      },
+      {
+        marker: 'ph',
+        title: 'Indented paragraph with hanging indent',
+        isDeprecated: true,
+        action: fn(),
+      },
+    ],
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The paragraph-marker surface, which is what the other stories do not show: paragraph ' +
+          'markers whose subtitles carry the indent level, and more than one non-marker command ' +
+          'row (the two paste commands) rather than a single remove row. It also passes the ' +
+          "paragraph menu's own `searchPlaceholder` instead of the generic one — type `pi` to " +
+          'reveal the disallowed row.',
       },
     },
   },

@@ -173,7 +173,10 @@ internal class ParatextProjectSendReceiveService(
     /// <param name="notificationId">
     /// ID of the notification that triggered this cancel, if any. Implementations may use this to
     /// validate that the cancel is for the expected sync operation. <see langword="null"/> when
-    /// not called from a notification (e.g., on app shutdown).
+    /// not called from a notification (e.g., on app shutdown, or from an ambient status control
+    /// that raised no notification of its own). A <see langword="null"/> id means "cancel whatever
+    /// sync is in progress" and implementations MUST honour it as such — ignoring an id-less cancel
+    /// leaves the caller's UI reporting a cancel that never happened.
     /// </param>
     protected void CancelSync(NotificationId? notificationId = null)
     {

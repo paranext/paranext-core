@@ -13,10 +13,16 @@ import WebSocket from 'ws';
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
 /**
- * Same serialized request type as `registerCommand('platform.about', ...)` in command.service
- * (`command` + `:` + `platform.about`).
+ * A renderer's window-scoped `platform.about` command (`command:platform.about-{windowId}`, see
+ * `dialog.service-host.ts`).
+ *
+ * The gate matches the SCOPED name rather than the generic `command:platform.about`: the main
+ * process registers routing proxies under the generic names before it creates any window, so the
+ * generic name appears in `rpc.discover` while no renderer exists to serve it. A scoped name can
+ * only come from a live renderer that finished registering its commands. The window id is an
+ * Electron BrowserWindow id, so it is matched as a pattern rather than a fixed string.
  */
-const PLATFORM_ABOUT_COMMAND = 'command:platform.about';
+const SCOPED_PLATFORM_ABOUT_COMMAND = /^command:platform\.about-\d+$/;
 
 const RPC_DISCOVER_POLL_INTERVAL_MS = 250;
 export const PROCESS_READY_TIMEOUT = 120_000;
@@ -41,6 +47,18 @@ export interface ElectronAppContext {
   userDataDir: string;
   /** Resolves when the Electron process closes (registered before yielding to tests). */
   appClosed: Promise<void>;
+  /**
+   * OS pid of the Electron process, captured at launch time while `electronApp.process()` is
+   * guaranteed to work. Teardown falls back to it when Playwright has already disposed the
+   * ElectronApplication (where `process()` throws) — disposal usually means the process exited, but
+   * that must be verified against the OS rather than assumed.
+   */
+  appPid?: number;
+  /**
+   * When true, {@link teardownElectronApp} leaves {@link userDataDir} on disk so a later launch can
+   * reuse it. Carried over from {@link LaunchElectronAppOptions.preserveUserDataDir}.
+   */
+  preserveUserDataDir?: boolean;
 }
 
 /** Wait for the WebSocket server to be ready on the specified port. */
@@ -97,11 +115,28 @@ export interface LaunchElectronAppOptions {
    * developer's machine and never read or write the developer's real projects.
    */
   isolatedProjectRoot?: boolean;
+  /**
+   * Absolute path of an existing user-data directory to launch into, instead of creating a fresh
+   * temp one. For relaunch tests: pass the `userDataDir` a previous {@link launchElectronApp}
+   * returned (launched with {@link LaunchElectronAppOptions.preserveUserDataDir}) so the new
+   * instance starts from the profile state the previous one persisted. Launches must be sequential
+   * — the fixed WebSocket port and Electron's per-profile singleton lock forbid overlapping
+   * instances — so only pass this after the previous instance's process has fully exited.
+   */
+  userDataDir?: string;
+  /**
+   * When true, {@link teardownElectronApp} (and the cleanup that runs when the launch itself fails)
+   * leaves the user-data directory on disk so a later launch can reuse it via
+   * {@link LaunchElectronAppOptions.userDataDir}. The LAST launch of a relaunch chain must leave
+   * this unset so its teardown deletes the directory — otherwise the temp directory leaks.
+   */
+  preserveUserDataDir?: boolean;
 }
 
 /**
- * Launch a fresh Electron instance with an isolated user-data directory. Returns the app handle,
- * the temp directory path, and a promise that resolves when the app closes.
+ * Launch a fresh Electron instance with an isolated user-data directory (or, for relaunch tests, an
+ * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the
+ * user-data directory path, and a promise that resolves when the app closes.
  */
 export async function launchElectronApp(
   opts: LaunchElectronAppOptions = {},
@@ -111,8 +146,9 @@ export async function launchElectronApp(
   console.log(`Launching Electron app from project root: ${rootDir}`);
 
   // Use an isolated user-data directory so the singleton instance lock does not
-  // conflict with any already-running Platform.Bible instance.
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paranext-e2e-'));
+  // conflict with any already-running Platform.Bible instance. A caller-supplied directory (a
+  // relaunch into a preserved profile) is used as-is.
+  const userDataDir = opts.userDataDir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'paranext-e2e-'));
 
   // VSCode/Claude Code set ELECTRON_RUN_AS_NODE=1 which forces the Electron
   // binary to run as plain Node.js. We must omit it (do not set it to undefined:
@@ -128,7 +164,8 @@ export async function launchElectronApp(
     ...restEnv,
     NODE_ENV: 'development',
     // Enable noisy dev mode so test extensions (helloRock3, helloSomeone, etc.) are loaded.
-    // Only set if not already defined, so other E2E suites can override.
+    // Only set if not already defined, so other E2E suites can override (e.g. a suite that needs a
+    // clean layout passes `envOverrides: { DEV_NOISY: 'false' }`, which is spread last below).
     DEV_NOISY: process.env.DEV_NOISY ?? 'true',
     // Placing the project root inside userDataDir means the existing teardown rmSync cleans it up.
     ...(opts.isolatedProjectRoot
@@ -148,8 +185,9 @@ export async function launchElectronApp(
     });
   } catch (error) {
     console.error('Failed to launch Electron:', error);
-    // Clean up the temp directory created above — launch never succeeded
-    fs.rmSync(userDataDir, { recursive: true, force: true });
+    // Clean up the temp directory created above — launch never succeeded. Preserved profiles are
+    // kept even here so a failed relaunch does not destroy the state under investigation.
+    if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
     throw error;
   }
 
@@ -173,7 +211,7 @@ export async function launchElectronApp(
         }
       }
     }
-    fs.rmSync(userDataDir, { recursive: true, force: true });
+    if (!opts.preserveUserDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
     throw error;
   }
   console.log('WebSocket server is ready');
@@ -187,7 +225,13 @@ export async function launchElectronApp(
     });
   });
 
-  return { electronApp, userDataDir, appClosed };
+  return {
+    electronApp,
+    userDataDir,
+    appClosed,
+    appPid: electronApp.process().pid,
+    preserveUserDataDir: opts.preserveUserDataDir,
+  };
 }
 
 /**
@@ -195,13 +239,24 @@ export async function launchElectronApp(
  * user-data directory.
  */
 export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void> {
-  const { electronApp, userDataDir, appClosed } = ctx;
+  const { electronApp, userDataDir, appClosed, appPid, preserveUserDataDir } = ctx;
 
   // Teardown: kill the OS process and wait for Playwright to passively detect
   // the disconnection via the 'close' event registered above.
-  const electronProcess = electronApp.process();
+  // After a graceful quit, Playwright may have fully disposed the ElectronApplication by the time
+  // teardown runs — on Windows its stdio closes promptly (no .NET watcher child holds the pipe
+  // write-ends open, unlike Linux), and `process()` on the disposed object throws. Disposal
+  // usually means the process exited, but not always — so fall back to the pid captured at launch
+  // and ask the OS whether the process is still alive rather than assuming.
+  let electronProcess: ReturnType<ElectronApplication['process']> | undefined;
+  try {
+    electronProcess = electronApp.process();
+  } catch {
+    electronProcess = undefined;
+  }
+  const pid = electronProcess?.pid ?? appPid;
   console.log(
-    `[teardown] Closing Electron app... pid=${electronProcess?.pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
+    `[teardown] Closing Electron app... pid=${pid} exitCode=${electronProcess?.exitCode} signalCode=${electronProcess?.signalCode}`,
   );
 
   // On Linux, processLauncher.js spawns Electron with `detached: true`, making
@@ -213,22 +268,41 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
   // config has no node environment, so it cannot see the global.
   // eslint-disable-next-line no-undef
   const killGroup = (sig: NodeJS.Signals) => {
-    if (!electronProcess?.pid) return;
+    if (!pid) return;
     try {
-      process.kill(-electronProcess.pid, sig);
+      process.kill(-pid, sig);
     } catch {
       // Process group may already be gone — fall back to single-process kill
       try {
-        electronProcess.kill(sig);
+        process.kill(pid, sig);
       } catch {
         /* already dead */
       }
     }
   };
 
-  // Node.js ChildProcess.exitCode/signalCode are null until the process exits
-  // eslint-disable-next-line no-null/no-null
-  if (electronProcess && electronProcess.exitCode === null && electronProcess.signalCode === null) {
+  /** Whether the Electron OS process is still running, per the best signal available. */
+  const isProcessAlive = (): boolean => {
+    if (electronProcess)
+      // Node.js ChildProcess.exitCode/signalCode are null until the process exits
+      // eslint-disable-next-line no-null/no-null
+      return electronProcess.exitCode === null && electronProcess.signalCode === null;
+    if (pid === undefined) return false;
+    // No child-process handle (Playwright disposed it) — probe the OS directly. Signal 0 performs
+    // only an existence/permission check and delivers nothing.
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  if (isProcessAlive()) {
+    if (!electronProcess)
+      console.log(
+        `[teardown] Playwright handle already disposed but pid ${pid} is still alive — killing anyway...`,
+      );
     console.log('[teardown] Sending SIGKILL to process group...');
     killGroup('SIGKILL');
     console.log('[teardown] Waiting for appClosed after SIGKILL (up to 3s)...');
@@ -239,6 +313,17 @@ export async function teardownElectronApp(ctx: ElectronAppContext): Promise<void
       }),
     ]);
     console.log('[teardown] Done waiting after SIGKILL');
+  } else if (!electronProcess) {
+    console.log('[teardown] Playwright handle already disposed and the OS process has exited.');
+  }
+
+  // A preserved profile stays on disk so a later launch can relaunch into it (see
+  // LaunchElectronAppOptions.preserveUserDataDir). The last teardown of a relaunch chain runs with
+  // the flag unset and deletes the directory below.
+  if (preserveUserDataDir) {
+    console.log(`[teardown] Preserving user data dir for relaunch: ${userDataDir}`);
+    console.log('[teardown] Complete');
+    return;
   }
 
   console.log('[teardown] Cleaning up user data dir...');
@@ -360,14 +445,20 @@ export async function sendPapiRequestOnce<T>(
 }
 
 /**
- * Poll `rpc.discover` until `methodName` appears in `result.methods` or `timeoutMs` elapses. Uses
- * the same registration map as the live PAPI server (renderer-registered commands included).
+ * Poll `rpc.discover` until a method matching `methodName` appears in `result.methods` or
+ * `timeoutMs` elapses. Uses the same registration map as the live PAPI server (renderer-registered
+ * commands included).
+ *
+ * @param methodName Exact method name, or a pattern to match against every registered name (for
+ *   names that carry a runtime-assigned suffix, e.g. a window-scoped command).
  */
 export async function waitForPapiMethodRegistered(
-  methodName: string,
+  methodName: string | RegExp,
   port: number = DEFAULT_WEBSOCKET_PORT,
   timeoutMs = 60_000,
 ): Promise<void> {
+  const isMatch = (name: string) =>
+    typeof methodName === 'string' ? name === methodName : methodName.test(name);
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const remaining = timeoutMs - (Date.now() - start);
@@ -381,7 +472,7 @@ export async function waitForPapiMethodRegistered(
         port,
         Math.min(10_000, Math.max(1000, remaining)),
       );
-      if (result.methods?.some((m) => m.name === methodName)) return;
+      if (result.methods?.some((m) => isMatch(m.name))) return;
     } catch {
       /* next poll */
     }
@@ -534,10 +625,10 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
 
 /**
  * Wait for the Platform.Bible UI to be fully ready beyond just React mounting. Waits for the
- * platform-dock layout to appear, then for the dialog service to finish registering menu commands
- * like `platform.about` (the dock can render before that async work completes), and finally for the
- * full-screen initialization overlay to clear. The overlay lingers while async services (settings,
- * theme) finish initializing — it must be gone before tests interact with the UI.
+ * platform-dock layout to appear, then for a renderer to finish registering its window-scoped menu
+ * commands (the dock can render before that async work completes), and finally for the full-screen
+ * initialization overlay to clear. The overlay lingers while async services (settings, theme)
+ * finish initializing — it must be gone before tests interact with the UI.
  */
 export async function waitForAppReady(page: Page, timeout = 90_000): Promise<void> {
   const start = Date.now();
@@ -546,7 +637,11 @@ export async function waitForAppReady(page: Page, timeout = 90_000): Promise<voi
     timeout,
   });
   const remaining1 = Math.max(1000, timeout - (Date.now() - start));
-  await waitForPapiMethodRegistered(PLATFORM_ABOUT_COMMAND, DEFAULT_WEBSOCKET_PORT, remaining1);
+  await waitForPapiMethodRegistered(
+    SCOPED_PLATFORM_ABOUT_COMMAND,
+    DEFAULT_WEBSOCKET_PORT,
+    remaining1,
+  );
   const remaining2 = Math.max(1000, timeout - (Date.now() - start));
   // Services like settings and theme finish async work after dock-layout mounts and platform.about
   // registers, so the overlay can outlast both earlier signals.

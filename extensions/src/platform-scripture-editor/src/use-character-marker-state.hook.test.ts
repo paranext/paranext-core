@@ -139,8 +139,8 @@ describe('useCharacterMarkerState — trigger label inputs', () => {
   it('prefers coverage over the cheap check once the menu opens', () => {
     // `\bd Mu\bd*\bd lu\bd*` — two adjacent sibling char nodes carrying the SAME marker, so the two
     // ends have different json paths. The cheap check over-reports `isMixed` before the menu opens;
-    // coverage corrects it once `onOpen` runs. This is the only test standing behind the spec's
-    // §4.1 guarantee that the trigger and the open menu never contradict each other.
+    // coverage corrects it once `onOpen` runs. This is the only test holding the guarantee that the
+    // trigger and the open menu never contradict each other.
     const usjSiblingSameMarker: Usj = {
       type: 'USJ',
       version: '3.0',
@@ -226,7 +226,11 @@ describe('useCharacterMarkerState — menu items', () => {
 
   it('derives the covering marker from coverage so a mixed selection still offers removal', () => {
     // The gap this rule closes: contextMarker is the anchor's marker, so for `kolo ` + `\bd Mulu`
-    // with the anchor in plain text it is 'p' and the remove row would be missing.
+    // with the anchor in plain text it is 'p' and the remove row would be missing. Now that
+    // coverage is forwarded rather than stamped, the generator's own mixed-coverage check sees
+    // `\bd Mulu` only 'partial'ly covers the full "kolo Mulu" span (`kolo ` is uncovered), so this
+    // is the remove-ALL row, not a single-marker remove row — its action takes no argument and
+    // removes every marker the selection covers in one editor update.
     const removeCharacterMarker = vi.fn();
     const { result } = renderHook(() =>
       useCharacterMarkerState(
@@ -245,12 +249,18 @@ describe('useCharacterMarkerState — menu items', () => {
 
     const removeRow = result.current.markerMenuItems.find((item) => item.marker === undefined);
     expect(removeRow).toBeDefined();
-    expect(removeRow?.selectionState).toBe('partial');
+    // No selection affordance on a markerless action row — see the generator's note on why
+    // `selectionState` would render a misleading `aria-checked` here.
+    expect(removeRow?.selectionState).toBeUndefined();
     removeRow?.action();
-    expect(removeCharacterMarker).toHaveBeenCalledWith('bd');
+    expect(removeCharacterMarker).toHaveBeenCalledWith();
   });
 
-  it('offers no removal row when two markers cover the selection, since the target is ambiguous', () => {
+  it('offers a remove-all row (not a single-marker one) when two markers cover the selection', () => {
+    // Forwarding real coverage means the generator's own mixed-coverage check — not the hook's
+    // ambiguous-marker fallback — decides whether removal is offered. Two covering markers
+    // (`nd` and `wj`) is `isMixedCoverage` regardless of `resolveCurrentMarker` returning
+    // `undefined` for the ambiguous case, so removal is still offered, as a remove-all row.
     const nestedUsj: Usj = {
       type: 'USJ',
       version: '3.0',
@@ -270,6 +280,7 @@ describe('useCharacterMarkerState — menu items', () => {
         },
       ],
     };
+    const removeCharacterMarker = vi.fn();
     const { result } = renderHook(() =>
       useCharacterMarkerState(
         options({
@@ -279,16 +290,43 @@ describe('useCharacterMarkerState — menu items', () => {
             start: { jsonPath: '$.content[2].content[0].content[0].content[0]', offset: 0 },
             end: { jsonPath: '$.content[2].content[0].content[1]', offset: 5 },
           }),
-          removeCharacterMarker: vi.fn(),
+          removeCharacterMarker,
         }),
       ),
     );
 
     act(() => result.current.onOpen());
 
-    expect(
-      result.current.markerMenuItems.find((item) => item.marker === undefined),
-    ).toBeUndefined();
+    const removeRow = result.current.markerMenuItems.find((item) => item.marker === undefined);
+    expect(removeRow).toBeDefined();
+    // Every selected character carries at least the outer `wj` marker — the case that used to
+    // render `aria-checked="false"` ("not checked") beside an action certain to remove markers.
+    expect(removeRow?.selectionState).toBeUndefined();
+    removeRow?.action();
+    expect(removeCharacterMarker).toHaveBeenCalledWith();
+  });
+
+  it('offers removal through the menu once a remove callback is supplied', () => {
+    const removeCharacterMarker = vi.fn();
+    const { result } = renderHook(() =>
+      useCharacterMarkerState(options({ contextMarker: 'bd', removeCharacterMarker })),
+    );
+
+    const removeRow = result.current.markerMenuItems.find((item) => !item.marker);
+    expect(removeRow).toBeDefined();
+    removeRow?.action();
+    expect(removeCharacterMarker).toHaveBeenCalledWith('bd');
+  });
+
+  it('does not stamp selectionState before the menu opens', () => {
+    // Coverage only exists after `onOpen`; until then the rows carry no selection affordance.
+    const { result } = renderHook(() =>
+      useCharacterMarkerState(options({ removeCharacterMarker: vi.fn() })),
+    );
+
+    expect(result.current.markerMenuItems.every((item) => item.selectionState === undefined)).toBe(
+      true,
+    );
   });
 });
 

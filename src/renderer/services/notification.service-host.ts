@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
 import { CommandHandlers } from 'papi-shared-types';
 import {
-  NOTIFICATION_POSITIONS,
+  NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
   NotificationServiceNetworkObjectName,
   type INotificationService,
   type PlatformNotification,
@@ -200,66 +200,20 @@ const notificationService: INotificationService = {
   dismiss,
 };
 
-/** Register the network object that backs the notification service */
+/**
+ * Register the network object that backs the notification service.
+ *
+ * Registered under this window's scoped name (e.g. `NotificationService-1`) so every window can
+ * serve its own notification UI. The main process publishes the generic name and forwards to the
+ * focused window, so a notification raised by a background task lands where the user is looking.
+ */
 export async function startNotificationService(): Promise<void> {
   await networkObjectService.set(
-    NotificationServiceNetworkObjectName,
+    `${NotificationServiceNetworkObjectName}-${globalThis.windowId}`,
     notificationService,
     undefined,
     undefined,
-    {
-      summary: 'Service that sends notifications to users in the UI',
-      methods: [
-        {
-          name: 'send',
-          summary: "Send a notification to the user's UI",
-          params: [
-            {
-              name: 'notification',
-              required: true,
-              summary: 'The notification to send',
-              schema: {
-                type: 'object',
-                properties: {
-                  message: { type: 'string' },
-                  severity: { type: 'string' },
-                  clickCommand: { type: 'string' },
-                  clickCommandLabel: { type: 'string' },
-                  secondaryClickCommand: { type: 'string' },
-                  secondaryClickCommandLabel: { type: 'string' },
-                  dismissClickCommand: { type: 'string' },
-                  position: { type: 'string', enum: [...NOTIFICATION_POSITIONS] },
-                  dismissible: { type: 'boolean' },
-                  notificationId: { type: ['string', 'number'] },
-                  duration: { type: 'number' },
-                },
-                required: ['message', 'severity'],
-              },
-            },
-          ],
-          result: {
-            name: 'return value',
-            schema: { type: ['string', 'number'] },
-          },
-        },
-        {
-          name: 'dismiss',
-          summary: "Dismiss a notification from the user's UI",
-          params: [
-            {
-              name: 'notificationId',
-              required: true,
-              summary: 'The ID of the notification to dismiss',
-              schema: { type: ['string', 'number'] },
-            },
-          ],
-          result: {
-            name: 'return value',
-            schema: { type: 'null' },
-          },
-        },
-      ],
-    },
+    NOTIFICATION_SERVICE_NETWORK_OBJECT_DOCS,
   );
 }
 

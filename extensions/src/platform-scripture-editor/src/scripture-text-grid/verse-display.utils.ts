@@ -1,6 +1,28 @@
 import { Usj, MarkerObject, MarkerContent } from '@eten-tech-foundation/scripture-utilities';
 
 /**
+ * The verse a SINGLE-VERSE display surface should show for a focused reference: verse 0 shows verse
+ * 1, everything else shows itself.
+ *
+ * Verse 0 is everything preceding verse 1 (intros, titles, Psalm superscriptions), which a
+ * one-verse-tall cell cannot render usefully — so Paratext 9 shows verse 1 there and single-verse
+ * surfaces here match it. Display-only: callers must not write the resolved verse back to the
+ * scroll group.
+ *
+ * Chapter surfaces must NOT call this — they show verse-0 front matter directly. Full rationale and
+ * rejected alternatives: ADR-0019.
+ *
+ * @param verseNum Non-negative integer verse number, as carried by `SerializedVerseRef`. Only `0`
+ *   is special-cased; anything else is returned unchanged, so a negative or fractional value passes
+ *   through and then slices to nothing, surfacing as the empty state rather than as an error. That
+ *   is unreachable through today's callers, but matters if this is promoted to
+ *   `lib/platform-bible-utils` (see ADR-0019), where callers lose that guarantee.
+ */
+export function resolveDisplayVerseNum(verseNum: number): number {
+  return verseNum === 0 ? 1 : verseNum;
+}
+
+/**
  * Parses a (possibly combined/partial) verse marker into a numeric range. `"5"` → `{5,5}`,
  * `"14-15"` → `{14,15}`, `"1-3a"` → `{1,3}`, `"3a"` → `{3,3}`. Non-numeric → `{NaN,NaN}`.
  */
@@ -59,8 +81,13 @@ function isVerseOpener(node: MarkerContent): node is MarkerObject {
  * paragraphs). `usxStringToUsj` (the only USJ producer we consume) drops eid-only verse closers, so
  * there is no closer marker to look for; collection for a verse ends when the next verse opener is
  * hit or a structural/heading paragraph is reached; drops `book`/`chapter` chrome. Emits a
- * combined-verse marker (e.g. `"14-15"`) exactly once (PT-3495). `isEmpty` is true when the verse
- * has no renderable text — e.g. verse-0 or a verse missing from this resource (PT-3133).
+ * combined-verse marker (e.g. `"14-15"`) exactly once (PT-3495). `isEmpty` is true when the slice
+ * has no renderable text — the verse is absent from this resource, or present but whitespace-only —
+ * which callers render as an empty state rather than blanking the row.
+ *
+ * Purely mechanical: slices the verse you ask for. Surfaces taking their verse from a focused
+ * reference must pass it through {@link resolveDisplayVerseNum} first — a raw verse 0 slices to
+ * nothing.
  */
 export function sliceUsjToVerse(usj: Usj, verseNum: number): { usj: Usj; isEmpty: boolean } {
   const resultContent: MarkerContent[] = [];

@@ -1,9 +1,451 @@
+import { Scope } from 'platform-bible-react';
 import {
   escapeStringRegexp,
+  isPlatformError,
   isSelectableInvisibleCharOrWhiteSpace,
+  normalizeProjectId,
+  PlatformError,
+  ScrollGroupId,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
-import { FindOptions } from 'platform-scripture';
+import { FindJobStatusReport, FindOptions } from 'platform-scripture';
+import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
+
+/** Maps invisible/whitespace code points to visible stand-in symbols */
+const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
+  '\u0020': '·', // regular space → middle dot
+  '\u00a0': '[Nbsp]', // non-breaking space — distinguished from regular space
+  '\u200b': '‹ZW›', // zero-width space
+  '\u200c': '‹ZWN›', // zero-width non-joiner
+  '\u200d': '‹ZWJ›', // zero-width joiner
+  '\u200e': '‹LRM›', // left-to-right mark
+  '\u200f': '‹RLM›', // right-to-left mark
+  '\u2060': '‹WJ›', // word joiner
+  '\u202f': '·', // narrow no-break space
+  '\u2009': '·', // thin space
+  '\u200a': '·', // hair space
+  '\u2002': '·', // en space
+  '\u2003': '·', // em space
+  '\u3000': '·', // ideographic space
+  // ~ is intentionally omitted here; it is added dynamically when allowInvisibleCharacters is false,
+  // because in that mode ~ represents NBSP in USFM and should render as [Nbsp]. When
+  // allowInvisibleCharacters is true, ~ is a literal tilde in the text and must not be substituted.
+};
+
+// The regex intentionally mixes regular spaces and Unicode zero-width/whitespace code points in one
+// character class. ESLint flags this as "misleading" because some of these code points (e.g.
+// \u200d ZERO WIDTH JOINER) are normally combiners that modify adjacent characters rather than
+// standing alone, so grouping them with ordinary characters in `[...]` can look unintentional.
+// Here it is intentional: we want a single pass that catches every invisible/whitespace variant.
+/* eslint-disable no-misleading-character-class */
+/** Matches all handled invisible/whitespace chars, including the USFM tilde NBSP escape. */
+const INVISIBLE_CHAR_REGEX_WITH_TILDE =
+  /[ \u00a0\u200b\u200c\u200d\u200e\u200f\u2060\u202f\u2009\u200a\u2002\u2003\u3000~]/g;
+/** Matches all handled invisible/whitespace chars, excluding tilde (for AllowInvisibleChars=true). */
+const INVISIBLE_CHAR_REGEX_WITHOUT_TILDE =
+  /[ \u00a0\u200b\u200c\u200d\u200e\u200f\u2060\u202f\u2009\u200a\u2002\u2003\u3000]/g;
+/* eslint-enable no-misleading-character-class */
+
+/**
+ * Replaces invisible/whitespace characters with visible stand-in symbols. Regular visible
+ * characters pass through unchanged.
+ *
+ * @param text The text to process
+ * @param allowInvisibleCharacters Whether the project has AllowInvisibleChars enabled. When `false`
+ *   (the default), the USFM tilde `~` is treated as a NBSP escape and rendered as `[Nbsp]`. When
+ *   `true`, `~` is a literal tilde in the project's USFM and is left unchanged.
+ */
+export function renderWithInvisibleChars(
+  text: string,
+  allowInvisibleCharacters: boolean = false,
+): string {
+  if (allowInvisibleCharacters) {
+    return text.replace(
+      INVISIBLE_CHAR_REGEX_WITHOUT_TILDE,
+      (ch) => INVISIBLE_CHAR_SYMBOLS[ch] ?? ch,
+    );
+  }
+  // In legacy mode ~ represents NBSP — render it the same as U+00A0
+  return text.replace(INVISIBLE_CHAR_REGEX_WITH_TILDE, (ch) =>
+    ch === '~' ? '[Nbsp]' : (INVISIBLE_CHAR_SYMBOLS[ch] ?? ch),
+  );
+}
+
+/**
+ * Replaces trailing spaces with non-breaking spaces so they receive background-color and
+ * text-decoration styling inside the highlighted find span. Since `\u00a0` is in
+ * {@link INVISIBLE_CHAR_SYMBOLS}, `renderWithInvisibleChars` will render it as `[Nbsp]` when
+ * `showInvisible` is enabled. Note: trailing spaces that were originally U+0020 will appear as
+ * `[Nbsp]` rather than `·` due to this substitution, which is acceptable since the key information
+ * (the match ends in whitespace) is still conveyed.
+ */
+export function preserveTrailingSpaces(text: string): string {
+  return text.replace(/ +$/, (spaces) => '\u00a0'.repeat(spaces.length));
+}
+
+/**
+ * Applies preserve-case transformation to the replacement text based on the casing of the matched
+ * text:
+ *
+ * - ALL CAPS match → ALL CAPS replacement
+ * - Title Case match (first letter capital) → Title Case replacement
+ * - Otherwise → replacement as-is
+ */
+export function applyPreserveCase(matchedText: string, replacementText: string): string {
+  if (!replacementText || !matchedText) return replacementText;
+  if (matchedText === matchedText.toUpperCase() && matchedText !== matchedText.toLowerCase()) {
+    return replacementText.toUpperCase();
+  }
+  const firstChar = matchedText[0];
+  if (firstChar === firstChar.toUpperCase() && firstChar !== firstChar.toLowerCase()) {
+    return replacementText[0].toUpperCase() + replacementText.slice(1);
+  }
+  return replacementText;
+}
+
+/**
+ * How often the find-job poll loop checks for an update. Exported so the give-up window below is
+ * computed from (and can't silently drift from) the actual poll cadence.
+ */
+export const POLL_INTERVAL_MS = 100;
+
+/**
+ * How long to tolerate a stalled find-job poll (the PDP/connection blipping and returning no
+ * update) or a search that can't start because the data provider isn't ready, before giving up and
+ * surfacing an error. Expressed as wall-clock time — not a raw retry count — so it keeps meaning
+ * the same thing if `POLL_INTERVAL_MS` ever changes, and so it's long enough to survive a slow
+ * backend call (a large project, a Send/Receive in progress) without a false failure.
+ */
+export const GIVE_UP_AFTER_MS = 5000;
+
+/** How many consecutive poll misses {@link GIVE_UP_AFTER_MS} allows before giving up. */
+export const MAX_CONSECUTIVE_POLL_MISSES = Math.ceil(GIVE_UP_AFTER_MS / POLL_INTERVAL_MS);
+
+/**
+ * Decides whether the find-job poll loop should keep retrying after a poll comes back with no
+ * update, given how many consecutive misses have already happened. A single miss is treated as a
+ * transient blip and retried; only a sustained run of misses (see {@link GIVE_UP_AFTER_MS}) is
+ * treated as a real failure.
+ *
+ * @param consecutiveMisses The number of consecutive misses before this one.
+ * @returns The updated miss count, and whether it has now reached
+ *   {@link MAX_CONSECUTIVE_POLL_MISSES}.
+ */
+export function nextPollMissState(consecutiveMisses: number): {
+  consecutiveMisses: number;
+  hasExceededRetryLimit: boolean;
+} {
+  const nextConsecutiveMisses = consecutiveMisses + 1;
+  return {
+    consecutiveMisses: nextConsecutiveMisses,
+    hasExceededRetryLimit: nextConsecutiveMisses >= MAX_CONSECUTIVE_POLL_MISSES,
+  };
+}
+
+/** What a single find-job poll attempt found, and what the poll loop should do about it. */
+export type PollAttemptOutcome =
+  | { kind: 'noActiveJob' }
+  | { kind: 'update'; update: FindJobStatusReport }
+  | { kind: 'miss'; consecutiveMisses: number; hasExceededRetryLimit: boolean };
+
+/**
+ * Classifies a single find-job poll attempt, distinguishing "there is no job to poll for right now"
+ * from "there is an active job but the poll came back empty" — the exact distinction a prior
+ * version of the poll loop collapsed, which caused a false "search interrupted" error on every
+ * ordinary new search: `abandonFindJob` clears the active-job tracking synchronously, before its
+ * own PDP round-trip resolves, so the poll loop for the _previous_ search would see "no update"
+ * during that window and (wrongly) count it as a connection miss instead of recognizing there was
+ * simply no job left to ask about.
+ *
+ * @param params.hasActiveJob Whether the caller currently believes a find job is active.
+ * @param params.getUpdate Retrieves the latest job-status update; only called when `hasActiveJob`.
+ * @param params.consecutiveMisses The number of consecutive misses before this attempt.
+ */
+export async function classifyPollAttempt(params: {
+  hasActiveJob: boolean;
+  getUpdate: () => Promise<FindJobStatusReport | undefined>;
+  consecutiveMisses: number;
+}): Promise<PollAttemptOutcome> {
+  if (!params.hasActiveJob) return { kind: 'noActiveJob' };
+  const update = await params.getUpdate();
+  if (!update) return { kind: 'miss', ...nextPollMissState(params.consecutiveMisses) };
+  return { kind: 'update', update };
+}
+
+/**
+ * Whether the current search term + scope/filters combination would actually run a search: false
+ * for an empty term, and false for the `selectedBooks` scope with no books selected. Shared between
+ * `find.web-view.tsx` (the source of truth) and `find.stories.tsx`'s harness so the two can't
+ * silently diverge — they previously each hand-rolled this rule, and the harness's copy dropped the
+ * empty-term check.
+ */
+export function isFindQueryValid(params: {
+  searchTerm: string;
+  scope: Scope;
+  selectedBookIds: string[];
+}): boolean {
+  if (params.searchTerm.trim() === '') return false;
+  if (params.scope === 'selectedBooks' && params.selectedBookIds.length === 0) return false;
+  return true;
+}
+
+/** The decision {@link gateStartSearch} makes for a given attempt to start a search. */
+export type StartSearchGate =
+  | { action: 'run' }
+  | { action: 'skip'; shouldRetryWhenPdpReady: boolean };
+
+/**
+ * Decides whether an attempt to start a find-job search should actually run, and — if not — whether
+ * it is worth automatically retrying once the data provider becomes available. Only a missing data
+ * provider is retryable: it is a temporary condition (mount-time race, or the provider dropping
+ * during a long idle period) that resolves on its own once the provider reconnects. An invalid
+ * query or a search already in flight are not retryable — retrying them would either loop forever
+ * (the query stays invalid until the user changes it) or duplicate work.
+ */
+export function gateStartSearch(params: {
+  isSearchQueryValid: boolean;
+  hasPdp: boolean;
+  isAlreadyStarting: boolean;
+}): StartSearchGate {
+  if (!params.isSearchQueryValid || params.isAlreadyStarting) {
+    return { action: 'skip', shouldRetryWhenPdpReady: false };
+  }
+  if (!params.hasPdp) {
+    return { action: 'skip', shouldRetryWhenPdpReady: true };
+  }
+  return { action: 'run' };
+}
+
+/**
+ * Arms a single bounded wait: `onTimeout` fires once after `delayMs` unless `clear()` is called
+ * first. Used to bound how long a search can sit waiting for the find data provider before giving
+ * up — without this, a valid term with the provider never arriving would leave the pending/loading
+ * state showing forever with no error, the same class of silently-stuck-forever bug the poll loop's
+ * own give-up handling (see {@link nextPollMissState}) prevents one step later.
+ */
+export function armBoundedWait(onTimeout: () => void, delayMs: number): { clear: () => void } {
+  const timeoutId = setTimeout(onTimeout, delayMs);
+  return { clear: () => clearTimeout(timeoutId) };
+}
+
+/**
+ * Whether the Find panel should treat the given `platform.interfaceMode` value as "simple" — i.e.
+ * hide the find/replace toggle and stay in find mode. Replace is a power-mode-only capability, so
+ * this returns `false` ONLY when the mode is definitively `'power'`; a {@link PlatformError} (the
+ * setting is still loading or failed to read) or any non-`'power'` value fails safe to simple.
+ *
+ * @param interfaceMode The `platform.interfaceMode` value (or a PlatformError) from `useSetting`.
+ * @returns `true` when the replace toggle should be hidden (simple mode), `false` when it should be
+ *   shown (power mode).
+ */
+export function isSimpleInterfaceMode(interfaceMode: 'simple' | 'power' | PlatformError): boolean {
+  return isPlatformError(interfaceMode) || interfaceMode !== 'power';
+}
+
+/**
+ * A currently open scripture-editor tab, as tracked by `useOpenProjectTabs`.
+ *
+ * Derived from the hook's own type rather than restated, so the two cannot drift. The import is
+ * `import type`, which TypeScript erases entirely — so this module stays free of the runtime
+ * `@papi/frontend` import `use-open-project-tabs.ts` performs, and remains importable by the
+ * presentational component, its story, and this file's unit tests.
+ */
+export type OpenScrollGroupTab = Omit<OpenProjectTabWithWebView, 'webViewType'>;
+
+/**
+ * Runs a web-view-controller call, containing BOTH ways a controller for a CLOSED editor tab fails.
+ *
+ * A controller is a network object: disposing it revokes its proxy. After that, even READING a
+ * method off it (`controller.runAnnotationAction`) throws `TypeError: Cannot perform 'get' on a
+ * proxy that has been revoked` — **synchronously**, before any promise exists. So the
+ * natural-looking `controller?.method(...).catch(() => {})` cannot contain it: `?.` only guards
+ * nullish, and `.catch` only sees rejections. The escaping TypeError crashed the whole Find web
+ * view whenever the selected project's editor tab closed while an annotation-cleanup ran against
+ * the disposed controller.
+ *
+ * Wrapping the call in a thunk lets this helper own the property read too, so the sync throw and
+ * the async rejection funnel into one place.
+ *
+ * @param call Thunk that reads the method off the controller and invokes it. May return `undefined`
+ *   when there is no controller to call.
+ * @param onError Optional handler for either failure mode. Omit to swallow silently (correct for
+ *   best-effort cleanup, where the editor is already gone and there is nothing to report).
+ */
+export function callControllerSafely(
+  call: () => Promise<unknown> | undefined,
+  onError?: (error: unknown) => void,
+): void {
+  try {
+    call()?.catch((error: unknown) => onError?.(error));
+  } catch (error) {
+    // Synchronous throw from a revoked proxy (see above) — the editor tab is gone, so there is
+    // nothing to act on beyond reporting it.
+    onError?.(error);
+  }
+}
+
+/** A `(projectId, scrollGroupId)` pair Find's project selector has selected. */
+export type SelectedProjectScrollGroup = {
+  projectId: string;
+  scrollGroupId: ScrollGroupId;
+};
+
+/**
+ * Whether selecting `newProjectId` moves Find to a DIFFERENT project — the decision that gates
+ * abandoning the running find job, clearing results, and re-running the search.
+ *
+ * Compared case-INSENSITIVELY on purpose. `useOpenProjectTabs` reports lowercased project ids while
+ * canonical ids are UPPERCASE, so the selection can legitimately be corrected from `web` to `WEB`
+ * for the very same project. Treating that casing-only correction as a switch would abandon the
+ * job, wipe the results the user is reading, and start a second identical search.
+ *
+ * @param newProjectId The project id being selected.
+ * @param currentProjectId The project Find currently operates on, or `undefined` before any initial
+ *   selection has been made.
+ * @returns `true` when this is a move to a different project (including the initial selection,
+ *   where there is no current project); `false` for the same project, whatever its casing.
+ */
+export function isDifferentProjectSelection(
+  newProjectId: string,
+  currentProjectId: string | undefined,
+): boolean {
+  if (!currentProjectId) return true;
+  return normalizeProjectId(newProjectId) !== normalizeProjectId(currentProjectId);
+}
+
+/**
+ * Narrows a persisted book selection to the books the currently selected project actually has.
+ *
+ * `selectedBookIds` is persisted per web view, so switching projects can leave it naming books the
+ * new project doesn't contain. The finder engine skips absent books gracefully, so this is not a
+ * crash — but with the `selectedBooks` scope the search would silently cover fewer books than the
+ * checkbox list shows.
+ *
+ * Pass `undefined` for `availableBookIds` while the project's book list is still being read, and
+ * the selection is returned untouched: pruning against a not-yet-known list would wipe the whole
+ * selection instead of narrowing it. An EMPTY array is a real answer — a project with no searchable
+ * books — and does empty the selection. The distinction matters because Find excludes extra
+ * material, so a project holding nothing else genuinely has nothing to search, and treating that as
+ * "not known yet" would leave a stale selection live.
+ *
+ * @param availableBookIds Book ids the selected project has, or `undefined` when not yet known.
+ * @param selectedBookIds The currently selected book ids.
+ * @returns The pruned ids, or the ORIGINAL `selectedBookIds` array reference when nothing needed
+ *   removing — so callers can compare by identity to skip a redundant state write (which also keeps
+ *   an effect that depends on this from re-triggering itself).
+ */
+export function prunePresentBookIds(
+  availableBookIds: readonly string[] | undefined,
+  selectedBookIds: string[],
+): string[] {
+  if (!availableBookIds) return selectedBookIds;
+  const availableBookIdSet = new Set(availableBookIds);
+  const prunedBookIds = selectedBookIds.filter((bookId) => availableBookIdSet.has(bookId));
+  return prunedBookIds.length === selectedBookIds.length ? selectedBookIds : prunedBookIds;
+}
+
+/**
+ * Resolves which `(project, scroll group)` pair Find's project selector should have selected, given
+ * the currently open scripture-editor tabs. Restricting the picker to only open projects means the
+ * selection can go stale the moment a tab closes, so this is re-run whenever the set of open tabs
+ * changes.
+ *
+ * - Returns the current selection unchanged when its tab is still open.
+ * - Otherwise prefers another open tab of the SAME project — trying `preferredWebViewId` (the tab
+ *   that originally opened Find, so a reload/first mount resumes exactly where it was) before any
+ *   other tab of that project — since the project itself hasn't changed, only which tab a result
+ *   click targets.
+ * - Falls back to the first remaining open tab of any project once the current project has no open
+ *   tabs left at all.
+ * - Returns `undefined` when no tabs are open anywhere.
+ *
+ * @param currentProjectId Find's current project id.
+ * @param currentScrollGroupId The currently selected scroll group, or `undefined` before an initial
+ *   selection has been made.
+ * @param openTabs Currently open scripture-editor tabs.
+ * @param preferredWebViewId A tab id to prefer when resolving a same-project fallback (typically
+ *   the tab that originally opened Find).
+ */
+export function resolveSelectedProjectScrollGroup(
+  currentProjectId: string,
+  currentScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenScrollGroupTab[],
+  preferredWebViewId: string | undefined,
+): SelectedProjectScrollGroup | undefined {
+  const normalizedCurrentProjectId = normalizeProjectId(currentProjectId);
+  const matchesCurrentProject = (tab: OpenScrollGroupTab) =>
+    normalizeProjectId(tab.projectId) === normalizedCurrentProjectId;
+
+  if (
+    currentScrollGroupId !== undefined &&
+    openTabs.some((tab) => matchesCurrentProject(tab) && tab.scrollGroupId === currentScrollGroupId)
+  ) {
+    return { projectId: currentProjectId, scrollGroupId: currentScrollGroupId };
+  }
+
+  const preferredTab =
+    preferredWebViewId !== undefined
+      ? openTabs.find((tab) => tab.webViewId === preferredWebViewId && matchesCurrentProject(tab))
+      : undefined;
+  if (preferredTab) {
+    return { projectId: currentProjectId, scrollGroupId: preferredTab.scrollGroupId };
+  }
+
+  const sameProjectTab = openTabs.find(matchesCurrentProject);
+  if (sameProjectTab) {
+    return { projectId: currentProjectId, scrollGroupId: sameProjectTab.scrollGroupId };
+  }
+
+  // Cross-project fallback: the current project has no open tab left, so Find moves to another open
+  // project (and re-runs the search there — see the rerun hook). Which project that is must be
+  // DETERMINISTIC: `openTabs` arrives as `[...tabsMap.values()]`, i.e. in the order the web-view
+  // events happened to land, so taking `openTabs[0]` made the landing project depend on event timing
+  // and differ between otherwise identical sessions. Order by scroll group, then project id, so the
+  // same set of open tabs always resolves to the same fallback.
+  const fallbackTab = [...openTabs].sort(
+    (a, b) =>
+      a.scrollGroupId - b.scrollGroupId ||
+      normalizeProjectId(a.projectId).localeCompare(normalizeProjectId(b.projectId)),
+  )[0];
+  if (!fallbackTab) return undefined;
+  return { projectId: fallbackTab.projectId, scrollGroupId: fallbackTab.scrollGroupId };
+}
+
+/**
+ * Resolve which open tab Find should target when the user picks a project from a picker that does
+ * not surface scroll groups (simple interface mode, where `ScrollGroupSelector` is hidden from both
+ * toolbars and the picker reports a project id alone).
+ *
+ * Wraps {@link resolveSelectedProjectScrollGroup} and rejects its cross-project fallback. That
+ * fallback is correct for the reassignment effect that runs when tabs close, but wrong for a click:
+ * it would retarget Find at a project the user did not pick — reachable if the picked project's
+ * last tab closes between render and click. Returning `undefined` leaves the choice to the
+ * reassignment effect.
+ *
+ * Pass the CURRENT selection through rather than `undefined`, which is what makes re-picking the
+ * already-selected project keep the tab Find is already on instead of snapping to that project's
+ * first tab — and keeps the result independent of the order `openTabs` happened to arrive in.
+ *
+ * @returns The project and scroll group to select, or `undefined` if the picked project has no open
+ *   tab and the selection should be ignored.
+ */
+export function resolveScrollGroupForPickedProject(
+  pickedProjectId: string,
+  currentScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenScrollGroupTab[],
+  preferredWebViewId: string | undefined,
+): SelectedProjectScrollGroup | undefined {
+  const resolved = resolveSelectedProjectScrollGroup(
+    pickedProjectId,
+    currentScrollGroupId,
+    openTabs,
+    preferredWebViewId,
+  );
+  if (!resolved) return undefined;
+  if (normalizeProjectId(resolved.projectId) !== normalizeProjectId(pickedProjectId))
+    return undefined;
+  return resolved;
+}
 
 /**
  * Character categorizer settings fetched from the project's `platformScripture.*` settings, used to

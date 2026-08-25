@@ -88,6 +88,7 @@ export function correctEditorUsjVersion(editorUsj: Usj): Usj {
 
 const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
 const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%';
+const READONLY_KEY = '%webView_platformScriptureEditor_title_readonly_indicator%';
 const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
 const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
@@ -105,17 +106,18 @@ export async function formatEditorTitle(
   }
   if (isLocalizeKey(title)) {
     const localizedStrings = await getLocalizedStrings({
-      localizeKeys: [EDITABLE_KEY, title],
+      localizeKeys: [EDITABLE_KEY, READONLY_KEY, title],
     });
     const localizedTitleFormatStr = localizedStrings[title];
     const localizedEditable = localizedStrings[EDITABLE_KEY];
+    const localizedReadonly = localizedStrings[READONLY_KEY];
 
     let projectName = projectId;
     if (projectId) projectName = await getProjectName(projectId);
 
     title = formatReplacementString(localizedTitleFormatStr, {
       projectId: projectName,
-      editable: isReadOnly ? '' : localizedEditable,
+      editable: isReadOnly ? localizedReadonly : localizedEditable,
     });
   }
 
@@ -768,8 +770,10 @@ export async function openDefaultActiveProjectIfApplicable(
   // start, picker fires inside `platformScriptureEditor.activate()` before `paratextBibleSendReceive`
   // registers commands) or isn't installed at all (Platform.Bible), this rejects and we return
   // `'no-send-receive'`. The driver's existing triggers handle the retry once S/R is ready — we
-  // do NOT block here. paratextBibleSendReceive does not register a network object, so PAPI's
-  // `waitForNetworkObject` is not a usable readiness signal. See PT-3958.
+  // do NOT block here. paratextBibleSendReceive registers commands but no network object of its
+  // own, so `papi.networkObjectStatus.waitForNetworkObject` has nothing to wait on; PAPI exposes no
+  // equivalent "is this command registered yet?" signal, which is why this probes and gives up
+  // rather than waiting.
   let sharedProjects: SharedProjectsInfo;
   try {
     sharedProjects = await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects');
@@ -1067,6 +1071,40 @@ export async function openOrUpdateRelatedPanels(
     await papi.commands.sendCommand('legacyCommentManager.openCommentListPanel', projectId);
   } catch (e) {
     papi.logger.warn(`Error opening comment list panel: ${getErrorMessage(e)}`);
+  }
+}
+
+/**
+ * Re-points the Find panel at `projectId`, the way {@link openOrUpdateRelatedPanels} re-points the
+ * rest of Column 3. Kept separate, and called after the editor's own web view exists, because Find
+ * needs `editorWebViewId`: it caches that id and uses it to select and highlight a clicked result
+ * in the editor, and a project switch that replaces the editor tab mints a new one. Running this
+ * alongside the other panels would hand Find the id of the editor being replaced.
+ *
+ * Find is also the one Column 3 panel that is re-pointed without being opened. In Simple mode it is
+ * part of the fixed layout from startup, so it is always already there; anywhere else it is a panel
+ * the user opened deliberately, and a project switch is not a request to open it.
+ *
+ * Never throws: like every panel in {@link openOrUpdateRelatedPanels}, a failure here is logged and
+ * swallowed, because the project switch itself has already succeeded by this point.
+ *
+ * @param papi The instance of papi to send the command
+ * @param projectId The id of the project Find should search from now on
+ * @param editorWebViewId Id of the editor web view the switch produced
+ */
+export async function updateRelatedFindPanel(
+  papi: typeof PapiBackend,
+  projectId: string,
+  editorWebViewId: string | undefined,
+): Promise<void> {
+  try {
+    await papi.commands.sendCommand(
+      'platformScripture.updateFindProject',
+      projectId,
+      editorWebViewId,
+    );
+  } catch (e) {
+    papi.logger.warn(`Error updating find panel project: ${getErrorMessage(e)}`);
   }
 }
 

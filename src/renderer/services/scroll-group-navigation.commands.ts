@@ -2,6 +2,7 @@ import {
   getBookChapterControlHandle,
   TOP_TOOLBAR_BOOK_CHAPTER_CONTROL_OWNER_ID,
 } from '@renderer/services/book-chapter-control.registry';
+import { registerScopedCommands } from '@renderer/services/renderer-hosted-command-registry';
 import {
   getScrRefForProject,
   getScrRefSync,
@@ -27,7 +28,6 @@ import {
 import { WebViewId } from '@shared/models/web-view.model';
 import { getWebViewIdFromFocusSubject } from '@shared/services/window.service-model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
-import { registerCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
@@ -204,6 +204,13 @@ function writeNewRef(target: NavigationTarget, newRef: SerializedVerseRef): void
  * auto-repeat sends one command per repeat) would read the same starting ref and lose steps, and a
  * slow earlier run could write its stale result after a newer one, stepping backward. Running each
  * behind the previous one (the mutex is FIFO) makes N presses advance exactly N steps, in order.
+ *
+ * Per-renderer, so it serializes within a window, not across them (cross-window ordering is
+ * PT-4270's scope). A scroll group is app-global, so two windows driving the same group can still
+ * interleave — but that needs the user to switch focus mid-navigation, rather than the key
+ * auto-repeat this exists to handle, and each window's own presses stay correctly ordered.
+ * Serializing across windows would mean a lock in the main process on the path of every navigation
+ * keystroke; do that only if the interleaving is actually observed.
  */
 const navigationCommandMutex = new Mutex();
 
@@ -327,59 +334,35 @@ export const navigationCommandHandlers: {
   'platform.openBookChapterControl': openBookChapterControl,
 };
 
-/** Registers the PT-4032 navigation commands. Call once at renderer startup */
+/** Registers the scroll-group navigation commands. Call once at renderer startup */
 export async function startScrollGroupNavigationCommands(): Promise<void> {
-  const didNavigateResult = { name: 'didNavigate', schema: { type: 'boolean' } } as const;
   await Promise.all([
-    ...Object.entries(navigationCommandHandlers).map(([commandName, handler]) =>
-      // Object.entries widens the key to string; the map above pins each name to its handler type
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      registerCommand(commandName as CommandNames, handler),
-    ),
-    // Reference-history keyboard commands (PT-4033) live here with the other active-target
-    // navigation commands: they resolve the scroll group to act on from the shared navigation target
+    // Every one of these acts on the window's own navigation target, so each renderer owns its own
+    // handler and the main process's routing proxy forwards the generic name to whichever window is
+    // focused. The OpenRPC docs live with the proxy, on the generic name, since that is the name
+    // consumers call. registerScopedCommands records each name so a missing registration is caught
+    // at startup (see assertAllRendererHostedCommandsRegistered) rather than only at call time.
+    ...registerScopedCommands(navigationCommandHandlers),
+    // Reference-history keyboard commands live here with the other active-target navigation
+    // commands: they resolve the scroll group to act on from the shared navigation target
     // (getActiveReferenceHistoryScrollGroupId) — the one the top toolbar follows — so a keyboard
     // shortcut and the on-screen history buttons can never disagree. The renderer also resolves the
     // physical→logical RTL swap (in navigateReferenceHistoryPhysicalSync), so the main-process
     // keyboard handler dispatches the physical key with no arguments. No-op (`false`) when the
     // active web view has no numbered scroll group (a detached ref).
-    registerCommand(
-      'platform.navigateLeftInReferenceHistory',
-      async () => {
+    ...registerScopedCommands({
+      'platform.navigateLeftInReferenceHistory': async () => {
         const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
         return scrollGroupId === undefined
           ? false
           : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'left');
       },
-      {
-        method: {
-          'x-experimental': true,
-          summary:
-            'Navigate the reference history of the active scroll group (the one the top toolbar ' +
-            'follows) in the physical "left" direction (back in LTR, forward in RTL)',
-          params: [],
-          result: didNavigateResult,
-        },
-      },
-    ),
-    registerCommand(
-      'platform.navigateRightInReferenceHistory',
-      async () => {
+      'platform.navigateRightInReferenceHistory': async () => {
         const scrollGroupId = getActiveReferenceHistoryScrollGroupId();
         return scrollGroupId === undefined
           ? false
           : navigateReferenceHistoryPhysicalSync(scrollGroupId, 'right');
       },
-      {
-        method: {
-          'x-experimental': true,
-          summary:
-            'Navigate the reference history of the active scroll group (the one the top toolbar ' +
-            'follows) in the physical "right" direction (forward in LTR, back in RTL)',
-          params: [],
-          result: didNavigateResult,
-        },
-      },
-    ),
+    }),
   ]);
 }

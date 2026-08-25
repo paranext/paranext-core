@@ -15,6 +15,17 @@ const EDITOR_FIRST_LOAD_POLL_TIME = 100;
 const EDITOR_MAX_POLL_INTERVALS = 100; // Hopefully the editor will load in 10 seconds
 
 /**
+ * The USFM paragraph elements the editor renders.
+ *
+ * Shared rather than restated: both gutter overlays decide what counts as a paragraph, and they
+ * have to agree — `ParagraphMarkerTooltipOverlay` picks the paragraph to describe, and
+ * `CharacterMarkerBarOverlay` picks the one to anchor and measure against. Two copies of the
+ * selector could drift, and a mismatch would leave the bar tracking a different element than the
+ * tooltip names.
+ */
+export const EDITOR_PARA_SELECTOR = '.para[class*="usfm_"]';
+
+/**
  * Run something on the editor's first load. This is a workaround until we can listen for the editor
  * to finish loading.
  *
@@ -91,6 +102,90 @@ export function findScrollContainer(
     candidate = candidate.parentElement ?? undefined;
   }
   return undefined;
+}
+
+/**
+ * Clamps a target's top edge into the scroll container's visible area, in `positionAnchor` content
+ * coordinates — the shared vertical math behind every gutter-anchored overlay in this extension.
+ *
+ * `scrollContainer` must be an ANCESTOR of `positionAnchor`. Because they move together in the
+ * viewport as the user scrolls, the viewport-relative delta is already the content-relative
+ * position and no `scrollTop` addition is needed; the container's own viewport top is used only to
+ * locate where the visible area begins. `positionAnchor.scrollTop` staying 0 while text visibly
+ * scrolls is the symptom of having passed the wrong element.
+ *
+ * Two clamps, in order: pin to the top of the visible area when the target has scrolled above it,
+ * then never exceed the target's own bottom edge, so an almost-fully-scrolled-past target does not
+ * drag the anchor below itself.
+ *
+ * @param targetRect Viewport rect of the thing being tracked — a paragraph element or a caret range
+ * @param anchorRect Viewport rect of the positioned element that owns the coordinate space
+ * @param scrollContainerRect Viewport rect of the scrolling ancestor
+ * @returns The clamped top, in `positionAnchor` content coordinates
+ */
+export function clampTopToVisibleArea(
+  targetRect: { top: number; bottom: number },
+  anchorRect: { top: number },
+  scrollContainerRect: { top: number },
+): number {
+  const topInContent = targetRect.top - anchorRect.top;
+  const bottomInContent = targetRect.bottom - anchorRect.top;
+  const visibleAreaTop = scrollContainerRect.top - anchorRect.top;
+
+  const ANCHOR_HEIGHT = 1;
+  const clampedTop = Math.max(topInContent, visibleAreaTop);
+  return Math.min(clampedTop, bottomInContent - ANCHOR_HEIGHT);
+}
+
+/**
+ * Marks the throwaway span {@link measureBaselineOffset} appends. Exported so a test can tell the
+ * probe's stubbed rect from its container's.
+ */
+export const BASELINE_PROBE_ATTRIBUTE = 'data-psc-baseline-probe';
+
+/**
+ * Measures where a container's first-line text baseline sits, in pixels below the container's own
+ * top edge.
+ *
+ * The mechanism is a zero-height, zero-width `inline-block` span with `vertical-align: baseline`:
+ * such a box has no content to sit above or below the baseline, so its top edge lands exactly ON
+ * the baseline. The difference between its rect top and the container's rect top is therefore the
+ * baseline offset.
+ *
+ * Uses rect math, NOT `offsetTop`: `offsetTop` is measured against the nearest positioned ancestor,
+ * and callers here run inside a `position: relative` wrapper — so `offsetTop` would silently be
+ * relative to the wrong element.
+ *
+ * Returns `undefined`, not `0`, when there is nothing to measure. Inside a `display: none` iframe
+ * every rect degenerates to zeros (see the hidden-view rule in
+ * `.claude/rules/cross-view-sync-hidden-views.md`), and a `0` there is indistinguishable from a
+ * genuine zero offset — so a caller that cached it would misalign forever. `undefined` tells the
+ * caller not to cache and to measure again once layout exists.
+ *
+ * @param container The element whose text baseline to measure. Must have inline content flow — a
+ *   flex container is not a valid target, because flex items ignore `vertical-align`
+ * @returns Pixels from the container's top edge to its first-line baseline, or `undefined` when
+ *   there is no layout
+ */
+export function measureBaselineOffset(container: HTMLElement): number | undefined {
+  const probe = container.ownerDocument.createElement('span');
+  probe.setAttribute(BASELINE_PROBE_ATTRIBUTE, '');
+  probe.style.cssText =
+    'display:inline-block;width:0;height:0;vertical-align:baseline;pointer-events:none';
+  container.appendChild(probe);
+
+  try {
+    const probeTop = probe.getBoundingClientRect().top;
+    const containerRect = container.getBoundingClientRect();
+
+    if (probeTop === 0 && containerRect.top === 0 && containerRect.height === 0) return undefined;
+
+    return probeTop - containerRect.top;
+  } finally {
+    // `finally` so the probe never survives a throw. A leaked zero-width span would be invisible
+    // and would accumulate one per measurement.
+    probe.remove();
+  }
 }
 
 /**

@@ -300,6 +300,16 @@ Notes:
 - **Use a packaged build for numbers you intend to compare.** In dev, the .NET provider runs under `dotnet watch`, which inflates the C# portion of the timeline and is not representative.
 - `main.log` accumulates across launches; the tool shows only the latest run and warns when it drops older ones. For a clean capture, delete (or copy aside) the log between runs.
 
+### Analytics test-environment override
+
+Platform.Bible's analytics abstraction (`src/extension-host/services/analytics.service.ts`) normally decides whether events target the "test" or "production" analytics audience by checking whether the build is packaged and which Send/Receive server it's configured against. Developers and testers who need to force "test" targeting regardless of build/server configuration — so their activity never lands in production analytics — can set the `PT_ANALYTICS_TEST_OVERRIDE=true` environment variable when launching:
+
+```bash
+PT_ANALYTICS_TEST_OVERRIDE=true npm start
+```
+
+The value must be exactly `true`; any other value (including other truthy-looking strings) is ignored and normal resolution applies.
+
 ## GitHub Pages
 
 **[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**
@@ -443,13 +453,20 @@ npm run test:e2e:smoke
 All `test:e2e:*` scripts are there for running variations of the playwright end-to-end tests.
 
 - `test:e2e:smoke` runs a single instance of the application, and all tests share that instance
-- `test:e2e:smoke-wsl` runs the same smoke tests using a "hidden UI" on Linux instead of a visible UI
-- `test:e2e:isolated` runs tests that require a separate application instance for each test. These
-  tests are organized into feature subsets under `e2e-tests/tests/isolated/`; run
-  `npm run test:e2e:isolated all` for every test, `npm run test:e2e:isolated <subset>` for one
-  feature, or pass no arguments to list the available subsets (no tests are run in that case)
+- `test:e2e:smoke-wsl` runs the same smoke tests using a "hidden UI" on Linux instead of a visible
+  UI. Its script also takes `--wrap <command>` to run any other e2e command the same way, e.g.
+  `e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated multi-window`
+- `test:e2e:isolated` runs tests that need their own application instance rather than sharing
+  one. These tests are organized into feature subsets under `e2e-tests/tests/isolated/`; run
+  `npm run test:e2e:isolated <subset>` for one feature, or pass no arguments to list the available
+  subsets (no tests are run in that case). `npm run test:e2e:isolated all` does not currently pass:
+  the `title-bar` and `navigation-history` subsets attach to a running app over CDP, which the
+  project's own global setup refuses to start alongside
 - `test:e2e-cdp` runs tests that require the application UI to be open already
-- `test:e2e:all` runs all configured tests
+- `test:e2e:all` runs every project in `e2e-tests/playwright.config.ts`. Like
+  `test:e2e:isolated all` it cannot currently pass: `enhanced-resources`, `title-bar` and
+  `navigation-history` all attach to a running app, which that config's global setup refuses to
+  start alongside
 
 ## Storybook
 

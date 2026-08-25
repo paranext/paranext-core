@@ -2,7 +2,7 @@ import { useData } from '@renderer/hooks/papi-hooks';
 import { useEvent, usePromise } from 'platform-bible-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNetworkEvent } from '@shared/services/network.service';
-import { webViews } from '@renderer/services/papi-frontend.service';
+import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-host';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { normalizeProjectId } from '@shared/models/project-lookup.service-model';
 import { type ProjectMetadata } from '@shared/models/project-metadata.model';
@@ -18,7 +18,10 @@ import {
 } from '@shared/services/web-view.service-model';
 import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
-import { findFirstEditorWebViewDefinition } from '@shared/models/web-view.model';
+import {
+  findFirstEditorWebViewDefinition,
+  type SavedWebViewDefinition,
+} from '@shared/models/web-view.model';
 import { type ProjectItem } from '@renderer/components/projects/project-picker.component';
 
 /** How long to wait before retrying a failed metadata fetch. */
@@ -107,7 +110,9 @@ export function useProjectPickerData(): ProjectPickerData {
   //   change the SET of available projects (extensions reloading, C# project-list changes).
   // - webViewRefreshCounter re-derives the current project from the open web views. Bumped by web
   //   view open/update/close - frequent during startup tab restoration - which re-runs only the
-  //   cheap getAllOpenWebViewDefinitions query and reuses the cached metadata.
+  //   cheap local web view enumeration and reuses the cached metadata. Those are network events, so
+  //   every window's web view activity bumps this counter; the derivation below reads only this
+  //   window's dock layout, so another window's event just re-derives the same value.
   const [metadataRefreshCounter, setMetadataRefreshCounter] = useState(0);
   const [webViewRefreshCounter, setWebViewRefreshCounter] = useState(0);
   const [currentProjectError, setCurrentProjectError] = useState<string | undefined>(undefined);
@@ -246,7 +251,32 @@ export function useProjectPickerData(): ProjectPickerData {
       // active editor, without invalidating the metadata cache.
       // eslint-disable-next-line no-unused-expressions
       webViewRefreshCounter;
-      const allDefs = await webViews.getAllOpenWebViewDefinitions();
+      // THIS window's open web views, from the local dock layout — the same source
+      // `navigation-target.util` resolves the main editor from. Deliberately not the `webViews`
+      // network object, whose `getAllOpenWebViewDefinitions` fans out across every window: the
+      // picker names the project of the editor in this window and feeds a toolbar that navigates
+      // this window's target, so a background window's editor must never become this window's
+      // current project.
+      let allDefs: SavedWebViewDefinition[] = [];
+      try {
+        allDefs = getAllOpenWebViewDefinitionsSync();
+      } catch (e) {
+        // The dock layout may not be registered yet on the first render, so this read comes back
+        // empty rather than answering "nothing is open". Treating that as "no current project" is
+        // safe only because two things guarantee a later re-run, and both must hold:
+        // - every web view that ends up open announces itself through the events above, including
+        //   the ones restored from a saved layout. A persisted definition carries no content, so
+        //   restoring a tab re-opens it through the same path that emits `onDidUpdateWebView` —
+        //   there is no way for a web view to be present without having emitted.
+        // - `getAllMetadata`'s identity changes with `metadataRefreshCounter`, so this callback is
+        //   not pinned to a snapshot taken during the empty window.
+        // One of these while a window is starting up is the expected transient. One after the
+        // layout has registered means neither guarantee above fired, and the picker will sit blank
+        // with nothing left to re-trigger it — which is why this is loud enough to find in a log.
+        logger.warn(
+          `ProjectPicker: could not enumerate this window's web views: ${getErrorMessage(e)}`,
+        );
+      }
       const editorDef = findFirstEditorWebViewDefinition(allDefs);
       const currentProjectId = editorDef?.projectId;
       if (!currentProjectId) {

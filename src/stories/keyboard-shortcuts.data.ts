@@ -18,35 +18,43 @@ import { KeyboardShortcutEntry } from './keyboard-shortcuts-catalog/keyboard-sho
 export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   {
     id: 'next-tab',
-    purpose: 'Switch to the next tab',
+    purpose: 'Switch to the next tab in the window that received the keypress',
     category: 'Navigation',
-    context: 'Main process (global)',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tabs, not app-wide.
+    context: 'Main process (per window)',
     keys: { macOS: '⌃⇥ / ⌘⇧]', windows: 'Ctrl+Tab', linux: 'Ctrl+Tab' },
     locations: ['src/main/main.ts'],
   },
   {
     id: 'previous-tab',
-    purpose: 'Switch to the previous tab',
+    purpose: 'Switch to the previous tab in the window that received the keypress',
     category: 'Navigation',
-    context: 'Main process (global)',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tabs, not app-wide.
+    context: 'Main process (per window)',
     keys: { macOS: '⌃⇧⇥ / ⌘⇧[', windows: 'Ctrl+Shift+Tab', linux: 'Ctrl+Shift+Tab' },
     locations: ['src/main/main.ts'],
   },
   {
     id: 'next-tab-group',
-    purpose: 'Switch to the next tab group',
+    purpose: 'Switch to the next tab group in the window that received the keypress',
     category: 'Navigation',
-    context: 'Main process (global)',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tab groups, not app-wide.
     // macOS combo mirrors code order (`input.meta && input.alt`); see file note on modifier order
+    context: 'Main process (per window)',
     keys: { macOS: '⌘⌥↓', windows: 'Ctrl+PageDown', linux: 'Ctrl+PageDown' },
     locations: ['src/main/main.ts'],
   },
   {
     id: 'previous-tab-group',
-    purpose: 'Switch to the previous tab group',
+    purpose: 'Switch to the previous tab group in the window that received the keypress',
     category: 'Navigation',
-    context: 'Main process (global)',
+    // Registered per window (each window's webContents gets its own before-input-event listener)
+    // and acts only on that window's own tab groups, not app-wide.
     // macOS combo mirrors code order (`input.meta && input.alt`); see file note on modifier order
+    context: 'Main process (per window)',
     keys: { macOS: '⌘⌥↑', windows: 'Ctrl+PageUp', linux: 'Ctrl+PageUp' },
     locations: ['src/main/main.ts'],
   },
@@ -188,14 +196,24 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
   },
   {
     id: 'scripture-find',
-    purpose: 'Open the find dialog',
+    purpose:
+      'Bring Find to the front and put the caret in its search box — a permanent tab in Simple mode, a panel beside the editor in Power mode. Pre-fills the search box with the editor selection, if any',
     category: 'Navigation',
-    context: 'Scripture editor web view',
-    // macOS intentionally uses ⌃F (not the usual ⌘F) to match the handler in
-    // platform-scripture-editor.web-view.tsx.
+    context:
+      'Scripture editor, model text, Bible text, commentary, and Text Collection web views. ' +
+      'In Text Collection it searches the resource holding the caret; in the reference panels, the ' +
+      'displayed resource. Does nothing (logged) until a scripture is resolved.',
+    // macOS intentionally uses ⌃F (not the usual ⌘F). One shared hook holds the handler; the next
+    // entries are the web views that mount it, and the last is the command they invoke.
     keys: { macOS: '⌃F', windows: 'Ctrl+F', linux: 'Ctrl+F' },
     locations: [
+      'extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts',
       'extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/model-text-panel.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/resource-text-panel.web-view.tsx',
+      'extensions/src/platform-scripture-editor/src/scripture-text-grid.web-view.tsx',
+      'extensions/src/platform-scripture/src/main.ts',
+      'extensions/src/platform-scripture/src/find/use-focus-search-on-invoke.hook.ts',
     ],
   },
   {

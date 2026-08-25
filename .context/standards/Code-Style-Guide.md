@@ -30,6 +30,7 @@ High-level guidelines that should shape both writing and reviewing code. The top
 - **Follow existing patterns and code**
   - Respect separation of execution environments (processes, extension/renderer). Don't pass functions or class instances over the PAPI. Don't use `instanceof` on values that may have crossed execution environments — see [MDN's note](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/instanceof#instanceof_and_multiple_realms).
   - Prefer string unions over multiple interdependent booleans. Instead of `didError`, `isRunning`, `didComplete`, use a finite state union. This reduces contradictory states and increases flexibility.
+- **Comments face forward, not backward** — a comment must help someone who reads the code later and never saw the change that introduced it. Applies to TypeScript and C# alike; see [forward-facing comments](../../.claude/rules/code-quality/forward-facing-comments.md) for the strip-the-PR-context test and the cut/keep lists.
 - **Prioritize sustainability**
   - As the code owner, you're responsible for maintaining what you approve in your area.
   - If you aren't comfortable with the change, don't approve it.
