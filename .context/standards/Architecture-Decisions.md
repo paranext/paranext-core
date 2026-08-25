@@ -1360,11 +1360,14 @@ step, no automation. Just a record.
   `extensions/node_modules/`, which makes it the default for **every** package under
   `extensions/src/*`, not just this one — `import/no-extraneous-dependencies` is off, so the next
   extension to import `@xmldom/xmldom` binds to 0.8.x with no warning. Two follow-ups worth taking
-  together: `convertMarbleChapterXml` runs only in a web view, which already has a native
-  `DOMParser`, so dropping the dependency there would remove the pin, the version split, and this
+  together: PT-4445 migrates `marble-converter` to 0.9's `onError` and drops the pin, and PT-4446
+  supersedes it — `convertMarbleChapterXml` runs only in a web view, which already has a native
+  `DOMParser`, so dropping the dependency there removes the pin, the version split, and this
   paragraph at once. Separately, `@xmldom/xmldom` emits no `parsererror` element, so PR #541's
   malformed-XML guard is inert under the shim; fatally malformed USX still throws (as a `ParseError`
   from inside `parseFromString`, not the renderer's `Invalid USX:` error), but *recoverable* defects
   are silently repaired rather than rejected — on the extension host that repaired form is what gets
-  written back to disk. Revisit if the package ever ships its own Node fallback.
-- **Source:** PT-4412.
+  written back to disk. That write-path asymmetry is **PT-4444**, flagged at the save site in
+  `platform-scripture-extender-pdpe.model.ts`. Revisit if the package ever ships its own Node
+  fallback.
+- **Source:** PT-4412, review of #2714.

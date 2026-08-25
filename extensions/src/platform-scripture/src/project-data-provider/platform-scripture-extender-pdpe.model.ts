@@ -127,6 +127,13 @@ export class ScriptureExtenderProjectDataProviderEngine
     });
   }
 
+  // A read-modify-write round-trips through `usxStringToUsj` in the getters below and back out
+  // through the two setters here. On the extension host that parse runs on `@xmldom/xmldom` (see
+  // ADR-0027), which silently repairs recoverable USX defects rather than rejecting them — the
+  // renderer's native `DOMParser` rejects the same input — so what these setters persist is the
+  // repaired form, not what was on disk.
+  // TODO(PT-4444): make the two processes agree on what USX is valid, then drop this note.
+
   // Do not emit update events when running this method because we are subscribing to data updates
   // and sending out update events in the constructor
   @papi.dataProviders.decorators.doNotNotify
