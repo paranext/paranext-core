@@ -2333,7 +2333,7 @@ step, no automation. Just a record.
 - **Source:** PT-2626 review (PR #2727), finding 7 — "the current standard tells the next author to
   do the opposite of what this PR establishes."
 
-## ADR-0027: Core owns startup-sync ordering and gates it on project-data-provider readiness
+## adr-startup-sync-readiness-gate: Core owns startup-sync ordering and gates it on project-data-provider readiness
 
 - **Date:** 2026-08-16
 - **Status:** Accepted

@@ -493,10 +493,11 @@ function isRetryableBootRaceError(error: unknown): boolean {
  * readiness gate the Simple-mode path uses. Power mode is deliberately left ungated against that
  * readiness: charging a readiness wait against this path's window-interactive freshness window
  * could silently drop a legitimate startup sync, trading a visible bug for an invisible one. See
- * ADR-0027 for that trade-off, and for why having the S/R extension self-trigger at the end of its
- * own activation — once floated here as the cleaner long-term shape — was rejected: extensions
- * activate sequentially, so nothing guarantees it activates after the scripture extension, and if
- * it goes first its self-trigger starves the same factory.
+ * `adr-startup-sync-readiness-gate` in `.context/standards/Architecture-Decisions.md` for that
+ * trade-off, and for why having the S/R extension self-trigger at the end of its own activation —
+ * once floated here as the cleaner long-term shape — was rejected: extensions activate
+ * sequentially, so nothing guarantees it activates after the scripture extension, and if it goes
+ * first its self-trigger starves the same factory.
  *
  * Returns a {@link StartupSyncTriggerOutcome} for the cases the caller logs as non-failures (the
  * command ran and reported a result, the startup went stale, or the app is quitting), and throws
