@@ -172,9 +172,9 @@ Reference implementations: `extensions/src/platform-scripture/src/find.web-view-
 ## Async Hook State Shape
 
 Two shapes are both correct; pick by whether the payload is **state-specific**. See
-[ADR-0025](Architecture-Decisions.md) for the full rationale.
+[ADR-0027](Architecture-Decisions.md) for the full rationale.
 
-> **Provisional.** ADR-0025 is **Proposed**, not Accepted: the rule is drawn from exactly two hooks,
+> **Provisional.** ADR-0027 is **Proposed**, not Accepted: the rule is drawn from exactly two hooks,
 > both introduced by PT-4347. Follow it as the default for new async hook state, but a hook that
 > fits neither shape should reopen the decision rather than contort to satisfy it.
 
