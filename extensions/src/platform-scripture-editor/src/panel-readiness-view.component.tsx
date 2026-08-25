@@ -1,4 +1,12 @@
-import { Button } from 'platform-bible-react';
+import {
+  Button,
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+} from 'platform-bible-react';
+import { AlertTriangle, BookOpen, CloudOff } from 'lucide-react';
 import { ReactNode } from 'react';
 import type { ResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { RetryableErrorView, LoadingView } from './panel-state-views.component';
@@ -15,6 +23,10 @@ import { RetryableErrorView, LoadingView } from './panel-state-views.component';
  * Deciding these states inline is what went wrong in both panels: an empty prompt was rendered from
  * a value that was only meaningful once the data had arrived. Taking one `readiness` value makes
  * "which state is this?" answerable without re-deriving it from whatever is in scope.
+ *
+ * Each state carries its own icon, which is what makes them distinguishable at a glance (AC-4). The
+ * pick prompt and the catalog error are otherwise the same shape — text plus a button — but their
+ * buttons do opposite things, so telling them apart matters more than it looks.
  *
  * @param readiness Which front state to show; `configured` renders nothing so the caller continues
  *   to its own downstream branches.
@@ -56,12 +68,14 @@ export function PanelReadinessView({
   // to replace a resource that may already be configured.
   if (readiness === 'error') {
     return (
-      <div
-        className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center"
-        role="alert"
-      >
-        <p>{errorMessage}</p>
-      </div>
+      <Empty className="tw:h-screen" role="alert">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <AlertTriangle />
+          </EmptyMedia>
+          <EmptyDescription>{errorMessage}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
@@ -73,6 +87,7 @@ export function PanelReadinessView({
         message={catalogErrorMessage}
         retryLabel={retryLabel}
         onRetry={onRetryCatalog}
+        icon={<CloudOff />}
       />
     );
   }
@@ -81,10 +96,17 @@ export function PanelReadinessView({
 
   if (readiness === 'empty') {
     return (
-      <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        <p>{emptyPrompt}</p>
-        <Button onClick={() => onPick()}>{pickLabel}</Button>
-      </div>
+      <Empty className="tw:h-screen">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <BookOpen />
+          </EmptyMedia>
+          <EmptyDescription>{emptyPrompt}</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent>
+          <Button onClick={() => onPick()}>{pickLabel}</Button>
+        </EmptyContent>
+      </Empty>
     );
   }
 

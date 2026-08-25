@@ -394,13 +394,11 @@ export function ModelTextPanel({
   // the Resource panel uses, so the two panels cannot drift apart on the question that caused this
   // bug in the first place.
   const readiness = getResourcePanelReadiness({
-    listStatus: modelTextsState.status,
+    listState: modelTextsState,
     isCatalogReady,
     hasCatalogError,
-    configuredCount: effectiveModelTexts?.items.length ?? 0,
-    // This panel shows the first configured model text whatever its type, so every configured item
-    // "matches" it — unlike the Resource panel, which filters by resource type.
-    matchingCount: effectiveModelTexts?.items.length ?? 0,
+    // `matchingCount` is omitted: this panel shows the first configured model text whatever its
+    // type, so every configured item matches — unlike the Resource panel, which filters by type.
   });
 
   if (readiness !== 'configured') {

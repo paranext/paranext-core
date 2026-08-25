@@ -285,10 +285,9 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // Readiness is decided from whether the sources have ARRIVED, never from whether the filtered
   // result came out empty — see `getResourcePanelReadiness`.
   const readiness = getResourcePanelReadiness({
-    listStatus: effectiveResourcesState.status,
+    listState: effectiveResourcesState,
     isCatalogReady,
     hasCatalogError,
-    configuredCount: effectiveResources?.items.length ?? 0,
     matchingCount: filteredResources.length,
   });
 
