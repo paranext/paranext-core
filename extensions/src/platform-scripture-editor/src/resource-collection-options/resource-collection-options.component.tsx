@@ -212,7 +212,7 @@ export function ResourceCollectionOptions({
         ))}
       </section>
 
-      <Button variant="outline" disabled={disabled} onClick={onGetResources}>
+      <Button variant="outline" disabled={disabled} onClick={() => onGetResources()}>
         {getResourcesLabel}
       </Button>
     </div>
