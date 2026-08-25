@@ -1318,3 +1318,80 @@ step, no automation. Just a record.
   not be run in this development environment, and `test:e2e:isolated` (the only runner that reaches
   `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
   a manual pass rather than by automation.
+
+## ADR-0027: Registration validity is resolved once per session in a renderer store the first-run gate consumes
+
+- **Date:** 2026-08-22
+- **Status:** Accepted
+- **Context:** PT-4325 needs an unobtrusive reminder dot on the user-profile popover whenever the
+  user's Paratext registration is missing or invalid. The popover's trigger lives in the toolbar and
+  is visible with the popover closed, so it needs the answer without the popover being open — the
+  existing `getParatextRegistrationData` fetch is gated on `isOpen` and, in any case, a populated
+  name/email does not mean a *valid* registration. The right question is
+  `paratextRegistration.doesUserHaveValidRegistration`, which `resolveRegistrationValidity` already
+  wraps. The complication is that `first-run-store.ts` already asks it, but only sometimes: Power
+  mode, demo mode, and a suppressed background re-check all return before probing, so the dot cannot
+  simply piggyback on the gate. The alternative — let the dot probe independently — costs something,
+  though less than first assumed: main re-dispatches a request for a not-yet-registered handler
+  through `requestWithRetry` (`shared/data/rpc.model.ts`), a **10-attempt, 1-second-apart** loop, so
+  with `resolveRegistrationValidity`'s 3 probes a second chain adds up to ~30 redundant JSON-RPC
+  round trips spread across a slow cold start. (Those retries log at `debug`, not `warn`. An earlier
+  draft of this entry claimed "warning logs", copied from `requestNoRetry`'s TSDoc in
+  `network.service.ts`, which was wrong and is corrected in this same change. The traffic is real;
+  the log spam is not.)
+- **Decision:** A renderer store, `registration-validity-store.ts`, owns **one** registration probe
+  per session. `refreshRegistrationValidity()` shares an in-flight probe with every concurrent
+  caller (forced or not — `force` bypasses the cache, never the in-flight share), caches only a
+  definitive `'valid'`/`'invalid'`, and never caches `'unknown'` — nor lets an `'unknown'` probe
+  overwrite an answer already known, since it means "couldn't ask", not "all fine".
+  `first-run-store.ts` calls it instead of `resolveRegistrationValidity` directly. The gate remains
+  the **only writer of the just-registered suppression** — the one-shot `JUST_REGISTERED_KEY` flag,
+  whose read/consume ordering differs deliberately between the gate's two sites — and expresses the
+  suppressed answer through `publishRegistrationValidity(...)` rather than through the probe. That
+  publish seeds the session; it is **not** sticky, so a later forced re-check can re-probe past it
+  (see Consequences). UI
+  consumers read the store through `useRegistrationValidity`, which kicks the session's probe on
+  mount; that mount probe is what makes registration-dependent UI work in the paths where the gate
+  never probes. `'unknown'` renders nothing, matching the fail-open convention
+  `useSendReceiveAvailability` documents.
+- **Why not two independent probes:** the redundant traffic above is the smaller reason. The larger
+  one is that a single answer per session is what lets the gate and the UI agree. Independent probes
+  can diverge by timing, and — decisively — the just-registered suppression only reaches the UI
+  because the gate hands its decision over via `publishRegistrationValidity`. With separate probes
+  there would be no way to suppress the post-re-register nag at all.
+- **Alternatives:** **Two independent probes** — rejected per the paragraph above; the dedupe costs
+  two changed lines in the gate. **Move the just-registered suppression into the store**
+  — rejected: it is a one-shot flag consumed at two sites with intentionally different ordering, so
+  sharing it means either two consumers of a one-shot flag or a behavioural change to a critical
+  startup gate; the override publish gets the same result without touching the flag's lifecycle.
+  **Have the store wait for the gate to settle before probing** — rejected: the gate leaves
+  `'loading'` *before* its fire-and-forget background re-check runs, so the wait does not avoid the
+  race it exists for; it only adds coordination code and a timeout. **Gate the dot behind
+  `platform.showRegistrationReminderOnStartup`** — rejected as a product decision: that setting opts
+  out of the intrusive startup wizard raise ("Show re-registration reminder at startup"), and the dot
+  is precisely the unobtrusive alternative PT-4323 asks for, so the dot path never reads it.
+- **Consequences:** The first-run gate's registration answer is now **cache-mediated** — it comes
+  from the probe the toolbar started milliseconds earlier rather than from a call the gate issued
+  itself. For a local read within one startup that is semantically identical, and the gate's Retry
+  path still re-probes because `'unknown'` is never cached; but it is a new coupling, and tests that
+  simulate a relaunch must now reset the validity store alongside `resetFirstRunStore()` (one such
+  test in `first-run-store.test.ts` caught this). The store deliberately **propagates** a probe
+  rejection instead of swallowing it, because the gate logs `Background registration re-check failed`
+  on that path; every fire-and-forget caller therefore has to `.catch()`. Two states are knowingly
+  imperfect. A registration that goes invalid mid-session is not detected until the next launch or
+  the next popover open. On the launch right after re-registering, the dot can briefly appear before
+  the gate publishes its suppressed answer — and because that publish is not sticky, opening the
+  profile popover force-re-probes and can bring the dot back for the rest of that session; on the one
+  path where the gate never publishes (Simple + completed + reminder suppressed + just registered) it
+  simply stays on. All are false positives on an unobtrusive indicator that self-correct next launch.
+  One cost is new rather than merely imperfect: Power mode previously issued **zero** registration
+  commands and now issues one per launch, because the toolbar mounts unconditionally and the hook's
+  probe is what makes the dot work there at all. Demo mode is explicitly exempt — `useRegistrationValidity`
+  checks `isDemoMode()` before probing or refreshing, so that mode's promise to bypass the real
+  registration backend still holds and the reminder simply never appears there. Separately, a forced
+  re-check is unthrottled, so repeatedly opening the popover against a down provider restarts the
+  resolver's full retry chain each time. Revisit if startup traffic becomes a concern.
+  Revisit the whole shape when PT-4324 (built-in Sample project) and PT-4305 land, since both will
+  want to react to registration state.
+- **Source:** PT-4325 (registration reminder dot), sub-task of PT-4323; retry-cost evidence from
+  `requestWithRetry` and `MAX_REQUEST_ATTEMPTS` in `src/shared/data/rpc.model.ts`.

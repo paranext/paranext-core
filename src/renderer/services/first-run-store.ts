@@ -5,7 +5,10 @@ import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bib
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
-import { resolveRegistrationValidity } from './resolve-registration-validity';
+import {
+  publishRegistrationValidity,
+  refreshRegistrationValidity,
+} from './registration-validity-store';
 import { pickBestSetupLanguage } from './pick-best-setup-language';
 
 /** What the app should currently render for first-run gating. */
@@ -241,9 +244,13 @@ async function resolveInternal(generation: number): Promise<void> {
     // Consume the just-registered flag before resolving validity: the user set it just before
     // calling platform.restart(), so 'invalid' here is almost certainly a transient backend fluke.
     const justRegistered = consumeJustRegisteredFlag();
-    const registrationValidity = await resolveRegistrationValidity();
+    const registrationValidity = await refreshRegistrationValidity();
     const effectiveValidity =
       justRegistered && registrationValidity === 'invalid' ? 'valid' : registrationValidity;
+    // Record the answer the gate acted on, not the raw probe, so the reminder dot starts the session
+    // agreeing with the just-registered suppression decided here. A later forced re-check (opening
+    // the profile popover) can still re-probe past it. See ADR-0027.
+    if (effectiveValidity !== registrationValidity) publishRegistrationValidity(effectiveValidity);
     const decision = decideFirstRun({
       firstRunComplete: false,
       wizardActive,
@@ -353,12 +360,24 @@ async function startBackgroundRegistrationRecheck(): Promise<void> {
         `Could not read platform.showRegistrationReminderOnStartup: ${getErrorMessage(e)}`,
       );
     }
-    if (reminderSuppressed) return;
-    const validity = await resolveRegistrationValidity();
+    if (reminderSuppressed) {
+      // This path consumed the one-shot just-registered flag above but returns before probing, so
+      // without this the flag is spent for nothing: the toolbar's own probe would publish the
+      // transient 'invalid' and nag all session about a registration the user just fixed. Matches
+      // what resolveInternal and IdentifyStep already do. See ADR-0027.
+      if (justRegistered) publishRegistrationValidity('valid');
+      return;
+    }
+    const validity = await refreshRegistrationValidity();
     // Only a definitive 'invalid' raises the wizard; 'valid'/'unknown' leave the user in the app.
     if (validity !== 'invalid') return;
     // Suppress a single post-re-register transient 'invalid'; a still-invalid next launch re-raises.
-    if (justRegistered) return;
+    if (justRegistered) {
+      // Match the suppression above so the reminder dot doesn't nag on the one launch right after
+      // re-registering. See ADR-0027.
+      publishRegistrationValidity('valid');
+      return;
+    }
     setStatus({ kind: 'wizard', step: 'identify', allowContinueWithoutRegistration: true });
   } catch (e) {
     logger.warn(`Background registration re-check failed: ${getErrorMessage(e)}`);
