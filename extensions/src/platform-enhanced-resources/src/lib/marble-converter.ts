@@ -9,7 +9,9 @@
 // below is 0.8-only — 0.9 throws "errorHandler object is no longer supported, switch to onError!".
 // The repo root declares 0.9.x for the extension host's DOM globals, so without the pin this file
 // would resolve 0.9 and throw on every conversion.
-// TODO: migrate to 0.9's `onError` and drop the pin (follow-up to PT-4412).
+// TODO(PT-4445): migrate to 0.9's `onError` and drop the pin — or PT-4446, which drops the
+// dependency entirely since this converter only ever runs in a web view, which has a native
+// `DOMParser`.
 import { DOMParser } from '@xmldom/xmldom';
 import {
   USJ_TYPE,
