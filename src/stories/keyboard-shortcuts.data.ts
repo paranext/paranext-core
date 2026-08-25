@@ -624,4 +624,20 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     keys: { macOS: '— (no equivalent)', windows: 'Shift+F10 / Menu', linux: 'Shift+F10 / Menu' },
     locations: ['src/renderer/components/docking/platform-tab-title.component.tsx'],
   },
+  {
+    id: 'tour-dismiss',
+    purpose: 'Dismiss the onboarding tour',
+    category: 'View',
+    context: 'Onboarding tour overlay',
+    keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
+    locations: ['lib/platform-bible-react/src/components/advanced/tour/tour.component.tsx'],
+  },
+  {
+    id: 'tour-focus-cycle',
+    purpose: 'Cycle keyboard focus through the onboarding tour card buttons',
+    category: 'Navigation',
+    context: 'Onboarding tour overlay',
+    keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
+    locations: ['lib/platform-bible-react/src/components/advanced/tour/tour.component.tsx'],
+  },
 ];
