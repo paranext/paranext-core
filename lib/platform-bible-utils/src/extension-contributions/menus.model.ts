@@ -154,6 +154,18 @@ export type WebViewMenu = {
   /** Menu that opens when you right click on the main body/area of a tab */
   contextMenu: SingleColumnMenu | undefined;
   /**
+   * Menu that opens when you right click on the tab itself, rather than on its contents.
+   *
+   * Items here act on the tab, so they are offered on every tab — including tabs that host no web
+   * view, which receive the platform defaults alone.
+   *
+   * Optional, unlike the menus above, so that adding this channel did not have to churn every
+   * existing web view menu.
+   *
+   * @experimental This menu is unstable and may change or disappear without notice
+   */
+  tabMenu?: SingleColumnMenu;
+  /**
    * Set to `true` to mark this WebView menu as experimental. Experimental menu content may change
    * or be removed without notice. Extensions reading this should treat the marker as
    * informational.
@@ -177,6 +189,13 @@ export type PlatformMenus = {
   defaultWebViewContextMenu: SingleColumnMenu;
   /** Default top menu for web views that don't specify their own */
   defaultWebViewTopMenu: MultiColumnMenu;
+  /**
+   * Default tab context menu, offered on every tab. Web views that specify their own tab menu have
+   * this folded into it.
+   *
+   * @experimental This menu is unstable and may change or disappear without notice
+   */
+  defaultWebViewTabMenu: SingleColumnMenu;
 };
 
 /**
@@ -205,6 +224,10 @@ export const menuDocumentSchema = {
       description: "Default context menu for web views that don't specify their own",
       $ref: '#/$defs/singleColumnMenu',
     },
+    defaultWebViewTabMenu: {
+      description: 'Default menu that opens when you right click a tab itself',
+      $ref: '#/$defs/singleColumnMenu',
+    },
     webViewMenus: {
       description: 'Menus that apply per web view in the application',
       type: 'object',
@@ -216,7 +239,13 @@ export const menuDocumentSchema = {
       additionalProperties: false,
     },
   },
-  required: ['mainMenu', 'defaultWebViewTopMenu', 'defaultWebViewContextMenu', 'webViewMenus'],
+  required: [
+    'mainMenu',
+    'defaultWebViewTopMenu',
+    'defaultWebViewContextMenu',
+    'defaultWebViewTabMenu',
+    'webViewMenus',
+  ],
   additionalProperties: false,
   $defs: {
     localizeKey: {
@@ -479,6 +508,10 @@ export const menuDocumentSchema = {
         },
         contextMenu: {
           description: 'Menu that opens when you right click on the main body/area of a tab',
+          $ref: '#/$defs/singleColumnMenu',
+        },
+        tabMenu: {
+          description: 'Menu that opens when you right click the tab itself',
           $ref: '#/$defs/singleColumnMenu',
         },
         isExperimental: {
