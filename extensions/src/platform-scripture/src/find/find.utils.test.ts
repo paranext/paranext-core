@@ -666,12 +666,19 @@ describe('prunePresentBookIds', () => {
     expect(prunePresentBookIds(['GEN', 'EXO', 'LEV'], selectedBookIds)).toBe(selectedBookIds);
   });
 
-  // The regression this guards: `booksPresent` sits at its all-zero default while the project setting
-  // resolves after a switch, so `availableBookIds` is briefly empty. Pruning against that would wipe
-  // the user's entire book selection rather than narrowing it. "Not known yet" != "no books".
+  // The regression this guards: the project setting is still resolving after a switch, so the book
+  // list is not known. Pruning against it would wipe the user's entire book selection rather than
+  // narrowing it. "Not known yet" != "no books".
   it('leaves the selection untouched when the available books are not known yet', () => {
     const selectedBookIds = ['GEN', 'EXO'];
-    expect(prunePresentBookIds([], selectedBookIds)).toBe(selectedBookIds);
+    expect(prunePresentBookIds(undefined, selectedBookIds)).toBe(selectedBookIds);
+  });
+
+  // The other half of that distinction: Find excludes extra material, so a project holding
+  // nothing else has a genuinely empty searchable book list. Treating that as "not known yet" would
+  // leave a stale selection live and searchable.
+  it('empties the selection when the project has no searchable books at all', () => {
+    expect(prunePresentBookIds([], ['GLO', 'FRT'])).toEqual([]);
   });
 
   it('empties the selection when the project genuinely shares no books with it', () => {

@@ -89,7 +89,11 @@ function IndeterminateProgress({ label }: { label: string }) {
  *
  * Recovery: if sync completes before this step mounts, no events will arrive. After
  * {@link SYNC_STARTED_TIMEOUT_MS} with no events, `setSyncComplete(true)` fires as a fallback so
- * Finish is always reachable. The event stream is otherwise fire-and-forget with no query API.
+ * Finish is always reachable. A snapshot query does now exist —
+ * `paratextBibleSendReceive.getSyncState`, which `use-sync-status.hook.ts` seeds from for exactly
+ * this "mounted after it started" problem — so the timeout could be replaced by a read. It has not
+ * been, because this step also has to cover a sync that never reached the Send/Receive extension's
+ * wrappers, which the snapshot does not see either.
  *
  * In Storybook shell stories, `stepComponents` replaces this step with a plain stub; for
  * interactive previews of the real sync states, see `sync-progress.component.stories.tsx`.
