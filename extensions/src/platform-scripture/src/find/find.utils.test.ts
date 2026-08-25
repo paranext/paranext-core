@@ -884,23 +884,47 @@ describe('buildFindOptions', () => {
     wordRestriction: 'none',
   } as const;
 
-  // Saved USFM can never contain consecutive spaces — ParatextData regularizes runs of whitespace
-  // to a single space on every write — so a query typed with extra spaces would otherwise be
-  // unsatisfiable. Find always forgives whitespace differences to keep such queries meaningful.
-  it('always ignores whitespace differences', () => {
-    expect(buildFindOptions(BASE_ARGS).ignoreWhitespaceDifferences).toBe(true);
+  // See buildFindOptions' TSDoc for why the runs are collapsed.
+  it('collapses runs of consecutive spaces in the search term', () => {
+    expect(buildFindOptions({ ...BASE_ARGS, searchTerm: '   beginning    ' }).searchString).toBe(
+      ' beginning ',
+    );
+    expect(buildFindOptions({ ...BASE_ARGS, searchTerm: 'the   Word' }).searchString).toBe(
+      'the Word',
+    );
   });
 
-  it('ignores whitespace differences even in regex mode, where the engine treats it as a no-op', () => {
-    expect(
-      buildFindOptions({ ...BASE_ARGS, isRegexAllowed: true }).ignoreWhitespaceDifferences,
-    ).toBe(true);
+  it('leaves a single space alone', () => {
+    expect(buildFindOptions({ ...BASE_ARGS, searchTerm: 'the Word' }).searchString).toBe(
+      'the Word',
+    );
   });
 
-  it('passes the search term and scope through unchanged', () => {
-    const options = buildFindOptions({ ...BASE_ARGS, searchTerm: '   beginning    ' });
-    expect(options.searchString).toBe('   beginning    ');
-    expect(options.scope).toEqual([{ bookId: 'MAT', chapter: 1 }]);
+  it('leaves invisible characters untouched so they can still be searched for exactly', () => {
+    // U+00A0 no-break space, U+200B zero-width space
+    expect(buildFindOptions({ ...BASE_ARGS, searchTerm: 'a\u00A0b' }).searchString).toBe(
+      'a\u00A0b',
+    );
+    expect(buildFindOptions({ ...BASE_ARGS, searchTerm: 'a\u200Bb' }).searchString).toBe(
+      'a\u200Bb',
+    );
+  });
+
+  it('does not enable ignoreWhitespaceDifferences', () => {
+    expect(buildFindOptions(BASE_ARGS).ignoreWhitespaceDifferences).toBeUndefined();
+  });
+
+  it('passes the search term through verbatim in regex mode, where spacing may be deliberate', () => {
+    const options = buildFindOptions({
+      ...BASE_ARGS,
+      searchTerm: 'the   Word',
+      isRegexAllowed: true,
+    });
+    expect(options.searchString).toBe('the   Word');
+  });
+
+  it('passes the scope through unchanged', () => {
+    expect(buildFindOptions(BASE_ARGS).scope).toEqual([{ bookId: 'MAT', chapter: 1 }]);
   });
 
   it('inverts shouldMatchCase into caseInsensitive', () => {
