@@ -623,6 +623,7 @@
   "%webView_bookChapterControl_selectChapter%": "Seleccionar capítulo",
   "%webView_bookChapterControl_selectVerse%": "Seleccionar versículo",
   "%webView_bookChapterControl_showAllBooks%": "Mostrar todos los libros",
+  "%webView_bookChapterControl_showProjectBooksOnly%": "Mostrar solo los libros del proyecto",
   "%webView_defaultTitle_webView%": "Vista Web",
   "%webView_edit%": "Editar",
   "%webView_error_dump_copied_message%": "Error copiado en el portapapeles",

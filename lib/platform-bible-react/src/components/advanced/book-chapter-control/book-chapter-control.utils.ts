@@ -203,6 +203,12 @@ export type BookChapterControlBookLists = {
    * they have never been offered.
    */
   reachableBooks: string[];
+  /**
+   * The project's books plus the current one, flattened — the navigation universe while the list is
+   * collapsed. The current book is always included so a reference on a book the project lacks can
+   * still be stepped through; the project's other books are the only ones the user has opted into.
+   */
+  projectAndCurrentBooks: string[];
   /** Reachable books the project does not have. These render greyed but stay selectable. */
   booksOutsideProject: ReadonlySet<string>;
 };
@@ -249,10 +255,24 @@ export function deriveBookChapterControlBookLists(
   const reachableBooksBySection = groupBooksBySection(reachableBookIds);
   const reachableBooks = Object.values(reachableBooksBySection).flat();
 
+  const projectBooksBySection = groupBooksBySection(projectBookIds);
+
+  // Canon-ordered on the same terms as the reachable list, so the current book lands among the
+  // project's books rather than after them, then grouped and flattened like `reachableBooks` so it
+  // inherits the same peripheral-id exclusion.
+  const projectAndCurrentBooks = projectBookIdSet.has(currentBookId)
+    ? Object.values(projectBooksBySection).flat()
+    : Object.values(
+        groupBooksBySection(
+          ALL_BOOK_IDS.filter((bookId) => projectBookIdSet.has(bookId) || bookId === currentBookId),
+        ),
+      ).flat();
+
   return {
-    projectBooksBySection: groupBooksBySection(projectBookIds),
+    projectBooksBySection,
     reachableBooksBySection,
     reachableBooks,
+    projectAndCurrentBooks,
     // Derived from the grouped-and-flattened list, so a peripheral id that grouping dropped can
     // never be marked dimmed for a list it is not part of.
     booksOutsideProject: new Set(reachableBooks.filter((bookId) => !projectBookIdSet.has(bookId))),

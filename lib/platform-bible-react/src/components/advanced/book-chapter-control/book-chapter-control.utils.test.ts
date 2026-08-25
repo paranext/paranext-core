@@ -371,6 +371,48 @@ describe('book-chapter-control.utils', () => {
       expect(reachableBooks).toEqual(['GEN', 'MAT', 'REV']);
     });
 
+    test('The collapsed navigation universe is the project list when it has the current book', () => {
+      const { projectAndCurrentBooks } = deriveBookChapterControlBookLists(
+        ['GEN', 'MAT', 'REV'],
+        ['TOB'],
+        'MAT',
+      );
+
+      expect(projectAndCurrentBooks).toEqual(['GEN', 'MAT', 'REV']);
+    });
+
+    test('The current book joins the collapsed navigation universe when the project lacks it', () => {
+      const { projectAndCurrentBooks } = deriveBookChapterControlBookLists(
+        ['GEN', 'MAT'],
+        [],
+        'REV',
+      );
+
+      expect(projectAndCurrentBooks).toEqual(['GEN', 'MAT', 'REV']);
+    });
+
+    test('An additional book never joins the collapsed navigation universe', () => {
+      const { projectAndCurrentBooks, reachableBooks } = deriveBookChapterControlBookLists(
+        ['GEN', 'MAT'],
+        ['TOB', 'REV'],
+        'GEN',
+      );
+
+      expect(projectAndCurrentBooks).toEqual(['GEN', 'MAT']);
+      expect(reachableBooks).toContain('TOB');
+      expect(reachableBooks).toContain('REV');
+    });
+
+    test('A peripheral current book no section claims is not in the collapsed navigation universe', () => {
+      const { projectAndCurrentBooks } = deriveBookChapterControlBookLists(
+        ['GEN', 'MAT'],
+        [],
+        'FRT',
+      );
+
+      expect(projectAndCurrentBooks).toEqual(['GEN', 'MAT']);
+    });
+
     test('With no extras and the current book in the project, the project list is grouped as-is', () => {
       const { reachableBooksBySection } = deriveBookChapterControlBookLists(
         ['REV', 'GEN', 'TOB'],
