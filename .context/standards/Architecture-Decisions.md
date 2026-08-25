@@ -1592,3 +1592,53 @@ step, no automation. Just a record.
   (`PreserveConsecutiveSpacesInTextTokens`); this decision is unaffected by that, since it never
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
+
+## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** Importing Paratext 9 interlinear data into a Platform.Bible extension requires core
+  to expose project-folder files extensions cannot otherwise reach (extensions have no filesystem
+  access, and `ExtensionData` is confined to its own store). PT9 keeps this data in per-language
+  interlinear book files plus `Lexicon.xml`, `WordAnalyses.xml`, and `InterlinearSetup.xml`. This
+  is the first projectInterface serving PT9-legacy per-project file data, and the next PT9 import
+  (hyphenation, renderings, and spelling are all existing PT9 `ProjectFileType` categories) will
+  follow whatever precedent it sets. Decided on PR #2707.
+- **Decision:** Four coupled choices. (1) **Parsed models, not raw file text:**
+  `platformScripture.Pt9Interlinear` serves typed records deserialized through ParatextData's own
+  XML classes, read via each project's live `FileManager`, with PT9's own read semantics and never
+  stricter ones - duplicate keys keep the last occurrence, a missing range defaults, and a
+  malformed boolean or unknown enum name fails the file exactly as it would fail in Paratext 9.
+  Core owns the payload schema; consumers never re-derive PT9's file formats from bytes. (2)
+  **Change detection is a polled manifest, not events:** the interface emits no file-change
+  events; a manifest getter serves an opaque SHA-256 change token per covered file (the
+  interlinear book files, the lexicon, and the stored word analyses; the setups file rides the
+  payload without change detection). Content hashes rather than mtimes, because Send/Receive
+  rewrites timestamps without changing content.
+  (3) **Advertisement by project class:** the interface joins the unpublished-only list beside
+  `legacyCommentManager.comments` - published projects are distributed archives that do not carry
+  interlinear authoring data - and wire-method registration is gated on the advertised list, so
+  the wire surface always matches the advertisement. (4) **Namespace:** the interface lives under
+  `platformScripture.*` like the other Paratext-project interfaces; the project is the subject,
+  and the legacy on-disk format is an implementation detail of what the getters read.
+- **Alternatives:** (a) **Raw file text keyed by path** (the PR's original shape) - rejected after
+  building both and comparing: every consumer re-implements PT9's parsers and inherits their
+  divergences, raw text inflates ~1.65x when escaped into JSON, and path-keyed payloads leak
+  storage layout into the contract. (b) **File-watcher change events** - deferred to the planned
+  sync work; poll-on-open serves the importer today, and the manifest keeps the poll honest. (c)
+  **Advertising by editability** - rejected: `platform.isEditable` is a separate per-project
+  setting, and an unpublished project with `Editable=F` still carries importable interlinear
+  data. (d) **A command instead of a projectInterface** - rejected: per-project capability
+  advertisement is what projectInterfaces exist for, and "interface unsupported" doubling as "no
+  PT9 data channel" is load-bearing for consumer UX.
+- **Consequences:** The transport shapes the contract: a single WebSocket message past its limit
+  tears down the whole C# connection (an unaddressed platform-level issue), so the response is
+  bounded by an aggregate size cap and fails with a documented error-message prefix - a prefix,
+  because exception types do not cross the RPC boundary, making the message text the only
+  contract a consumer can recognize. Schema evolution now moves at platform speed: a field the
+  payload drops costs a core release to recover, which is why the setup records deliberately
+  carry the model text's identity even though nothing consumes it yet. A future PT9-legacy import
+  should follow this shape - parsed models with PT9-parity semantics, a hashed manifest for
+  change detection, unpublished-only advertisement - rather than re-litigating it.
+- **Source:** PR #2707 review of the PT9 interlinear projectInterface - finding that the PR's
+  architecture decisions had no recorded precedent for the next PT9-legacy import to follow.
