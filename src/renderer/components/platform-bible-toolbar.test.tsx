@@ -2,7 +2,12 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 import React from 'react';
-import { useData, useScrollGroupScrRef, useSetting } from '@renderer/hooks/papi-hooks';
+import {
+  useData,
+  useProjectSetting,
+  useScrollGroupScrRef,
+  useSetting,
+} from '@renderer/hooks/papi-hooks';
 import { useNavigationTargetWebView } from '@renderer/hooks/use-navigation-target-web-view.hook';
 import { useOpenResourceBookIds } from '@renderer/hooks/use-open-resource-book-ids.hook';
 import { useWindowControlsOverlay } from '@renderer/hooks/use-window-controls-overlay.hook';
@@ -796,10 +801,35 @@ describe('PlatformBibleToolbar — top BCV and project selector styling by inter
   });
 });
 
-describe('PlatformBibleToolbar — books from open resources', () => {
+describe('PlatformBibleToolbar — books beyond the active project', () => {
+  /** `platformScripture.booksPresent` bit string with only Genesis (canon book 1) set. */
+  const GENESIS_ONLY_BOOKS_PRESENT = '1';
+
+  const mockCurrentBook = (book: string) => {
+    vi.mocked(useScrollGroupScrRef).mockReturnValue([
+      { book, chapterNum: 1, verseNum: 1 },
+      vi.fn(),
+      0,
+      vi.fn(),
+      undefined,
+    ]);
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockSendCommand(true);
+    // clearAllMocks() does not reset a prior test's mockReturnValue (see precedent above), so state
+    // the whole starting position: simple mode, an active project holding only Genesis, the
+    // reference sitting in Genesis, and Revelation open as a resource.
+    vi.mocked(useSetting).mockReturnValue(['simple', vi.fn(), vi.fn(), false]);
+    vi.mocked(useProjectSetting).mockReturnValue([
+      GENESIS_ONLY_BOOKS_PRESENT,
+      vi.fn(),
+      vi.fn(),
+      false,
+    ]);
+    mockCurrentBook('GEN');
+    vi.mocked(useOpenResourceBookIds).mockReturnValue(['REV']);
   });
 
   it('offers books from open resources to the book chapter control', async () => {
@@ -808,11 +838,37 @@ describe('PlatformBibleToolbar — books from open resources', () => {
     expect(control).toHaveAttribute('data-additional-books', 'REV');
   });
 
+  it('offers nothing beyond the active project in power mode', async () => {
+    // Power mode's book/chapter/verse controls are out of scope for this widening, so the toolbar
+    // must not hand them additional books even when open resources have some.
+    vi.mocked(useSetting).mockReturnValue(['power', vi.fn(), vi.fn(), false]);
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).not.toHaveAttribute('data-additional-books');
+  });
+
+  it('offers the current book when the active project does not have it', async () => {
+    // BookChapterControl renders exactly the book list it is given, so a reference on a book the
+    // active project lacks is only in its own picker because the toolbar adds it.
+    vi.mocked(useOpenResourceBookIds).mockReturnValue([]);
+    mockCurrentBook('JHN');
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).toHaveAttribute('data-additional-books', 'JHN');
+  });
+
   it('passes no additional books callback when there are none', async () => {
     vi.mocked(useOpenResourceBookIds).mockReturnValue([]);
     render(<PlatformBibleToolbar />);
     const control = await screen.findByTestId('book-chapter-control');
     expect(control).not.toHaveAttribute('data-additional-books');
+  });
+
+  it('does not repeat the current book when an open resource already offers it', async () => {
+    mockCurrentBook('REV');
+    render(<PlatformBibleToolbar />);
+    const control = await screen.findByTestId('book-chapter-control');
+    expect(control).toHaveAttribute('data-additional-books', 'REV');
   });
 });
 
