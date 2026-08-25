@@ -67,7 +67,7 @@ import {
   RESOURCE_PANEL_TYPED_STRING_KEYS,
   resolveResourcePanelStringKeys,
 } from './resource-panel-strings.utils';
-import { RetryableErrorView, LoadingView } from './panel-state-views.component';
+import { ExpandableInfo, RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -93,6 +93,12 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_catalogUnavailable%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_textUnavailable%',
+  // The Bible-texts empty state's "More info" disclosure. Not part of
+  // RESOURCE_PANEL_TYPED_STRING_KEYS: that set pairs one key per field for BOTH resource types,
+  // and commentaries deliberately has no disclosure — its prompt is self-explanatory.
+  '%webView_resourcePanel_bibleTexts_emptyState_moreInfo%',
+  '%webView_resourcePanel_bibleTexts_emptyState_lessInfo%',
+  '%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%',
   ...RESOURCE_PANEL_TYPED_STRING_KEYS,
 ];
 
@@ -618,6 +624,17 @@ globalThis.webViewComponent = function ResourceTextPanel({
         readiness={readiness}
         errorMessage={localizedStrings['%webView_resourcePanel_settingsUnavailable%']}
         emptyPrompt={localizedStrings[emptyStatePromptKey]}
+        moreInfo={
+          // Only Bible Texts needs the disclosure; the Commentaries prompt says what it is asking
+          // for, so it renders the shorter empty state.
+          resourceType === 'ScriptureResource' ? (
+            <ExpandableInfo
+              moreLabel={localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo%']}
+              lessLabel={localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_lessInfo%']}
+              body={localizedStrings['%webView_resourcePanel_bibleTexts_emptyState_moreInfo_body%']}
+            />
+          ) : undefined
+        }
         catalogErrorMessage={localizedStrings['%webView_resourcePanel_catalogUnavailable%']}
         loadingLabel={localizedStrings['%webView_resourcePanel_loading%']}
         pickLabel={localizedStrings[pickButtonKey]}

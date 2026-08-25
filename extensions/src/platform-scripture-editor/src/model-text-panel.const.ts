@@ -22,6 +22,11 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   '%webView_modelTextPanel_installFailedOffline%',
   '%webView_modelTextPanel_retry%',
   '%webView_modelTextPanel_emptyState_prompt%',
+  // The empty state's "More info" disclosure, which explains what a model text is and that the
+  // admin usually chooses it. Rendered through `PanelReadinessView`'s `moreInfo` slot.
+  '%webView_modelTextPanel_emptyState_moreInfo%',
+  '%webView_modelTextPanel_emptyState_lessInfo%',
+  '%webView_modelTextPanel_emptyState_moreInfo_body%',
   // Readiness states: the panel cannot read its setting, the DBL catalog failed, or either is still
   // in flight. See `getResourcePanelReadiness` and `PanelReadinessView`.
   '%webView_modelTextPanel_settingsUnavailable%',
