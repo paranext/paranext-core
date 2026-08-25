@@ -402,11 +402,11 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     // it passes through with nothing claimed and nothing driven.
     const driver = makeDriver();
     const state = session('enter', 'q');
-    for (const key of ['1', ' ', 'Enter', 'Escape', 'Backspace', 'ArrowDown']) {
+    ['1', ' ', 'Enter', 'Escape', 'Backspace', 'ArrowDown'].forEach((key) => {
       const event = makeEvent(key);
       expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('passed');
       expect(event.defaultPrevented).toBe(false);
-    }
+    });
     expect(state.filter).toBe('q');
     expect(driver.update).not.toHaveBeenCalled();
     expect(driver.dismiss).not.toHaveBeenCalled();
