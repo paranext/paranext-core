@@ -8,7 +8,7 @@ import {
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 } from '@shared/services/web-view.service-model';
 import { type SavedWebViewDefinition } from '@shared/models/web-view.model';
-import { useOpenResourceBookIds } from './use-open-resource-book-ids.hook';
+import { useOpenProjectBookIds } from './use-open-project-book-ids.hook';
 
 // Hoisted so the vi.mock factories below can close over them — vi.mock is lifted above module init.
 // `getProjectDataProvider` is deliberately untyped: an untyped mock accepts doubles narrower than
@@ -107,9 +107,9 @@ beforeEach(() => {
   vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([]);
 });
 
-describe('useOpenResourceBookIds', () => {
+describe('useOpenProjectBookIds', () => {
   test('returns nothing when no web views are open', async () => {
-    const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+    const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
 
     await waitFor(() => expect(result.current).toEqual([]));
     expect(getProjectDataProvider).not.toHaveBeenCalled();
@@ -123,7 +123,7 @@ describe('useOpenResourceBookIds', () => {
       pdpWithBooks(booksPresentFlags(66), 'resourceProject'),
     );
 
-    const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+    const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
 
     await waitFor(() => expect(result.current).toEqual(['REV']));
   });
@@ -136,7 +136,7 @@ describe('useOpenResourceBookIds', () => {
     ]);
     getProjectDataProvider.mockResolvedValue(pdpWithBooks(booksPresentFlags(66), 'gridMember'));
 
-    const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+    const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
 
     await waitFor(() => expect(result.current).toEqual(['REV']));
     expect(getProjectDataProvider).toHaveBeenCalledWith('platform.base', 'gridMember');
@@ -150,7 +150,7 @@ describe('useOpenResourceBookIds', () => {
       webViewDefinition('b', { state: { [NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY]: [1, 2] } }),
     ]);
 
-    const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+    const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
 
     await waitFor(() => expect(result.current).toEqual([]));
     expect(getProjectDataProvider).not.toHaveBeenCalled();
@@ -161,10 +161,59 @@ describe('useOpenResourceBookIds', () => {
       webViewDefinition('editor', { projectId: 'activeProject' }),
     ]);
 
-    const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+    const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
 
     await waitFor(() => expect(result.current).toEqual([]));
     expect(getProjectDataProvider).not.toHaveBeenCalled();
+  });
+
+  describe('when disabled', () => {
+    test('returns nothing and opens no data providers', async () => {
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+        webViewDefinition('resource', { projectId: 'resourceProject' }),
+      ]);
+      getProjectDataProvider.mockResolvedValue(
+        pdpWithBooks(booksPresentFlags(66), 'resourceProject'),
+      );
+
+      const { result } = renderHook(() => useOpenProjectBookIds('activeProject', false));
+
+      await waitFor(() => expect(result.current).toEqual([]));
+      expect(getProjectDataProvider).not.toHaveBeenCalled();
+    });
+
+    test('does not subscribe to web view events', async () => {
+      const { unmount } = renderHook(() => useOpenProjectBookIds('activeProject', false));
+
+      await waitFor(() =>
+        expect(webViewEventHandlers.get(EVENT_NAME_ON_DID_OPEN_WEB_VIEW)?.size ?? 0).toBe(0),
+      );
+      expect(webViewEventHandlers.get(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW)?.size ?? 0).toBe(0);
+      expect(webViewEventHandlers.get(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW)?.size ?? 0).toBe(0);
+
+      unmount();
+    });
+
+    test('starts working once it is enabled', async () => {
+      vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+        webViewDefinition('resource', { projectId: 'resourceProject' }),
+      ]);
+      getProjectDataProvider.mockResolvedValue(
+        pdpWithBooks(booksPresentFlags(66), 'resourceProject'),
+      );
+
+      const { result, rerender } = renderHook(
+        ({ isEnabled }: { isEnabled: boolean }) =>
+          useOpenProjectBookIds('activeProject', isEnabled),
+        { initialProps: { isEnabled: false } },
+      );
+
+      await waitFor(() => expect(result.current).toEqual([]));
+
+      rerender({ isEnabled: true });
+
+      await waitFor(() => expect(result.current).toEqual(['REV']));
+    });
   });
 
   test('subscribes once per project id even when two views share it', async () => {
@@ -176,7 +225,7 @@ describe('useOpenResourceBookIds', () => {
       pdpWithBooks(booksPresentFlags(66), 'resourceProject'),
     );
 
-    const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+    const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
 
     await waitFor(() => expect(result.current).toEqual(['REV']));
     expect(getProjectDataProvider).toHaveBeenCalledTimes(1);
@@ -193,7 +242,7 @@ describe('useOpenResourceBookIds', () => {
         : pdpWithBooks(booksPresentFlags(1), 'earlier'),
     );
 
-    const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+    const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
 
     await waitFor(() => expect(result.current).toEqual(['GEN', 'REV']));
   });
@@ -208,7 +257,7 @@ describe('useOpenResourceBookIds', () => {
       return pdpWithBooks(booksPresentFlags(66), 'workingResource');
     });
 
-    const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+    const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
 
     // The working project's book is the signal that both providers have settled — without it the
     // assertion would pass against the initial empty state before the rejection is even handled.
@@ -225,7 +274,7 @@ describe('useOpenResourceBookIds', () => {
       pdpWithBooks(booksPresentFlags(66), 'resourceProject'),
     );
 
-    const { result, unmount } = renderHook(() => useOpenResourceBookIds('activeProject'));
+    const { result, unmount } = renderHook(() => useOpenProjectBookIds('activeProject'));
     await waitFor(() => expect(result.current).toEqual(['REV']));
 
     unmount();
@@ -257,7 +306,7 @@ describe('useOpenResourceBookIds', () => {
     test("drops a closed project's books from the result", async () => {
       openTwoResourceProjects();
 
-      const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+      const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
       await waitFor(() => expect(result.current).toEqual(['GEN', 'REV']));
 
       closeOneResourceProject();
@@ -267,7 +316,7 @@ describe('useOpenResourceBookIds', () => {
     });
 
     test("adds a newly opened project's books to the result", async () => {
-      const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+      const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
       await waitFor(() => expect(result.current).toEqual([]));
 
       vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
@@ -282,7 +331,7 @@ describe('useOpenResourceBookIds', () => {
     test("runs the closed project's own unsubscriber and resubscribes the survivor", async () => {
       openTwoResourceProjects();
 
-      const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+      const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
       await waitFor(() => expect(result.current).toEqual(['GEN', 'REV']));
       expect(getProjectDataProvider).toHaveBeenCalledTimes(2);
 
@@ -307,7 +356,7 @@ describe('useOpenResourceBookIds', () => {
         pdpWithBooks(booksPresentFlags(66), 'resourceProject'),
       );
 
-      const { result } = renderHook(() => useOpenResourceBookIds('activeProject'));
+      const { result } = renderHook(() => useOpenProjectBookIds('activeProject'));
       await waitFor(() => expect(result.current).toEqual(['REV']));
       expect(getProjectDataProvider).toHaveBeenCalledTimes(1);
 

@@ -1,4 +1,10 @@
 import { CommandItem } from '@/components/shadcn-ui/command';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { getLocalizedBookId, getLocalizedBookName } from '@/components/shared/book.utils';
 import { cn } from '@/utils/shadcn-ui/utils';
 import { Canon } from '@sillsdev/scripture';
@@ -40,8 +46,8 @@ type BookItemProps = {
    *
    * Distinct from `disabled`, which also suppresses selection; `disabled` takes precedence and a
    * disabled item is never additionally dimmed. The reason is appended to the item's accessible
-   * name so the greying is never a colour-only signal — the state and its explanation are one prop
-   * precisely so they cannot drift apart.
+   * name and shown in a tooltip, so the greying is never a colour-only signal for either kind of
+   * reader — the state and its explanation are one prop precisely so they cannot drift apart.
    *
    * An empty string counts as no reason, so the item renders undimmed. Callers resolving this from
    * a localized string should fall back with `||` rather than `??`, since `??` passes an empty
@@ -112,9 +118,53 @@ export function BookItem({
   );
 
   const isDimmed = !!dimmedReason && !disabled;
-  const baseAriaLabel = `${Canon.bookIdToEnglishName(bookId)} (${bookId.toLocaleUpperCase()})`;
+  // Built from the same localized values the row renders, not from the English canon name: the
+  // dimmed reason appended below arrives already localized, so an English base would announce a
+  // half-translated name — "Genesis (GEN), no está en este proyecto". Both fall back to English
+  // when the caller passes no localized names, so the undimmed case is unchanged.
+  const baseAriaLabel = `${bookDisplayName} (${bookDisplayId})`;
 
-  return (
+  const commandItem = (
+    <CommandItem
+      ref={ref}
+      value={commandValue || `${bookId} ${Canon.bookIdToEnglishName(bookId)}`}
+      onSelect={handleSelect}
+      onMouseDown={handleMouseDown}
+      role="option"
+      aria-selected={isSelected}
+      aria-disabled={disabled || undefined}
+      aria-label={isDimmed ? `${baseAriaLabel}, ${dimmedReason}` : baseAriaLabel}
+      disabled={disabled}
+      className={cn(
+        className,
+        disabled && 'tw:cursor-not-allowed tw:opacity-50',
+        // Mirrors NumberedItemGrid's dimmed-vs-disabled split: dimmed is presentation only, so it
+        // never sets aria-disabled or blocks onSelect, and it yields to disabled.
+        //
+        // Opacity on the whole item rather than a lower-contrast text colour, for two reasons: the
+        // book id below carries its own muted colour, so tinting only the name would leave the row
+        // half-dimmed; and a dimmed item is still selectable, so it must not end up harder to read
+        // than a genuinely disabled one. Cleared while highlighted, so the row the user is actually
+        // on reads at full contrast like any other book.
+        isDimmed && 'tw:opacity-70 tw:data-selected:opacity-100',
+      )}
+    >
+      {showCheck && (
+        <Check
+          className={cn(
+            'tw:me-2 tw:h-4 tw:w-4 tw:shrink-0',
+            isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
+          )}
+        />
+      )}
+      <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
+      <span className="tw:ms-2 tw:shrink-0 tw:text-xs tw:text-muted-foreground">
+        {bookDisplayId}
+      </span>
+    </CommandItem>
+  );
+
+  const item = (
     <div
       className={cn(
         'tw:mx-1 tw:my-1 tw:border-b-0 tw:border-e-0 tw:border-s-2 tw:border-t-0 tw:border-solid',
@@ -126,37 +176,26 @@ export function BookItem({
         },
       )}
     >
-      <CommandItem
-        ref={ref}
-        value={commandValue || `${bookId} ${Canon.bookIdToEnglishName(bookId)}`}
-        onSelect={handleSelect}
-        onMouseDown={handleMouseDown}
-        role="option"
-        aria-selected={isSelected}
-        aria-disabled={disabled || undefined}
-        aria-label={isDimmed ? `${baseAriaLabel}, ${dimmedReason}` : baseAriaLabel}
-        disabled={disabled}
-        className={cn(
-          className,
-          disabled && 'tw:cursor-not-allowed tw:opacity-50',
-          // Mirrors NumberedItemGrid's dimmed-vs-disabled split: dimmed is presentation only, so it
-          // never sets aria-disabled or blocks onSelect, and it yields to disabled.
-          isDimmed && 'tw:bg-muted/50 tw:text-muted-foreground/50',
-        )}
-      >
-        {showCheck && (
-          <Check
-            className={cn(
-              'tw:me-2 tw:h-4 tw:w-4 tw:shrink-0',
-              isSelected ? 'tw:opacity-100' : 'tw:opacity-0',
-            )}
-          />
-        )}
-        <span className="tw:min-w-0 tw:flex-1">{bookDisplayName}</span>
-        <span className="tw:ms-2 tw:shrink-0 tw:text-xs tw:text-muted-foreground">
-          {bookDisplayId}
-        </span>
-      </CommandItem>
+      {commandItem}
     </div>
+  );
+
+  if (!isDimmed) return item;
+
+  // Without the tooltip the greying is a colour-only signal for a sighted user: the reason reaches
+  // assistive tech through the accessible name, and this is where everyone else reads it. Delayed
+  // rather than instant because these items sit in a list the pointer sweeps across.
+  //
+  // The trigger wraps the section-border div rather than the CommandItem itself because cmdk's Item
+  // assigns its own onPointerMove after spreading incoming props, which would drop the handler the
+  // tooltip needs to open. Neither TooltipProvider nor Tooltip renders an element, and the trigger
+  // renders the wrapper it is given, so the list's DOM shape is unchanged.
+  return (
+    <TooltipProvider delayDuration={500}>
+      <Tooltip>
+        <TooltipTrigger asChild>{item}</TooltipTrigger>
+        <TooltipContent>{dimmedReason}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

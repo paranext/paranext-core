@@ -280,7 +280,7 @@ describe('BookChapterControl additional books', () => {
     const revelation = await screen.findByRole('option', {
       name: /Revelation \(REV\), not in this project/,
     });
-    expect(revelation).toHaveClass('tw:text-muted-foreground/50');
+    expect(revelation).toHaveClass('tw:opacity-70');
   });
 
   test('additional ids already in the project are not dimmed', async () => {
@@ -296,7 +296,7 @@ describe('BookChapterControl additional books', () => {
     await userEvent.click(getTrigger());
 
     const genesis = await screen.findByRole('option', { name: /Genesis/ });
-    expect(genesis).not.toHaveClass('tw:text-muted-foreground/50');
+    expect(genesis).not.toHaveClass('tw:opacity-70');
   });
 
   test('the toggle is absent when there are no books outside the project', async () => {
@@ -312,7 +312,7 @@ describe('BookChapterControl additional books', () => {
     await userEvent.click(getTrigger());
 
     expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show all books' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument();
   });
 
   test('the toggle is absent when getActiveBookIds is not supplied', async () => {
@@ -327,7 +327,7 @@ describe('BookChapterControl additional books', () => {
     await userEvent.click(getTrigger());
 
     expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show all books' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument();
   });
 
   test('the toggle starts unpressed and reveals the extra book when pressed', async () => {
@@ -343,14 +343,17 @@ describe('BookChapterControl additional books', () => {
 
     await user.click(getTrigger());
 
-    const toggle = await screen.findByRole('button', { name: 'Show all books' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    const toggle = await screen.findByRole('button', { name: 'Show more books' });
+    // The flipping label carries the state; aria-expanded would encode it a second time,
+    // in the opposite direction ("Show project books only" + expanded=true reads as a
+    // contradiction), so the toggle deliberately has none.
+    expect(toggle).not.toHaveAttribute('aria-expanded');
     expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
 
     await user.click(toggle);
 
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
-    await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'true'));
+    await waitFor(() => expect(toggle).toHaveAccessibleName('Show project books only'));
   });
 
   test('a revealed book outside the project is dimmed', async () => {
@@ -365,10 +368,10 @@ describe('BookChapterControl additional books', () => {
     );
 
     await user.click(getTrigger());
-    await user.click(await screen.findByRole('button', { name: 'Show all books' }));
+    await user.click(await screen.findByRole('button', { name: 'Show more books' }));
 
     const revelation = await screen.findByRole('option', { name: /Revelation/ });
-    expect(revelation).toHaveClass('tw:text-muted-foreground/50');
+    expect(revelation).toHaveClass('tw:opacity-70');
   });
 
   test('selecting a revealed book navigates to it', async () => {
@@ -384,7 +387,7 @@ describe('BookChapterControl additional books', () => {
     );
 
     await user.click(getTrigger());
-    await user.click(await screen.findByRole('button', { name: 'Show all books' }));
+    await user.click(await screen.findByRole('button', { name: 'Show more books' }));
     await user.click(await screen.findByRole('option', { name: /Revelation/ }));
     // Revelation has chapters, so the control advances to the chapter grid before submitting.
     await user.click(await screen.findByRole('option', { name: '1' }));
@@ -405,13 +408,13 @@ describe('BookChapterControl additional books', () => {
     );
 
     await userEvent.click(getTrigger());
-    expect(await screen.findByRole('button', { name: 'Show all books' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Show more books' })).toBeInTheDocument();
 
     // Searching already spans every reachable book, so the control has nothing left to do.
     await userEvent.type(getSearchInput(), 'rev');
 
     await waitFor(() =>
-      expect(screen.queryByRole('button', { name: 'Show all books' })).not.toBeInTheDocument(),
+      expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument(),
     );
   });
 
@@ -428,7 +431,7 @@ describe('BookChapterControl additional books', () => {
 
     await user.click(getTrigger());
 
-    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    const toggle = await screen.findByRole('button', { name: 'Show more books' });
     await user.click(toggle);
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
 
@@ -450,22 +453,21 @@ describe('BookChapterControl additional books', () => {
     );
 
     await userEvent.click(getTrigger());
-    await userEvent.click(await screen.findByRole('button', { name: 'Show all books' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Show more books' }));
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
 
     await userEvent.type(getSearchInput(), 'rev');
     // Neither label may be on screen: which one would render depends on the expansion state.
     await waitFor(() =>
       expect(
-        screen.queryByRole('button', { name: /Show all books|Show project books only/ }),
+        screen.queryByRole('button', { name: /Show more books|Show project books only/ }),
       ).not.toBeInTheDocument(),
     );
 
     await userEvent.clear(getSearchInput());
 
     // Typing never touches the expansion state, so clearing returns to exactly the prior view.
-    const toggle = await screen.findByRole('button', { name: 'Show project books only' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await screen.findByRole('button', { name: 'Show project books only' });
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
   });
 
@@ -482,8 +484,7 @@ describe('BookChapterControl additional books', () => {
 
     await user.click(getTrigger());
 
-    const toggle = await screen.findByRole('button', { name: 'Show project books only' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await screen.findByRole('button', { name: 'Show project books only' });
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
   });
 
@@ -523,8 +524,7 @@ describe('BookChapterControl additional books', () => {
 
     await user.click(getTrigger());
 
-    const toggle = await screen.findByRole('button', { name: 'Show all books' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await screen.findByRole('button', { name: 'Show more books' });
     expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
   });
 
@@ -546,7 +546,7 @@ describe('BookChapterControl additional books', () => {
     expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /Matthew/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Show all books' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument();
 
     // Quick navigation spans the project's books only, so the current book offers no next chapter.
     await waitFor(() =>
@@ -572,7 +572,7 @@ describe('BookChapterControl additional books', () => {
     );
 
     await user.click(getTrigger());
-    await user.click(await screen.findByRole('button', { name: 'Show all books' }));
+    await user.click(await screen.findByRole('button', { name: 'Show more books' }));
     expect(await screen.findByRole('option', { name: /Revelation/ })).toBeInTheDocument();
 
     await user.keyboard('{Escape}');
@@ -580,8 +580,7 @@ describe('BookChapterControl additional books', () => {
 
     await user.click(getTrigger());
 
-    const toggle = await screen.findByRole('button', { name: 'Show all books' });
-    await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'false'));
+    await screen.findByRole('button', { name: 'Show more books' });
     expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
   });
 
@@ -598,13 +597,13 @@ describe('BookChapterControl additional books', () => {
 
     await user.click(getTrigger());
 
-    const toggle = await screen.findByRole('button', { name: 'Show all books' });
+    const toggle = await screen.findByRole('button', { name: 'Show more books' });
 
     await user.click(toggle);
     await waitFor(() => expect(toggle).toHaveAccessibleName('Show project books only'));
 
     await user.click(toggle);
-    await waitFor(() => expect(toggle).toHaveAccessibleName('Show all books'));
+    await waitFor(() => expect(toggle).toHaveAccessibleName('Show more books'));
   });
 
   test('quick navigation stops at the project while the list is collapsed', async () => {
@@ -640,7 +639,7 @@ describe('BookChapterControl additional books', () => {
     );
 
     await user.click(getTrigger());
-    await user.click(await screen.findByRole('button', { name: 'Show all books' }));
+    await user.click(await screen.findByRole('button', { name: 'Show more books' }));
 
     const nextChapter = await screen.findByRole('button', { name: 'Next chapter' });
     await waitFor(() => expect(nextChapter).toBeEnabled());

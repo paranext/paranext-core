@@ -1,10 +1,6 @@
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { getChaptersForBook, Section } from 'platform-bible-utils';
-import {
-  ALL_BOOK_IDS,
-  ALL_ENGLISH_BOOK_NAMES,
-  doesBookMatchQuery,
-} from '@/components/shared/book.utils';
+import { ALL_ENGLISH_BOOK_NAMES, doesBookMatchQuery } from '@/components/shared/book.utils';
 import { BookWithOptionalChapterAndVerse } from './book-chapter-control.types';
 
 // Smart parsing regex patterns
@@ -212,7 +208,14 @@ export type BookChapterControlBookLists = {
   booksOutsideProject: ReadonlySet<string>;
 };
 
-function groupBooksBySection(bookIds: string[]): Record<Section, string[]> {
+/**
+ * Groups book ids into the sections the control renders. Ids no section claims — the peripheral
+ * ones (FRT, BAK, OTH, INT, CNC, GLO, TDX, NDX) — are dropped, which is what keeps the control from
+ * offering a book it cannot browse to.
+ *
+ * @param bookIds Book ids to group, in the order they should appear within their section
+ */
+export function groupBooksBySection(bookIds: string[]): Record<Section, string[]> {
   return {
     [Section.OT]: bookIds.filter((bookId) => Canon.isBookOT(bookId)),
     [Section.NT]: bookIds.filter((bookId) => Canon.isBookNT(bookId)),
@@ -241,11 +244,18 @@ export function deriveBookChapterControlBookLists(
   const extraBookIdSet = new Set(extraBookIds);
 
   // Canon-ordered so an extra book lands among its neighbours instead of after the project's books.
+  // Ordered from `Canon.allBookIds` rather than `ALL_BOOK_IDS` so the widened list is always a
+  // superset of the project's books: `ALL_BOOK_IDS` drops the ids the Canon library marks obsolete
+  // (JSA, JDB, TBS, SST, DNT, BLT, 3ES), which a project's `booksPresent` can still claim and which
+  // the collapsed list therefore offers. An obsolete book reachable through an open resource is
+  // offered for the same reason - a book present in an open scripture stays browsable.
   // The fast path preserves the caller's array when nothing widens the list.
   const reachableBookIds =
     extraBookIdSet.size === 0
       ? projectBookIds
-      : ALL_BOOK_IDS.filter((bookId) => projectBookIdSet.has(bookId) || extraBookIdSet.has(bookId));
+      : Canon.allBookIds.filter(
+          (bookId) => projectBookIdSet.has(bookId) || extraBookIdSet.has(bookId),
+        );
 
   const reachableBooksBySection = groupBooksBySection(reachableBookIds);
   const reachableBooks = Object.values(reachableBooksBySection).flat();

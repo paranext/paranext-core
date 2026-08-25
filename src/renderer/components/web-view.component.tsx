@@ -67,9 +67,6 @@ const WEB_VIEW_MENU_DEFAULT = {
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
-// Copied into a mutable array because useLocalizedStrings takes LocalizeKey[] while the exported
-// constant is readonly. Module scope keeps the identity stable, which useLocalizedStrings needs to
-// avoid resubscribing on every render.
 const bookChapterControlLocalizedStringKeys: LocalizeKey[] = [...BOOK_CHAPTER_CONTROL_STRING_KEYS];
 
 const registrationPromises = new PromiseChainingMap<string>(logger);

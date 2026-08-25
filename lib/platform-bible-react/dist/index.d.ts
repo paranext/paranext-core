@@ -67,7 +67,7 @@ export declare const BOOK_CHAPTER_CONTROL_STRING_KEYS: readonly [
 	"%webView_bookChapterControl_bookNotInProject%",
 	"%webView_bookChapterControl_selectChapter%",
 	"%webView_bookChapterControl_selectVerse%",
-	"%webView_bookChapterControl_showAllBooks%",
+	"%webView_bookChapterControl_showMoreBooks%",
 	"%webView_bookChapterControl_showProjectBooksOnly%"
 ];
 /** Type definition for the localized strings used in the BookChapterControl component */
@@ -98,9 +98,12 @@ export type BookChapterControlProps = {
 	getActiveBookIds?: () => string[];
 	/**
 	 * Optional callback returning book ids that exist outside the active project — e.g. books present
-	 * in an open resource. They are hidden from the default list, revealed by the "show all books"
+	 * in an open resource. They are hidden from the default list, revealed by the "show more books"
 	 * control, and always searchable; those not also returned by `getActiveBookIds` render dimmed but
 	 * remain selectable.
+	 *
+	 * Ignored unless `getActiveBookIds` is also passed: without a project list the control already
+	 * offers the whole canon, so there is nothing left for this to add.
 	 *
 	 * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
 	 * updated every render
