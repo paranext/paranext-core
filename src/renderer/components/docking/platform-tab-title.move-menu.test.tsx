@@ -3,6 +3,7 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
+import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-shard';
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { notificationService } from '@shared/services/notification.service';
@@ -445,6 +446,12 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     vi.mocked(sendCommand).mockReset();
     vi.mocked(logger.warn).mockClear();
     vi.mocked(notificationService.send).mockClear();
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { id: 'web-view-1' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { id: 'web-view-2' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
+    ]);
     globalThis.windowId = undefined;
   });
 
@@ -495,6 +502,50 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
 
     expect(screen.queryByTestId('submenu-content')).toBeNull();
     // Positive control: the rest of the menu is there, so this is not an empty render
+    expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
+  });
+
+  it('drops move-to-new-window when this tab is alone in a window that is not the primary one', async () => {
+    // The wiring for that guard, not just the predicate: this window is absent from the list's
+    // primary entry AND holds a single web view. `buildTabMenuItems` is unit-tested for the flag,
+    // but nothing else exercises the three reads that compute it here
+    globalThis.windowId = '2';
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { id: 'web-view-1' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
+    ]);
+    await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
+
+    expect(screen.queryByText('Move tab to new window')).not.toBeInTheDocument();
+    // Positive control: the rest of the menu is present, so the guard removed one item rather than
+    // the menu failing to render
+    expect(screen.getByText('Float Tab')).toBeInTheDocument();
+    expect(await screen.findByTestId('submenu-content')).toBeInTheDocument();
+  });
+
+  it('keeps move-to-new-window when the window holds more than this tab', async () => {
+    // The other side of the same wiring: same window, more than one web view
+    globalThis.windowId = '2';
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { id: 'web-view-1' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { id: 'web-view-2' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
+    ]);
+    await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
+
+    expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
+  });
+
+  it('keeps move-to-new-window for a lone tab in the window holding the primary role', async () => {
+    // And the third read: alone, but this IS the primary window, so the move is not a no-op
+    globalThis.windowId = '1';
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      { id: 'web-view-1' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
+    ]);
+    await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
+
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
   });
 
