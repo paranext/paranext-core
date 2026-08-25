@@ -112,7 +112,7 @@
     "unlink-dev-packages": "ts-node .erb/scripts/unlink-dev-packages.ts",
     "utils:link": "yalc link @eten-tech-foundation/scripture-utilities --no-pure",
     "utils:unlink": "yalc remove @eten-tech-foundation/scripture-utilities && npm i --ignore-scripts",
-    "verify:testing-guide": "python3 .claude/scripts/verify-testing-guide-example.py"
+    "verify:testing-guide": "node .claude/scripts/verify-testing-guide-example.mjs"
   },
   "lint-staged": {
     "cspell.json": [
