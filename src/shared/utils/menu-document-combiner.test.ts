@@ -47,6 +47,10 @@ const startingDoc = {
       },
     ],
   },
+  defaultWebViewTabMenu: {
+    groups: {},
+    items: [],
+  },
   defaultWebViewContextMenu: {
     groups: {
       'platform.insert': { order: 1, isExtensible: true },
@@ -336,6 +340,10 @@ const expectedOutput = {
         command: 'platform.assignments',
       },
     ],
+  },
+  defaultWebViewTabMenu: {
+    groups: {},
+    items: [],
   },
   defaultWebViewContextMenu: {
     groups: {
@@ -658,6 +666,19 @@ test('Web view menu defaults are combined', () => {
         },
       ],
     },
+    defaultWebViewTabMenu: {
+      groups: {
+        'platform.tabGroup': { order: 1, isExtensible: true },
+      },
+      items: [
+        {
+          label: '%test%',
+          group: 'platform.tabGroup',
+          order: 1,
+          command: 'platform.testTabItem',
+        },
+      ],
+    },
     defaultWebViewContextMenu: {
       groups: {
         'platform.contextGroup': { order: 1, isExtensible: true },
@@ -763,6 +784,19 @@ test('Web view menu defaults are combined', () => {
         },
       ],
     },
+    defaultWebViewTabMenu: {
+      groups: {
+        'platform.tabGroup': { order: 1, isExtensible: true },
+      },
+      items: [
+        {
+          label: '%test%',
+          group: 'platform.tabGroup',
+          order: 1,
+          command: 'platform.testTabItem',
+        },
+      ],
+    },
     defaultWebViewContextMenu: {
       groups: {
         'platform.contextGroup': { order: 1, isExtensible: true },
@@ -820,6 +854,17 @@ test('Web view menu defaults are combined', () => {
             },
           ],
         },
+        tabMenu: {
+          groups: { 'platform.tabGroup': { order: 1, isExtensible: true } },
+          items: [
+            {
+              label: '%test%',
+              group: 'platform.tabGroup',
+              order: 1,
+              command: 'platform.testTabItem',
+            },
+          ],
+        },
       },
       'testWebView2.testWebView2': {
         includeDefaults: true,
@@ -861,6 +906,17 @@ test('Web view menu defaults are combined', () => {
               group: 'platform.contextGroup',
               order: 1,
               command: 'platform.test',
+            },
+          ],
+        },
+        tabMenu: {
+          groups: { 'platform.tabGroup': { order: 1, isExtensible: true } },
+          items: [
+            {
+              label: '%test%',
+              group: 'platform.tabGroup',
+              order: 1,
+              command: 'platform.testTabItem',
             },
           ],
         },

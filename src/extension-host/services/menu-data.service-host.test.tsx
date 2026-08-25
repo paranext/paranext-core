@@ -154,6 +154,26 @@ const MOCK_MENU_DATA: PlatformMenus = {
       },
     ],
   },
+  defaultWebViewTabMenu: {
+    groups: { 'platform.tabWindow': { order: 1, isExtensible: true } },
+    items: [
+      {
+        label: '%tab_contextMenu_floatPanel%',
+        localizeNotes: 'Tab context menu > Float tab',
+        group: 'platform.tabWindow',
+        order: 1,
+        command: 'platform.floatTab',
+      },
+      {
+        label: '%tab_contextMenu_moveTabToNewWindow%',
+        localizeNotes: 'Tab context menu > Move tab to new window',
+        group: 'platform.tabWindow',
+        order: 2,
+        command: 'platform.moveWebViewToNewWindow',
+        hiddenInterfaceModes: ['simple'],
+      },
+    ],
+  },
   webViewMenus: {
     'videoExtension.playEditWebView': {
       includeDefaults: false,
@@ -479,5 +499,78 @@ describe('Platform menu document interface-mode gating', () => {
     expect(
       result.items.some((item) => 'command' in item && item.command === 'platform.createWindow'),
     ).toBe(true);
+  });
+});
+
+describe('Tab menu', () => {
+  /** The shipped platform menu document, as the combiner hands it to the engine at startup */
+  function getRealPlatformMenus(): PlatformMenus {
+    const realMenus = menuDocumentCombiner.rawOutput;
+    if (!realMenus) throw new Error('Platform menu document failed to combine');
+    return realMenus;
+  }
+
+  const commandsIn = (menu: { items: unknown[] } | undefined) =>
+    (menu?.items ?? []).map((item) =>
+      // Items are either a command item or a submenu host; both are identified for these assertions
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      'command' in (item as object)
+        ? // eslint-disable-next-line no-type-assertion/no-type-assertion
+          (item as { command: string }).command
+        : // eslint-disable-next-line no-type-assertion/no-type-assertion
+          (item as { id: string }).id,
+    );
+
+  test('the shipped document offers both move actions and the float item', async () => {
+    const engine =
+      testingMenuDataService.implementMenuDataDataProviderEngine(getRealPlatformMenus());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // A tab hosting no web view is the case that must still get the platform items
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(commandsIn(result.tabMenu)).toEqual([
+      'platform.floatTab',
+      'platform.moveWebViewToNewWindow',
+      'platform.moveTabToWindow',
+    ]);
+  });
+
+  test('a tab hosting no web view is answered with the platform items, not with nothing', async () => {
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(result.tabMenu).toBeDefined();
+    expect(commandsIn(result.tabMenu)).toContain('platform.floatTab');
+  });
+
+  test('hides a tab item marked hidden in simple mode', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('simple');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(commandsIn(result.tabMenu)).not.toContain('platform.moveWebViewToNewWindow');
+    // Positive control: the filter removed one item rather than the menu arriving empty
+    expect(commandsIn(result.tabMenu)).toContain('platform.floatTab');
+  });
+
+  test('shows that same item in power mode', async () => {
+    const { settingsService } = await import('@shared/services/settings.service');
+    vi.mocked(settingsService.get).mockResolvedValue('power');
+    const engine = testingMenuDataService.implementMenuDataDataProviderEngine(MOCK_MENU_DATA);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const result = await engine.getWebViewMenu('nothing.recognized');
+
+    expect(commandsIn(result.tabMenu)).toContain('platform.moveWebViewToNewWindow');
   });
 });

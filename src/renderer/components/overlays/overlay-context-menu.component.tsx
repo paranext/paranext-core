@@ -58,6 +58,12 @@ export type OverlayContextMenuItem =
   | { type: 'separator' }
   | {
       type: 'submenu';
+      /**
+       * Id of the contributed menu item this submenu was built from, when it came from a
+       * contribution. Lets a consumer recognize a particular submenu — for one whose contents are
+       * only known at the moment the menu opens, for instance — without matching on its label.
+       */
+      id?: string;
       label: string | LocalizeKey;
       icon?: PlatformIconName;
       items: OverlayContextMenuItem[];

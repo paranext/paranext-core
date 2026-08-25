@@ -263,6 +263,7 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       localizeColumns(retVal.defaultWebViewTopMenu.columns),
       localizeMenuItems(retVal.defaultWebViewTopMenu.items),
       localizeMenuItems(retVal.defaultWebViewContextMenu.items),
+      localizeMenuItems(retVal.defaultWebViewTabMenu.items),
       Object.getOwnPropertyNames(retVal.webViewMenus).map(async (webViewName: string) => {
         // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
         // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -272,6 +273,7 @@ export class MenuDocumentCombiner extends DocumentCombiner {
           localizeColumns(webViewMenu.topMenu?.columns),
           localizeMenuItems(webViewMenu.topMenu?.items),
           localizeMenuItems(webViewMenu.contextMenu?.items),
+          localizeMenuItems(webViewMenu.tabMenu?.items),
         ]);
       }),
     ]);
@@ -320,6 +322,12 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       namePrefix,
       currentMenus?.defaultWebViewContextMenu.groups,
     );
+    checkNewGroups(newMenus.defaultWebViewTabMenu?.groups, namePrefix, undefined);
+    checkNewMenuItems(
+      newMenus.defaultWebViewTabMenu?.items,
+      namePrefix,
+      currentMenus?.defaultWebViewTabMenu.groups,
+    );
     const newWebViewMenus = newMenus?.webViewMenus;
     if (!newWebViewMenus) return;
     Object.getOwnPropertyNames(newWebViewMenus).forEach((webViewName: string) => {
@@ -343,6 +351,8 @@ export class MenuDocumentCombiner extends DocumentCombiner {
         namePrefix,
         currentWebView?.contextMenu?.groups,
       );
+      checkNewGroups(newWebView?.tabMenu?.groups, namePrefix, undefined);
+      checkNewMenuItems(newWebView?.tabMenu?.items, namePrefix, currentWebView?.tabMenu?.groups);
     });
 
     // TODO: Validate that extensions only add to objects that are marked as extensible
@@ -361,6 +371,8 @@ export class MenuDocumentCombiner extends DocumentCombiner {
     checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewTopMenu.items);
     checkMenuGroupsForDuplicateOrdering(allMenus.defaultWebViewContextMenu.groups);
     checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewContextMenu.items);
+    checkMenuGroupsForDuplicateOrdering(allMenus.defaultWebViewTabMenu.groups);
+    checkMenuItemsForDuplicateOrdering(allMenus.defaultWebViewTabMenu.items);
     Object.getOwnPropertyNames(allMenus.webViewMenus).forEach((webViewName: string) => {
       // TS doesn't allow `webViewName` above to be a ReferencedItem even though the type says it is
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -370,6 +382,8 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       checkMenuItemsForDuplicateOrdering(webViewMenu.topMenu?.items);
       checkMenuGroupsForDuplicateOrdering(webViewMenu.contextMenu?.groups);
       checkMenuItemsForDuplicateOrdering(webViewMenu.contextMenu?.items);
+      checkMenuGroupsForDuplicateOrdering(webViewMenu.tabMenu?.groups);
+      checkMenuItemsForDuplicateOrdering(webViewMenu.tabMenu?.items);
     });
   }
 
@@ -406,6 +420,13 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       // Assert the type that schema validation should have already sorted out
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       webViewMenu.contextMenu = contextMenuCombiner.output as SingleColumnMenu | undefined;
+
+      const startingTabMenu = webViewMenu.tabMenu ?? {};
+      const tabMenuCombiner = new NonValidatingDocumentCombiner(startingTabMenu, options);
+      tabMenuCombiner.addOrUpdateContribution('', retVal.defaultWebViewTabMenu);
+      // Assert the type that schema validation should have already sorted out
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      webViewMenu.tabMenu = tabMenuCombiner.output as SingleColumnMenu | undefined;
     });
     return retVal;
   }
