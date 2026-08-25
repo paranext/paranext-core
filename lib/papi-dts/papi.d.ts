@@ -4454,13 +4454,13 @@ declare module 'shared/services/window.service-model' {
     /** Runtime id of the window. Not stable across restarts */
     windowId: number;
     /**
-     * The window's title, which follows its own content. Two windows showing the same thing carry
-     * the same label, and nothing disambiguates them.
+     * The window's title, which follows its own content. Two windows showing the same thing carry the
+     * same label, and nothing disambiguates them.
      */
     label: string;
     /**
-     * Whether this window currently holds the primary role. The role is reassignable, so this
-     * follows the role rather than which window happened to be created first.
+     * Whether this window currently holds the primary role. The role is reassignable, so this follows
+     * the role rather than which window happened to be created first.
      */
     isMain: boolean;
   };
@@ -5321,9 +5321,9 @@ declare module 'papi-shared-types' {
      */
     'platform.getFocusedWindowId': () => Promise<number | undefined>;
     /**
-     * List every open window with the title it is currently showing, for offering the user a
-     * choice of window. Titles follow each window's own content, so two windows showing the same
-     * thing carry the same label and nothing distinguishes them.
+     * List every open window with the title it is currently showing, for offering the user a choice
+     * of window. Titles follow each window's own content, so two windows showing the same thing
+     * carry the same label and nothing distinguishes them.
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
@@ -10585,6 +10585,12 @@ declare module 'renderer/components/overlays/overlay-context-menu.component' {
       }
     | {
         type: 'submenu';
+        /**
+         * Id of the contributed menu item this submenu was built from, when it came from a
+         * contribution. Lets a consumer recognize a particular submenu — for one whose contents are
+         * only known at the moment the menu opens, for instance — without matching on its label.
+         */
+        id?: string;
         label: string | LocalizeKey;
         icon?: PlatformIconName;
         items: OverlayContextMenuItem[];
