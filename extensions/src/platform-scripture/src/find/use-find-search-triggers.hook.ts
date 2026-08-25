@@ -1,4 +1,4 @@
-import { MutableRefObject, useEffect } from 'react';
+import { MutableRefObject, useEffect, useRef } from 'react';
 import { FindJobStatus } from 'platform-scripture';
 
 /**
@@ -83,15 +83,22 @@ export function useFindSearchTriggers({
   // Restore-time fallback: when a persisted term is present but the provider was not usable at mount,
   // run the search as soon as it becomes usable. `findPdpAvailability` is required here for the same
   // reason as above — without it, a late-settling provider leaves a term on screen and no results.
+  //
+  // One-shot, because `searchStatus === undefined` is not unique to mount time: clearing the
+  // results resets it, after which the next character typed would satisfy this fallback and run an
+  // immediate, un-debounced whole-scope search for a one-character term.
+  const hasRunRestoreFallbackRef = useRef(false);
   useEffect(() => {
     if (
       !findPdp ||
       findPdpAvailability !== 'ready' ||
       !initialSearchTriggeredRef.current ||
+      hasRunRestoreFallbackRef.current ||
       searchStatus !== undefined ||
       searchTerm.trim() === ''
     )
       return;
+    hasRunRestoreFallbackRef.current = true;
     // Non-explicit: restoring a persisted term is not a fresh user search, so it must not write
     // another recent-searches entry.
     startSearch(false);

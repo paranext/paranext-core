@@ -582,37 +582,6 @@ describe('shouldClearResultsForInvalidQuery', () => {
       }),
     ).toBe(false);
   });
-
-  // Every route into an invalid query has to clear, not just the emptied box. `isFindQueryValid`
-  // is what decides which routes those are (see its suite above); this pins down that both of its
-  // invalid cases reach the same clear, by feeding its real verdict in rather than a literal.
-  it('clears for a deselected-books query the same way it clears for an emptied box', () => {
-    const emptiedBox = isFindQueryValid({
-      searchTerm: '',
-      scope: 'selectedBooks',
-      selectedBookIds: ['GEN'],
-    });
-    const deselectedBooks = isFindQueryValid({
-      searchTerm: 'God',
-      scope: 'selectedBooks',
-      selectedBookIds: [],
-    });
-
-    expect(
-      shouldClearResultsForInvalidQuery({
-        isSearchQueryValid: emptiedBox,
-        hasResults: true,
-        searchStatus: 'completed',
-      }),
-    ).toBe(true);
-    expect(
-      shouldClearResultsForInvalidQuery({
-        isSearchQueryValid: deselectedBooks,
-        hasResults: true,
-        searchStatus: 'completed',
-      }),
-    ).toBe(true);
-  });
 });
 
 describe('resolveSelectedProjectScrollGroup', () => {

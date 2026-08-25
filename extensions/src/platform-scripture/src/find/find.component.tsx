@@ -335,8 +335,8 @@ export type FindProps = {
   onSearchTermChange: (term: string) => void;
   /** Called to start a search. `isExplicitSearch` is true for Enter/Find-button-initiated searches. */
   onStartSearch: (isExplicitSearch?: boolean) => void;
-  /** Called to stop the current search. `shouldClearResults` clears results and resets state. */
-  onStopSearch: (shouldClearResults?: boolean) => void;
+  /** Called to stop the running search, leaving the results it has already found on screen. */
+  onStopSearch: () => void;
   /** Called when the user changes the scope. */
   setScope: (scope: Scope) => void;
   /** Called when the selected books for the `selectedBooks` scope change. */
@@ -620,11 +620,6 @@ export function Find({
   // receives every input the rule needs.
   const isSearchQueryValid = isFindQueryValid({ searchTerm, scope, selectedBookIds });
 
-  // Keyed off the trimmed term so the clear button and the results area agree: a whitespace-only
-  // term is an invalid query, so the results are already cleared and the prompt asks for search
-  // text — offering a clear button beside that would name a term the panel is treating as absent.
-  const hasClearableTerm = searchTerm.trim() !== '';
-
   // Single source of truth for which (if any) results-area placeholder shows, so the four states
   // are mutually exclusive by construction instead of by four separately-maintained boolean
   // expressions. 'none' covers both "results are present" and "a search finished with 0 results" —
@@ -641,9 +636,12 @@ export function Find({
     | 'none' = useMemo(() => {
     if (noOpenProjects) return 'noOpenProjectsPrompt';
     // Outranks the results still on screen. They belong to the last query that DID run, so leaving
-    // them up with no message dead-ends a selection the user has since emptied — the state reads as
-    // a working search that simply stopped responding.
-    if (searchTerm.trim() !== '' && !isSearchQueryValid) return 'invalidQueryPrompt';
+    // them up with no message dead-ends a query the user has since emptied — the state reads as a
+    // working search that simply stopped responding. Deciding it here, ahead of the results, is what
+    // makes an invalid query show the right thing by construction: no container effect has to land
+    // first, so there is no window in which stale results are on screen under a query that cannot
+    // produce them.
+    if (!isSearchQueryValid) return searchTerm.trim() === '' ? 'idlePrompt' : 'invalidQueryPrompt';
     if (results.length > 0) return 'none';
     if (searchStatus === 'running') return 'skeleton';
     if (searchStatus !== undefined) return 'none';
@@ -902,9 +900,9 @@ export function Find({
                 }
               }}
               placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-              className={`tw:w-full tw:min-w-16 tw:text-ellipsis tw:!pl-8 scripture-font ${hasClearableTerm ? 'tw:!pe-8' : 'tw:!pr-4'}`}
+              className={`tw:w-full tw:min-w-16 tw:text-ellipsis tw:!pl-8 scripture-font ${searchTerm ? 'tw:!pe-8' : 'tw:!pr-4'}`}
             />
-            {hasClearableTerm && (
+            {searchTerm && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1209,6 +1207,9 @@ export function Find({
           // inert. The no-open-projects placeholder replaces them rather than rendering alongside,
           // so a click can't silently do nothing.
           if (noOpenProjects) return undefined;
+          // Same reasoning for a query that can no longer produce these rows: the placeholder is
+          // meant to replace them, not sit above them.
+          if (!isSearchQueryValid) return undefined;
           // Only the first book that has a replaced result gets the cancel handler.
           // All replaced rows share one pending operation, so only one Cancel button
           // should appear to avoid implying per-row granularity.
@@ -1272,7 +1273,7 @@ export function Find({
           {searchStatus === 'running' && (activeMode !== 'replace' || !isPostReplaceSearch) && (
             <div className="tw:flex tw:items-center tw:gap-4">
               <Progress value={searchProgress} className="tw:w-64" />
-              <Button onClick={() => onStopSearch(false)}>
+              <Button onClick={() => onStopSearch()}>
                 {localizedStrings['%webView_find_cancelSearch%']}
               </Button>
             </div>

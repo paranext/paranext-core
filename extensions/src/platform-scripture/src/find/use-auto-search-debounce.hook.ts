@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { DEBOUNCE_CANCELED_ERROR_MESSAGE, debounce, getErrorMessage } from 'platform-bible-utils';
-import { logger } from '@papi/frontend';
+import {
+  DEBOUNCE_CANCELED_ERROR_MESSAGE,
+  DebouncedFunction,
+  debounce,
+  getErrorMessage,
+} from 'platform-bible-utils';
+import type { FindLogger } from './search-result.component';
 
 /** What {@link useAutoSearchDebounce} hands back to the caller. */
 export type AutoSearchDebounce = {
@@ -28,20 +33,31 @@ export type AutoSearchDebounce = {
  *
  * @param startSearch Starts a search. Always invoked at its latest identity, so callers need not
  *   memoize it.
- * @param delayMs How long to wait after the last request before searching.
+ * @param delayMs How long to wait after the last request before searching. Read once, when the
+ *   debounce is created.
+ * @param logger Receives a warning when a search fails to start. Passed in rather than imported
+ *   from `@papi/frontend` so this module — like the rest of `find/` — stays free of the runtime
+ *   `@papi` import, which the test environment only mocks a default export for.
  * @returns Stable callbacks — safe to list in effect dependencies.
  */
 export function useAutoSearchDebounce(
   startSearch: () => void,
   delayMs: number,
+  logger?: FindLogger,
 ): AutoSearchDebounce {
   const startSearchRef = useRef(startSearch);
   startSearchRef.current = startSearch;
+  const loggerRef = useRef(logger);
+  loggerRef.current = logger;
 
-  const debouncedStartSearch = useMemo(
-    () => debounce(() => startSearchRef.current(), delayMs),
-    [delayMs],
-  );
+  // A ref, not `useMemo`: this object owns a live timer, and React documents a memo value as a
+  // discardable hint. Were it evicted, a timer armed on the discarded instance would still fire
+  // while `cancelPendingAutoSearch` cancelled the replacement — the duplicate search this hook
+  // exists to prevent. A ref guarantees exactly one instance for the life of the component.
+  const debouncedStartSearchRef = useRef<DebouncedFunction<() => void> | undefined>(undefined);
+  if (!debouncedStartSearchRef.current)
+    debouncedStartSearchRef.current = debounce(() => startSearchRef.current(), delayMs);
+  const debouncedStartSearch = debouncedStartSearchRef.current;
 
   const requestAutoSearch = useCallback(() => {
     // Cancelling rejects the pending invocation's promise, so this fire-and-forget call must handle
@@ -49,7 +65,7 @@ export function useAutoSearchDebounce(
     debouncedStartSearch().catch((error) => {
       const message = getErrorMessage(error);
       if (message !== DEBOUNCE_CANCELED_ERROR_MESSAGE)
-        logger.warn(`Find: auto-search failed to start: ${message}`);
+        loggerRef.current?.warn(`Find: auto-search failed to start: ${message}`);
     });
   }, [debouncedStartSearch]);
 
