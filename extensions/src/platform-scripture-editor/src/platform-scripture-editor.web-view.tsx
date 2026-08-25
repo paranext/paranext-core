@@ -1490,8 +1490,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return;
     }
     pendingScaffoldInsertRef.current = true;
-    // Undo for this insert relies on `applyUpdate('local')` edits staying undoable, which the
-    // pinned `@eten-tech-foundation/platform-editor` provides.
+    // Undo for this insert depends on the editor keeping its history across the `onUsjChange` round
+    // trip this call sets off: the editor's state-load effect fires Lexical's
+    // `CLEAR_HISTORY_COMMAND` unconditionally, so anything that re-runs it moments after an edit
+    // wipes the undo stack. `@eten-tech-foundation/platform-editor` 0.8.15 is the first published
+    // version that holds that effect's inputs stable BY VALUE rather than by reference; 0.8.14 does
+    // not. The pin is `~0.8.15`, so a patch release could regress it without a bump review, and no
+    // test here or upstream covers undo for this path — re-check it by hand when the pin moves.
     editorRef.current?.applyUpdate(buildChapterScaffoldOps(scrRef.chapterNum, lastVerse), 'local');
   }, [scrRef.book, scrRef.chapterNum, lastVerse, isStructureProtected, notifyStructureProtected]);
 

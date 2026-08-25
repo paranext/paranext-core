@@ -139,12 +139,12 @@ describe('generateCharacterMarkerMenuListItems', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
-  it('does not add the marker when one is applied but change is not available yet', () => {
-    // `EditorRef` exposes no replace-character-marker operation, so a caller has no
-    // `changeCharacterMarker` to pass. Picking a marker must NOT fall back to `insertMarker`:
-    // inserting over an existing character marker nests it (verified against the editor package —
-    // `getUsjMarkerAction('bd')` over a selection inside a `\nd` CharNode yields
-    // `char:nd > char:bd`), and nesting survives into the saved USJ. Inert is the safe behavior.
+  it('does not add the marker when one is applied but no change operation was supplied', () => {
+    // `changeCharacterMarker` is optional, and the production caller omits it. Picking a marker in
+    // that state must NOT fall back to `insertMarker`: inserting over an existing character marker
+    // nests it (verified against the editor package — `getUsjMarkerAction('bd')` over a selection
+    // inside a `\nd` CharNode yields `char:nd > char:bd`), and nesting survives into the saved USJ.
+    // Inert is the safe behavior.
     const { ref, insertMarker } = makeMockEditorRef();
     const close = vi.fn();
     const items = generateCharacterMarkerMenuListItems(ref, close, {}, PARENT, {

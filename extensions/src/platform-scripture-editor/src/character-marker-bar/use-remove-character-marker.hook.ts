@@ -102,17 +102,14 @@ export function useRemoveCharacterMarker({
       // only part of a NESTED marker whose OUTER marker is the target. That case still takes a
       // snapshot for an edit that does not happen, and still reports nothing to the user. It is
       // reachable only in theory today (`isMarkerRowInert` disables the row that would ask for it),
-      // which is why it is documented rather than defended against: the defense needs this hook to
-      // consume an outcome signal — either the boolean `removeCharacterMarker` returns, which the
-      // call above discards, or the discrete-update-plus-inline-re-derive that `applyUpdate` does
-      // elsewhere in this feature.
+      // which is why it is documented rather than defended against.
       //
-      // A before/after `getUsj()` comparison cannot stand in for either: `getUsj()` returns
-      // `editedUsjRef.current`, a cached ref, and the
-      // `editor.update()` inside `removeCharacterMarker` runs without `{ discrete: true }`, so
-      // Lexical defers the commit and that ref is not refreshed synchronously — a before/after
-      // comparison would read the same stale object and report "unchanged" for every successful
-      // removal, not just the declined ones.
+      // The signal to defend with is already there: `removeCharacterMarker` returns `true` only when
+      // a marker was actually removed, and the call above discards it. The return is trustworthy —
+      // the editor runs its `update()` with `{ discrete: true }` precisely so the boolean cannot
+      // report `false` for a removal that happened. Consuming it means moving the snapshot after the
+      // call (or rolling it back), so it is a restructure of this handler, not a one-line change.
+      // TODO(PT-4394): consume the outcome and skip/undo the empty restore point.
     },
     [editorRef, projectId, isSyncBlocked, localizedStrings],
   );
