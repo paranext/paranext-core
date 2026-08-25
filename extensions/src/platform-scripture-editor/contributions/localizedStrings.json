@@ -166,7 +166,7 @@
       "%webView_scriptureTextGrid_cell_resetZoom%": "Reset zoom",
       "%webView_scriptureTextGrid_cell_status_bookNotAvailable%": "Book not in this text",
       "%webView_scriptureTextGrid_cell_status_downloading%": "Downloading…",
-      "%webView_scriptureTextGrid_cell_status_failed%": "Resource failed to load",
+      "%webView_scriptureTextGrid_cell_status_failed%": "Download failed",
       "%webView_scriptureTextGrid_cell_status_loading%": "Resource is loading…",
       "%webView_scriptureTextGrid_cell_status_noContent%": "No content for this reference",
       "%webView_scriptureTextGrid_cell_unavailable%": "Resource unavailable",
@@ -351,6 +351,7 @@
       "%webView_scriptureTextGrid_cell_resetZoom%": "Restablecer zoom",
       "%webView_scriptureTextGrid_cell_status_bookNotAvailable%": "El libro no está en este texto",
       "%webView_scriptureTextGrid_cell_status_downloading%": "Descargando…",
+      "%webView_scriptureTextGrid_cell_status_failed%": "Error de descarga",
       "%webView_scriptureTextGrid_cell_status_loading%": "El recurso se está cargando…",
       "%webView_scriptureTextGrid_cell_status_noContent%": "No hay contenido para esta referencia",
       "%webView_scriptureTextGrid_cell_unavailable%": "Recurso no disponible",
@@ -391,9 +392,6 @@
     },
     "%webView_platformScriptureEditor_switchScriptureView%": {
       "fallbackKey": "%Paratext.TextForm.nextViewToolStripMenuItem.Text%"
-    },
-    "%webView_scriptureTextGrid_cell_status_noContent%": {
-      "fallbackKey": "%webView_scriptureTextGrid_cell_status_failed%"
     }
   }
 }
