@@ -28,6 +28,11 @@ const EMPTY_IDS: string[] = [];
  * declares under {@link NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY} (how a view that hosts several
  * projects at once, like the Scripture Text Grid, makes its members visible from outside).
  *
+ * Every project-scoped web view counts, not only the ones that display scripture — a project
+ * settings tab or a checks view widens the list the same way an editor does. A project the user has
+ * open anywhere in the window is one they are working with, and the books it reports are the same
+ * books either way.
+ *
  * `activeProjectId` is excluded — its books are already the control's baseline, so subscribing
  * again would be pure cost.
  */
@@ -36,7 +41,7 @@ function getOpenProjectIds(activeProjectId: string | undefined): string[] {
   try {
     definitions = getAllOpenWebViewDefinitionsSync();
   } catch (e) {
-    logger.debug(`Open resource books could not enumerate open web views: ${getErrorMessage(e)}`);
+    logger.debug(`Open project books could not enumerate open web views: ${getErrorMessage(e)}`);
     return EMPTY_IDS;
   }
 
@@ -56,8 +61,9 @@ function getOpenProjectIds(activeProjectId: string | undefined): string[] {
 }
 
 /**
- * The books present in open projects and resources OTHER than the active project — what the global
- * book/chapter/verse control offers beyond the active project's own books.
+ * The books present in every project open in this window OTHER than the active project — what the
+ * global book/chapter/verse control offers beyond the active project's own books. Resources are
+ * projects here, so they are included; so is any other project-scoped web view.
  *
  * The result is NOT filtered against the active project's books: this hook knows the other
  * projects' ids, not the active project's book list, and an open resource may well share books with
@@ -68,25 +74,42 @@ function getOpenProjectIds(activeProjectId: string | undefined): string[] {
  * permissive; here, it would advertise every book in the canon as reachable.
  *
  * @param activeProjectId The project whose books are already offered, excluded from the result
+ * @param isEnabled Whether to do the work at all. When false the hook subscribes to nothing and
+ *   returns an empty list, so a caller that discards the result pays none of its cost. Defaults to
+ *   true.
  * @returns Book ids in canon order, deduplicated across projects
  */
-export function useOpenResourceBookIds(activeProjectId: string | undefined): string[] {
+export function useOpenProjectBookIds(
+  activeProjectId: string | undefined,
+  isEnabled: boolean = true,
+): string[] {
   const [webViewRefreshCounter, setWebViewRefreshCounter] = useState(0);
   const refreshOpenWebViews = useCallback(() => setWebViewRefreshCounter((n) => n + 1), []);
 
-  const onDidOpenWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW), []);
+  // Undefined while disabled: `useEvent` subscribes to nothing when its event is undefined, so a
+  // disabled hook does not even listen for the web view changes it would have reacted to.
+  const onDidOpenWebView = useMemo(
+    () => (isEnabled ? getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW) : undefined),
+    [isEnabled],
+  );
   useEvent(onDidOpenWebView, refreshOpenWebViews);
-  const onDidUpdateWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW), []);
+  const onDidUpdateWebView = useMemo(
+    () => (isEnabled ? getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) : undefined),
+    [isEnabled],
+  );
   useEvent(onDidUpdateWebView, refreshOpenWebViews);
-  const onDidCloseWebView = useMemo(() => getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW), []);
+  const onDidCloseWebView = useMemo(
+    () => (isEnabled ? getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW) : undefined),
+    [isEnabled],
+  );
   useEvent(onDidCloseWebView, refreshOpenWebViews);
 
   const openProjectIds = useMemo(
-    () => getOpenProjectIds(activeProjectId),
+    () => (isEnabled ? getOpenProjectIds(activeProjectId) : EMPTY_IDS),
     // webViewRefreshCounter is a refresh trigger: its value is unused, but each bump re-enumerates
     // this window's open web views.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeProjectId, webViewRefreshCounter],
+    [isEnabled, activeProjectId, webViewRefreshCounter],
   );
 
   // A membership fingerprint, so an unchanged set of ids is a stable dependency and an unrelated web
@@ -126,7 +149,7 @@ export function useOpenResourceBookIds(activeProjectId: string | undefined): str
             if (disposed) return;
             if (isPlatformError(value)) {
               logger.debug(
-                `Open resource books: ${projectId} reported an error for booksPresent: ${getErrorMessage(value)}`,
+                `Open project books: ${projectId} reported an error for booksPresent: ${getErrorMessage(value)}`,
               );
               setBookIdsByProjectId((previous) => ({ ...previous, [projectId]: EMPTY_IDS }));
               return;
@@ -142,7 +165,7 @@ export function useOpenResourceBookIds(activeProjectId: string | undefined): str
           // A provider that cannot serve booksPresent contributes nothing, which is also what makes
           // this forward-compatible with resource providers that gain the setting later.
           logger.debug(
-            `Open resource books: no booksPresent for ${projectId}: ${getErrorMessage(e)}`,
+            `Open project books: no booksPresent for ${projectId}: ${getErrorMessage(e)}`,
           );
         });
     });
@@ -170,4 +193,4 @@ export function useOpenResourceBookIds(activeProjectId: string | undefined): str
   }, [bookIdsByProjectId, openProjectIds]);
 }
 
-export default useOpenResourceBookIds;
+export default useOpenProjectBookIds;

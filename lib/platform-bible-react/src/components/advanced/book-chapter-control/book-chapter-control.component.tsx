@@ -26,6 +26,7 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
+  useId,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -43,6 +44,7 @@ import {
   deriveBookChapterControlBookLists,
   fetchEndChapter,
   getKeyCharacterType,
+  groupBooksBySection,
   hasChapterVerseSeparator,
   isBookBefore,
   isChapterBefore,
@@ -111,7 +113,10 @@ export function BookChapterControl({
   const [isCommandListHidden, setIsCommandListHidden] = useState(false);
   // Whether the book list is expanded past the active project's books. Governs browsing only —
   // searching always spans every reachable book.
-  const [isShowingAllBooks, setIsShowingAllBooks] = useState(false);
+  const [isShowingMoreBooks, setIsShowingMoreBooks] = useState(false);
+  // Ties the show-more/show-fewer toggle to the list it governs. Generated rather than fixed
+  // because more than one BookChapterControl can be mounted at a time.
+  const bookListId = useId();
 
   // Reference to the PopoverTrigger button. Used by `onPointerDownOutside` to detect
   // clicks on our own trigger while the popover is open — see that handler for the full
@@ -176,41 +181,26 @@ export function BookChapterControl({
     [activeBookIds, additionalBookIds],
   );
 
-  // Read through a ref so handleOpenChange keeps an empty dependency array: its identity feeds
-  // useImperativeHandle, and churning it would re-register the consumer's imperative handle.
-  //
-  // Writing a ref during render is safe here specifically because the write is idempotent (a pure
-  // function of the values above) and the value is never read during render — only from
-  // handleOpenChange, which runs from an event. An effect would be worse, not safer: effects run
-  // after commit, so an imperative open() firing in the same synchronous stretch as a reference
-  // change could read a stale value.
-  const isCurrentBookOutsideProjectRef = useRef(false);
-  isCurrentBookOutsideProjectRef.current = booksOutsideProject.has(scrRef.book);
+  // Deliberately the boolean and not `scrRef` or the set it comes from: handleOpenChange closes
+  // over this and its identity feeds useImperativeHandle, so depending on either of those would
+  // re-register the consumer's imperative handle on every reference change. Depending on the
+  // boolean re-registers only when the current book actually crosses in or out of the project.
+  const isCurrentBookOutsideProject = booksOutsideProject.has(scrRef.book);
 
   // Filter books based on search input
   const filteredBooksByType = useMemo(() => {
     if (!inputValue.trim())
-      return isShowingAllBooks ? reachableBooksBySection : projectBooksBySection;
+      return isShowingMoreBooks ? reachableBooksBySection : projectBooksBySection;
 
-    const filteredBooks: Record<Section, string[]> = {
-      [Section.OT]: [],
-      [Section.NT]: [],
-      [Section.DC]: [],
-      [Section.Extra]: [],
-    };
-
-    const bookTypes: Section[] = [Section.OT, Section.NT, Section.DC, Section.Extra];
-    bookTypes.forEach((type) => {
-      filteredBooks[type] = reachableBooksBySection[type].filter((bookId) => {
-        return doesBookMatchQuery(bookId, inputValue, localizedBookNames);
-      });
-    });
-
-    return filteredBooks;
+    // Searching always spans every reachable book, whatever the toggle says
+    return groupBooksBySection(
+      reachableBooks.filter((bookId) => doesBookMatchQuery(bookId, inputValue, localizedBookNames)),
+    );
   }, [
     projectBooksBySection,
     reachableBooksBySection,
-    isShowingAllBooks,
+    reachableBooks,
+    isShowingMoreBooks,
     inputValue,
     localizedBookNames,
   ]);
@@ -350,7 +340,7 @@ export function BookChapterControl({
   // until the list is expanded.
   const quickNavButtons = useQuickNavButtons(
     scrRef,
-    isShowingAllBooks ? reachableBooks : projectBooks,
+    isShowingMoreBooks ? reachableBooks : projectBooks,
     direction,
     handleSubmit,
   );
@@ -390,19 +380,22 @@ export function BookChapterControl({
   // back button's job; trying to double-duty dismiss as "go up one level" silently rewinds
   // the user's selection when Radix fires a close for a transient reason (focus blip, click
   // in a non-item padding area, etc.).
-  const handleOpenChange = useCallback((shouldCommandBeOpen: boolean) => {
-    setIsCommandOpen(shouldCommandBeOpen);
-    if (shouldCommandBeOpen) {
-      setViewMode('books');
-      setSelectedBookForChaptersView(undefined);
-      setSelectedBookForVersesView(undefined);
-      setSelectedChapterForVersesView(undefined);
-      setInputValue('');
-      // Seed, don't force: the list opens expanded when the current book is outside the project so
-      // that book is visible, and the toggle still collapses from there.
-      setIsShowingAllBooks(isCurrentBookOutsideProjectRef.current);
-    }
-  }, []);
+  const handleOpenChange = useCallback(
+    (shouldCommandBeOpen: boolean) => {
+      setIsCommandOpen(shouldCommandBeOpen);
+      if (shouldCommandBeOpen) {
+        setViewMode('books');
+        setSelectedBookForChaptersView(undefined);
+        setSelectedBookForVersesView(undefined);
+        setSelectedChapterForVersesView(undefined);
+        setInputValue('');
+        // Seed, don't force: the list opens expanded when the current book is outside the project so
+        // that book is visible, and the toggle still collapses from there.
+        setIsShowingMoreBooks(isCurrentBookOutsideProject);
+      }
+    },
+    [isCurrentBookOutsideProject],
+  );
 
   // `disabled` on the trigger button only prevents OPENING the popover — it does not affect one
   // that is already open, which would otherwise keep accepting input and submit a reference for a
@@ -520,7 +513,7 @@ export function BookChapterControl({
 
   // Only offer the expansion while browsing: searching already spans every reachable book, so the
   // control would sit there doing nothing.
-  const canShowAllBooksToggle =
+  const canShowMoreBooksToggle =
     viewMode === 'books' && !inputValue.trim() && booksOutsideProject.size > 0;
 
   const isBookDisabled = useCallback(
@@ -543,18 +536,19 @@ export function BookChapterControl({
     [disableReferencesUpTo],
   );
 
-  // `||`, not `??`, throughout: the localization service returns the localize key itself when a key
-  // is missing, and an absent translation can also come back empty — both are values `??` would
-  // pass straight through, rendering a raw `%key%` or a blank label. `||` falls back to the English
-  // text in either case.
+  // `||`, not `??`, throughout: an absent translation can come back as an empty string, which `??`
+  // would pass straight through as a blank label. `||` falls back to the English text instead.
+  // A key with no entry at all resolves to the key itself, which is truthy and so renders raw as
+  // `%key%`; that case is guarded by `book-chapter-control-localization.test.ts`, which fails if any
+  // key in `BOOK_CHAPTER_CONTROL_STRING_KEYS` lacks an English value.
   const selectChapterTitle =
-    localizedStrings?.['%webView_bookChapterControl_selectChapter%'] || 'Select Chapter';
+    localizedStrings?.['%webView_bookChapterControl_selectChapter%'] || 'Select chapter';
   const selectVerseTitle =
-    localizedStrings?.['%webView_bookChapterControl_selectVerse%'] || 'Select Verse';
+    localizedStrings?.['%webView_bookChapterControl_selectVerse%'] || 'Select verse';
   const bookNotInProjectLabel =
     localizedStrings?.['%webView_bookChapterControl_bookNotInProject%'] || 'not in this project';
-  const showAllBooksLabel =
-    localizedStrings?.['%webView_bookChapterControl_showAllBooks%'] || 'Show all books';
+  const showMoreBooksLabel =
+    localizedStrings?.['%webView_bookChapterControl_showMoreBooks%'] || 'Show more books';
   const showProjectBooksOnlyLabel =
     localizedStrings?.['%webView_bookChapterControl_showProjectBooksOnly%'] ||
     'Show project books only';
@@ -1167,7 +1161,7 @@ export function BookChapterControl({
 
           {/** Body */}
           {!isCommandListHidden && (
-            <CommandList ref={commandListRef}>
+            <CommandList ref={commandListRef} id={bookListId}>
               {/** Book list mode (also used in case of top matches) */}
               {viewMode === 'books' && (
                 <>
@@ -1319,16 +1313,19 @@ export function BookChapterControl({
 
           {/* Outside CommandList on purpose: inside it, cmdk would register this as an option —
               arrow-navigable and matched by typing — instead of a control. */}
-          {canShowAllBooksToggle && (
+          {canShowMoreBooksToggle && (
             <div className="tw:border-t tw:p-1">
               <Button
                 variant="ghost"
                 size="sm"
                 className="tw:w-full tw:justify-start tw:font-normal"
-                aria-expanded={isShowingAllBooks}
-                onClick={() => setIsShowingAllBooks((wasShowing) => !wasShowing)}
+                // No aria-expanded: the label names the action and so already carries the state,
+                // and the two encode it in opposite directions — "Show project books only" plus
+                // `aria-expanded="true"` reads as a contradiction.
+                aria-controls={bookListId}
+                onClick={() => setIsShowingMoreBooks((wasShowing) => !wasShowing)}
               >
-                {isShowingAllBooks ? showProjectBooksOnlyLabel : showAllBooksLabel}
+                {isShowingMoreBooks ? showProjectBooksOnlyLabel : showMoreBooksLabel}
               </Button>
             </div>
           )}
