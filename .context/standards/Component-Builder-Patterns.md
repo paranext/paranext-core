@@ -169,6 +169,63 @@ Reference implementations: `extensions/src/platform-scripture/src/find.web-view-
 
 ---
 
+## Async Hook State Shape
+
+Two shapes are both correct; pick by whether the payload is **state-specific**. See
+[ADR-0028](Architecture-Decisions.md) for the full rationale.
+
+> **Provisional.** ADR-0028 is **Proposed**, not Accepted: the rule is drawn from exactly two hooks,
+> both introduced by PT-4347. Follow it as the default for new async hook state, but a hook that
+> fits neither shape should reopen the decision rather than contort to satisfy it.
+
+**Discriminated union** — when data exists in only one state, so the type can make the other
+combinations unrepresentable:
+
+```ts
+type EffectiveResourceReferenceListState =
+  | { status: 'loading' }
+  | { status: 'error' }
+  | { status: 'ready'; list: EffectiveResourceReferenceList };
+```
+
+There is no list to hand out while loading or on error, and the union is what stops a caller reading
+one anyway. Reference: `useEffectiveResourceReferenceList`.
+
+**Flat named state object** — when the values are always present and the flags describe them:
+
+```ts
+type DblResourceCatalog = {
+  dblResources: DblResourceData[]; // always present (coerced to [])
+  isLoadingResources: boolean;
+  isCatalogReady: boolean;
+  hasCatalogError: boolean;
+  refetchCatalog: () => void;
+};
+```
+
+Nothing here needs making unrepresentable. References: `useDblResourceCatalog`,
+`useStructureProtectionState`.
+
+### Never unpack a union at a boundary
+
+A union's guarantee dies the moment a consumer splits it into a nullable payload plus a bare status.
+Indexing the discriminant strips the payload and hands the callee two values free to disagree — the
+exact shape the union existed to forbid:
+
+```tsx
+// WRONG — `status: 'ready'` with `list: undefined` is now expressible
+type Props = {
+  modelTexts: EffectiveResourceReferenceList | undefined;
+  modelTextsStatus: EffectiveResourceReferenceListState['status'];
+};
+
+// RIGHT — narrowing survives into the component
+type Props = { modelTextsState: EffectiveResourceReferenceListState };
+```
+
+Pass the whole state and narrow inside. If a component needs the payload in several places, derive it
+once from the narrowed union rather than accepting it as a second prop.
+
 ## PAPI Integration Patterns
 
 ### Standard imports for extension web views
