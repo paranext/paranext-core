@@ -34,7 +34,12 @@ set -u
 trap '' PIPE
 
 TMPDIR_C=""
-trap 'rm -rf "${TMPDIR_C:-}"' EXIT INT TERM
+# The signal handlers must terminate as well as clean up. A cleanup-only trap replaces the default
+# terminate-on-signal, and bash resumes the script afterwards - so Ctrl-C during a batch would kill
+# only the in-flight curl and upload every remaining file, once per interrupt. Exiting 3 keeps the
+# "0 or 3, never anything else" contract.
+trap 'rm -rf "${TMPDIR_C:-}"' EXIT
+trap 'rm -rf "${TMPDIR_C:-}"; exit 3' INT TERM
 
 warn() { echo "pr-attach: $*" >&2; }
 
@@ -134,11 +139,14 @@ for f in "${FILES[@]}"; do
   NAME=$(basename -- "$f")
   # The name reaches the query string @uri-escaped, but the alt text is interpolated into
   # markdown, where a `]` or a newline in a filename would break out of the embed.
-  ALT=$(printf '%s' "$NAME" | tr -d '\n\r][()')
+  ALT=$(printf '%s' "$NAME" | tr -d '\n\r][()`\\')
   # The Authorization header goes in via a config file on stdin rather than argv: everything on
   # curl's command line is readable from /proc/<pid>/cmdline by any local process mid-upload.
+  # A single wall-clock cap that suits a screenshot makes a multi-megabyte clip fail on upload
+  # size and report it through fail_hint, blaming GitHub for a slow uplink.
+  case "$MIME" in video/*) MAX_TIME=300 ;; *) MAX_TIME=60 ;; esac
   RESP=$(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" \
-    | curl -sS --max-time 30 -X POST \
+    | curl -sS --connect-timeout 10 --max-time "$MAX_TIME" -X POST \
       "https://uploads.github.com/user-attachments/assets?name=$(jq -rn --arg n "$NAME" '$n|@uri')&content_type=$MIME&repository_id=$REPO_ID" \
       --config - -H "Accept: application/json" \
       --data-binary "@$f" 2>&1)

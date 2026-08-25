@@ -39,8 +39,9 @@ jpeg, gif, webp, mp4, mov, webm. Videos are emitted as a **bare URL** rather tha
   Exit 3 means "no embeds available": the caller SKIPS the images and continues. Never
   retry-loop, never block, never fail a workflow because of a missing screenshot.
 - Because callers are told to branch on 3 alone, the script keeps that true in the corner
-  cases: SIGPIPE is ignored, so piping into `head` cannot exit 141, and a failed write to
-  stdout is counted as a failure rather than a delivered embed.
+  cases: SIGPIPE is ignored, so piping into `head` cannot exit 141; a failed write to stdout
+  is counted as a failure rather than a delivered embed; and an interrupt cleans up and exits
+  3 instead of resuming the batch one file at a time.
 - Only a URL of the exact asset shape is accepted. The URL is interpolated into markdown, so
   a response with a crafted tail could otherwise inject a second link into a PR comment.
 - Before a batch that matters, optionally run `--check` once; if it fails, skip the batch.
