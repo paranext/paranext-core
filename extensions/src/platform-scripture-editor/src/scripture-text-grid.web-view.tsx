@@ -43,7 +43,7 @@ import { useTextCollectionSources } from './use-text-collection-sources.hook';
 import { useFocusedResourceProjectId } from './use-focused-resource-project-id.hook';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { resolveTextCollectionProjectId } from './scripture-text-grid-project.utils';
-import { resolveNavigableProjectIdsWrite } from './scripture-text-grid-navigable-ids.utils';
+import { resolveNavigableProjectIdsWrite } from './navigable-project-ids.utils';
 import {
   ResourceCollectionOptions,
   RESOURCE_COLLECTION_OPTIONS_STRING_KEYS,
