@@ -4,9 +4,9 @@ namespace Paranext.DataProvider.Projects;
 
 /// <summary>
 /// One lexeme reference inside a PT9 interlinear cluster: the lexicon lexeme it selects and,
-/// when the user chose a specific sense, the id of that sense's gloss entry. A corrupt cluster
-/// element can carry no lexeme id; the reference is passed through as-is for the consumer to
-/// count and drop.
+/// when the user chose a specific sense, the id of that sense. A corrupt cluster element can
+/// carry no lexeme id; the reference is passed through as-is for the consumer to count and
+/// drop.
 /// </summary>
 public sealed record Pt9InterlinearLexemeRef(
     [property: JsonPropertyName("lexemeId")] string? LexemeId,
@@ -102,12 +102,17 @@ public sealed record Pt9Lexicon(
 );
 
 /// <summary>
-/// One configured interlinearization: the gloss language id and, for setups created without a
-/// model text, the display name the user gave the language.
+/// One configured interlinearization: its type name (e.g. <c>Glossing</c>,
+/// <c>BackTranslation</c>), the gloss language id, the display name the user gave the language for
+/// setups created without a model text, and the name and hex id of the model text the
+/// interlinearization reads from. The model fields are absent for a setup with no model text.
 /// </summary>
 public sealed record Pt9InterlinearSetup(
+    [property: JsonPropertyName("type")] string Type,
     [property: JsonPropertyName("languageId")] string? LanguageId,
-    [property: JsonPropertyName("languageName")] string? LanguageName
+    [property: JsonPropertyName("languageName")] string? LanguageName,
+    [property: JsonPropertyName("modelScrTextName")] string? ModelScrTextName,
+    [property: JsonPropertyName("modelScrTextId")] string? ModelScrTextId
 );
 
 /// <summary>
@@ -115,7 +120,8 @@ public sealed record Pt9InterlinearSetup(
 /// interlinearization setups, per-language per-book cluster data, the lexicon, and stored word
 /// analyses. <c>HasAssociatedLexicalProject</c> is true when the project's lexicon lives in an
 /// associated external lexical project (e.g. FieldWorks) rather than in Lexicon.xml, so an empty
-/// <c>Lexicon</c> does not mean the project has no gloss data.
+/// <c>Lexicon</c> does not mean the project has no gloss data; such a project's lexical data is
+/// resolved through the platform's Lexicon extension rather than through this interface.
 ///
 /// Files are read with PT9's own semantics, never more strictly: a duplicate verse reference,
 /// lexicon key, or wordform keeps the last occurrence; a cluster missing its Range element gets
