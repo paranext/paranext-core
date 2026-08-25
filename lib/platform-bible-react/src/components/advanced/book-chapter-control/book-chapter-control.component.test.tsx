@@ -299,24 +299,6 @@ describe('BookChapterControl additional books', () => {
     expect(genesis).not.toHaveClass('tw:text-muted-foreground/50');
   });
 
-  test('the current book is dimmed when the project lacks it, even with no additional books', async () => {
-    render(
-      <BookChapterControl
-        scrRef={{ book: 'REV', chapterNum: 1, verseNum: 1 }}
-        handleSubmit={() => {}}
-        getActiveBookIds={getProjectBooks}
-        getAdditionalBookIds={() => []}
-      />,
-    );
-
-    await userEvent.click(getTrigger());
-    // Type a fragment matching several books so a top match does not replace the book list.
-    await userEvent.type(getSearchInput(), 'e');
-
-    const revelation = await screen.findByRole('option', { name: /Revelation/ });
-    expect(revelation).toHaveClass('tw:text-muted-foreground/50');
-  });
-
   test('the toggle is absent when there are no books outside the project', async () => {
     render(
       <BookChapterControl
@@ -546,20 +528,36 @@ describe('BookChapterControl additional books', () => {
     expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
   });
 
-  test('shows the current book even when it is in neither the project nor the additional list', async () => {
+  // Regression guard for consumers that never opt into books outside the project: the control must
+  // render exactly what the caller offers, adding nothing of its own.
+  test('with no additional books the whole control is limited to the project', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(
       <BookChapterControl
-        scrRef={{ book: 'JUD', chapterNum: 1, verseNum: 1 }}
+        scrRef={{ book: 'REV', chapterNum: 1, verseNum: 1 }}
         handleSubmit={() => {}}
         getActiveBookIds={getProjectBooks}
-        getAdditionalBookIds={getExtraBooks}
       />,
     );
 
     await user.click(getTrigger());
 
-    expect(await screen.findByRole('option', { name: /Jude/ })).toBeInTheDocument();
+    // The browsable list is the project's books, with nothing to reveal.
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Matthew/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show all books' })).not.toBeInTheDocument();
+
+    // Quick navigation spans the project's books only, so the current book offers no next chapter.
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Next chapter' })).toBeDisabled(),
+    );
+
+    // Searching spans the same books. A fragment several books match keeps the list rendered.
+    await user.type(getSearchInput(), 'e');
+
+    expect(await screen.findByRole('option', { name: /Genesis/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
   });
 
   test('reopening resets the expansion to the seed', async () => {

@@ -163,11 +163,11 @@ export function BookChapterControl({
     projectBooksBySection,
     reachableBooksBySection,
     reachableBooks,
-    projectAndCurrentBooks,
+    projectBooks,
     booksOutsideProject,
   } = useMemo(
-    () => deriveBookChapterControlBookLists(activeBookIds, additionalBookIds, scrRef.book),
-    [activeBookIds, additionalBookIds, scrRef.book],
+    () => deriveBookChapterControlBookLists(activeBookIds, additionalBookIds),
+    [activeBookIds, additionalBookIds],
   );
 
   // Read through a ref so handleOpenChange keeps an empty dependency array: its identity feeds
@@ -341,11 +341,10 @@ export function BookChapterControl({
 
   // Hook that provides navigation buttons for quick chapter/verse navigation
   // The collapsed list is the books the user has opted into, so quick navigation stays inside them
-  // until the list is expanded; the current book is always included so a reference on a book the
-  // project lacks can still be stepped through.
+  // until the list is expanded.
   const quickNavButtons = useQuickNavButtons(
     scrRef,
-    isShowingAllBooks ? reachableBooks : projectAndCurrentBooks,
+    isShowingAllBooks ? reachableBooks : projectBooks,
     direction,
     handleSubmit,
   );
