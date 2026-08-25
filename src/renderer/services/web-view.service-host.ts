@@ -1497,9 +1497,9 @@ async function withTimeout<T>(
 }
 
 /**
- * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares four
- * tabs with empty state (no `projectId`); restoring it would mount four empty webviews, fire
- * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all four
+ * Drives the power → simple transition from the renderer. The bare `simpleLayout` declares multiple
+ * tabs with empty state (no `projectId`); restoring it would mount those empty webviews, fire
+ * `onDidOpenWebView` for each, trigger the default-project picker, and then reload all those
  * webviews with the project — paying a full webview teardown + remount cycle twice. Power mode
  * avoids this because its persisted layout already has every tab's state populated.
  *
