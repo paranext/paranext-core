@@ -68,6 +68,10 @@ const TOOLTIP_DELAY = 300;
 
 const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 
+// Stable identity for the "nothing extra to offer" case, so the memo below does not hand
+// BookChapterControl a fresh empty array on every render.
+const EMPTY_BOOK_IDS: string[] = [];
+
 // Visual breathing room between content and the native buttons on top of the live-measured overlay
 // width. Tuned by eye — smaller than the static reserved-space guess's 1rem (see
 // getToolbarOSReservedSpaceClassName) because the live measurement is exact, unlike that guess.
@@ -164,12 +168,25 @@ export function PlatformBibleToolbar() {
   const getActiveBookIds = booksPresent ? fetchActiveBookIds : undefined;
 
   const openResourceBookIds = useOpenResourceBookIds(resolvedWebView?.definition.projectId);
+  // Simple mode is the only mode this ships in: it has a single, global book/chapter/verse control,
+  // so widening its book list is unambiguous. Power mode's own controls are left as they are for
+  // that team to decide on; the component API stays open to them either way.
+  const additionalBookIds = useMemo(() => {
+    if (isPowerMode) return EMPTY_BOOK_IDS;
+    const projectBookIds = getBookIdsFromBooksPresent(booksPresent);
+    // BookChapterControl renders exactly the book list it is given, so the current book has to come
+    // from here or a reference on a book the active project lacks would be missing from its own
+    // picker.
+    if (projectBookIds.includes(scrRef.book) || openResourceBookIds.includes(scrRef.book))
+      return openResourceBookIds;
+    return [...openResourceBookIds, scrRef.book];
+  }, [isPowerMode, booksPresent, openResourceBookIds, scrRef.book]);
   // Stable identity per value, for the same reason fetchActiveBookIds is memoized above:
   // BookChapterControl memoizes its book list on this function's identity.
-  const fetchAdditionalBookIds = useCallback(() => openResourceBookIds, [openResourceBookIds]);
+  const fetchAdditionalBookIds = useCallback(() => additionalBookIds, [additionalBookIds]);
   // Undefined rather than a function returning an empty list: the control offers no "show all
   // books" toggle when there is nothing extra to offer.
-  const getAdditionalBookIds = openResourceBookIds.length > 0 ? fetchAdditionalBookIds : undefined;
+  const getAdditionalBookIds = additionalBookIds.length > 0 ? fetchAdditionalBookIds : undefined;
 
   // Register the top BookChapterControl's imperative handle only while it is enabled — a React 19
   // cleanup callback ref so registration tracks both mount/unmount and the enabled state. When
