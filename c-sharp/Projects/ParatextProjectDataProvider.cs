@@ -185,10 +185,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         retVal.Add(("getFinalVerseNumbersInBook", GetFinalVerseNumbersInBook));
         retVal.Add(("setFinalVerseNumbersInBook", SetFinalVerseNumbersInBook));
 
-        retVal.Add(("getPt9InterlinearManifest", GetPt9InterlinearManifest));
-        retVal.Add(("setPt9InterlinearManifest", SetPt9InterlinearManifest));
-        retVal.Add(("getPt9InterlinearData", GetPt9InterlinearData));
-        retVal.Add(("setPt9InterlinearData", SetPt9InterlinearData));
+        // PT9 interlinear methods are only registered when this PDP advertises
+        // platformScripture.Pt9Interlinear. Published PDPs do not advertise it, so they skip
+        // registration entirely instead of exposing methods their interface list never promised.
+        if (ProjectDetails.Metadata.ProjectInterfaces.Contains(ProjectInterfaces.PT9_INTERLINEAR))
+        {
+            retVal.Add(("getPt9InterlinearManifest", GetPt9InterlinearManifest));
+            retVal.Add(("setPt9InterlinearManifest", SetPt9InterlinearManifest));
+            retVal.Add(("getPt9InterlinearData", GetPt9InterlinearData));
+            retVal.Add(("setPt9InterlinearData", SetPt9InterlinearData));
+        }
 
         return retVal;
     }
@@ -300,6 +306,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                         "Never returns; always throws"
                     )
                 ),
+                // The PT9 entries are unconditional even though their registration is gated:
+                // documentation is consulted only for functions actually registered, so a
+                // published PDP publishes no PT9 docs.
                 ["getPt9InterlinearManifest"] = ExperimentalMethodDocumentation.Create(
                     "Get a map of project-relative PT9 interlinear file path to the SHA-256 hex of "
                         + "the file's current bytes. Empty when the project has no interlinear data.",
@@ -2617,21 +2626,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     // Read-only access to a Paratext project's PT9 interlinear data, parsed from the project's
     // interlinear files, for importing legacy interlinear data. Files on disk are authoritative;
-    // no writer, no events.
+    // no writer, no file-change events. Reads are not coordinated with Send/Receive; a caller
+    // detects a sync that landed mid-read by re-polling the manifest afterward.
 
     private const string Pt9InterlinearReadOnlyMessage =
         "PT9 interlinear data is read-only. It reflects the Paratext project's interlinear files on "
         + "disk, which are the authoritative source; there is no write path through this "
         + "projectInterface.";
 
-    // The three project-root PT9 interlinear files. Per-language verse files live under
-    // Interlinear_{language}/ and are matched separately by pattern.
-    private static readonly string[] s_pt9InterlinearRootFileNames =
-    [
-        "Lexicon.xml",
-        "WordAnalyses.xml",
-        "InterlinearSetup.xml",
-    ];
+    /// <summary>
+    /// Request timeout for the PT9 interlinear getters. A cold read of a
+    /// <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>-sized project from a slow disk or network share
+    /// can exceed the client's default request timeout, while a genuinely hung filesystem should
+    /// still fail rather than wait forever.
+    /// </summary>
+    private const int Pt9InterlinearNetworkTimeoutMs = 120_000;
 
     /// <summary>
     /// Resolves the live project for the PT9 interlinear getters, so a relocated or reloaded
@@ -2652,84 +2661,18 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     }
 
     /// <summary>
-    /// Enumerates the project-relative, forward-slash-normalized paths of the project's PT9
-    /// interlinear files through the project's file manager: whichever of the three root files are
-    /// present, plus every <c>Interlinear_{language}/Interlinear_{language}_{book}.xml</c>. Empty
-    /// when the project carries no interlinear data. Both get methods build from this one list, so
-    /// within a single call they cannot disagree on the file set.
+    /// Gets a map of project-relative path to the SHA-256 hex of that file's current bytes: an
+    /// opaque change-detection token per file, never content, covering the interlinear book
+    /// files, the lexicon, and the stored word analyses. The setups file rides the data payload
+    /// but is deliberately not covered, so a setups-only edit signals no change. Empty when the
+    /// project has no interlinear data. Throws if the project directory or
+    /// a file found by the scan cannot be read, so an unreadable project never poses as one with
+    /// no data and a caller never receives a partial manifest.
     /// </summary>
-    private static List<string> FindPt9InterlinearFiles(ProjectFileManager fileManager)
-    {
-        var filePaths = new List<string>();
-        foreach (var fileName in s_pt9InterlinearRootFileNames)
-        {
-            if (fileManager.Exists(fileName))
-                filePaths.Add(fileName);
-        }
-
-        foreach (var languageDirectory in fileManager.ProjectDirectories("Interlinear_*"))
-        {
-            foreach (
-                var relativePath in fileManager.ProjectFiles(
-                    "Interlinear_*_*.xml",
-                    languageDirectory
-                )
-            )
-            {
-                filePaths.Add(relativePath.Replace('\\', '/'));
-            }
-        }
-
-        return filePaths;
-    }
-
-    private static string ComputeSha256Hex(byte[] bytes) =>
-        Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-
-    /// <summary>
-    /// Deserializes one PT9 interlinear XML file through the project's file manager. Any read or
-    /// parse failure surfaces as one exception type naming the project-relative path. A corrupt
-    /// file is reported, never renamed or recovered, so a read cannot modify the project.
-    /// </summary>
-    private static T DeserializePt9Xml<T>(ProjectFileManager fileManager, string relativePath)
-        where T : class
-    {
-        try
-        {
-            using var reader = fileManager.OpenFileForXmlRead(relativePath);
-            var serializer = new XmlSerializer(typeof(T));
-            if (serializer.Deserialize(reader) is T deserialized)
-                return deserialized;
-            throw new InvalidDataException($"Could not read PT9 interlinear file '{relativePath}'");
-        }
-        catch (Exception e)
-            when (e
-                    is InvalidOperationException
-                        or XmlException
-                        or IOException
-                        or UnauthorizedAccessException
-            )
-        {
-            throw new InvalidDataException(
-                $"Could not read PT9 interlinear file '{relativePath}'",
-                e
-            );
-        }
-    }
-
-    /// <summary>
-    /// Gets a map of project-relative PT9 interlinear file path to the SHA-256 hex of that file's
-    /// current bytes: an opaque change-detection token per file, never content. Empty when the
-    /// project has no interlinear data. Throws if a file found by the scan cannot be read, so a
-    /// caller never receives a partial manifest.
-    /// </summary>
+    [NetworkTimeout(Pt9InterlinearNetworkTimeoutMs)]
     public Dictionary<string, string> GetPt9InterlinearManifest(object? param = null)
     {
-        var fileManager = GetPt9InterlinearScrText().FileManager;
-        var manifest = new Dictionary<string, string>();
-        foreach (var relativePath in FindPt9InterlinearFiles(fileManager))
-            manifest[relativePath] = ComputeSha256Hex(fileManager.ReadAllBytes(relativePath));
-        return manifest;
+        return Pt9InterlinearReader.GetManifest(GetPt9InterlinearScrText());
     }
 
     /// <summary>
@@ -2741,66 +2684,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     /// <summary>
     /// Gets the project's PT9 interlinear data parsed from its interlinear files: setups, per-book
-    /// cluster data, the lexicon, and stored word analyses. Empty lists when the project has no
-    /// interlinear data. Throws if a file found by the scan cannot be read or parsed, so a caller
-    /// never receives a partial payload.
+    /// cluster data, the lexicon, and stored word analyses. Setups come from the setups file when
+    /// present, merged with setups PT9 reconstructs from legacy project settings. Empty lists when
+    /// the project has no interlinear data. Throws if the project directory or a file found by
+    /// the scan cannot be read, or a file cannot be parsed, so an unreadable project never poses
+    /// as one with no data and a caller never receives a partial payload; and throws an error
+    /// whose message starts with <see cref="Pt9InterlinearReader.Pt9InterlinearDataTooLargeMessagePrefix"/> when the
+    /// files exceed <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>, so a response can never take down
+    /// the connection.
     /// </summary>
+    [NetworkTimeout(Pt9InterlinearNetworkTimeoutMs)]
     public Pt9InterlinearProjectData GetPt9InterlinearData(object? param = null)
     {
-        var scrText = GetPt9InterlinearScrText();
-        var fileManager = scrText.FileManager;
-
-        var setups = new List<Pt9InterlinearSetup>();
-        var books = new List<Pt9InterlinearBook>();
-        Pt9Lexicon? lexicon = null;
-        var wordAnalyses = new List<Pt9WordParse>();
-
-        foreach (var relativePath in FindPt9InterlinearFiles(fileManager))
-        {
-            switch (relativePath)
-            {
-                case "InterlinearSetup.xml":
-                    setups.AddRange(
-                        DeserializePt9Xml<InterlinearSetupList>(fileManager, relativePath)
-                            .InterlinearSetups.Select(setup => new Pt9InterlinearSetup(
-                                setup.LanguageId,
-                                setup.LanguageName
-                            ))
-                    );
-                    break;
-                case "Lexicon.xml":
-                    lexicon = ConvertPt9Lexicon(
-                        DeserializePt9Xml<LexiconData>(fileManager, relativePath)
-                    );
-                    break;
-                case "WordAnalyses.xml":
-                    wordAnalyses.AddRange(
-                        DeserializePt9Xml<WordAnalysesData>(fileManager, relativePath)
-                            .Entries.Select(entry => new Pt9WordParse(
-                                entry.Word,
-                                entry
-                                    .Analyses.Select(analysis => analysis.LexemeIds.ToList())
-                                    .ToList()
-                            ))
-                    );
-                    break;
-                default:
-                    books.Add(
-                        ConvertPt9InterlinearBook(
-                            DeserializePt9Xml<InterlinearData>(fileManager, relativePath)
-                        )
-                    );
-                    break;
-            }
-        }
-
-        return new Pt9InterlinearProjectData(
-            setups,
-            books,
-            lexicon,
-            wordAnalyses,
-            scrText.Settings.AssociatedLexicalProject?.IsValid ?? false
-        );
+        return Pt9InterlinearReader.GetData(GetPt9InterlinearScrText());
     }
 
     /// <summary>
@@ -2808,71 +2704,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     public bool SetPt9InterlinearData(object? value) =>
         throw new NotSupportedException(Pt9InterlinearReadOnlyMessage);
-
-    private static Pt9Lexicon ConvertPt9Lexicon(LexiconData lexiconData)
-    {
-        var entries = lexiconData
-            .Entries.Select(entry => new Pt9LexiconEntry(
-                entry.Key.Type.ToString(),
-                entry.Key.LexicalForm,
-                entry.Key.Homograph,
-                entry
-                    .Value.Senses.Select(sense => new Pt9LexiconSense(
-                        sense.Id,
-                        (sense.Glosses ?? [])
-                            .Select(gloss => new Pt9LexiconGloss(gloss.Language, gloss.Text))
-                            .ToList()
-                    ))
-                    .ToList()
-            ))
-            .ToList();
-
-        var legacyAnalyses = lexiconData
-            .Analyses.Select(analysis => new Pt9WordParse(
-                analysis.Key,
-                [analysis.Value.Lexemes.Select(lexeme => lexeme.Id).ToList()]
-            ))
-            .ToList();
-
-        return new Pt9Lexicon(lexiconData.Language, entries, legacyAnalyses);
-    }
-
-    private static Pt9InterlinearBook ConvertPt9InterlinearBook(InterlinearData interlinearData)
-    {
-        var verses = interlinearData
-            .Verses.Select(verse => new Pt9InterlinearVerse(
-                verse.Key,
-                verse.Value.Hash,
-                verse
-                    .Value.Clusters.Select(cluster => new Pt9InterlinearCluster(
-                        cluster.TextRange.Index,
-                        cluster.TextRange.Length,
-                        cluster.Excluded,
-                        cluster
-                            .Lexemes.Select(lexeme => new Pt9InterlinearLexemeRef(
-                                lexeme.LexemeId,
-                                string.IsNullOrEmpty(lexeme.SenseId) ? null : lexeme.SenseId
-                            ))
-                            .ToList()
-                    ))
-                    .ToList(),
-                verse
-                    .Value.Punctuations.Select(punctuation => new Pt9InterlinearPunctuation(
-                        punctuation.TextRange.Index,
-                        punctuation.TextRange.Length,
-                        punctuation.BeforeText,
-                        punctuation.AfterText
-                    ))
-                    .ToList()
-            ))
-            .ToList();
-
-        return new Pt9InterlinearBook(
-            interlinearData.GlossLanguage,
-            interlinearData.BookId,
-            verses
-        );
-    }
 
     #endregion
 

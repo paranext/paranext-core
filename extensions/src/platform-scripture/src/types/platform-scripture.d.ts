@@ -1214,7 +1214,7 @@ declare module 'platform-scripture' {
 
   /**
    * One lexeme reference inside a PT9 interlinear cluster: the lexicon lexeme it selects and, when
-   * the user chose a specific sense, the id of that sense's gloss entry.
+   * the user chose a specific sense, the id of that sense.
    *
    * @experimental
    */
@@ -1343,21 +1343,32 @@ declare module 'platform-scripture' {
   };
 
   /**
-   * One configured interlinearization: the gloss language id and, for setups created without a
-   * model text, the display name the user gave the language.
+   * One configured interlinearization. Setups come from the project's setups file when present,
+   * merged with the setups Paratext 9 reconstructs from legacy project settings; the merge is
+   * computed on read and never writes to the project. Settings-derived setups resolve model names
+   * against the locally installed projects, as PT9 itself does, so a setup whose model text is not
+   * installed is absent.
    *
    * @experimental
    */
   export type Pt9InterlinearSetup = {
+    /** Interlinearization type name as PT9 stores it, e.g. `Glossing`, `BackTranslation`. */
+    type: string;
     languageId?: string;
+    /** Display name the user gave the language, for setups created without a model text. */
     languageName?: string;
+    /** Name of the model text this interlinearization reads from; absent when it has none. */
+    modelScrTextName?: string;
+    /** Hex id of the model text; absent when the setup has no model text or PT9 stored no id. */
+    modelScrTextId?: string;
   };
 
   /**
    * A Paratext project's complete PT9 interlinear data, parsed from the project's files.
    * `hasAssociatedLexicalProject` is true when the project's lexicon lives in an associated
    * external lexical project (e.g. FieldWorks) rather than in Lexicon.xml, so an absent `lexicon`
-   * does not mean the project has no gloss data.
+   * does not mean the project has no gloss data; such a project's lexical data is resolved through
+   * the platform's Lexicon extension rather than through this interface.
    *
    * Files are read with Paratext 9's own semantics, never more strictly: a duplicate verse
    * reference, lexicon key, or wordform keeps the last occurrence; a cluster missing its Range
@@ -1375,25 +1386,29 @@ declare module 'platform-scripture' {
   };
 
   /**
-   * Map of project-relative, forward-slash-normalized PT9 interlinear file path to the lowercase
-   * SHA-256 hex of that file's current bytes: an opaque change-detection token per file. Empty when
+   * Map of project-relative file path to the lowercase SHA-256 hex of that file's current bytes: an
+   * opaque change-detection token per file, covering the interlinear book files, the lexicon, and
+   * the stored word analyses. The setups file rides the {@link Pt9InterlinearProjectData} payload
+   * but is deliberately not covered, so a setups-only edit signals no change. Path separators are
+   * forward slashes; a backslash inside a key is part of a file name, never a separator. Empty when
    * the project has no interlinear data.
    *
    * @experimental
    */
-  export type Pt9InterlinearManifest = { [filePath: string]: string };
+  export type Pt9InterlinearProjectManifest = { [filePath: string]: string };
 
   /**
    * Data types the PT9 interlinear projectInterface exposes via its base
    * {@link IProjectDataProvider}. Both are read-only - the Paratext project's interlinear files on
-   * disk are the authoritative source; `set*` is not supported and throws if called. There are no
-   * change events; poll `getPt9InterlinearManifest` to detect changes.
+   * disk are the authoritative source; `set*` is not supported and throws if called. The interface
+   * does not track interlinear file changes, though project-wide update events reach these data
+   * types like any others; poll `getPt9InterlinearManifest` to detect changes.
    *
    * @experimental
    */
   export type Pt9InterlinearProjectInterfaceDataTypes = {
     /** Per-file SHA-256 hex, for change detection without transferring content. */
-    Pt9InterlinearManifest: DataProviderDataType<undefined, Pt9InterlinearManifest, never>;
+    Pt9InterlinearManifest: DataProviderDataType<undefined, Pt9InterlinearProjectManifest, never>;
     /** The parsed interlinear data. */
     Pt9InterlinearData: DataProviderDataType<undefined, Pt9InterlinearProjectData, never>;
   };
@@ -1401,76 +1416,135 @@ declare module 'platform-scripture' {
   /**
    * Read-only access to a Paratext project's persisted PT9 interlinear data, parsed from the
    * project's interlinear files, for importing legacy interlinear data into an interlinearizer.
-   * Advertised only on editable projects - published (resource) projects are archives that do not
-   * carry interlinear authoring data - so a consumer reads "interface unsupported" as "no PT9
-   * interlinear import available for this project".
+   * Advertised on every unpublished local project - published (resource) projects are distributed
+   * archives that do not carry interlinear authoring data - so a consumer reads "interface
+   * unsupported" as "no PT9 interlinear import available for this project". Advertisement does not
+   * follow `platform.isEditable`: an unpublished project whose Editable setting is off still
+   * advertises this interface.
    *
    * Both data types are read-only: `set*` is unsupported and throws if called; the authoritative
-   * source is the files on disk, not this projectInterface. The interface raises no change events -
-   * `subscribe*` emits at most the current value once (per `retrieveDataImmediately`) and never
-   * tracks file changes. Poll `getPt9InterlinearManifest` and compare hashes to detect changes.
+   * source is the files on disk, not this projectInterface. The interface never tracks interlinear
+   * file changes - editing those files fires no update. Subscribers still receive project-wide
+   * update events (book management operations, Send/Receive), which say nothing about whether
+   * interlinear data changed. Poll `getPt9InterlinearManifest` and compare hashes to detect
+   * changes.
+   *
+   * Paratext saves interlinear files by two renames, so a concurrent save can make any read
+   * transiently fail while a file is mid-replacement; retrying the call is safe.
+   *
+   * Reads are not coordinated with Send/Receive: a sync that lands mid-read can produce a manifest
+   * or payload mixing pre- and post-sync files, each individually valid. A consumer that persists
+   * converted data together with its manifest and re-polls the manifest afterward will observe the
+   * mismatch and can re-read.
    *
    * Acquire via `papi.projectDataProviders.get('platformScripture.Pt9Interlinear', projectId)`
    * (backend) or the `useProjectDataProvider('platformScripture.Pt9Interlinear', projectId)` React
    * hook (frontend).
+   *
+   * @example Probe cheaply and fetch the payload only when something changed:
+   *
+   * ```typescript
+   * const pdp = await papi.projectDataProviders.get(
+   *   'platformScripture.Pt9Interlinear',
+   *   projectId,
+   * );
+   * const manifest = await pdp.getPt9InterlinearManifest();
+   * if (!hashesMatch(manifest, storedHashes)) {
+   *   const data = await pdp.getPt9InterlinearData();
+   *   // Convert and persist `data` together with `manifest` for the next comparison.
+   * }
+   * ```
    *
    * @experimental
    */
   export type IPt9InterlinearProjectDataProvider =
     IProjectDataProvider<Pt9InterlinearProjectInterfaceDataTypes> & {
       /**
-       * Returns the lowercase SHA-256 hex of each PT9 interlinear file's current bytes, keyed by
-       * project-relative path; empty when the project has no interlinear data. The cheap
-       * change-detection probe. Throws if a file found by the scan cannot be read, so a caller
-       * never receives a partial manifest.
+       * The change-detection probe: reads and hashes every interlinear file, so it is cheap
+       * relative to transferring and parsing the content, not free. Throws if the project directory
+       * or a file found by the scan cannot be read, so an unreadable project never poses as one
+       * with no data and a caller never receives a partial manifest.
        *
+       * @returns The lowercase SHA-256 hex of each covered PT9 interlinear file's current bytes
+       *   (see {@link Pt9InterlinearProjectManifest} for what is covered), keyed by project-relative
+       *   path; empty when the project has no interlinear data.
        * @experimental
        */
-      getPt9InterlinearManifest(): Promise<Pt9InterlinearManifest>;
+      getPt9InterlinearManifest(): Promise<Pt9InterlinearProjectManifest>;
       /**
        * Read-only - throws if called. The authoritative source is the Paratext project's
        * interlinear files on disk.
        *
+       * @param newValue Typed `never`: no value is accepted.
+       * @returns Never resolves; the returned promise always rejects.
        * @experimental
        */
       setPt9InterlinearManifest(
         newValue: never,
       ): Promise<DataProviderUpdateInstructions<Pt9InterlinearProjectInterfaceDataTypes>>;
       /**
-       * Subscribe to the manifest. Emits at most the current value once; the interface does not
-       * track file changes, so no further updates fire. Poll `getPt9InterlinearManifest` to detect
-       * changes.
+       * Subscribe to the manifest. Emits the current value on subscription (per
+       * `retrieveDataImmediately`, default true) and again on any project-wide update event (book
+       * management operations, Send/Receive); the interface does not track interlinear file changes
+       * themselves, so an update says nothing about whether interlinear data changed. The manifest
+       * is small, so the default `deeply-equal` subscriber mode is cheap and suppresses the
+       * no-change callbacks those events would otherwise produce, though each update still costs a
+       * read and hash of every interlinear file.
        *
+       * @param selector Always `undefined`: the manifest is argument-less, whole-project data.
+       * @param callback Receives the manifest, or a {@link PlatformError} when retrieving it after
+       *   an update fails.
+       * @param options Subscription behavior; the defaults fit this data type.
+       * @returns Unsubscriber that ends the subscription.
        * @experimental
        */
       subscribePt9InterlinearManifest(
         selector: undefined,
-        callback: (manifest: Pt9InterlinearManifest | PlatformError) => void,
+        callback: (manifest: Pt9InterlinearProjectManifest | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
 
       /**
-       * Returns the project's PT9 interlinear data parsed from its interlinear files: setups,
-       * per-book cluster data, the lexicon, and stored word analyses. Empty lists when the project
-       * has no interlinear data. Throws if a file found by the scan cannot be read or parsed, so a
-       * caller never receives a partial payload.
+       * Returns the project's PT9 interlinear data parsed from its interlinear files. Throws if the
+       * project directory or a file found by the scan cannot be read, or a file cannot be parsed,
+       * so an unreadable project never poses as one with no data and a caller never receives a
+       * partial payload. Also throws, with an error message starting `PT9 interlinear data is too
+       * large`, when the project's interlinear files exceed what one response can carry - a
+       * response over the WebSocket's message limit would tear down the whole connection, so the
+       * request fails instead. That prefix is the contract for recognizing the condition, since
+       * error types do not cross the RPC boundary.
        *
+       * @returns Setups, per-book cluster data, the lexicon, and stored word analyses; empty lists
+       *   when the project has no interlinear data.
        * @experimental
        */
       getPt9InterlinearData(): Promise<Pt9InterlinearProjectData>;
       /**
        * Read-only - throws if called. See {@link setPt9InterlinearManifest}.
        *
+       * @param newValue Typed `never`: no value is accepted.
+       * @returns Never resolves; the returned promise always rejects.
        * @experimental
        */
       setPt9InterlinearData(
         newValue: never,
       ): Promise<DataProviderUpdateInstructions<Pt9InterlinearProjectInterfaceDataTypes>>;
       /**
-       * Subscribe to the parsed data. Emits at most the current value once; the interface does not
-       * track file changes, so no further updates fire. Poll `getPt9InterlinearManifest` to detect
-       * changes.
+       * Subscribe to the parsed data. Emits the current value on subscription (per
+       * `retrieveDataImmediately`, default true) and again on any project-wide update event (book
+       * management operations, Send/Receive); the interface does not track interlinear file changes
+       * themselves, so an update says nothing about whether interlinear data changed. Every update
+       * re-fetches the whole payload whatever the subscriber options, and one previous payload
+       * stays retained per subscriber for the subscription's lifetime; `whichUpdates: '*'` skips
+       * only the deep comparison and then delivers no-change callbacks. Prefer subscribing to the
+       * manifest and fetching the data only when its hashes actually changed.
        *
+       * @param selector Always `undefined`: the payload is argument-less, whole-project data.
+       * @param callback Receives the payload, or a {@link PlatformError} when retrieving it after an
+       *   update fails.
+       * @param options Subscription behavior; the retention and re-fetch costs above apply in every
+       *   mode.
+       * @returns Unsubscriber that ends the subscription.
        * @experimental
        */
       subscribePt9InterlinearData(
