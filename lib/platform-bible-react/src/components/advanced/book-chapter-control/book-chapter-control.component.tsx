@@ -165,11 +165,16 @@ export function BookChapterControl({
     [getActiveBookIds, getAdditionalBookIds],
   );
 
-  const { projectBooksBySection, reachableBooksBySection, reachableBooks, booksOutsideProject } =
-    useMemo(
-      () => deriveBookChapterControlBookLists(activeBookIds, additionalBookIds, scrRef.book),
-      [activeBookIds, additionalBookIds, scrRef.book],
-    );
+  const {
+    projectBooksBySection,
+    reachableBooksBySection,
+    reachableBooks,
+    projectAndCurrentBooks,
+    booksOutsideProject,
+  } = useMemo(
+    () => deriveBookChapterControlBookLists(activeBookIds, additionalBookIds, scrRef.book),
+    [activeBookIds, additionalBookIds, scrRef.book],
+  );
 
   // Read through a ref so handleOpenChange keeps an empty dependency array: its identity feeds
   // useImperativeHandle, and churning it would re-register the consumer's imperative handle.
@@ -341,7 +346,15 @@ export function BookChapterControl({
   // #region Navigation and view changes
 
   // Hook that provides navigation buttons for quick chapter/verse navigation
-  const quickNavButtons = useQuickNavButtons(scrRef, reachableBooks, direction, handleSubmit);
+  // The collapsed list is the books the user has opted into, so quick navigation stays inside them
+  // until the list is expanded; the current book is always included so a reference on a book the
+  // project lacks can still be stepped through.
+  const quickNavButtons = useQuickNavButtons(
+    scrRef,
+    isShowingAllBooks ? reachableBooks : projectAndCurrentBooks,
+    direction,
+    handleSubmit,
+  );
 
   const handleBackToBooks = useCallback(() => {
     setViewMode('books');
@@ -543,6 +556,9 @@ export function BookChapterControl({
     localizedStrings?.['%webView_bookChapterControl_bookNotInProject%'] || 'not in this project';
   const showAllBooksLabel =
     localizedStrings?.['%webView_bookChapterControl_showAllBooks%'] || 'Show all books';
+  const showProjectBooksOnlyLabel =
+    localizedStrings?.['%webView_bookChapterControl_showProjectBooksOnly%'] ||
+    'Show project books only';
 
   // #endregion
 
@@ -1313,7 +1329,7 @@ export function BookChapterControl({
                 aria-expanded={isShowingAllBooks}
                 onClick={() => setIsShowingAllBooks((wasShowing) => !wasShowing)}
               >
-                {showAllBooksLabel}
+                {isShowingAllBooks ? showProjectBooksOnlyLabel : showAllBooksLabel}
               </Button>
             </div>
           )}
