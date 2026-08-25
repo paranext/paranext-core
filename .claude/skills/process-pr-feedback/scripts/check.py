@@ -67,10 +67,6 @@ def internal_labels(packet):
             # A single bare token before a separator is the shape a mis-written entry takes.
             # Say so loudly: dropping a real entry silently is how the deny-list ends up testing
             # nothing while the run prints PASS.
-            # Narrow: an id-shaped head, not merely one containing a digit or hyphen. A bare
-            # `[-_:\d]` test fires on ordinary prose ("P2 — writes this file.", a date, a
-            # version), and a warning that fires on prose the classifier deliberately skips
-            # stops being the one loud line in the output.
             head = entry.split(" ")[0]
             # An id-shaped head is one carrying a digit, and deliberately permissive about the
             # rest: excluding regex characters would drop the warning for the shapes the docs
@@ -129,9 +125,9 @@ def main():
     for it in items:
         for gap in missing_fields(it):
             malformed.add(it.get("item"))
-            # Reported, not raised. An unrecognised kind is the dangerous one: post.py used to
-            # treat anything that was not reply/inline as an issue comment, so a typo turned a
-            # threaded reply into a new top-level comment on the PR.
+            # Reported, not raised. An unrecognised kind is the dangerous one: a catch-all
+            # `else` in the poster would treat it as an issue comment, turning a typo in `kind`
+            # into a new top-level comment on the PR instead of a threaded reply.
             fails_early.append(f"{it.get('item', '<no item id>')}: {gap}")
     if malformed:
         print(f"[shape] {len(malformed)} malformed item(s) skipped by later checks: "

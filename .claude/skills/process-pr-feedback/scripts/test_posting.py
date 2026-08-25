@@ -186,11 +186,11 @@ def test_placeholder_rejector_accepts_a_real_regex_containing_nn():
 
 
 def test_prose_openers_are_never_transcribed_whatever_their_shape():
-    """Three rounds of inferring intent from shape got this wrong in both directions.
+    """Inferring intent from shape fails in both directions.
 
-    `Note`/`NOTE` were stopped on with a remedy that would deny-list an everyday word; `e.g.`
-    and `P2` were transcribed as live regexes that would hard-FAIL any body containing them.
-    None of them is backticked, so none is an entry.
+    `Note`/`NOTE` read as entries whose remedy would deny-list an everyday word; `e.g.` and `P2`
+    read as live regexes that would hard-FAIL any body containing them. None of them is
+    backticked, so none is an entry.
     """
     for prose in ("Note — the reviewer never saw these ids.",
                   "NOTE — the reviewer never saw these ids.",

@@ -91,8 +91,8 @@ def describe_row(row):
     `unsettled_pendings` deliberately returns rows too short to name their item — a kill can
     truncate a row mid-write, and that row is the whole point of the report. Every consumer that
     renders one therefore has to survive it, so the rendering lives here rather than being
-    open-coded at each print site: guarding the call sites one at a time is what moved the crash
-    out of the library and into its caller last round.
+    open-coded at each print site — guarding call sites one at a time relocates the crash into
+    whichever caller was missed.
     """
     item = row[ITEM] if len(row) > ITEM else "<truncated row>"
     return f"{item} [{chr(9).join(row)!r}]"
