@@ -164,34 +164,23 @@ export { expect } from '@playwright/test';
 
 const WEBSOCKET_PORT = 8876;
 
-/** Minimal shape of ProjectMetadata returned by the PAPI project lookup service. */
-type ProjectMetadata = {
-  id: string;
-  projectInterfaces?: string[];
-};
-
 /**
- * Retrieve all available project metadata via the PAPI WebSocket. Calls
- * `object:ProjectLookupService.getMetadataForAllProjects` — a network-object method registered in
- * `project-lookup.service-host.ts`.
+ * Send one JSON-RPC request over the PAPI WebSocket and resolve with its result.
+ *
+ * Opens a connection per call and closes it once the matching response arrives. Requests are
+ * identified by a fixed id of 1; unsolicited traffic (events, notifications) is ignored until the
+ * response for that id shows up.
  */
-export async function getAvailableProjects(timeoutMs = 30_000): Promise<ProjectMetadata[]> {
-  return new Promise<ProjectMetadata[]>((resolve, reject) => {
+async function requestPapi<T>(method: string, params: unknown[], timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
     const ws = new WebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
     const timeout = setTimeout(() => {
       ws.close();
-      reject(new Error(`getAvailableProjects: timed out after ${timeoutMs / 1000} s`));
+      reject(new Error(`${method}: timed out after ${timeoutMs / 1000} s`));
     }, timeoutMs);
 
     ws.on('open', () => {
-      ws.send(
-        JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'object:ProjectLookupService.getMetadataForAllProjects',
-          params: [],
-        }),
-      );
+      ws.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }));
     });
 
     ws.on('message', (data) => {
@@ -209,11 +198,11 @@ export async function getAvailableProjects(timeoutMs = 30_000): Promise<ProjectM
       clearTimeout(timeout);
       ws.close();
       if (parsed.error) {
-        reject(new Error(`PAPI error: ${JSON.stringify(parsed.error)}`));
+        reject(new Error(`PAPI error from ${method}: ${JSON.stringify(parsed.error)}`));
       } else {
         // parsed result is unknown JSON from a WebSocket message; we trust the PAPI contract
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        resolve((parsed.result as ProjectMetadata[]) ?? []);
+        resolve(parsed.result as T);
       }
     });
 
@@ -224,52 +213,55 @@ export async function getAvailableProjects(timeoutMs = 30_000): Promise<ProjectM
   });
 }
 
+/** Minimal shape of ProjectMetadata returned by the PAPI project lookup service. */
+type ProjectMetadata = {
+  id: string;
+  projectInterfaces?: string[];
+};
+
+/**
+ * Retrieve all available project metadata via the PAPI WebSocket. Calls
+ * `object:ProjectLookupService.getMetadataForAllProjects` — a network-object method registered in
+ * `project-lookup.service-host.ts`.
+ */
+export async function getAvailableProjects(timeoutMs = 30_000): Promise<ProjectMetadata[]> {
+  return (
+    (await requestPapi<ProjectMetadata[] | undefined>(
+      'object:ProjectLookupService.getMetadataForAllProjects',
+      [],
+      timeoutMs,
+    )) ?? []
+  );
+}
+
 /**
  * Open a scripture editor for the given project via the PAPI
  * `command:platformScriptureEditor.openScriptureEditor` command.
  */
 export async function openScriptureEditor(projectId: string): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const ws = new WebSocket(`ws://localhost:${WEBSOCKET_PORT}`);
-    const timeout = setTimeout(() => {
-      ws.close();
-      reject(new Error(`openScriptureEditor("${projectId}"): timed out after 30 s`));
-    }, 30_000);
+  await requestPapi('command:platformScriptureEditor.openScriptureEditor', [projectId], 30_000);
+}
 
-    ws.on('open', () => {
-      ws.send(
-        JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'command:platformScriptureEditor.openScriptureEditor',
-          params: [projectId],
-        }),
-      );
-    });
-
-    ws.on('message', (data) => {
-      let parsed: { id?: number; error?: unknown; result?: unknown };
-      try {
-        parsed = JSON.parse(data.toString());
-      } catch (err) {
-        clearTimeout(timeout);
-        ws.close();
-        reject(err);
-        return;
-      }
-      if (parsed.id !== 1) return;
-      clearTimeout(timeout);
-      ws.close();
-      if (parsed.error) {
-        reject(new Error(`PAPI error opening editor: ${JSON.stringify(parsed.error)}`));
-      } else {
-        resolve();
-      }
-    });
-
-    ws.on('error', (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
-  });
+/**
+ * Empty the find search history for a project.
+ *
+ * The history is NOT panel state — the find WebView reads and writes it through the
+ * `platformScripture.findHistory` data provider, which persists it in extension user data
+ * (`dev-appdata/extensions/platformScripture/user-data/`). It therefore outlives the WebView, the
+ * Electron process, and the whole test run, and it is capped at `MAX_FIND_HISTORY_ITEMS`, so what a
+ * test sees depends both on the tests that ran before it and on how many entries earlier RUNS left
+ * behind. Clearing it through the data provider is the only reset available: the panel exposes no
+ * clear-history control, and every mounted find WebView is subscribed, so the panel re-renders with
+ * the empty list.
+ *
+ * `projectId` must be the project whose history the panel is showing (the find WebView keys history
+ * by the scroll group's source project); history for a different project would be cleared without
+ * changing anything the panel displays.
+ */
+export async function clearFindHistory(projectId: string | undefined): Promise<void> {
+  await requestPapi(
+    'object:platformScripture.findHistory-data.setHistory',
+    [projectId, []],
+    15_000,
+  );
 }
