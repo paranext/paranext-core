@@ -4,9 +4,11 @@
 #
 # Environment passed through to the app:
 #   DEV_NOISY=true    Load the test extensions (helloRock3 etc.) and their default layout. Off by
-#                     default, which is what interactive development wants — but e2e suites that
-#                     drive those extensions (e2e-tests/tests/isolated/overlay/) need it on, and
-#                     they fail in confusing ways without it:
+#                     default, which is what interactive development wants. It matters only for
+#                     suites that ATTACH to the app this script starts — the CDP ones under
+#                     e2e-tests/playwright-cdp.config.ts. Launch-mode suites spawn their own
+#                     Electron via launchElectronApp, which sets its own DEV_NOISY default
+#                     (helpers.ts), so this has no effect on them:
 #                       DEV_NOISY=true ./.erb/scripts/refresh.sh
 #   Any other variable the app reads is likewise inherited; this script does not sanitize the
 #   environment.
