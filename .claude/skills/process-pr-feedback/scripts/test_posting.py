@@ -205,12 +205,31 @@ def test_prose_openers_do_not_trip_the_loud_warning():
     """A warning that fires on prose the classifier deliberately skips stops being a signal."""
     import io
     import contextlib
+    # `P2 — …` is deliberately absent: its head carries a digit, so it does warn. That is the
+    # accepted cost of keeping the regex-shaped entry cases below covered.
     for prose in ("NOTE — the reviewer never saw these ids.", "e.g. — an example opener.",
-                  "The reviewer never saw these ids."):
+                  "CODENAME — an internal codename", "The reviewer never saw these ids."):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             _labels(prose)
         assert "!!" not in buf.getvalue(), f"{prose!r} tripped the loud warning"
+
+
+def test_the_documented_entry_shapes_warn_when_written_without_backticks():
+    """The shapes the docs teach as examples are the ones that must not vanish quietly.
+
+    A narrower head test kept firing on a bare literal id while silently dropping these, so the
+    test asserting the bare case passed with the regression sitting beside it.
+    """
+    import io
+    import contextlib
+    for entry in (r"2659-\d\d — our packet item ids",
+                  r"\bD[1-7]\b — our G1 decision numbers",
+                  r"T2-0[1-9] — our inventory ids"):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _labels(entry)
+        assert "!!" in buf.getvalue(), f"{entry!r} was dropped without the loud warning"
 
 
 def test_an_unbackticked_id_shaped_line_is_reported_not_silently_dropped(capsys=None):
@@ -357,9 +376,10 @@ def test_a_truncated_pending_is_still_reported_not_swallowed():
 def test_report_lines_renders_a_truncated_row_without_crashing():
     """Runs the CONSUMER, not just the row walkers that feed it.
 
-    `verify_posted.py` prints exactly what `report_lines` returns, so this covers all of its
-    report loops at once. A test that calls `describe_row` directly leaves those loops
-    unexercised, which is how re-open-coding `r[1]` at a print site went unnoticed twice.
+    `verify_posted.py`'s pre-scan report prints exactly what `report_lines` returns, so this
+    covers those loops. It does NOT cover the FAIL-branch summary further down, which is open-coded
+    over `unknown` and `malformed` — that one renders through `describe_row` and is safe, but this
+    test does not exercise it, and saying otherwise is the overstatement the last round made.
     """
     from posting_lib import report_lines
     rows = [["PENDING"], ["FAIL", "R5-07", "2659", "reply", "-", "-", "t"]]

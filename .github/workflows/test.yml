@@ -142,8 +142,10 @@ jobs:
           npm run typecheck
 
       # The repo's agent tooling under .claude/ is Python and shell, which no other job covers.
-      # Uses the runner's preinstalled python3 — the scripts are stdlib-only and parse under 3.9,
-      # so this needs no setup-python step, no config file and no new dependency.
+      # Three tools: ruff (fetched by pipx, version-pinned, rules in ruff.toml) lints the Python;
+      # the runner's preinstalled python3 runs the stdlib-only test suite; bash -n covers the
+      # shell scripts. pipx resolves ruff from PyPI on each run rather than from a cache — that
+      # is the trade for not adding a setup action, and a PyPI outage reddens the step.
       - name: Agent script checks
         if: ${{ matrix.os == env.OS_LINUX }}
         run: |

@@ -73,12 +73,17 @@ def internal_labels(packet):
             # version), and a warning that fires on prose the classifier deliberately skips
             # stops being the one loud line in the output.
             head = entry.split(" ")[0]
-            # An id-shaped head carries a digit and nothing but id characters. Every id this
-            # vocabulary uses is numbered (2659-38, R5-01, T2-01, D1). A purely alphabetic
-            # codename is indistinguishable from an ordinary capitalised word ("NOTE"), so it
-            # does not warn - it is still listed in the quiet skipped line above.
-            id_shaped = re.fullmatch(r"[\w:-]+", head) and re.search(r"\d", head)
-            if re.match(r"^\S+\s+(—|-)\s+", entry) and id_shaped:
+            # An id-shaped head is one carrying a digit. Deliberately permissive about the
+            # rest: a narrower test excluded regex characters, which silently dropped the
+            # warning for the exact shapes the docs use as examples - `2659-\d\d`,
+            # `\bD[1-7]\b`, `T2-0[1-9]` - while still firing on a bare literal id, so the
+            # test asserting the bare case passed with the regression beside it.
+            #
+            # The cost is a false positive on a prose opener whose first word carries a digit
+            # ("P2 — writes this file.", a bare date). That is the right way round: the warning
+            # only ever says "this was NOT transcribed", and a spurious one is cheap next to a
+            # documented entry shape vanishing into the quiet skipped list.
+            if re.match(r"^\S+\s+(—|-)\s+", entry) and re.search(r"\d", head):
                 suspicious.append(entry[:70])
             continue
         token = m.group(1).strip()

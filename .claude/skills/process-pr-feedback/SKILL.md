@@ -1062,7 +1062,8 @@ Both halves are governed by what G2 approved. If approval covered the replies bu
 post and stop — but re-check the bodies first. Posting without pushing leaves the remote at the
 pre-restack commit, so every SHA a reply cites from the local restacked tip names an object that
 is not on GitHub, which is the **unpushed**-SHA failure `references/reply-conventions.md` rule 5
-forbids (distinct from a SHA a later restack orphans, which still resolves). New inline comments still anchor correctly (the anchor and its `commit_id` both come
+forbids (distinct from a SHA a later restack orphans, which still resolves). New inline comments
+still anchor correctly (the anchor and its `commit_id` both come
 from the remote head), but they anchor at code that does not yet contain the fix the reply
 describes. Either hold those replies until the push is approved, or reword them to state what
 landed locally without citing an unpushed SHA.
