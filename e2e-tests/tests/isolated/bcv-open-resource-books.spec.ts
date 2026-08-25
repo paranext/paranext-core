@@ -1,11 +1,10 @@
-import fs from 'fs';
-import path from 'path';
 import { expect, test } from '../../fixtures/isolated.fixture';
 import { preConfigureSettings, waitForAppReady } from '../../fixtures/helpers';
 import { openScriptureEditorForProject } from '../../fixtures/scripture-editor-helpers';
 import {
   cleanupCommentTestProject,
   createCommentTestProject,
+  removeRevelationFromProject,
   type CommentTestProject,
 } from '../../fixtures/comment-test-helpers';
 
@@ -45,49 +44,6 @@ const GENESIS_ITEM = bookItemSelector('Genesis', 'GEN');
 
 /** Class the control applies to a book that is reachable but not in the navigation target project. */
 const DIMMED_BOOK_CLASS_PATTERN = /tw:text-muted-foreground\/50/;
-
-/**
- * Revelation's USFM file in the bundled WEB project. The `67` prefix is the USFM file-naming
- * number, which is one higher than the canon book number for every New Testament book.
- */
-const REVELATION_SFM_FILE_NAME = '67REVengWEBUS.SFM';
-
-/**
- * Index of Revelation in `Settings.xml`'s `BooksPresent` bit string. The string is indexed by canon
- * book number minus one, and Revelation is canon book 66.
- */
-const REVELATION_BOOKS_PRESENT_INDEX = 65;
-
-/**
- * Removes Revelation from a project copy: both the book file and the `BooksPresent` bit, because
- * `platformScripture.booksPresent` is served from `ScrText.BooksPresentSet`, which reconciles the
- * two. Throws if either input does not look the way this expects, so a changed WEB asset surfaces
- * as a setup failure instead of a test that quietly stops discriminating.
- */
-function removeRevelationFromProject(project: CommentTestProject): void {
-  const sfmPath = path.join(project.projectDir, REVELATION_SFM_FILE_NAME);
-  if (!fs.existsSync(sfmPath))
-    throw new Error(`Expected ${REVELATION_SFM_FILE_NAME} in the WEB project copy at ${sfmPath}`);
-  fs.rmSync(sfmPath);
-
-  const settingsPath = path.join(project.projectDir, 'Settings.xml');
-  const settingsXml = fs.readFileSync(settingsPath, 'utf8');
-  const booksPresentMatch = settingsXml.match(/<BooksPresent>([01]+)<\/BooksPresent>/);
-  const booksPresent = booksPresentMatch?.[1];
-  if (!booksPresentMatch || !booksPresent)
-    throw new Error(`No <BooksPresent> bit string found in ${settingsPath}`);
-  if (booksPresent[REVELATION_BOOKS_PRESENT_INDEX] !== '1')
-    throw new Error(
-      `Expected Revelation to be present at index ${REVELATION_BOOKS_PRESENT_INDEX} of BooksPresent, got "${booksPresent}"`,
-    );
-
-  const withoutRevelation = `${booksPresent.slice(0, REVELATION_BOOKS_PRESENT_INDEX)}0${booksPresent.slice(REVELATION_BOOKS_PRESENT_INDEX + 1)}`;
-  fs.writeFileSync(
-    settingsPath,
-    settingsXml.replace(booksPresentMatch[0], `<BooksPresent>${withoutRevelation}</BooksPresent>`),
-    'utf8',
-  );
-}
 
 // DEV_NOISY=false keeps the test-only extensions and their tabs out of the layout, so the only
 // Scripture editors open are the two this test opens.
