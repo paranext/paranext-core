@@ -1,6 +1,15 @@
 #!/bin/bash
 # Quick app refresh - stops, rebuilds, and restarts Platform.Bible with CDP enabled
 # This is a FAST operation (~30s). Agents should run this freely without optimization concerns.
+#
+# Environment passed through to the app:
+#   DEV_NOISY=true    Load the test extensions (helloRock3 etc.) and their default layout. Off by
+#                     default, which is what interactive development wants — but e2e suites that
+#                     drive those extensions (e2e-tests/tests/isolated/overlay/) need it on, and
+#                     they fail in confusing ways without it:
+#                       DEV_NOISY=true ./.erb/scripts/refresh.sh
+#   Any other variable the app reads is likewise inherited; this script does not sanitize the
+#   environment.
 set -e
 cd "$(dirname "$0")/../.."
 
