@@ -19,7 +19,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%tab_aria_tab%': 'tab',
-      '%tab_contextMenu_floatTab%': 'Float Tab',
+      '%tab_contextMenu_floatPanel%': 'Float Tab',
     },
   ]),
   useData: vi.fn(() => ({

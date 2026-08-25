@@ -15,7 +15,7 @@ vi.mock('@renderer/hooks/papi-hooks', () => ({
   useLocalizedStrings: vi.fn(() => [
     {
       '%tab_aria_tab%': 'tab',
-      '%tab_contextMenu_floatTab%': 'Float Tab',
+      '%tab_contextMenu_floatPanel%': 'Float Tab',
       '%tab_contextMenu_moveTabToNewWindow%': 'Move tab to new window',
     },
   ]),
@@ -163,7 +163,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     await waitFor(() =>
       expect(notificationService.send).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%tab_contextMenu_moveTabToNewWindow_failed%',
+          message: '%tab_contextMenu_moveTab_failed%',
           severity: 'error',
         }),
       ),
@@ -186,7 +186,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     await waitFor(() =>
       expect(notificationService.send).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%tab_contextMenu_moveTabToNewWindow_failed%',
+          message: '%tab_contextMenu_moveTab_failed%',
           severity: 'error',
         }),
       ),
@@ -211,7 +211,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     await waitFor(() =>
       expect(notificationService.send).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%tab_contextMenu_moveTabToNewWindow_failedReopenedElsewhere%',
+          message: '%tab_contextMenu_moveTab_failedReopenedElsewhere%',
           severity: 'error',
         }),
       ),
@@ -236,7 +236,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     await waitFor(() =>
       expect(notificationService.send).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%tab_contextMenu_moveTabToNewWindow_failedNotReopened%',
+          message: '%tab_contextMenu_moveTab_failedNotReopened%',
           severity: 'error',
         }),
       ),
@@ -262,7 +262,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     await waitFor(() =>
       expect(notificationService.send).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%tab_contextMenu_moveTabToNewWindow_failedMayHaveClosed%',
+          message: '%tab_contextMenu_moveTab_failedMayHaveClosed%',
           severity: 'error',
         }),
       ),
@@ -288,7 +288,7 @@ describe('PlatformTabTitle "Move tab to new window" context-menu item', () => {
     await waitFor(() =>
       expect(notificationService.send).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: '%tab_contextMenu_moveTabToNewWindow_failedNotReopened%',
+          message: '%tab_contextMenu_moveTab_failedNotReopened%',
           severity: 'error',
         }),
       ),
