@@ -17,6 +17,7 @@ import {
 import {
   CommandPaletteItem,
   OverlayEntry,
+  PaletteSearchField,
 } from '@renderer/services/overlays/overlay.service-model';
 import { filterPaletteItems } from '@renderer/services/overlays/overlay-palette-filter.util';
 import {
@@ -112,6 +113,13 @@ export type OverlayCommandPalettePresentationalProps = {
    * on by nothing here, so the session's own semantics run whether it or this palette holds focus.
    */
   keyForwarding?: PaletteKeyForwarding;
+  /**
+   * Which item text fields the filter matches against — see
+   * {@link CommandPaletteRequest.searchFields}. Threaded into the same {@link filterPaletteItems}
+   * call the host uses for commit resolution, so what is on screen and what a commit selects agree
+   * on which fields match.
+   */
+  searchFields?: readonly PaletteSearchField[];
 };
 
 // ── Constants ──
@@ -317,6 +325,7 @@ export function OverlayCommandPalettePresentational({
   onFilterTextChange,
   onSelectedIndexChange,
   keyForwarding,
+  searchFields,
 }: OverlayCommandPalettePresentationalProps) {
   // React's useRef requires null as the initial value for DOM refs
   // eslint-disable-next-line no-null/no-null
@@ -413,8 +422,13 @@ export function OverlayCommandPalettePresentational({
   // filterText; active by the input mirror (which external filterText updates overwrite).
   const filteredItems = useMemo(
     () =>
-      filterPaletteItems(items, passive ? filterText : inputValue, passive ? 'passive' : 'active'),
-    [items, passive, filterText, inputValue],
+      filterPaletteItems(
+        items,
+        passive ? filterText : inputValue,
+        passive ? 'passive' : 'active',
+        searchFields,
+      ),
+    [items, passive, filterText, inputValue, searchFields],
   );
   // Highlight resolution, identical in both modes: clamp the driving index to the (possibly
   // just-narrowed) filtered list, exactly as the store clamps on every update, so neither mode can
@@ -747,20 +761,30 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
     (filterText: string) => {
       updateCommandPaletteState(overlay.id, {
         filterText,
-        itemCount: filterPaletteItems(overlay.items, filterText, filterMode).length,
+        itemCount: filterPaletteItems(
+          overlay.items,
+          filterText,
+          filterMode,
+          overlay.request.searchFields,
+        ).length,
       });
     },
-    [overlay.id, overlay.items, filterMode],
+    [overlay.id, overlay.items, filterMode, overlay.request.searchFields],
   );
 
   const handleSelectedIndexChange = useCallback(
     (selectedIndex: number) => {
       updateCommandPaletteState(overlay.id, {
         selectedIndex,
-        itemCount: filterPaletteItems(overlay.items, overlay.filterText, filterMode).length,
+        itemCount: filterPaletteItems(
+          overlay.items,
+          overlay.filterText,
+          filterMode,
+          overlay.request.searchFields,
+        ).length,
       });
     },
-    [overlay.id, overlay.items, overlay.filterText, filterMode],
+    [overlay.id, overlay.items, overlay.filterText, filterMode, overlay.request.searchFields],
   );
 
   return (
@@ -785,6 +809,7 @@ export function OverlayCommandPalette({ overlay }: OverlayCommandPaletteProps) {
       onFilterTextChange={handleFilterTextChange}
       onSelectedIndexChange={handleSelectedIndexChange}
       keyForwarding={overlay.request.keyForwarding}
+      searchFields={overlay.request.searchFields}
     />
   );
 }

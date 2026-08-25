@@ -60,16 +60,21 @@ describe('filterPaletteItems', () => {
       expect(filterPaletteItems(items, '+f', 'passive').map((i) => i.id)).toEqual(['ft', 'fig']);
     });
 
-    it('should not match description or badge text', () => {
+    it('should not match description or badge text, whatever searchFields says', () => {
       const describedItems: CommandPaletteItem[] = [
         { id: 'ft', label: 'ft', description: 'Footnote text', badge: 'end' },
       ];
+      // Default searchFields: passive stays label-prefix-only (PT9 marker-dropdown semantics)
       expect(filterPaletteItems(describedItems, 'Foot', 'passive')).toEqual([]);
       expect(filterPaletteItems(describedItems, 'end', 'passive')).toEqual([]);
+      // An explicit searchFields does not change the passive contract either
+      expect(
+        filterPaletteItems(describedItems, 'Foot', 'passive', ['label', 'description', 'badge']),
+      ).toEqual([]);
     });
   });
 
-  describe('active mode (label-only containment, exact match first)', () => {
+  describe('active mode (containment over searchFields, label matches ranked exact-first)', () => {
     const items: CommandPaletteItem[] = [
       { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
       { id: 'q1', label: 'Poetry Line 1 (q1)', description: 'First level poetry' },
@@ -86,12 +91,24 @@ describe('filterPaletteItems', () => {
       expect(filterPaletteItems(items, 'Line 1', 'active').map((i) => i.id)).toEqual(['q1']);
     });
 
-    it('should rank an exact label match first, never buried under containment matches', () => {
+    it('should by default match description text (general command palettes search all visible text)', () => {
+      // The default restores the pre-label-only union (label + description + badge): generic
+      // command palettes rely on finding a command by a word from its description.
+      expect(filterPaletteItems(items, 'Normal', 'active').map((i) => i.id)).toEqual(['p']);
+      expect(filterPaletteItems(items, 'first level', 'active').map((i) => i.id)).toEqual(['q1']);
+    });
+
+    it('should by default match badge text', () => {
+      expect(filterPaletteItems(items, 'deprecated', 'active').map((i) => i.id)).toEqual(['pro']);
+    });
+
+    it('should rank an exact label match first — description hits follow, never bury it', () => {
       // The measured symptom: a marker palette's typed `w` ranked the exact `w` 9th because
-      // description hits (qt, addpn, ...) filled the list in context order. Label-only matching
-      // + exact-first ranking — identical to the editor palette — is the fix.
+      // description hits (qt, addpn, ...) filled the list in context order. Even under the
+      // default field union, LABEL matches come first (exact-first, the editor palette's
+      // ranking); items matching only by description trail in their original order.
       const markerItems: CommandPaletteItem[] = [
-        { id: 'qt', label: 'qt', description: 'Quoted text - Old Testament quotations' },
+        { id: 'qt', label: 'qt', description: 'Quotation with words of the prophets' },
         { id: 'wj', label: 'wj', description: 'Words of Jesus' },
         { id: 'w', label: 'w', description: 'A wordlist entry' },
         { id: 'wa', label: 'wa', description: 'Aramaic word' },
@@ -100,19 +117,26 @@ describe('filterPaletteItems', () => {
         'w',
         'wj',
         'wa',
+        // description-only hit ("words of the prophets") trails the label matches
+        'qt',
       ]);
     });
 
-    it('should NOT match description text (label-only, editor-palette parity)', () => {
-      // Owner-directed change: description containment is what buried exact marker matches (the
-      // "w ranked 9th" report). Matching is label-only now, identical to the editor palette's
-      // filterAndRankItems over the marker name.
-      expect(filterPaletteItems(items, 'Normal', 'active')).toEqual([]);
-      expect(filterPaletteItems(items, 'first level', 'active')).toEqual([]);
-    });
-
-    it('should NOT match badge text (label-only, editor-palette parity)', () => {
-      expect(filterPaletteItems(items, 'deprecated', 'active')).toEqual([]);
+    it("should pin label-only matching for searchFields: ['label'] (marker palettes)", () => {
+      // Marker palettes opt into label-only so an exact typed marker can never be buried under —
+      // or even followed by — items whose descriptions contain the typed text.
+      expect(filterPaletteItems(items, 'Normal', 'active', ['label'])).toEqual([]);
+      expect(filterPaletteItems(items, 'first level', 'active', ['label'])).toEqual([]);
+      expect(filterPaletteItems(items, 'deprecated', 'active', ['label'])).toEqual([]);
+      const markerItems: CommandPaletteItem[] = [
+        { id: 'qt', label: 'qt', description: 'Quotation with words of the prophets' },
+        { id: 'wj', label: 'wj', description: 'Words of Jesus' },
+        { id: 'w', label: 'w', description: 'A wordlist entry' },
+      ];
+      expect(filterPaletteItems(markerItems, 'w', 'active', ['label']).map((i) => i.id)).toEqual([
+        'w',
+        'wj',
+      ]);
     });
 
     it('should require containment, not fuzzy subsequence matching', () => {

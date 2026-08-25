@@ -16,16 +16,23 @@
  * package.
  */
 
-import { isBlockMarker, isLocalizeKey, LanguageStrings, usfmMarkers } from 'platform-bible-utils';
+import {
+  isBlockMarker,
+  isLocalizeKey,
+  LanguageStrings,
+  usfmMarkers,
+  type PaletteItem,
+} from 'platform-bible-utils';
 import type { MutableRefObject } from 'react';
 import {
   defaultStyleInfo,
   getMarkerMenuItems,
   type EditorRef,
+  type MarkerMenuItem as EditorMarkerMenuItem,
   type SelectionRange,
   type StyleInfo,
 } from '@eten-tech-foundation/platform-editor';
-import type { MarkerMenuItem } from 'platform-bible-react';
+import { markerMenuItemToPaletteItem, type MarkerMenuItem } from 'platform-bible-react';
 import type { ScriptureEditorViewType } from 'platform-scripture-editor';
 import { WRITE_GUARD_RELEASE_AFTER_MS } from './write-in-flight-guard.util';
 
@@ -265,4 +272,36 @@ export function resolveEditingSessionActivity({
     isActive: hasPaletteSession || (isNoteSessionOpen && !isNoteSessionStale),
     isNoteSessionStale,
   };
+}
+
+/**
+ * Maps marker-menu items to command-palette items with every `LocalizeKey` field already resolved
+ * to its final display string, so the request handed to `papi.overlays.showCommandPalette` carries
+ * NO unresolved keys.
+ *
+ * That pre-resolution is what keeps the palette open synchronously: the overlay host awaits the
+ * localization service for any request whose items still contain `LocalizeKey` text, and keystrokes
+ * typed during that await are dropped — marker palettes are opened MID-typing (the `\` trigger), so
+ * that window is user-visible. `markerMenuItemToPaletteItem` (platform-bible-react) emits exactly
+ * one `LocalizeKey` field, the close-tag badge; this wrapper resolves it (and any future
+ * key-bearing field) from the `localizedStrings` the web view already holds. An unknown key keeps
+ * its raw key text — the same fallback the overlay host and the palette component apply — so
+ * display is unchanged, just resolved earlier.
+ */
+export function markerMenuItemsToResolvedPaletteItems(
+  items: readonly EditorMarkerMenuItem[],
+  localizedStrings: LanguageStrings,
+): PaletteItem[] {
+  const resolve = (value: string): string =>
+    isLocalizeKey(value) ? (localizedStrings[value] ?? value) : value;
+  return items.map((item) => {
+    const paletteItem = markerMenuItemToPaletteItem(item);
+    return {
+      ...paletteItem,
+      label: resolve(paletteItem.label),
+      description:
+        paletteItem.description === undefined ? undefined : resolve(paletteItem.description),
+      badge: paletteItem.badge === undefined ? undefined : resolve(paletteItem.badge),
+    };
+  });
 }

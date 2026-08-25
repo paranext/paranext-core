@@ -113,10 +113,29 @@ export type CommandPaletteItem = PaletteItem & {
   group?: string;
 };
 
+/**
+ * A {@link CommandPaletteItem} text field that palette filtering may match against. See
+ * {@link CommandPaletteRequest.searchFields}.
+ */
+export type PaletteSearchField = 'label' | 'description' | 'badge';
+
 /** Request payload for {@link IOverlayService.showCommandPalette}. */
 export interface CommandPaletteRequest {
   /** The selectable items to display */
   items: CommandPaletteItem[];
+  /**
+   * Which item text fields the filter text matches against. Defaults to `['label', 'description',
+   * 'badge']` — every text field the palette displays — which suits general command palettes (a
+   * command is often found by a word from its description). Palettes whose label is the whole
+   * identity opt into `['label']`: for marker palettes the label IS the marker code, and
+   * description matching buried exact typed markers under description hits.
+   *
+   * Matching and ranking: label matches come first, ranked exact-first (see
+   * {@link PaletteFilterMode}); items matching only on the OTHER searched fields follow in their
+   * original order. Passive palettes prefix-match the label only regardless of this option (PT9
+   * marker-dropdown semantics — the passive flavor exists for in-document marker typing).
+   */
+  searchFields?: readonly PaletteSearchField[];
   /**
    * Anchor position in pixels relative to the requesting WebView's iframe origin. The palette is
    * positioned adjacent to this point. If omitted, centers in the viewport.
@@ -176,19 +195,22 @@ export interface CommandPaletteRequest {
  * How `filterPaletteItems` (overlay-palette-filter.util.ts) matches filter text against items — one
  * mode per palette flavor:
  *
- * - `'passive'` — case-insensitive PREFIX match on `label` only. Passive palettes show bare marker
- *   codes (`f`, `fe`, `fig`) filtered by the marker prefix the user has typed into the document,
- *   mirroring PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in
- *   the filter text is stripped before matching, so `"+w"` matches the same items as `"w"`.
- * - `'active'` — case-insensitive CONTAINMENT match, still on `label` only. Descriptions and badges
- *   never match, so an exact marker match cannot be buried under items whose descriptions happen to
- *   contain the typed letter.
+ * - `'passive'` — case-insensitive PREFIX match on `label` only, whatever
+ *   {@link CommandPaletteRequest.searchFields} says. Passive palettes show bare marker codes (`f`,
+ *   `fe`, `fig`) filtered by the marker prefix the user has typed into the document, mirroring
+ *   PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in the filter
+ *   text is stripped before matching, so `"+w"` matches the same items as `"w"`.
+ * - `'active'` — case-insensitive CONTAINMENT match over the request's
+ *   {@link CommandPaletteRequest.searchFields} (default: label, description, and badge). Label
+ *   matches rank first, exact-first, so an exact marker match cannot be buried under items whose
+ *   descriptions happen to contain the typed letter; marker palettes additionally opt into
+ *   label-only matching.
  *
- * Both modes rank matches exact-first — see `filterPaletteItems`.
+ * Label matches rank exact-first in both modes — see `filterPaletteItems`.
  *
  * Re-exported from `platform-bible-react`, the home of the `filterAndRankPaletteItems` that
- * `filterPaletteItems` delegates to, so the mode this service accepts and the mode that function
- * implements cannot drift apart.
+ * `filterPaletteItems` delegates label matching to, so the mode this service accepts and the mode
+ * that function implements cannot drift apart.
  */
 export type { PaletteFilterMode };
 

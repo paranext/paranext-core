@@ -58,7 +58,6 @@ import {
   getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyEvent,
-  markerMenuItemToPaletteItem,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
@@ -151,6 +150,7 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
   generateInlineMarkerMenuListItems,
+  markerMenuItemsToResolvedPaletteItems,
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
@@ -221,6 +221,9 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   ...Object.entries(usfmMarkers)
     .map((item) => item[1].description)
     .filter((item) => !!item),
+  // Resolved into the marker-palette items at construction time (the close-tag badge) so palette
+  // requests carry no unresolved keys — see `markerMenuItemsToResolvedPaletteItems`.
+  '%markerMenu_endTag_label%',
   '%paragraphMenu_misc_markerDescription%',
   '%versionHistoryCommit_beforeInsertFootnote%',
   '%versionHistoryCommit_beforeInsertCrossReference%',
@@ -1746,13 +1749,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       papi.overlays
         .showCommandPalette(
           {
-            items: items.map(markerMenuItemToPaletteItem),
+            // Every LocalizeKey already resolved: a request with no unresolved item text skips the
+            // overlay host's localization await, so the palette can receive forwarded keys the
+            // moment it is requested — marker palettes open MID-typing, and keystrokes during
+            // that await were dropped.
+            items: markerMenuItemsToResolvedPaletteItems(items, localizedStrings),
             anchor: ctx.anchorRect,
             passive,
+            // Marker palettes filter on the label ONLY (the label IS the marker): an exact typed
+            // marker must never be buried under items whose descriptions contain the typed text.
+            searchFields: ['label'],
             // The same key `MarkerMenu` puts in its own search field, so the two ways of picking a
             // marker read identically instead of this one falling back to a generic "Search...".
             // Passed as the key, not a resolved string: the overlay renders in the renderer frame
-            // and localizes it there. Inert for the passive flavor, which has no search field.
+            // and localizes it there (the palette-open path only awaits localization for ITEM
+            // text, so a key here does not reintroduce the dropped-keystroke window). Inert for
+            // the passive flavor, which has no search field.
             placeholder: '%markerMenu_searchPlaceholder%',
             // The session owns these keys wherever focus ends up — without this, a palette that
             // wins the focus race takes the session's keys with it and none of the ratified
@@ -1806,7 +1818,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           if (!passive) editorRef.current?.focus();
         });
     },
-    [webViewId],
+    [webViewId, localizedStrings],
   );
 
   /**
@@ -1887,9 +1899,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       papi.overlays
         .showCommandPalette(
           {
-            items: items.map(markerMenuItemToPaletteItem),
+            // Pre-resolved for the same reason as the `\` palette above: no localization await,
+            // so the palette is drivable the moment it is requested.
+            items: markerMenuItemsToResolvedPaletteItems(items, localizedStrings),
             anchor: ctx.anchorRect,
             passive: false,
+            // Marker palette: label-only matching, same as the `\` palette above.
+            searchFields: ['label'],
           },
           webViewId,
         )
@@ -1909,7 +1925,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           editorRef.current?.focus();
         });
     },
-    [webViewId],
+    [webViewId, localizedStrings],
   );
 
   /**
@@ -1929,7 +1945,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // selection-`\` palette then opened focus-stealing with no forwarding, and the Space/`*`/
       // `\`/Backspace commit semantics never ran.
       show: (items, anchor, passive, keyForwarding) =>
-        papi.overlays.showCommandPalette({ items, anchor, passive, keyForwarding }, webViewId),
+        papi.overlays.showCommandPalette(
+          // Marker palette: label-only matching (the label IS the marker), same as the main
+          // editor's `\`/Enter palettes above.
+          { items, anchor, passive, keyForwarding, searchFields: ['label'] },
+          webViewId,
+        ),
       update: (update) => papi.overlays.updateCommandPalette(webViewId, update),
       commit: () => papi.overlays.commitCommandPaletteSelection(webViewId),
       dismiss: () => papi.overlays.dismissCommandPalette(webViewId),

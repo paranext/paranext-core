@@ -341,9 +341,7 @@ describe('OverlayCommandPalettePresentational', () => {
       expect(screen.queryByText('Close Tab')).not.toBeInTheDocument();
     });
 
-    it('does NOT match description text — label-only, editor-palette parity (owner-directed)', () => {
-      // Description containment is what buried exact marker matches (the "typed w, exact match
-      // ranked 9th" report): matching runs on labels only now, identical to the editor palette.
+    it('matches description text by default (general palettes search all visible text)', () => {
       const items: CommandPaletteItem[] = [
         { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
         { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
@@ -354,6 +352,30 @@ describe('OverlayCommandPalettePresentational', () => {
           items={items}
           onSelect={vi.fn()}
           onDismiss={vi.fn()}
+        />,
+      );
+
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Normal' } });
+
+      expect(screen.getByText('Paragraph (p)')).toBeInTheDocument();
+      expect(screen.queryByText('Margin (m)')).not.toBeInTheDocument();
+    });
+
+    it("does NOT match description text under searchFields: ['label'] — marker-palette opt-in", () => {
+      // Description containment is what buried exact marker matches (the "typed w, exact match
+      // ranked 9th" report): marker palettes opt into label-only matching, identical to the
+      // editor palette; the rendered list must honor the same opt-in the host commit uses.
+      const items: CommandPaletteItem[] = [
+        { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
+        { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
+      ];
+
+      render(
+        <OverlayCommandPalettePresentational
+          items={items}
+          onSelect={vi.fn()}
+          onDismiss={vi.fn()}
+          searchFields={['label']}
         />,
       );
 

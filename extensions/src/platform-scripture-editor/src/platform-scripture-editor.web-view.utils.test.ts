@@ -8,8 +8,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { MutableRefObject } from 'react';
 import type { EditorRef, SelectionRange, StyleInfo } from '@eten-tech-foundation/platform-editor';
+import { isLocalizeKey } from 'platform-bible-utils';
 import {
   generateInlineMarkerMenuListItems,
+  markerMenuItemsToResolvedPaletteItems,
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
@@ -520,5 +522,54 @@ describe('resolveEditingSessionActivity', () => {
       nowMs: NOW,
     });
     expect(activity).toEqual({ isActive: true, isNoteSessionStale: true });
+  });
+});
+
+describe('markerMenuItemsToResolvedPaletteItems', () => {
+  it('resolves the close-tag badge LocalizeKey to its localized string', () => {
+    const items = markerMenuItemsToResolvedPaletteItems(
+      [{ marker: 'wj*', kind: 'closeTag', isBasic: true }],
+      { '%markerMenu_endTag_label%': 'End' },
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0].badge).toBe('End');
+  });
+
+  it('produces items with NO unresolved LocalizeKey text, so the palette request skips the localization await', () => {
+    const items = markerMenuItemsToResolvedPaletteItems(
+      [
+        { marker: 'wj*', kind: 'closeTag', isBasic: true },
+        { marker: 'nd', kind: 'character', isBasic: false, description: 'Name of God' },
+        { marker: 'f', kind: 'note', isBasic: true, description: 'Footnote' },
+      ],
+      { '%markerMenu_endTag_label%': 'End' },
+    );
+    const textValues = items.flatMap((item) =>
+      [item.label, item.description, item.badge].filter((value) => value !== undefined),
+    );
+    expect(textValues.length).toBeGreaterThan(0);
+    expect(textValues.filter((value) => isLocalizeKey(value))).toEqual([]);
+  });
+
+  it('keeps raw key text for a key the strings map does not know (same fallback the overlay host applies)', () => {
+    const items = markerMenuItemsToResolvedPaletteItems(
+      [{ marker: 'wj*', kind: 'closeTag', isBasic: true }],
+      {},
+    );
+    expect(items[0].badge).toBe('%markerMenu_endTag_label%');
+  });
+
+  it('passes plain-string fields through unchanged', () => {
+    const items = markerMenuItemsToResolvedPaletteItems(
+      [{ marker: 'nd', kind: 'character', isBasic: false, description: 'Name of God' }],
+      { '%markerMenu_endTag_label%': 'End' },
+    );
+    expect(items[0]).toMatchObject({
+      id: 'nd',
+      label: 'nd',
+      description: 'Name of God',
+      muted: true,
+    });
+    expect(items[0].badge).toBeUndefined();
   });
 });

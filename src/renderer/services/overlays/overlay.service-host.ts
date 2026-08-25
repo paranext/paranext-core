@@ -863,6 +863,7 @@ async function updateCommandPalette(
     entry.items,
     nextFilterText,
     entry.request.passive ? 'passive' : 'active',
+    entry.request.searchFields,
   );
   updateCommandPaletteState(entry.id, {
     filterText: nextFilterText,
@@ -902,6 +903,7 @@ async function commitCommandPaletteSelection(webViewId: string): Promise<void> {
     entry.items,
     entry.filterText,
     entry.request.passive ? 'passive' : 'active',
+    entry.request.searchFields,
   );
   if (filtered.length === 0) {
     logger.warn(

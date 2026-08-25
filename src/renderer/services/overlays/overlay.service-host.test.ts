@@ -746,7 +746,7 @@ describe('overlay.service-host', () => {
       expect(await promise).toBe('fig');
     });
 
-    it('should commit an ACTIVE palette via case-insensitive LABEL containment only (no description matching)', async () => {
+    it('should commit an ACTIVE palette via case-insensitive LABEL containment, ranked ahead of description hits', async () => {
       const activeRequest: CommandPaletteRequest = {
         items: [
           { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
@@ -755,8 +755,7 @@ describe('overlay.service-host', () => {
       };
       const promise = overlayService.showCommandPalette(activeRequest, 'test-webview');
 
-      // Label containment, different case — matches 'Paragraph (p)' only (description matching
-      // was retired, owner-directed: it buried exact marker matches under description hits).
+      // Label containment, different case — matches 'Paragraph (p)' only.
       await overlayService.updateCommandPalette('test-webview', { filterText: 'paragraph (p' });
       await overlayService.commitCommandPaletteSelection('test-webview');
 
@@ -764,17 +763,38 @@ describe('overlay.service-host', () => {
       expect(await promise).toBe('p');
     });
 
-    it('should drop the commit and keep the palette open when the filter only matches descriptions', async () => {
+    it('should commit a description match by default (general command palettes search all visible text)', async () => {
       const activeRequest: CommandPaletteRequest = {
         items: [
           { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
           { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
         ],
       };
+      const promise = overlayService.showCommandPalette(activeRequest, 'test-webview');
+
+      // 'normal' appears only in a DESCRIPTION — with no searchFields declared, the default field
+      // union (label + description + badge) finds it, so the commit resolves.
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'normal' });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+
+      expect(getOverlays()).toHaveLength(0);
+      expect(await promise).toBe('p');
+    });
+
+    it("should drop the commit and keep a searchFields: ['label'] palette open when the filter only matches descriptions", async () => {
+      const activeRequest: CommandPaletteRequest = {
+        items: [
+          { id: 'm', label: 'Margin (m)', description: 'Flush-left paragraph' },
+          { id: 'p', label: 'Paragraph (p)', description: 'Normal paragraph' },
+        ],
+        // The marker-palette opt-in: the label IS the identity, so description hits must not
+        // resolve a commit.
+        searchFields: ['label'],
+      };
       overlayService.showCommandPalette(activeRequest, 'test-webview');
 
       // 'normal' appears only in a DESCRIPTION — label-only matching sees zero matches, and a
-      // zero-match commit is dropped with the palette left open (P9 zero-match semantics).
+      // zero-match commit is dropped with the palette left open (PT9 zero-match semantics).
       await overlayService.updateCommandPalette('test-webview', { filterText: 'normal' });
       await overlayService.commitCommandPaletteSelection('test-webview');
 
@@ -1105,6 +1125,7 @@ describe('overlay.service-host', () => {
     });
 
     it('should pass plain-string items through untouched and create the overlay synchronously', () => {
+      vi.mocked(localizationService.getLocalizedStrings).mockClear();
       const request: CommandPaletteRequest = {
         items: [
           { id: 'ft', label: 'Footnote' },
@@ -1117,6 +1138,15 @@ describe('overlay.service-host', () => {
       // palette is immediately drivable (forwarded keystrokes can arrive right after show)
       const overlays = getOverlays();
       expect(overlays).toHaveLength(1);
+      // A fully-resolved request never consults the localization service for ITEM text — the
+      // await that would introduce is the window where keystrokes typed right after show were
+      // dropped. (The fire-and-forget screen-reader announcement is the one legitimate lookup on
+      // this path, and it never gates overlay creation.)
+      vi.mocked(localizationService.getLocalizedStrings).mock.calls.forEach(
+        ([{ localizeKeys }]) => {
+          expect(localizeKeys).toEqual(['%overlay_aria_commandPaletteOpened%']);
+        },
+      );
       // Only commandPalette overlays exist in this test
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const palette = overlays[0] as Extract<(typeof overlays)[0], { type: 'commandPalette' }>;

@@ -9957,10 +9957,28 @@ declare module 'renderer/services/overlays/overlay.service-model' {
     /** Optional group key for visual sectioning with group headers */
     group?: string;
   };
+  /**
+   * A {@link CommandPaletteItem} text field that palette filtering may match against. See
+   * {@link CommandPaletteRequest.searchFields}.
+   */
+  export type PaletteSearchField = 'label' | 'description' | 'badge';
   /** Request payload for {@link IOverlayService.showCommandPalette}. */
   export interface CommandPaletteRequest {
     /** The selectable items to display */
     items: CommandPaletteItem[];
+    /**
+     * Which item text fields the filter text matches against. Defaults to `['label', 'description',
+     * 'badge']` — every text field the palette displays — which suits general command palettes (a
+     * command is often found by a word from its description). Palettes whose label is the whole
+     * identity opt into `['label']`: for marker palettes the label IS the marker code, and
+     * description matching buried exact typed markers under description hits.
+     *
+     * Matching and ranking: label matches come first, ranked exact-first (see
+     * {@link PaletteFilterMode}); items matching only on the OTHER searched fields follow in their
+     * original order. Passive palettes prefix-match the label only regardless of this option (PT9
+     * marker-dropdown semantics — the passive flavor exists for in-document marker typing).
+     */
+    searchFields?: readonly PaletteSearchField[];
     /**
      * Anchor position in pixels relative to the requesting WebView's iframe origin. The palette is
      * positioned adjacent to this point. If omitted, centers in the viewport.
@@ -10024,19 +10042,22 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    * How `filterPaletteItems` (overlay-palette-filter.util.ts) matches filter text against items — one
    * mode per palette flavor:
    *
-   * - `'passive'` — case-insensitive PREFIX match on `label` only. Passive palettes show bare marker
-   *   codes (`f`, `fe`, `fig`) filtered by the marker prefix the user has typed into the document,
-   *   mirroring PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in
-   *   the filter text is stripped before matching, so `"+w"` matches the same items as `"w"`.
-   * - `'active'` — case-insensitive CONTAINMENT match, still on `label` only. Descriptions and badges
-   *   never match, so an exact marker match cannot be buried under items whose descriptions happen to
-   *   contain the typed letter.
+   * - `'passive'` — case-insensitive PREFIX match on `label` only, whatever
+   *   {@link CommandPaletteRequest.searchFields} says. Passive palettes show bare marker codes (`f`,
+   *   `fe`, `fig`) filtered by the marker prefix the user has typed into the document, mirroring
+   *   PT9's marker dropdown (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in the filter
+   *   text is stripped before matching, so `"+w"` matches the same items as `"w"`.
+   * - `'active'` — case-insensitive CONTAINMENT match over the request's
+   *   {@link CommandPaletteRequest.searchFields} (default: label, description, and badge). Label
+   *   matches rank first, exact-first, so an exact marker match cannot be buried under items whose
+   *   descriptions happen to contain the typed letter; marker palettes additionally opt into
+   *   label-only matching.
    *
-   * Both modes rank matches exact-first — see `filterPaletteItems`.
+   * Label matches rank exact-first in both modes — see `filterPaletteItems`.
    *
    * Re-exported from `platform-bible-react`, the home of the `filterAndRankPaletteItems` that
-   * `filterPaletteItems` delegates to, so the mode this service accepts and the mode that function
-   * implements cannot drift apart.
+   * `filterPaletteItems` delegates label matching to, so the mode this service accepts and the mode
+   * that function implements cannot drift apart.
    */
   export type { PaletteFilterMode };
   /**
@@ -12205,24 +12226,43 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    * consumer of the contract's types.
    */
   import { type PaletteFilterMode } from 'platform-bible-react';
-  import type { CommandPaletteItem } from 'renderer/services/overlays/overlay.service-model';
+  import type {
+    CommandPaletteItem,
+    PaletteSearchField,
+  } from 'renderer/services/overlays/overlay.service-model';
   /**
-   * Filters command palette items by matching `filterText` against each item's `label`, with
-   * per-{@link PaletteFilterMode} semantics (passive prefix-matches with a leading `+` stripped from
-   * the filter first, active containment-matches), and ranks the matches EXACT-FIRST: exact label
-   * match, then prefix matches, then containment matches, ties keeping their original context order.
+   * The fields searched when a request declares no `searchFields` of its own: every text field a
+   * palette item displays. This is the historical behavior general command palettes rely on (a
+   * command is often found by a word from its description); palettes whose label is the whole
+   * identity (marker palettes) opt into `['label']` per request instead.
+   */
+  export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[];
+  /**
+   * Filters command palette items by matching `filterText` against each item's text, with
+   * per-{@link PaletteFilterMode} semantics and the request's `searchFields` deciding which fields
+   * participate:
+   *
+   * - `'passive'` prefix-matches the `label` only (with a leading `+` stripped from the filter first),
+   *   whatever `searchFields` says — PT9 marker-dropdown semantics for in-document marker typing.
+   * - `'active'` containment-matches over `searchFields` (default
+   *   {@link DEFAULT_PALETTE_SEARCH_FIELDS}): label matches come FIRST, ranked exact-first (exact
+   *   label match, then prefix matches, then containment matches, ties keeping their original context
+   *   order); items matching only on the other searched fields follow in their original order, so an
+   *   exact label match can never be buried under description/badge hits.
+   *
    * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
    * never be case-picky). Returns `items` unchanged when `filterText` is empty or undefined.
    *
-   * Delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the editor package's
-   * own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette — so the host
-   * palette and the editor palette can never disagree about ordering, and the marker-palette keydown
-   * table's zero-match detection counts with the same semantics.
+   * Label matching delegates to `filterAndRankPaletteItems` (platform-bible-react), which wraps the
+   * editor package's own `filterAndRankItems` — the exact ranking behind the in-editor `\` palette —
+   * so the host palette and the editor palette can never disagree about label ordering, and the
+   * marker-palette keydown table's zero-match detection counts with the same semantics.
    *
    * This is the single filtering implementation shared by the host-side
    * `commitCommandPaletteSelection` (to resolve the highlighted item) and the command palette
    * component (to render the filtered list) — using one function for both keeps host-side selection
-   * and on-screen rendering from disagreeing about which items are visible.
+   * and on-screen rendering from disagreeing about which items are visible. Callers thread the
+   * request's `searchFields` through so those sites also agree on WHICH fields match.
    *
    * @remarks
    * Matching operates directly on the strings in `items` with no localization of its own. Both
@@ -12232,12 +12272,16 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    * @param items The full, unfiltered list of command palette items
    * @param filterText The current filter text, or undefined/empty for no filtering
    * @param mode Which palette flavor's matching semantics to apply
-   * @returns The items matching the filter text under the given mode, ranked exact-first
+   * @param searchFields Which item text fields to match against; defaults to
+   *   {@link DEFAULT_PALETTE_SEARCH_FIELDS}
+   * @returns The items matching the filter text under the given mode, label matches ranked
+   *   exact-first ahead of other-field matches
    */
   export function filterPaletteItems(
     items: CommandPaletteItem[],
     filterText: string | undefined,
     mode: PaletteFilterMode,
+    searchFields?: readonly PaletteSearchField[],
   ): CommandPaletteItem[];
 }
 declare module 'renderer/services/overlays/overlay-menu-converter' {
