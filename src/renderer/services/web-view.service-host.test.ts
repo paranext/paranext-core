@@ -573,6 +573,51 @@ describe('handleSwitchToSimpleMode', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('timed out'));
   }, 6000);
 
+  it('fast path: resolves via a real matching webview event, not just the timeout', async () => {
+    // Regression/coverage for the load-bearing assumption `runProjectBoundSimpleSwitch` depends
+    // on: a tab's `id` IS its web view id, so a real webview-open event for that id actually
+    // reaches and resolves the tabs-resolved tracker before its timeout. The two tests above only
+    // ever use ids that never receive a matching event (proving the timeout paths); this one
+    // proves the event path that makes the fast path actually fast in production.
+    const host = await importHost();
+    const fakeDockLayout = createFakeDockLayout();
+    host.registerDockLayout(fakeDockLayout);
+    const { setLastOpenedProject } = await import('@renderer/services/last-opened-project-cache');
+    setLastOpenedProject({ id: 'proj-visible-tab-resolves' });
+    const VISIBLE_TAB_ID = 'visible-tab-real-event';
+    visibleSimpleLayoutTabIdsMock.push(VISIBLE_TAB_ID);
+
+    const switchPromise = host.handleSwitchToSimpleMode();
+    let settled = false;
+    switchPromise
+      .then(() => {
+        settled = true;
+        return undefined;
+      })
+      .catch(() => {
+        settled = true;
+      });
+    // The tracker only subscribes after several awaits inside the switch (the paint wait, the
+    // supplement-settings read), so the exact moment it starts listening isn't observable from
+    // here. Re-emit on each retry instead of guessing the timing - duplicate events for the same
+    // id are idempotent (see the tracker's own doc comment), so repeating this is safe. If event
+    // delivery were broken, `settled` would never flip and this throws via `vi.waitFor`'s own
+    // (much shorter than the tracker's 3s) timeout, distinguishing failure from a false pass.
+    await vi.waitFor(() => {
+      emitNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW, {
+        webView: {
+          id: VISIBLE_TAB_ID,
+          webViewType: SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+          projectId: 'proj-visible-tab-resolves',
+        },
+      });
+      if (!settled) throw new Error('switch has not resolved yet');
+    });
+
+    const { logger } = await import('@shared/services/logger.service');
+    expect(logger.warn).not.toHaveBeenCalledWith(expect.stringContaining('timed out'));
+  });
+
   it('slow path: resolves the most recent project and seeds the cache', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
@@ -652,15 +697,28 @@ describe('handleSwitchToSimpleMode', () => {
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Timed out'));
   }, 5000);
 
-  it('fallback: with no cache and no resolvable recent project, skips the project-bound layout entirely', async () => {
+  it('fallback: with no cache and no resolvable recent project, skips the project-bound layout entirely and loads the bare layout instead', async () => {
     const host = await importHost();
     const fakeDockLayout = createFakeDockLayout();
     host.registerDockLayout(fakeDockLayout);
+    // `registerDockLayout`'s own fire-and-forget initial `loadLayout()` call would otherwise
+    // dirty this spy before `handleSwitchToSimpleMode` even runs, making "loadLayout was called"
+    // trivially true regardless of what the fallback path does. Wait for it to land, then clear,
+    // so the assertions below prove this test's own fallback load, not the unrelated initial one.
+    await vi.waitFor(() => expect(fakeDockLayout.loadLayout).toHaveBeenCalled());
+    vi.mocked(fakeDockLayout.loadLayout).mockClear();
     dataProviderGetMock.mockResolvedValue(undefined);
 
     await host.handleSwitchToSimpleMode();
 
     expect(buildSimpleLayoutForProjectMock).not.toHaveBeenCalled();
+    // The negative above would also hold if the switch did nothing at all - assert the positive
+    // too: the fallback path actually loads the bare layout rather than leaving the dock untouched.
+    expect(fakeDockLayout.loadLayout).toHaveBeenCalled();
+    const { lastCall } = vi.mocked(fakeDockLayout.loadLayout).mock;
+    expect(lastCall?.[0]).not.toEqual(
+      expect.objectContaining({ builtForProjectId: expect.anything() }),
+    );
   });
 
   it('slow path: warns distinctly when the recents provider itself fails, not just on a timeout', async () => {
