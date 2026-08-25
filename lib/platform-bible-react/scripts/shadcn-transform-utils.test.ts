@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   applyTransformationsToFiles,
+  ensureReactImport,
   parseComponentDeclaredVars,
   parseProtectedVarsFromIndexCss,
   removeAtThemeBlocks,
@@ -123,6 +124,50 @@ describe('rewriteCssVarReferences', () => {
 
 // ---- New tests for applyTransformationsToFiles ----
 
+describe('ensureReactImport', () => {
+  it('inserts a React default import when the content references React and imports none', () => {
+    const input =
+      "import { cva } from 'class-variance-authority';\n\nfunction Empty(props: React.ComponentProps<'div'>) {}\n";
+    expect(ensureReactImport(input)).toBe(
+      "import React from 'react';\nimport { cva } from 'class-variance-authority';\n\nfunction Empty(props: React.ComponentProps<'div'>) {}\n",
+    );
+  });
+
+  it('inserts the import at the top when the content has no imports at all', () => {
+    const input = "type Props = React.ComponentProps<'div'>;\n";
+    expect(ensureReactImport(input)).toBe(
+      "import React from 'react';\ntype Props = React.ComponentProps<'div'>;\n",
+    );
+  });
+
+  it('leaves content alone when a React default import is already present', () => {
+    const input = "import React from 'react';\nconst x: React.ReactNode = null;\n";
+    expect(ensureReactImport(input)).toBe(input);
+  });
+
+  it('leaves content alone when a React namespace import is already present', () => {
+    const input = "import * as React from 'react';\nconst x: React.ReactNode = null;\n";
+    expect(ensureReactImport(input)).toBe(input);
+  });
+
+  it('leaves content alone when a combined React import is already present', () => {
+    const input = "import React, { useState } from 'react';\nconst x: React.ReactNode = null;\n";
+    expect(ensureReactImport(input)).toBe(input);
+  });
+
+  it('leaves content alone when nothing references the React namespace', () => {
+    const input = "import { cn } from '@/utils/shadcn-ui/utils';\nconst x = cn('a');\n";
+    expect(ensureReactImport(input)).toBe(input);
+  });
+
+  it('inserts the import when only named bindings are imported from react', () => {
+    const input = "import { useState } from 'react';\nconst x: React.ReactNode = null;\n";
+    expect(ensureReactImport(input)).toBe(
+      "import React from 'react';\nimport { useState } from 'react';\nconst x: React.ReactNode = null;\n",
+    );
+  });
+});
+
 describe('applyTransformationsToFiles', () => {
   let tmpDir: string;
 
@@ -150,6 +195,17 @@ describe('applyTransformationsToFiles', () => {
     expect(result.errors).toHaveLength(0);
     expect(result.modifiedCount).toBe(1);
     expect(fsReadFileSync(file, 'utf8')).toBe("import React from 'react';\nconst x = 1;\n");
+  });
+
+  it('inserts a missing React default import for a file that references React', () => {
+    const file = join(tmpDir, 'test.tsx');
+    fsWriteFileSync(file, "import { cn } from './utils';\nconst x: React.ReactNode = null;\n");
+    const result = applyTransformationsToFiles([file], new Set());
+    expect(result.errors).toHaveLength(0);
+    expect(result.modifiedCount).toBe(1);
+    expect(fsReadFileSync(file, 'utf8')).toBe(
+      "import React from 'react';\nimport { cn } from './utils';\nconst x: React.ReactNode = null;\n",
+    );
   });
 
   it('converts rtl:tw: to tw:rtl:', () => {

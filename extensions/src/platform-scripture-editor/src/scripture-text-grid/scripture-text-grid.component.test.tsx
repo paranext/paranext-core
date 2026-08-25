@@ -122,6 +122,22 @@ describe('ScriptureTextGrid', () => {
       'עברית, MAT 5:3',
     ]);
   });
+  it('announces verse 1 at a verse-0 reference, matching what the cells render (PT-3133)', () => {
+    render(
+      <ScriptureTextGrid
+        resources={resources}
+        scrRef={{ ...scrRef, verseNum: 0 }}
+        setScrRef={setScrRef}
+        cellAccessibleNameTemplate="{resourceName}, {reference}"
+      />,
+    );
+    // Cells fall forward to verse 1, so announcing "5:0" would contradict the rendered verse number.
+    expect(screen.getAllByRole('listitem').map((c) => c.getAttribute('aria-label'))).toEqual([
+      'WEB, MAT 5:1',
+      'KJV, MAT 5:1',
+      'עברית, MAT 5:1',
+    ]);
+  });
   it('feeds the same scrRef to every cell', () => {
     render(<ScriptureTextGrid resources={resources} scrRef={scrRef} setScrRef={setScrRef} />);
     expect(screen.getByText('WEB@3')).toBeInTheDocument();

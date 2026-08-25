@@ -963,15 +963,25 @@ declare module 'platform-scripture' {
 
   // #region Scripture Edit Permissions Types
 
-  /** Provides permission checks for editing Scripture content (intentionally empty) */
-  export type ScriptureEditPermissionsProjectInterfaceDataTypes = {};
+  /** Provides permission checks for editing Scripture content */
+  export type ScriptureEditPermissionsProjectInterfaceDataTypes = {
+    /**
+     * Read-only. Whether the current user can edit Scripture content on this project (i.e., has a
+     * role other than Observer or None). Refreshes automatically after every Send/Receive sync.
+     * Subscribe to react to changes; this data type cannot be set.
+     */
+    CanUserEditScripture: DataProviderDataType<undefined, boolean, never>;
+  };
 
   /** Provides permission checks for editing Scripture content on this project */
   export type IScriptureEditPermissionsProjectDataProvider =
     IProjectDataProvider<ScriptureEditPermissionsProjectInterfaceDataTypes> & {
       /**
-       * Determines whether the current user can edit Scripture content on this project (i.e., has a
-       * role other than Observer or None).
+       * One-shot, non-reactive check for whether the current user can edit Scripture content on
+       * this project. Prefer subscribing to the `CanUserEditScripture` data type
+       * (`getCanUserEditScripture`/`subscribeCanUserEditScripture`) for anything that should react
+       * to a role change landing via sync; this method is for one-off checks (e.g. picking a
+       * default project) that don't need a live subscription.
        *
        * @returns `true` if the user can edit Scripture content, `false` if they are Observer-only
        *   or if permissions cannot be determined.
@@ -1585,6 +1595,19 @@ declare module 'platform-scripture' {
     scope: 'all' | 'book';
     /** If scope is 'book', then this is the ID of the book whose results are now invalid */
     bookId?: string;
+  };
+
+  /**
+   * Payload for the `platformScripture.focusFindSearch` network event, which asks one already-open
+   * Find web view to put the caret in its search box.
+   *
+   * Addressed rather than broadcast: more than one Find web view can be open at once in Power mode,
+   * and taking the caret away from the user's current position is only correct for the panel the
+   * invoke actually resolved. Every other Find web view ignores the event.
+   */
+  export type FindFocusSearchEvent = {
+    /** Id of the Find web view whose search box should take focus. */
+    webViewId: string;
   };
 
   /**
@@ -2363,6 +2386,7 @@ declare module 'papi-shared-types' {
     CheckDetails,
     CheckCreatorFunction,
     CheckResultsInvalidated,
+    FindFocusSearchEvent,
     ResourceReferenceList,
     IRecentlyOpenedProjectsService,
     IFindHistoryDataProvider,
@@ -2495,21 +2519,63 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     /**
-     * Open the Find / Replace UI for a project. Reuses an existing find web view rather than
-     * opening a new one when possible, reloading it if the resolved project differs from the
-     * existing web view's project, and brings the web view to front.
+     * Open the Find / Replace UI for a project, bringing it to the front. Reuses an existing find
+     * web view rather than opening a new one when possible, reloading it when the resolved project,
+     * the project's editability, or the triggering editor differs from what the existing web view
+     * holds, or when there is text to pre-fill.
      *
-     * @param editorWebViewId Id of the triggering editor's web view — not a project id. The project
-     *   and scroll group for the Find / Replace UI are resolved from it internally via
-     *   `papi.webViews.getOpenWebViewDefinition`.
+     * When no project can be resolved — no editor web view id was passed, or the one passed holds
+     * no project — this opens nothing and creates nothing, but still brings an already-open find
+     * web view to the front unchanged, so that in Simple mode (where Find is a permanent tab)
+     * invoking Find always lands on that tab rather than appearing to do nothing.
+     *
+     * Every path that fronts a find web view also puts the caret in its search box, so an invoke
+     * leaves the user able to type immediately. Bringing a tab to the front focuses the web view's
+     * iframe but lands on its `body`, which is why this is done explicitly rather than left to the
+     * docking framework.
+     *
+     * @param editorWebViewId Id of the triggering editor's web view — not a project id. The
+     *   project, scroll group, and editability for the Find / Replace UI are resolved from it
+     *   internally via `papi.webViews.getOpenWebViewDefinition`.
      * @param selectedText Text to pre-fill the search box with (e.g. the editor's current selection
      *   when invoked via Ctrl+F). Pass `undefined` to open without a pre-filled search.
-     * @returns Id of the find web view (existing or newly opened), or `undefined` if no editor web
-     *   view id was provided or the web view has no project (nothing is opened in that case).
+     * @param sourceProjectId Explicit project/resource id to search, overriding the project
+     *   resolved from `editorWebViewId`. Passed by resource panels (model text, Bible texts,
+     *   commentaries) whose displayed resource differs from the tab's own project.
+     * @returns Id of the find web view — newly opened, reloaded, or (when no project could be
+     *   resolved) the existing one brought to front — or `undefined` when no project could be
+     *   resolved and no find web view was open.
      */
     'platformScripture.openFind': (
       editorWebViewId?: string | undefined,
       selectedText?: string | undefined,
+      sourceProjectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    /**
+     * Re-point an already-open Find / Replace web view at a different project, so it searches that
+     * project instead of the one it was opened for. Clears any pre-filled search text restrictions
+     * tied to the previous project's results by rebuilding the web view.
+     *
+     * Creates nothing: when no Find web view is open this does nothing and returns `undefined`. Use
+     * `platformScripture.openFind` to open one.
+     *
+     * Editability is not a parameter here: the Find web view reads `platform.isEditable` for
+     * whichever project it is bound to and withholds Replace / Replace All on its own. Re-pointing
+     * at a published resource therefore leaves the text searchable with the replace controls
+     * withheld, rather than offering replacements the project would reject.
+     *
+     * @param projectId Id of the project the Find / Replace UI should search from now on.
+     * @param editorWebViewId Id of the editor web view Find should act on: the one it focuses, and
+     *   whose text it selects and highlights when a result is clicked. Pass this whenever the
+     *   re-point accompanies a new or replaced editor, since a replaced editor tab mints a new id
+     *   and Find silently skips those actions once the id it holds no longer resolves. Omit to
+     *   leave the id Find already holds untouched.
+     * @returns Id of the re-pointed find web view, or `undefined` if no find web view was open.
+     */
+    'platformScripture.updateFindProject': (
+      projectId: string,
+      editorWebViewId?: string | undefined,
     ) => Promise<string | undefined>;
 
     /**
@@ -2548,12 +2614,15 @@ declare module 'papi-shared-types' {
      *   `papi.webViews.getOpenWebViewDefinition` — if it resolves to a web view with a project, the
      *   dialog opens pre-targeted at that project; otherwise the value itself is treated as the
      *   project id. Omit to open the dialog with the project picker visible.
+     * @param intent Pass `'createMissingBook'` to open the dialog on its Create-books section with
+     *   the calling editor's current book pre-selected, instead of the default view.
      * @returns Id of the Manage Books web view — the existing one if reused, or a newly opened one
      *   — or `undefined` if the provider did not create one.
      * @experimental
      */
     'platformScripture.openManageBooks': (
-      webViewIdOrProjectId?: string | undefined,
+      webViewIdOrProjectId?: string,
+      intent?: 'createMissingBook',
     ) => Promise<string | undefined>;
 
     /**
@@ -2724,5 +2793,16 @@ declare module 'papi-shared-types' {
      * @experimental
      */
     'platformScripture.openMarkersChecklistSettings': undefined;
+    /**
+     * Emitted by `platformScripture.openFind` to ask one already-open Find web view to put the
+     * caret in its search box, so that invoking Find lands the user somewhere they can type. Only
+     * the Find web view whose id the payload names reacts.
+     *
+     * Not emitted when the invoke rebuilds the Find web view; that path carries the request in the
+     * web view's own state instead, because an event would race the new web view's subscription.
+     *
+     * @experimental
+     */
+    'platformScripture.focusFindSearch': FindFocusSearchEvent;
   }
 }

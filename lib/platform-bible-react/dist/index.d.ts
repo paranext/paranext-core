@@ -1995,19 +1995,9 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * This component is designed to be used in the window title bar of an electron application.
  *
- * Two `data-testid` hooks are part of this contract as well, relied on by end-to-end tests outside
- * this package: `toolbar-content-row` (the row that clips when contents do not fit) and
- * `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking change.
- *
- * @example
- *
- * Hide a child once the usable bar width drops below 52rem:
- *
- * ```tsx
- * <Toolbar {...props}>
- *   <Badge className="tw:@max-[52rem]/toolbar:hidden">{version}</Badge>
- * </Toolbar>;
- * ```
+ * Two `data-testid` hooks are relied on by end-to-end tests outside this package, so they are part
+ * of this component's contract: `toolbar-content-row` (the row that clips when contents do not fit)
+ * and `toolbar-content-area` (the area receiving `children`). Renaming either is a breaking change.
  *
  * @param {ToolbarProps} props - The props for the component.
  */
@@ -2551,6 +2541,10 @@ export type EmptyStateProps = {
  * A presentational empty-state message for a list, grid, or panel that currently has nothing to
  * show. Renders the localized `message` in a `role="status"` region so screen readers announce it
  * when the surrounding content becomes empty. Layout is left to the caller via `className`.
+ *
+ * For a richer zero-state that needs media, a heading, or an action, use the `Empty` composition
+ * (`Empty`, `EmptyHeader`, `EmptyMedia`, `EmptyTitle`, `EmptyDescription`, `EmptyContent`)
+ * instead.
  */
 export declare function EmptyState({ message, id, className }: EmptyStateProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
@@ -3043,6 +3037,60 @@ export declare function DropdownMenuSubTrigger({ className, inset, children, ...
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuSubContent({ className, children, ...props }: DropdownMenuSubContentProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * The Empty component displays a centered zero-state message — typically a title, description, and
+ * an optional action — for when there is no content to show. The component is built and styled by
+ * Shadcn UI.
+ *
+ * Use this composition when the zero-state needs media, a heading, or an action. For a plain
+ * one-line "nothing to show" message inside a list, grid, or panel, use {@link EmptyState} instead —
+ * it takes a single localized `message` and renders it in a `role="status"` region. These
+ * primitives set no ARIA role, so pass `role="status"` yourself before the zero-state appears.
+ *
+ * Two things the caller controls: the root sets `border-dashed` but no border width —
+ * Platform.Bible's scoped Tailwind Preflight zeroes borders, so pass `className="tw:border"` to
+ * draw the dashed outline — and {@link EmptyTitle} renders a `<div>`, not a heading, so nest your
+ * own heading element inside it when the zero-state is a region's entire content.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function Empty({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the Empty component's icon/media, title, and description. The component is built
+ * and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyHeader({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+declare const emptyMediaVariants: (props?: ({
+	variant?: "default" | "icon" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Container for the Empty component's icon or other media, e.g. an illustration or avatar. The
+ * component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyMedia({ className, variant, ...props }: React$1.ComponentProps<"div"> & VariantProps<typeof emptyMediaVariants>): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component's title text. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyTitle({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Empty component's description text. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyDescription({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
+ * Container for the Empty component's main content, typically actions such as buttons. The
+ * component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radix/empty}
+ */
+export declare function EmptyContent({ className, ...props }: React$1.ComponentProps<"div">): import("react/jsx-runtime").JSX.Element;
+/**
  * Input component displays a form input field or a component that looks like an input field. Built
  * and styled with Shadcn UI.
  *
@@ -3433,6 +3481,12 @@ export declare function ToggleGroupItem({ className, children, variant, size, ..
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
  *
+ * Delivery is guarded per subscription: once the subscription is superseded (the `event` or
+ * `eventHandler` reference changed) or the component unmounts, an emission that still arrives from
+ * it — e.g. an emitter walking a snapshot of its handler list — is ignored rather than delivered to
+ * `eventHandler`. An unsubscriber that throws during cleanup is logged rather than thrown, since
+ * nothing can catch an error thrown from an effect cleanup.
+ *
  * @param event The event to subscribe to.
  *
  *   - If event is a `PlatformEvent`, that event will be used
@@ -3449,6 +3503,14 @@ export declare const useEvent: <T>(event: PlatformEvent<T> | undefined, eventHan
  * Adds an event handler to an asynchronously subscribing/unsubscribing event so the event handler
  * runs when the event is emitted. Use `papi.network.getNetworkEvent` to use a networked event with
  * this hook.
+ *
+ * Delivery is guarded per subscription: once a subscription is superseded (the `event` or
+ * `eventHandler` reference changed) or the component unmounts, an emission that still arrives from
+ * it — e.g. one already in flight over the network — is ignored rather than delivered to
+ * `eventHandler`. If the subscribe promise resolves only after the subscription was already
+ * superseded, the resolved unsubscriber is invoked immediately so the subscription does not leak.
+ * Subscribe and unsubscribe failures are logged rather than thrown — neither has a caller that
+ * could catch them. A failed unsubscribe is logged, not retried.
  *
  * @param event The asynchronously (un)subscribing event to subscribe to.
  *
@@ -3549,6 +3611,34 @@ export declare function useExtraValidMarkers(usj: Usj | undefined): string[];
  * @returns `true` when the web view is rendered (visible), `false` while its tab is hidden
  */
 export declare const useViewVisibility: () => boolean;
+/**
+ * Defers work that should not happen while this web view's tab is inactive, and runs it once when
+ * the tab is shown again.
+ *
+ * Rc-dock keeps an inactive tab's pane mounted under `display: none`: the iframe keeps running, so
+ * React effects, subscriptions, and reactions to shared state all continue firing at full rate for
+ * a view nobody can see. For cheap, data-driven work that is fine, and this hook would only add
+ * latency. It is for the two cases where it is not fine: work whose result depends on layout, which
+ * a `display: none` pane does not have, and work expensive enough that spending it on a hidden view
+ * is a waste — a per-reference search or fetch that a permanently-mounted panel would otherwise
+ * launch on every reference change through the whole session.
+ *
+ * Requests made while hidden collapse into a single pending catch-up rather than queueing, which
+ * suits the shape of work this is for: "bring the view up to date with the current state", where
+ * only the last request's result would have survived anyway. Work whose every invocation matters
+ * (appending to a log, counting events) needs a queue, not this hook.
+ *
+ * Pair it with `useViewVisibility`, which reports whether the calling view is rendered. See
+ * `.claude/rules/cross-view-sync-hidden-views.md` for the wider rule this implements.
+ *
+ * @param isViewVisible Whether the web view is currently rendered — pass `useViewVisibility()`.
+ * @param run The work to perform. Always invoked at its latest identity, so callers need not
+ *   memoize it.
+ * @returns A stable callback that runs `run` now when visible, or arms the catch-up when hidden.
+ *   Its identity never changes, so callers can safely list it in effect dependencies without the
+ *   effect re-firing on every visibility flip.
+ */
+export declare function useRunWhenVisible(isViewVisible: boolean, run: () => void): () => void;
 /** The four tab-icon variants, as static asset URLs (e.g. `papi-extension://` URLs). */
 export type TabIconUrls = {
 	/** Dark theme (any selection). */
