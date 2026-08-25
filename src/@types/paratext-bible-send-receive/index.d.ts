@@ -4,8 +4,7 @@
 // and its bundled extensions can talk to Send/Receive with real types.
 //
 // Derived from
-// https://github.com/paranext/paratext-bible-internal-extensions/blob/b50ebb16505f8069fd517af39dea29de7d7569bb/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
-// TODO(PT-4233): Update the SHA above to the companion PR's merged commit once it lands.
+// https://github.com/paranext/paratext-bible-internal-extensions/blob/0d01d96b71f43af0e94749e5092728831072dba4/src/paratext-bible-send-receive/src/types/paratext-bible-send-receive.d.ts
 // When the Send/Receive contract changes, re-sync the parts declared here from that file.
 // NOTE: Preserve any types that exist here but not in the upstream file (structural refinements
 // added in core before the upstream adopts them). Do not replace the module block wholesale.
@@ -13,11 +12,14 @@
 // declaration here (extra doc detail or type refinements) to a poorer upstream one — merge the
 // two, and upstream the improvement instead.
 // DELIBERATE DIVERGENCE — do not "restore" these to match upstream on a re-sync. Each is optional
-// here and required upstream because a shipped Paratext 10 Studio build answers without it; making
-// it required again turns each consumer's `?? fallback` into a lint-flagged unnecessary coalesce,
-// and removing that coalesce crashes an older Studio build on the missing value:
-//   * `SyncState.syncingProjectIds`
-//   * `SyncActivitySnapshot.projectIds`
+// here because a shipped Paratext 10 Studio build answers without it; making it required turns each
+// consumer's `?? fallback` into a lint-flagged unnecessary coalesce, and removing that coalesce
+// crashes an older Studio build on the missing value:
+//   * `SyncState.syncingProjectIds` — required in the upstream file above.
+//   * `SyncActivitySnapshot.projectIds` — no upstream declaration to diverge from yet; this whole
+//     type, `getSyncActivity` and `onSyncActivityChanged` are declared here ahead of the Paratext 10
+//     Studio patch that raises the signal, the same way the write-gate seam
+//     (`getAutoSyncBlocking` / `onSyncWriteLockChanged`) is.
 //
 // Why this lives in `src/@types` and not under an extension's `src/types`:
 //
