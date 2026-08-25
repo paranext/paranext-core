@@ -132,7 +132,15 @@ function PopoverContent({
         sideOffset={sideOffset}
         className={cn(
           // CUSTOM: Added pr-twp to apply Platform.Bible's Tailwind CSS scope isolation; removed tw:z-50 to use shared constant below
-          'pr-twp tw:flex tw:w-72 tw:origin-(--radix-popover-content-transform-origin) tw:flex-col tw:gap-2.5 tw:rounded-lg tw:bg-popover tw:p-2.5 tw:text-sm tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:outline-hidden tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95',
+          // CUSTOM: Added tw:max-h-(--radix-popover-content-available-height) and tw:overflow-y-auto
+          // to cap the popover at the space Radix actually has on whichever side it lands and to
+          // scroll whatever does not fit. A trigger sitting low in its container makes Radix flip
+          // the popover upward, and uncapped content then overruns the top of the web view's
+          // iframe, which clips it away with no way to scroll to it. Defaulting both together keeps
+          // every call site capped without each one having to remember the pair, and the cap from
+          // silently clipping content that has no scroller of its own. Call sites can still
+          // override either class.
+          'pr-twp tw:flex tw:max-h-(--radix-popover-content-available-height) tw:w-72 tw:overflow-y-auto tw:origin-(--radix-popover-content-transform-origin) tw:flex-col tw:gap-2.5 tw:rounded-lg tw:bg-popover tw:p-2.5 tw:text-sm tw:text-popover-foreground tw:shadow-md tw:ring-1 tw:ring-foreground/10 tw:outline-hidden tw:duration-100 tw:data-[side=bottom]:slide-in-from-top-2 tw:data-[side=left]:slide-in-from-right-2 tw:data-[side=right]:slide-in-from-left-2 tw:data-[side=top]:slide-in-from-bottom-2 tw:data-open:animate-in tw:data-open:fade-in-0 tw:data-open:zoom-in-95 tw:data-closed:animate-out tw:data-closed:fade-out-0 tw:data-closed:zoom-out-95',
           className,
         )}
         // CUSTOM: z-index uses shared constant instead of default tw:z-50, ensuring popover renders above the dock

@@ -1101,14 +1101,11 @@ export function Find({
                 <ChevronDown className="tw:h-3 tw:w-3 tw:shrink-0 tw:text-muted-foreground" />
               </Button>
             </PopoverTrigger>
-            {/* Height-capped and scrollable for the same reason as the books picker inside it: in a
-                narrow panel this popover can flip above its trigger, and anything taller than the
-                space there is clipped off past the top of the web view's iframe. overflow-x-hidden
-                keeps the y-axis scroller from computing the x-axis to `auto` and adding a second,
-                horizontal scrollbar. */}
+            {/* overflow-x-hidden keeps PopoverContent's default y-axis scroller from computing the
+                x-axis to `auto` and adding a second, horizontal scrollbar. */}
             <PopoverContent
               align="start"
-              className="tw:max-h-(--radix-popover-content-available-height) tw:w-auto tw:overflow-x-hidden tw:overflow-y-auto tw:p-3"
+              className="tw:w-auto tw:overflow-x-hidden tw:p-3"
               collisionPadding={8}
             >
               <ScopeSelector
