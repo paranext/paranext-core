@@ -188,23 +188,46 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
   });
 
   describe('note caller sequences', () => {
-    it('gives cross-references their own caller counter so they do not consume footnote letters', () => {
+    it('keys the caller counters on the editor-stamped data-note-kind (PT9 Standard.xslt classification)', () => {
       expect(scss).toMatch(/@counter-style cross-ref-callers/);
       expect(scss).toMatch(/counter-reset: caller crossref;/);
+      // The editor stamps data-note-kind="footnote"/"crossref" on every .note per PT9's
+      // Standard.xslt rule (marker starts with `f`/`ef` → footnote; EVERYTHING else — x, ex, and
+      // custom note markers — crossref), so the counters key on the stamp instead of enumerating
+      // marker classes here.
       expect(scss).toMatch(
-        /\.note\.usfm_x \.immutable-note-caller\[data-caller='\+'\],\n\.note\.usfm_ex \.immutable-note-caller\[data-caller='\+'\] \{\s*counter-increment: crossref;\s*\}/,
+        /\.note\[data-note-kind='footnote'\] \.immutable-note-caller\[data-caller='\+'\] \{\s*counter-increment: caller;\s*\}/,
       );
-      expect(scss).toMatch(/counter\(crossref, cross-ref-callers\)/);
-      // The footnote half is the FLOOR, not an enumerated f/fe/ef/efe list: a custom.sty note
-      // marker (`\zfn` → class "note usfm_zfn") matched neither family list and rendered an
-      // invisible, unclickable caller — no counter, empty ::before. Everything that is not a
-      // cross-reference increments `caller`.
       expect(scss).toMatch(
-        /\.note:not\(\.usfm_x\):not\(\.usfm_ex\) \.immutable-note-caller\[data-caller='\+'\]/,
+        /\.note\.collapsed\[data-note-kind='footnote'\]\s+\.immutable-note-caller\[data-caller='\+'\]\s+> button::before \{\s*content: counter\(caller, note-callers\);\s*\}/,
       );
-      expect(scss).toMatch(/counter\(caller, note-callers\)/);
-      // The generic rules the scoped versions replaced must not return — a re-synced copy that
-      // re-adds them alongside the scoped ones would double-increment the footnote counter.
+      expect(scss).toMatch(
+        /\.note\[data-note-kind='crossref'\] \.immutable-note-caller\[data-caller='\+'\] \{\s*counter-increment: crossref;\s*\}/,
+      );
+      expect(scss).toMatch(
+        /\.note\.collapsed\[data-note-kind='crossref'\]\s+\.immutable-note-caller\[data-caller='\+'\]\s+> button::before \{\s*content: counter\(crossref, cross-ref-callers\);\s*\}/,
+      );
+    });
+
+    it('keeps transitional fallback rules for editor builds that predate the data-note-kind stamping', () => {
+      // An unstamped .note (older editor build) falls back to the footnote sequence so its caller
+      // stays visible (a counter and a non-empty ::before) instead of disappearing.
+      expect(scss).toMatch(
+        /\.note:not\(\[data-note-kind\]\) \.immutable-note-caller\[data-caller='\+'\] \{\s*counter-increment: caller;\s*\}/,
+      );
+      expect(scss).toMatch(
+        /\.note\.collapsed:not\(\[data-note-kind\]\)\s+\.immutable-note-caller\[data-caller='\+'\]\s+> button::before \{\s*content: counter\(caller, note-callers\);\s*\}/,
+      );
+    });
+
+    it('does not resurrect the retired marker-class or generic caller rules', () => {
+      // The marker-class enumeration (`.usfm_x`/`.usfm_ex`) misclassified custom note markers —
+      // PT9 gives every non-f/ef note style the cross-reference sequence — and must not return.
+      expect(scss).not.toMatch(/\.note\.usfm_x \.immutable-note-caller/);
+      expect(scss).not.toMatch(/\.note\.usfm_ex \.immutable-note-caller/);
+      expect(scss).not.toMatch(/\.note:not\(\.usfm_x\)/);
+      // Nor the fully generic rules the scoped versions replaced long ago — a re-synced copy that
+      // re-adds them alongside the kind-keyed ones would double-increment the footnote counter.
       expect(scss).not.toMatch(/^\.immutable-note-caller\[data-caller='\+'\] \{/m);
       expect(scss).not.toMatch(
         /^\.note\.collapsed \.immutable-note-caller\[data-caller='\+'\] > button::before/m,

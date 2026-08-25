@@ -2314,7 +2314,7 @@
     'w' 'x' 'y' 'z';
 }
 
-/* Cross-reference (x, ex) auto-generated callers use their own sequence, so they don't also
+/* Cross-reference-kind notes' auto-generated callers use their own sequence, so they don't also
    increment the footnote counter above. */
 @counter-style cross-ref-callers {
   system: cyclic;
@@ -2331,29 +2331,44 @@
   counter-reset: none;
 }
 
-/* The footnote sequence is the FLOOR for every note family except cross-references, not an
-   enumerated f/fe/ef/efe list: a project custom.sty note marker (`\StyleType Note`, e.g. `\zfn`)
-   renders `class="note usfm_zfn"`, and an enumerated list matched neither family — leaving the
-   caller with no counter and an empty ::before, an invisible, unclickable note. StyleInfo offers
-   custom.sty markers to users, so the custom case is reachable from the UI, not hypothetical. */
-.note:not(.usfm_x):not(.usfm_ex) .immutable-note-caller[data-caller='+'] {
+/* Which caller sequence a note uses is decided by the EDITOR, which stamps
+   `data-note-kind="footnote"` or `data-note-kind="crossref"` on every `.note` element following
+   PT9's Standard view classification (Paratext repo,
+   ParatextInternalShared/ScriptureViews/Standard.xslt lines 446-449): a note style whose marker
+   starts with `f` or `ef` is a footnote; EVERY other note style — x, ex, and any custom note
+   marker — uses the cross-reference sequence. Keying the counters on that stamp (instead of
+   enumerating marker classes here) keeps the classification in one place, so a custom.sty note
+   marker gets exactly the sequence PT9 would give it. */
+.note[data-note-kind='footnote'] .immutable-note-caller[data-caller='+'] {
   counter-increment: caller;
 }
 
-.note.collapsed:not(.usfm_x):not(.usfm_ex)
+.note.collapsed[data-note-kind='footnote']
   .immutable-note-caller[data-caller='+']
   > button::before {
   content: counter(caller, note-callers);
 }
 
-.note.usfm_x .immutable-note-caller[data-caller='+'],
-.note.usfm_ex .immutable-note-caller[data-caller='+'] {
+.note[data-note-kind='crossref'] .immutable-note-caller[data-caller='+'] {
   counter-increment: crossref;
 }
 
-.note.collapsed.usfm_x .immutable-note-caller[data-caller='+'] > button::before,
-.note.collapsed.usfm_ex .immutable-note-caller[data-caller='+'] > button::before {
+.note.collapsed[data-note-kind='crossref']
+  .immutable-note-caller[data-caller='+']
+  > button::before {
   content: counter(crossref, cross-ref-callers);
+}
+
+/* TRANSITIONAL fallback for editor builds that predate the `data-note-kind` stamping: an
+   unstamped `.note` falls back to the footnote sequence, so callers stay visible (a counter and a
+   non-empty ::before) rather than disappearing. Remove once the pinned editor package always
+   stamps the attribute. */
+.note:not([data-note-kind]) .immutable-note-caller[data-caller='+'] {
+  counter-increment: caller;
+}
+
+.note.collapsed:not([data-note-kind]) .immutable-note-caller[data-caller='+'] > button::before {
+  content: counter(caller, note-callers);
 }
 
 .formatted-font.text-spacing[contenteditable='false']
