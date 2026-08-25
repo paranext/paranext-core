@@ -1,5 +1,5 @@
 /**
- * E2E tests for the Find and Replace UI.
+ * E2E tests for the Find UI in Simple interface mode.
  *
  * These tests spin up their own isolated Electron instance and auto-open the testWEB project before
  * the suite runs. testWEB is a programmatic copy of the WEB asset with a unique project ID and
@@ -8,6 +8,44 @@
  * Run via: `npm run test:e2e:isolated find`
  *
  * OR by path: `npm run test:e2e:isolated tests/isolated/find/find-replace.spec.ts`
+ *
+ * ## Simple mode, declared rather than inherited
+ *
+ * `find.fixture` pins `platform.interfaceMode: 'simple'`, `platform.interfaceLanguage: ['en']` and
+ * the window size before launch. All three change what this suite sees: Simple mode hides the
+ * Find/Replace mode toggle and the entire Replace surface (`hideModeToggle`), every text-based
+ * selector here is English-only, and the tab bar's overflow behaviour depends on window width.
+ *
+ * Replace is therefore untestable from here. The Replace-mode tests this file used to carry were
+ * removed rather than ported — see the note above "Search Filters" below.
+ *
+ * ## A permanent tab, not a panel you open and close
+ *
+ * In Simple mode Find is seeded into the static layout as a permanent Column 3 tab with
+ * `isClosable: false`, so:
+ *
+ * - There is no close button. Any teardown that waits for `.dock-tab-close-btn` waits forever.
+ * - The panel never unmounts, so its state (search term, filters, scope, history) LEAKS between
+ *   tests. Every test starts by calling {@link openFindPanel}, which activates the tab and resets
+ *   that state.
+ * - "Opening" Find fronts the tab that already exists. A test that asserts the Find tab is _visible_
+ *   therefore proves nothing — it is visible from startup. Assertions key off tab ACTIVATION
+ *   (`.dock-tab-active`) or in-panel state instead.
+ *
+ * ## Stable selectors
+ *
+ * Tabs and iframes are matched by the fixed UUID the simple layout assigns the Find web view
+ * ({@link FIND_WEB_VIEW_UUID}), via the `data-web-view-id` attribute, not by their localized text
+ * label — Simple mode hides the tab label entirely once the column collapses. Match the UUID as a
+ * PREFIX: the renderer suffixes every web view id from a shared layout with the window it was
+ * loaded into (`-w1`, `-w2`, ...), so the rendered attribute is the UUID plus that suffix.
+ *
+ * At 1280 px not every Column 3 tab fits the visible portion of the tab bar. rc-tabs renders all
+ * tab nodes at all times but clips those that overflow, so `toBeAttached()` succeeds for a clipped
+ * tab while `toBeVisible()` fails. {@link activateTab} handles both cases, clicking the tab directly
+ * when visible and otherwise going through the `.dock-nav-more` overflow dropdown. This mirrors
+ * `clickCommentsTab` in `tests/isolated/comments-tab.spec.ts`, the proven precedent for a
+ * permanent, non-closable Column 3 tab.
  */
 
 import { Frame, FrameLocator, Locator, Page } from '@playwright/test';
@@ -20,9 +58,30 @@ import {
 } from '../../../fixtures/find.fixture';
 import { waitForAppReady, PROCESS_READY_TIMEOUT } from '../../../fixtures/helpers';
 
+// The layout this suite's assertions are written against — in particular the Column 3 tab overflow
+// behaviour that activateTab has to cope with.
+test.use({ windowSize: { width: 1280, height: 800 } });
+
+// Every test activates the Find tab, resets the panel, and then runs a search that can take a long
+// time on a loaded worker. Give them all the same generous budget rather than sprinkling
+// per-describe overrides.
+test.describe.configure({ timeout: 180_000 });
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
+
+/**
+ * Fixed UUID for the Find tab in Column 3 of the simple layout. Source:
+ * src/renderer/components/docking/simple-layout.data.ts
+ */
+const FIND_WEB_VIEW_UUID = 'f1e2d3c4-b5a6-4789-9c0d-1e2f3a4b5c6d';
+
+/**
+ * Fixed UUID for the Commentaries tab, the Column 3 sibling used to take activation away from Find.
+ * Source: src/renderer/components/docking/simple-layout.data.ts
+ */
+const COMMENTARIES_WEB_VIEW_UUID = '6c950d23-f8d7-4482-a384-93ea0481698b';
 
 /**
  * A common word present in the WEB project. Tests that need results rely on this term. If tests
@@ -31,11 +90,11 @@ import { waitForAppReady, PROCESS_READY_TIMEOUT } from '../../../fixtures/helper
 const COMMON_SEARCH_TERM = 'the';
 
 /**
- * Search term used exclusively by Replace Operations tests. Using a separate term ensures that
- * Replace All cannot deplete COMMON_SEARCH_TERM from the project and break earlier tests that
- * depend on finding results.
+ * Search term reserved for the "interacting with a result adds to history" test. It must (a) return
+ * results in any book, and (b) never be searched by another test, so that finding it in the history
+ * proves the result interaction put it there.
  */
-const REPLACE_SEARCH_TERM = 'said';
+const RESULT_INTERACTION_TERM = 'and';
 
 /** A word unlikely to exist in any scripture project, used to test the "no results" state. */
 const NO_MATCH_TERM = 'ZZZQQQXXX_NORESULT_12345';
@@ -43,10 +102,277 @@ const NO_MATCH_TERM = 'ZZZQQQXXX_NORESULT_12345';
 /** History debounce delay (ms). Must match HISTORY_DEBOUNCE_DELAY_MS in find.web-view.tsx. */
 const HISTORY_DEBOUNCE_MS = 5_000;
 
+/**
+ * The scripture editor's hamburger ("Project") menu button.
+ *
+ * The Find panel's own project picker carries the SAME `aria-label="Project"`, so a bare
+ * `button[aria-label="Project"]` scan can land on the Find frame instead of the editor's — Find is
+ * a permanent tab and is already mounted. `ProjectSelector` renders its trigger with
+ * `role="combobox"`; the editor hamburger is a `DropdownMenuTrigger` and is not, so excluding the
+ * combobox role separates them.
+ */
+const EDITOR_HAMBURGER_SELECTOR = 'button[aria-label="Project"]:not([role="combobox"])';
+
+/**
+ * Accessible name of the X button in the search input. Matched exactly: the component library also
+ * defines a "Clear search results" label, which a substring match would pick up too.
+ */
+const CLEAR_SEARCH_LABEL = 'Clear search';
+
+/**
+ * How long to wait for a search to produce results. The findInScripture PDP factory initializes
+ * lazily on first request and can take 60–120 s on a cold start while the C# backend loads project
+ * data; `beforeAll` warms it, but a loaded worker can still be slow.
+ */
+const SEARCH_TIMEOUT_MS = 150_000;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Find the scripture editor's frame by scanning all web-view iframes for the one that contains the
+ * Project hamburger button.
+ *
+ * We cannot use `nth(0)` because other webviews (the home page with DEV_NOISY=false, or helloRock3
+ * frames with DEV_NOISY=true) may be present before the scripture editor in the iframe list.
+ */
+async function findScriptureEditorFrame(page: Page, timeout = 30_000): Promise<Frame> {
+  const deadline = Date.now() + timeout;
+
+  const checkFrames = async (): Promise<Frame | undefined> =>
+    // Using reduce to iterate without for-of (linter requirement). Each step checks a frame and
+    // short-circuits once a match is found.
+    page
+      .frames()
+      .filter((f) => f !== page.mainFrame())
+      .reduce<Promise<Frame | undefined>>(async (accPromise, frame) => {
+        const acc = await accPromise;
+        if (acc) return acc;
+        try {
+          const isVisible = await frame.locator(EDITOR_HAMBURGER_SELECTOR).isVisible();
+          if (isVisible) return frame;
+        } catch {
+          // Frame may not be accessible yet — keep polling
+        }
+        return undefined;
+      }, Promise.resolve(undefined));
+
+  while (Date.now() < deadline) {
+    // Polling loop: each check depends on the previous result
+    // eslint-disable-next-line no-await-in-loop
+    const found = await checkFrames();
+    if (found) return found;
+    // Polling loop: wait between frame-scan attempts must be sequential
+    // eslint-disable-next-line no-await-in-loop
+    await page.waitForTimeout(500);
+  }
+  throw new Error(`Scripture editor not found: no Project button visible after ${timeout}ms`);
+}
+
+/** The tab-title element for a Column 3 web view, matched by its layout UUID prefix. */
+function tabTitleForWebView(mainPage: Page, uuid: string): Locator {
+  return mainPage.locator(`.platform-tab-title[data-web-view-id^="${uuid}"]`);
+}
+
+/** The `.dock-tab` wrapper around a web view's tab title — this is what carries the active class. */
+function dockTabForWebView(mainPage: Page, uuid: string): Locator {
+  return mainPage.locator('.dock-tab').filter({ has: tabTitleForWebView(mainPage, uuid) });
+}
+
+/**
+ * FrameLocator for the Find panel's iframe.
+ *
+ * Uses the UUID-based `data-web-view-id` attribute (set by `web-view.component.tsx`) rather than
+ * `iframe[title="Find"]`, which depends on the localization service having initialized before the
+ * WebView's first `getWebView()` call. The UUID attribute is always present.
+ */
+function findPanelFrame(mainPage: Page): FrameLocator {
+  return mainPage.frameLocator(`iframe[data-web-view-id^="${FIND_WEB_VIEW_UUID}"]`);
+}
+
+/**
+ * The status-bar paragraph under the results list. Carries the result count, the "No results found"
+ * message, and the regex error message.
+ *
+ * `role="status"` is excluded deliberately. The three results-area placeholders (idle,
+ * no-open-projects, invalid-query) render through `EmptyState`, which adds `role="status"` and is
+ * given the same `tw:text-center tw:font-light` classes by `ResultsPlaceholder` — so without this
+ * the idle placeholder would satisfy every "a search finished" assertion in the file.
+ */
+function resultsMessage(frame: FrameLocator): Locator {
+  return frame.locator('p:not([role="status"]).tw\\:font-light.tw\\:text-center');
+}
+
+/**
+ * Activate a Column 3 tab, coping with rc-tabs overflow.
+ *
+ * If the tab title is scrolled outside the visible portion of the tab bar, hover the
+ * `.dock-nav-more` overflow button to open the dropdown and activate it from there.
+ */
+async function activateTab(mainPage: Page, uuid: string): Promise<void> {
+  const tabTitle = tabTitleForWebView(mainPage, uuid);
+  await expect(tabTitle).toBeAttached({ timeout: 120_000 });
+
+  if (await tabTitle.isVisible()) {
+    await tabTitle.click();
+  } else {
+    // Tab is outside the visible scroll area — open the overflow dropdown and activate it.
+    const dockBar = mainPage.locator('.dock-bar').filter({ has: tabTitle });
+    await dockBar.locator('.dock-nav-more').hover();
+    // rc-tabs re-renders the tab title (including data-web-view-id) in the overflow popup.
+    await mainPage
+      .locator('[role="listbox"] [role="option"]')
+      .filter({ has: mainPage.locator(`[data-web-view-id^="${uuid}"]`) })
+      .click({ timeout: 5_000 });
+  }
+
+  await expect(dockTabForWebView(mainPage, uuid)).toHaveClass(/dock-tab-active/, {
+    timeout: 10_000,
+  });
+}
+
+/**
+ * Bring the Find tab to the front.
+ *
+ * Asserts the tab became ACTIVE rather than merely visible: in Simple mode the Find tab exists and
+ * is visible from startup, so a visibility check would pass even if the activation did nothing.
+ */
+async function activateFindTab(mainPage: Page): Promise<FrameLocator> {
+  await activateTab(mainPage, FIND_WEB_VIEW_UUID);
+  const frame = findPanelFrame(mainPage);
+  await expect(frame.locator('#search-term')).toBeVisible({ timeout: 30_000 });
+  return frame;
+}
+
+/**
+ * Invoke Find the way a user does, from the scripture editor's hamburger ("Project") menu.
+ *
+ * The hamburger button and its Radix menu both render INSIDE the editor's iframe (the menu portals
+ * to the iframe body), while Find itself is a tab at main-page level.
+ */
+async function invokeFindFromHamburger(mainPage: Page): Promise<void> {
+  const editorFrame = await findScriptureEditorFrame(mainPage);
+
+  const hamburger = editorFrame.locator(EDITOR_HAMBURGER_SELECTOR);
+  await expect(hamburger).toBeVisible({ timeout: 15_000 });
+  await hamburger.click();
+
+  // Anchored to the exact label "Find" (%webView_platformScriptureEditor_openFind%).
+  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
+  await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
+  await findMenuItem.click();
+}
+
+/**
+ * Return the Find panel to a known state.
+ *
+ * The panel is a permanent tab that never unmounts, so the search term, the filters, and the scope
+ * all survive from one test to the next. Without this, a test's result depends on which tests ran
+ * before it.
+ *
+ * Must run while the tab is ACTIVE: an inactive rc-dock pane is `display: none`, and clicks into a
+ * hidden subtree do nothing.
+ */
+async function resetFindPanel(frame: FrameLocator): Promise<void> {
+  // Clear the search term. The X button only exists while the input is non-empty, so an
+  // already-empty panel needs no click.
+  const clearButton = frame.getByRole('button', { name: CLEAR_SEARCH_LABEL, exact: true });
+  if (await clearButton.isVisible()) await clearButton.click();
+  await expect(frame.locator('#search-term')).toHaveValue('');
+
+  // Reset the filters.
+  await frame.getByRole('button', { name: /toggle filters/i }).click();
+  const matchCase = frame.locator('#matchCase');
+  await expect(matchCase).toBeVisible({ timeout: 5_000 });
+  if (await matchCase.isChecked()) await matchCase.click();
+  const allowRegex = frame.locator('#allowRegex');
+  if (await allowRegex.isChecked()) await allowRegex.click();
+  const noWordRestriction = frame.locator('#wordRestriction-none');
+  if (!(await noWordRestriction.isChecked())) await noWordRestriction.click();
+  await matchCase.press('Escape');
+  await expect(matchCase).not.toBeVisible({ timeout: 5_000 });
+
+  // Reset the scope to the whole book.
+  await frame.getByRole('button', { name: /showing/i }).click();
+  const bookScope = frame.locator('#scope-book');
+  await expect(bookScope).toBeVisible({ timeout: 5_000 });
+  if (!(await bookScope.isChecked())) await bookScope.click();
+  await bookScope.press('Escape');
+  await expect(bookScope).not.toBeVisible({ timeout: 5_000 });
+
+  // The idle placeholder is the panel's "no search has run" state, and it is only reached once
+  // `searchStatus` is back to undefined — which is exactly what the X button's `onStopSearch(true)`
+  // does. Waiting for it therefore confirms both that the clear landed AND that the catch-up search
+  // which fires when the tab is activated (see `useRunWhenVisible` in find.web-view.tsx) is gone
+  // rather than still in flight and about to overwrite the search this test is about to run.
+  //
+  // A short timeout on purpose: clearing is synchronous state, so this resolves in seconds or not
+  // at all. Waiting a full search timeout here would turn one systemic breakage into half an hour
+  // of identical timeouts.
+  await expect(frame.locator('[data-testid="find-idle-placeholder"]')).toBeVisible({
+    timeout: 30_000,
+  });
+}
+
+/**
+ * Standard per-test entry point: bring Find to the front and reset it to a known state.
+ *
+ * The reset has to follow the activation (a hidden pane cannot be clicked), so the activation's
+ * catch-up search may briefly run with the previous test's term. `resetFindPanel` waits for the
+ * idle placeholder, which is only reached once that search is gone.
+ */
+async function openFindPanel(mainPage: Page): Promise<FrameLocator> {
+  const frame = await activateFindTab(mainPage);
+  await resetFindPanel(frame);
+  return frame;
+}
+
+/**
+ * Type a search term in the search input and wait for the results counter to appear. The counter
+ * shows either "N of M" or "– of M" once a search completes.
+ */
+async function fillSearchAndWaitForResults(frame: FrameLocator, term: string): Promise<void> {
+  await frame.locator('#search-term').fill(term);
+  // Press Enter to start the search immediately, bypassing the 500 ms debounce.
+  await frame.locator('#search-term').press('Enter');
+  await expect(frame.locator('.tw\\:tabular-nums')).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+}
+
+/** Click the X (clear search) button in the search input. */
+async function clickClearSearch(frame: FrameLocator): Promise<void> {
+  const clearButton = frame.getByRole('button', { name: CLEAR_SEARCH_LABEL, exact: true });
+  await expect(clearButton).toBeVisible({ timeout: 5_000 });
+  await clearButton.click();
+}
+
+/** Open the recent searches history dropdown. */
+async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
+  const historyButton = frame.getByRole('button', { name: /show recent searches/i });
+  await expect(historyButton).toBeVisible({ timeout: 5_000 });
+  await historyButton.click();
+}
+
+/** Open the filters dropdown (the SlidersHorizontal / Toggle filters button). */
+async function openFiltersPanel(frame: FrameLocator): Promise<void> {
+  const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
+  await expect(filtersBtn).toBeVisible({ timeout: 5_000 });
+  await filtersBtn.click();
+}
+
+/**
+ * Get the first search result card. Each result renders a `ResultsCard` which produces
+ * `div[role="button"][aria-pressed]`. We target this directly rather than `div.pr-twp` because the
+ * root panel container is also a `div.pr-twp` and would match first.
+ */
+function firstResultCard(frame: FrameLocator): Locator {
+  return frame.locator('[role="button"][aria-pressed]').first();
+}
+
 // ---------------------------------------------------------------------------
 // Worker-level setup — runs once before any test in this file.
 // Opens a scripture editor so the hamburger menu is available throughout
-// the suite without repeating the setup in every test.
+// the suite, and warms the findInScripture PDP.
 // ---------------------------------------------------------------------------
 
 test.beforeAll(async ({ electronApp }) => {
@@ -119,203 +445,47 @@ test.beforeAll(async ({ electronApp }) => {
   // Warm up the findInScripture PDP: it initializes lazily on first request (60–120 s cold
   // start while the C# backend loads five overlay PDPs), so kick it off here rather than
   // making the first test absorb the cost.
-  //
-  // IMPORTANT: do NOT close the Find panel here. Closing leaves the dock tracking a
-  // "suspended" web view that a later `openFind` finds by existingId but cannot bring to
-  // front. Test 1's afterEach closes it; later opens are fast because the engine is warm.
   console.log('[find tests] Warming up findInScripture PDP...');
-  const editorFrame = await findScriptureEditorFrame(page);
-  const hamburger = editorFrame.locator('button[aria-label="Project"]');
-  await expect(hamburger).toBeVisible({ timeout: 15_000 });
-  await hamburger.click();
-  // Anchored to the exact label "Find" (%webView_platformScriptureEditor_openFind%). It
-  // carried an ellipsis until PT-4342 renamed it, and this selector still required one.
-  // Nothing caught the drift: a failure here aborts the worker, so this suite's other 22
-  // tests report as "did not run" rather than as failures.
-  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
-  await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
-  await findMenuItem.click();
-
-  const findTab = page.locator('.dock-tab', { hasText: /^Find/i });
-  await expect(findTab).toBeVisible({ timeout: 15_000 });
-
-  const findFrame = page.frameLocator('iframe[title="Find"]');
+  const findFrame = await activateFindTab(page);
   await findFrame.locator('#search-term').fill(COMMON_SEARCH_TERM);
   await findFrame.locator('#search-term').press('Enter');
 
-  // Wait up to 90 s for either the counter (results found) or the results/no-results paragraph.
+  // Wait for either the counter (results found) or the results/no-results paragraph.
   await expect(
-    findFrame
-      .locator('.tw\\:tabular-nums')
-      .or(findFrame.locator('p.tw\\:font-light.tw\\:text-center'))
-      .first(),
-  ).toBeVisible({ timeout: 90_000 });
+    findFrame.locator('.tw\\:tabular-nums').or(resultsMessage(findFrame)).first(),
+  ).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
 
-  console.log('[find tests] findInScripture PDP is warm — leaving Find open for test 1 to close');
+  console.log('[find tests] findInScripture PDP is warm');
 });
-
-// ---------------------------------------------------------------------------
-// Worker-level teardown — close any leftover Find panel between tests so that
-// a failure in one test cannot pollute the next.
-// ---------------------------------------------------------------------------
-
-test.afterEach(async ({ mainPage }) => {
-  const findTab = mainPage.locator('.dock-tab', { hasText: /^Find/i });
-  const isOpen = await findTab.isVisible();
-  if (isOpen) {
-    await findTab.locator('.dock-tab-close-btn').dispatchEvent('click');
-    await expect(findTab).not.toBeVisible({ timeout: 10_000 });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Find the scripture editor's frame by scanning all web-view iframes for the one that contains the
- * Project hamburger button.
- *
- * We cannot use `nth(0)` because other webviews (the home page with DEV_NOISY=false, or helloRock3
- * frames with DEV_NOISY=true) may be present before the scripture editor in the iframe list.
- */
-async function findScriptureEditorFrame(page: Page, timeout = 30_000): Promise<Frame> {
-  const deadline = Date.now() + timeout;
-
-  const checkFrames = async (): Promise<Frame | undefined> =>
-    // Using reduce to iterate without for-of (linter requirement). Each step checks a frame and
-    // short-circuits once a match is found.
-    page
-      .frames()
-      .filter((f) => f !== page.mainFrame())
-      .reduce<Promise<Frame | undefined>>(async (accPromise, frame) => {
-        const acc = await accPromise;
-        if (acc) return acc;
-        try {
-          const isVisible = await frame.locator('button[aria-label="Project"]').isVisible();
-          if (isVisible) return frame;
-        } catch {
-          // Frame may not be accessible yet — keep polling
-        }
-        return undefined;
-      }, Promise.resolve(undefined));
-
-  while (Date.now() < deadline) {
-    // Polling loop: each check depends on the previous result
-    // eslint-disable-next-line no-await-in-loop
-    const found = await checkFrames();
-    if (found) return found;
-    // Polling loop: wait between frame-scan attempts must be sequential
-    // eslint-disable-next-line no-await-in-loop
-    await page.waitForTimeout(500);
-  }
-  throw new Error(`Scripture editor not found: no Project button visible after ${timeout}ms`);
-}
-
-/**
- * Open the Find panel from the first editor's hamburger menu.
- *
- * @returns A FrameLocator scoped to the Find webview iframe.
- */
-async function openFindPanel(mainPage: Page): Promise<FrameLocator> {
-  // The TabToolbar renders inside the scripture editor's WebView iframe (shouldShowToolbar: false
-  // in the editor's main.ts means the main-page WebView component does not render an outer toolbar).
-  // We must scan all web-view iframes to find the one that contains the Project button.
-  const editorFrame = await findScriptureEditorFrame(mainPage);
-
-  // Click the hamburger / project menu of the first open editor webview
-  const hamburger = editorFrame.locator('button[aria-label="Project"]');
-  await expect(hamburger).toBeVisible({ timeout: 15_000 });
-  await hamburger.click();
-
-  // Click "Find..." from the dropdown (the Radix DropdownMenuContent portals into the iframe body)
-  const findMenuItem = editorFrame.getByRole('menuitem', { name: /^find$/i });
-  await expect(findMenuItem).toBeVisible({ timeout: 5_000 });
-  await findMenuItem.click();
-
-  // Wait for the Find dock tab to appear
-  const findTab = mainPage.locator('.dock-tab', { hasText: /^Find/i });
-  await expect(findTab).toBeVisible({ timeout: 15_000 });
-
-  return mainPage.frameLocator('iframe[title="Find"]');
-}
-
-/** Close the Find dock tab. */
-async function closeFindPanel(mainPage: Page): Promise<void> {
-  const findTab = mainPage.locator('.dock-tab', { hasText: /^Find/i });
-  await expect(findTab).toBeVisible({ timeout: 5_000 });
-  // Use dispatchEvent since the tab may be outside the visible area on narrow viewports
-  await findTab.locator('.dock-tab-close-btn').dispatchEvent('click');
-  await expect(findTab).not.toBeVisible({ timeout: 10_000 });
-}
-
-/**
- * Type a search term in the search input and wait for the results counter to appear. The counter
- * shows either "N of M" or "– of M" once a search completes.
- */
-async function fillSearchAndWaitForResults(frame: FrameLocator, term: string): Promise<void> {
-  await frame.locator('#search-term').fill(term);
-  // Press Enter to start the search immediately, bypassing the 500 ms debounce. Without this,
-  // if the input already contains `term` (restored from project settings), the fill() call does
-  // not change React state and the debounce never fires, so results never appear.
-  await frame.locator('#search-term').press('Enter');
-  // Counter matches "N of M", "– of N", or the Spanish equivalent so use a broad regex.
-  // Allow up to 150 s: the findInScripture PDP factory initializes lazily on first request and
-  // can take 60–120 s on a cold start while the C# backend loads project data.  Even on a warm
-  // engine, a fresh web-view instance re-awaits the PDP resolution hook, so the first search in
-  // each new Find panel can still take > 90 s.
-  await expect(frame.locator('.tw\\:tabular-nums')).toBeVisible({ timeout: 150_000 });
-}
-
-/** Click the X (clear search) button in the search input. */
-async function clickClearSearch(frame: FrameLocator): Promise<void> {
-  const clearButton = frame.getByRole('button', { name: /clear search/i });
-  await expect(clearButton).toBeVisible({ timeout: 5_000 });
-  await clearButton.click();
-}
-
-/** Open the recent searches history dropdown. */
-async function openHistoryDropdown(frame: FrameLocator): Promise<void> {
-  const historyButton = frame.getByRole('button', { name: /show recent searches/i });
-  await expect(historyButton).toBeVisible({ timeout: 5_000 });
-  await historyButton.click();
-}
-
-/** Switch to Replace mode by clicking the Replace tab in the mode toggle. */
-async function switchToReplaceMode(frame: FrameLocator): Promise<void> {
-  // The ToggleGroup with type="single" renders items as role="radio"
-  await frame.getByRole('radio', { name: /^replace$/i }).click();
-  await expect(frame.locator('#replace-term')).toBeVisible({ timeout: 5_000 });
-}
-
-/**
- * Get the first search result card. Each result renders a `ResultsCard` which produces
- * `div[role="button"][aria-pressed]`. We target this directly rather than `div.pr-twp` because the
- * root panel container is also a `div.pr-twp` and would match first.
- */
-function firstResultCard(frame: FrameLocator): Locator {
-  return frame.locator('[role="button"][aria-pressed]').first();
-}
 
 // ---------------------------------------------------------------------------
 // Tests: Panel Basics
 // ---------------------------------------------------------------------------
 
 test.describe('Find Panel Basics', () => {
-  test('should open Find panel from editor hamburger menu', async ({ mainPage }) => {
-    const frame = await openFindPanel(mainPage);
+  test('should activate the Find tab and focus the search box when invoked from the editor hamburger menu', async ({
+    mainPage,
+  }) => {
+    // Take activation away from Find first. In Simple mode the Find tab always exists and is
+    // always visible, so the only thing an invoke can change is which Column 3 tab is active and
+    // where the caret lands — assert on those, not on the tab's existence.
+    await openFindPanel(mainPage);
+    await activateTab(mainPage, COMMENTARIES_WEB_VIEW_UUID);
+    const findTab = dockTabForWebView(mainPage, FIND_WEB_VIEW_UUID);
+    // Assert the tab is there before asserting it is not active, so that a selector which matched
+    // nothing could not satisfy the negated check below.
+    await expect(findTab).toBeAttached();
+    await expect(findTab).not.toHaveClass(/dock-tab-active/);
 
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
+    await invokeFindFromHamburger(mainPage);
 
-    await closeFindPanel(mainPage);
+    await expect(findTab).toHaveClass(/dock-tab-active/, { timeout: 15_000 });
+    // Landing on the search box is the point of the invoke (see use-focus-search-on-invoke.hook.ts).
+    await expect(findPanelFrame(mainPage).locator('#search-term')).toBeFocused({ timeout: 15_000 });
   });
 
-  test('should render mode toggle, search input, and scope selector', async ({ mainPage }) => {
+  test('should render the search input and scope selector', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
-
-    // Mode toggle buttons (Radix ToggleGroup renders items as role="radio" when type="single")
-    await expect(frame.getByRole('radio', { name: /^find$/i })).toBeVisible({ timeout: 10_000 });
-    await expect(frame.getByRole('radio', { name: /^replace$/i })).toBeVisible();
 
     // Search input
     await expect(frame.locator('#search-term')).toBeVisible();
@@ -326,30 +496,11 @@ test.describe('Find Panel Basics', () => {
     // Scope selector ("Showing <book>" button)
     await expect(frame.getByRole('button', { name: /showing/i })).toBeVisible();
 
-    await closeFindPanel(mainPage);
-  });
-
-  test('should show Replace input and controls when switching to Replace mode', async ({
-    mainPage,
-  }) => {
-    const frame = await openFindPanel(mainPage);
-
-    // In Find mode, replace-specific controls should not be visible
-    await expect(frame.locator('#replace-term')).not.toBeVisible({ timeout: 5_000 });
-    await expect(frame.locator('#preserve-case')).not.toBeVisible();
-
-    // Switch to Replace mode
-    await switchToReplaceMode(frame);
-
-    // Replace input, Preserve Case, and action buttons should now be visible
-    await expect(frame.locator('#replace-term')).toBeVisible();
-    await expect(frame.locator('#preserve-case')).toBeVisible();
-    await expect(frame.getByRole('button', { name: /^replace all$/i })).toBeVisible();
-    // There are two "Replace" buttons in replace mode: header action button and per-result button.
-    // The header one is always present in replace mode even without results.
-    await expect(frame.getByRole('button', { name: /^replace$/i }).first()).toBeVisible();
-
-    await closeFindPanel(mainPage);
+    // The Find/Replace mode toggle is hidden in Simple mode (`hideModeToggle` in
+    // find.component.tsx), which is what makes Replace untestable from this suite. Assert its
+    // absence so that re-introducing it here does not go unnoticed.
+    await expect(frame.getByRole('radio', { name: /^replace$/i })).toHaveCount(0);
+    await expect(frame.getByRole('radio', { name: /^find$/i })).toHaveCount(0);
   });
 });
 
@@ -360,19 +511,15 @@ test.describe('Find Panel Basics', () => {
 test.describe('Search Results', () => {
   test('should display results when a search term is entered', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     await fillSearchAndWaitForResults(frame, COMMON_SEARCH_TERM);
 
     // At least one result card should appear
     await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
-
-    await closeFindPanel(mainPage);
   });
 
   test('should update results when the search term is modified', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     await fillSearchAndWaitForResults(frame, COMMON_SEARCH_TERM);
     const counterFirst = await frame.locator('.tw\\:tabular-nums').textContent();
@@ -381,9 +528,7 @@ test.describe('Search Results', () => {
     // cap, so its counter must differ — another common word would cap at "1 of 100" like the
     // first term and the counter would never change. Scope defaults to the current book, which
     // may contain 0 matches, so the assertion below accepts either a changed counter or the
-    // "no results" paragraph; both confirm the results updated. Enter (rather than waiting for
-    // the debounce) avoids the edge case where fill() doesn't change React state and no search
-    // would run.
+    // "no results" paragraph; both confirm the results updated.
     await frame.locator('#search-term').fill('Bartholomew');
     await frame.locator('#search-term').press('Enter');
 
@@ -397,20 +542,17 @@ test.describe('Search Results', () => {
           .locator('.tw\\:tabular-nums')
           .textContent({ timeout: 1_000 });
         expect(counterSecond).not.toBe(counterFirst);
-      } else if (await frame.locator('p.tw\\:font-light.tw\\:text-center').isVisible()) {
+      } else if (await resultsMessage(frame).isVisible()) {
         // No-results paragraph appeared — search completed with 0 results (results changed)
       } else {
         // Neither visible yet — search still in progress, keep waiting
         throw new Error('Waiting for Bartholomew search to produce results');
       }
     }).toPass({ timeout: 30_000 });
-
-    await closeFindPanel(mainPage);
   });
 
   test('should clear results when the clear (X) button is clicked', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     await fillSearchAndWaitForResults(frame, COMMON_SEARCH_TERM);
     await expect(firstResultCard(frame)).toBeVisible({ timeout: 10_000 });
@@ -422,19 +564,14 @@ test.describe('Search Results', () => {
     await expect(frame.locator('.tw\\:tabular-nums')).not.toBeVisible({ timeout: 5_000 });
     await expect(frame.locator('#search-term')).toHaveValue('');
     await expect(firstResultCard(frame)).not.toBeVisible({ timeout: 5_000 });
-
-    await closeFindPanel(mainPage);
   });
 
   test('should show no-results message for a term with no matches', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     await frame.locator('#search-term').fill(NO_MATCH_TERM);
 
     await expect(frame.getByText(/no results found/i)).toBeVisible({ timeout: 20_000 });
-
-    await closeFindPanel(mainPage);
   });
 });
 
@@ -445,7 +582,6 @@ test.describe('Search Results', () => {
 test.describe('Search History', () => {
   test('should add search term to history after 5 seconds of inactivity', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     const term = `histtest-debounce-${Date.now()}`;
     await frame.locator('#search-term').fill(term);
@@ -454,16 +590,13 @@ test.describe('Search History', () => {
     await mainPage.waitForTimeout(HISTORY_DEBOUNCE_MS + 500);
 
     await openHistoryDropdown(frame);
-    await expect(frame.getByText(term)).toBeVisible({ timeout: 5_000 });
-
-    await closeFindPanel(mainPage);
+    await expect(frame.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
   });
 
   test('should add search term to history immediately when Enter is pressed', async ({
     mainPage,
   }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     const term = `histtest-enter-${Date.now()}`;
     const searchInput = frame.locator('#search-term');
@@ -472,16 +605,13 @@ test.describe('Search History', () => {
 
     // History updates synchronously on Enter — no debounce wait needed
     await openHistoryDropdown(frame);
-    await expect(frame.getByText(term)).toBeVisible({ timeout: 5_000 });
-
-    await closeFindPanel(mainPage);
+    await expect(frame.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
   });
 
   test('should add search term to history when the clear (X) button is clicked', async ({
     mainPage,
   }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     const term = `histtest-clear-${Date.now()}`;
     await frame.locator('#search-term').fill(term);
@@ -490,315 +620,60 @@ test.describe('Search History', () => {
     await clickClearSearch(frame);
 
     await openHistoryDropdown(frame);
-    await expect(frame.getByText(term)).toBeVisible({ timeout: 5_000 });
-
-    await closeFindPanel(mainPage);
+    await expect(frame.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
   });
 
   test('should add search term to history when interacting with a search result', async ({
     mainPage,
   }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
-    // Use Enter to explicitly start the search (which also adds to history immediately)
-    const searchInput = frame.locator('#search-term');
-    await searchInput.fill(COMMON_SEARCH_TERM);
-    await searchInput.press('Enter');
+    // Deliberately NOT pressing Enter: Enter adds to history by itself, which would make the
+    // assertion below pass regardless of whether interacting with a result does anything. Let the
+    // 500 ms search debounce run the search instead, and click the result well inside the 5 s
+    // history debounce so the result interaction is the only thing that can have added the term.
+    await frame.locator('#search-term').fill(RESULT_INTERACTION_TERM);
 
-    // Wait for results and click the first one
-    await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
+    await expect(firstResultCard(frame)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
+
+    // Confirm the term is not already in history, so the assertion after the click is meaningful.
+    // The button is absent entirely while history is empty, which proves the same thing.
+    const historyButton = frame.getByRole('button', { name: /show recent searches/i });
+    if (await historyButton.isVisible()) {
+      await historyButton.click();
+      await expect(frame.getByRole('option', { name: RESULT_INTERACTION_TERM })).toHaveCount(0);
+      // Close the popover and wait for it to actually go: Radix consumes the first outside click
+      // to dismiss, so clicking the result card while it is still open would dismiss the popover
+      // instead of selecting the result.
+      await historyButton.press('Escape');
+      await expect(frame.getByRole('option')).toHaveCount(0);
+    }
+
     await firstResultCard(frame).click();
 
     await openHistoryDropdown(frame);
-    // Use getByRole('option') to scope the match to the history dropdown's CommandItem elements
-    // (which have role="option"), not the many result card texts that also contain the search term.
-    await expect(frame.getByRole('option', { name: COMMON_SEARCH_TERM })).toBeVisible({
+    // Scope the match to the history dropdown's CommandItem elements (role="option"), not the many
+    // result card texts that also contain the search term.
+    await expect(frame.getByRole('option', { name: RESULT_INTERACTION_TERM })).toBeVisible({
       timeout: 5_000,
     });
-
-    await closeFindPanel(mainPage);
-  });
-
-  test('should add search term to history when the Find panel is closed', async ({ mainPage }) => {
-    const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
-
-    const term = `histtest-close-${Date.now()}`;
-    // Type a term but do NOT press Enter — closing should save via the unmount effect
-    await frame.locator('#search-term').fill(term);
-
-    await closeFindPanel(mainPage);
-
-    // Wait for the unmount effects (findHistory data provider write) to complete before reopening
-    // so that the new panel reads the already-written value, not a race.
-    await mainPage.waitForTimeout(1_000);
-
-    // Re-open Find and verify the term is in history
-    const frame2 = await openFindPanel(mainPage);
-    await expect(frame2.locator('#search-term')).toBeVisible({ timeout: 10_000 });
-
-    await openHistoryDropdown(frame2);
-    // Use getByRole('option') to scope to the history dropdown CommandItem elements
-    // (role="option"), consistent with other history tests.
-    await expect(frame2.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
-
-    await closeFindPanel(mainPage);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Preserve Case
-// ---------------------------------------------------------------------------
-
-test.describe('Preserve Case in Replace Mode', () => {
-  // openFindPanel can consume up to ~90 s on a warm-but-loaded worker; give each test 3 minutes
-  // so the fill+press pair never runs out of budget before the action completes.
-  test.describe.configure({ timeout: 180_000 });
-
-  test('should display the Preserve Case checkbox in Replace mode', async ({ mainPage }) => {
-    const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
-
-    await switchToReplaceMode(frame);
-
-    await expect(frame.locator('#preserve-case')).toBeVisible({ timeout: 5_000 });
-    await expect(frame.getByText(/preserve case/i)).toBeVisible();
-
-    await closeFindPanel(mainPage);
-  });
-
-  test('should show replace previews in results when Preserve Case is toggled', async ({
-    mainPage,
-  }) => {
-    const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
-
-    await frame.locator('#search-term').fill(COMMON_SEARCH_TERM);
-    // Press Enter to start the search immediately (bypasses the 500 ms debounce)
-    await frame.locator('#search-term').press('Enter');
-    await switchToReplaceMode(frame);
-
-    await frame.locator('#replace-term').fill('a');
-
-    // Verify results are visible before testing preserve case toggle
-    await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
-
-    // Enable Preserve Case and verify the checkbox reflects the new state
-    const preserveCaseCheckbox = frame.locator('#preserve-case');
-    const wasChecked = await preserveCaseCheckbox.isChecked();
-    if (!wasChecked) await preserveCaseCheckbox.click();
-    await expect(preserveCaseCheckbox).toBeChecked();
-
-    // Results should still be visible with preserve case enabled
-    await expect(firstResultCard(frame)).toBeVisible({ timeout: 5_000 });
-
-    // Disable Preserve Case and verify results remain visible
-    await preserveCaseCheckbox.click();
-    await expect(preserveCaseCheckbox).not.toBeChecked();
-    await expect(firstResultCard(frame)).toBeVisible({ timeout: 5_000 });
-
-    await closeFindPanel(mainPage);
-  });
-
-  test('should apply preserve case when a replace operation is performed', async ({ mainPage }) => {
-    const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
-
-    await frame.locator('#search-term').fill(COMMON_SEARCH_TERM);
-    // Press Enter to start the search immediately (bypasses the 500 ms debounce)
-    await frame.locator('#search-term').press('Enter');
-    await switchToReplaceMode(frame);
-    await frame.locator('#replace-term').fill('a');
-
-    // Enable Preserve Case
-    const preserveCaseCheckbox = frame.locator('#preserve-case');
-    if (!(await preserveCaseCheckbox.isChecked())) await preserveCaseCheckbox.click();
-    await expect(preserveCaseCheckbox).toBeChecked();
-
-    // Wait for results
-    await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
-
-    // Click the first result to focus it, then replace via the header Replace button
-    await firstResultCard(frame).click();
-
-    const replaceHeaderBtn = frame.getByRole('button', { name: /^replace$/i }).first();
-    await expect(replaceHeaderBtn).toBeEnabled({ timeout: 5_000 });
-    await replaceHeaderBtn.click();
-
-    // Assert on the sonner toast rather than the isReplaced badge — the badge is cleared as
-    // soon as the post-replace re-search starts, while the toast persists for several seconds.
-    await expect(frame.getByText(/replaced 1 occurrence/i).first()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    await closeFindPanel(mainPage);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Replace Operations
-// ---------------------------------------------------------------------------
-
-/** Open the filters dropdown (the SlidersHorizontal / Toggle filters button). */
-async function openFiltersPanel(frame: FrameLocator): Promise<void> {
-  const filtersBtn = frame.getByRole('button', { name: /toggle filters/i });
-  await expect(filtersBtn).toBeVisible({ timeout: 5_000 });
-  await filtersBtn.click();
-}
-
-/**
- * Set up the Find panel in Replace mode with a search term and replace term, then wait for results.
- * Returns the FrameLocator.
- */
-async function setupReplaceMode(
-  mainPage: Page,
-  searchTerm = REPLACE_SEARCH_TERM,
-  replaceTerm = 'replaced',
-): Promise<FrameLocator> {
-  const frame = await openFindPanel(mainPage);
-  await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
-
-  await frame.locator('#search-term').fill(searchTerm);
-  // Press Enter to start the search immediately (bypasses the 500 ms debounce)
-  await frame.locator('#search-term').press('Enter');
-  await switchToReplaceMode(frame);
-  await frame.locator('#replace-term').fill(replaceTerm);
-
-  // Wait for the first result card to appear
-  await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
-
-  return frame;
-}
-test.describe('Replace Operations', () => {
-  // setupReplaceMode calls openFindPanel which can consume up to ~90 s; give each test 3 minutes.
-  test.describe.configure({ timeout: 180_000 });
-
-  test('should replace the selected result when Enter is pressed on the focused result card', async ({
-    mainPage,
-  }) => {
-    const frame = await setupReplaceMode(mainPage);
-
-    // Click the first card to select it (makes it aria-pressed="true")
-    await firstResultCard(frame).click();
-
-    // The first card's inner ResultsCard div now has aria-pressed="true".
-    // Calling .press('Enter') focuses the element then dispatches the keydown event.
-    const selectedCard = frame.locator('[role="button"][aria-pressed="true"]').first();
-    await expect(selectedCard).toBeVisible({ timeout: 5_000 });
-    await selectedCard.press('Enter');
-
-    // The result should show "Replaced" visual feedback
-    await expect(frame.getByText(/^replaced$/i).first()).toBeVisible({ timeout: 10_000 });
-
-    await closeFindPanel(mainPage);
-  });
-
-  test('should replace the focused result when the Replace button in the header is clicked', async ({
-    mainPage,
-  }) => {
-    const frame = await setupReplaceMode(mainPage);
-
-    // Select the first result
-    await firstResultCard(frame).click();
-
-    // Click the header Replace button (the first "Replace" button — the action button, not the tab)
-    const replaceHeaderBtn = frame.getByRole('button', { name: /^replace$/i }).first();
-    await expect(replaceHeaderBtn).toBeEnabled({ timeout: 5_000 });
-    await replaceHeaderBtn.click();
-
-    await expect(frame.getByText(/^replaced$/i).first()).toBeVisible({ timeout: 10_000 });
-
-    await closeFindPanel(mainPage);
-  });
-
-  test('should replace when the per-result Replace button inside a result card is clicked', async ({
-    mainPage,
-  }) => {
-    const frame = await setupReplaceMode(mainPage);
-
-    // Click the first result to expand/select it — the per-result Replace button appears
-    const card = firstResultCard(frame);
-    await card.click();
-
-    // The per-result Replace button is rendered inside the selected card
-    const resultReplaceBtn = card.getByRole('button', { name: /^replace$/i });
-    await expect(resultReplaceBtn).toBeVisible({ timeout: 5_000 });
-    await resultReplaceBtn.click();
-
-    await expect(frame.getByText(/^replaced$/i).first()).toBeVisible({ timeout: 10_000 });
-
-    await closeFindPanel(mainPage);
-  });
-
-  test('should replace a result when regex mode is enabled', async ({ mainPage }) => {
-    // Enable regex mode before setting up Replace so the search uses a regex pattern.
-    // We open the panel first, enable regex, then let setupReplaceMode search with it active.
-    const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
-
-    await openFiltersPanel(frame);
-    const regexCheckbox = frame.locator('#allowRegex');
-    await expect(regexCheckbox).toBeVisible({ timeout: 5_000 });
-    if (!(await regexCheckbox.isChecked())) await regexCheckbox.click();
-    await expect(regexCheckbox).toBeChecked();
-    // Close the filters panel so the search input is accessible
-    await regexCheckbox.press('Escape');
-
-    await frame.locator('#search-term').fill(REPLACE_SEARCH_TERM);
-    await frame.locator('#search-term').press('Enter');
-    await switchToReplaceMode(frame);
-    await frame.locator('#replace-term').fill('spoke');
-
-    await expect(firstResultCard(frame)).toBeVisible({ timeout: 20_000 });
-
-    await firstResultCard(frame).click();
-    const replaceHeaderBtn = frame.getByRole('button', { name: /^replace$/i }).first();
-    await expect(replaceHeaderBtn).toBeEnabled({ timeout: 5_000 });
-    await replaceHeaderBtn.click();
-
-    await expect(frame.getByText(/replaced 1 occurrence/i).first()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    await closeFindPanel(mainPage);
-  });
-
-  // Replace All depletes REPLACE_SEARCH_TERM from the project — run it last so the per-result
-  // replace tests above can still find results to work with.
-  test('should replace all visible results when the Replace All button is clicked', async ({
-    mainPage,
-  }) => {
-    const frame = await setupReplaceMode(mainPage);
-
-    const replaceAllBtn = frame.getByRole('button', { name: /^replace all$/i });
-    await expect(replaceAllBtn).toBeEnabled({ timeout: 5_000 });
-    await replaceAllBtn.click();
-
-    // The toast "Replaced N occurrences" is the stable signal: the per-card "Replaced" badge
-    // appears only briefly before the post-replace re-search calls setResults([]), whereas the
-    // toast persists for several seconds.
-    await expect(frame.getByText(/replaced \d+ occurrences/i).first()).toBeVisible({
-      timeout: 10_000,
-    });
-
-    await closeFindPanel(mainPage);
   });
 });
 
 // ---------------------------------------------------------------------------
 // Tests: Search Filters
+//
+// The nine Replace-mode tests that used to sit here (mode switching, Preserve Case, per-result and
+// Replace All operations) were REMOVED rather than ported. Simple mode hides the Find/Replace
+// toggle and renders no Replace surface at all, so there is nothing for them to drive. Covering
+// Replace needs a separate suite running in Power interface mode.
 // ---------------------------------------------------------------------------
 
 test.describe('Search Filters', () => {
-  // openFindPanel can consume up to ~90 s; give each test 3 minutes.
-  test.describe.configure({ timeout: 180_000 });
-
   test('should show an error message when an invalid regex pattern is entered in regex mode', async ({
     mainPage,
   }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     // Enable regex mode via the filters panel
     await openFiltersPanel(frame);
@@ -815,15 +690,12 @@ test.describe('Search Filters', () => {
 
     // The UI should display an error, not crash or hang
     await expect(frame.getByText(/an error occurred/i)).toBeVisible({ timeout: 20_000 });
-
-    await closeFindPanel(mainPage);
   });
 
   test('should apply match-case and whole-word filters simultaneously without crashing', async ({
     mainPage,
   }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     // Search with defaults first so there is a current term to re-search when filters change
     await fillSearchAndWaitForResults(frame, COMMON_SEARCH_TERM);
@@ -839,6 +711,7 @@ test.describe('Search Filters', () => {
     const wholeWordRadio = frame.locator('#wordRestriction-wholeWord');
     await expect(wholeWordRadio).toBeVisible({ timeout: 5_000 });
     await wholeWordRadio.click();
+    await expect(wholeWordRadio).toBeChecked();
 
     // Close filters panel
     await matchCaseCheckbox.press('Escape');
@@ -846,14 +719,9 @@ test.describe('Search Filters', () => {
     // After both filters are applied the search re-runs automatically. Either the counter
     // updates (different result count) or the no-results paragraph appears — either confirms
     // both filters are honoured without a crash.
-    await expect(
-      frame
-        .locator('.tw\\:tabular-nums')
-        .or(frame.locator('p.tw\\:font-light.tw\\:text-center'))
-        .first(),
-    ).toBeVisible({ timeout: 30_000 });
-
-    await closeFindPanel(mainPage);
+    await expect(frame.locator('.tw\\:tabular-nums').or(resultsMessage(frame)).first()).toBeVisible(
+      { timeout: 30_000 },
+    );
   });
 });
 
@@ -862,12 +730,8 @@ test.describe('Search Filters', () => {
 // ---------------------------------------------------------------------------
 
 test.describe('Scope Switching', () => {
-  // openFindPanel can consume up to ~90 s; give each test 3 minutes.
-  test.describe.configure({ timeout: 180_000 });
-
   test('should re-search and update results when the scope is changed', async ({ mainPage }) => {
     const frame = await openFindPanel(mainPage);
-    await expect(frame.locator('#search-term')).toBeVisible({ timeout: 10_000 });
 
     // Run an initial search with the default book scope
     await fillSearchAndWaitForResults(frame, COMMON_SEARCH_TERM);
@@ -889,7 +753,7 @@ test.describe('Scope Switching', () => {
     // 1. The scope button display updated to show a chapter (e.g. "Genesis 1")
     // 2. A search completed — either results are visible or the no-results message appears.
     //
-    // Note: we no longer compare the result counter value here because COMMON_SEARCH_TERM ('the')
+    // Note: we do not compare the result counter value here because COMMON_SEARCH_TERM ('the')
     // is frequent enough to hit the 100-result batch cap in both book and chapter scopes, which
     // would make the counter identical in both cases and cause a false failure.
     await expect(async () => {
@@ -900,10 +764,8 @@ test.describe('Scope Switching', () => {
       // A search should have completed with results or no-results
       const counterVisible = await frame.locator('.tw\\:tabular-nums').isVisible();
       if (counterVisible) return;
-      if (await frame.locator('p.tw\\:font-light.tw\\:text-center').isVisible()) return;
+      if (await resultsMessage(frame).isVisible()) return;
       throw new Error('Waiting for scope-change search to complete');
     }).toPass({ timeout: 30_000 });
-
-    await closeFindPanel(mainPage);
   });
 });
