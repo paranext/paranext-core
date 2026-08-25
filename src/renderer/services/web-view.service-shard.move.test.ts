@@ -227,6 +227,48 @@ describe('captureAndCloseWebView', () => {
   });
 });
 
+describe('argument validation', () => {
+  // Both halves of the move are registered network-object methods, so any process can call them
+  // with anything. These pin that they check rather than trust.
+
+  test('capture refuses a web view id that is not a string', async () => {
+    const { shard } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
+
+    // The wire has no types; a caller can send whatever it likes
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    await expect(shard.captureAndCloseWebView(42 as unknown as string)).rejects.toThrow(
+      /needs a web view id/,
+    );
+  });
+
+  test('adopt refuses a bundle that is missing its web view type', async () => {
+    const { shard } = await shardOverDockLayout(undefined);
+
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const bundle = { id: 'abc' } as unknown as SavedWebViewDefinition;
+
+    await expect(shard.adoptWebView(bundle)).rejects.toThrow(/webViewType/);
+  });
+
+  test('adopt writes no state for a bundle it rejects', async () => {
+    // The reason validation has to come first rather than anywhere else in the adopt: the state
+    // seed runs before the provider, so without this an arbitrary caller could park a blob under
+    // any web view id it named and have the adopt fail afterwards, leaving the blob behind.
+    const { setFullWebViewStateById } = await import('@renderer/services/web-view-state.service');
+    vi.mocked(setFullWebViewStateById).mockClear();
+    const { shard } = await shardOverDockLayout(undefined);
+
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const bundle = {
+      id: 'victim-id',
+      state: { injected: true },
+    } as unknown as SavedWebViewDefinition;
+
+    await expect(shard.adoptWebView(bundle)).rejects.toThrow();
+    expect(setFullWebViewStateById).not.toHaveBeenCalled();
+  });
+});
+
 describe('adoptWebView', () => {
   const SAVED_DEFINITION: SavedWebViewDefinition = {
     id: 'moved-view',
