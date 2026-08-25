@@ -5,7 +5,13 @@ import {
   TestInfo,
   ConsoleMessage,
 } from '@playwright/test';
-import { launchElectronApp, LaunchElectronAppOptions, teardownElectronApp } from './helpers';
+import {
+  DEFAULT_WINDOW_SIZE,
+  launchElectronApp,
+  LaunchElectronAppOptions,
+  teardownElectronApp,
+  WindowSize,
+} from './helpers';
 
 export { expect } from '@playwright/test';
 
@@ -37,6 +43,11 @@ export interface IsolatedFixtures {
    * name throws "Fixture ... has already been registered as a { scope: 'worker' } fixture".
    */
   electronLaunchOptions: LaunchElectronAppOptions;
+  /**
+   * Window size this suite's layout is written against; set with `test.use({ windowSize: { width,
+   * height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
+   */
+  windowSize: WindowSize;
   electronApp: ElectronApplication;
   mainPage: Page;
 }
@@ -44,6 +55,7 @@ export interface IsolatedFixtures {
 export const test = base.extend<IsolatedFixtures>({
   // Option fixture: suites override via test.use(); default launches with no special options.
   electronLaunchOptions: [{}, { option: true }],
+  windowSize: [DEFAULT_WINDOW_SIZE, { option: true }],
 
   // Test-scoped fixture: Playwright launches one Electron instance per test() block.
   electronApp: async ({ electronLaunchOptions }, use) => {
@@ -56,19 +68,19 @@ export const test = base.extend<IsolatedFixtures>({
     console.log('[teardown] Test-scoped app teardown complete');
   },
 
-  mainPage: async ({ electronApp }, use, testInfo: TestInfo) => {
+  mainPage: async ({ electronApp, windowSize }, use, testInfo: TestInfo) => {
     const page = await electronApp.firstWindow({ timeout: 90_000 });
 
     // Ensure the window is large enough for WebView content to be visible.
     // On headless Linux (xvfb) or WSL2 the default window can be very small,
     // causing elements inside WebView iframes to be clipped or hidden.
-    await electronApp.evaluate(({ BrowserWindow }) => {
+    await electronApp.evaluate(({ BrowserWindow }, size) => {
       const win = BrowserWindow.getAllWindows()[0];
       if (win) {
         if (win.isMaximized()) win.unmaximize();
-        win.setSize(1280, 800);
+        win.setSize(size.width, size.height);
       }
-    });
+    }, windowSize);
 
     console.log(`Window URL: ${page.url()}`);
     const onPageError = (err: Error) => console.error(`Page error: ${err.message}`);

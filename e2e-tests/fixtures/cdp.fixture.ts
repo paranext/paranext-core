@@ -49,6 +49,7 @@ import {
   PageScreenshotOptions,
 } from '@playwright/test';
 import * as fs from 'fs';
+import { assertDeclaredWindowSize, DEFAULT_WINDOW_SIZE, WindowSize } from './helpers';
 
 export { expect } from '@playwright/test';
 
@@ -140,12 +141,19 @@ function shouldValidateScreenshotPath(path: string): boolean {
 
 export interface CdpFixtures {
   mainPage: Page;
+  /**
+   * Window size this suite's layout is written against; set with `test.use({ windowSize: { width,
+   * height } })`. Defaults to {@link DEFAULT_WINDOW_SIZE}.
+   *
+   * Attach mode cannot resize the window — it has no main-process channel — so this is asserted
+   * rather than applied. Start the app at the declared size.
+   */
+  windowSize: WindowSize;
 }
 
 export const test = base.extend<CdpFixtures>({
-  // Playwright fixtures require destructured parameter even when no dependencies are needed
-  // eslint-disable-next-line no-empty-pattern
-  mainPage: async ({}, use) => {
+  windowSize: [DEFAULT_WINDOW_SIZE, { option: true }],
+  mainPage: async ({ windowSize }, use) => {
     let browser;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
@@ -191,48 +199,26 @@ export const test = base.extend<CdpFixtures>({
 
     if (!page) throw new Error('No renderer page found via CDP');
 
-    // ENFORCE Full HD viewport (1920x1080) so screenshots capture the full UI layout regardless of
-    // the underlying Electron window size or whether DevTools is docked. Without this, screenshots
-    // taken at the default 1024x728 window — or worse, the ~300x768 sliver left when DevTools is
-    // docked-right — slip into the evidence directory and produce reviews-by-vibes. See module
-    // docblock for the full failure-mode discussion.
-    await page.setViewportSize({ width: MIN_SCREENSHOT_WIDTH, height: MIN_SCREENSHOT_HEIGHT });
-
-    // Sanity check: confirm the viewport ACTUALLY applied at the renderer level — not just at
-    // Playwright's bookkeeping. `page.viewportSize()` returns the cached requested-value (it just
-    // echoes back what we asked for), so it cannot detect the case where the OS window is smaller
-    // than the requested viewport (CDP can't grow a viewport past the OS window size). The only
-    // reliable signal is reading `window.innerWidth` / `window.innerHeight` IN the renderer via
-    // `page.evaluate()` — those properties reflect the actual rendered viewport.
-    // Read `outerWidth`/`outerHeight`, NOT `innerWidth`/`innerHeight`. `setViewportSize()` on a
-    // CDP-attached page applies an emulation override, and that override changes `innerWidth`
-    // itself — so checking `innerWidth` reads back the value we just asked for and can never
-    // fail, however small the real window is. Measured: a 1024px-wide window with DevTools
-    // docked reports `innerWidth` 469 before the call and 1280 after it, while `outerWidth`
-    // stays 1024 throughout. `outerWidth` is the OS window, and it is what bounds a screenshot.
-    const actualSize = await page.evaluate(() => ({
-      width: window.outerWidth,
-      height: window.outerHeight,
-    }));
-    // Allow a few pixels of shortfall. A window asked for 1920x1080 under a bare Xvfb comes back
-    // as 1919x1079 (measured) — there is no window manager to grant the last pixel, and nothing is
-    // meaningfully cropped by it. The failure this guard exists for is an order of magnitude
-    // larger: a default-sized or DevTools-squeezed window reports 469 or 725.
-    const WINDOW_SIZE_TOLERANCE_PX = 8;
-    if (
-      actualSize.width < MIN_SCREENSHOT_WIDTH - WINDOW_SIZE_TOLERANCE_PX ||
-      actualSize.height < MIN_SCREENSHOT_HEIGHT - WINDOW_SIZE_TOLERANCE_PX
-    ) {
-      throw new Error(
-        `cdp.fixture: the Electron window is ${actualSize.width}x${actualSize.height}, smaller than the ` +
-          `required ${MIN_SCREENSHOT_WIDTH}x${MIN_SCREENSHOT_HEIGHT}. CDP cannot grow a viewport past ` +
-          `the OS window, so screenshots would be cropped and layout-sensitive assertions would run ` +
-          `against a window no user has. Start the app sized, e.g. MAIN_ARGS="--remote-debugging-port=9223 ` +
-          `--window-size ${MIN_SCREENSHOT_WIDTH}x${MIN_SCREENSHOT_HEIGHT}" npm start. Note --maximize is a ` +
-          `no-op under a bare Xvfb (no window manager), and --window-size needs WIDTHxHEIGHT — a comma ` +
-          `is silently ignored.`,
-      );
-    }
+    // Assert the window matches what the spec declared, instead of emulating a viewport on top
+    // of it. `setViewportSize()` here applies a CDP emulation override: layout is computed at the
+    // requested size inside a window that is still whatever size it was, and `innerWidth` reports
+    // the requested value, so nothing can detect the mismatch. Measured: a 1024px-wide window
+    // reports `innerWidth` 469 before such a call and 1280 after, while `outerWidth` stays 1024.
+    // Attach mode has no main-process channel and so cannot genuinely resize the window — the
+    // honest move is to require the app to have been started at the size the spec needs.
+    //
+    // Screenshot quality is NOT enforced here. It is enforced where screenshots are written, by
+    // the `page.screenshot` wrapper below calling `assertFullHdScreenshot`. Keeping the two apart
+    // is deliberate: window size decides layout, and a spec needing Full HD evidence declares it
+    // with `test.use({ windowSize: { width: 1920, height: 1080 } })`.
+    await assertDeclaredWindowSize(
+      page,
+      windowSize,
+      `Start the app at that size, e.g. MAIN_ARGS="--remote-debugging-port=9223 --window-size ` +
+        `${windowSize.width}x${windowSize.height}" npm start. --maximize is a no-op under a bare ` +
+        `Xvfb (no window manager), --window-size needs WIDTHxHEIGHT rather than a comma, and ` +
+        `PT_NO_DEVTOOLS=true stops docked DevTools eating roughly 555px of the window.`,
+    );
 
     // AUTO-VALIDATE screenshot dimensions. Wrap `page.screenshot` so every screenshot taken via
     // the fixture is validated against the Full HD minimum the moment the file lands on disk.
