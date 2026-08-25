@@ -47,8 +47,8 @@ export interface ResourcePickerDialogProps {
   allResources: DblResourceData[];
   /** Whether the `allResources` is still loading */
   isResourcesLoading?: boolean;
-  /** If provided, only resources of this type are shown */
-  resourceType?: ResourceType;
+  /** If provided, only resources of this type (or any of the listed types) are shown */
+  resourceType?: ResourceType | ResourceType[];
   /** IDs of resources already selected in the calling panel */
   selectedResourceIds?: string[];
   /** Localized strings — use RESOURCE_PICKER_DIALOG_STRING_KEYS with useLocalizedStrings */
@@ -168,7 +168,11 @@ export default function ResourcePickerDialog({
   const filteredResources = useMemo(
     () =>
       allResources
-        .filter((r) => !resourceType || r.type === resourceType)
+        .filter(
+          (r) =>
+            !resourceType ||
+            (Array.isArray(resourceType) ? resourceType.includes(r.type) : r.type === resourceType),
+        )
         .filter((r) => matchesSearch(r, searchText))
         .filter(
           (r) => selectedLanguages.length === 0 || selectedLanguages.includes(r.bestLanguageName),

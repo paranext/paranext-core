@@ -107,11 +107,7 @@ export function useEffectiveResourceReferenceList(
   >(undefined);
 
   useEffect(() => {
-    if (!userPdp) {
-      // No PDP available for this project — treat as empty user list so callers don't wait forever.
-      setUserResourceReferenceList(DEFAULT_LIST);
-      return;
-    }
+    if (!userPdp) return;
 
     let disposed = false;
     let unsubscribe: (() => Promise<boolean>) | undefined;

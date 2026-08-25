@@ -88,9 +88,9 @@ describe('useEffectiveResourceReferenceList', () => {
     expect(result.current.status).toBe('loading');
   });
 
-  it('returns project-level result immediately when user PDP is unavailable', () => {
-    // When useProjectDataProvider returns undefined, the hook treats it as "no user list" and
-    // falls back to DEFAULT_LIST so callers don't wait forever on a spinner.
+  it('returns undefined while the user PDP is still loading', () => {
+    // useProjectDataProvider returns undefined while initializing — the hook must wait and
+    // return [undefined, true] rather than resolving prematurely with a DEFAULT_LIST merge.
     mockUseProjectSetting.mockReturnValue([emptyList(), undefined, undefined, false]);
     mockUseProjectDataProvider.mockReturnValue(undefined);
 
@@ -98,8 +98,8 @@ describe('useEffectiveResourceReferenceList', () => {
       useEffectiveResourceReferenceList('proj-1', 'platformScripture.modelTexts'),
     );
 
-    expect(result.current[0]).not.toBeUndefined();
-    expect(result.current[1]).toBe(false);
+    expect(result.current[0]).toBeUndefined();
+    expect(result.current[1]).toBe(true);
   });
 
   it('returns project-only list when user list is empty', () => {

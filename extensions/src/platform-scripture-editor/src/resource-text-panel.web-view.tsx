@@ -269,7 +269,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
     () => resourcesPossiblyUndefined ?? [],
     [resourcesPossiblyUndefined],
   );
-  const [pickerResources, isPickerLoading] = useResourcePickerResources(
+  const [pickerResources] = useResourcePickerResources(
     projectId,
     RESOURCE_PICKER_OPTIONS,
     dblResources,
