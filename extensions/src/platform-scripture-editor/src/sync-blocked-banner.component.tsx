@@ -60,8 +60,9 @@ export function SyncBlockedBanner({ localizedStrings }: Props) {
     // The toolbar's sync popover (`src/renderer/components/sync-status-button.component.tsx`) offers
     // the same cancel, and in Simple mode both can be on screen during a blocking scheduled sync.
     // Neither knows the other was clicked, so a cancel requested here still reads as armed there.
-    // Kept separate deliberately — see adr-toolbar-sync-status-is-local in `.context/standards/Architecture-Decisions.md`
-    // for why, and for the follow-up that gives them one shared cancel-requested state.
+    // Kept separate deliberately — see `adr-toolbar-sync-status-is-local` in
+    // `.context/standards/Architecture-Decisions.md` for why, and for the follow-up that gives them
+    // one shared cancel-requested state.
     setIsCancelEnabled(false);
     papi.commands.sendCommand('paratextBibleSendReceive.cancelSync').catch((e) => {
       logger.warn(`Sync-blocked banner failed to cancel sync: ${getErrorMessage(e)}`);

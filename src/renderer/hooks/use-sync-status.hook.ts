@@ -209,7 +209,7 @@ function isValidSyncState(state: unknown): state is SyncState {
  * mode that currently includes the startup sync itself (`main/startup-tasks.ts` calls the dotnet
  * `syncProjects` command directly), so "correct from startup" holds for manual and scheduled syncs
  * but not yet for that one. See {@link SyncState} for the full list, and
- * adr-toolbar-sync-status-is-local in `.context/standards/Architecture-Decisions.md` for why
+ * `adr-toolbar-sync-status-is-local` in `.context/standards/Architecture-Decisions.md` for why
  * closing that gap is a change to sync behavior rather than to this hook.
  *
  * Projects are resolved from project metadata rather than the event, which carries no ids. They are

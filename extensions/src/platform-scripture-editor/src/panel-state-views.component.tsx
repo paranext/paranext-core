@@ -46,7 +46,7 @@ export function LoadingView({ label }: { label: ReactNode }) {
  * re-drive that read, so it renders a message alone (see `PanelReadinessView`) rather than offering
  * an inert button.
  *
- * Composes the shadcn `Empty` primitive per adr-empty-is-zero-state-primitive rather than
+ * Composes the shadcn `Empty` primitive per `adr-empty-is-zero-state-primitive` rather than
  * hand-rolling a container, and carries `role="alert"` so a screen-reader user sitting on the panel
  * is told when it flips out of the loading state, which announces through its own live region.
  *
