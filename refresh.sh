@@ -1,54 +1,14 @@
 #!/bin/bash
-# Quick app refresh - stops, rebuilds, and restarts Platform.Bible with CDP enabled
-# This is a FAST operation (~30s). Agents should run this freely without optimization concerns.
+# Thin delegate to the canonical launcher at .erb/scripts/refresh.sh.
+#
+# These were two near-identical copies, and they drifted: the canonical one gained PT_NO_DEVTOOLS
+# and an explicit --window-size (a docked DevTools panel takes ~555px of the window, and --maximize
+# is a no-op under a bare Xvfb because nothing is there to honour it), while this one kept starting
+# a ~1024px DevTools-docked app. That is exactly the window the CDP fixtures now reject at setup,
+# so whichever copy you happened to run decided whether your tests could run at all.
+#
+# Kept rather than deleted because things point at it by this path — e.g.
+# e2e-tests/fixtures/papi-live.fixture.ts tells you to "Start it with: ./refresh.sh".
+# Arguments and environment pass straight through; see the canonical script for what it accepts.
 set -e
-cd "$(dirname "$0")"
-
-echo "Stopping app..."
-npm stop 2>/dev/null || true
-
-echo "Building..."
-npm run build
-
-
-# Safety net: Claude Code / VS Code set this, which makes Electron act as plain Node.js
-unset ELECTRON_RUN_AS_NODE
-
-# Start with CDP enabled. On Linux, use xvfb for headless operation.
-# On macOS (and other platforms without xvfb), show the GUI window.
-if command -v xvfb-run >/dev/null 2>&1; then
-  echo "Starting with CDP enabled (headless via xvfb)..."
-  xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
-      env MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
-else
-  echo "Starting with CDP enabled (visible window — xvfb not available)..."
-  env MAIN_ARGS="--remote-debugging-port=9223 --maximize" npm start &
-fi
-APP_PID=$!
-
-# Kill the background process on failure/exit
-cleanup() {
-  if kill -0 "$APP_PID" 2>/dev/null; then
-    echo "Cleaning up background process $APP_PID..."
-    kill "$APP_PID" 2>/dev/null || true
-  fi
-}
-trap cleanup EXIT
-
-# Wait for all ports (max 3 minutes)
-echo "Waiting for app to be ready..."
-for i in {1..36}; do
-  RENDERER=$(curl -s -m 2 http://localhost:1212 > /dev/null 2>&1 && echo "UP" || echo "DOWN")
-  WS=$(curl -s -m 2 http://localhost:8876 > /dev/null 2>&1 && echo "UP" || echo "DOWN")
-  CDP=$(curl -s -m 2 http://localhost:9223/json > /dev/null 2>&1 && echo "UP" || echo "DOWN")
-  if [ "$RENDERER" = "UP" ] && [ "$WS" = "UP" ] && [ "$CDP" = "UP" ]; then
-    echo "✓ App ready (Renderer: $RENDERER, WebSocket: $WS, CDP: $CDP)"
-    # Disable the trap — app should keep running after successful startup
-    trap - EXIT
-    exit 0
-  fi
-  echo "  Waiting... (Renderer: $RENDERER, WebSocket: $WS, CDP: $CDP)"
-  sleep 5
-done
-echo "✗ Timeout waiting for app"
-exit 1
+exec "$(dirname "$0")/.erb/scripts/refresh.sh" "$@"

@@ -37,7 +37,14 @@ class NoSilentSkipsReporter implements Reporter {
   private static neverRan(test: TestCase): boolean {
     if (test.expectedStatus === 'skipped') return false;
     if (test.results.length === 0) return true;
-    return test.results.some(
+    // `every`, not `some`: when a setup failure loses tests, the dispatcher gives each one a
+    // `skipped` result AND queues it for retry, so a test whose first attempt was lost but which
+    // passed on a later attempt has a mix of results. Reporting that as lost would fail runs whose
+    // tests all ultimately passed — the inverse of this reporter's purpose, landing hardest on the
+    // flakiest suites, which are exactly the ones `retries` exists for. A test is lost only when no
+    // attempt produced a real result, which is also what `computeTestCaseOutcome` requires
+    // (`expected === 0 && unexpected === 0`).
+    return test.results.every(
       (testResult) => testResult.status === 'skipped' || testResult.status === 'interrupted',
     );
   }
