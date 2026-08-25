@@ -58,7 +58,9 @@ export function buildLocalNonDblResources(
       (r) =>
         (r.projectId !== '' && r.projectId === m.id) ||
         // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
-        (r.dblEntryUid !== '' && m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
+        (r.installed &&
+          r.dblEntryUid !== '' &&
+          m.id.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
     );
     return matchingDblEntry === undefined;
   });
