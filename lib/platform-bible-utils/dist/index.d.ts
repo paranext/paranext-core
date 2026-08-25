@@ -302,6 +302,173 @@ export declare class EventRollingTimeCounter {
 	hasViolatedThreshold(minRollingTimeMs: number): boolean;
 }
 /**
+ * A string pre-segmented into Unicode grapheme clusters. Segmentation happens once in the
+ * constructor (the expensive step); every other operation reuses it. Derived values
+ * (substring/slice/etc.) reuse the parent grapheme slice and never re-segment.
+ *
+ * Every method mirrors its `String.prototype` counterpart exactly — including the edge cases around
+ * negative, fractional, `NaN`, and out-of-range arguments — with one substitution: the unit of
+ * indexing and length is the grapheme cluster rather than the UTF-16 code unit. So `length` counts
+ * what a reader would call characters, `slice` never cuts a cluster in half, and a search only
+ * reports a hit that begins and ends on cluster boundaries.
+ *
+ * The surface is limited to operations that actually need the segmentation: {@link toArray} and
+ * {@link formatReplacement} have no native counterpart but do need it, while `normalize` and
+ * `ordinalCompare` are deliberately absent, because neither reads the string as characters — they
+ * live with the plain string helpers in `string-util` instead.
+ *
+ * Range and padding methods return a `GraphemeString` rather than a `string` so the parent's
+ * segmentation carries into the result instead of being recomputed. Call `.string` for the text.
+ */
+export declare class GraphemeString {
+	/** The raw string. Used for `.string`, the native scans behind search, and regex split. */
+	private readonly str;
+	/** Grapheme clusters — source of truth for indexing. Treat as read-only. */
+	private readonly graphemes;
+	/** Lazily built cache behind {@link offsets}. */
+	private offsetsCache?;
+	/**
+	 * @param string The raw string.
+	 * @param graphemes Optional precomputed grapheme array. When provided, segmentation is skipped
+	 *   entirely — this is how derived instances avoid re-parsing.
+	 */
+	constructor(string: string, graphemes?: string[]);
+	/** The original raw string. */
+	get string(): string;
+	/** Number of grapheme clusters. Mirrors `String.prototype.length` in graphemes. */
+	get length(): number;
+	/**
+	 * UTF-16 start offset of each grapheme, where `offsets.length === graphemes.length`.
+	 *
+	 * PERF: built on first use rather than in the constructor. Only the search and range methods need
+	 * it; `length`, the point accessors, and the padding methods do not, and those are both the
+	 * cheapest and the most frequent operations — building it eagerly taxes them for nothing.
+	 */
+	private get offsets();
+	/** The grapheme clusters as an array. Treat the result as read-only. No native equivalent. */
+	toArray(): string[];
+	/**
+	 * Replace each `{key}` in this string with `replacers[key]` and unescape `\{`/`\}`. An unknown
+	 * key is replaced by the key text itself. Adjacent strings are concatenated, so a replacer that
+	 * is not a string stays its own entry — which is how a React element survives being substituted
+	 * in.
+	 *
+	 * No native counterpart, but it walks the string character by character, so it belongs here
+	 * rather than beside the plain string helpers: an instance built once from a template can be
+	 * formatted repeatedly without re-segmenting it.
+	 */
+	formatReplacementToArray<T = unknown>(replacers: {
+		[key: string | number]: T;
+	} | object): (string | T)[];
+	/** {@link formatReplacementToArray} with every part coerced to a string and joined. */
+	formatReplacement(replacers: {
+		[key: string | number]: string | unknown;
+	} | object): string;
+	/**
+	 * Mirrors `String.prototype.at`. The grapheme at `index`, or `undefined` if out of bounds.
+	 * Negative indexes count back from the end.
+	 */
+	at(index: number): string | undefined;
+	/**
+	 * Mirrors `String.prototype.charAt`. The grapheme at `index`, or `''` if out of bounds. Like
+	 * native — and unlike {@link at} — a negative index is out of bounds rather than counted from the
+	 * end.
+	 */
+	charAt(index: number): string;
+	/**
+	 * Mirrors `String.prototype.codePointAt`, indexed by grapheme. For a grapheme built from several
+	 * code points this reports only the first one.
+	 */
+	codePointAt(index: number): number | undefined;
+	/**
+	 * Mirrors `String.prototype.slice`. Negative indexes count back from the end and a backwards
+	 * range yields an empty result.
+	 */
+	slice(indexStart?: number, indexEnd?: number): GraphemeString;
+	/**
+	 * Mirrors `String.prototype.substring`. Negative indexes clamp to 0 rather than counting from the
+	 * end, and — as in native — the arguments are swapped when `begin` is greater than `end`.
+	 */
+	substring(begin?: number, end?: number): GraphemeString;
+	/**
+	 * Mirrors `String.prototype.padStart`, padding by whole graphemes so the result is exactly
+	 * `targetLength` graphemes long.
+	 */
+	padStart(targetLength: number, padString?: string): GraphemeString;
+	/** Mirrors `String.prototype.padEnd`. See {@link padStart}. */
+	padEnd(targetLength: number, padString?: string): GraphemeString;
+	/**
+	 * Mirrors `String.prototype.indexOf`: the first grapheme index at or after `position` where
+	 * `searchString` occurs, or -1. A negative `position` clamps to 0, and an empty needle reports
+	 * the clamped `position` itself. Only a hit that begins and ends on a grapheme boundary counts,
+	 * so searching for a single emoji that forms part of a larger cluster reports -1 rather than
+	 * matching inside it.
+	 *
+	 * Accepts a raw string or a GraphemeString; the needle is used raw and is never segmented.
+	 */
+	indexOf(searchString: string | GraphemeString, position?: number): number;
+	/**
+	 * Mirrors `String.prototype.lastIndexOf`: the last grapheme index at or before `position` where
+	 * `searchString` occurs, or -1. As in native, an omitted or `NaN` position searches the whole
+	 * string while a negative one clamps to 0. See {@link indexOf} for the boundary rule.
+	 */
+	lastIndexOf(searchString: string | GraphemeString, position?: number): number;
+	/** Mirrors `String.prototype.includes`. See {@link indexOf} for `position` and boundary rules. */
+	includes(searchString: string | GraphemeString, position?: number): boolean;
+	/**
+	 * Mirrors `String.prototype.startsWith`: whether an occurrence of `searchString` begins at
+	 * `position`. A negative `position` clamps to 0 and an empty needle returns `true`. The match
+	 * must end on a grapheme boundary, so a prefix ending mid-cluster is rejected.
+	 */
+	startsWith(searchString: string | GraphemeString, position?: number): boolean;
+	/**
+	 * Mirrors `String.prototype.endsWith`: whether an occurrence of `searchString` ends exactly at
+	 * `endPosition` (default: the end of the string). A negative `endPosition` clamps to 0 and an
+	 * empty needle returns `true`. The match must begin on a grapheme boundary.
+	 */
+	endsWith(searchString: string | GraphemeString, endPosition?: number): boolean;
+	/**
+	 * Mirrors `String.prototype.split`, including the parts that surprise people: a `splitLimit`
+	 * discards everything past the limit rather than keeping it as a final piece, the limit is
+	 * converted with `ToUint32` (so `-1` means "no limit" while `NaN` and `Infinity` mean "empty
+	 * result"), an omitted separator yields the whole string, and a regular expression's capture
+	 * groups are interleaved into the result.
+	 *
+	 * The grapheme substitutions: an empty separator splits into graphemes rather than UTF-16 units,
+	 * and a separator only matches where it begins and ends on grapheme boundaries.
+	 *
+	 * Entries are `undefined` exactly where native produces `undefined` — a capture group that did
+	 * not participate in the match.
+	 */
+	split(separator?: string | RegExp, splitLimit?: number): (GraphemeString | undefined)[];
+	/** Split on a literal separator, in grapheme space. See {@link split}. */
+	private splitOnString;
+	/**
+	 * Split on a regular expression, in grapheme space. Follows the same shape as the spec's
+	 * `RegExp.prototype[@@split]`, with two changes: positions advance by whole graphemes, and a
+	 * match that does not begin and end on grapheme boundaries is skipped as if it had not matched.
+	 */
+	private splitOnRegExp;
+	/** Build the grapheme array a padding method should prepend/append, empty when none is needed. */
+	private buildPadding;
+	/** UTF-16 offset where grapheme `index` starts, or the end of the string for `index === length`. */
+	private offsetAt;
+	/**
+	 * How many graphemes a boundary-aligned occurrence of `needle` starting at grapheme `index`
+	 * occupies.
+	 */
+	private graphemeSpan;
+	/** Build a child from a resolved, clamped grapheme range `[begin, end)`. */
+	private derive;
+	/**
+	 * Binary search `offsets` for a UTF-16 offset. Returns its grapheme index if the offset is a
+	 * grapheme boundary, else -1. `offsets` is strictly increasing.
+	 */
+	private graphemeIndexAtOffset;
+	/** Whether a UTF-16 offset falls on a grapheme boundary (or the very end of the string). */
+	private isBoundary;
+}
+/**
  * Class that allows calling asynchronous functions multiple times at once while only running one at
  * a time.
  *
@@ -3561,201 +3728,124 @@ export declare function getNthCaller(n: number, callers?: string[]): string;
  */
 export declare function getFormatCallerFunction(footnotes: MarkerObject[], callers: string[] | undefined): (caller: string | undefined, index: number) => string | undefined;
 /**
- * This function mirrors the `at` function from the JavaScript Standard String object. It handles
- * Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `at` function from the JavaScript Standard String object. It operates
+ * on grapheme clusters instead of UTF-16 code units.
  *
- * Finds the Unicode code point at the given index.
+ * Finds the grapheme cluster at the given index.
  *
  * @param string String to index
- * @param index Position of the character to be returned in range of -length(string) to
- *   length(string)
- * @returns New string consisting of the Unicode code point located at the specified offset,
- *   undefined if index is out of bounds
+ * @param index Position of the grapheme cluster to return. Negative values count back from the end
+ * @returns The grapheme cluster at the given index, or `undefined` if the index is out of bounds
  */
 export declare function at(string: string, index: number): string | undefined;
 /**
  * This function mirrors the `charAt` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Returns a new string consisting of the single unicode code point at the given index.
+ * Returns the single grapheme cluster at the given index.
  *
  * @param string String to index
- * @param index Position of the string character to be returned, in the range of 0 to
- *   length(string)-1
- * @returns New string consisting of the Unicode code point located at the specified offset, empty
- *   string if index is out of bounds
+ * @param index Position of the grapheme cluster to return. Unlike {@link at}, a negative index is
+ *   out of bounds rather than counted from the end
+ * @returns The grapheme cluster at the given index, or an empty string if the index is out of
+ *   bounds
  */
 export declare function charAt(string: string, index: number): string;
 /**
  * This function mirrors the `codePointAt` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Returns a non-negative integer that is the Unicode code point value of the character starting at
- * the given index.
+ * Returns the Unicode code point value of the grapheme cluster at the given index. For a cluster
+ * built from several code points, this is the first code point only.
  *
  * @param string String to index
- * @param index Position of the string character to be returned, in the range of 0 to
- *   length(string)-1
- * @returns Non-negative integer representing the code point value of the character at the given
- *   index, or undefined if there is no element at that position
+ * @param index Position of the grapheme cluster to read, in the range 0 to `stringLength(string)-1`
+ * @returns The code point value, or `undefined` if the index is out of bounds
  */
 export declare function codePointAt(string: string, index: number): number | undefined;
 /**
  * This function mirrors the `endsWith` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Determines whether a string ends with the characters of this string.
+ * Determines whether a string ends with the characters of another string.
  *
  * @param string String to search through
  * @param searchString Characters to search for at the end of the string
  * @param endPosition End position where searchString is expected to be found. Default is
- *   `length(string)`
+ *   `stringLength(string)`
  * @returns True if it ends with searchString, false if it does not
  */
 export declare function endsWith(string: string, searchString: string, endPosition?: number): boolean;
 /**
- * Formats a string into an array of objects (adjacent strings are concatenated in one array entry),
- * replacing `{replacer key}` with the value in the `replacers` at that replacer key (or multiple
- * replacer values if there are multiple in the string). Will also remove \ before curly braces if
- * curly braces are escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this
- * is {name}! I like `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
- *
- * If the key in unescaped braces is not found, returns the key without the braces. Empty unescaped
- * curly braces will just return a string without the braces e.g. ('I am {Nemo}', { 'name': 'Jim'})
- * would return 'I am Nemo'.
- *
- * Note: React elements can be used as replacer values.
- *
- * @example
- *
- * ```tsx
- * <p>
- *   {formatReplacementStringToArray('Hi {other}! I am {name}.', {
- *     other: 'Billy',
- *     name: <span className="tw:text-red-500">Jim</span>,
- *   })}
- * </p>
- * ```
- *
- * @example
- *
- * ```typescript
- * formatReplacementStringToArray(
- *   'Hi, this is {name}! I like \{curly braces\}! I have a {carInfo} car. My favorite food is {food}.',
- *   { name: ['Bill'], carInfo: { year: 2015, color: 'blue' } }
- * );
- *
- * =>
- *
- * ['Hi, this is ', ['Bill'], '! I like {curly braces}! I have a ', { year: 2015, color: 'blue' }, ' car. My favorite food is food.']
- * ```
- *
- * @param str String to format and break out into an array of objects
- * @param replacers Object whose keys are replacer keys and whose values are the values with which
- *   to replace `{replacer key}`s found in the string to format. If the replacer value is a string,
- *   it will be concatenated into existing strings in the array. Otherwise, the replacer value will
- *   be added as a new entry in the array
- * @returns Array of formatted strings and replaced objects
- */
-export declare function formatReplacementStringToArray<T = unknown>(str: string, replacers: {
-	[key: string | number]: T;
-} | object): (string | T)[];
-/**
- * Formats a string, replacing `{replacer key}` with the value in the `replacers` at that replacer
- * key (or multiple replacer values if there are multiple in the string). Will also remove \ before
- * curly braces if curly braces are escaped with a backslash in order to preserve the curly braces.
- * E.g. 'Hi, this is {name}! I like `\{curly braces\}`! would become Hi, this is Jim! I like {curly
- * braces}!
- *
- * If the key in unescaped braces is not found, returns the key without the braces. Empty unescaped
- * curly braces will just return a string without the braces e.g. ('I am {Nemo}', { 'name': 'Jim'})
- * would return 'I am Nemo'.
- *
- * @example
- *
- * ```typescript
- * formatReplacementString(
- *   'Hi, this is {name}! I like \{curly braces\}! I have a {carColor} car. My favorite food is {food}.',
- *   { name: 'Bill', carColor: 'blue' }
- * );
- *
- * =>
- *
- * 'Hi, this is Bill! I like {curly braces}! I have a blue car. My favorite food is food.'
- * ```
- *
- * @param str String to format
- * @param replacers Object whose keys are replacer keys and whose values are the values with which
- *   to replace `{replacer key}`s found in the string to format. Will be coerced to strings using
- *   `${replacerValue}`
- * @returns Formatted string
- */
-export declare function formatReplacementString(str: string, replacers: {
-	[key: string | number]: string | unknown;
-} | object): string;
-/**
  * This function mirrors the `includes` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
  * Performs a case-sensitive search to determine if searchString is found in string.
  *
  * @param string String to search through
  * @param searchString String to search for
- * @param position Position within the string to start searching for searchString. Default is `0`
- * @returns True if search string is found, false if it is not
+ * @param position Position within the string to start searching. Negative values clamp to `0`.
+ *   Default is `0`
+ * @returns True if the search string is found, false if it is not
  */
 export declare function includes(string: string, searchString: string, position?: number): boolean;
 /**
  * This function mirrors the `indexOf` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Returns the index of the first occurrence of a given string.
+ * Returns the index of the first occurrence of a given string, or -1 if it is not found. Only an
+ * occurrence that begins and ends on a grapheme cluster boundary counts as a match.
  *
  * @param string String to search through
  * @param searchString The string to search for
- * @param position Start of searching. Default is `0`
- * @returns Index of the first occurrence of a given string
+ * @param position Where to start searching. Negative values clamp to `0`. Default is `0`
+ * @returns Index of the first occurrence of the given string, or -1
  */
-export declare function indexOf(string: string, searchString: string, position?: number | undefined): number;
+export declare function indexOf(string: string, searchString: string, position?: number): number;
 /**
  * This function mirrors the `lastIndexOf` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Searches this string and returns the index of the last occurrence of the specified substring.
+ * Returns the index of the last occurrence of the specified substring, or -1 if it is not found.
  *
  * @param string String to search through
  * @param searchString Substring to search for
- * @param position The index at which to begin searching. If omitted, the search begins at the end
- *   of the string. Default is `undefined`
- * @returns Index of the last occurrence of searchString found, or -1 if not found.
+ * @param position The index at or before which the occurrence must begin. If omitted, the whole
+ *   string is searched. Negative values clamp to `0`
+ * @returns Index of the last occurrence of searchString, or -1 if not found
  */
 export declare function lastIndexOf(string: string, searchString: string, position?: number): number;
 /**
- * This function mirrors the `length` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes. Since `length` appears to be a
- * reserved keyword, the function was renamed to `stringLength`
- *
- * Returns the length of a string.
+ * This function mirrors the `length` property from the JavaScript Standard String object. It counts
+ * grapheme clusters instead of UTF-16 code units. Since `length` appears to be a reserved keyword,
+ * the function was renamed to `stringLength`.
  *
  * @param string String to return the length for
- * @returns Number that is length of the starting string
+ * @returns Number of grapheme clusters in the string
  */
 export declare function stringLength(string: string): number;
 /**
- * This function mirrors the `normalize` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `normalize` function from the JavaScript Standard String object, with
+ * one addition: `'none'` returns the string unchanged, where native throws a `RangeError`.
  *
- * Returns the Unicode Normalization Form of this string.
+ * Note this deliberately does not go through {@link GraphemeString}: normalization reads the whole
+ * string and never needs it segmented, so routing it through the class would add segmentation cost
+ * for no benefit.
  *
  * @param string The starting string
- * @param form Form specifying the Unicode Normalization Form. Default is `'NFC'`
- * @returns A string containing the Unicode Normalization Form of the given string.
+ * @param form Form specifying the Unicode Normalization Form, or `'none'` to return the string
+ *   as-is
+ * @returns A string containing the Unicode Normalization Form of the given string
  */
 export declare function normalize(string: string, form: "NFC" | "NFD" | "NFKC" | "NFKD" | "none"): string;
 /**
  * Compares two strings using an ordinal comparison approach based on the specified collation
  * options. This function uses the built-in `localeCompare` method with the 'en' locale and the
  * provided collation options to compare the strings.
+ *
+ * Note this deliberately does not go through {@link GraphemeString}: collation reads the whole
+ * string and never needs it segmented, so routing it through the class would add segmentation cost
+ * for no benefit.
  *
  * @param string1 The first string to compare.
  * @param string2 The second string to compare.
@@ -3767,100 +3857,121 @@ export declare function normalize(string: string, form: "NFC" | "NFD" | "NFKC" |
 export declare function ordinalCompare(string1: string, string2: string, options?: Intl.CollatorOptions): number;
 /**
  * This function mirrors the `padEnd` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Pads this string with another string (multiple times, if needed) until the resulting string
- * reaches the given length. The padding is applied from the end of this string.
+ * Pads the string with another string (multiple times, if needed) until the result is
+ * `targetLength` grapheme clusters long. The padding is applied at the end.
  *
- * @param string String to add padding too
- * @param targetLength The length of the resulting string once the starting string has been padded.
- *   If value is less than or equal to length(string), then string is returned as is.
- * @param padString The string to pad the current string with. If padString is too long to stay
- *   within targetLength, it will be truncated. Default is `" "`
- * @returns String with appropriate padding at the end
+ * @param string String to add padding to
+ * @param targetLength Length of the result, in grapheme clusters. If it is less than or equal to
+ *   `stringLength(string)`, the string is returned as is
+ * @param padString The string to pad with, truncated to fit `targetLength`. Default is `" "`
+ * @returns String with the appropriate padding at the end
  */
 export declare function padEnd(string: string, targetLength: number, padString?: string): string;
 /**
  * This function mirrors the `padStart` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Pads this string with another string (multiple times, if needed) until the resulting string
- * reaches the given length. The padding is applied from the start of this string.
+ * Pads the string with another string (multiple times, if needed) until the result is
+ * `targetLength` grapheme clusters long. The padding is applied at the start.
  *
- * @param string String to add padding too
- * @param targetLength The length of the resulting string once the starting string has been padded.
- *   If value is less than or equal to length(string), then string is returned as is.
- * @param padString The string to pad the current string with. If padString is too long to stay
- *   within the targetLength, it will be truncated from the end. Default is `" "`
- * @returns String with of specified targetLength with padString applied from the start
+ * @param string String to add padding to
+ * @param targetLength Length of the result, in grapheme clusters. If it is less than or equal to
+ *   `stringLength(string)`, the string is returned as is
+ * @param padString The string to pad with, truncated to fit `targetLength`. Default is `" "`
+ * @returns String with the appropriate padding at the start
  */
 export declare function padStart(string: string, targetLength: number, padString?: string): string;
 /**
- * This function mirrors the `slice` function from the JavaScript Standard String object. It handles
- * Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `slice` function from the JavaScript Standard String object. It
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Extracts a section of this string and returns it as a new string, without modifying the original
- * string.
+ * Extracts a section of the string and returns it as a new string, without modifying the original.
  *
  * @param string The starting string
- * @param indexStart The index of the first character to include in the returned substring.
- * @param indexEnd The index of the first character to exclude from the returned substring.
- * @returns A new string containing the extracted section of the string.
+ * @param indexStart The index of the first grapheme cluster to include. Negative values count back
+ *   from the end
+ * @param indexEnd The index of the first grapheme cluster to exclude. Negative values count back
+ *   from the end. A range that ends before it starts yields an empty string
+ * @returns A new string containing the extracted section of the string
  */
 export declare function slice(string: string, indexStart: number, indexEnd?: number): string;
 /**
- * This function mirrors the `split` function from the JavaScript Standard String object. It handles
- * Unicode code points instead of UTF-16 character codes.
+ * This function mirrors the `split` function from the JavaScript Standard String object. It
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Takes a pattern and divides the string into an ordered list of substrings by searching for the
- * pattern, puts these substrings into an array, and returns the array.
+ * Divides the string into an ordered list of substrings by searching for a pattern, and returns
+ * them as an array.
  *
  * @param string The string to split
- * @param separator The pattern describing where each split should occur
- * @param splitLimit Limit on the number of substrings to be included in the array. Splits the
- *   string at each occurrence of specified separator, but stops when limit entries have been placed
- *   in the array.
- * @returns An array of strings, split at each point where separator occurs in the starting string.
- *   Returns undefined if separator is not found in string.
+ * @param separator The pattern describing where each split should occur. An empty string splits
+ *   into individual grapheme clusters
+ * @param splitLimit Maximum number of substrings to return. As in native, anything past the limit
+ *   is discarded, and the limit is converted with `ToUint32` — so `-1` means "no limit" while `NaN`
+ *   and `Infinity` yield an empty array
+ * @returns An array of strings, split at each point where separator occurs in the starting string
  */
 export declare function split(string: string, separator: string | RegExp, splitLimit?: number): string[];
 /**
  * This function mirrors the `startsWith` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Determines whether the string begins with the characters of a specified string, returning true or
- * false as appropriate.
+ * Determines whether the string begins with the characters of a specified string.
  *
  * @param string String to search through
- * @param searchString The characters to be searched for at the start of this string.
- * @param position The start position at which searchString is expected to be found (the index of
- *   searchString's first character). Default is `0`
+ * @param searchString The characters to search for at the start of the string
+ * @param position The position at which searchString is expected to begin. Negative values clamp to
+ *   `0`. Default is `0`
  * @returns True if the given characters are found at the beginning of the string, including when
- *   searchString is an empty string; otherwise, false.
+ *   searchString is an empty string; otherwise, false
  */
 export declare function startsWith(string: string, searchString: string, position?: number): boolean;
 /**
  * This function mirrors the `substring` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * operates on grapheme clusters instead of UTF-16 code units.
  *
- * Returns a substring by providing start and end position.
+ * Returns the part of the string between a start and an end index.
  *
  * @param string String to be divided
- * @param begin Start position
- * @param end End position. Default is `End of string`
- * @returns Substring from starting string
+ * @param begin Start position. Negative values clamp to `0` rather than counting from the end
+ * @param end End position. Default is the end of the string. As in native, the two arguments are
+ *   swapped when `begin` is greater than `end`
+ * @returns Substring from the starting string
  */
 export declare function substring(string: string, begin: number, end?: number): string;
 /**
- * This function mirrors the `toArray` function from the JavaScript Standard String object. It
- * handles Unicode code points instead of UTF-16 character codes.
+ * Converts a string to an array of its grapheme clusters. Mirrors spreading a native string, except
+ * that native yields code points rather than grapheme clusters.
  *
- * Converts a string to an array of string characters.
- *
- * @param string String to convert to array
- * @returns An array of characters from the starting string
+ * @param string String to convert to an array
+ * @returns An array of the string's grapheme clusters
  */
 export declare function toArray(string: string): string[];
+/**
+ * Replaces each `{key}` in `str` with `replacers[key]`, and unescapes `\{`/`\}`. An unknown key is
+ * replaced by the key text itself. Adjacent strings are concatenated into one array entry, so a
+ * replacer that is not a string stays its own entry — which is how a React element survives being
+ * substituted into a localized template.
+ *
+ * @param str String containing `{key}` placeholders
+ * @param replacers Object whose keys are placeholder names and whose values are the replacements
+ * @returns Array of the string's pieces interleaved with the replacements
+ */
+export declare function formatReplacementStringToArray<T = unknown>(str: string, replacers: {
+	[key: string | number]: T;
+} | object): (string | T)[];
+/**
+ * Replaces each `{key}` in `str` with `replacers[key]`, coerces every part to a string, and joins
+ * them. See {@link formatReplacementStringToArray} to keep non-string replacers intact.
+ *
+ * @param str String containing `{key}` placeholders
+ * @param replacers Object whose keys are placeholder names and whose values are the replacements
+ * @returns The formatted string
+ */
+export declare function formatReplacementString(str: string, replacers: {
+	[key: string | number]: string | unknown;
+} | object): string;
 /** Determine whether the string is a `LocalizeKey` meant to be localized in Platform.Bible. */
 export declare function isLocalizeKey(str: string): str is LocalizeKey;
 /**
