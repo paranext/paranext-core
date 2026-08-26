@@ -902,7 +902,11 @@ describe('the move commands', () => {
     // until the window closed while the caller was deciding. Refused here rather than at shard
     // resolution, which would spend its announcement grace period first and then fail as though a
     // real window had been slow to answer.
-    mocks.isWindowTracked.mockImplementation((windowId: number) => windowId === 1);
+    // Set up through the window fixture rather than by overriding the mock here: this suite's
+    // `beforeEach` runs `vi.clearAllMocks()`, which forgets recorded calls but keeps
+    // implementations, so a hand-set one would outlive this test and reject window ids in every
+    // later test that never re-drives the fixture.
+    withWindows({ 1: windowShard([]) });
     const handler = await getCommandHandler('platform.moveWebViewToWindow');
 
     await expect(handler('view-1', 999)).rejects.toThrow(/window id 999, which no open window has/);

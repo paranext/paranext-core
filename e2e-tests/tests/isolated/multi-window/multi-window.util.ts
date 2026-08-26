@@ -243,10 +243,19 @@ export async function focusWindowAndWaitForRouting(
       const shouldSimulateFocusDelivery = Date.now() - startTime >= OS_FOCUS_COOPERATION_BUDGET_MS;
       await electronApp.evaluate(
         ({ BrowserWindow }, { id, simulateFocusDelivery }) => {
-          const win = BrowserWindow.fromId(id);
-          if (!win) throw new Error(`No BrowserWindow with id ${id}`);
-          BrowserWindow.getAllWindows().forEach((otherWindow) => {
-            if (otherWindow.id !== id && !otherWindow.isMinimized()) otherWindow.minimize();
+          // Matched through the renderer URL rather than `BrowserWindow.fromId`: `id` here is the
+          // platform's, and `fromId` understands only Electron's. The two coincide on a first
+          // launch and stop coinciding the moment the app is relaunched, since the platform's
+          // counter keeps counting while Electron's restarts at 1 — so `fromId` would answer
+          // `undefined`, or worse, answer with a different window.
+          const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) =>
+            Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId'));
+          const allWindows = BrowserWindow.getAllWindows();
+          const win = allWindows.find((someWindow) => platformIdOf(someWindow) === id);
+          if (!win) throw new Error(`No window with platform id ${id}`);
+          allWindows.forEach((otherWindow) => {
+            if (platformIdOf(otherWindow) !== id && !otherWindow.isMinimized())
+              otherWindow.minimize();
           });
           if (win.isMinimized()) win.restore();
           win.show();
@@ -268,8 +277,12 @@ export async function focusWindowAndWaitForRouting(
 // #region window helpers
 
 /**
- * The window's Electron BrowserWindow id, read from the `windowId` query parameter the main process
- * puts in every renderer URL (`WINDOW_ID` in `src/shared/data/platform.data.ts`).
+ * The window's platform id, read from the `windowId` query parameter the main process puts in every
+ * renderer URL (`WINDOW_ID` in `src/shared/data/platform.data.ts`).
+ *
+ * Not Electron's `BrowserWindow.id`, which the platform stopped exporting — anything resolving a
+ * window from this value has to match on the same query parameter rather than call
+ * `BrowserWindow.fromId`.
  */
 export function getWindowIdOfPage(page: Page): number {
   const rawId = new URL(page.url()).searchParams.get('windowId');
@@ -395,8 +408,13 @@ export async function widenWindowForToolbarReference(
   const windowId = getWindowIdOfPage(page);
   await electronApp.evaluate(
     ({ BrowserWindow, screen }, { id }) => {
-      const win = BrowserWindow.fromId(id);
-      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+      // `id` is the platform's, read off the renderer URL; `BrowserWindow.fromId` takes Electron's,
+      // and the two diverge after a relaunch. Match on the same query parameter the id came from.
+      const win = BrowserWindow.getAllWindows().find(
+        (someWindow) =>
+          Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId')) === id,
+      );
+      if (!win) throw new Error(`No window with platform id ${id}`);
       // An unmapped window reports stale bounds and ignores the resize.
       if (win.isMinimized()) win.restore();
       const { workArea } = screen.getPrimaryDisplay();
