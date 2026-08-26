@@ -6,7 +6,7 @@ import {
   USJ_TYPE,
 } from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
-import { at, isWhiteSpace, slice, split, startsWith } from '../string-util';
+import { at, isWhiteSpace, slice, split } from '../string-util';
 import { LocalizeKey } from '../extension-contributions/menus.model';
 import { isString } from '../util';
 
@@ -295,7 +295,7 @@ export async function getLocalizedIdFromBookNumber(
 ) {
   const id = Canon.bookNumberToId(bookNumber);
 
-  if (!startsWith(Intl.getCanonicalLocales(localizationLanguage)[0], 'zh'))
+  if (!Intl.getCanonicalLocales(localizationLanguage)[0].startsWith('zh'))
     return getLocalizedString({
       localizeKey: `LocalizedId.${id}`,
       languagesToSearch: [localizationLanguage],
@@ -952,7 +952,7 @@ export function collectUsjMarkers(usj: Usj | undefined): string[] {
       // String nodes are text runs, not markers.
       if (isString(node)) return;
       const { marker } = node;
-      if (marker && !startsWith(marker, 'z') && !seen.has(marker)) {
+      if (marker && !marker.startsWith('z') && !seen.has(marker)) {
         seen.add(marker);
         markers.push(marker);
       }

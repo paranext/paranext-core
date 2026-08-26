@@ -16,7 +16,6 @@ import {
 import {
   AsyncVariable,
   getErrorMessage,
-  indexOf,
   isPlatformError,
   Mutex,
   newPlatformError,
@@ -24,7 +23,6 @@ import {
   PlatformErrorCode,
   PlatformEvent,
   PlatformEventEmitter,
-  stringLength,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
 import {
@@ -196,14 +194,14 @@ function isJsonRpcResponse(response: unknown): response is JSONRPCResponse {
 function validateCommandFormatting(commandName: string) {
   if (!commandName)
     throw new Error(`Invalid command name ${commandName}: must be a non-empty string`);
-  const periodIndex = indexOf(commandName, '.');
+  const periodIndex = commandName.indexOf('.');
   if (periodIndex < 0)
     throw new Error(`Invalid command name ${commandName}: must have at least one period`);
   if (periodIndex === 0)
     throw new Error(
       `Invalid command name ${commandName}: must have non-empty string before a period`,
     );
-  if (periodIndex >= stringLength(commandName) - 1)
+  if (periodIndex >= commandName.length - 1)
     throw new Error(
       `Invalid command name ${commandName}: must have a non-empty string after a period`,
     );

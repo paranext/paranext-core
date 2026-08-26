@@ -21,7 +21,6 @@ import {
   debounce,
   deserialize,
   getErrorMessage,
-  includes,
   isLocalizeKey,
   isString,
   serialize,
@@ -190,7 +189,7 @@ class SettingDataProviderEngine
     } catch (error) {
       // If there is no validator just let the change go through
       const missingValidatorMsg = `'${requestType}' not found`;
-      if (includes(getErrorMessage(error), missingValidatorMsg)) return true;
+      if (getErrorMessage(error).includes(missingValidatorMsg)) return true;
       throw error;
     }
   }

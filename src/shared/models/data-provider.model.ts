@@ -1,11 +1,4 @@
-import {
-  stringLength,
-  UnsubscriberAsync,
-  PlatformEventHandler,
-  substring,
-  startsWith,
-  PlatformError,
-} from 'platform-bible-utils';
+import { UnsubscriberAsync, PlatformEventHandler, PlatformError } from 'platform-bible-utils';
 import { NetworkableObject } from '@shared/models/network-object.model';
 
 /** Various options to adjust how the data provider subscriber emits updates */
@@ -255,12 +248,12 @@ const dataProviderFunctionPrefixes = ['set', 'get', 'subscribe'];
 export function getDataProviderDataTypeFromFunctionName<
   TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
 >(fnName: string) {
-  const fnPrefix = dataProviderFunctionPrefixes.find((prefix) => startsWith(fnName, prefix));
+  const fnPrefix = dataProviderFunctionPrefixes.find((prefix) => fnName.startsWith(prefix));
   if (!fnPrefix) throw new Error(`${fnName} is not a data provider data type function`);
 
   // Assert the expected return type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return substring(fnName, stringLength(fnPrefix)) as DataTypeNames<TDataTypes>;
+  return fnName.substring(fnPrefix.length) as DataTypeNames<TDataTypes>;
 }
 
 export default DataProviderInternal;

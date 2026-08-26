@@ -29,7 +29,6 @@ import {
   PlatformError,
   getErrorMessage,
   isPlatformError,
-  startsWith,
   ThemeFamily,
 } from 'platform-bible-utils';
 import themesDataObject from '@shared/data/themes.data.json';
@@ -133,7 +132,7 @@ function loadUserThemesFromLocalStorage(): ThemeFamiliesById {
   return {
     ...Object.fromEntries(
       Object.entries(THEMES_DATA_OBJECT).filter(([themeFamilyId]) =>
-        startsWith(themeFamilyId, USER_THEME_FAMILY_PREFIX),
+        themeFamilyId.startsWith(USER_THEME_FAMILY_PREFIX),
       ),
     ),
     ...(userThemesSerialized ? deserialize(userThemesSerialized) : {}),
@@ -443,7 +442,7 @@ class ThemeDataProviderEngine
     // Reject if changing anything but user-defined families
     if (
       Object.keys(newUserThemes).some(
-        (themeFamilyId) => !startsWith(themeFamilyId, USER_THEME_FAMILY_PREFIX),
+        (themeFamilyId) => !themeFamilyId.startsWith(USER_THEME_FAMILY_PREFIX),
       )
     )
       throw new Error(
