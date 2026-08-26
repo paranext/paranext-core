@@ -65,12 +65,11 @@ const windowServiceShards = createServiceShardIndex<WindowServiceShard>({
  *
  * Deliberately a plain lookup rather than a caching layer, even though the main process's input
  * handlers call it on every keystroke and mouse press: the network object service already keeps
- * what it resolves, serializes concurrent lookups of the same ID behind one lock, and drops what it
+ * what it resolves, serializes concurrent lookups of the same id behind one lock, and drops what it
  * holds when the object is disposed or its window closes. A second cache of resolved providers
- * could only go stale — and because Electron reuses `BrowserWindow.id`, a stale entry would be
- * handed to the next window opened with that ID rather than merely being useless.
+ * could only go stale, and a stale entry here answers for a window that has gone.
  *
- * @param windowId The Electron BrowserWindow ID
+ * @param windowId Platform id of the window whose shard to get
  */
 export async function getWindowServiceShard(
   windowId: number,
