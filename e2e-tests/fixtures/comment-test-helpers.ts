@@ -101,11 +101,20 @@ export async function createCommentTestProject(users: string[]): Promise<Comment
   //    format that Paratext projects use (e.g. "32664dc3288a28df2e2bb75ded887fc8f17a15fb").
   const projectId = crypto.randomBytes(20).toString('hex');
 
-  // 3. Give the copy a unique short name and new "Guid" so it does not collide with existing projects
+  // 3. Give the copy a unique short name and new "Guid" so it does not collide with existing
+  //    projects, and mark it editable.
+  //
+  //    The bundled WEB assets ship `<Editable>F</Editable>`, which `platform.isEditable` reports
+  //    verbatim (see GetIsEditable in c-sharp/Projects/ScrTextExtensions.cs). A non-editable
+  //    project is a published resource as far as the app is concerned, and the Simple-mode Column 3
+  //    panels — the comment list among them — deliberately do NOT follow the editor onto one
+  //    (`openOrUpdateRelatedPanels` is gated on isEditable in platform-scripture-editor/src/main.ts).
+  //    Comments belong to a translation project the user works in, so these copies model one.
   const settingsXml = fs.readFileSync(path.join(projectDir, 'Settings.xml'), 'utf8');
   const updatedSettings = settingsXml
     .replace(/<Name>[^<]*<\/Name>/, `<Name>${shortName}</Name>`)
-    .replace(/<Guid>[^<]*<\/Guid>/, `<Guid>${projectId}</Guid>`);
+    .replace(/<Guid>[^<]*<\/Guid>/, `<Guid>${projectId}</Guid>`)
+    .replace(/<Editable>[^<]*<\/Editable>/, '<Editable>T</Editable>');
   fs.writeFileSync(path.join(projectDir, 'Settings.xml'), updatedSettings);
 
   // 4. Add test users by writing ProjectUserAccess.xml before the data provider opens the project.
