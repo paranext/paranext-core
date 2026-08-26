@@ -54,12 +54,13 @@ export type WindowEmptinessHandlerDependencies = {
    *
    * A report arrives over the network and names its own subject, so any process can report any
    * number. An id main does not know is not a window that emptied — it is either a window already
-   * gone or a number nobody minted — and answering it does more than waste a decision: a `closing`
-   * answer records the id in this handler's closing set, where nothing will ever remove it, because
-   * removal happens when the window is seen to go away and this one never existed. Electron reuses
-   * ids within a process, so a real window minted with that number later would be told `closing` on
-   * its first report, never be closed, and latch there refusing content for the rest of the
-   * session.
+   * gone or a number nobody has minted yet — and answering it does more than waste a decision: a
+   * `closing` answer records the id in this handler's closing set, where nothing will ever remove
+   * it, because removal happens when the window is seen to go away and this one never existed.
+   * Electron hands ids out ascending and never reuses one within a process, so the number to
+   * fabricate is a FUTURE window's: report 7 while only 1-3 exist, and the real window 7 is
+   * answered `closing` on its first report, never closed, and latched there refusing content for
+   * the rest of the session.
    */
   isWindowTracked: (windowId: number) => boolean;
   /**

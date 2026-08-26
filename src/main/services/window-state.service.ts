@@ -42,21 +42,6 @@ let focusedWindowId: number | undefined;
 let doesFocusedWindowHoldOsFocus = false;
 
 /**
- * Whether any window of this application has held OS focus at least once this session.
- *
- * Deliberately separate from {@link focusedWindowId}, which looks like it answers this and does not:
- * `removeWindow` clears that one when the window it names goes away, so on a platform where the app
- * outlives its last window the "has this app been used" question would silently reset to the
- * startup answer. This one is set on the first focus and never cleared, because the question it
- * answers cannot become false again.
- *
- * The use is telling startup apart from backgrounded. Both look like "not focused", and they want
- * opposite treatment: a window created at startup must take the foreground, and one created while
- * the user is in another application must not.
- */
-let hasApplicationEverBeenFocused = false;
-
-/**
  * IDs of the windows that have held focus, most recently focused first.
  *
  * Routing needs "the window the user was last working in", which a single `focusedWindowId` scalar
@@ -580,7 +565,6 @@ export function removeWindow(window: BrowserWindow, windowId: number): void {
 export function setFocusedWindowId(windowId: number | undefined): void {
   focusedWindowId = windowId;
   doesFocusedWindowHoldOsFocus = windowId !== undefined;
-  if (windowId !== undefined) hasApplicationEverBeenFocused = true;
   if (windowId !== undefined) {
     const focusOrderIndex = mostRecentlyFocusedWindowIds.indexOf(windowId);
     if (focusOrderIndex >= 0) mostRecentlyFocusedWindowIds.splice(focusOrderIndex, 1);
@@ -612,18 +596,6 @@ export function handleWindowBlurred(windowId: number): void {
  */
 export function isApplicationFocused(): boolean {
   return focusedWindowId !== undefined && doesFocusedWindowHoldOsFocus;
-}
-
-/**
- * Whether this application is running in the background — it has been in front at some point this
- * session and is not now.
- *
- * The distinction that matters is against startup, which {@link isApplicationFocused} alone cannot
- * make: before anything has ever been focused it is also false, and a window created then must take
- * the foreground rather than be withheld from it.
- */
-export function isApplicationInBackground(): boolean {
-  return hasApplicationEverBeenFocused && !isApplicationFocused();
 }
 
 /**
@@ -765,7 +737,6 @@ export function resetForTesting(): void {
   mostRecentlyFocusedWindowIds.length = 0;
   focusedWindowId = undefined;
   doesFocusedWindowHoldOsFocus = false;
-  hasApplicationEverBeenFocused = false;
   announcedRoutingTarget = { windowId: undefined, isReady: false };
   isWindowPendingContent = () => false;
 }

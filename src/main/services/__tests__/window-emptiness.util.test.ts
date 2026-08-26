@@ -462,8 +462,11 @@ describe('a close decided outside this handler', () => {
     expect(markWindowClosing).not.toHaveBeenCalled();
   });
   describe('reports naming a window main is not tracking', () => {
-    test('an untracked id is refused without deciding anything', async () => {
-      const countWindows = vi.fn(() => 1);
+    test('an untracked id is refused before any decision is taken', async () => {
+      // Two or more windows remain on purpose: with one, the pre-existing last-window branch also
+      // answers open-home and also calls nothing, so the assertions below would be satisfied by
+      // the wrong branch and pass with this guard removed.
+      const countWindows = vi.fn(() => 3);
       const closeWindow = vi.fn();
       const markWindowClosing = vi.fn();
       const handler = createWindowEmptinessHandler({
@@ -476,20 +479,21 @@ describe('a close decided outside this handler', () => {
       const response = await handler(999, 'emptied-by-removal');
 
       expect(response).toEqual({ action: 'open-home' });
-      expect(closeWindow).not.toHaveBeenCalled();
       expect(markWindowClosing).not.toHaveBeenCalled();
+      expect(closeWindow).not.toHaveBeenCalled();
     });
 
-    test('a real window later minted with a refused id is still answered normally', async () => {
-      // The damage a fabricated report does is not the answer it gets — it is being recorded in the
-      // closing set, which nothing removes for a window that never existed. Electron reuses ids
-      // within a process, so the window that eventually holds that number would be told it is
-      // closing, never be closed, and latch there refusing content for the rest of the session.
+    test('a window later minted with a refused id is still decided normally', async () => {
+      // Ids are handed out ascending and never reused within a process, so a fabricated id is a
+      // FUTURE window's — report 7 while only 1-3 exist and window 7 arrives later. Without the
+      // guard the fabricated report runs the whole decision and records 7 in the closing set,
+      // which nothing removes for a window that never existed, and the real window 7 is then
+      // answered `closing` forever and never closed.
       const closeWindow = vi.fn();
       const markWindowClosing = vi.fn();
       let isTracked = false;
       const handler = createWindowEmptinessHandler({
-        countWindows: () => 2,
+        countWindows: () => 3,
         closeWindow,
         isWindowTracked: () => isTracked,
         markWindowClosing,
@@ -497,14 +501,16 @@ describe('a close decided outside this handler', () => {
 
       await handler(7, 'emptied-by-removal');
 
+      // The refusal must decide nothing — checked before the second call so the assertion cannot
+      // be satisfied by it
+      expect(markWindowClosing).not.toHaveBeenCalled();
+
       // Electron now hands out 7 for real
       isTracked = true;
       const response = await handler(7, 'emptied-by-removal');
 
-      // A decided close answers `closing` and marks the window; the close itself is scheduled a
-      // tick later, so the mark is the synchronous evidence the decision was actually taken
       expect(response).toEqual({ action: 'closing' });
-      expect(markWindowClosing).toHaveBeenCalledWith(7);
+      expect(markWindowClosing).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -3642,9 +3642,13 @@ async function adoptWebView(
     typeof savedWebViewDefinition.webViewType !== 'string' ||
     !savedWebViewDefinition.webViewType ||
     (savedWebViewDefinition.state !== undefined &&
-      // `typeof null` is `'object'`, so the truthiness check is what actually rejects a null the
-      // wire handed us; undefined is already excluded by the clause above
-      (typeof savedWebViewDefinition.state !== 'object' || !savedWebViewDefinition.state))
+      // A state bag is a plain, round-trippable object. `typeof null` and `typeof []` are both
+      // `'object'`, so neither the type check nor truthiness alone rejects what the wire can send;
+      // `isSerializable` is what the state setter itself uses for the same question
+      (typeof savedWebViewDefinition.state !== 'object' ||
+        !savedWebViewDefinition.state ||
+        Array.isArray(savedWebViewDefinition.state) ||
+        !isSerializable(savedWebViewDefinition.state)))
   )
     throw new Error(
       'adoptWebView needs a web view definition carrying a non-empty id and webViewType, and state must be an object when present',
@@ -3661,13 +3665,27 @@ async function adoptWebView(
   // Seeded before the provider runs: the moved view's state must be in this window's storage
   // for the view to read, including when the provider does not echo state back. A provider
   // that returns state still wins — the open persists the provider's state after this
-  if (savedWebViewDefinition.state && Object.keys(savedWebViewDefinition.state).length > 0)
-    setFullWebViewStateById(savedWebViewDefinition.id, savedWebViewDefinition.state);
-  return openOrReloadWebView(
-    savedWebViewDefinition,
-    { type: 'tab' },
-    getWebViewOptionsDefaults({}),
-  );
+  const stateToSeed = savedWebViewDefinition.state;
+  const wasStateSeeded = !!stateToSeed && Object.keys(stateToSeed).length > 0;
+  if (stateToSeed && wasStateSeeded)
+    setFullWebViewStateById(savedWebViewDefinition.id, stateToSeed);
+  try {
+    const adoptedId = await openOrReloadWebView(
+      savedWebViewDefinition,
+      { type: 'tab' },
+      getWebViewOptionsDefaults({}),
+    );
+    // A provider that declines returns no id, which is a failed adopt like any other: the seed is
+    // a write this window would not otherwise have made, and it persists as soon as it is made
+    if (!adoptedId && wasStateSeeded) deleteFullWebViewStateById(savedWebViewDefinition.id);
+    return adoptedId;
+  } catch (e) {
+    // The source window keeps its own copy until the move is known to have landed, and that copy
+    // is what a failed move re-adopts from — so nothing is lost by dropping this one, while
+    // leaving it behind would park a moved view's state under an id this window does not hold
+    if (wasStateSeeded) deleteFullWebViewStateById(savedWebViewDefinition.id);
+    throw e;
+  }
 }
 
 /** Whether a value that arrived over the wire is a Scripture reference and not a scroll group id */

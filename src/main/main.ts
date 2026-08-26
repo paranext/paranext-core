@@ -85,7 +85,6 @@ import {
   getTargetWindowId,
   getWindows,
   handleWindowBlurred,
-  isApplicationInBackground,
   isWindowClosing as isWindowMarkedClosing,
   isWindowTracked,
   isWindowReady,
@@ -694,22 +693,8 @@ async function main() {
       }
     }
 
-    // Whether this window must appear without stealing the foreground. Decided BEFORE the window
-    // exists, because creating one can itself change what holds focus.
-    //
-    // The question is specifically "backgrounded", not "not focused": at startup nothing has been
-    // focused yet and that window must take the foreground normally. `isApplicationInBackground`
-    // separates the two by way of a latch that is never cleared once set — see its own doc for why
-    // the focused-window id cannot stand in for it.
-    const shouldAppearWithoutActivating = isApplicationInBackground();
-
     const newWindow = new BrowserWindow({
-      // Shown by the constructor on the ordinary path, exactly as before. Withheld only when the
-      // user is in another application, so `ready-to-show` below can bring it up without
-      // activating it — a window the constructor has already shown cannot be un-activated after
-      // the fact. Narrowed to that case on purpose: a window that never becomes visible is a worse
-      // failure than a badly-timed one, and `did-fail-load` only logs.
-      show: !shouldAppearWithoutActivating,
+      show: true,
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
       width: windowWidth,
       height: windowHeight,
@@ -964,16 +949,7 @@ async function main() {
         logger.info(`Window ${windowId} is starting minimized due to START_MINIMIZED env variable`);
         newWindow.minimize();
       } else {
-        if (shouldAppearWithoutActivating) {
-          // The user is working in another application and did not ask for this window — an
-          // extension did. It appears where they left the app, and flashes, which is the same
-          // signal `focusWindow` leaves behind when the OS refuses a raise.
-          logger.info(
-            `Window ${windowId} is showing without activating because the application is in the background`,
-          );
-          newWindow.showInactive();
-          newWindow.flashFrame(true);
-        } else newWindow.show();
+        newWindow.show();
         // Once-guarded like window-created above: ready-to-show fires again for a re-created window.
         markStartupOnce('window-shown');
         if (isFirstWindowOfProcess && getCommandLineSwitch(CommandLineArgs.Maximize)) {
