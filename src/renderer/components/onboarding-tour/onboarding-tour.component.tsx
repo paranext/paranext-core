@@ -1,19 +1,15 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import {
-  getFirstRunStatus,
-  subscribeToFirstRun,
-  readTourDone,
-  writeTourDone,
-} from '@renderer/services/first-run-store';
+import { getFirstRunStatus, subscribeToFirstRun } from '@renderer/services/first-run-store';
 import { useIsPowerMode } from '@renderer/hooks/use-is-power-mode.hook';
-import { Tour, TourStep } from 'platform-bible-react';
-import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
+import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   SIMPLE_PANEL_ID_MODEL_TEXT,
   SIMPLE_PANEL_ID_PROJECT,
   SIMPLE_PANEL_ID_RESOURCES,
 } from '@renderer/components/docking/simple-layout.data';
+import { Tour, TourStep, TOUR_LOCALIZE_KEYS } from './tour.component';
+import { readTourDone, writeTourDone } from './onboarding-tour.store';
 
 // NOTE ON THE TRIGGER: `getFirstRunStatus()` returns `{ kind: 'app' }` for EVERY already-onboarded
 // user (seeded from the completion cache at module load), not only for someone who just finished the
@@ -23,7 +19,7 @@ import {
 // yet seen it (new users after the wizard, existing users on their next launch), then never again
 // thanks to the localStorage flag. That is the intended behavior.
 
-const LOCALIZE_KEYS: LocalizeKey[] = [
+const STEP_LOCALIZE_KEYS: LocalizeKey[] = [
   '%onboardingTour_step_project_title%',
   '%onboardingTour_step_project_description%',
   '%onboardingTour_step_modelText_title%',
@@ -34,12 +30,11 @@ const LOCALIZE_KEYS: LocalizeKey[] = [
   '%onboardingTour_step_sendReceive_description%',
   '%onboardingTour_step_profile_title%',
   '%onboardingTour_step_profile_description%',
-  '%onboardingTour_button_next%',
-  '%onboardingTour_button_back%',
-  '%onboardingTour_button_skip%',
-  '%onboardingTour_button_done%',
-  '%onboardingTour_stepCounter%',
 ];
+
+// The tour's own chrome keys come from Tour itself, so the button/counter half of this list has a
+// single source rather than being restated here.
+const LOCALIZE_KEYS: LocalizeKey[] = [...STEP_LOCALIZE_KEYS, ...TOUR_LOCALIZE_KEYS];
 
 /** Hook-bearing implementation of the tour — mounted only while the tour might still show. */
 function OnboardingTourNotYetDone() {
@@ -60,15 +55,10 @@ function OnboardingTourNotYetDone() {
     setFinishedThisSession(true);
   }, []);
 
-  const stepCounter = useCallback(
-    (current: number, total: number) =>
-      formatReplacementString(strings['%onboardingTour_stepCounter%'] || '{current} / {total}', {
-        current: String(current),
-        total: String(total),
-      }),
-    [strings],
-  );
-
+  // Stop order is deliberately semantic — project, then model text, then resources, then the two
+  // toolbar controls — and is NOT mirrored for RTL. The sequence follows what a new user needs to
+  // understand in order, not where the columns sit on screen; only each card's *placement* is
+  // direction-aware (Tour resolves the logical `start`/`end` sides below).
   const steps: TourStep[] = useMemo(
     () => [
       {
@@ -96,6 +86,10 @@ function OnboardingTourNotYetDone() {
         spotlightPadding: 1,
       },
       {
+        // TODO(PT-4007): the sync button does not render in the toolbar until this is fixed, and
+        // `toolbar-sync-area` is then an empty zero-size wrapper — so Tour skips this stop and the
+        // tour runs with four. Nothing here needs to change once the button is back; this note
+        // exists so a four-stop tour is recognized as that bug rather than a regression here.
         target: '[data-testid="toolbar-sync-area"]',
         title: strings['%onboardingTour_step_sendReceive_title%'] ?? '',
         description: strings['%onboardingTour_step_sendReceive_description%'] ?? '',
@@ -156,14 +150,10 @@ function OnboardingTourNotYetDone() {
     <Tour
       steps={steps}
       open={isOpen}
-      stepCounter={stepCounter}
+      localizedStrings={strings}
       // Both done and skip persist the flag — the user has seen the tour either way.
       onDone={handleFinish}
       onSkip={handleFinish}
-      nextLabel={strings['%onboardingTour_button_next%']}
-      backLabel={strings['%onboardingTour_button_back%']}
-      skipLabel={strings['%onboardingTour_button_skip%']}
-      doneLabel={strings['%onboardingTour_button_done%']}
     />
   );
 }
@@ -175,6 +165,11 @@ function OnboardingTourNotYetDone() {
  * - The user is in Power mode
  * - The app is not yet unlocked (`firstRunStatus.kind !== 'app'` — still loading or in the wizard)
  * - The tour has already been completed or skipped
+ *
+ * Completion is recorded on Done and on Skip (Escape routes through Skip), and only then. Quitting
+ * or reloading with the tour still open leaves the flag unwritten, so the tour resumes from stop 1
+ * on the next launch: a user who never reached the end has not yet been oriented, and the whole
+ * point of the tour is that they are.
  *
  * RTL is handled entirely inside `Tour` (logical `start`/`end` sides resolved via
  * `readDirection()`); this component never reads layout direction.

@@ -1,5 +1,5 @@
 /**
- * E2E tests for the onboarding tour (PT-4261 / PT-4262).
+ * E2E tests for the onboarding tour.
  *
  * The onboarding tour is a one-shot spotlight overlay that shows once in Simple mode after the
  * first-run wizard has been completed (i.e. `firstRunStatus.kind === 'app'`). It persists
@@ -19,14 +19,15 @@
  * races the tour's async open). These tests are the exception — they pass `allowOnboardingTour:
  * true` via the local `waitForAppReadyWithTour` wrapper so the tour is free to show.
  *
- * ## Step count flexibility
+ * ## Expected stops
  *
- * The tour targets five elements: the project panel, model-text panel, resources panel,
- * toolbar-sync-area, and user-profile-popover-trigger. The first three are rc-dock panel columns
- * with `data-dockid` attributes. Tests that assert a specific step count use `>= 2` as the lower
- * bound to allow for missing dock panels in environments where the dock layout hasn't yet mounted
- * one or more columns, and because zero-size targets (e.g. the empty sync area when send/receive is
- * unavailable) are skipped.
+ * Four stops always resolve here: the project, model-text and resources dock columns, and the user
+ * profile trigger. The Send/Receive stop is conditional — its anchor (`toolbar-sync-area`) is an
+ * empty, zero-size wrapper unless the send/receive extension supplies the sync button, and Tour
+ * skips zero-size targets. paranext-core does not bundle that extension, so the stop is normally
+ * absent; it can still appear if the tour opens before the availability probe settles. Hence the
+ * assertions below: the four unconditional stops must ALL be present and in order, and the sync
+ * stop is the only permitted variation.
  *
  * ## Tour retrigger
  *
@@ -41,20 +42,51 @@ import { preConfigureSettings, waitForAppReady } from '../../fixtures/helpers';
 import {
   clearTourDone,
   getTourDialog,
-  getTourDoneFlag,
-  getTourStepCount,
+  getTourTotalSteps,
   getCurrentStepTitle,
   advanceTour,
   advanceToLastStep,
+  goBackTour,
   skipTour,
 } from './onboarding-tour.page';
+
+/** Titles (from `assets/localization/en.json`) of the stops that always resolve in this build. */
+const REQUIRED_STEP_TITLES = [
+  'Your project',
+  'Your model text',
+  'Your resources and tools',
+  'Profile',
+];
+/** Title of the stop that is present only when the send/receive extension supplies the sync button. */
+const CONDITIONAL_STEP_TITLE = 'Sync';
 
 /**
  * These tests need the tour to actually show, so opt out of waitForAppReady's default tour
  * suppression.
  */
 async function waitForAppReadyWithTour(page: Page): Promise<void> {
-  await waitForAppReady(page, undefined, { allowOnboardingTour: true });
+  await waitForAppReady(page, { allowOnboardingTour: true });
+}
+
+/** Walks the tour from its current step to the last one, collecting each step's title in order. */
+async function collectStepTitles(page: Page): Promise<string[]> {
+  const titles: string[] = [];
+  const dialog = getTourDialog(page);
+  const nextButton = dialog.getByRole('button', { name: /^Next$/i });
+  // Bounded well above the real stop count so a regression cannot loop forever.
+  for (let i = 0; i < 10; i += 1) {
+    // Walking the tour is sequential by definition — each step must be read, then clicked past,
+    // before the next one exists to read. There is nothing here to parallelize.
+    // eslint-disable-next-line no-await-in-loop
+    titles.push(await getCurrentStepTitle(page));
+    // Same reason: the button's visibility is only meaningful for the step just recorded.
+    // eslint-disable-next-line no-await-in-loop
+    if (!(await nextButton.isVisible())) break;
+    // Same reason: the click must land before the loop reads the step it reveals.
+    // eslint-disable-next-line no-await-in-loop
+    await nextButton.click();
+  }
+  return titles;
 }
 
 // Seed settings before each Electron launch so the wizard gate is bypassed and the tour is free
@@ -84,24 +116,23 @@ test.describe('Onboarding tour', () => {
     await expect(dialog).toBeVisible({ timeout: 15_000 });
   });
 
-  test('has at least 2 steps (flexible: Paratext panels may not be present)', async ({
-    mainPage,
-  }) => {
+  test('spotlights every unconditional stop, in order', async ({ mainPage }) => {
     await waitForAppReadyWithTour(mainPage);
 
     const dialog = getTourDialog(mainPage);
     await expect(dialog).toBeVisible({ timeout: 15_000 });
 
-    // The step counter reads "1 / N" where N >= 2 (panel columns may be absent in headless or
-    // partial-layout environments, and zero-size targets are skipped).
-    const counterText = await getTourStepCount(mainPage);
-    // Extract total from "1 / N"
-    const match = /(\d+)\s*\/\s*(\d+)/.exec(counterText);
-    expect(match, `Expected "X / Y" counter but got: "${counterText}"`).not.toBeNull();
-    // match[1] is current step (1), match[2] is total
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const total = parseInt(match![2], 10);
-    expect(total).toBeGreaterThanOrEqual(2);
+    const total = await getTourTotalSteps(mainPage);
+    const titles = await collectStepTitles(mainPage);
+
+    expect(titles).toHaveLength(total);
+    // The four unconditional stops must all be there, in this order — the sync stop may or may not
+    // sit between resources and profile, so filtering it out is what makes the check stable
+    // without weakening it to a bare count.
+    expect(titles.filter((t) => t !== CONDITIONAL_STEP_TITLE)).toEqual(REQUIRED_STEP_TITLES);
+    expect(total).toBe(
+      REQUIRED_STEP_TITLES.length + (titles.includes(CONDITIONAL_STEP_TITLE) ? 1 : 0),
+    );
   });
 
   test('advances through all steps with Next and shows Done on the last step', async ({
@@ -117,6 +148,24 @@ test.describe('Onboarding tour', () => {
     // On the last step the primary button label changes to "Done".
     await expect(dialog.getByRole('button', { name: /^Done$/i })).toBeVisible({ timeout: 5_000 });
     await expect(dialog.getByRole('button', { name: /^Next$/i })).not.toBeVisible();
+  });
+
+  test('Back returns to the previous step', async ({ mainPage }) => {
+    await waitForAppReadyWithTour(mainPage);
+
+    const dialog = getTourDialog(mainPage);
+    await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+    // Back is deliberately absent on the first step, so it only appears once we have advanced.
+    await expect(dialog.getByRole('button', { name: /^Back$/i })).not.toBeVisible();
+    expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
+
+    await advanceTour(mainPage);
+    const secondTitle = await getCurrentStepTitle(mainPage);
+    expect(secondTitle).not.toBe(REQUIRED_STEP_TITLES[0]);
+
+    await goBackTour(mainPage);
+    expect(await getCurrentStepTitle(mainPage)).toBe(REQUIRED_STEP_TITLES[0]);
   });
 
   test('Skip closes the tour immediately', async ({ mainPage }) => {
@@ -137,20 +186,15 @@ test.describe('Onboarding tour', () => {
     const dialog = getTourDialog(mainPage);
     await expect(dialog).toBeVisible({ timeout: 15_000 });
 
-    // Advance through all steps and click Done to write the completion flag.
+    // Advance through all steps and click Done, which is what records completion.
     await advanceToLastStep(mainPage);
-    // Click Done on the last step — this writes 'platform-bible.onboardingTourComplete' to
-    // localStorage via writeTourDone().
     await dialog.getByRole('button', { name: /^Done$/i }).click();
     await expect(dialog).not.toBeVisible({ timeout: 5_000 });
-
-    // Confirm the flag was written, then reload the renderer to trigger a fresh component mount.
-    expect(await getTourDoneFlag(mainPage)).toBe('true');
 
     await mainPage.reload();
     await waitForAppReadyWithTour(mainPage);
 
-    // The tour must not appear again because the completion flag is already set.
+    // The tour must not appear again because completion is already recorded.
     await expect(dialog).not.toBeVisible({ timeout: 5_000 });
   });
 
@@ -170,38 +214,22 @@ test.describe('Onboarding tour', () => {
     await expect(dialog).not.toBeVisible({ timeout: 5_000 });
   });
 
-  test('clearTourDone helper removes the completion flag so the tour re-appears', async ({
-    mainPage,
-  }) => {
+  test('shows again once the completion record is cleared', async ({ mainPage }) => {
     await waitForAppReadyWithTour(mainPage);
 
-    // Skip the tour to write the flag.
     const dialog = getTourDialog(mainPage);
     await expect(dialog).toBeVisible({ timeout: 15_000 });
+
+    // Skipping records completion, so a reload alone would not bring the tour back.
     await skipTour(mainPage);
     await expect(dialog).not.toBeVisible({ timeout: 5_000 });
+    await mainPage.reload();
+    await waitForAppReadyWithTour(mainPage);
+    await expect(dialog).not.toBeVisible({ timeout: 5_000 });
 
-    // Verify the flag was written.
-    expect(await getTourDoneFlag(mainPage)).toBe('true');
-
-    // Clear the flag.
     await clearTourDone(mainPage);
-    expect(await getTourDoneFlag(mainPage)).toBeNull();
-
-    // Reload — the tour should appear again.
     await mainPage.reload();
     await waitForAppReadyWithTour(mainPage);
     await expect(dialog).toBeVisible({ timeout: 15_000 });
-  });
-
-  test('getCurrentStepTitle returns the title of the active step', async ({ mainPage }) => {
-    await waitForAppReadyWithTour(mainPage);
-
-    const dialog = getTourDialog(mainPage);
-    await expect(dialog).toBeVisible({ timeout: 15_000 });
-
-    const title = await getCurrentStepTitle(mainPage);
-    // The first step title comes from localisation; it should be a non-empty string.
-    expect(title.length).toBeGreaterThan(0);
   });
 });
