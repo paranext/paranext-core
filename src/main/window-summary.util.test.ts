@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { summarizeWindows } from '@main/window-summary.util';
 
-const window = (id: number, title: string, wasEverReady = true) => ({
-  id,
+const window = (windowId: number, title: string, wasEverReady = true) => ({
+  windowId,
   getTitle: () => title,
   wasEverReady,
 });
