@@ -616,8 +616,8 @@ describe('split', () => {
   });
 
   it('split with splitLimit discards the remainder, as native does', () => {
-    const result = split(MEDIUM_SURROGATE_PAIRS_STRING, '\u{10437}', 2);
-    expect(result).toEqual(['Look', 'At\u{1F984}This']);
+    const result = split(MEDIUM_SURROGATE_PAIRS_STRING, '𐐷', 2);
+    expect(result).toEqual(['Look', 'At🦄This']);
   });
 
   it('split by empty string', () => {
