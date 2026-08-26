@@ -471,14 +471,20 @@ export function PlatformBibleToolbar() {
           <>
             {/* toolbar-sync-area: always in the DOM so onboarding-tour step 4
                 (onboarding-tour.component.tsx) can target [data-testid="toolbar-sync-area"]
-                regardless of isSendReceiveAvailable — the sync button inside is still
-                conditional so the toolbar stays compact when sync is unavailable.
-                shrink-0 because this wrapper, not the Button, is now the flex item in the
-                config area's `min-w-0` row — without it a narrow window compresses the Sync
-                button. empty:hidden keeps the wrapper out of the flex flow when the button is
-                not rendered, so it contributes no gap-2 spacing; it stays in the DOM (and stays
-                zero-size, which is how Tour already skips the step) either way. */}
-            <div data-testid="toolbar-sync-area" className="tw:shrink-0 tw:empty:hidden">
+                regardless of isSendReceiveAvailable — the sync button inside stays conditional
+                so the toolbar remains compact when sync is unavailable.
+                This wrapper displaces SyncStatusButton as the flex item in the config area's
+                shrinking row, so it has to be transparent to that shrinking: `shrink` and
+                `min-w-0` pass the row's pressure through to the button, which truncates its own
+                label (see its className). `shrink-0` here would pin the wrapper's width and
+                silently undo that. `display: contents` would be tidier still, but it gives the
+                wrapper no box, and Tour measures this element to place the spotlight.
+                empty:hidden keeps the wrapper out of the flex flow when the button is absent, so
+                it contributes no gap-2 spacing while staying in the DOM at zero size — which is
+                how Tour skips the step.
+                TODO(PT-4007): while the sync button is missing from the toolbar this wrapper is
+                always empty, so the tour runs with four stops rather than five. */}
+            <div data-testid="toolbar-sync-area" className="tw:min-w-0 tw:shrink tw:empty:hidden">
               {!isPowerMode && isSendReceiveAvailable !== false && (
                 // Simple mode only — power users send/receive per project from the Home
                 // view. Fail open on availability: `undefined` means not known yet (the extension

@@ -4,20 +4,19 @@ import { ONBOARDING_TOUR_DONE_KEY } from '../../fixtures/helpers';
 /**
  * Page-object helpers for the onboarding tour overlay.
  *
- * The tour is a `role="dialog"` overlay rendered by `OnboardingTour` (which delegates to `Tour` in
- * `platform-bible-react`). It only appears in Simple mode when `firstRunStatus.kind === 'app'` and
- * the user has not yet completed or skipped it (`platform-bible.onboardingTourComplete` absent from
- * localStorage).
+ * The tour is a `role="dialog"` overlay rendered by `OnboardingTour` (which delegates to `Tour`).
+ * It only appears in Simple mode when `firstRunStatus.kind === 'app'` and the user has not yet
+ * completed or skipped it (`platform-bible.onboardingTourComplete` absent from localStorage).
  *
  * All locator helpers scope queries inside the tour dialog element so they cannot accidentally
  * match other content in the app.
  *
  * Button labels (from `assets/localization/en.json`):
  *
- * - Next: `%onboardingTour_button_next%` → "Next"
+ * - Next: `%firstRun_button_next%` → "Next"
+ * - Back: `%firstRun_button_back%` → "Back"
  * - Done: `%onboardingTour_button_done%` → "Done"
  * - Skip: `%onboardingTour_button_skip%` → "Skip tour"
- * - Back: `%onboardingTour_button_back%` → "Back"
  */
 
 /** Clears the onboarding-tour completion flag from localStorage. */
@@ -41,24 +40,27 @@ export function getTourDialog(page: Page): Locator {
   return page.getByTestId('tour-dialog');
 }
 
-/**
- * Returns the step-counter display text (e.g. `"1 / 5"`). Reads the first `<p>` inside the tour
- * card, which renders the `stepCounter` output.
- */
+/** Returns the step-counter display text (e.g. `"1 of 5"`). */
 export async function getTourStepCount(page: Page): Promise<string> {
-  const dialog = getTourDialog(page);
-  // The step counter is the first <p> inside the card div (muted-foreground text).
-  const counter = dialog.locator('p.tw\\:text-muted-foreground').first();
+  const counter = getTourDialog(page).getByTestId('tour-step-counter');
   return counter.textContent().then((t) => t?.trim() ?? '');
 }
 
 /**
- * Returns the current step card's title text. The Tour component renders the step title in an
- * `<h3>` inside the card.
+ * Returns the total number of stops the tour resolved, parsed from the step counter. Throws if the
+ * counter does not read as "current of total", so a malformed counter fails loudly rather than
+ * silently reporting zero stops.
  */
+export async function getTourTotalSteps(page: Page): Promise<number> {
+  const counterText = await getTourStepCount(page);
+  const match = /(\d+)\D+(\d+)/.exec(counterText);
+  if (!match) throw new Error(`Expected a "current of total" counter but got: "${counterText}"`);
+  return parseInt(match[2], 10);
+}
+
+/** Returns the current step card's title text. */
 export async function getCurrentStepTitle(page: Page): Promise<string> {
-  const dialog = getTourDialog(page);
-  const title = dialog.locator('h3');
+  const title = getTourDialog(page).getByTestId('tour-step-title');
   return title.textContent().then((t) => t?.trim() ?? '');
 }
 
@@ -69,6 +71,12 @@ export async function getCurrentStepTitle(page: Page): Promise<string> {
 export async function advanceTour(page: Page): Promise<void> {
   const dialog = getTourDialog(page);
   await dialog.getByRole('button', { name: /^(Next|Done)$/i }).click();
+}
+
+/** Clicks the Back button to return to the previous step. */
+export async function goBackTour(page: Page): Promise<void> {
+  const dialog = getTourDialog(page);
+  await dialog.getByRole('button', { name: /^Back$/i }).click();
 }
 
 /**
