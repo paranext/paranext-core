@@ -29,6 +29,7 @@ import { selectTextConnection } from './select-dbl-resource';
 import {
   getRefLabel,
   isDblResourceReference,
+  isNonDblResource,
   isProjectReference,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
@@ -167,8 +168,13 @@ export function ModelTextPanel({
   let dblRef: (EffectiveResourceReference & DblResourceReference) | undefined;
   if (isDblResourceReference(effectiveModelText)) dblRef = effectiveModelText;
   const match = dblRef ? findCachedDblResource(dblRef, dblResources) : undefined;
-  // ProjectReferences (locally-installed non-DBL resources) are resolved directly by project ID.
-  const localProjectId = isProjectReference(effectiveModelText) ? effectiveModelText.id : undefined;
+  // ProjectReferences are locally-installed non-DBL resources. Only treat the reference as
+  // resolvable if the project is confirmed present in dblResources — an admin-shared reference
+  // pointing at a project the user hasn't installed must fall through to the not-found guard.
+  const localProjectId = isProjectReference(effectiveModelText)
+    ? dblResources.find((r) => isNonDblResource(r) && r.projectId === effectiveModelText.id)
+        ?.projectId
+    : undefined;
   const resourceProjectId = match?.installed ? match.projectId : localProjectId;
   const modelTextLabel = effectiveModelText
     ? getRefLabel(effectiveModelText, dblResources)

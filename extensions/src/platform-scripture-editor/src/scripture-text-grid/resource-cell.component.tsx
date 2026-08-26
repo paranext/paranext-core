@@ -151,6 +151,12 @@ export function ResourceCell({
     () => (isPlatformError(usjPossiblyError) ? undefined : usjPossiblyError),
     [usjPossiblyError],
   );
+  useEffect(() => {
+    if (isPlatformError(usjPossiblyError))
+      logger.warn(
+        `ScriptureTextGrid: chapter data error for ${resourceRef.resourceId}: ${getErrorMessage(usjPossiblyError)}`,
+      );
+  }, [usjPossiblyError, resourceRef.resourceId]);
   const extraValidMarkers = useExtraValidMarkers(usj);
   const options: EditorOptions = useMemo(
     () => ({

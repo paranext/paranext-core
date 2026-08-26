@@ -71,6 +71,9 @@ public static class DblResourceWhiteList
         "085DEFAC6E17B9EB",
         "08C66B989FA5FA17",
         "08EBDAC929584A89",
+        // "090F7CBF7924B245" is intentionally absent: DBL reassigned this UID to a different
+        // resource, so keeping it caused syncInstalledFlags to match TNN's project ID via the
+        // startsWith path and incorrectly exclude TNN from the non-DBL resource list.
         "091988FDE60272D7",
         "0A0927A2E4C58318",
         "0A19B175A7F803A4",
