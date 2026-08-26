@@ -93,6 +93,14 @@ export interface FootnoteEditorProps {
    * the built-in `MarkerMenu` popup below owns that path unconditionally.
    */
   markerPalette?: FootnoteEditorMarkerPalette;
+  /**
+   * Called whenever the user edits the note in this popover: a content change (the auto-save path),
+   * a caller-type change, or a custom-caller change. NOT called for programmatic initialization
+   * (popover mount / initial content load). Carries no data — `onChange` is the data path — so
+   * hosts can use it as a pure liveness signal for the editing session (e.g. refreshing a staleness
+   * clock so a long live edit is never treated as an abandoned session).
+   */
+  onNoteEdit?: () => void;
 }
 
 /**
@@ -238,6 +246,7 @@ export default function FootnoteEditor({
   localizedStrings,
   parentEditorRef,
   markerPalette,
+  onNoteEdit,
 }: FootnoteEditorProps) {
   // These refs must have default values of `null` to be accepted by the React elements as refs
   /* eslint-disable no-null/no-null */
@@ -449,6 +458,11 @@ export default function FootnoteEditor({
       resolvedCustomCaller: string,
       applyToParent = false,
     ) => {
+      // Every user-driven save funnels through here — the auto-save content path
+      // (handleUsjChange) and both caller-change paths — and the initial content load never does
+      // (handleUsjChange's hasInitializedEditor guard skips its first call), so this is the one
+      // place that reports user edits to the host.
+      onNoteEdit?.();
       const currentNoteOp = editorRef.current?.getNoteOps(0)?.at(0);
       if (currentNoteOp && isInsertEmbedOpOfType('note', currentNoteOp)) {
         if (currentNoteOp.insert.note) {
@@ -468,7 +482,7 @@ export default function FootnoteEditor({
         }
       }
     },
-    [noteKey, onChange, parentEditorRef],
+    [noteKey, onChange, onNoteEdit, parentEditorRef],
   );
 
   const closeAndSave = useCallback(() => {

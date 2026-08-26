@@ -393,13 +393,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   /** True when the footnote editor was opened for a newly inserted note (not an existing one) */
   const editingNoteIsNew = useRef(false);
   /**
-   * `Date.now()` when the {@link editingNoteKey} session was opened or last saved from (`undefined`
-   * while no session is open). The PDP-sync deferral consults it through
+   * `Date.now()` when the {@link editingNoteKey} session was opened, last edited in, or last saved
+   * from (`undefined` while no session is open). The PDP-sync deferral consults it through
    * `resolveEditingSessionActivity`: a session older than `STALE_NOTE_EDITING_SESSION_MS` with no
    * interaction is treated as an orphaned key (a popover that died without cleanup) rather than a
-   * live edit, so it stops holding incoming PDP updates at bay. Refreshed on every save from the
-   * popover (the note-editing branch of `handleEditorialUsjChange`), so a live long edit never
-   * trips the bound.
+   * live edit, so it stops holding incoming PDP updates at bay. Refreshed on every user edit inside
+   * the popover (`FootnoteEditor`'s `onNoteEdit` — see `onFootnoteEditorNoteEdit`) and on every
+   * save from the popover (the note-editing branch of `handleEditorialUsjChange`), so a live long
+   * edit never trips the bound.
    */
   const editingNoteSessionRefreshedAt = useRef<number | undefined>(undefined);
 
@@ -2760,6 +2761,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     closeFootnoteEditor(true);
   }, [closeFootnoteEditor]);
 
+  /**
+   * Called by FootnoteEditor's onNoteEdit prop on every user edit inside the popover (typing,
+   * caller changes). Those edits stay inside the popover's own editor — nothing reaches this main
+   * editor (and its `handleEditorialUsjChange` refresh) until a save applies to the parent — so
+   * without this stamp a user composing a note for longer than the staleness bound would have a
+   * LIVE session reaped as orphaned, discarding the popover mid-edit.
+   */
+  const onFootnoteEditorNoteEdit = useCallback(() => {
+    editingNoteSessionRefreshedAt.current = Date.now();
+  }, []);
+
   const openFootnoteEditorOnNewNote = useCallback((ops?: DeltaOp[], insertedNodeKey?: string) => {
     if (insertedNodeKey && ops) {
       // If we are already editing a note, then returns
@@ -2927,7 +2939,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         // Any editor change that lands while the note-editing session is open counts as
         // interaction with it — most importantly the popover's own save path (replaceEmbedUpdate
         // → this callback) — so refresh the session's staleness clock: a live long edit must
-        // never be reaped as an orphaned session.
+        // never be reaped as an orphaned session. This stamp alone is not enough, though: edits
+        // made INSIDE the popover never reach this callback until a save applies to the parent,
+        // so they refresh the same clock through FootnoteEditor's onNoteEdit
+        // (onFootnoteEditorNoteEdit above).
         editingNoteSessionRefreshedAt.current = Date.now();
         // When the FootnoteEditor saves, Lexical emits a replaceEmbedUpdate. This triggers
         // onUsjChange with an insertedNodeKey.
@@ -3795,6 +3810,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             noteOps={editingNoteOps.current}
             noteKey={editingNoteKey.current}
             onClose={onFootnoteEditorClose}
+            onNoteEdit={onFootnoteEditorNoteEdit}
             scrRef={scrRef}
             editorOptions={options}
             defaultMarkerMenuTrigger={defaultMarkersMenuTrigger}

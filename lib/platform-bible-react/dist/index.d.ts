@@ -1011,6 +1011,14 @@ export interface FootnoteEditorProps {
 	 * the built-in `MarkerMenu` popup below owns that path unconditionally.
 	 */
 	markerPalette?: FootnoteEditorMarkerPalette;
+	/**
+	 * Called whenever the user edits the note in this popover: a content change (the auto-save path),
+	 * a caller-type change, or a custom-caller change. NOT called for programmatic initialization
+	 * (popover mount / initial content load). Carries no data — `onChange` is the data path — so
+	 * hosts can use it as a pure liveness signal for the editing session (e.g. refreshing a staleness
+	 * clock so a long live edit is never treated as an abandoned session).
+	 */
+	onNoteEdit?: () => void;
 }
 /**
  * Driver for the standard-view `\` marker palette (PT9 parity), supplied by a host that wires it to
@@ -1061,7 +1069,7 @@ export declare function markerMenuItemToPaletteItem(item: EditorMarkerMenuItem):
  *
  * @param FootnoteEditorProps - The properties for the footnote editor component
  */
-export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, markerPalette, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
+export function FootnoteEditor({ classNameForEditor, noteOps, onChange, onClose, scrRef, noteKey, editorOptions, defaultMarkerMenuTrigger, localizedStrings, parentEditorRef, markerPalette, onNoteEdit, }: FootnoteEditorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * What this table needs of a keydown. A DOM `KeyboardEvent` satisfies it, and so does a
  * `ForwardedPaletteKeyEvent` (from `platform-bible-utils/experimental`, outside this package's docs

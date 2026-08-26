@@ -209,8 +209,9 @@ export function restoreSelectionIfLost(
 
 /**
  * How long, in milliseconds, a footnote-popover editing session may sit without any interaction
- * (opening it or saving from it) before the PDP-sync deferral treats it as STALE — abandoned
- * bookkeeping rather than a live session — and stops letting it hold incoming updates at bay.
+ * (opening it, editing in it, or saving from it) before the PDP-sync deferral treats it as STALE —
+ * abandoned bookkeeping rather than a live session — and stops letting it hold incoming updates at
+ * bay.
  *
  * Deliberately the same value as {@link WRITE_GUARD_RELEASE_AFTER_MS}: both bound how long one piece
  * of orphaned state (an unsettled write there, an editing-session key here) may wedge the editor's
@@ -228,9 +229,9 @@ export interface EditingSessionActivityInput {
    */
   editingNoteKey: string | undefined;
   /**
-   * `Date.now()` when the note-editing session was opened or last saved from, or `undefined` when
-   * that was never recorded. An open session with no recorded time cannot prove it is live, so it
-   * counts as stale.
+   * `Date.now()` when the note-editing session was opened, last edited in, or last saved from, or
+   * `undefined` when that was never recorded. An open session with no recorded time cannot prove it
+   * is live, so it counts as stale.
    */
   noteSessionRefreshedAtMs: number | undefined;
   /** `Date.now()` at the moment of the decision. */
@@ -246,9 +247,9 @@ export interface EditingSessionActivityInput {
  * the popover dies without cleanup, the orphaned key would otherwise defer every incoming PDP
  * update until the user happens to click another note caller (the only other stale-session recovery
  * path is click-triggered). A session the user is actively working in refreshes its timestamp on
- * every save from the popover, so a live long edit never trips the bound; a session older than the
- * bound is reported stale so the caller can clear it (via the normal footnote-editor close path,
- * keeping popover state consistent) and stop deferring.
+ * every edit in and save from the popover, so a live long edit never trips the bound; a session
+ * older than the bound is reported stale so the caller can clear it (via the normal footnote-editor
+ * close path, keeping popover state consistent) and stop deferring.
  *
  * A palette session carries no time bound here: its lifecycle is owned by the overlay service's
  * show promise, which always settles (select, dismiss, or replacement rejection).
