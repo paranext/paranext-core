@@ -57,6 +57,35 @@ async function closeDevTools(electronApp: ElectronApplication): Promise<void> {
 }
 
 /**
+ * Waits until the title bar's localized strings have resolved.
+ *
+ * Every assertion in this file is geometric, and an unresolved string is WIDER than the string it
+ * stands for: the bar renders the raw key (`%product_shortName%`, `%mainMenu_help%`) until the
+ * localization data provider answers. Measuring before then reports a bar that overflows by tens of
+ * pixels and blames the layout for it.
+ *
+ * `waitForAppReady` does not cover this — it waits for the app's own readiness signal, which fires
+ * before the strings arrive. The placeholder syntax is the honest thing to poll on, because it is
+ * exactly what makes the measurement wrong.
+ */
+async function waitForLocalizedTitleBar(mainPage: Page): Promise<void> {
+  await expect
+    .poll(
+      async () =>
+        mainPage.locator('[data-testid="toolbar-content-row"]').evaluate((el) => {
+          const text = el.textContent ?? '';
+          return /%[A-Za-z0-9_]+%/.test(text);
+        }),
+      {
+        timeout: 30_000,
+        message:
+          'Title bar still shows raw %localization_key% placeholders, so any width measured here is wrong',
+      },
+    )
+    .toBe(false);
+}
+
+/**
  * Resizes the window and waits until the renderer has actually laid out at the new width.
  *
  * Returns nothing useful to assert on by design — the point is the wait. Electron clamps the
@@ -132,6 +161,7 @@ test.describe('Title bar at narrow window widths', () => {
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
+    await waitForLocalizedTitleBar(mainPage);
     await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
 
     const contentRow = mainPage.locator('[data-testid="toolbar-content-row"]');
@@ -182,6 +212,7 @@ test.describe('Title bar at narrow window widths', () => {
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
+    await waitForLocalizedTitleBar(mainPage);
     await setWindowWidth(electronApp, mainPage, IMPOSSIBLY_NARROW_PX);
 
     const contentRow = mainPage.locator('[data-testid="toolbar-content-row"]');
