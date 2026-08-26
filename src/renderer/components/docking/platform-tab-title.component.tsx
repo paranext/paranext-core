@@ -287,21 +287,22 @@ export function PlatformTabTitle({
    * window list is a round trip to the main process, and counting this window's web views walks
    * every open definition and touches their state. Neither belongs in the render of every tab title
    * on every layout change.
+   *
+   * Deliberately kept when the menu closes, so every open after the first renders the last known
+   * targets straight away and refreshes them behind the menu. Only the first open of a given tab's
+   * menu has nothing to show, and the move-to-window submenu appears there once the read lands.
+   *
+   * Not covered by a placeholder on purpose. Showing a disabled "loading" entry would keep the
+   * item's position stable when there ARE other windows, but it would put an entry on screen and
+   * then take it away again in the single-window case, where today nothing appears at all — trading
+   * a smaller flicker for a worse one. Keeping the item permanently and disabling it instead would
+   * contradict hiding actions that would be no-ops, which is the rule the rest of this menu
+   * follows.
    */
   const [menuTargets, setMenuTargets] = useState<{
     otherWindows: WindowSummary[];
     isOnlyTabInSecondaryWindow: boolean;
   }>({ otherWindows: [], isOnlyTabInSecondaryWindow: false });
-
-  // Deliberately kept when the menu closes, so every open after the first renders the last known
-  // targets straight away and refreshes them behind the menu. Only the first open of a given tab's
-  // menu has nothing to show, and the move-to-window submenu appears there once the read lands.
-  //
-  // Not covered by a placeholder on purpose. Showing a disabled "loading" entry would keep the
-  // item's position stable when there ARE other windows, but it would put an entry on screen and
-  // then take it away again in the single-window case, where today nothing appears at all — trading
-  // a smaller flicker for a worse one. Keeping the item permanently and disabling it instead would
-  // contradict hiding actions that would be no-ops, which is the rule the rest of this menu follows.
 
   const handleMenuOpenChange = async (isOpen: boolean) => {
     if (!isOpen) return;
