@@ -41,6 +41,7 @@ import type { Frame, Page } from '@playwright/test';
 import WebSocket from 'ws';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
+  SAMPLE_WEB_PROJECT_ID,
   preConfigureSettings,
   sendPapiRequestOnce,
   waitForAppReady,
@@ -63,9 +64,6 @@ import {
   pollUntil,
   waitForRendererRegistered,
 } from './multi-window.util';
-
-/** Fixed GUID of the bundled sample WEB project (c-sharp/assets/WEB/Settings.xml <Guid>). */
-const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
 
 /**
  * The toolbar's book-chapter-verse control trigger (`platform-bible-toolbar.tsx` →

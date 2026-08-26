@@ -25,13 +25,12 @@ import { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   preConfigureSettings,
+  SAMPLE_WEB_PROJECT_ID,
   sendPapiRequestOnce,
   waitForAtLeastOneProjectMetadata,
   waitForPapiMethodRegistered,
 } from '../../../fixtures/helpers';
 
-/** Fixed GUID of the bundled sample WEB project (c-sharp/assets/WEB/Settings.xml <Guid>). */
-const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
 const WEBSOCKET_PORT = 8876;
 const COMMAND_TIMEOUT_MS = 30_000;
 

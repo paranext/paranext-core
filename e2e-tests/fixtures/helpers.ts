@@ -13,6 +13,15 @@ import WebSocket from 'ws';
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
 /**
+ * Fixed GUID of the bundled sample WEB project (`c-sharp/assets/WEB/Settings.xml` `<Guid>`).
+ *
+ * Exported because it is a fixture identity, not a per-spec choice: every suite launching with
+ * `isolatedProjectRoot` opens this same project, and a copy that drifts from the bundle fails as an
+ * opaque `openScriptureEditorForProject` timeout rather than as a wrong-id error.
+ */
+export const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
+
+/**
  * The window-scoped shard methods a renderer registers, one per service the main process's routers
  * forward a command or request to (see the `*.service-shard.ts` modules).
  *

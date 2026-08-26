@@ -26,13 +26,12 @@ import { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   preConfigureSettings,
+  SAMPLE_WEB_PROJECT_ID,
   waitForAppReady,
   waitForAtLeastOneProjectMetadata,
 } from '../../../fixtures/helpers';
 import { openScriptureEditorForProject } from '../../../fixtures/scripture-editor-helpers';
 
-/** Fixed GUID of the bundled sample WEB project (c-sharp/assets/WEB/Settings.xml <Guid>). */
-const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
 const WEBSOCKET_PORT = 8876;
 
 /** The top toolbar's BookChapterControl trigger — the only one in the main frame. */
@@ -115,9 +114,10 @@ test.describe('Reference history', () => {
     //
     // - firstRunComplete: without it the app starts on the first-run wizard, a modal that
     //   aria-hides the rest of the app and swallows pointer events, so nothing below is reachable.
-    // - interfaceLanguage: every selector here is English — the book names on the BCV trigger, the
-    //   "Genesis 1:1" history-menu labels, and the menus' "Back history"/"Forward history"
-    //   accessible names.
+    // - interfaceLanguage: every selector here is English — the book names on the BCV trigger and
+    //   the menus' "Back history"/"Forward history" accessible names. The "Genesis 1:1" labels
+    //   inside the history menus do NOT depend on it: `ReferenceHistoryButtons` builds them with
+    //   `formatScrRef(entry.scrRef, 'English')` and does not localize (see the TODO there).
     // - interfaceMode: the mode decides both what the toolbar renders around these buttons and how
     //   the dock treats an opened editor, so the suite declares the one it drives. Power mode is
     //   the choice because it opens each editor as its own dock tab.
