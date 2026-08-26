@@ -1592,3 +1592,35 @@ step, no automation. Just a record.
   (`PreserveConsecutiveSpacesInTextTokens`); this decision is unaffected by that, since it never
   relied on the normalization holding.
 - **Source:** PT-3408, review of PR #2715.
+
+## adr-hand-written-tour-spotlight: Hand-write the guided-tour spotlight rather than adopt a tour dependency
+
+- **Date:** 2026-08-26
+- **Status:** Accepted
+- **Context:** PT-4262 names "the Tour component evaluated in PT-4257 (allshadcn)" as the thing to
+  build the Simple-mode orientation tour on, and repeats it in the Definition of Done. Following that
+  up: allshadcn is a community gallery documenting a spotlight *pattern*, not an entry in the official
+  shadcn registry and not an installable package — there is nothing to `add` or depend on. The other
+  candidates in the space (`onborda`, `driver.js`, `react-joyride`, `shepherd.js`) are real packages,
+  but each ships its own overlay, positioning engine and theming, none of which compose with this
+  repo's `pr-twp` scoped preflight, `Z_INDEX_*` scale, `readDirection()` RTL convention, or the
+  rc-dock geometry the stops actually anchor to.
+- **Decision:** Write the spotlight component by hand (`src/renderer/components/onboarding-tour/
+  tour.component.tsx`), following the allshadcn spotlight pattern — full-viewport SVG mask with a
+  cutout over the measured target, plus a positioned step card. Take no new runtime dependency.
+- **Alternatives:** **Vendor a shadcn-registry Tour** — rejected: no such registry component exists,
+  so there is no upstream to diff against and `// CUSTOM:` markers would be meaningless.
+  **Depend on `onborda`/`driver.js`/`react-joyride`/`shepherd.js`** — rejected: each brings a second
+  overlay and theming system into an app that already has both, and the integration surface (mask
+  geometry, z-index, RTL, focus handling) is most of the component anyway. **Defer the tour until a
+  dependency is chosen** — rejected: the tour is the deliverable, and the pattern is well understood.
+- **Consequences:** The repo owns the spotlight code, including the parts a library would have
+  supplied: rect re-measurement (resize, scroll, and `ResizeObserver` for in-place target reflow),
+  side flipping and viewport clamping, the focus trap, and the skip-a-missing-target degradation.
+  That is the cost, and it is why the component carries a full unit-test file rather than a smoke
+  test. The upside is that it speaks the repo's own conventions natively and has no upgrade
+  treadmill. If a second consumer appears, promote it to `lib/platform-bible-react/` under that
+  library's localization contract; until then it stays beside its only consumer per
+  `.claude/rules/architecture/react-patterns.md`.
+- **Source:** PT-4262 implementation (PR #2632), where the review asked why the mandated dependency
+  was not used.
