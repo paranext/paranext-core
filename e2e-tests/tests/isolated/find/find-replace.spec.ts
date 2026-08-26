@@ -101,6 +101,12 @@ const COMMON_SEARCH_TERM = 'the';
  */
 const RESULT_INTERACTION_TERM = 'and';
 
+/**
+ * A rare term whose result count stays under the 100-result batch cap, so its counter is
+ * distinguishable from a common word's capped "1 of 100".
+ */
+const RARE_SEARCH_TERM = 'Bartholomew';
+
 /** A word unlikely to exist in any scripture project, used to test the "no results" state. */
 const NO_MATCH_TERM = 'ZZZQQQXXX_NORESULT_12345';
 
@@ -406,6 +412,79 @@ function firstResultCard(frame: FrameLocator): Locator {
   return frame.locator('[role="button"][aria-pressed]').first();
 }
 
+/**
+ * Every term this suite types into the search box. A selection equal to one of these would let the
+ * pre-fill assertion in "Editor selection to Find" pass without the selection ever reaching Find,
+ * because the panel restores the project's last search term into an empty box on mount.
+ */
+const SEARCHED_TERMS = [
+  COMMON_SEARCH_TERM,
+  RESULT_INTERACTION_TERM,
+  RARE_SEARCH_TERM,
+  NO_MATCH_TERM,
+];
+
+/**
+ * Select the first word in the editor's text that is long enough to be distinctive and is not one
+ * of `excludedWords`, and return the selected text. A programmatic Range keeps the setup
+ * deterministic — a positional double-click can land on a verse number or whitespace — while still
+ * producing the real DOM selection the Find triggers read.
+ */
+async function selectDistinctiveWordInEditor(
+  editorFrame: Frame,
+  excludedWords: string[],
+): Promise<string> {
+  return editorFrame.evaluate((excluded: string[]) => {
+    const content = document.querySelector('.editor-input');
+    if (!content) throw new Error('Editor content (.editor-input) not found');
+    const isExcluded = (word: string) =>
+      excluded.some((candidate) => candidate.toLowerCase() === word.toLowerCase());
+    const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT);
+    const wordPattern = /\p{L}{6,}/gu;
+    let node = walker.nextNode();
+    while (node) {
+      const text = node.textContent ?? '';
+      wordPattern.lastIndex = 0;
+      let match = wordPattern.exec(text);
+      while (match) {
+        if (!isExcluded(match[0])) {
+          const range = document.createRange();
+          range.setStart(node, match.index);
+          range.setEnd(node, match.index + match[0].length);
+          const selection = window.getSelection();
+          if (!selection) throw new Error('No selection object available in the editor frame');
+          selection.removeAllRanges();
+          selection.addRange(range);
+          // Collapsed footnotes live inside `.editor-input` but are `display: none`, and
+          // `Selection.toString()` is empty over hidden content. Keep walking rather than handing
+          // back a word the user could not have selected.
+          if (selection.toString().trim()) return selection.toString();
+          selection.removeAllRanges();
+        }
+        match = wordPattern.exec(text);
+      }
+      node = walker.nextNode();
+    }
+    throw new Error(
+      'No distinctive word (6+ letters, visible, not an excluded search term) found in the editor',
+    );
+  }, excludedWords);
+}
+
+/**
+ * Undo {@link selectDistinctiveWordInEditor} so no selection leaks into later tests: drop the
+ * document selection, and press inside the editor's text content, which is what clears the tab's
+ * pointer-press selection snapshot.
+ */
+async function clearEditorSelection(editorFrame: Frame): Promise<void> {
+  await editorFrame.evaluate(() => {
+    window.getSelection()?.removeAllRanges();
+    document
+      .querySelector('.editor-input')
+      ?.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Worker-level setup — runs once before any test in this file.
 // Opens a scripture editor so the hamburger menu is available throughout
@@ -543,6 +622,54 @@ test.describe('Find Panel Basics', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Tests: Selection carried into Find
+// ---------------------------------------------------------------------------
+
+test.describe('Editor selection to Find', () => {
+  // Longer than the file-wide 180 s: this test waits for editor text (60 s) on top of a panel
+  // reset and a cold-start search (SEARCH_TIMEOUT_MS), which can sum past the file default.
+  test.describe.configure({ timeout: 300_000 });
+
+  test('pre-fills and searches the editor selection when Find is invoked from the editor menu', async ({
+    mainPage,
+  }) => {
+    // Reset before selecting anything. With the box empty and the history cleared, a pre-filled
+    // value can only have come from the selection — the panel has no earlier term left to restore,
+    // so the assertion below cannot pass vacuously.
+    const frame = await openFindPanel(mainPage);
+
+    const editorFrame = await findScriptureEditorFrame(mainPage);
+    // Wait for verse text to populate, not just for the container to exist — the helper needs real
+    // words to select.
+    await expect(editorFrame.locator('.editor-input')).toContainText(/\p{L}{6,}/u, {
+      timeout: 60_000,
+    });
+
+    const selectedText = (await selectDistinctiveWordInEditor(editorFrame, SEARCHED_TERMS)).trim();
+    // A word rendered inside a collapsed footnote is `display: none`, and `Selection.toString()`
+    // returns '' over hidden content. Assert the selection is real before using it, or the
+    // `toHaveValue(selectedText)` check below passes vacuously against an empty search box.
+    expect(selectedText).not.toBe('');
+
+    try {
+      await invokeFindFromHamburger(mainPage);
+
+      await expect(frame.locator('#search-term')).toHaveValue(selectedText, { timeout: 15_000 });
+      // The panel searches the pre-filled term immediately; the results counter proves it ran.
+      await expect(frame.locator('.tw\\:tabular-nums')).toBeVisible({
+        timeout: SEARCH_TIMEOUT_MS,
+      });
+    } finally {
+      // Leave no selection behind, including when an assertion above threw. Nothing else in this
+      // suite reaches into the editor iframe, so without this the selection — and the pointer-press
+      // snapshot built from it — would pre-fill every later Find invoke in this file and kick off an
+      // unintended search before those tests type their own term.
+      await clearEditorSelection(editorFrame);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Tests: Search Results
 // ---------------------------------------------------------------------------
 
@@ -567,7 +694,7 @@ test.describe('Search Results', () => {
     // first term and the counter would never change. Scope defaults to the current book, which
     // may contain 0 matches, so the assertion below accepts either a changed counter or the
     // "no results" paragraph; both confirm the results updated.
-    await frame.locator('#search-term').fill('Bartholomew');
+    await frame.locator('#search-term').fill(RARE_SEARCH_TERM);
     await frame.locator('#search-term').press('Enter');
 
     // Use isVisible() for non-blocking checks so the predicate never hangs waiting for an
