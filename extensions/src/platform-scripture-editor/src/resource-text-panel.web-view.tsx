@@ -333,11 +333,15 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Auto-correct selectedResourceId when the selected item leaves the filtered list.
   // Skipped while a pending selection is in-flight to avoid overriding it prematurely.
+  // Skips rows with no projectId (unresolvable references) to avoid a permanent spinner.
   useEffect(() => {
     if (filteredResources.length === 0) return;
     if (pendingResourceId) return;
     const currentId = filteredResources.find((r) => pickerRowId(r) === selectedResourceId);
-    if (!currentId) setSelectedResourceId(pickerRowId(filteredResources[0]));
+    if (!currentId) {
+      const firstUsable = filteredResources.find((r) => r.projectId !== undefined);
+      if (firstUsable) setSelectedResourceId(pickerRowId(firstUsable));
+    }
   }, [filteredResources, selectedResourceId, setSelectedResourceId, pendingResourceId]);
 
   const selectedRef =

@@ -107,44 +107,47 @@ async function syncInstalledFlags(): Promise<void> {
     // incorrectly mark all installed resources as not-installed and corrupt the cache.
     if (!localProjectMetadata.some((m) => m.isEditable === false)) return;
 
-    // Re-check cachedResources after the await — fetchAndCacheResources may have updated it
-    if (cachedResources === undefined) return;
+    // Wrap the read-modify-write in fetchMutex so a concurrent fetchAndCacheResources call cannot
+    // overwrite cachedResources between our map() and our assignment.
+    await fetchMutex.runExclusive(async () => {
+      if (cachedResources === undefined) return;
 
-    let isChanged = false;
-    const newCachedResources = cachedResources.map((resource) => {
-      const matchingLocalProject = localProjectMetadata.find((localProject) =>
-        // If the `projectId` is defined then tries to use that
-        resource.projectId
-          ? resource.projectId === localProject.id
-          : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
-            // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
-            resource.dblEntryUid !== '' &&
-            localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
-      );
-
-      const isInstalled = matchingLocalProject !== undefined;
-      if (isInstalled !== resource.installed) {
-        isChanged = true;
-        return {
-          ...resource,
-          installed: isInstalled,
-          updateAvailable: false,
-          projectId: matchingLocalProject?.id ?? '',
-        };
-      }
-
-      return resource;
-    });
-
-    if (isChanged) {
-      cachedResources = newCachedResources;
-      if (executionToken)
-        await papi.storage.writeUserData(
-          executionToken,
-          RESOURCES_CACHE_KEY,
-          JSON.stringify(cachedResources),
+      let isChanged = false;
+      const newCachedResources = cachedResources.map((resource) => {
+        const matchingLocalProject = localProjectMetadata.find((localProject) =>
+          // If the `projectId` is defined then tries to use that
+          resource.projectId
+            ? resource.projectId === localProject.id
+            : // Otherwise uses the `dblEntryUid` which contains the first part of the project id.
+              // Guard against empty dblEntryUid: ''.startsWith('') is true for every string.
+              resource.dblEntryUid !== '' &&
+              localProject.id.toLowerCase().startsWith(resource.dblEntryUid.toLowerCase()),
         );
-    }
+
+        const isInstalled = matchingLocalProject !== undefined;
+        if (isInstalled !== resource.installed) {
+          isChanged = true;
+          return {
+            ...resource,
+            installed: isInstalled,
+            updateAvailable: false,
+            projectId: matchingLocalProject?.id ?? '',
+          };
+        }
+
+        return resource;
+      });
+
+      if (isChanged) {
+        cachedResources = newCachedResources;
+        if (executionToken)
+          await papi.storage.writeUserData(
+            executionToken,
+            RESOURCES_CACHE_KEY,
+            JSON.stringify(cachedResources),
+          );
+      }
+    });
   } catch (error: unknown) {
     logger.warn(`Error syncing installed flags: ${getErrorMessage(error)}`);
   }
