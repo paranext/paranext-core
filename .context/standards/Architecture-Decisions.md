@@ -2669,7 +2669,7 @@ step, no automation. Just a record.
   investigation; the Lexical re-throw chain verified by running it, not by reading it.
 
 
-## ADR-0029: `GraphemeString` mirrors native `String` semantics one-for-one; `string-util` is a thin wrapper over it
+## adr-grapheme-string-native-parity: `GraphemeString` mirrors native `String` semantics one-for-one; `string-util` is a thin wrapper over it
 
 - **Date:** 2026-08-25
 - **Status:** Accepted
