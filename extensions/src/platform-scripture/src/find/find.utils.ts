@@ -8,15 +8,8 @@ import {
   ScrollGroupId,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
-import {
-  FindJobStatus,
-  FindJobStatusReport,
-  FindOptions,
-  FindScope,
-  WordRestriction,
-} from 'platform-scripture';
+import { FindJobStatus, FindJobStatusReport, FindOptions } from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
-import type { SearchTextType } from './find-types';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
 const INVISIBLE_CHAR_SYMBOLS: Record<string, string> = {
@@ -712,60 +705,4 @@ export function buildSearchRegex(
   const flags = `${caseInsensitive ? 'i' : ''}g${needsUnicodeFlag ? 'u' : ''}`;
 
   return new RegExp(regexStr, flags);
-}
-
-/** Matches a run of two or more consecutive spaces */
-const CONSECUTIVE_SPACES_REGEX = / {2,}/gu;
-
-/**
- * The Find UI state that determines how a search is performed. Field names mirror the Find web
- * view's own state rather than the {@link FindOptions} fields they map to.
- */
-export type FindUiState = {
-  /** The text or regex pattern the user typed */
-  searchTerm: string;
-  /** The books and chapters to search, in order */
-  findScope: FindScope[];
-  /** Whether the user asked for a case-sensitive search */
-  shouldMatchCase: boolean;
-  /** Whether the user enabled regex mode */
-  isRegexAllowed: boolean;
-  /** Which text the user chose to search — all text, or verse text only */
-  searchTextType: SearchTextType;
-  /** Whether matches are restricted to word boundaries */
-  wordRestriction: WordRestriction;
-};
-
-/**
- * Translates the Find UI's state into the {@link FindOptions} sent to the find PDP.
- *
- * Runs of consecutive spaces in the search term are collapsed to a single space. Saved USFM can
- * never contain consecutive spaces — ParatextData regularizes runs of whitespace to a single space
- * on every write — so a query typed with extra spaces would otherwise be unsatisfiable. Only plain
- * spaces are collapsed, so searching for an exact invisible character (NBSP, ZWSP, a bidi mark)
- * still matches only that character.
- *
- * In regex mode the search term is passed through verbatim, since consecutive spaces may be
- * deliberate and the pattern must mean exactly what the user wrote.
- *
- * `ignoreWhitespaceDifferences` is deliberately left unset: it makes every invisible character
- * interchangeable with an ordinary space, which would put exact invisible-character search out of
- * reach outside regex mode. It is a port of PT9's user-togglable
- * `FindReplaceOptions.IgnoreWhitespaceDifferences` and belongs behind a UI control, as does the
- * sibling `ignoreDiacritics` flag.
- *
- * @param input The current Find UI state
- * @returns The options describing the search to run
- */
-export function buildFindOptions(input: FindUiState): FindOptions {
-  return {
-    scope: input.findScope,
-    searchString: input.isRegexAllowed
-      ? input.searchTerm
-      : input.searchTerm.replace(CONSECUTIVE_SPACES_REGEX, ' '),
-    caseInsensitive: !input.shouldMatchCase,
-    useRegex: input.isRegexAllowed,
-    verseTextOnly: input.searchTextType === 'verseOnly',
-    wordRestriction: input.wordRestriction,
-  };
 }

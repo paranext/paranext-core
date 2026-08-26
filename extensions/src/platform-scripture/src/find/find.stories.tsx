@@ -122,6 +122,7 @@ type SearchParams = {
   wordRestriction: WordRestriction;
   searchTextType: SearchTextType;
   isRegexAllowed: boolean;
+  ignoreWhitespaceDifferences: boolean;
   scope: Scope;
   selectedBookIds: string[];
   verseRef: SerializedVerseRef;
@@ -134,8 +135,10 @@ function escapeRegExp(value: string): string {
 
 /**
  * Build the regular expression for the current search params (or `undefined` for an empty term or
- * an invalid user-supplied regex). Honors match-case, the word-boundary restriction, and the
- * allow-regex toggle the same way the real find job's options would.
+ * an invalid user-supplied regex). Honors match-case, the word-boundary restriction, the
+ * allow-regex toggle and ignore-whitespace-differences the same way the real find job's options
+ * would. Ignore-diacritics is not emulated here — the real engine NFD-normalizes the source text to
+ * apply it, which this fixture-backed harness does not do.
  */
 function buildSearchRegex(params: SearchParams): RegExp | undefined {
   if (!params.term) return undefined;
@@ -148,7 +151,11 @@ function buildSearchRegex(params: SearchParams): RegExp | undefined {
       return undefined;
     }
   }
-  const escaped = escapeRegExp(params.term);
+  // Let a run of whitespace in the term match any run of whitespace in the text, rather than
+  // rewriting the term — the same relax-the-match approach buildSearchRegex takes.
+  const escaped = params.ignoreWhitespaceDifferences
+    ? escapeRegExp(params.term).replace(/\s+/gu, '\\s+')
+    : escapeRegExp(params.term);
   switch (params.wordRestriction) {
     case 'wholeWord':
       return new RegExp(`\\b${escaped}\\b`, flags);
@@ -290,6 +297,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
   const [searchTextType, setSearchTextType] = useState<SearchTextType>('all');
   const [wordRestriction, setWordRestriction] = useState<WordRestriction>('none');
   const [isRegexAllowed, setIsRegexAllowed] = useState(false);
+  const [ignoreWhitespaceDifferences, setIgnoreWhitespaceDifferences] = useState(false);
+  const [ignoreDiacritics, setIgnoreDiacritics] = useState(false);
 
   const [activeMode, setActiveMode] = useState<'find' | 'replace'>(config.activeMode ?? 'find');
   const [replaceTerm, setReplaceTerm] = useState(config.replaceTerm ?? 'Yahweh');
@@ -325,6 +334,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
     return runSearch({
       term: searchTerm,
       shouldMatchCase,
+      ignoreWhitespaceDifferences,
       wordRestriction,
       searchTextType,
       isRegexAllowed,
@@ -337,6 +347,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
     config.results,
     searchTerm,
     shouldMatchCase,
+    ignoreWhitespaceDifferences,
     wordRestriction,
     searchTextType,
     isRegexAllowed,
@@ -519,6 +530,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       selectedBookIds={selectedBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}
+      ignoreWhitespaceDifferences={ignoreWhitespaceDifferences}
+      ignoreDiacritics={ignoreDiacritics}
       searchTextType={searchTextType}
       wordRestriction={wordRestriction}
       isRegexAllowed={isRegexAllowed}
@@ -552,6 +565,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       setSearchTextType={setSearchTextType}
       setWordRestriction={setWordRestriction}
       setShouldMatchCase={setShouldMatchCase}
+      setIgnoreWhitespaceDifferences={setIgnoreWhitespaceDifferences}
+      setIgnoreDiacritics={setIgnoreDiacritics}
       setIsRegexAllowed={setIsRegexAllowed}
       onToggleMode={setActiveMode}
       onReplaceTermChange={setReplaceTerm}

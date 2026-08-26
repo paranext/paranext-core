@@ -4,7 +4,6 @@ import { FindJobStatusReport } from 'platform-scripture';
 import {
   applyPreserveCase,
   armBoundedWait,
-  buildFindOptions,
   buildSearchRegex,
   callControllerSafely,
   CharacterCategorizer,
@@ -96,7 +95,13 @@ describe('isSimpleInterfaceMode', () => {
 describe('buildSearchRegex – regex mode (useRegex)', () => {
   it('passes special characters through as-is without escaping them', () => {
     const regex = buildSearchRegex(
-      { searchString: '[aeiou]+', caseInsensitive: false, wordRestriction: 'none', useRegex: true },
+      {
+        scope: [],
+        searchString: '[aeiou]+',
+        caseInsensitive: false,
+        wordRestriction: 'none',
+        useRegex: true,
+      },
       DEFAULT_CATEGORIZER,
     );
     expect(matchAll(regex, 'hello world')).toEqual(['e', 'o', 'o']);
@@ -104,7 +109,13 @@ describe('buildSearchRegex – regex mode (useRegex)', () => {
 
   it('applies the case-insensitive flag in regex mode when caseInsensitive is true', () => {
     const regex = buildSearchRegex(
-      { searchString: 'hello', caseInsensitive: true, wordRestriction: 'none', useRegex: true },
+      {
+        scope: [],
+        searchString: 'hello',
+        caseInsensitive: true,
+        wordRestriction: 'none',
+        useRegex: true,
+      },
       DEFAULT_CATEGORIZER,
     );
     expect(matchAll(regex, 'Hello HELLO hello')).toEqual(['Hello', 'HELLO', 'hello']);
@@ -113,6 +124,7 @@ describe('buildSearchRegex – regex mode (useRegex)', () => {
   it('does not apply ignoreDiacritics when useRegex is true (user pattern used as-is)', () => {
     const regex = buildSearchRegex(
       {
+        scope: [],
         searchString: 'e',
         caseInsensitive: false,
         wordRestriction: 'none',
@@ -130,6 +142,7 @@ describe('buildSearchRegex – regex mode (useRegex)', () => {
   it('supports regex groups and alternation in the search string', () => {
     const regex = buildSearchRegex(
       {
+        scope: [],
         searchString: 'son (of|the)',
         caseInsensitive: false,
         wordRestriction: 'none',
@@ -145,6 +158,7 @@ describe('buildSearchRegex – ignoreDiacritics', () => {
   it('extends the match to include a combining diacritic after the base character', () => {
     const regex = buildSearchRegex(
       {
+        scope: [],
         searchString: 'e',
         caseInsensitive: false,
         wordRestriction: 'none',
@@ -159,6 +173,7 @@ describe('buildSearchRegex – ignoreDiacritics', () => {
   it('does not extend the match to a combining diacritic when ignoreDiacritics is false', () => {
     const regex = buildSearchRegex(
       {
+        scope: [],
         searchString: 'e',
         caseInsensitive: false,
         wordRestriction: 'none',
@@ -175,6 +190,7 @@ describe('buildSearchRegex – ignoreDiacritics', () => {
     // stripped from the search pattern, leaving a pattern that matches bare 'cafe'
     const regex = buildSearchRegex(
       {
+        scope: [],
         searchString: 'caf\u00e9',
         caseInsensitive: false,
         wordRestriction: 'none',
@@ -190,6 +206,7 @@ describe('buildSearchRegex – ignoreWhitespaceDifferences', () => {
   it('matches when the search has more spaces than the text', () => {
     const regex = buildSearchRegex(
       {
+        scope: [],
         searchString: 'hello  world',
         caseInsensitive: false,
         wordRestriction: 'none',
@@ -203,6 +220,7 @@ describe('buildSearchRegex – ignoreWhitespaceDifferences', () => {
   it('matches a non-breaking space in the text when the search term has a regular space', () => {
     const regex = buildSearchRegex(
       {
+        scope: [],
         searchString: 'hello world',
         caseInsensitive: false,
         wordRestriction: 'none',
@@ -217,6 +235,7 @@ describe('buildSearchRegex – ignoreWhitespaceDifferences', () => {
   it('requires an exact space match when ignoreWhitespaceDifferences is false', () => {
     const regex = buildSearchRegex(
       {
+        scope: [],
         searchString: 'hello world',
         caseInsensitive: false,
         wordRestriction: 'none',
@@ -233,6 +252,7 @@ describe('buildSearchRegex – CJK single-character words', () => {
   it('matches a CJK character inside a word even with wholeWord restriction', () => {
     const regex = buildSearchRegex(
       {
+        scope: [],
         searchString: '\u4e2d', // '中', code point 0x4E2D — in single-char-word range
         caseInsensitive: false,
         wordRestriction: 'wholeWord',
@@ -246,6 +266,7 @@ describe('buildSearchRegex – CJK single-character words', () => {
   it('matches a Hiragana character inside a word even with startOfWord restriction', () => {
     const regex = buildSearchRegex(
       {
+        scope: [],
         searchString: '\u3042', // 'あ', Hiragana — in single-char-word range
         caseInsensitive: false,
         wordRestriction: 'startOfWord',
@@ -259,7 +280,7 @@ describe('buildSearchRegex – CJK single-character words', () => {
 describe('buildSearchRegex – word restrictions', () => {
   it('does not match a substring embedded inside a longer word when wholeWord is set', () => {
     const regex = buildSearchRegex(
-      { searchString: 'he', caseInsensitive: false, wordRestriction: 'wholeWord' },
+      { scope: [], searchString: 'he', caseInsensitive: false, wordRestriction: 'wholeWord' },
       DEFAULT_CATEGORIZER,
     );
     // 'he' inside 'them' (he-m) and inside 'the' (t-he) must not match
@@ -268,7 +289,7 @@ describe('buildSearchRegex – word restrictions', () => {
 
   it('matches a standalone word when wholeWord is set', () => {
     const regex = buildSearchRegex(
-      { searchString: 'he', caseInsensitive: false, wordRestriction: 'wholeWord' },
+      { scope: [], searchString: 'he', caseInsensitive: false, wordRestriction: 'wholeWord' },
       DEFAULT_CATEGORIZER,
     );
     expect(matchAll(regex, 'he said he would')).toEqual(['he', 'he']);
@@ -276,7 +297,7 @@ describe('buildSearchRegex – word restrictions', () => {
 
   it('matches the term at the start of a word when startOfWord is set', () => {
     const regex = buildSearchRegex(
-      { searchString: 'pre', caseInsensitive: false, wordRestriction: 'startOfWord' },
+      { scope: [], searchString: 'pre', caseInsensitive: false, wordRestriction: 'startOfWord' },
       DEFAULT_CATEGORIZER,
     );
     expect(matchAll(regex, 'preview preview')).toEqual(['pre', 'pre']);
@@ -284,7 +305,7 @@ describe('buildSearchRegex – word restrictions', () => {
 
   it('does not match when the term appears only at the end of a word and startOfWord is set', () => {
     const regex = buildSearchRegex(
-      { searchString: 'ting', caseInsensitive: false, wordRestriction: 'startOfWord' },
+      { scope: [], searchString: 'ting', caseInsensitive: false, wordRestriction: 'startOfWord' },
       DEFAULT_CATEGORIZER,
     );
     // 'ting' is at the end of 'testing', not the start
@@ -293,7 +314,7 @@ describe('buildSearchRegex – word restrictions', () => {
 
   it('matches the term at the end of a word when endOfWord is set', () => {
     const regex = buildSearchRegex(
-      { searchString: 'ing', caseInsensitive: false, wordRestriction: 'endOfWord' },
+      { scope: [], searchString: 'ing', caseInsensitive: false, wordRestriction: 'endOfWord' },
       DEFAULT_CATEGORIZER,
     );
     expect(matchAll(regex, 'testing running')).toEqual(['ing', 'ing']);
@@ -301,7 +322,7 @@ describe('buildSearchRegex – word restrictions', () => {
 
   it('does not match when the term appears only at the start of a word and endOfWord is set', () => {
     const regex = buildSearchRegex(
-      { searchString: 'pre', caseInsensitive: false, wordRestriction: 'endOfWord' },
+      { scope: [], searchString: 'pre', caseInsensitive: false, wordRestriction: 'endOfWord' },
       DEFAULT_CATEGORIZER,
     );
     // 'pre' is at the start of 'preview', not the end
@@ -312,7 +333,7 @@ describe('buildSearchRegex – word restrictions', () => {
 describe('buildSearchRegex – trailing space', () => {
   it('matches a word followed by a space', () => {
     const regex = buildSearchRegex(
-      { searchString: 'the ', caseInsensitive: true, wordRestriction: 'none' },
+      { scope: [], searchString: 'the ', caseInsensitive: true, wordRestriction: 'none' },
       DEFAULT_CATEGORIZER,
     );
     expect(matchAll(regex, 'the book of the genealogy')).toEqual(['the ', 'the ']);
@@ -320,7 +341,7 @@ describe('buildSearchRegex – trailing space', () => {
 
   it('does not match a word followed by punctuation instead of a space', () => {
     const regex = buildSearchRegex(
-      { searchString: 'word ', caseInsensitive: false, wordRestriction: 'none' },
+      { scope: [], searchString: 'word ', caseInsensitive: false, wordRestriction: 'none' },
       DEFAULT_CATEGORIZER,
     );
     // "word," has a comma, not a space — must not match
@@ -329,7 +350,7 @@ describe('buildSearchRegex – trailing space', () => {
 
   it('does not match a word at the end of text when trailing space is required', () => {
     const regex = buildSearchRegex(
-      { searchString: 'word ', caseInsensitive: false, wordRestriction: 'none' },
+      { scope: [], searchString: 'word ', caseInsensitive: false, wordRestriction: 'none' },
       DEFAULT_CATEGORIZER,
     );
     expect(matchAll(regex, 'the last word')).toEqual([]);
@@ -337,7 +358,7 @@ describe('buildSearchRegex – trailing space', () => {
 
   it('matches the word only at positions actually followed by a space', () => {
     const regex = buildSearchRegex(
-      { searchString: 'son ', caseInsensitive: false, wordRestriction: 'none' },
+      { scope: [], searchString: 'son ', caseInsensitive: false, wordRestriction: 'none' },
       DEFAULT_CATEGORIZER,
     );
     // "son of David" → "son " matches; "son of Abraham." → "son " matches;
@@ -348,7 +369,7 @@ describe('buildSearchRegex – trailing space', () => {
 
   it('does not match a word followed by a comma even when that word also appears with a space elsewhere', () => {
     const regex = buildSearchRegex(
-      { searchString: 'father ', caseInsensitive: false, wordRestriction: 'none' },
+      { scope: [], searchString: 'father ', caseInsensitive: false, wordRestriction: 'none' },
       DEFAULT_CATEGORIZER,
     );
     // "father," should not be matched; "father of" should be matched
@@ -360,7 +381,7 @@ describe('buildSearchRegex – trailing space', () => {
 
   it('is case-insensitive when requested and still requires the trailing space', () => {
     const regex = buildSearchRegex(
-      { searchString: 'The ', caseInsensitive: true, wordRestriction: 'none' },
+      { scope: [], searchString: 'The ', caseInsensitive: true, wordRestriction: 'none' },
       DEFAULT_CATEGORIZER,
     );
     const matches = matchAll(regex, 'the book of The genealogy');
@@ -370,7 +391,7 @@ describe('buildSearchRegex – trailing space', () => {
 
   it('trailing space does not match a trailing period', () => {
     const regex = buildSearchRegex(
-      { searchString: 'Abraham ', caseInsensitive: false, wordRestriction: 'none' },
+      { scope: [], searchString: 'Abraham ', caseInsensitive: false, wordRestriction: 'none' },
       DEFAULT_CATEGORIZER,
     );
     // "Abraham." ends the sentence — no space follows
@@ -871,81 +892,5 @@ describe('resolveScrollGroupForPickedProject', () => {
 
   it('returns undefined when no tabs are open anywhere', () => {
     expect(resolveScrollGroupForPickedProject('PROJ-A', 0, [], undefined)).toBeUndefined();
-  });
-});
-
-describe('buildFindOptions', () => {
-  const BASE_ARGS = {
-    searchTerm: 'beginning',
-    findScope: [{ bookId: 'MAT', chapter: 1 }],
-    shouldMatchCase: false,
-    isRegexAllowed: false,
-    searchTextType: 'all',
-    wordRestriction: 'none',
-  } as const;
-
-  // See buildFindOptions' TSDoc for why the runs are collapsed.
-  it('collapses runs of consecutive spaces in the search term', () => {
-    expect(buildFindOptions({ ...BASE_ARGS, searchTerm: '   beginning    ' }).searchString).toBe(
-      ' beginning ',
-    );
-    expect(buildFindOptions({ ...BASE_ARGS, searchTerm: 'the   Word' }).searchString).toBe(
-      'the Word',
-    );
-  });
-
-  it('leaves a single space alone', () => {
-    expect(buildFindOptions({ ...BASE_ARGS, searchTerm: 'the Word' }).searchString).toBe(
-      'the Word',
-    );
-  });
-
-  it('leaves invisible characters untouched so they can still be searched for exactly', () => {
-    // U+00A0 no-break space, U+200B zero-width space
-    expect(buildFindOptions({ ...BASE_ARGS, searchTerm: 'a\u00A0b' }).searchString).toBe(
-      'a\u00A0b',
-    );
-    expect(buildFindOptions({ ...BASE_ARGS, searchTerm: 'a\u200Bb' }).searchString).toBe(
-      'a\u200Bb',
-    );
-  });
-
-  it('does not enable ignoreWhitespaceDifferences', () => {
-    expect(buildFindOptions(BASE_ARGS).ignoreWhitespaceDifferences).toBeUndefined();
-  });
-
-  it('passes the search term through verbatim in regex mode, where spacing may be deliberate', () => {
-    const options = buildFindOptions({
-      ...BASE_ARGS,
-      searchTerm: 'the   Word',
-      isRegexAllowed: true,
-    });
-    expect(options.searchString).toBe('the   Word');
-  });
-
-  it('passes the scope through unchanged', () => {
-    expect(buildFindOptions(BASE_ARGS).scope).toEqual([{ bookId: 'MAT', chapter: 1 }]);
-  });
-
-  it('inverts shouldMatchCase into caseInsensitive', () => {
-    expect(buildFindOptions({ ...BASE_ARGS, shouldMatchCase: true }).caseInsensitive).toBe(false);
-    expect(buildFindOptions({ ...BASE_ARGS, shouldMatchCase: false }).caseInsensitive).toBe(true);
-  });
-
-  it('maps searchTextType to verseTextOnly', () => {
-    expect(buildFindOptions({ ...BASE_ARGS, searchTextType: 'verseOnly' }).verseTextOnly).toBe(
-      true,
-    );
-    expect(buildFindOptions({ ...BASE_ARGS, searchTextType: 'all' }).verseTextOnly).toBe(false);
-  });
-
-  it('passes useRegex and wordRestriction through', () => {
-    const options = buildFindOptions({
-      ...BASE_ARGS,
-      isRegexAllowed: true,
-      wordRestriction: 'wholeWord',
-    });
-    expect(options.useRegex).toBe(true);
-    expect(options.wordRestriction).toBe('wholeWord');
   });
 });
