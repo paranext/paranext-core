@@ -16,6 +16,9 @@ const config = defineConfig(async () => {
         'src/**/*.test.tsx',
         'tools/pt9-css-converter/src/**/*.test.ts',
         '.erb/scripts/**/*.test.ts',
+        // The extensions build library (template merge, folder formatting). Not `extensions/src`:
+        // each extension there has its own test setup.
+        'extensions/lib/**/*.test.ts',
       ],
     },
   };

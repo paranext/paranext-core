@@ -5,7 +5,7 @@
   "main": "src/main.js",
   "types": "src/types/platform-enhanced-resources.d.ts",
   "author": "Paranext",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "scripts": {
     "build:web-view": "webpack --config ./webpack/webpack.config.web-view.ts",
     "build:main": "webpack --config ./webpack/webpack.config.main.ts",
@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@sillsdev/scripture": "^2.0.5",
+    "@xmldom/xmldom": "^0.8.13",
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {

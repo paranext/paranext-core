@@ -10,7 +10,7 @@
     <RootNamespace>Paranext.DataProvider</RootNamespace>
     <SelfContained>true</SelfContained>
     <Company>SIL Global and United Bible Societies</Company>
-    <Copyright>Copyright © 2017-2025 SIL Global and United Bible Societies</Copyright>
+    <Copyright>Copyright © 2017-2026 SIL Global and United Bible Societies</Copyright>
     <Authors>sillsdev</Authors>
     <Product>Paratext Data Provider for Platform.Bible</Product>
     <Title>Paratext Data Provider for Platform.Bible</Title>
@@ -20,7 +20,7 @@
     <PackageIcon>icon.png</PackageIcon>
     <PackageProjectUrl>https://github.com/paranext</PackageProjectUrl>
     <RepositoryUrl>https://github.com/paranext/paranext-core</RepositoryUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <!-- To support macOS universal binaries, we need to build both architectures -->
     <RuntimeIdentifiers Condition="$([MSBuild]::IsOsPlatform('OSX'))">osx-x64;osx-arm64</RuntimeIdentifiers>
     <UserSecretsId>1860f020-31dd-4eb4-81c4-323eb0cb3e48</UserSecretsId>
@@ -51,7 +51,19 @@
     <PackageReference Include="ParatextChecks" Version="$(ParatextPackageVersion)" />
     <PackageReference Include="ParatextData" Version="$(ParatextPackageVersion)" />
     <PackageReference Include="StreamJsonRpc" Version="2.22.11" />
-    <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
+    <!--
+      Suppressed, not consumed. SIL.Core targets netstandard2.0 and declares System.Net.Http 4.3.4,
+      which is newer than the 4.3.0 the .NET 8 shared framework supersedes - so without this the
+      package's netstandard1.6 assembly wins over the framework's and lands in the publish output.
+      ExcludeAssets="all" keeps the framework's implementation and drops the shim.
+
+      This is a licensing decision as much as a technical one. The package carries the pre-MIT
+      "MICROSOFT .NET LIBRARY" terms rather than an SPDX expression, and those terms include an
+      "Excluded License" clause whose effect on an AGPL binary nobody has determined. Not shipping
+      it removes the question rather than answering it. System.Net.WebSockets 4.3.0 is the same
+      shape and must not be referenced either, for the same reason (see LICENSING.md).
+    -->
+    <PackageReference Include="System.Net.Http" Version="4.3.4" ExcludeAssets="all" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.9" />
   </ItemGroup>
 

@@ -1311,6 +1311,12 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   // Shim out require so extensions can use it only as prescribed.
   // WARNING: This code should not be edited without serious review. For more information,
   // see https://github.com/paranext/paranext/wiki/Module-import-restrictions
+  //
+  // This shim is also where the Extension Interface is defined in practice: the module names
+  // allowed below are what an extension may link against at runtime, and LICENSE-EXCEPTION.md
+  // grants an additional permission under AGPL section 7 to works that use only those. Widening
+  // this list widens that grant; narrowing it can put an existing extension outside the exception.
+  // Treat a change here as a licensing change as well as a security one.
   // Assert the specific type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   Module.prototype.require = ((moduleName: string) => {

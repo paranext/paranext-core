@@ -117,6 +117,12 @@ export class RpcWebSocketListener implements IRpcMethodRegistrar {
       // never accept traffic arriving on a non-loopback interface. Bind by name rather than a
       // literal address: clients connect to `localhost` too, so both ends resolve through the same
       // resolver and agree on the IP version, whichever the host prefers.
+      //
+      // This binding is also load-bearing for AGPL-3.0's network clause (section 13): loopback
+      // traffic never leaves the host, so it does not put a remote user "interacting with it ...
+      // through a computer network" in play. Making this address configurable would change what
+      // downstream licensees are exposed to, so treat that as a licensing decision, not just a
+      // networking one.
       this.webSocketServer = new WebSocketServer({ host: 'localhost', port: WEBSOCKET_PORT });
       this.webSocketServer.addListener('connection', this.onClientConnect);
       this.webSocketServer.addListener('close', this.disconnect);

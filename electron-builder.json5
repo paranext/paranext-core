@@ -4,7 +4,7 @@
 {
   productName: 'Platform.Bible',
   appId: 'org.paranext.PlatformBible',
-  copyright: 'Copyright © 2017-2025 SIL Global and United Bible Societies',
+  copyright: 'Copyright © 2017-2026 SIL Global and United Bible Societies',
   protocols: {
     name: 'platform-bible',
     schemes: ['platform-bible'],
@@ -85,7 +85,34 @@
     buildResources: 'assets',
     output: 'release/build',
   },
-  extraResources: ['./assets/**', { from: './extensions/dist/', to: './extensions' }],
+  extraResources: [
+    './assets/**',
+    { from: './extensions/dist/', to: './extensions' },
+    // Third-party attribution obligations - MIT, BSD, ISC and Apache-2.0 alike - apply to the
+    // distributed binary regardless of the terms the application itself ships under, so the notices
+    // travel with the installer. This is NOT the end-user licence: nsis.license / dmg license is a
+    // separate artifact and stays unset: the Terms of Service are accepted at account creation, not
+    // through a click-through during install (LICENSING.md).
+    './THIRD-PARTY-NOTICES.md',
+    './LICENSE',
+    // The installer otherwise carries two statements about the user's rights and nothing that
+    // reconciles them: `resources/LICENSE` is the full AGPL-3.0-or-later text, while the
+    // application is licensed to the user under the Terms of Service. Both are accurate - the
+    // SOURCE is AGPL and the BINARY is licensed under the Terms - but which one applies to what is
+    // stated only here. Shipping the document that draws that line, alongside both texts.
+    './LICENSING.md',
+    // The terms the application itself is licensed to the user under (Terms of Service section
+    // 3.B.1). Referenced by `release/app/package.json`'s `SEE LICENSE IN TERMS-OF-SERVICE.md`, so
+    // it has to travel with the binary for that declaration to resolve. NOT an installer EULA:
+    // acceptance happens when a user creates their Paratext account, not through a click-through
+    // during install, which is why `nsis.license` and `dmg` stay unset.
+    './TERMS-OF-SERVICE.md',
+    // An additional permission under section 7 of the AGPL. Section 7 expects such a permission to
+    // travel with the licence text it modifies, so it ships beside `LICENSE` rather than only
+    // living in the repository - a recipient of the binary who goes on to build an extension needs
+    // to be able to read it from what they were given.
+    './LICENSE-EXCEPTION.md',
+  ],
   publish: {
     provider: 'github',
     owner: 'paranext',

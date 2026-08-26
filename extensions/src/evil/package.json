@@ -5,7 +5,7 @@
   "main": "evil.js",
   "types": "evil.d.ts",
   "author": "Paranext",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "volta": {
     "extends": "../../package.json"
   },

@@ -21,10 +21,20 @@ const DB_IP_WEBSITE_NAME = 'DB-IP';
 const DB_IP_LICENSE = 'CC BY 4.0';
 const DB_IP_ATTRIBUTION_LINK = 'https://creativecommons.org/licenses/by/4.0/';
 
+/**
+ * What `release/app/package.json` declares: npm's registered form for terms that are not an SPDX
+ * licence, pointing at the file the installer carries. The distributed application is licensed to
+ * the user under the Terms of Service rather than under this repository's AGPL source (see
+ * LICENSING.md). Mapped to a readable name here because the raw declaration is a manifest
+ * convention, not something to show a user.
+ */
+const TERMS_OF_SERVICE_DECLARATION = 'SEE LICENSE IN TERMS-OF-SERVICE.md';
+
 const STRING_KEYS: LocalizeKey[] = [
   '%product_name%',
   '%about_versionLabel_format%',
   '%about_licenseLabel_format%',
+  '%about_licenseLabel_termsOfService%',
   '%about_db_ip_attribution_format%',
   '%about_db_ip_attribution_intro%',
   '%about_db_ip_attribution_terms%',
@@ -42,6 +52,7 @@ function AboutDialog() {
       '%product_name%': productName,
       '%about_versionLabel_format%': versionLabelFormat,
       '%about_licenseLabel_format%': licenseLabelFormat,
+      '%about_licenseLabel_termsOfService%': termsOfService,
       '%about_db_ip_attribution_format%': dbIpAttributionFormat,
       '%about_db_ip_attribution_intro%': dbIpAttributionIntro,
       '%about_db_ip_attribution_terms%': dbIpAttributionTerms,
@@ -63,9 +74,17 @@ function AboutDialog() {
         <h1 className="about-title">{productName}</h1>
         <p className="about-description">{packageInfo.description}</p>
         <p className="about-version">{formatReplacementString(versionLabelFormat, packageInfo)}</p>
-        <p className="about-license">{formatReplacementString(licenseLabelFormat, packageInfo)}</p>
+        <p className="about-license">
+          {formatReplacementString(licenseLabelFormat, {
+            ...packageInfo,
+            license:
+              packageInfo.license === TERMS_OF_SERVICE_DECLARATION
+                ? termsOfService
+                : packageInfo.license,
+          })}
+        </p>
         <p className="about-attribution">
-          Copyright ©2017-2025 SIL Global and United Bible Societies
+          Copyright © 2017-2026 SIL Global and United Bible Societies
         </p>
         <p className="about-db-ip-attribution">
           {formatReplacementStringToArray(dbIpAttributionFormat, {
