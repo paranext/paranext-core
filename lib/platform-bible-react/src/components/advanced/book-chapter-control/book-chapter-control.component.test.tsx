@@ -339,7 +339,7 @@ describe('BookChapterControl additional books', () => {
     await userEvent.type(getSearchInput(), 'e');
 
     const revelation = await screen.findByRole('option', {
-      name: /Revelation is not in this project/,
+      name: /Revelation \(REV\) is not in this project/,
     });
     expect(revelation).toHaveClass('tw:bg-muted/50');
     // The label stays readable while the row is highlighted, unlike a hover-only tooltip
@@ -459,7 +459,7 @@ describe('BookChapterControl additional books', () => {
     await user.type(getSearchInput(), 'e');
 
     const revelation = await screen.findByRole('option', {
-      name: /Revelation is not in this project/,
+      name: /Revelation \(REV\) is not in this project/,
     });
     expect(revelation).toHaveClass('tw:bg-muted/50');
   });

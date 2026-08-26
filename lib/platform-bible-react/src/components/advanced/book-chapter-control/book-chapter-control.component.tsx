@@ -557,12 +557,17 @@ export function BookChapterControl({
   const bookNotInProjectDescriptionTemplate =
     localizedStrings?.['%webView_bookChapterControl_bookNotInProjectDescription%'] ||
     '{book} is not in this project';
-  // A localized template that places the book name itself, rather than appending the short label to
-  // a name here: word order, punctuation, and any inflection of the name belong to the translation.
+  // A localized template that places the book itself, rather than appending the short label to a
+  // name here: word order, punctuation, and any inflection of the name belong to the translation.
+  // Substitutes the same `Name (ID)` form BookItem announces for an undimmed row, so the id is not
+  // dropped from a dimmed row's accessible name and both read alike.
   const getBookNotInProjectDescription = useCallback(
     (bookId: string) =>
       formatReplacementString(bookNotInProjectDescriptionTemplate, {
-        book: getLocalizedBookName(bookId, localizedBookNames),
+        book: `${getLocalizedBookName(bookId, localizedBookNames)} (${getLocalizedBookId(
+          bookId,
+          localizedBookNames,
+        )})`,
       }),
     [bookNotInProjectDescriptionTemplate, localizedBookNames],
   );
