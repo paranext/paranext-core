@@ -25,6 +25,12 @@
  * populated. `createCommentTestProject` in comment-test-helpers.ts writes a `ProjectUserAccess.xml`
  * into the temp project directory so Paratext Data returns the synthetic users from
  * `findAssignableUsers`.
+ *
+ * Writing that file also makes the project's team list exhaustive, so `createCommentTestProject`
+ * adds the machine's own registered Paratext user to it — without a role there, every comment write
+ * is refused with "You do not have permission to create comments in this project". A machine with
+ * no Paratext registration has no user to add, so the suite skips rather than failing on a
+ * precondition it cannot create.
  */
 
 import { test } from '../../../fixtures/comment.fixture';
@@ -39,6 +45,7 @@ import {
   expandThread,
   expectAssigningTo,
   assignUserAndSubmit,
+  readCurrentParatextUserName,
 } from '../../../fixtures/comment-test-helpers';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -62,17 +69,33 @@ test.describe('Comment last-assignee persistence (PT-3878)', () => {
     cleanupCommentTestProject(project);
   });
 
+  // A project that lists assignable users lists ALL its users, so an unregistered machine has no
+  // name to put in that list and cannot be granted permission to write the comments these tests
+  // assign. Declared here so it reports as a skip naming its missing precondition rather than as a
+  // permission failure deep inside the seeding.
+  test.skip(
+    !readCurrentParatextUserName(),
+    'This machine has no Paratext registration, so it has no user name to give a role on the test ' +
+      'project, and every comment write is refused. Register Paratext (profile menu → Internet & ' +
+      'connectivity, or the first-run wizard) and re-run.',
+  );
+
+  /** Seed the threads the tests work with. Thread ids come back in {@link VERSE_REFS} order. */
+  async function seedThreads(): Promise<string[]> {
+    return createCommentThreads(project, VERSE_REFS, [
+      'First comment thread',
+      'Second comment thread',
+      'Third comment thread',
+    ]);
+  }
+
   test('pre-selects the last assigned user when opening the next comment thread', async ({
     mainPage,
   }) => {
     await waitForAppReady(mainPage);
 
     // Seed comment threads now that the app (and Paratext PDPF) is running.
-    const threadIds = await createCommentThreads(project, VERSE_REFS, [
-      'First comment thread',
-      'Second comment thread',
-      'Third comment thread',
-    ]);
+    const threadIds = await seedThreads();
 
     await openCommentList(mainPage, project);
 
@@ -100,11 +123,7 @@ test.describe('Comment last-assignee persistence (PT-3878)', () => {
     await waitForAppReady(mainPage);
 
     // Seed comment threads now that the app is running.
-    const threadIds = await createCommentThreads(project, VERSE_REFS, [
-      'First comment thread',
-      'Second comment thread',
-      'Third comment thread',
-    ]);
+    const threadIds = await seedThreads();
 
     await openCommentList(mainPage, project);
 
