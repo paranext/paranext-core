@@ -19,7 +19,6 @@ import {
   PlatformEvent,
   PlatformEventEmitter,
   deepEqual,
-  endsWith,
   getAllObjectFunctionNames,
   getErrorMessage,
   groupBy,
@@ -76,7 +75,7 @@ const SUBSCRIBE_PLACEHOLDER = {};
  * @experimental
  */
 export const getDataProviderObjectId = (providerName: string) => {
-  return endsWith(providerName, `-${DATA_PROVIDER_LABEL}`)
+  return providerName.endsWith(`-${DATA_PROVIDER_LABEL}`)
     ? providerName
     : `${providerName}-${DATA_PROVIDER_LABEL}`;
 };

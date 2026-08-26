@@ -1,13 +1,12 @@
 import { readFileBinary } from '@node/services/node-file-system.service';
 import { buildExtensionUriFromPath } from '@extension-host/services/extension-storage.service';
-import { startsWith } from 'platform-bible-utils';
 import { Uri } from '@shared/data/file-system.model';
 import { getAssetPathInfoFromExtensionUri } from '@shared/utils/extension-asset.utils';
 
 export type GetAsset = typeof getAsset;
 
 export async function getAsset(extensionName: string, assetPath: string): Promise<Buffer> {
-  if (!startsWith(assetPath, 'assets/') && !startsWith(assetPath, 'assets\\')) {
+  if (!assetPath.startsWith('assets/') && !assetPath.startsWith('assets\\')) {
     throw Error('Requests are limited to files in the "assets" directory');
   }
   const uriToAsset = buildExtensionUriFromPath(extensionName, assetPath);

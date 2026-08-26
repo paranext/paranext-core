@@ -10,7 +10,7 @@ import {
   SqlOutputRow,
   NamedSqlParameters,
 } from '@shared/services/database.service-model';
-import { createSyncProxyForAsyncObject, startsWith } from 'platform-bible-utils';
+import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 import { newNonce } from '@shared/utils/util';
 import { getUriFromExtensionUri } from '@extension-host/services/asset-retrieval.service';
@@ -85,7 +85,7 @@ class DatabaseService implements IDatabaseService {
     const databasePath = getPathFromUri(getUriFromExtensionUri(extensionFileUri));
 
     // Extension asset files are always read-only
-    const isReadOnly = !!(readOnly || startsWith(extensionFileUri, EXTENSION_ASSET_PROTOCOL_NAME));
+    const isReadOnly = !!(readOnly || extensionFileUri.startsWith(EXTENSION_ASSET_PROTOCOL_NAME));
 
     // The worker thread serializes all operations, so fullMutex is inherently satisfied
     const nonce = newNonce();

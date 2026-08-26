@@ -36,14 +36,9 @@ import {
   AsyncVariable,
   debounce,
   deserialize,
-  endsWith,
   formatReplacementString,
   getErrorMessage,
-  includes,
-  slice,
   SortedSet,
-  startsWith,
-  stringLength,
   toKebabCase,
   UnsubscriberAsync,
   UnsubscriberAsyncList,
@@ -229,7 +224,7 @@ const nameComparator = (a: string, b: string) => a.localeCompare(b, 'en', { sens
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
   const extensionManifest: ExtensionManifest = deserialize(extensionManifestJson);
 
-  if (includes(extensionManifest.name, '..'))
+  if (extensionManifest.name.includes('..'))
     throw new Error('Extension name must not include `..`!');
   if (FORBIDDEN_EXTENSION_NAMES.some((forbiddenName) => forbiddenName === extensionManifest.name))
     throw new Error(`Extension name '${extensionManifest.name}' forbidden!`);
@@ -340,7 +335,7 @@ async function getExtensionZipUris(): Promise<Uri[]> {
         .flatMap((dirEntries) => dirEntries[nodeFS.EntryType.File])
         .filter((extensionFileUri) => extensionFileUri),
     )
-    .filter((extensionFileUri) => endsWith(extensionFileUri.toLowerCase(), '.zip'));
+    .filter((extensionFileUri) => extensionFileUri.toLowerCase().endsWith('.zip'));
 }
 
 /**
@@ -429,7 +424,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
   await Promise.all(
     zipEntries.map(async ([fileName]) => {
       const parsedPath = path.parse(fileName);
-      if (includes(fileName, '..')) {
+      if (fileName.includes('..')) {
         logger.warn(`Invalid extension ZIP file entry in "${zipUri}": ${fileName}`);
         zipEntriesInProperDirectory = false;
       }
@@ -633,7 +628,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         // it can lead to problems with race conditions. If this ever becomes a problem, we can fix
         // this code.
         const dtsInfos = (
-          await nodeFS.readDir(extensionInfo.dirUri, (entryName) => endsWith(entryName, '.d.ts'))
+          await nodeFS.readDir(extensionInfo.dirUri, (entryName) => entryName.endsWith('.d.ts'))
         )[nodeFS.EntryType.File].map(createDtsInfoFromUri);
 
         if (dtsInfos.length <= 0) {
@@ -651,7 +646,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         // with version number or something
         if (!extensionDtsInfo)
           extensionDtsInfo = dtsInfos.find((dtsInfo) =>
-            startsWith(dtsInfo.base, extensionNameKebabCase),
+            dtsInfo.base.startsWith(extensionNameKebabCase),
           );
 
         // Try using a dts file whose name is `index.d.ts`
@@ -668,7 +663,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
 
       // If the dts file has stuff after the extension name, we want to use it so they can suffix a
       // version number or something
-      if (startsWith(extensionDtsInfo.base, extensionNameKebabCase))
+      if (extensionDtsInfo.base.startsWith(extensionNameKebabCase))
         extensionDtsBaseDestination = extensionDtsInfo.base;
 
       // Put the extension's dts in the types cache in its own folder
@@ -681,7 +676,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         userExtensionTypesCacheUri,
         // Folder name must match module name which we are assuming is the same as the name of the
         // .d.ts file, so get the .d.ts file's name and use it as the folder name
-        slice(extensionDtsBaseDestination, 0, -stringLength('.d.ts')),
+        extensionDtsBaseDestination.slice(0, -'.d.ts'.length),
         'index.d.ts',
       );
 

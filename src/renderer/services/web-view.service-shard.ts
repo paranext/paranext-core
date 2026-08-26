@@ -100,8 +100,6 @@ import {
   isSerializable,
   isString,
   newGuid,
-  split,
-  startsWith,
   THEME_STYLE_ELEMENT_ID,
   Unsubscriber,
   UnsubscriberAsync,
@@ -534,7 +532,7 @@ function removeNodeIfForbidden(node: Node) {
         removeElement(`iframe with a non-string sandbox value ${sandbox.value}`);
         return;
       }
-      const sandboxValues = split(sandbox.value, ' ');
+      const sandboxValues = sandbox.value.split(' ');
       const src = currentElement.attributes.getNamedItem('src');
       // If the iframe has `src`, only allow `src` sandbox values because browsers that do not
       // support `srcdoc` fall back to `src` so we should be more strict
@@ -2384,9 +2382,9 @@ export async function openOrReloadWebView(
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL && allowedFrameSources)
     allowedFrameSources = allowedFrameSources.filter(
       (hostValue) =>
-        startsWith(hostValue, 'https:') ||
-        startsWith(hostValue, 'papi-extension:') ||
-        startsWith(hostValue, 'http://localhost:'),
+        hostValue.startsWith('https:') ||
+        hostValue.startsWith('papi-extension:') ||
+        hostValue.startsWith('http://localhost:'),
     );
 
   // Validate the WebViewDefinition to make sure it is acceptable

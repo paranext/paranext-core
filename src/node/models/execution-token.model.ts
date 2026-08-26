@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import { createNonce } from '@node/utils/crypto-util';
-import { stringLength } from 'platform-bible-utils';
 import { ExtensionBasicData } from '@shared/models/extension-basic-data.model';
 
 /** For now this is just for extensions, but maybe we will want to expand this in the future */
@@ -14,7 +13,7 @@ export class ExecutionToken implements ExtensionBasicData {
 
   constructor(tokenType: ExecutionTokenType, name: string) {
     if (!tokenType) throw new Error('token type must be defined');
-    if (!name || stringLength(name) < 1) throw new Error('name must be a string of length > 0');
+    if (!name || name.length < 1) throw new Error('name must be a string of length > 0');
 
     this.type = tokenType;
     this.name = name;

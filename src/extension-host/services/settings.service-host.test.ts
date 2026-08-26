@@ -2,7 +2,6 @@ import { vi } from 'vitest';
 import { testingSettingService } from '@extension-host/services/settings.service-host';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 import { SettingNames } from 'papi-shared-types';
-import { slice } from 'platform-bible-utils';
 
 const MOCK_SETTINGS_DATA = {
   'platform.interfaceLanguage': ['fre'],
@@ -67,7 +66,7 @@ vi.mock('@shared/services/localization.service', () => ({
     async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
       [localizeKey: string]: string;
     }> {
-      return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+      return Object.fromEntries(keys.map((key) => [key, key.slice(1, -1)]));
     },
   },
 }));
