@@ -17,6 +17,7 @@ export const BOOK_CHAPTER_CONTROL_STRING_KEYS = Object.freeze([
   '%history_recent%',
   '%history_recentSearches_ariaLabel%',
   '%webView_bookChapterControl_bookNotInProject%',
+  '%webView_bookChapterControl_bookNotInProjectDescription%',
   '%webView_bookChapterControl_selectChapter%',
   '%webView_bookChapterControl_selectVerse%',
   '%webView_bookChapterControl_showMoreBooks%',

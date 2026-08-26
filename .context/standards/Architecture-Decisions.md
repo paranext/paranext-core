@@ -1518,8 +1518,9 @@ step, no automation. Just a record.
   them, and core cannot re-derive them correctly.
 - **Decision:** A web view that displays scripture from projects beyond its own `projectId` declares
   those project ids in its own web view state under `NAVIGABLE_PROJECT_IDS_WEB_VIEW_STATE_KEY`
-  (`platform-bible-utils/experimental`, the one place both core and extension web views can import a
-  runtime value from). Readers union `definition.projectId` with the declared list across open
+  (`platform-bible-utils/experimental` — both core and extension web views can import runtime values
+  from the stable entry point too; the key lives under `experimental` because the convention itself
+  is not yet stable). Readers union `definition.projectId` with the declared list across open
   definitions and react to the existing web view open/update/close events. The declaring view owns
   its own resolution and publishes installed project ids; readers guard the value with
   `isNavigableProjectIds` rather than trusting it, since web view state is written by whoever owns

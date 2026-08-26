@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, test, vi } from 'vitest';
 import '@testing-library/jest-dom';
@@ -51,25 +51,26 @@ function renderBookItem(props: Partial<Parameters<typeof BookItem>[0]> = {}) {
 describe('BookItem dimmed state', () => {
   test('is not dimmed by default', () => {
     renderBookItem();
-    expect(screen.getByRole('option')).not.toHaveClass('tw:opacity-70');
+    expect(screen.getByRole('option')).not.toHaveClass('tw:bg-muted/50');
   });
 
+  // Same tokens as NumberedItemGrid, so book rows and chapter/verse cells grey identically
   test('applies the dimmed classes when a dimmed reason is given', () => {
-    renderBookItem({ dimmedReason: 'not in this project' });
+    renderBookItem({ dimmedReason: 'Not in project' });
     const option = screen.getByRole('option');
-    expect(option).toHaveClass('tw:opacity-70');
-    // The row the user is actually on reads at full contrast, like any other book
-    expect(option).toHaveClass('tw:data-selected:opacity-100');
+    expect(option).toHaveClass('tw:bg-muted/50');
+    expect(option).toHaveClass('tw:text-muted-foreground/50');
   });
 
-  // A dimmed item is selectable, so it must not read as less available than a disabled one
-  test('a dimmed item is less dimmed than a disabled one', () => {
-    const { unmount } = renderBookItem({ dimmedReason: 'not in this project' });
-    expect(screen.getByRole('option')).toHaveClass('tw:opacity-70');
-    unmount();
+  // Otherwise the id keeps full strength beside a dimmed name and the row reads half-dimmed
+  test('the book id inherits the dimmed colour instead of setting its own', () => {
+    renderBookItem({ dimmedReason: 'Not in project' });
+    expect(screen.getByText('REV')).not.toHaveClass('tw:text-muted-foreground');
+  });
 
-    renderBookItem({ disabled: true });
-    expect(screen.getByRole('option')).toHaveClass('tw:opacity-50');
+  test('the book id keeps its own muted colour when not dimmed', () => {
+    renderBookItem();
+    expect(screen.getByText('REV')).toHaveClass('tw:text-muted-foreground');
   });
 
   test('a dimmed item is still selectable', async () => {
@@ -96,17 +97,10 @@ describe('BookItem dimmed state', () => {
   });
 
   test('disabled wins over dimmed so the two styles do not stack', () => {
-    renderBookItem({ dimmedReason: 'not in this project', disabled: true });
+    renderBookItem({ dimmedReason: 'Not in project', disabled: true });
     const option = screen.getByRole('option');
     expect(option).toHaveClass('tw:cursor-not-allowed');
-    expect(option).not.toHaveClass('tw:opacity-70');
-  });
-
-  test('appends the dimmed reason to the accessible name', () => {
-    renderBookItem({ dimmedReason: 'not in this project' });
-    expect(
-      screen.getByRole('option', { name: 'Revelation (REV), not in this project' }),
-    ).toBeInTheDocument();
+    expect(option).not.toHaveClass('tw:bg-muted/50');
   });
 
   test('omits the reason when no dimmed reason is given', () => {
@@ -114,52 +108,63 @@ describe('BookItem dimmed state', () => {
     expect(screen.getByRole('option', { name: 'Revelation (REV)' })).toBeInTheDocument();
   });
 
-  // The reason arrives localized, so the name it is appended to has to be localized too
-  test('announces a localized name and reason in one language', () => {
+  // The undimmed name is built from localized display values, so it is never half English
+  test('announces a localized name when localized names are given', () => {
     renderBookItem({
-      dimmedReason: 'no está en este proyecto',
+      localizedBookNames: new Map([['REV', { localizedId: 'APO', localizedName: 'Apocalipsis' }]]),
+    });
+
+    expect(screen.getByRole('option', { name: 'Apocalipsis (APO)' })).toBeInTheDocument();
+  });
+
+  // cmdk never moves DOM focus onto an item, so a hover-only tooltip is invisible to a keyboard
+  // user arrowing through the list. The label has to be rendered.
+  test('renders the dimmed reason as visible text', () => {
+    renderBookItem({ dimmedReason: 'Not in project' });
+
+    expect(screen.getByText('Not in project')).toBeVisible();
+  });
+
+  test('renders no reason text when the item is not dimmed', () => {
+    renderBookItem();
+
+    expect(screen.queryByText('Not in project')).not.toBeInTheDocument();
+  });
+
+  test('renders no reason text on a disabled item', () => {
+    renderBookItem({ dimmedReason: 'Not in project', disabled: true });
+
+    expect(screen.queryByText('Not in project')).not.toBeInTheDocument();
+  });
+
+  // The whole sentence comes from one localized template, so a translation controls word order
+  test('announces the localized description in place of an appended fragment', () => {
+    renderBookItem({
+      dimmedReason: 'No en el proyecto',
+      dimmedDescription: 'Apocalipsis no está en este proyecto',
       localizedBookNames: new Map([['REV', { localizedId: 'APO', localizedName: 'Apocalipsis' }]]),
     });
 
     expect(
-      screen.getByRole('option', { name: 'Apocalipsis (APO), no está en este proyecto' }),
+      screen.getByRole('option', { name: 'Apocalipsis no está en este proyecto' }),
     ).toBeInTheDocument();
   });
 
-  test('a disabled item does not announce the dimmed reason', () => {
-    renderBookItem({ dimmedReason: 'not in this project', disabled: true });
+  test('falls back to the short label when no description is given', () => {
+    renderBookItem({ dimmedReason: 'Not in project' });
+
+    expect(
+      screen.getByRole('option', { name: 'Revelation (REV), Not in project' }),
+    ).toBeInTheDocument();
+  });
+
+  test('a disabled item announces neither the label nor the description', () => {
+    renderBookItem({
+      dimmedReason: 'Not in project',
+      dimmedDescription: 'Revelation is not in this project',
+      disabled: true,
+    });
+
     expect(screen.getByRole('option', { name: 'Revelation (REV)' })).toBeInTheDocument();
-  });
-
-  // Radix opens its tooltip from a pointermove carrying a non-touch pointerType, which
-  // userEvent.hover does not produce under jsdom — these have to be fired directly.
-  function hoverWithPointer(element: HTMLElement) {
-    fireEvent.pointerEnter(element, { pointerType: 'mouse' });
-    fireEvent.pointerMove(element, { pointerType: 'mouse' });
-  }
-
-  // Without this the greying is a colour-only signal for a sighted user
-  test('shows the dimmed reason in a tooltip on hover', async () => {
-    renderBookItem({ dimmedReason: 'not in this project' });
-
-    hoverWithPointer(screen.getByRole('option'));
-
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('not in this project');
-  });
-
-  test('shows no tooltip when the item is not dimmed', async () => {
-    renderBookItem();
-
-    hoverWithPointer(screen.getByRole('option'));
-
-    await expect(screen.findByRole('tooltip')).rejects.toThrow();
-  });
-
-  test('shows no tooltip on a disabled item', async () => {
-    renderBookItem({ dimmedReason: 'not in this project', disabled: true });
-
-    hoverWithPointer(screen.getByRole('option'));
-
-    await expect(screen.findByRole('tooltip')).rejects.toThrow();
   });
 });
