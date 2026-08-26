@@ -23,12 +23,6 @@ step, no automation. Just a record.
 - **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-NNNN` instead of deleting
   it; add the new decision as a new entry.
 - **Append at the end**, newest last. Number entries `ADR-NNNN`.
-- **Numbers are claimed at merge, not at write.** Several branches in flight at once each append the
-  next free number as of the day they branched, so two unmerged branches routinely carry the SAME
-  number for different decisions — and because the file is append-only, nothing catches it: the
-  second merge simply leaves `main` with two identical headings. Before merging a PR that adds an
-  entry, re-read the last heading on `main` and renumber yours to follow it, updating any
-  cross-references. Whoever merges second does the renumbering.
 
 ### Entry template
 
@@ -1430,7 +1424,7 @@ step, no automation. Just a record.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
 
-## layout-persistence-guard-retirement (ADR-0024): Two layout-persistence guards kept side by side pending deliberate retirement of the older one
+## layout-persistence-guard-retirement (Formerly numbered 0024): Two layout-persistence guards kept side by side pending deliberate retirement of the older one
 
 - **Date:** 2026-08-20
 - **Status:** Accepted (interim — retirement of the superseded guard is deferred, not decided against)
@@ -1464,7 +1458,4 @@ step, no automation. Just a record.
   structural guard's test suite already covers every case `web-view.service-host.test.ts`'s
   content-based-guard test exercises, then delete the content-based branch and that guard's
   now-redundant test in one deliberate commit.
-- **Source:** PR #2425 / PR #2681 merge conflict resolution. Renamed from its original numeric-only
-  `ADR-0024` to the `layout-persistence-guard-retirement` slug on 2026-08-26 (team decision to
-  identify ADRs by kebab-case slug going forward; the number is kept parenthetically since it was
-  already referenced in Discord before the rename).
+- **Source:** PR #2425
