@@ -46,6 +46,15 @@ function waitForPort(port: number, timeout: number): Promise<void> {
   });
 }
 
+/** Last few lines of a file, for putting a process's own words into the error that reports it. */
+function tailFile(filePath: string, lines = 20): string {
+  try {
+    return fs.readFileSync(filePath, 'utf-8').split('\n').slice(-lines).join('\n');
+  } catch {
+    return '(no output captured)';
+  }
+}
+
 /**
  * Newest file modification time (ms since epoch) under `dir`, recursively. Used to detect a stale
  * dev main bundle. `node_modules` is skipped — dependency changes are reflected in package.json.
@@ -169,9 +178,15 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
     console.log(`Renderer dev server already running on port ${RENDERER_PORT}.`);
   } else {
     console.log('Starting renderer dev server...');
+    // Log the dev server's output instead of discarding it. When this process dies mid-run, every
+    // subsequent test fails with `Window URL: chrome-error://chromewebdata/` — the renderer cannot
+    // load — and with `stdio: 'ignore'` there is no record anywhere of why it went. One dead dev
+    // server then costs a whole suite's runtime and leaves nothing to diagnose from.
+    const devServerLogPath = path.join(rootDir, 'e2e-tests', '.dev-server.log');
+    const devServerLog = fs.openSync(devServerLogPath, 'w');
     const devServer = spawn('npm', ['run', 'start:renderer'], {
       cwd: rootDir,
-      stdio: 'ignore',
+      stdio: ['ignore', devServerLog, devServerLog],
       shell: true,
       // Create a new process group so global-teardown can kill the entire tree
       // via process.kill(-pid). Without this, the shell child inherits the
@@ -192,9 +207,31 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       fs.writeFileSync(pidFile, String(devServer.pid));
     }
 
+    // Notice the server dying rather than waiting out the full port timeout and reporting the
+    // wrong cause. `detached` + `unref` do not stop this process from seeing the exit.
+    let devServerExit: { code: number | null; signal: string | null } | undefined;
+    devServer.on('exit', (code, signal) => {
+      devServerExit = { code, signal };
+    });
+
     // Wait for the dev server to be ready
     console.log(`Waiting for renderer dev server on port ${RENDERER_PORT}...`);
-    await waitForPort(RENDERER_PORT, 120_000);
-    console.log('Renderer dev server is ready.');
+    try {
+      await waitForPort(RENDERER_PORT, 120_000);
+    } catch (err) {
+      const why = devServerExit
+        ? `The renderer dev server exited (code=${devServerExit.code}, signal=${devServerExit.signal}).`
+        : 'The renderer dev server is still running but never opened the port.';
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `${reason}\n${why}\nIts output: ${devServerLogPath}\n${tailFile(devServerLogPath)}`,
+      );
+    }
+    if (devServerExit) {
+      throw new Error(
+        `The renderer dev server opened port ${RENDERER_PORT} and then exited (code=${devServerExit.code}, signal=${devServerExit.signal}). Every test would otherwise fail with \`Window URL: chrome-error://chromewebdata/\` — the renderer cannot load.\nIts output: ${devServerLogPath}\n${tailFile(devServerLogPath)}`,
+      );
+    }
+    console.log(`Renderer dev server is ready. Its output: ${devServerLogPath}`);
   }
 }
