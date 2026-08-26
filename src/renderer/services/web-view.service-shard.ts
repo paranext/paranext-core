@@ -3150,6 +3150,17 @@ export const openWebView = async (
     if (!optionsDefaulted.createNewIfNotFound) return undefined;
   }
 
+  // A `'window'` layout cannot be created by a shard — main intercepts those and routes a plain tab
+  // open into the window it made. So one reaching this point means main resolved this window as
+  // already owning the web view the caller asked to reuse, and that web view left between the
+  // resolution and this call. That is a lost race, not misrouting, and saying so matters: the dock
+  // would otherwise raise its routing-contract alarm, which sends whoever reads the log looking for
+  // a broken invariant instead of a moved tab.
+  if (layout?.type === 'window')
+    throw new LogError(
+      `Could not open web view type ${webViewType}: it was routed here to reuse a web view this window no longer holds, and creating a window is not a window's own to do.`,
+    );
+
   // We didn't find an existing web view with the ID, so we need to create a new one.
 
   // We want to create a new webview, so create a placeholder with a new ID to pass to the WebViewProvider
