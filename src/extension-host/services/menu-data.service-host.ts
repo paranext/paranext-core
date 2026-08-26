@@ -138,14 +138,6 @@ class MenuDataDataProviderEngine
     return { ...webViewMenu, topMenu, contextMenu, tabMenu };
   }
 
-  /** Apply the interface-mode filter to a tab menu, leaving an absent one absent */
-  #filteredTabMenu(
-    tabMenu: Localized<SingleColumnMenu> | undefined,
-  ): Localized<SingleColumnMenu> | undefined {
-    if (!tabMenu) return undefined;
-    return { ...tabMenu, items: filterItemsForInterfaceMode(tabMenu.items, this.currentMode) };
-  }
-
   // setWebViewMenu doesn't use instance state but cannot be static because it implements the
   // IDataProviderEngine<MenuDataDataTypes> interface
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
@@ -165,6 +157,14 @@ class MenuDataDataProviderEngine
       return success;
     }
     return true;
+  }
+
+  /** Apply the interface-mode filter to a tab menu, leaving an absent one absent */
+  #filteredTabMenu(
+    tabMenu: Localized<SingleColumnMenu> | undefined,
+  ): Localized<SingleColumnMenu> | undefined {
+    if (!tabMenu) return undefined;
+    return { ...tabMenu, items: filterItemsForInterfaceMode(tabMenu.items, this.currentMode) };
   }
 
   /**
