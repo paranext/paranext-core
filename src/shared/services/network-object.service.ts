@@ -14,7 +14,6 @@ import {
   isString,
   CanHaveOnDidDispose,
   MutexMap,
-  startsWith,
 } from 'platform-bible-utils';
 import {
   NetworkObject,
@@ -383,7 +382,10 @@ const createRemoteProxy = (
       // If the prop requested is a symbol, that doesn't work over the network. Reject
       if (!isString(key)) return undefined;
       // Don't create remote proxies for events
-      if (startsWith(key, 'on')) return undefined;
+      // Native `startsWith`, not the grapheme-aware helper: network object property names are
+      // JavaScript identifiers matched against an ASCII prefix, and this trap runs on every property
+      // access. Each call gets a fresh key, so there is no instance to reuse.
+      if (key.startsWith('on')) return undefined;
 
       // If the local network object doesn't have the property, build a request for it
       const requestFunction = (...args: unknown[]) =>
@@ -429,7 +431,7 @@ const createLocalProxy = (
       if (key === 'constructor' || key === 'dispose') return undefined;
       // Don't proxy events except "onDidDispose" since that's the only way for callers to
       // register functions to run when the object is going away
-      if (isString(key) && startsWith(key, 'on') && key !== 'onDidDispose') return undefined;
+      if (isString(key) && key.startsWith('on') && key !== 'onDidDispose') return undefined;
 
       const property = Reflect.get(target, key, objectBeingSet);
 
@@ -455,7 +457,7 @@ function createNetworkObjectDetails(
   objectFunctionNames.delete('dispose');
   objectFunctionNames.forEach((functionName) => {
     // If we come up with some better way to identify events, we can remove this and related checks
-    if (startsWith(functionName, 'on')) objectFunctionNames.delete(functionName);
+    if (functionName.startsWith('on')) objectFunctionNames.delete(functionName);
   });
   return {
     id,
