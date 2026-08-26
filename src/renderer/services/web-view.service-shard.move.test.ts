@@ -320,4 +320,34 @@ describe('adoptWebView', () => {
 
     expect(await shard.adoptWebView(SAVED_DEFINITION)).toBeUndefined();
   });
+
+  test('a declined adopt leaves no seeded state behind', async () => {
+    // The seed has to happen before the provider runs, so an adopt that does not complete has
+    // already written this window's storage. Leaving it parks a moved view's state under an id
+    // this window does not hold; the source window still has its own copy for the recovery.
+    const { deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+    vi.mocked(deleteFullWebViewStateById).mockClear();
+    const { shard } = await shardOverDockLayout(undefined);
+    await primeProvider(async () => undefined);
+
+    await shard.adoptWebView(SAVED_DEFINITION);
+
+    expect(deleteFullWebViewStateById).toHaveBeenCalledWith('moved-view');
+  });
+
+  test('a failed adopt leaves no seeded state behind', async () => {
+    const { deleteFullWebViewStateById } = await import(
+      '@renderer/services/web-view-state.service'
+    );
+    vi.mocked(deleteFullWebViewStateById).mockClear();
+    const { shard } = await shardOverDockLayout(undefined);
+    await primeProvider(async () => {
+      throw new Error('provider blew up');
+    });
+
+    await expect(shard.adoptWebView(SAVED_DEFINITION)).rejects.toThrow();
+    expect(deleteFullWebViewStateById).toHaveBeenCalledWith('moved-view');
+  });
 });
