@@ -41,9 +41,8 @@ Run this per PR the round covers and record a row each **in `findings.md`**: PR 
 the API rather than `git rev-parse origin/<branch>`, which reports whatever this checkout last
 fetched. The gates can take days — a pin that lives only in this session's context is one the
 session running step 10 cannot read. Any push this round makes — the step-0 rebase included —
-re-records that branch's pin: it is the last SHA *this round* put on the remote, not the one it
-first saw. **Keep the original head in the row as well.** The pin moves; step 10.1 needs the tip
-the branches above were forked from, and once the pin has moved it is no longer that.
+re-records that row: the pin is the last SHA *this round* put on the remote, not the one it first
+saw.
 
 `behind_by > 0` or `mergeable: CONFLICTING` → **rebase before anything else**; every fix estimate is
 against a tree that will change. On a stack each PR's base is the branch below it, not `main`.
@@ -171,8 +170,8 @@ npm run build:main     # writes buildInfo.json, which typecheck imports
 ```
 
 Both builds first, then `npm run typecheck && npm run lint && npm run format:check`, and the test
-suites through the `test-runner` skill. Keep `format:check` named: `lint` is eslint over
-`.cjs,.js,.jsx,.ts,.tsx` only, so a JSON, YAML or SCSS change is seen by nothing but the separate
+suites through the `test-runner` skill. Keep `format:check` named: `lint` is eslint over script
+files plus stylelint over styles, so a JSON or YAML change is checked by nothing but the separate
 prettier pass that CI gates on.
 
 Then **run the app and reproduce the reviewer's scenario** — `app-runner` to start it,
@@ -213,21 +212,22 @@ SHA that is not on GitHub is a broken citation in public. Approval here also cov
 ## 10. Restack, push, post
 
 1. **Restack first, push second.** If anything sits on top of this branch, rebase it before
-   pushing anything: `git rebase --onto <new-base-tip> <old-base-tip> <branch>`, bottom of the
-   stack up. Both placeholders come from step 0's table: `<old-base-tip>` is the base branch's
-   **original** recorded head — the tip its children were forked from, which by now is on no ref
-   at all and is not the pin if the pin has moved; `<new-base-tip>` is that branch's tip now.
-   Guess `<old-base-tip>` and the rebase replays either nothing or the base's own commits onto
-   the child. Never blanket `--continue || --skip`
+   pushing anything, bottom of the stack up:
+   `git rebase --onto <base> "$(git merge-base <base> <branch>)" <branch>`. Compute the fork
+   point; do not record one. `merge-base` is correct in every case this flow produces, including
+   after a mid-round rebase of the base — provided its children were restacked with it, which
+   step 0 already requires. A remembered SHA is wrong the moment the stack moves, and the rebase
+   then replays the base's own commits onto the child. Never blanket `--continue || --skip`
    in a loop — `--skip` silently drops real commits, and an untracked-file collision or a hook
    failure looks exactly like an empty commit. Then **re-run step 7's battery at each new tip**,
    since the restack rewrote the commits it passed on.
 2. **Push** every branch you touched, bottom of the stack first, one command at a time, with
-   `--force-with-lease=<branch>:<step-0 headRefOid>`. Never bare: with no expected value the lease
+   `--force-with-lease=<branch>:<that branch's pin>`. Never bare: with no expected value the lease
    is checked against the remote-tracking ref, which any fetch across the two stops has already
-   advanced, so it protects nothing. A restacked branch that is never pushed
-   leaves its PR on the old commits while the replies cite a tip that exists only on disk.
-   A rejected lease means the branch moved since step 0 — do not re-pin to the current remote,
+   advanced, so it protects nothing. A restacked branch that is never pushed leaves its PR on the
+   old commits while the replies cite a tip that exists only on disk.
+   A rejected lease means the branch moved since this round last pushed it — do not re-pin to
+   the current remote,
    which is the defeated form; read the remote back and put it to the user as a new decision.
    A force-push can dismiss approvals; record `reviewDecision` before and after, and re-request
    review from whoever had approved.
