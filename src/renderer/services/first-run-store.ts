@@ -3,6 +3,7 @@ import { logger } from '@shared/services/logger.service';
 import { localizationService } from '@shared/services/localization.service';
 import { getCurrentLocale, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { readCachedInterfaceMode } from '@renderer/hooks/use-interface-mode.hook';
+import { readBooleanFlag, writeBooleanFlag } from './local-storage-flag.util';
 import { decideFirstRun } from './first-run.reducer';
 import { FirstRunStep } from './first-run.model';
 import { resolveRegistrationValidity } from './resolve-registration-validity';
@@ -36,23 +37,6 @@ const JUST_REGISTERED_KEY = 'platform-bible.firstRunJustRegistered';
 // Guards startBackgroundRegistrationRecheck so the completed-user re-check runs at most once per
 // startup even if resolveInternal is re-entered (e.g. via retryFirstRunResolution).
 let backgroundRecheckStarted = false;
-
-function readBooleanFlag(key: string): boolean {
-  try {
-    return localStorage.getItem(key) === 'true';
-  } catch {
-    // localStorage may be unavailable (sandboxed/test envs); treat as false.
-    return false;
-  }
-}
-
-function writeBooleanFlag(key: string, value: boolean): void {
-  try {
-    localStorage.setItem(key, value ? 'true' : 'false');
-  } catch {
-    // Best-effort cache; a failed write just means the next startup re-resolves from scratch.
-  }
-}
 
 /** Demo/UX mode — see {@link DEMO_MODE_KEY}. Enablement only; never true in shipped builds. */
 export function isDemoMode(): boolean {
@@ -422,13 +406,9 @@ export async function retryFirstRunResolution(): Promise<void> {
   return resolvePromise;
 }
 
-// The onboarding tour shows once per user in Simple mode and is persisted in localStorage.
-// Key lives here alongside other platform-bible.* namespace entries.
-const ONBOARDING_TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
-
 /**
- * Resets in-memory store state to match current localStorage. Clears listeners, the resolve dedupe
- * guard, and the tour-done localStorage flag so a complete round-trip reset is possible in tests.
+ * Resets in-memory store state to match current localStorage. Clears listeners and the resolve
+ * dedupe guard.
  *
  * WARNING: Test-only. @internal
  */
@@ -438,19 +418,4 @@ export function resetFirstRunStore(): void {
   resolving = false;
   backgroundRecheckStarted = false;
   listeners.clear();
-  try {
-    localStorage.removeItem(ONBOARDING_TOUR_DONE_KEY);
-  } catch {
-    // Ignore storage errors in environments where localStorage is unavailable.
-  }
-}
-
-/** Returns true if the onboarding tour has been completed or skipped. */
-export function readTourDone(): boolean {
-  return readBooleanFlag(ONBOARDING_TOUR_DONE_KEY);
-}
-
-/** Records that the onboarding tour has been completed or skipped. */
-export function writeTourDone(): void {
-  writeBooleanFlag(ONBOARDING_TOUR_DONE_KEY, true);
 }

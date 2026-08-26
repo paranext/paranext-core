@@ -359,7 +359,7 @@ test.describe('multi-window lifecycle', () => {
   }) => {
     const logStep = createStepLogger('multi-window');
     const output = captureAppOutput(electronApp);
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const window1Id = getWindowIdOfPage(mainPage);
     logStep(`window ${window1Id} ready`);
 
@@ -481,7 +481,7 @@ test.describe('multi-window lifecycle', () => {
   }) => {
     const logStep = createStepLogger('multi-window');
     const output = captureAppOutput(electronApp);
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     logStep('window 1 ready');
 
     // Baselines: both app-global services answer before anything is changed or closed. Without
@@ -617,7 +617,7 @@ test.describe('multi-window lifecycle', () => {
   }) => {
     const logStep = createStepLogger('multi-window');
     const output = captureAppOutput(electronApp);
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
 
     const page2 = await createSecondWindow(electronApp);
     const window2Id = getWindowIdOfPage(page2);

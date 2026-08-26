@@ -282,7 +282,7 @@ test.describe('per-window UI isolation', () => {
   }) => {
     const logStep = createStepLogger('per-window-ui');
     const output = captureAppOutput(electronApp);
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     const window1Id = getWindowIdOfPage(mainPage);
     await expect(homeTabTitle(mainPage, window1Id)).toBeAttached({ timeout: 60_000 });
     logStep(`window ${window1Id} ready`);
