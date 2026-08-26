@@ -244,6 +244,8 @@ describe('argument validation', () => {
   test('adopt refuses a bundle that is missing its web view type', async () => {
     const { shard } = await shardOverDockLayout(undefined);
 
+    // The assertion is the point of the test: it constructs the malformed bundle a wire caller can
+    // send, which by definition does not satisfy the type
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const bundle = { id: 'abc' } as unknown as SavedWebViewDefinition;
 
@@ -258,6 +260,7 @@ describe('argument validation', () => {
     vi.mocked(setFullWebViewStateById).mockClear();
     const { shard } = await shardOverDockLayout(undefined);
 
+    // Same as above — a well-typed bundle could not carry the malformed shape under test
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const bundle = {
       id: 'victim-id',
