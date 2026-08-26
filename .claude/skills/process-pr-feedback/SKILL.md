@@ -46,11 +46,24 @@ saw.
 
 `behind_by > 0` or `mergeable: CONFLICTING` → **rebase before anything else**; every fix estimate is
 against a tree that will change. On a stack each PR's base is the branch below it, not `main`, and
-**rebasing a base means restacking every branch above it right then**, bottom up, with 10.1's
-command. A child left on a rewritten base is broken for the rest of the round and its `behind_by`
-will not say so, because that number is measured against a base tip which no longer exists. The
-same holds whenever a base is rewritten later: restack its children with it, or land the fix as a
-new commit rather than a rewrite.
+**rebasing a base means restacking every branch above it in the same operation**, bottom up. That
+restack needs the base's tip from *before* the rebase, so capture it first — nothing recovers it
+afterwards:
+
+```bash
+OLD=$(git rev-parse <base>)                # BEFORE rewriting the base
+# …rebase <base>…
+git rebase --onto <base> "$OLD" <child>    # each branch above, bottom up
+```
+
+Do **not** reach for 10.1's `merge-base` form here. A child that has not been restacked yet still
+forks from the base's pre-rebase tip, so `merge-base` resolves below the base's own commits and the
+rebase replays them onto the child. Restacking immediately is what makes `merge-base` valid later:
+it is correct only once every child sits on an ancestor of its base. A child left on a rewritten
+base is broken for the rest of the round and its `behind_by` will not say so, because that number
+is measured against a base tip which no longer exists. The same applies to any later rewrite — an
+amend or fixup during steps 5–8 — so either capture and restack together, or land the fix as a new
+commit rather than a rewrite.
 
 Three traps:
 - **`mergeable: UNKNOWN` is a non-answer, not a pass.** GitHub computes it lazily, so the first
@@ -219,13 +232,14 @@ SHA that is not on GitHub is a broken citation in public. Approval here also cov
 1. **Restack first, push second.** If anything sits on top of this branch, rebase it before
    pushing anything, bottom of the stack up:
    `git rebase --onto <base> "$(git merge-base <base> <branch>)" <branch>`. Compute the fork
-   point; do not record one. `merge-base` is correct in every case this flow produces, including
-   after a mid-round rebase of the base — provided its children were restacked with it, which
-   step 0 already requires. A remembered SHA is wrong the moment the stack moves, and the rebase
-   then replays the base's own commits onto the child. Never blanket `--continue || --skip`
-   in a loop — `--skip` silently drops real commits, and an untracked-file collision or a hook
-   failure looks exactly like an empty commit. Then **re-run step 7's battery at each new tip**,
-   since the restack rewrote the commits it passed on.
+   point; do not record one. `merge-base` is correct here because step 0 requires a rewritten base
+   to have its children restacked in the same operation, so by now every child sits on an ancestor
+   of its base. That is the only condition under which it holds — see step 0 for the rewrite case,
+   which needs the pre-rewrite tip instead. A SHA remembered across the round is wrong the moment
+   the stack moves again, and the rebase then replays the base's own commits onto the child.
+   Never blanket `--continue || --skip` in a loop — `--skip` silently drops real commits, and an
+   untracked-file collision or a hook failure looks exactly like an empty commit. Then **re-run
+   step 7's battery at each new tip**, since the restack rewrote the commits it passed on.
 2. **Push** every branch you touched, bottom of the stack first, one command at a time, with
    `--force-with-lease=<branch>:<that branch's pin>`. Never bare: with no expected value the lease
    is checked against the remote-tracking ref, which any fetch across the two stops has already
