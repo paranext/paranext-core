@@ -1220,13 +1220,11 @@ async function getPersistedLayout(
  * dock's whole contents anyway.
  *
  * As a second, content-based check, also refuses to persist a layout that still contains one of
- * Simple mode's fixed tab ids (`SIMPLE_LAYOUT_TAB_IDS`) while not in Simple mode. This predates the
- * structural `layoutLoadGenerationInDock` check above and is a strict subset of what that one
- * catches (confirmed in the #2681 PR discussion) — kept for now only so this merge doesn't silently
- * drop a guard; retiring it (once the structural check's coverage has been verified with this
- * guard's own tests still green) is tracked as deliberate follow-up work, not something to fold
- * into conflict resolution. See ADR `layout-persistence-guard-retirement` in
- * `.context/standards/Architecture-Decisions.md` for the full reasoning.
+ * Simple mode's fixed tab ids (`SIMPLE_LAYOUT_TAB_IDS`) while not in Simple mode. This is a strict
+ * subset of what the structural `layoutLoadGenerationInDock` check above catches; it is retained as
+ * a redundant safeguard and is slated for removal once the structural check's coverage is verified.
+ * See ADR `layout-persistence-guard-retirement` in `.context/standards/Architecture-Decisions.md`
+ * for the full reasoning.
  *
  * @param layout Layout to persist
  */
