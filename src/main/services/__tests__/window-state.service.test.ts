@@ -11,6 +11,9 @@ import {
   getTargetWindowId,
   getUnreachableWindowIds,
   getWindows,
+  handleWindowBlurred,
+  isApplicationFocused,
+  isApplicationInBackground,
   isWindowAbandoned,
   isWindowClosing,
   isWindowReady,
@@ -813,6 +816,41 @@ describe('window state tracking', () => {
       expect(isWindowAbandoned(1)).toBe(false);
       markWindowNotReady(1);
       expect(getUnreachableWindowIds()).toEqual([1]);
+    });
+  });
+
+  describe('telling a backgrounded application from one that has never been focused', () => {
+    test('a never-focused application is not in the background', () => {
+      // Startup. Both questions read false, and they must not be conflated: a window created now
+      // has to take the foreground.
+      addWindow(fakeWindow(1));
+
+      expect(isApplicationFocused()).toBe(false);
+      expect(isApplicationInBackground()).toBe(false);
+    });
+
+    test('an application whose window lost focus is in the background', () => {
+      addWindow(fakeWindow(1));
+      setFocusedWindowId(1);
+      handleWindowBlurred(1);
+
+      expect(isApplicationFocused()).toBe(false);
+      expect(isApplicationInBackground()).toBe(true);
+    });
+
+    test('closing the focused window leaves the application in the background, not at startup', () => {
+      // The macOS case: the app stays resident with no windows. `focusedWindowId` is cleared when
+      // its window is removed, so anything reading that scalar would fall back to the startup
+      // answer here and let the next window take the foreground out of whatever the user moved on
+      // to — which is the opposite of what is wanted.
+      const window = fakeWindow(1);
+      addWindow(window);
+      setFocusedWindowId(1);
+      removeWindow(window, 1);
+
+      // The scalar really is cleared — that is the whole reason it cannot answer this question
+      expect(getFocusedWindowId()).toBeUndefined();
+      expect(isApplicationInBackground()).toBe(true);
     });
   });
 

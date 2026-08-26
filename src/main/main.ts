@@ -85,7 +85,7 @@ import {
   getTargetWindowId,
   getWindows,
   handleWindowBlurred,
-  isApplicationFocused,
+  isApplicationInBackground,
   isWindowClosing as isWindowMarkedClosing,
   isWindowReady,
   markWindowAbandoned,
@@ -693,13 +693,11 @@ async function main() {
     // Whether this window must appear without stealing the foreground. Decided BEFORE the window
     // exists, because creating one can itself change what holds focus.
     //
-    // Both halves are needed and they answer different questions. `getFocusedWindowId()` latches on
-    // the first focus and is never cleared, so it answers "has this app been used yet this
-    // session"; `isApplicationFocused()` answers "is it in front right now". Only the combination
-    // means backgrounded. Testing `isApplicationFocused()` alone would be wrong at startup, where
-    // nothing has been focused yet and the first window must take focus normally.
-    const shouldAppearWithoutActivating =
-      getFocusedWindowId() !== undefined && !isApplicationFocused();
+    // The question is specifically "backgrounded", not "not focused": at startup nothing has been
+    // focused yet and that window must take the foreground normally. `isApplicationInBackground`
+    // separates the two by way of a latch that is never cleared once set — see its own doc for why
+    // the focused-window id cannot stand in for it.
+    const shouldAppearWithoutActivating = isApplicationInBackground();
 
     const newWindow = new BrowserWindow({
       // Shown by the constructor on the ordinary path, exactly as before. Withheld only when the
