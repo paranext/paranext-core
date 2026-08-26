@@ -238,6 +238,17 @@ export function countWindowsThatCouldBeTheLastOne(): number {
 }
 
 /** Whether a window's renderer has registered its window service, so routing to it can succeed */
+/**
+ * Whether this id names a window the tracker is holding.
+ *
+ * Distinct from every other predicate here, which answer questions ABOUT a tracked window and say
+ * nothing about ids that were never tracked: this one answers whether the subject exists at all,
+ * which is what a caller handed an id from off-process needs to establish first.
+ */
+export function isWindowTracked(windowId: number): boolean {
+  return trackedWindows.some((tracked) => tracked.windowId === windowId);
+}
+
 export function isWindowReady(windowId: number): boolean {
   return readyWindowIds.has(windowId);
 }

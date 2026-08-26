@@ -87,6 +87,7 @@ import {
   handleWindowBlurred,
   isApplicationInBackground,
   isWindowClosing as isWindowMarkedClosing,
+  isWindowTracked,
   isWindowReady,
   markWindowAbandoned,
   markWindowClosing,
@@ -392,6 +393,9 @@ async function main() {
     // rule, whole — see `countWindowsThatCouldBeTheLastOne` for what it leaves out and why
     countWindows: countWindowsThatCouldBeTheLastOne,
     closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+    // A report names its own subject and arrives over the network, so the id is the caller's word.
+    // The tracker is what knows whether that word describes a window this process has.
+    isWindowTracked,
     markWindowClosing,
     // The shared registry, not only this handler's own decisions: a window the user is closing can
     // report empty mid-teardown, and it must get the same "closing" answer instead of a second close
