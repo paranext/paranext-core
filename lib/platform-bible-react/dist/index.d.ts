@@ -1197,8 +1197,11 @@ export type ForwardedSessionKind = Exclude<MarkerPaletteSessionKind, "enter">;
  * set makes the session the single owner of the query in both focus states — which is exactly what
  * the passive palette already is.
  *
- * Derived from the table rather than hand-listed, so the two cannot drift. Pure modifiers are
- * excluded: the table only passes them through, and claiming them would break `+` chords.
+ * The list's control-key half ({@link CONTROL_KEYS}) is kept in step with the handler's branches BY
+ * HAND — see that constant's comment for the convention when adding or removing a branch; only the
+ * filter-character half is derived (from `FILTER_CHAR_REGEX`). The test suite's claimed-keys sweep
+ * pins the reverse direction, failing on a listed key the handler no longer acts on. Pure modifiers
+ * are excluded: the table only passes them through, and claiming them would break `+` chords.
  */
 export declare function getMarkerPaletteClaimedKeys(kind: ForwardedSessionKind): string[];
 /**

@@ -64,6 +64,24 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
+  it('passes lock and dead keys through untouched — never a dismissal, never a filter character', () => {
+    // CapsLock is how an uppercase CUSTOM marker gets typed mid-filter, NumLock can be tapped at
+    // any time, and Dead is how diacritics begin on many layouts — none of them is input, so none
+    // may dismiss the session or leak into the query.
+    (['backslash', 'selection'] as const).forEach((kind) => {
+      ['CapsLock', 'NumLock', 'Dead'].forEach((key) => {
+        const driver = makeDriver();
+        const state = session(kind, 'w');
+        const event = makeEvent(key);
+        expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('passed');
+        expect(event.defaultPrevented).toBe(false);
+        expect(state.filter).toBe('w'); // not ingested
+        expect(driver.dismiss).not.toHaveBeenCalled();
+        expect(driver.update).not.toHaveBeenCalled();
+      });
+    });
+  });
+
   it('passes IME composition keydowns (isComposing) through untouched — no claim, no driver calls', () => {
     // An Enter that confirms a CJK/complex-script candidate arrives with `isComposing` and must
     // reach the editor's own composition-guarded handlers, not commit the palette. The capture
@@ -101,6 +119,31 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(event.defaultPrevented).toBe(false); // Ctrl+C copies the wrapped selection
     expect(state.filter).toBe('w'); // not ingested
     expect(driver.dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('treats an AltGr chord (ctrl+alt with AltGraph) as a typed character — it filters, never dismisses', () => {
+    // On Windows/Linux a character typed WITH AltGr held reports `ctrlKey && altKey` both set, so
+    // without the AltGraph exclusion ordinary typing on several European layouts dismissed the
+    // session mid-marker.
+    const driver = makeDriver();
+    const state = session('backslash', 'w');
+    const event = makeEvent('j', { ctrlKey: true, altKey: true, modifierAltGraph: true });
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('continue');
+    expect(event.defaultPrevented).toBe(true); // claimed — filters the palette, never lands
+    expect(state.filter).toBe('wj');
+    expect(driver.update).toHaveBeenCalledWith({ filterText: 'wj' });
+    expect(driver.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('a genuine ctrl+alt chord WITHOUT AltGraph keeps the chord behavior — unclaimed dismissal', () => {
+    const driver = makeDriver();
+    const state = session('backslash', 'w');
+    const event = makeEvent('j', { ctrlKey: true, altKey: true });
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(false); // the chord must still do its normal job
+    expect(state.filter).toBe('w'); // not ingested
+    expect(driver.dismiss).toHaveBeenCalledOnce();
+    expect(driver.update).not.toHaveBeenCalled();
   });
 
   it('claims in-session Enter (capture) so the editor never splits before the commit applies', () => {
@@ -161,6 +204,33 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
       ),
     ).toBe('ended');
     expect(focusedDriver.commit).toHaveBeenCalledOnce();
+  });
+
+  it('Tab commits the highlighted item exactly like Enter — claimed, one overlay commit', () => {
+    // The editor package's own menus treat Tab and Enter as one commit gesture; Tab is also in
+    // the claimed-keys list, so a focused palette forwards it here rather than moving focus.
+    (['backslash', 'selection'] as const).forEach((kind) => {
+      const driver = makeDriver();
+      const event = makeEvent('Tab');
+      expect(handleMarkerPaletteSessionKeyDown(event, session(kind, 'nd'), driver)).toBe('ended');
+      expect(event.defaultPrevented).toBe(true);
+      expect(event.stopPropagation).toHaveBeenCalled();
+      expect(driver.commit).toHaveBeenCalledOnce();
+      expect(driver.dismiss).not.toHaveBeenCalled();
+    });
+  });
+
+  it('Tab with zero matches is the same claimed no-op as Enter — the session stays open', () => {
+    (['backslash', 'selection'] as const).forEach((kind) => {
+      const driver = makeDriver();
+      const event = makeEvent('Tab');
+      expect(handleMarkerPaletteSessionKeyDown(event, session(kind, 'qqqq'), driver)).toBe(
+        'continue',
+      );
+      expect(event.defaultPrevented).toBe(true); // still claimed — Tab must not move focus
+      expect(driver.commit).not.toHaveBeenCalled();
+      expect(driver.dismiss).not.toHaveBeenCalled();
+    });
   });
 
   it('claims Escape and dismisses for every forwarded session kind', () => {
@@ -459,6 +529,19 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.commit).not.toHaveBeenCalled();
   });
 
+  it('selection session: the Space exact match is case-insensitive (`ND` typed, `nd` offered → commits)', () => {
+    // Markers are unique ignoring case and custom markers may be capitalized (the same rule that
+    // makes uppercase a filter character), so the wrap must not show `ND` matching in the list
+    // and then refuse the very commit it displayed. The OFFERED casing is what commits.
+    const driver = makeDriver();
+    const state = session('selection', 'ND');
+    const event = makeEvent(' ');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(true);
+    expect(driver.commitItem).toHaveBeenCalledExactlyOnceWith('nd');
+    expect(driver.dismiss).toHaveBeenCalledOnce();
+  });
+
   it('selection session: the Space exact match is against the full marker code, not a prefix', () => {
     // 'n' prefixes 'nd' but is not offered itself — Space must refuse, not wrap in 'nd'.
     const driver = makeDriver();
@@ -577,8 +660,9 @@ describe('clearPaletteSessionIfCurrent', () => {
 
 describe('getMarkerPaletteClaimedKeys', () => {
   // The list a session hands to its palette so the palette forwards exactly these keys back
-  // instead of consuming them. It must be derived from the table below rather than hand-written,
-  // or the two drift and the forwarded half of a session behaves differently from the focused one.
+  // instead of consuming them. Its control-key half (CONTROL_KEYS) is hand-kept in step with the
+  // handler's branches; if the two drift, the forwarded half of a session behaves differently
+  // from the focused one. The sweep below pins one drift direction behaviorally.
   it('claims every key the table acts on, for each forwarded session kind', () => {
     // 'enter' is deliberately absent: the Enter-split palette is always focused with no key
     // forwarding, so the table neither drives it nor claims keys for it.
@@ -603,5 +687,35 @@ describe('getMarkerPaletteClaimedKeys', () => {
   it('does not claim pure modifiers (they are not input and the table only passes them)', () => {
     const keys = getMarkerPaletteClaimedKeys('backslash');
     ['Shift', 'Control', 'Alt', 'Meta'].forEach((key) => expect(keys).not.toContain(key));
+  });
+
+  it('every claimed key is actually acted on in a forwarded session — no stale list entries', () => {
+    // The claimed list is hand-kept in step with the handler's branches (CONTROL_KEYS's comment is
+    // the convention), so it can drift in two directions. The FORWARD direction — a new branch
+    // added without a list entry — remains convention-guarded only: no test can enumerate branches
+    // the handler doesn't declare, which is exactly why getMarkerPaletteClaimedKeys's doc no
+    // longer claims the list is derived. This sweep pins the REVERSE direction: a stale entry
+    // whose branch was removed would make a focused palette forward a key the handler then lets
+    // fall through to the dismiss-and-let-it-land catch-all. With a non-empty filter matching an
+    // offered item, every listed key's branch CLAIMS its event (the unclaimed rows — empty-filter
+    // `\` and the backslash catch-all — are only reachable for keys outside the list or an empty
+    // filter), so a fallen-through key shows up here as an unclaimed dismissal. The 'selection'
+    // kind's catch-all claims every key by design, so 'backslash' is the discriminating half of
+    // the sweep; 'selection' still verifies every listed key is acted on rather than passed.
+    (['backslash', 'selection'] as const).forEach((kind) => {
+      getMarkerPaletteClaimedKeys(kind).forEach((key) => {
+        const driver = makeDriver();
+        const state = session(kind, 'nd');
+        const event = makeEvent(key);
+        const outcome = handleMarkerPaletteSessionKeyDown(event, state, driver);
+        // The kind and key ride along in the asserted object so a failure names the stale entry.
+        expect({ kind, key, outcome, claimed: event.defaultPrevented }).toEqual({
+          kind,
+          key,
+          outcome: expect.stringMatching(/^(continue|ended)$/),
+          claimed: true,
+        });
+      });
+    });
   });
 });

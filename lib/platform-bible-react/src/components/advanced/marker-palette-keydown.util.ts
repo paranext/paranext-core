@@ -203,7 +203,13 @@ const FILTER_CHAR_REGEX: Record<ForwardedSessionKind, RegExp> = {
   selection: /^[a-z0-9+-]$/i,
 };
 
-/** Control keys the table has a branch for, in every session kind. */
+/**
+ * Control keys the table has a branch for, in every session kind. HAND-KEPT in step with
+ * {@link handleMarkerPaletteSessionKeyDown} below: adding a branch below requires adding its key
+ * here, or a focused palette consumes the key itself instead of forwarding it back to the session.
+ * The reverse direction — a stale entry left behind after its branch is removed — is pinned by the
+ * claimed-keys sweep in this module's test suite.
+ */
 const CONTROL_KEYS: readonly string[] = [
   ' ',
   'Enter',
@@ -238,8 +244,11 @@ const FILTER_CHAR_ALPHABET: readonly string[] = [
  * set makes the session the single owner of the query in both focus states — which is exactly what
  * the passive palette already is.
  *
- * Derived from the table rather than hand-listed, so the two cannot drift. Pure modifiers are
- * excluded: the table only passes them through, and claiming them would break `+` chords.
+ * The list's control-key half ({@link CONTROL_KEYS}) is kept in step with the handler's branches BY
+ * HAND — see that constant's comment for the convention when adding or removing a branch; only the
+ * filter-character half is derived (from `FILTER_CHAR_REGEX`). The test suite's claimed-keys sweep
+ * pins the reverse direction, failing on a listed key the handler no longer acts on. Pure modifiers
+ * are excluded: the table only passes them through, and claiming them would break `+` chords.
  */
 export function getMarkerPaletteClaimedKeys(kind: ForwardedSessionKind): string[] {
   return [
