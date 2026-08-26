@@ -355,8 +355,14 @@ export function SyncStatusButton() {
    * rather than as a failure: the sync did not go wrong, it was stopped on request. Send/receive
    * carries no `cancelled` result status, so this control's own pending request is the only
    * evidence that separates the two.
+   *
+   * Both sources are read, and `isCancelling` is what makes this true on the very render the sync
+   * settles: {@link wasCancelRequested} is recorded by an effect, so it only arrives a commit later,
+   * and anything computed from it alone spends that commit calling a cancelled sync a failure. The
+   * visible surfaces repaint too fast for that to show, but the live region below speaks whatever
+   * text it holds.
    */
-  const wasCancelled = status === 'failed' && wasCancelRequested;
+  const wasCancelled = status === 'failed' && (wasCancelRequested || isCancelling);
 
   const buttonLabel = (() => {
     if (wasCancelled) return localizedStrings['%toolbar_sync_status_cancelled%'];
@@ -389,20 +395,25 @@ export function SyncStatusButton() {
    * What the region was last computed for. The effect below re-runs on every render, because
    * `localizedStrings` is a fresh object each time — without this it would immediately recompute
    * `unknown` with itself as the previous status and blank the announcement it had just made.
+   *
+   * Every value the announcement is computed from belongs in this key, `wasCancelled` included. The
+   * guard runs before the effect's dependencies are consulted, so a value left out of it is one the
+   * region can never be corrected for — the dep array still fires, and the guard still returns.
    */
-  const lastAnnouncedForRef = useRef<{ status: SyncStatus; areStringsLoaded: boolean } | undefined>(
-    undefined,
-  );
+  const lastAnnouncedForRef = useRef<
+    { status: SyncStatus; areStringsLoaded: boolean; wasCancelled: boolean } | undefined
+  >(undefined);
   useEffect(() => {
     const lastAnnouncedFor = lastAnnouncedForRef.current;
     if (
       lastAnnouncedFor &&
       lastAnnouncedFor.status === status &&
-      lastAnnouncedFor.areStringsLoaded === areStringsLoaded
+      lastAnnouncedFor.areStringsLoaded === areStringsLoaded &&
+      lastAnnouncedFor.wasCancelled === wasCancelled
     )
       return;
     const previousStatus = lastAnnouncedFor?.status;
-    lastAnnouncedForRef.current = { status, areStringsLoaded };
+    lastAnnouncedForRef.current = { status, areStringsLoaded, wasCancelled };
     if (!areStringsLoaded) return;
     if (status === 'syncing') {
       setAnnouncement(localizedStrings['%toolbar_sync_status_syncing%']);

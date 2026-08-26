@@ -2047,6 +2047,52 @@ describe('SyncStatusButton — accessibility', () => {
     });
   });
 
+  // The visible surfaces already report a cancelled sync as cancelled; the live region is a
+  // separate channel that was reporting the user's own request back to them as an error. It must
+  // never hold "Sync failed" even briefly, because a region's transient text is still spoken.
+  it('announces a cancelled sync as cancelled, and never as failed', async () => {
+    const fireSyncStateChanged = captureSyncStateEvent();
+    mockSyncStateSequence([
+      { isSyncing: true, lastRequestedProjectIds: [], syncingProjectIds: ['a'] },
+      completedState({ a: 'failed' }),
+    ]);
+    mockProjectNames({ a: 'AAA' });
+    render(<SyncStatusButton />);
+
+    fireEvent.click(await screen.findByTestId('toolbar-sync-button'));
+    fireEvent.click(await screen.findByTestId('toolbar-sync-cancel-button'));
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-sync-cancel-button')).toHaveTextContent('Test Cancelling');
+    });
+
+    // Everything the region holds from here on, not just what it settles on: a value it passes
+    // through is a value a screen reader can read out. Recorded from `oldValue` rather than by
+    // reading the node in the callback — the callback runs after React has committed, so reading
+    // the node there reports the final text for every mutation and sees no intermediate value.
+    const announced: string[] = [];
+    const liveRegion = screen.getByRole('status');
+    const observer = new MutationObserver((records) => {
+      records.forEach((record) => {
+        if (record.oldValue) announced.push(record.oldValue);
+      });
+    });
+    observer.observe(liveRegion, {
+      childList: true,
+      characterData: true,
+      characterDataOldValue: true,
+      subtree: true,
+    });
+
+    // The cancel takes effect: send/receive reports the project it did not finish as `failed`.
+    fireSyncStateChanged(false);
+
+    await waitFor(() => {
+      expect(liveRegion).toHaveTextContent('Test Sync cancelled');
+    });
+    observer.disconnect();
+    expect(announced).not.toContain('Test Sync failed');
+  });
+
   // The same `unknown` at startup is nobody's pending question — the control simply hasn't been
   // able to read anything yet, and announcing it would interrupt for no news.
   it('stays silent when the status is unavailable from the start', async () => {
