@@ -19,6 +19,8 @@ import { useEffectiveResourceReferenceList } from './use-effective-resource-refe
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
+import { FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY } from './focused-resource-state-key.const';
+import { usePublishFocusedResourceProjectId } from './use-publish-focused-resource.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
 
@@ -48,6 +50,7 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
   projectId,
   scrollGroupScrRef,
   updateWebViewDefinition,
+  useWebViewState,
 }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => ALL_STRING_KEYS, []));
 
@@ -118,6 +121,18 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // Ctrl+F opens Find for the displayed model resource.
   useOpenFindShortcut(webViewId, modelResourceProjectId);
+
+  // Publish that same resource so Find's project picker can offer it, not just Ctrl+F. This panel's
+  // definition `projectId` is the editable project (it reads that project's `modelTexts` setting),
+  // so the model resource on screen is otherwise invisible outside this iframe.
+  const [publishedFocusedResourceProjectId, setPublishedFocusedResourceProjectId] = useWebViewState<
+    string | undefined
+  >(FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY, undefined);
+  usePublishFocusedResourceProjectId(
+    publishedFocusedResourceProjectId,
+    setPublishedFocusedResourceProjectId,
+    modelResourceProjectId,
+  );
 
   // --- Operation callbacks ---
 

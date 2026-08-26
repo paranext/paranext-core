@@ -61,6 +61,7 @@ import {
   POLL_INTERVAL_MS,
   prunePresentBookIds,
   resolveScrollGroupForPickedProject,
+  resolveTargetEditorWebViewId,
   resolveSelectedProjectScrollGroup,
   shouldClearResultsForInvalidQuery,
 } from './find/find.utils';
@@ -77,6 +78,7 @@ import {
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
+import { FIND_SEARCHABLE_WEB_VIEW_TYPES } from './resource-panel-web-view-types.const';
 import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
 import { useAutoSearchDebounce } from './find/use-auto-search-debounce.hook';
 
@@ -103,17 +105,14 @@ const RESULTS_BATCH_SIZE = 100;
 const SEARCH_DEBOUNCE_DELAY_MS = 500;
 /** Delay after typing stops before the current search term is saved to history. */
 const HISTORY_DEBOUNCE_DELAY_MS = 5000;
+/**
+ * Stable reference so `useOpenProjectTabs`' subscription effect doesn't tear down and resubscribe
+ * on every render.
+ */
+const USE_OPEN_PROJECT_TABS_OPTIONS = { includeFocusedResourceTabs: true } as const;
+
 /** Stable empty-array reference so the History data subscription's default doesn't change identity. */
 const DEFAULT_RECENT_SEARCHES: string[] = [];
-
-/**
- * Web-view types that should count as "open" project tabs for the project picker's "Open Tabs"
- * grouping. Mirrors `checks-side-panel.web-view.tsx` / `manage-books.web-view.tsx`: only the
- * scripture editor binds a project to a scroll group in a user-meaningful way. Without this filter,
- * every project-bound web view (including this Find panel itself) would falsely mark a project as
- * open.
- */
-const SCRIPTURE_EDITOR_WEB_VIEW_TYPES = new Set<string>(['platformScriptureEditor.react']);
 
 /** Short and full names for every scripture project/resource, keyed by canonical project id. */
 type ProjectNamesById = { [id: string]: Pick<FindProject, 'shortName' | 'fullName'> };
@@ -401,18 +400,22 @@ global.webViewComponent = function FindWebView({
     useMemo(() => ({}), []),
   );
 
-  // Filter to scripture editor tabs only — without this filter, every project-bound web view
-  // (e.g. this Find panel itself) would falsely mark a project as "open" in the picker's "Open
-  // Tabs" grouping.
-  const editorWebViewFilter = useCallback(
-    (webView: { webViewType: string }) => SCRIPTURE_EDITOR_WEB_VIEW_TYPES.has(webView.webViewType),
+  // Filter to the tab types whose scripture Find can search — without this filter, every
+  // project-bound web view (e.g. this Find panel itself) would falsely mark a project as "open" in
+  // the picker's "Open Tabs" grouping.
+  const searchableWebViewFilter = useCallback(
+    (webView: { webViewType: string }) => FIND_SEARCHABLE_WEB_VIEW_TYPES.has(webView.webViewType),
     [],
   );
-  const allOpenProjectTabs = useOpenProjectTabs(editorWebViewFilter);
+  const allOpenProjectTabs = useOpenProjectTabs(
+    searchableWebViewFilter,
+    // The reference panels report the resource they display rather than their container project.
+    USE_OPEN_PROJECT_TABS_OPTIONS,
+  );
   const noOpenProjects = allOpenProjectTabs.length === 0;
 
-  // Find's project picker only ever lists projects that are open in an editor tab (a project
-  // isn't a candidate to search until it's actually open): once a project's last tab closes, the
+  // Find's project picker only ever lists projects open in a searchable tab (a project isn't a
+  // candidate to search until it's actually open): once a project's last tab closes, the
   // reassignment effect below moves the selection to another open project before this list update
   // even renders. A transient "selected but not listed" gap IS possible while the metadata fetch
   // above is in flight or stale — the refetch effect below and the `isLoadingProjects` gate in the
@@ -486,18 +489,19 @@ global.webViewComponent = function FindWebView({
   const pendingProjectSwitchRerunRef = useRef(false);
 
   // Which open editor tab a Find result click should scroll: the exact tab the project selector
-  // has selected. Deterministic (not a heuristic) because the reassignment effect below guarantees
-  // `(projectId, selectedScrollGroupId)` always names an open tab whenever one exists anywhere.
-  // `undefined` only when `noOpenProjects` — nothing to scroll.
-  const targetEditorWebViewId = useMemo(() => {
-    if (!projectId || selectedScrollGroupId === undefined) return undefined;
-    const normalizedProjectId = normalizeProjectId(projectId);
-    return allOpenProjectTabs.find(
-      (tab) =>
-        normalizeProjectId(tab.projectId) === normalizedProjectId &&
-        tab.scrollGroupId === selectedScrollGroupId,
-    )?.webViewId;
-  }, [projectId, selectedScrollGroupId, allOpenProjectTabs]);
+  // has selected, when that tab is a real Scripture editor. Also `undefined` when the selected
+  // scripture is only open in a read-only reference panel — those register no web view controller.
+  // See `resolveTargetEditorWebViewId`.
+  const targetEditorWebViewId = useMemo(
+    () =>
+      resolveTargetEditorWebViewId(
+        projectId,
+        selectedScrollGroupId,
+        allOpenProjectTabs,
+        SCRIPTURE_EDITOR_WEBVIEW_TYPE,
+      ),
+    [projectId, selectedScrollGroupId, allOpenProjectTabs],
+  );
 
   // #endregion
 

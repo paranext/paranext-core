@@ -466,6 +466,45 @@ export function resolveScrollGroupForPickedProject(
 }
 
 /**
+ * Resolve which open tab a Find result click should drive through the Scripture editor's web view
+ * controller — the tab matching the selected `(project, scroll group)` pair, but ONLY when it is a
+ * real Scripture editor.
+ *
+ * The read-only reference panels (model text, Bible texts, commentaries) are searchable and so are
+ * listed in the project picker, but they register no web view controller. Handing one of their ids
+ * to `useWebViewController(SCRIPTURE_EDITOR_WEBVIEW_TYPE, ...)` leaves it waiting on a controller
+ * that never arrives (~20s, then an unhandled rejection) — the same trap `resolveFindInvocation`
+ * avoids for the Ctrl+F path.
+ *
+ * `undefined` is a correct, expected answer whenever the selected scripture is only open in a
+ * reference panel: both result handlers navigate via `setVerseRefSetting` before consulting the
+ * controller, so results still navigate — only the editor-side select/highlight is skipped, which
+ * is right when no editor is showing that scripture.
+ *
+ * @param projectId Find's currently selected project id, or `undefined` when none is selected.
+ * @param selectedScrollGroupId The selected scroll group, or `undefined` before an initial
+ *   selection.
+ * @param openTabs Currently open searchable tabs, editors and reference panels alike.
+ * @param scriptureEditorWebViewType The Scripture editor's web view type.
+ * @returns The editor tab's web view id, or `undefined` when no editor tab matches.
+ */
+export function resolveTargetEditorWebViewId(
+  projectId: string | undefined,
+  selectedScrollGroupId: ScrollGroupId | undefined,
+  openTabs: readonly OpenProjectTabWithWebView[],
+  scriptureEditorWebViewType: string,
+): string | undefined {
+  if (!projectId || selectedScrollGroupId === undefined) return undefined;
+  const normalizedProjectId = normalizeProjectId(projectId);
+  return openTabs.find(
+    (tab) =>
+      tab.webViewType === scriptureEditorWebViewType &&
+      normalizeProjectId(tab.projectId) === normalizedProjectId &&
+      tab.scrollGroupId === selectedScrollGroupId,
+  )?.webViewId;
+}
+
+/**
  * Character categorizer settings fetched from the project's `platformScripture.*` settings, used to
  * build project-specific find/replace regex patterns.
  */

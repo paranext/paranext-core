@@ -1,9 +1,14 @@
 import papi from '@papi/frontend';
 import { useEffect, useMemo, useState } from 'react';
 import type { ScrollGroupId } from 'platform-bible-utils';
+import { FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY } from '../resource-panel-web-view-types.const';
 
 export interface OpenProjectTabWithWebView {
   webViewId: string;
+  /**
+   * The project this tab is showing. With `includeFocusedResourceTabs`, a reference panel reports
+   * the resource it displays here rather than its container project.
+   */
   projectId: string;
   scrollGroupId: ScrollGroupId;
   webViewType: string;
@@ -11,11 +16,36 @@ export interface OpenProjectTabWithWebView {
 
 export type WebViewFilter = (webView: { webViewType: string }) => boolean;
 
+export interface UseOpenProjectTabsOptions {
+  /**
+   * Also yield read-only reference panels (model text, Bible texts, commentaries) using the project
+   * of the resource they are displaying, published under
+   * {@link FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY}.
+   *
+   * Off by default because it changes which tabs a consumer sees: these panels' definition
+   * `projectId` is a container project, not the scripture on screen, and Simple mode's default
+   * layout opens them with no `projectId` at all — so without this they are invisible here. Find's
+   * project picker opts in; consumers that mean "editor tabs" should leave it off.
+   */
+  includeFocusedResourceTabs?: boolean;
+}
+
 interface WebViewEventLike {
   id: string;
   webViewType?: string;
   projectId?: string;
   scrollGroupScrRef?: unknown;
+  state?: Record<string, unknown>;
+}
+
+/** Reads the focused resource's project id out of a web view's published state, if present. */
+function getFocusedResourceProjectId(
+  state: Record<string, unknown> | undefined,
+): string | undefined {
+  const focusedResourceProjectId = state?.[FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY];
+  return typeof focusedResourceProjectId === 'string' && focusedResourceProjectId.length > 0
+    ? focusedResourceProjectId
+    : undefined;
 }
 
 /**
@@ -42,13 +72,24 @@ interface WebViewEventLike {
  *   because the other consumers (checklist, checks-side-panel) key off this shape; removing it is a
  *   separate cleanup tracked outside this change.
  */
-export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWebView[] {
+export function useOpenProjectTabs(
+  filter?: WebViewFilter,
+  options?: UseOpenProjectTabsOptions,
+): OpenProjectTabWithWebView[] {
   const [tabsMap, setTabsMap] = useState<Map<string, OpenProjectTabWithWebView>>(() => new Map());
+  const includeFocusedResourceTabs = options?.includeFocusedResourceTabs ?? false;
 
   useEffect(() => {
     let cancelled = false;
     const upsert = (webView: WebViewEventLike) => {
-      const { id, projectId, scrollGroupScrRef, webViewType } = webView;
+      const { id, projectId: containerProjectId, scrollGroupScrRef, webViewType, state } = webView;
+      // A reference panel's definition `projectId` is its container project, so the resource it
+      // displays wins when the caller asked for it. Falls back to the container project, which is
+      // what an editor tab (and every opted-out caller) reports.
+      const focusedResourceProjectId = includeFocusedResourceTabs
+        ? getFocusedResourceProjectId(state)
+        : undefined;
+      const projectId = focusedResourceProjectId ?? containerProjectId;
       const passesFilter = !filter || (webViewType !== undefined && filter({ webViewType }));
       // See JSDoc above: undefined → default group 0; numeric → as-is.
       //
@@ -78,6 +119,14 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
       ) {
         scrollGroup = 0;
       }
+      // A reference panel navigating independently carries `scrollGroupScrRef: null` — Simple mode's
+      // Bible texts and Commentaries panels do exactly this, since their provider deliberately never
+      // forces them into a group. The defensive rejection above would drop those tabs outright, so
+      // the resource they display could never reach a consumer no matter what the panel published.
+      // Default them to the default group, matching how a detached `SerializedVerseRef` is handled.
+      // Scoped to tabs surfaced BY their focused resource so every other tab keeps the strict
+      // rejection.
+      if (scrollGroup === undefined && focusedResourceProjectId !== undefined) scrollGroup = 0;
       const passes =
         typeof projectId === 'string' &&
         projectId.length > 0 &&
@@ -132,7 +181,7 @@ export function useOpenProjectTabs(filter?: WebViewFilter): OpenProjectTabWithWe
       unsubUpdate();
       unsubClose();
     };
-  }, [filter]);
+  }, [filter, includeFocusedResourceTabs]);
 
   return useMemo(() => [...tabsMap.values()], [tabsMap]);
 }

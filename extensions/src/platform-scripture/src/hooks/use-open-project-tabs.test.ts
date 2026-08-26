@@ -8,6 +8,7 @@ interface WebViewLike {
   webViewType?: string;
   projectId?: string;
   scrollGroupScrRef?: unknown;
+  state?: Record<string, unknown>;
 }
 type WebViewEventHandler = (event: { webView: WebViewLike }) => void;
 
@@ -321,5 +322,163 @@ describe('useOpenProjectTabs', () => {
     );
     expect(result.current).toHaveLength(1);
     expect(result.current[0].webViewId).toBe('wv-live');
+  });
+  describe('includeFocusedResourceTabs', () => {
+    const BIBLE_TEXTS = 'platformScriptureEditor.bibleTexts';
+
+    it('ignores a focused resource unless the option is passed', () => {
+      const { result } = renderHook(() => useOpenProjectTabs());
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-bible',
+            webViewType: BIBLE_TEXTS,
+            // Simple mode's default layout opens this panel with no container project.
+            scrollGroupScrRef: 0,
+            state: { focusedResourceProjectId: 'RES-1' },
+          },
+        }),
+      );
+      expect(result.current).toEqual([]);
+    });
+
+    it('surfaces a panel whose only project is its focused resource', () => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeFocusedResourceTabs: true }),
+      );
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-bible',
+            webViewType: BIBLE_TEXTS,
+            scrollGroupScrRef: 0,
+            state: { focusedResourceProjectId: 'RES-1' },
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('res-1');
+    });
+
+    it('prefers the focused resource over the container project', () => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeFocusedResourceTabs: true }),
+      );
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-bible',
+            webViewType: BIBLE_TEXTS,
+            // The container project is the editable project whose reference list is shown; the
+            // resource on screen is what Find must search.
+            projectId: 'CONTAINER-1',
+            scrollGroupScrRef: 0,
+            state: { focusedResourceProjectId: 'RES-1' },
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('res-1');
+    });
+
+    it('drops the tab when its focused resource clears', () => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeFocusedResourceTabs: true }),
+      );
+      const openHandler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        openHandler({
+          webView: {
+            id: 'wv-bible',
+            webViewType: BIBLE_TEXTS,
+            scrollGroupScrRef: 0,
+            state: { focusedResourceProjectId: 'RES-1' },
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(1);
+      const updateHandler = mockOnDidUpdateWebView.mock.calls[0][0];
+      act(() =>
+        updateHandler({
+          webView: {
+            id: 'wv-bible',
+            webViewType: BIBLE_TEXTS,
+            scrollGroupScrRef: 0,
+            state: {},
+          },
+        }),
+      );
+      expect(result.current).toEqual([]);
+    });
+
+    it('surfaces a panel whose scrollGroupScrRef is null', () => {
+      // Simple mode's Bible texts and Commentaries panels carry `scrollGroupScrRef: null` — they
+      // navigate independently and their provider deliberately does not force a group. The
+      // defensive null rejection would otherwise drop them entirely, so the focused resource would
+      // never reach Find no matter what the panel published.
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeFocusedResourceTabs: true }),
+      );
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-bible',
+            webViewType: BIBLE_TEXTS,
+            // `null` is exactly what these panels carry on the wire, so the test must send the
+            // real value rather than `undefined` (which takes a different branch entirely).
+            // eslint-disable-next-line no-null/no-null
+            scrollGroupScrRef: null,
+            state: { focusedResourceProjectId: 'RES-1' },
+          },
+        }),
+      );
+      expect(result.current).toHaveLength(1);
+      expect(result.current[0].projectId).toBe('res-1');
+      expect(result.current[0].scrollGroupId).toBe(0);
+    });
+
+    it('still rejects a null scrollGroupScrRef when there is no focused resource', () => {
+      // The defensive rejection stays in place for every other tab; only a tab surfaced by its
+      // focused resource gets the default-group fallback.
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeFocusedResourceTabs: true }),
+      );
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-bible',
+            webViewType: BIBLE_TEXTS,
+            projectId: 'CONTAINER-1',
+            // `null` is exactly what these panels carry on the wire, so the test must send the
+            // real value rather than `undefined` (which takes a different branch entirely).
+            // eslint-disable-next-line no-null/no-null
+            scrollGroupScrRef: null,
+          },
+        }),
+      );
+      expect(result.current).toEqual([]);
+    });
+
+    it('still requires a real project id on an editor tab', () => {
+      const { result } = renderHook(() =>
+        useOpenProjectTabs(undefined, { includeFocusedResourceTabs: true }),
+      );
+      const handler = mockOnDidOpenWebView.mock.calls[0][0];
+      act(() =>
+        handler({
+          webView: {
+            id: 'wv-editor',
+            webViewType: 'platformScriptureEditor.react',
+            scrollGroupScrRef: 0,
+          },
+        }),
+      );
+      expect(result.current).toEqual([]);
+    });
   });
 });

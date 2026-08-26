@@ -1429,3 +1429,47 @@ step, no automation. Just a record.
   future reader.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
+
+## ADR-0029: A reference panel's definition `projectId` is its container project — publish the displayed resource separately
+
+- **Date:** 2026-08-26
+- **Status:** Accepted
+- **Context:** Find's project picker lists projects by scanning open tabs through
+  `useOpenProjectTabs`, which reads each tab's web view definition `projectId`. Scripture/resources
+  shown in the Model text, Bible texts, and Commentaries panels never appeared as searchable
+  projects. Two independent reasons, and the first hides the second: Find's allowlist held only
+  `platformScriptureEditor.react`; and for these panels the definition `projectId` is the *container*
+  project (the editable project whose reference list the panel shows — the model text panel also
+  reads its `platformScripture.modelTexts` setting from it), not the resource on screen. Observed at
+  runtime: all three panels report the same `projectId` as the editor tab, so broadening the
+  allowlist alone would have listed a project already listed and never the resource. Simple mode's
+  default layout additionally opens all three with **no** `projectId` at all. That these panels are
+  meant to be searchable was already settled — each routes Ctrl+F to Find with the displayed
+  resource via `useOpenFindShortcut`, and Find already handles read-only sources by disabling
+  Replace.
+- **Decision:** Keep the definition `projectId` meaning "container project" — do not overwrite it
+  with the displayed resource (the model text panel depends on it). Instead each panel **publishes**
+  the displayed resource's project id into its own web view state under
+  `focusedResourceProjectId` (`usePublishFocusedResourceProjectId`), which reaches other extensions
+  through `getAllOpenWebViewDefinitions` / `onDidUpdateWebView`. Consumers opt in via
+  `useOpenProjectTabs(filter, { includeFocusedResourceTabs: true })`, which resolves a tab's project
+  as `focusedResourceProjectId ?? projectId`. The Text Collection
+  (`platformScriptureEditor.scriptureTextGrid`) is excluded: it shows several scriptures at once, so
+  it has no single project to offer a picker.
+- **Alternatives:** **Broaden Find's allowlist only** — rejected: a no-op that lists container
+  projects, as the runtime check above showed. **Overwrite the panels' definition `projectId` with
+  the resource** — rejected: breaks the model text panel, which reads its container project's
+  settings. **Make `includeFocusedResourceTabs` unconditional in `useOpenProjectTabs`** — rejected as
+  an unasked behavior change: `checklist.web-view.tsx` calls the hook *unfiltered*, so panels would
+  silently join its comparative-texts grouping. (That may well be desirable; it should be its own
+  decision.) **Have the picker list every project supporting `platformScripture.findInScripture`,
+  ignoring open tabs** — rejected here as a larger behavior change, but it remains the natural move
+  if "only open projects are candidates" is ever revisited.
+- **Consequences:** "Which project is this tab showing?" now has two answers for reference panels,
+  and consumers must choose deliberately — the opt-in flag is what makes the choice visible. The
+  state key is mirrored across two extensions (extensions cannot import each other's source), so it
+  is pinned by tests on both sides, as `SCRIPTURE_EDITOR_WEBVIEW_TYPE` already is. A panel with no
+  resolved resource publishes nothing, so the key is absent rather than null until a resource
+  resolves. Any future tab type that displays a resource must publish the key to appear in Find.
+- **Source:** Bug report that Find's picker omitted scripture/resources shown in the Model text,
+  Bible texts, and Commentaries panels.

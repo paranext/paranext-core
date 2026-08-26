@@ -18,6 +18,7 @@ import {
   prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
+  resolveTargetEditorWebViewId,
   shouldClearResultsForInvalidQuery,
 } from './find.utils';
 
@@ -870,5 +871,50 @@ describe('resolveScrollGroupForPickedProject', () => {
 
   it('returns undefined when no tabs are open anywhere', () => {
     expect(resolveScrollGroupForPickedProject('PROJ-A', 0, [], undefined)).toBeUndefined();
+  });
+});
+
+describe('resolveTargetEditorWebViewId', () => {
+  const EDITOR = 'platformScriptureEditor.react';
+  const BIBLE_TEXTS = 'platformScriptureEditor.bibleTexts';
+
+  it('returns the editor tab matching the selected project and scroll group', () => {
+    const openTabs = [
+      { webViewId: 'wv-editor', projectId: 'proj-a', scrollGroupId: 1, webViewType: EDITOR },
+    ];
+    expect(resolveTargetEditorWebViewId('PROJ-A', 1, openTabs, EDITOR)).toBe('wv-editor');
+  });
+
+  it('never returns a reference panel, which registers no web view controller', () => {
+    // Handing a panel id to useWebViewController(SCRIPTURE_EDITOR_WEBVIEW_TYPE, ...) waits ~20s on
+    // a controller that never arrives and then logs an unhandled rejection. A resource open only in
+    // a panel must resolve to undefined instead.
+    const openTabs = [
+      { webViewId: 'wv-bible', projectId: 'res-1', scrollGroupId: 0, webViewType: BIBLE_TEXTS },
+    ];
+    expect(resolveTargetEditorWebViewId('RES-1', 0, openTabs, EDITOR)).toBeUndefined();
+  });
+
+  it('prefers the editor when the same project is open in both an editor and a panel', () => {
+    const openTabs = [
+      { webViewId: 'wv-bible', projectId: 'proj-a', scrollGroupId: 0, webViewType: BIBLE_TEXTS },
+      { webViewId: 'wv-editor', projectId: 'proj-a', scrollGroupId: 0, webViewType: EDITOR },
+    ];
+    expect(resolveTargetEditorWebViewId('PROJ-A', 0, openTabs, EDITOR)).toBe('wv-editor');
+  });
+
+  it('returns undefined with no project or no selected scroll group', () => {
+    const openTabs = [
+      { webViewId: 'wv-editor', projectId: 'proj-a', scrollGroupId: 0, webViewType: EDITOR },
+    ];
+    expect(resolveTargetEditorWebViewId(undefined, 0, openTabs, EDITOR)).toBeUndefined();
+    expect(resolveTargetEditorWebViewId('PROJ-A', undefined, openTabs, EDITOR)).toBeUndefined();
+  });
+
+  it('does not cross scroll groups', () => {
+    const openTabs = [
+      { webViewId: 'wv-editor', projectId: 'proj-a', scrollGroupId: 2, webViewType: EDITOR },
+    ];
+    expect(resolveTargetEditorWebViewId('PROJ-A', 1, openTabs, EDITOR)).toBeUndefined();
   });
 });

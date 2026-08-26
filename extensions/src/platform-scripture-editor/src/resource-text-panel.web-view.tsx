@@ -39,6 +39,8 @@ import type {
   ResourceReferenceList,
 } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
+import { FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY } from './focused-resource-state-key.const';
+import { usePublishFocusedResourceProjectId } from './use-publish-focused-resource.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
@@ -176,6 +178,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
     'selectedResourceId',
     undefined,
   );
+  // Project id of the resource this panel is displaying, published for other extensions (Find's
+  // project picker) — see `usePublishFocusedResourceProjectId`. Written below, once resolved.
+  const [publishedFocusedResourceProjectId, setPublishedFocusedResourceProjectId] = useWebViewState<
+    string | undefined
+  >(FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY, undefined);
 
   // #endregion
 
@@ -354,6 +361,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Ctrl+F opens Find for the displayed resource.
   useOpenFindShortcut(webViewId, resourceProjectId);
+
+  // Publish that same resource so Find's project picker can offer it, not just Ctrl+F.
+  usePublishFocusedResourceProjectId(
+    publishedFocusedResourceProjectId,
+    setPublishedFocusedResourceProjectId,
+    resourceProjectId,
+  );
 
   // #endregion
 
