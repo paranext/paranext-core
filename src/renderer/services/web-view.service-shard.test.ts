@@ -531,7 +531,7 @@ beforeEach(() => {
   mocks.bufferedEmitters.clear();
   globalThis.open = openWindow;
   localStorage.clear();
-  globalThis.windowId = '2';
+  globalThis.windowId = 2;
   respondToGetLayout({ kind: 'empty' });
 });
 
@@ -560,10 +560,10 @@ describe('loadLayout scopes web view ids to this window', () => {
   test('gives two windows different supplement tab ids', async () => {
     const sharedLayout = layoutWithAnchor();
 
-    globalThis.windowId = '1';
+    globalThis.windowId = 1;
     const inWindow1 = tabIdsIn(await loadLayoutInWindow(sharedLayout));
     vi.resetModules();
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     const inWindow2 = tabIdsIn(await loadLayoutInWindow(sharedLayout));
 
     expect(inWindow1).not.toContain(`${SUPPLEMENT_TAB_ID}-w2`);

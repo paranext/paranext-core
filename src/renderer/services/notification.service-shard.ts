@@ -222,7 +222,7 @@ const notificationService: INotificationService = {
  * focused window, so a notification raised by a background task lands where the user is looking.
  */
 export async function startNotificationServiceShard(): Promise<void> {
-  if (!globalThis.windowId)
+  if (globalThis.windowId === undefined)
     throw new Error('Cannot start NotificationService: windowId is not set');
 
   await networkObjectService.set(

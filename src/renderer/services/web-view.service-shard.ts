@@ -630,15 +630,17 @@ const PREFIXED_DOCK_LAYOUT_KEY_PATTERN = new RegExp(`^(\\d+)_${DOCK_LAYOUT_KEY}$
 const EMPTY_DOCK_LAYOUT: LayoutInfo = { dockbox: { mode: 'horizontal', children: [] } };
 
 /**
- * This window's id as a number, for addressing the main process's window layout persistence
+ * This window's id, for addressing the main process's window layout persistence
  *
  * @throws If the window id is not set
  */
 function getWindowIdOrThrow(): number {
-  const windowId = Number.parseInt(globalThis.windowId ?? '', 10);
-  if (Number.isNaN(windowId))
+  // No parsing left to do: the id is read and validated once, where the renderer reads the URL.
+  // Compared against `undefined` rather than tested for truthiness, so a 0 could never be mistaken
+  // for an absent id.
+  if (globalThis.windowId === undefined)
     throw new Error('windowId is not set. Check that the URL includes the windowId parameter.');
-  return windowId;
+  return globalThis.windowId;
 }
 
 /**
@@ -3782,7 +3784,8 @@ const webViewServiceShard: WebViewServiceShard = {
 // To use this service, you should use `web-view.service.ts`
 export async function startWebViewServiceShard(): Promise<void> {
   await initialize();
-  if (!globalThis.windowId) throw new Error('Cannot start WebViewService: windowId is not set');
+  if (globalThis.windowId === undefined)
+    throw new Error('Cannot start WebViewService: windowId is not set');
 
   // Register this window's shard under a window-scoped name (e.g. "WebViewService-1") so multiple
   // renderers can coexist. The main process's WebView service router registers the generic name and

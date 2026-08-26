@@ -76,14 +76,18 @@ declare global {
    */
   var startupMarks: boolean;
   /**
-   * Window id of the Electron browser window as a string (e.g. "1", "2"). This is the stringified
-   * form of the Electron `BrowserWindow.id` (a `number`), set from the URL search params in the
-   * renderer process. The main process uses the numeric `BrowserWindow.id` directly (e.g. via
-   * `platform.getFocusedWindowId`). `undefined` until the renderer reads the URL parameter.
+   * Id of the window this code is running in, as the platform assigns them. Set from the URL search
+   * params in the renderer process, and `undefined` outside a window — which is how code shared
+   * with the extension host tells the two apart, so test it against `undefined` rather than for
+   * truthiness.
+   *
+   * The same id names this window everywhere else: in `platform.getWindows`, in a move's
+   * `targetWindowId`, and in main. No window is ever given an id another window has had, in this
+   * run of the app or any earlier one.
    *
    * @experimental
    */
-  var windowId: string | undefined;
+  var windowId: number | undefined;
 }
 /* eslint-enable */
 

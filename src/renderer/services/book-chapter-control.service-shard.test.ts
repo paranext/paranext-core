@@ -38,7 +38,7 @@ beforeEach(() => {
   mocks.getLastSelectedScriptureNavigableWebViewId.mockReturnValue(undefined);
   mocks.getBookChapterControlHandle.mockReturnValue(undefined);
   // A renderer receives its window id as a string query parameter
-  globalThis.windowId = '1';
+  globalThis.windowId = 1;
 });
 
 describe('BookChapterControl service shard registration', () => {

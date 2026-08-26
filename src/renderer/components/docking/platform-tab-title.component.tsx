@@ -368,7 +368,7 @@ export function PlatformTabTitle({
       return;
     }
 
-    const otherWindows = windows.filter((window) => `${window.windowId}` !== globalThis.windowId);
+    const otherWindows = windows.filter((window) => window.windowId !== globalThis.windowId);
 
     // Counting this window's tabs is guarded separately because it can fail for reasons that say
     // nothing about the windows — it throws before the dock layout registers. Folding it into the

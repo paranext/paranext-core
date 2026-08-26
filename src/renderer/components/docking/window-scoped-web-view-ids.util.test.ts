@@ -60,7 +60,7 @@ function readPanel(layout: LayoutInfo) {
 
 describe('withWindowScopedWebViewIds', () => {
   beforeEach(() => {
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
   });
 
   test('scopes a shared layout’s web view id to this window', () => {
@@ -79,9 +79,9 @@ describe('withWindowScopedWebViewIds', () => {
   test('gives two windows different ids for the same shared layout', () => {
     const shared = layoutWithWebView('abc-123');
 
-    globalThis.windowId = '1';
+    globalThis.windowId = 1;
     const inWindow1 = readWebViewTab(withWindowScopedWebViewIds(shared)).id;
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     const inWindow2 = readWebViewTab(withWindowScopedWebViewIds(shared)).id;
 
     expect(inWindow1).not.toBe(inWindow2);
@@ -116,9 +116,9 @@ describe('withWindowScopedWebViewIds', () => {
     // storage key, so identical input has to come out per-window distinct
     const legacy = layoutWithWebView('abc-123');
 
-    globalThis.windowId = '1';
+    globalThis.windowId = 1;
     const inWindow1 = readWebViewTab(withWindowScopedWebViewIds(legacy)).id;
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     const inWindow2 = readWebViewTab(withWindowScopedWebViewIds(legacy)).id;
 
     expect(inWindow1).not.toBe(inWindow2);
@@ -212,7 +212,7 @@ function readIds(tab: SavedTabInfo) {
 
 describe('withWindowScopedWebViewIdInTab', () => {
   beforeEach(() => {
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
   });
 
   test('scopes a supplement tab’s id, which is otherwise identical in every window', () => {

@@ -625,7 +625,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   });
 
   it('offers every window except the one the tab is in', async () => {
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
 
     const submenu = await screen.findByTestId('submenu-content');
@@ -634,7 +634,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   });
 
   it('moves the tab into the window that was chosen', async () => {
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
 
     fireEvent.click(await screen.findByText('MRK — wgPIDGIN'));
@@ -645,7 +645,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   });
 
   it('says where a failed move left the tab', async () => {
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     vi.mocked(sendCommand).mockImplementation(async (command: string) => {
       if (command === 'platform.getWindows') return [MAIN_WINDOW, OTHER_WINDOW];
       throw new Error('[webViewMoveFailure:reopened-in-focused-window] nope');
@@ -667,7 +667,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   });
 
   it('hides the submenu when this is the only window', async () => {
-    globalThis.windowId = '1';
+    globalThis.windowId = 1;
     await openMenuOn([MAIN_WINDOW]);
 
     expect(screen.queryByTestId('submenu-content')).toBeNull();
@@ -679,7 +679,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     // The wiring for that guard, not just the predicate: this window is absent from the list's
     // primary entry AND holds only this one tab. `buildTabMenuItems` is unit-tested for the flag,
     // but nothing else exercises the three reads that compute it here
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     vi.mocked(getOpenTabCountSync).mockReturnValue(1);
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
 
@@ -694,7 +694,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     // The case a web-view-only count would miss: this tab is the window's only web view, but a
     // dialog (or any other non-web-view tab) is also open there, so moving this tab out would not
     // in fact leave the window empty. Counting every tab, not just web views, is what this pins.
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     vi.mocked(getOpenTabCountSync).mockReturnValue(2);
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
 
@@ -726,7 +726,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   });
 
   it('names a window that is showing nothing titled', async () => {
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     await openMenuOn([{ windowId: 1, label: '', isMain: true }, OTHER_WINDOW]);
 
     const submenu = await screen.findByTestId('submenu-content');
@@ -737,7 +737,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     // The count throws before the dock layout registers, which says nothing about the windows. A
     // shared catch would have thrown away a window list that arrived perfectly well and reported
     // the failure as one the open windows could not be read
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     vi.mocked(getOpenTabCountSync).mockImplementation(() => {
       throw new Error('dock layout is not registered yet');
     });
@@ -750,7 +750,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   });
 
   it('leaves the submenu out when the window list cannot be read', async () => {
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     vi.mocked(sendCommand).mockRejectedValue(new Error('no windows for you'));
     render(<PlatformTabTitle id="tab-1" webViewId="web-view-1" text="Tab" />);
     await flushMenuRead();
@@ -766,7 +766,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   it('discards a stale window list that resolves after a newer request', async () => {
     // Two opens of the same tab's menu in quick succession, the first (now-stale) request's round
     // trip landing after the second (current) one's
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
     const STALE_WINDOW = { windowId: 3, label: 'Stale Window', isMain: true };
     const resolvers: ((windows: unknown[]) => void)[] = [];
     vi.mocked(sendCommand).mockImplementation(
