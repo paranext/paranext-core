@@ -3,6 +3,7 @@ import { execSync, spawn } from 'child_process';
 import net from 'net';
 import path from 'path';
 import fs from 'fs';
+import { restoreLeakedSettings } from './fixtures/helpers';
 
 const WEBSOCKET_PORT = 8876;
 const RENDERER_PORT = 1212;
@@ -124,6 +125,17 @@ const DEV_BUNDLES = [
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export default async function globalSetup(_config: FullConfig): Promise<void> {
   const rootDir = path.resolve(__dirname, '..');
+
+  // Undo a settings pin left behind by a run that died before its teardown. Done first, so the
+  // developer's real settings are back in place before anything reads them — and so a suite that
+  // pins nothing does not silently inherit another suite's mode from a run that crashed days ago.
+  const leaked = restoreLeakedSettings();
+  if (leaked !== undefined) {
+    console.log(
+      'Recovered dev-appdata/data/settings.json from a previous run that was killed before it ' +
+        `could restore it. The file it left behind was: ${leaked}`,
+    );
+  }
 
   // Fail fast if Platform.Bible is already running (single-instance lock will
   // cause Playwright's Electron instance to exit immediately)

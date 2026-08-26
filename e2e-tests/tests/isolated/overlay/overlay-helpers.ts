@@ -20,9 +20,17 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
   await tab.first().waitFor({ state: 'visible', timeout: 30_000 });
   await tab.first().click();
 
-  // Poll child frames until we find one with hello-rock3 content.
-  // The hello-rock3 WebView renders a .title div containing "Hello Rock3" (or
-  // the unresolved localization key "%helloRock3_helloRock3%").
+  // Poll child frames until we find one with hello-rock3 content that is actually VISIBLE.
+  // The hello-rock3 WebView renders a .title div containing "Hello Rock3" (or the unresolved
+  // localization key "%helloRock3_helloRock3%").
+  //
+  // Visibility is part of the match, not an afterthought. rc-dock keeps inactive tab panes mounted
+  // but hidden with `display: none`, so a frame in a background pane still exists, still answers
+  // queries, and still reports its elements — as hidden, with a zero-sized box. Returning one of
+  // those looks like success here and fails in the caller ten seconds later on an assertion about
+  // some button being hidden, which says nothing about the real problem. Requiring the match to be
+  // visible keeps the failure here, where the message can name it.
+  let sawHiddenMatch = false;
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     // Polling loop: each iteration depends on the previous result, so awaits must be sequential
@@ -30,25 +38,33 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
     const match = await page
       .frames()
       .filter((f) => f !== page.mainFrame())
-      .reduce<Promise<Frame | undefined>>(async (accPromise, frame) => {
+      .reduce<Promise<Frame | 'hidden' | undefined>>(async (accPromise, frame) => {
         const acc = await accPromise;
-        if (acc) return acc;
+        // Only a real Frame short-circuits the scan. A 'hidden' result must NOT: a later frame in
+        // the list may still be the visible one, and stopping here would report the whole scan as
+        // hidden because of an earlier background copy.
+        if (acc && acc !== 'hidden') return acc;
         try {
           const titleEl = frame.locator('.title');
           const count = await titleEl.count();
           if (count > 0) {
             const text = await titleEl.first().textContent();
             if (text && (text.includes('Hello Rock3') || text.includes('helloRock3'))) {
-              return frame;
+              if (await titleEl.first().isVisible()) return frame;
+              // Right web view, wrong state: its dock pane is not the active one. Reported rather
+              // than assigned to the outer flag, so this closure stays free of loop state.
+              return 'hidden';
             }
           }
         } catch {
           // Frame may not be ready yet
         }
-        return undefined;
+        // Carry any earlier 'hidden' forward so it survives frames that do not match at all.
+        return acc;
       }, Promise.resolve(undefined));
 
-    if (match) return match;
+    if (match === 'hidden') sawHiddenMatch = true;
+    else if (match) return match;
 
     // Polling loop: wait between attempts must be sequential
     // eslint-disable-next-line no-await-in-loop
@@ -56,8 +72,13 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
   }
 
   throw new Error(
-    'Hello Rock3 WebView frame not found within 30s. ' +
-      'Ensure DEV_NOISY=true is set so the helloRock3 test extension loads.',
+    sawHiddenMatch
+      ? 'Hello Rock3 WebView frame was found but stayed HIDDEN for 30s: its dock pane never became ' +
+        'the active one, so everything inside it reports as hidden with a zero-sized box. The tab ' +
+        'click above did not take effect — most likely it was intercepted by an overlapping ' +
+        'element, or another tab in the same stack was activated afterwards.'
+      : 'Hello Rock3 WebView frame not found within 30s. ' +
+        'Ensure DEV_NOISY=true is set so the helloRock3 test extension loads.',
   );
 }
 

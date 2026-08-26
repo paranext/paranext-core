@@ -59,6 +59,7 @@ e2e-tests/playwright-report/
 e2e-tests/test-results/
 e2e-tests/.dev-server.pid
 e2e-tests/.dev-server.log
+dev-appdata/data/settings.json.e2e-backup
 
 # Brainstorming session artifacts (visual companion)
 docs/superpowers/

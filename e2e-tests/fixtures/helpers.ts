@@ -666,6 +666,38 @@ export async function waitForAtLeastOneProjectMetadata(
 const DEV_APPDATA_SETTINGS_PATH = path.resolve(__dirname, '../../dev-appdata/data/settings.json');
 
 /**
+ * Where {@link preConfigureSettings} parks the developer's real settings while a test's overrides
+ * are in place, so a run that dies before its restore can be undone by the NEXT run's global setup
+ * rather than leaving test values on disk forever.
+ *
+ * Exported for `global-setup.ts`, which is the only thing that should consume it.
+ */
+export const DEV_APPDATA_SETTINGS_BACKUP_PATH = `${DEV_APPDATA_SETTINGS_PATH}.e2e-backup`;
+
+/**
+ * Undo a settings pin left behind by a run that never reached its teardown, and report whether it
+ * did. Safe to call when there is nothing to restore.
+ *
+ * The restore returned by `preConfigureSettings` only runs in an `afterAll`, so Ctrl+C, a killed
+ * worker, or a crashed run all leave the pinned values in the shared settings file. The three
+ * multi-window specs pin `interfaceMode: 'power'`, so the usual symptom is an unrelated suite
+ * silently running in the wrong interface mode days later. CI never sees any of this — it starts
+ * from a fresh checkout with no `dev-appdata/` at all — which is what makes it present as "green in
+ * CI, red for me".
+ */
+export function restoreLeakedSettings(): string | undefined {
+  if (!fs.existsSync(DEV_APPDATA_SETTINGS_BACKUP_PATH)) return undefined;
+  const leaked = fs.existsSync(DEV_APPDATA_SETTINGS_PATH)
+    ? fs.readFileSync(DEV_APPDATA_SETTINGS_PATH, 'utf-8')
+    : '(no settings file)';
+  const backup = fs.readFileSync(DEV_APPDATA_SETTINGS_BACKUP_PATH, 'utf-8');
+  if (backup === '') fs.rmSync(DEV_APPDATA_SETTINGS_PATH, { force: true });
+  else fs.writeFileSync(DEV_APPDATA_SETTINGS_PATH, backup);
+  fs.rmSync(DEV_APPDATA_SETTINGS_BACKUP_PATH, { force: true });
+  return leaked;
+}
+
+/**
  * Merge the given key-value pairs into the dev-appdata settings file before launching the app.
  * Preserves any existing settings (e.g. `platform.verseRef`) so the app session starts from the
  * developer's saved state plus the overrides.
@@ -691,12 +723,18 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
     }
   }
   fs.mkdirSync(settingsDir, { recursive: true });
+  // Park the original on disk BEFORE overwriting it. The returned restore only runs in an
+  // `afterAll`, so anything that kills the run first would otherwise leave the overrides in the
+  // developer's file permanently. With the backup present, the next run's global setup undoes it.
+  // An empty backup encodes "there was no settings file", which restore treats as "delete it".
+  fs.writeFileSync(DEV_APPDATA_SETTINGS_BACKUP_PATH, originalContents ?? '');
   fs.writeFileSync(DEV_APPDATA_SETTINGS_PATH, JSON.stringify({ ...existing, ...overrides }));
 
   return () => {
     if (originalContents !== undefined)
       fs.writeFileSync(DEV_APPDATA_SETTINGS_PATH, originalContents);
     else fs.rmSync(DEV_APPDATA_SETTINGS_PATH, { force: true });
+    fs.rmSync(DEV_APPDATA_SETTINGS_BACKUP_PATH, { force: true });
   };
 }
 
