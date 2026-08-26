@@ -3,7 +3,7 @@
   "version": "0.6.0-alpha.0",
   "description": "Paranext extension that tries to break things!!1!!",
   "author": "TJ Couch",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "main": "evil.js",
   "activationEvents": []
 }

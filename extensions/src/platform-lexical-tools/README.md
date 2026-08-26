@@ -27,6 +27,22 @@ loud failure.
 To publish your own DB for a fork, create a `dependencies` repo in your org with
 `lexical-db/lexical.db.xz` and `lexical-db/lexical.db.xz.sha256` on the `main` branch.
 
+### The notice files travel with the DB
+
+`lexical-db/LICENSE.md` and `lexical-db/SOURCE.md` are fetched alongside the database and written
+into the same directory. This is not bookkeeping: the extension's `assets` folder is copied into
+`extensions/dist` and from there into every installer, so those two files are what puts the
+database's terms in front of a user. Portions of the DB are UBS material under CC BY-SA 4.0, whose
+section 3(a)(1) requires the attribution and licence notice to accompany the work, and the rest is
+© United Bible Societies under no open licence, distributable under UBS's permission to Paratext
+and not by Platform.Bible or anyone else.
+
+They follow the same strict/lenient rule as the DB, applied one step later: for the canonical org a
+missing notice file fails `npm install`, because packaging the data without its attribution is the
+thing this fetch exists to prevent. A fork gets a warning naming the obligation and the install
+continues — so if you publish your own DB, publish `LICENSE.md` and `SOURCE.md` beside it stating
+its terms.
+
 <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
 
 ## Template Info
