@@ -195,6 +195,8 @@ describe('simple-layout.builder', () => {
       };
       const layout = { dockbox: { mode: 'horizontal', children: [ambiguousNode] } };
       const visitedIds: (string | undefined)[] = [];
+      // The fixture deliberately doesn't match rc-dock's real types (see comment above) — a single
+      // cast here is simpler than typed literals for a fixture built to violate the real shape.
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       visitPanels(layout as unknown as LayoutBase, (panel) => visitedIds.push(panel.tabs[0]?.id));
       // The box branch (recursing into `children`) runs before the panel branch (visiting the node

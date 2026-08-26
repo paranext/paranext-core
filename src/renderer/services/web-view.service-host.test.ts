@@ -961,6 +961,9 @@ describe('handleSwitchToSimpleMode', () => {
         children: [{ tabs: [{ id: 'simple-fixed-tab-1-w2', tabType: 'webView', data: {} }] }],
       },
     };
+    // onLayoutChangeRef.current's real type (OnLayoutChange) is rc-dock's own LayoutInfo-shaped
+    // signature; this test only needs enough of that shape to exercise saveLayout's tab-id check,
+    // so asserting through it here is simpler than building a full LayoutInfo fixture.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     await fakeDockLayout.onLayoutChangeRef.current?.(contaminatedLayout as never, '', undefined);
 
