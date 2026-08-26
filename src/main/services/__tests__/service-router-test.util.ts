@@ -39,6 +39,12 @@ export interface RoutingWindowMocks {
    * again — the ones a fan-out cannot ask and must stop waiting for
    */
   getAbandonedWindowIds: Mock;
+  /**
+   * Mock of `isWindowTracked`, which answers whether this process has a window at all — true for
+   * every window given here, including the ones that cannot be asked. Optional so a suite whose
+   * router never checks existence does not have to carry it.
+   */
+  isWindowTracked?: Mock;
   /** Mock of `networkObjectService.get`, which resolves a window's shard by network object id */
   networkObjectGet: Mock;
   /** Where the router's shard index parked its subscriptions, so tests can announce to it */
@@ -112,6 +118,10 @@ export function withWindows(
   mocks.getAbandonedWindowIds.mockReturnValue(
     windowIds.filter((id) => abandonedWindowIds.includes(id)),
   );
+  // Every window listed here exists, whatever state it is in — a starting, unreachable or
+  // abandoned window is one this process has and cannot currently ask, which is a different
+  // question from whether it is there at all
+  mocks.isWindowTracked?.mockImplementation((windowId: number) => windowIds.includes(windowId));
   mocks.networkObjectGet.mockImplementation(async (networkObjectId: string) => {
     const windowId = Number(networkObjectId.split('-').pop());
     return shardsByWindowId[windowId];
