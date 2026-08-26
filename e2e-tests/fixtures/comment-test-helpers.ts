@@ -60,6 +60,14 @@ const PARATEXT_PDPF_METHOD = 'object:platform.Paratext-pdpf.getProjectDataProvid
 
 const DEFAULT_WEBSOCKET_PORT = 8876;
 
+/**
+ * Paratext app-data directories are named `Paratext<major><minor>` — `Paratext80` is 8.0,
+ * `Paratext94` is 9.4, `Paratext100` is 10.0 — so the suffix read as a number orders the versions
+ * (minors are single-digit). Anything below 8.0 stored registration information in a different
+ * shape and ParatextData ignores it; see `UpgradeAppDataFiles` in ParatextData's ParatextInfo.
+ */
+const OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION = 80;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,6 +81,54 @@ export interface CommentTestProject {
   projectId: string;
   /** Usernames added as team members (used to re-write ProjectUserAccess.xml after app start) */
   users: string[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Current Paratext user
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Root the platform's local application data lives under, matching what .NET's
+ * `Environment.SpecialFolder.LocalApplicationData` resolves to for the C# data provider:
+ * `%LOCALAPPDATA%` on Windows, `$XDG_DATA_HOME` (default `~/.local/share`) everywhere else.
+ */
+function localApplicationDataRoot(): string | undefined {
+  if (process.platform === 'win32') return process.env.LOCALAPPDATA;
+  return process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
+}
+
+/**
+ * The name ParatextData reports as the current user (`RegistrationInfo.DefaultUser.Name`), read
+ * from the machine's registration file: the highest-named `Paratext*` app-data directory holding a
+ * `RegistrationInfo.xml`, which is how ParatextData picks one (`ParatextInfo`).
+ *
+ * Read from disk rather than asked of the running app on purpose. A project's
+ * `ProjectUserAccess.xml` is loaded when ParatextData first opens the project, during the app's
+ * startup scan, and the loaded copy is kept for the session — so the current user has to be in the
+ * file BEFORE the app launches. Writing it afterwards has no effect on that session.
+ *
+ * @returns The registered user name, or undefined when this machine has no Paratext registration
+ */
+export function readCurrentParatextUserName(): string | undefined {
+  const root = localApplicationDataRoot();
+  if (!root || !fs.existsSync(root)) return undefined;
+
+  const newest = fs
+    .readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => ({
+      name: entry.name,
+      version: Number(/^Paratext(\d+)$/.exec(entry.name)?.[1]),
+    }))
+    .filter((dir) => dir.version >= OLDEST_SUPPORTED_PARATEXT_APP_DATA_VERSION)
+    .filter((dir) => fs.existsSync(path.join(root, dir.name, 'RegistrationInfo.xml')))
+    .sort((a, b) => a.version - b.version)
+    .pop();
+  if (!newest) return undefined;
+  const registrationFile = path.join(root, newest.name, 'RegistrationInfo.xml');
+
+  const name = /<Name>([^<]*)<\/Name>/.exec(fs.readFileSync(registrationFile, 'utf8'))?.[1];
+  return name?.trim() || undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -131,7 +187,15 @@ export async function createCommentTestProject(users: string[]): Promise<Comment
         .filter(Boolean)
     : [];
 
-  const allUsers = [...new Set([...users, ...localUserNames])];
+  // The current user matters as much as the synthetic ones: ParatextData grants full access when a
+  // project has NO ProjectUserAccess.xml ("If no project users file, always administrator" —
+  // PermissionManager.HaveRoleNotObserver), but once the file exists a user missing from it has no
+  // role and every comment write is refused. localUsers.txt only exists where Paratext 9 has run,
+  // so the machine's registered name is read directly as well.
+  const currentUser = readCurrentParatextUserName();
+  const allUsers = [
+    ...new Set([...users, ...localUserNames, ...(currentUser ? [currentUser] : [])]),
+  ];
   if (allUsers.length > 0) {
     addUsersToProject(projectDir, allUsers);
   }
