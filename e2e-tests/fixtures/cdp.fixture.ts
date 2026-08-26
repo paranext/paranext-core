@@ -61,7 +61,13 @@ import {
   PageScreenshotOptions,
 } from '@playwright/test';
 import * as fs from 'fs';
-import { assertDeclaredWindowSize, DEFAULT_WINDOW_SIZE, WindowSize } from './helpers';
+import {
+  assertDeclaredWindowSize,
+  assertInterfaceMode,
+  DEFAULT_WINDOW_SIZE,
+  RequiredInterfaceMode,
+  WindowSize,
+} from './helpers';
 
 export { expect } from '@playwright/test';
 
@@ -161,11 +167,21 @@ export interface CdpFixtures {
    * rather than applied. Start the app at the declared size.
    */
   windowSize: WindowSize;
+  /**
+   * Interface mode this suite's layout is written against; set with `test.use({
+   * requiredInterfaceMode: 'simple' })`. Leave unset when the spec genuinely works in either mode.
+   *
+   * Asserted, not applied, for the same reason as {@link CdpFixtures.windowSize}: attach mode
+   * inherits the mode from the app you started. Declaring it converts a late, confusing timeout on
+   * an element the wrong mode never renders into an immediate, readable setup error.
+   */
+  requiredInterfaceMode: RequiredInterfaceMode | undefined;
 }
 
 export const test = base.extend<CdpFixtures>({
   windowSize: [DEFAULT_WINDOW_SIZE, { option: true }],
-  mainPage: async ({ windowSize }, use) => {
+  requiredInterfaceMode: [undefined, { option: true }],
+  mainPage: async ({ windowSize, requiredInterfaceMode }, use) => {
     let browser;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
@@ -232,6 +248,11 @@ export const test = base.extend<CdpFixtures>({
         `honour it, and the size must be its own argv token: --window-size=WxH never matches, ` +
         `because the flag is looked up by exact token (src/node/utils/command-line.util.ts:104).`,
     );
+
+    // Assert the interface mode BEFORE the screenshot wrapper is installed, so a mode mismatch
+    // reports itself rather than surfacing later as a timeout on an element the running mode never
+    // renders. Only checked when the spec declared one — plenty of specs work in either mode.
+    if (requiredInterfaceMode) await assertInterfaceMode(page, requiredInterfaceMode);
 
     // AUTO-VALIDATE screenshot dimensions. Wrap `page.screenshot` so every screenshot taken via
     // the fixture is validated against the Full HD minimum the moment the file lands on disk.

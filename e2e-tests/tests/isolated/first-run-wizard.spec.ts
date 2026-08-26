@@ -28,6 +28,11 @@ import { test, expect } from '../../fixtures/isolated.fixture';
 import { preConfigureSettings } from '../../fixtures/helpers';
 
 test.describe('First-run wizard overlay', () => {
+  // Verifies the `platform.interfaceMode` pin below actually took effect. The pin merges into a
+  // shared settings file, so it can silently fail and leave this suite driving the other mode's
+  // layout.
+  test.use({ requiredInterfaceMode: 'simple' });
+
   let restoreSettings: (() => void) | undefined;
 
   test.beforeAll(() => {

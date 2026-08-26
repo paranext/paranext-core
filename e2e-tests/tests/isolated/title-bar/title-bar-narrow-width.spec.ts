@@ -25,6 +25,13 @@ const IMPOSSIBLY_NARROW_PX = 1;
 /** Sub-pixel layout rounding shows up as a 1px scrollWidth excess that is not a real overflow. */
 const ROUNDING_TOLERANCE_PX = 1;
 
+test.use({
+  // Verifies the `platform.interfaceMode` pin actually took effect. The pin merges into a
+  // shared settings file, so it can silently fail and leave this suite driving the other
+  // mode's layout.
+  requiredInterfaceMode: 'simple',
+});
+
 let restoreSettings: (() => void) | undefined;
 
 test.beforeEach(() => {

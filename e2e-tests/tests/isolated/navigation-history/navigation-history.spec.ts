@@ -46,6 +46,10 @@ const BACK_KEY = isMac ? 'Meta+BracketLeft' : 'Alt+ArrowLeft';
 const FORWARD_KEY = isMac ? 'Meta+BracketRight' : 'Alt+ArrowRight';
 
 test.use({
+  // Verifies the `platform.interfaceMode` pin below actually took effect. The pin merges
+  // into a shared settings file, so it can silently fail and leave this suite driving the
+  // other mode's layout.
+  requiredInterfaceMode: 'power',
   // The option fixture is named `electronLaunchOptions`, not `launchOptions` — see
   // e2e-tests/fixtures/isolated.fixture.ts.
   //

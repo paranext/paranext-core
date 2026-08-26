@@ -44,6 +44,10 @@ const COMMAND_TIMEOUT_MS = 30_000;
 // clean single-pane layout for the viewport assertions both need the normal Home layout. Same
 // approach as comment.fixture.ts.
 test.use({
+  // Verifies the `platform.interfaceMode` pin below actually took effect. The pin merges
+  // into a shared settings file, so it can silently fail and leave this suite driving the
+  // other mode's layout.
+  requiredInterfaceMode: 'power',
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
   // The verse-in-viewport assertions are geometry: how far down the pane Lamentations 3:66 sits,
   // and therefore whether it starts off screen, is decided by the window size. 1280x800 is the size
