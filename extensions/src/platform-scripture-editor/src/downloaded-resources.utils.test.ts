@@ -168,6 +168,35 @@ describe('buildPickerResources', () => {
     });
   });
 
+  it('does NOT match via startsWith when the DBL cache entry is uninstalled (reassigned UID guard)', () => {
+    // A stale cache row with installed:false, projectId:'' for a reassigned UID must not match a
+    // locally-installed project via the startsWith branch — without this guard, a reassigned UID
+    // would be used to classify the local project as a DBL resource type.
+    const dblResources: DblResourceData[] = [
+      {
+        dblEntryUid: '090f7cbf7924b245',
+        displayName: 'New Resource (reassigned UID)',
+        fullName: 'New Resource (reassigned UID)',
+        bestLanguageName: 'English',
+        type: 'ScriptureResource',
+        size: 0,
+        installed: false,
+        updateAvailable: false,
+        projectId: '',
+      },
+    ];
+    const rows = buildPickerResources(
+      [],
+      [downloaded({ projectId: '090f7cbf7924b245_tnn_local', name: 'TNN' })],
+      dblResources,
+    );
+    // Falls through to a ProjectReference (not classified as the new DBL resource under the old UID)
+    expect(rows[0]).toMatchObject({
+      source: 'downloaded',
+      reference: { type: 'project', id: '090f7cbf7924b245_tnn_local' },
+    });
+  });
+
   it('classifies a synthetic non-DBL entry (dblEntryUid === projectId) as ProjectReference', () => {
     // Local non-DBL resources (e.g. VULGP83, TNN installed as .p8z) are represented in the
     // dblResources array with dblEntryUid === projectId as a synthetic marker. downloadedToRow

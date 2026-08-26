@@ -129,8 +129,10 @@ function downloadedToRow(
       (r.installed && r.projectId === project.projectId) ||
       // The second branch matches a DBL entry whose cache row is not yet flagged installed (e.g.
       // the flag lags an update), but the local project exists on disk — installed: true is still
-      // correct because the local project file is present.
-      (r.dblEntryUid !== '' &&
+      // correct because the local project file is present. The installed || projectId !== '' guard
+      // prevents a stale cache row with projectId:'' (reassigned UID) from matching a real project.
+      ((r.installed || r.projectId !== '') &&
+        r.dblEntryUid !== '' &&
         project.projectId.toLowerCase().startsWith(r.dblEntryUid.toLowerCase())),
   );
   if (dbl && !isNonDblResource(dbl)) {
