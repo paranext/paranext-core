@@ -19,14 +19,12 @@ import {
  * only in an open RESOURCE — in SIMPLE interface mode, where that control is the only
  * book/chapter/verse control the user has.
  *
- * ## Why this exists alongside the power-mode test
+ * ## Why simple mode is the only mode covered
  *
- * `bcv-open-resource-books.spec.ts` covers the same feature by opening two Scripture editors, which
- * only power mode permits (simple mode's editor column hosts exactly one, so a second open replaces
- * the first — see `resolveOpenEditorDispatch` in
- * `extensions/src/platform-scripture-editor/src/platform-scripture-editor.utils.ts`). Simple mode
- * is the feature's primary audience, so it needs its own proof, and it reaches the same behavior by
- * a different route.
+ * The toolbar disables the open-project book lookup outright in power mode, so there is no widened
+ * list and no toggle to assert there — power mode's own controls are left for that team to adopt
+ * the component API as they see fit. Simple mode is where the feature ships, and its single global
+ * control is the whole surface.
  *
  * ## How a second project gets into simple mode
  *
@@ -263,13 +261,17 @@ test.describe('simple mode: book/chapter/verse control reaches books in an open 
     const revelationItem = mainPage.locator(REVELATION_ITEM);
     await expect(revelationItem).toBeVisible({ timeout: 15_000 });
     await expect(revelationItem).toHaveClass(DIMMED_BOOK_CLASS_PATTERN);
-    // The greying is not colour-only: the explanation is appended to the accessible name.
+    // The greying is not colour-only: the accessible name is a full localized sentence.
     await expect(revelationItem).toHaveAttribute('aria-label', /is not in this project/);
 
     // ── Navigate there ─────────────────────────────────────────────────────────────────────────
     await revelationItem.click();
     await mainPage.getByRole('option', { name: '1', exact: true }).first().click();
+    // The book is the assertion the navigation is proved by. The chapter:verse is deliberately NOT
+    // asserted here: the trigger shrinks in steps with the toolbar's width (see
+    // `use-shrink-step.hook.ts`), and at the narrower steps it swaps the full name for the id and
+    // then drops the chapter:verse entirely — so whether "1:1" is on screen depends on the window
+    // this happens to run in, not on where the app navigated.
     await expect(trigger).toContainText(/Revelation|REV/, { timeout: 15_000 });
-    await expect(trigger).toContainText('1:1');
   });
 });
