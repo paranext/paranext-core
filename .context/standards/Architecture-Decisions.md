@@ -755,10 +755,10 @@ step, no automation. Just a record.
   its ref from the incoming token at mount, so `launchToken === ref.current` was always true and no
   effect body ever ran. The feature worked throughout because `adr-one-shot-launch-parameters`'s
   lazy initializers were correct all along. The token plumbing has been removed from all five files,
-  and the inverted trade-off this decision claimed to avoid is recorded honestly in
+  and the inverted trade-off this withdrawn decision claimed to avoid is recorded honestly in
   `adr-one-shot-launch-parameters`'s consequences instead: the remount really does discard in-dialog
   state, which is the cost of the mechanism rather than something a token avoided. The sibling
-  `projectId` bug this decision reported is likewise not a bug: a mount-only initializer is correct
+  `projectId` bug reported here is likewise not a bug: a mount-only initializer is correct
   precisely because the reload remounts.
 - **Process lesson:** a claim about platform behavior belongs in ONE place. This one was duplicated into
   five code comments, and when it turned out false all five were wrong together — and their number read
@@ -803,7 +803,7 @@ step, no automation. Just a record.
 - **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
   `srcNonce` to its use site.
 
-## adr-verse-zero-resolves-to-verse-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
+## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
 
 - **Formerly:** ADR-0019
 - **Date:** 2026-08-05

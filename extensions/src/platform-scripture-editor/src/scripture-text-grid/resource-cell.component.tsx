@@ -184,7 +184,7 @@ export function ResourceCell({
   // Resource Viewer depend on, both feeding a whole chapter so the document is addressable — would
   // go with it. A read-only editor reporting its caret is correct; the bug would be ours, since WE
   // told it a reference we then contradicted. Full reasoning, and what a future single-verse surface
-  // must copy: `adr-verse-zero-resolves-to-verse-one`.
+  // must copy: `adr-single-verse-surfaces-resolve-verse-zero-to-one`.
   const handleScrRefChange = useCallback(
     (nextScrRef: SerializedVerseRef) => {
       if (viewMode === 'verse' && isFallenForward) return;

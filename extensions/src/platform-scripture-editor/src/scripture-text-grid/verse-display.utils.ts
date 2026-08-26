@@ -10,14 +10,14 @@ import { Usj, MarkerObject, MarkerContent } from '@eten-tech-foundation/scriptur
  * scroll group.
  *
  * Chapter surfaces must NOT call this — they show verse-0 front matter directly. Full rationale and
- * rejected alternatives: `adr-verse-zero-resolves-to-verse-one`.
+ * rejected alternatives: `adr-single-verse-surfaces-resolve-verse-zero-to-one`.
  *
  * @param verseNum Non-negative integer verse number, as carried by `SerializedVerseRef`. Only `0`
  *   is special-cased; anything else is returned unchanged, so a negative or fractional value passes
  *   through and then slices to nothing, surfacing as the empty state rather than as an error. That
  *   is unreachable through today's callers, but matters if this is promoted to
- *   `lib/platform-bible-utils` (see `adr-verse-zero-resolves-to-verse-one`), where callers lose
- *   that guarantee.
+ *   `lib/platform-bible-utils` (see `adr-single-verse-surfaces-resolve-verse-zero-to-one`), where
+ *   callers lose that guarantee.
  */
 export function resolveDisplayVerseNum(verseNum: number): number {
   return verseNum === 0 ? 1 : verseNum;

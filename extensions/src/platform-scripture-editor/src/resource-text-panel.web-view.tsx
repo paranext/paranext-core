@@ -406,7 +406,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // sliced by scripture-text-grid/verse-display.utils — slicing would blank the verse-0 front
   // matter (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve
   // verse 0 to verse 1; whole-chapter surfaces like this one must not (see
-  // `adr-verse-zero-resolves-to-verse-one`).
+  // `adr-single-verse-surfaces-resolve-verse-zero-to-one`).
   const [usjPossiblyError] = useProjectData(
     'platformScripture.USJ_Chapter',
     resourceProjectId,
