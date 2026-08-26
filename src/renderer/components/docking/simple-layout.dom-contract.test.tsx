@@ -10,25 +10,8 @@ import {
   SIMPLE_PANEL_ID_RESOURCES,
 } from './simple-layout.data';
 
-// jsdom does not implement window.matchMedia; theme.service-host.ts calls it at module init (via
-// the import chain from platform-dock-layout-positioning.util). vi.hoisted runs before any
-// imports, so the stub is in place before module initialization reaches theme.service-host.ts.
-// Precedent: onboarding-tour.component.test.tsx uses the same stub.
-vi.hoisted(() => {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: (query: string) => ({
-      matches: false,
-      media: query,
-      onchange: undefined,
-      addListener: () => {},
-      removeListener: () => {},
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => false,
-    }),
-  });
-});
+// window.matchMedia — which theme.service-host.ts calls at module init, reached here via
+// platform-dock-layout-positioning.util — is stubbed for every jsdom test in vitest.setup.ts.
 
 vi.mock('../../../shared/services/logger.service');
 
