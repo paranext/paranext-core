@@ -2391,3 +2391,49 @@ step, no automation. Just a record.
   becomes primary later — PT-4278's window-manager service is the durable answer for that.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
+
+## ADR-0035: Window ids are minted by main, never reused, and numeric on every surface
+
+- **Date:** 2026-08-26
+- **Status:** Accepted
+- **Context:** Every window-id surface exported Electron's `BrowserWindow.id`. Electron assigns
+  those per session and hands the same number to a later window, so every mention of a window id
+  carried a "runtime-only, reused, never persist" caveat, and several behaviours existed only to
+  defend against reuse — the per-window mark cleanup in `removeWindow`, and the refusal to cache a
+  resolved shard in `getWindowServiceShard`. The ids were also two shapes at once: `globalThis.windowId`
+  is a string because it arrives as a URL parameter, while `targetWindowId`, `WindowSummary.windowId`,
+  every wire schema and all of main are numbers. The two shapes met in exactly one place, where a
+  tab menu stringified the number to compare it against the string.
+- **Decision:** Main mints window ids from its own counter and persists the counter, so an id is
+  never handed out twice — across launches as well as within one. `trackedWindows` in
+  `window-state.service.ts` is the one map from platform id to `BrowserWindow`, and `BrowserWindow.fromId`
+  is no longer used to resolve one. The platform id **replaces** Electron's on the PAPI rather than
+  joining it: one namespace, main translating internally. The id is a **number** on every surface,
+  which makes `globalThis.windowId` a number rather than a string — the renderer parses the URL
+  parameter once at the boundary, which is what `URL_PARAMETERS[WINDOW_ID]`'s `kind: 'integer'`
+  already declares and nothing consulted.
+- **Alternatives:** Keep `globalThis.windowId` a string and change only the minting — rejected: it
+  is the cheapest option and leaves the split in place, with one surface disagreeing with the two
+  public ones, with main, and with every wire schema, bridged only by a template literal at a single
+  comparison site. Make the id a string everywhere — rejected on two hard blockers: the move
+  subsystem's `MoveWebViewTarget = number | 'new'` discriminates on number-versus-string-literal, so
+  a string id makes `'new'` a possible id and collapses the union; and `getServiceShardWindowId`
+  returns `undefined` for anything that is not a number, so a half-typed build would route nothing
+  while looking healthy, with only a `logger.warn`. An opaque or uuid id — rejected: three regexes
+  require digits (`/-w\d+$/`, the prefixed dock-layout key, `Number.isInteger` in
+  `getServiceShardAttributes`) and two tie-breaks require creation order. Joining the platform id
+  alongside Electron's — rejected by the lead dev; two namespaces is the thing being removed.
+- **Consequences:** A monotonic counter preserves the creation-order property that the two
+  `a.windowId - b.windowId` tie-breaks and the e2e page sort rely on, so those keep working for the
+  reason they always assumed rather than by luck. Truthiness tests on a window id become wrong —
+  `if (!globalThis.windowId)` in `getWindowService` distinguishes "renderer" from "extension host",
+  and a numeric `0` is falsy, so identity checks must compare against `undefined`; the counter also
+  starts at 1 so no window ever holds 0. Data already on disk is keyed by the old ids — per-window
+  `localStorage` prefixes, `-w{id}` suffixes inside saved layouts, and the legacy prefixed
+  dock-layout keys — so this is a migration, not only a swap. The reuse-defence code may now be
+  simplified, but deliberately: `removeWindow`'s cleanup stays correct as hygiene even though its
+  stated reason is gone. Positional identity for persisted layout slots (ADR in PT-4285) is
+  untouched: a never-reused id answers "has this number been handed out", not "which window was
+  this".
+- **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
+  measured against the top of the multi-window stack.
