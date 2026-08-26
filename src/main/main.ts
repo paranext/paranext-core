@@ -86,6 +86,8 @@ import {
   focusWindow,
   getFocusedWindowId,
   getTargetWindowId,
+  getTrackedWindows,
+  getWindowById,
   getWindows,
   handleWindowBlurred,
   isWindowAbandoned,
@@ -412,7 +414,7 @@ async function main() {
     countWindows: countWindowsThatCouldBeTheLastOne,
     // The primary reopens Home when emptied rather than closing; only its ✕ and Quit close it
     isPrimaryWindow,
-    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+    closeWindow: (windowId) => getWindowById(windowId)?.close(),
     // A report names its own subject and arrives over the network, so the id is the caller's word.
     // The tracker is what knows whether that word describes a window this process has.
     isWindowTracked,
@@ -653,7 +655,10 @@ async function main() {
   const createWindow = async (
     restoreInfo?: WindowRestoreInfo,
     creationOptions?: { pendingContent?: boolean },
-  ): Promise<BrowserWindow> => {
+    // The platform id comes back alongside the window because this is the only place that has it:
+    // it is minted here and is not readable from the BrowserWindow, so a caller that needs to name
+    // the window afterwards would otherwise have to look it up by identity.
+  ): Promise<{ window: BrowserWindow; windowId: number }> => {
     // The menu and the `platform.createWindow` command stay live through a quit, because every
     // window sits in `preventDefault()` waiting on the shared shutdown run for as long as that run
     // takes. Opening a window in that gap would start a session the app is in no position to serve:
@@ -758,11 +763,10 @@ async function main() {
     // the waterfall's Total span.
     markStartupOnce('window-created');
 
-    // Capture the window ID before it can be destroyed (used in the `closed` handler)
-    const windowId = newWindow.id;
-
-    // Track this window immediately
-    addWindow(newWindow);
+    // Track this window immediately, which is also where it is given the platform id everything
+    // downstream names it by. Electron's own `BrowserWindow.id` is never used past this point, and
+    // the id stays valid in the `closed` handler after the window itself is gone.
+    const windowId = addWindow(newWindow);
 
     // Tie the window to its persisted identity so layout persistence can serve and save it
     if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entryIndex);
@@ -1504,7 +1508,7 @@ async function main() {
     // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
     // new AppUpdater();
 
-    return newWindow;
+    return { window: newWindow, windowId };
   };
 
   // The router that serves `openWebView` starts before this closure exists, so it is handed the
@@ -1514,8 +1518,8 @@ async function main() {
   // extension-host ready signal would deadlock against that wait.
   setWebViewWindowCreator({
     createPendingContentWindow: async () =>
-      (await createWindow(undefined, { pendingContent: true })).id,
-    closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
+      (await createWindow(undefined, { pendingContent: true })).windowId,
+    closeWindow: (windowId) => getWindowById(windowId)?.close(),
   });
 
   /**
@@ -1532,7 +1536,7 @@ async function main() {
     const plan = await loadWindowLayouts();
     if (plan.kind === 'legacy') {
       const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
-      setMainWindowId(legacyWindow.id);
+      setMainWindowId(legacyWindow.windowId);
       return;
     }
 
@@ -1545,7 +1549,7 @@ async function main() {
       entryIndex: mainEntryIndex,
       entry: entries[mainEntryIndex],
     });
-    setMainWindowId(mainWindow.id);
+    setMainWindowId(mainWindow.windowId);
     if (entries.length <= 1) return;
 
     // Simple mode is single-window: restore only the main window no matter how many entries the
@@ -1924,9 +1928,9 @@ async function main() {
       // anything. Picking either sends the user's action nowhere. A window that has not finished
       // starting is deliberately still offered — it is on screen, the user can see it, and work
       // sent to it lands once it is ready.
-      const availableWindows = getWindows().filter(
-        (window) => !isWindowMarkedClosing(window.id) && !isWindowAbandoned(window.id),
-      );
+      const availableWindows = getTrackedWindows()
+        .filter(({ windowId }) => !isWindowMarkedClosing(windowId) && !isWindowAbandoned(windowId))
+        .map(({ windowId, window }) => ({ windowId, getTitle: () => window.getTitle() }));
       return summarizeWindows(availableWindows, getMainWindowId());
     },
     {

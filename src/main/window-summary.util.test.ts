@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { summarizeWindows } from '@main/window-summary.util';
 
-const window = (id: number, title: string) => ({ id, getTitle: () => title });
+const window = (windowId: number, title: string) => ({ windowId, getTitle: () => title });
 
 describe('summarizeWindows', () => {
   test('reports one entry per window, labelled by its title', () => {

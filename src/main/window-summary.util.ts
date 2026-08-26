@@ -5,7 +5,12 @@ import { WindowSummary } from '@shared/services/window.service-model';
  * this stays a pure function its callers can exercise without an Electron window.
  */
 type SummarizableWindow = {
-  id: number;
+  /**
+   * The window's platform id. Named `windowId` rather than `id` on purpose: a raw `BrowserWindow`
+   * carries an `id`, and it is Electron's, which is not what any caller of this may publish. The
+   * mismatch makes passing one a compile error instead of a silently wrong summary.
+   */
+  windowId: number;
   getTitle: () => string;
 };
 
@@ -27,8 +32,8 @@ export function summarizeWindows(
   mainWindowId: number | undefined,
 ): WindowSummary[] {
   return windows.map((window) => ({
-    windowId: window.id,
+    windowId: window.windowId,
     label: window.getTitle(),
-    isMain: window.id === mainWindowId,
+    isMain: window.windowId === mainWindowId,
   }));
 }

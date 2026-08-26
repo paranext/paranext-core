@@ -8,26 +8,63 @@ import { BrowserWindow } from 'electron';
 import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
 
-/** A tracked window, paired with the id it was created with */
+/** A tracked window, paired with the platform id minted for it */
 type TrackedWindow = {
   /**
-   * The window's id, captured while the window was still alive.
+   * The window's platform id, minted by {@link mintWindowId} when the window was added.
    *
-   * Every reader below answers from this rather than from `window.id`. Electron destroys a window
+   * This is the platform's own id, not Electron's `BrowserWindow.id` — nothing outside this module
+   * has ever seen Electron's, and this list is the only mapping from one to the other. Reading it
+   * from here rather than from the window also keeps every lookup safe: Electron destroys a window
    * before the `closed` handler removes it from this list, and a property read on a destroyed
    * BrowserWindow throws — inside the routing lookup that runs on every routed call, and inside the
    * mutations a closing window's own teardown is waiting on, where a throw abandons the rest of the
-   * close. See {@link removeWindow}, which has always taken the id for the same reason.
+   * close. See {@link removeWindow}, which takes the id for the same reason.
    */
   windowId: number;
   window: BrowserWindow;
 };
 
+/**
+ * Storage key holding the next window id to hand out.
+ *
+ * `localStorage` here is main's file-backed polyfill (`polyfillLocalStorage()` in
+ * `src/main/global-this.model.ts`), which runs at module load before any service is imported, so it
+ * is available by the time the first window is created.
+ */
+const NEXT_WINDOW_ID_KEY = 'window-state.service.nextWindowId';
+
+/** The next id to hand out, or `undefined` until it has been read back from storage */
+let nextWindowId: number | undefined;
+
+/**
+ * Mint a window id that has never been used before — not earlier in this launch, and not in any
+ * previous one.
+ *
+ * The counter is persisted on every mint rather than at shutdown, so a crash cannot hand the same
+ * id to a later window. Ids increase in creation order, which the routing tie-breaks in
+ * `web-view.service-router.ts` and the e2e page ordering both depend on.
+ */
+function mintWindowId(): number {
+  if (nextWindowId === undefined) {
+    const stored = Number(localStorage.getItem(NEXT_WINDOW_ID_KEY));
+    // A missing, malformed or non-positive value restarts the sequence. That can repeat an id,
+    // which is the one thing the counter exists to prevent — but refusing to open a window is a
+    // worse answer to a corrupt integer than reusing one, and every reuse hazard this replaced was
+    // survivable before.
+    nextWindowId = Number.isInteger(stored) && stored > 0 ? stored : 1;
+  }
+  const windowId = nextWindowId;
+  nextWindowId += 1;
+  localStorage.setItem(NEXT_WINDOW_ID_KEY, `${nextWindowId}`);
+  return windowId;
+}
+
 // Keep a global reference of the window objects. If you don't, the windows will
 // be closed automatically when the JavaScript objects are garbage collected.
 const trackedWindows: TrackedWindow[] = [];
 
-/** ID of the Electron BrowserWindow that Electron most recently reported as focused, if any */
+/** Platform id of the window Electron most recently reported as focused, if any */
 let focusedWindowId: number | undefined;
 
 /**
@@ -534,14 +571,41 @@ function announceRoutingTargetIfChanged(): void {
 }
 
 /**
- * Add a window to the tracked list.
+ * Add a window to the tracked list and give it its platform id.
  *
- * Its id is read once, here, while the window is certain to be alive, and every reader answers from
- * that copy afterwards — see {@link TrackedWindow}.
+ * This is the only place a window id is minted, and the returned id is the only one the rest of the
+ * platform ever sees — see {@link TrackedWindow}.
+ *
+ * @returns The window's platform id
  */
-export function addWindow(window: BrowserWindow): void {
-  trackedWindows.push({ windowId: window.id, window });
+export function addWindow(window: BrowserWindow): number {
+  const windowId = mintWindowId();
+  trackedWindows.push({ windowId, window });
   announceRoutingTargetIfChanged();
+  return windowId;
+}
+
+/**
+ * Every tracked window paired with its platform id, in creation order.
+ *
+ * For callers that need to name the windows they are looking at. A `BrowserWindow` cannot answer
+ * what the platform calls it, so anything reporting on windows has to come through here rather than
+ * through {@link getWindows}.
+ */
+export function getTrackedWindows(): { windowId: number; window: BrowserWindow }[] {
+  return trackedWindows.map(({ windowId, window }) => ({ windowId, window }));
+}
+
+/**
+ * Get the window a platform id names, if it is still tracked.
+ *
+ * This is the platform-id half of `BrowserWindow.fromId`, which cannot be used now that the ids the
+ * platform hands out are not Electron's. Answering `undefined` for a window that has closed is
+ * correct rather than exceptional — a caller holding an id has no way to know the window went away
+ * between one call and the next.
+ */
+export function getWindowById(windowId: number): BrowserWindow | undefined {
+  return trackedWindows.find((tracked) => tracked.windowId === windowId)?.window;
 }
 
 /**
@@ -561,12 +625,12 @@ export function removeWindow(window: BrowserWindow, windowId: number): void {
   const trackedIndex = trackedWindows.findIndex((tracked) => tracked.window === window);
   if (trackedIndex >= 0) trackedWindows.splice(trackedIndex, 1);
   readyWindowIds.delete(windowId);
-  // These marks are this window's state, keyed by its ID. Left behind they keep answering for a
-  // window that no longer exists — anything that still holds the ID would be told it is closing,
+  // These marks are this window's state, keyed by its id. Left behind they keep answering for a
+  // window that no longer exists — anything that still holds the id would be told it is closing,
   // that it had been serving requests and died, or that it had been written off — and they would
-  // accumulate for the life of the process. (Electron hands out each ID at most once per process,
-  // so a later window can never be the one to ask; IDs only restart at 1 on the next launch, which
-  // is why none of them is ever persisted.)
+  // accumulate for the life of the process. No window can ever inherit this id and be given those
+  // answers, since ids are never handed out twice; clearing them is about not answering for the
+  // dead and not leaking, which is reason enough on its own.
   closingWindowIds.delete(windowId);
   everReadyWindowIds.delete(windowId);
   abandonedWindowIds.delete(windowId);
@@ -757,4 +821,8 @@ export function resetForTesting(): void {
   doesFocusedWindowHoldOsFocus = false;
   announcedRoutingTarget = { windowId: undefined, isReady: false };
   isWindowPendingContent = () => false;
+  // Forget the counter as well as the windows, so each test mints from a known starting point
+  // instead of inheriting whatever the previous test left behind
+  nextWindowId = undefined;
+  localStorage.removeItem(NEXT_WINDOW_ID_KEY);
 }
