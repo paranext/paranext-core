@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
   useExtraValidMarkers,
   useTabIconSelection,
+  useViewVisibility,
   type TabIconUrls,
 } from 'platform-bible-react';
 import {
@@ -41,6 +42,7 @@ import type {
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY } from './focused-resource-state-key.const';
 import { usePublishFocusedResourceProjectId } from './use-publish-focused-resource.hook';
+import { useScrRefWhenVisible } from './use-scr-ref-when-visible.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
 import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
@@ -169,6 +171,13 @@ globalThis.webViewComponent = function ResourceTextPanel({
   const [localizedStrings] = useLocalizedStrings(RESOURCE_PANEL_STRING_KEYS);
 
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
+
+  // Scrolling to a verse needs layout, which this pane does not have while its tab is inactive — so
+  // the reference handed to the editor is held back until the tab is shown. Chapter content stays
+  // keyed on the live `scrRef` below, so it is already loaded when that happens. See
+  // `useScrRefWhenVisible`.
+  const isViewVisible = useViewVisibility();
+  const editorScrRef = useScrRefWhenVisible(scrRef, isViewVisible);
 
   // #region Web view state
 
@@ -416,8 +425,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region USJ Fetch
 
-  // Chapter view: the whole chapter goes to Editorial, which navigates to scrRef. Deliberately NOT
-  // sliced by scripture-text-grid/verse-display.utils — slicing would blank the verse-0 front matter
+  // Chapter view: the whole chapter goes to Editorial, which navigates to the reference it is given
+  // (`editorScrRef`). Keyed on the LIVE `scrRef` rather than that deferred one, so a hidden tab's
+  // chapter is already loaded by the time it is shown and the reveal only has to scroll.
+  // Deliberately NOT sliced by scripture-text-grid/verse-display.utils — slicing would blank the
+  // verse-0 front matter
   // (intros, Psalm superscriptions) this view exists to show. Single-verse surfaces resolve verse 0
   // to verse 1; whole-chapter surfaces like this one must not (see ADR-0019).
   const [usjPossiblyError] = useProjectData(
@@ -646,7 +658,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
       <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
         <Editorial
           ref={editorRef}
-          scrRef={scrRef}
+          scrRef={editorScrRef}
           onScrRefChange={setScrRef}
           options={options}
           logger={logger}
