@@ -1,5 +1,5 @@
-import { test, expect } from '../../../fixtures/cdp.fixture';
-import { waitForAppReady } from '../../../fixtures/helpers';
+import { test, expect } from '../../fixtures/cdp.fixture';
+import { waitForAppReady } from '../../fixtures/helpers';
 
 /** Window Controls Overlay API isn't in TS's DOM lib yet. */
 type NavigatorWithWindowControlsOverlay = Navigator & {

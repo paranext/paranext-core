@@ -6,8 +6,8 @@ import { defineConfig } from '@playwright/test';
  * - `smoke` (default): tests share a single Electron instance per worker — fast, for CI.
  * - `isolated`: each suite gets its own Electron, but how varies by fixture —
  *   `fixtures/isolated.fixture.ts` launches one per test, `comment.fixture`/`find.fixture` one per
- *   worker, and the `title-bar/` subset launches nothing at all: it uses `fixtures/cdp.fixture.ts`
- *   and attaches to an app started separately. See the note on that project below.
+ *   worker. Every spec in this project launches its own app; specs that attach to one you started
+ *   live in `tests/attached/` instead.
  */
 const config = defineConfig({
   testDir: './tests',
@@ -56,12 +56,10 @@ const config = defineConfig({
       // `npm run test:e2e:isolated` (via e2e-tests/run-isolated.mjs) lists the subsets;
       // `npm run test:e2e:isolated <subset>` runs one; `... all` runs every subset.
       //
-      // `... all` cannot currently pass. The `title-bar/` subset uses fixtures/cdp.fixture.ts,
-      // which attaches to an already-running app, but this config's globalSetup aborts when port
-      // 8876 is bound — so there is no state in which it and its launch-based neighbours both
-      // run. playwright-cdp.config.ts cannot run it either; it testIgnores **/isolated/**. Run
-      // the other subsets individually until it moves out of this project or globalSetup grows an
-      // opt-out.
+      // Every spec here launches its own Electron, which is what lets `... all` run as one
+      // command. Attach-based specs are deliberately NOT in this tree: this config's globalSetup
+      // aborts when port 8876 is bound, which is exactly the state an attach spec needs, so one
+      // living here could never run alongside its neighbours. They live in `tests/attached/`.
       name: 'isolated',
       testDir: './tests/isolated',
     },
