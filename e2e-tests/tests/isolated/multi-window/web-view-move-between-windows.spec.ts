@@ -372,9 +372,9 @@ test.describe('moving a web view between windows', () => {
     logStep(`window ${window2Id} holds the moved web view as ${movedWebViewId}`);
 
     // Gone from the window it left — the tab and its iframe both.
-    await expect(
-      mainPage.locator(`.platform-tab-title[data-web-view-id="${webViewIdBeforeMove}"]`),
-    ).toHaveCount(0, { timeout: 60_000 });
+    await expect(webViewTabTitle(mainPage, webViewIdBeforeMove)).toHaveCount(0, {
+      timeout: 60_000,
+    });
     await expect(mainPage.locator(`iframe[data-web-view-id="${webViewIdBeforeMove}"]`)).toHaveCount(
       0,
     );
