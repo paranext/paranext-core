@@ -21,6 +21,7 @@ import { isDblResourceReference } from './resource-reference.utils';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
 import { ModelTextPanel, MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.component';
+import { canPublishResourcePanelProjectIds } from './resource-panel-readiness.utils';
 import { usePublishNavigableProjectIds } from './use-publish-navigable-project-ids.hook';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -123,14 +124,10 @@ globalThis.webViewComponent = function ModelTextPanelWebView({
 
   // This web view's definition `projectId` is the editable project whose model-text setting is
   // read, so the displayed resource is invisible to global navigation UI unless declared here.
-  // `modelResourceProjectId` is undefined until the model-text list is `ready` and the DBL catalog
-  // is ready, which is indistinguishable from "no resource is displayed". A catalog error is also
-  // not readiness: the configured resource cannot be resolved, so its id is unknown rather than
-  // absent, and `isCatalogReady` already excludes that case.
   usePublishNavigableProjectIds(
     useWebViewState,
     modelResourceProjectId ? [modelResourceProjectId] : [],
-    effectiveModelTextsState.status === 'ready' && isCatalogReady,
+    canPublishResourcePanelProjectIds(effectiveModelTextsState, isCatalogReady),
   );
 
   // --- Operation callbacks ---

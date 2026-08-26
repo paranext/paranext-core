@@ -82,3 +82,24 @@ export function getResourcePanelReadiness({
 
   return matching === 0 ? 'empty' : 'configured';
 }
+
+/**
+ * Whether a resource panel knows enough to declare the project it displays.
+ *
+ * Distinct from {@link getResourcePanelReadiness}, which decides what to _render_: an unreadable
+ * list or a failed catalog is a renderable answer ("show a message"), but it is not an answer about
+ * which project is on screen. The resolved project id is `undefined` in all of those states, and
+ * publishing `undefined` as "nothing displayed" would overwrite a correct persisted declaration —
+ * so only a delivered list plus a delivered catalog qualifies.
+ *
+ * @param listState The effective resource reference list's state (see
+ *   `useEffectiveResourceReferenceList`)
+ * @param isCatalogReady Whether the DBL resource catalog has finished loading and delivered
+ * @returns True when the panel's displayed project id can be trusted, published included
+ */
+export function canPublishResourcePanelProjectIds(
+  listState: EffectiveResourceReferenceListState,
+  isCatalogReady: boolean,
+): boolean {
+  return listState.status === 'ready' && isCatalogReady;
+}

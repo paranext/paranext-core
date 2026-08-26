@@ -246,6 +246,12 @@ export function PlatformBibleToolbar() {
     resolvedWebView?.definition.projectId,
   );
 
+  // The baseline is the navigation target's own project — its definition `projectId`. For a view
+  // that displays something other than its own project (a resource panel, whose `projectId` is the
+  // container whose reference list is shown; the Scripture Text Grid, which hosts many), that means
+  // the books of the resource on screen are offered as additional and labelled as outside the
+  // project. That is deliberate: the baseline tracks the project the user is working in, not
+  // whatever a panel happens to be rendering, so the unqualified list stays stable as panels change.
   const [booksPresentPossiblyError] = useProjectSetting(
     resolvedWebView?.definition.projectId,
     'platformScripture.booksPresent',

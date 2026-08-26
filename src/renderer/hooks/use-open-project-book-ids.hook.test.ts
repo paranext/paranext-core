@@ -18,10 +18,11 @@ const { getProjectDataProvider, webViewEventHandlers } = vi.hoisted(() => ({
   webViewEventHandlers: new Map<string, Set<(eventData: unknown) => void>>(),
 }));
 
-// A real subscriber rather than an inert one, so a test can emit a web view event and drive the
-// hook's re-enumeration of open web views — the trigger for every add/remove path below.
-vi.mock('@shared/services/network.service', () => ({
-  getNetworkEvent: vi.fn((eventName: string) => (handler: (eventData: unknown) => void) => {
+// Real subscribers rather than inert ones, so a test can emit a web view event and drive the hook's
+// re-enumeration of open web views — the trigger for every add/remove path below. Keyed by event
+// name so `emitWebViewEvent` can target one of the three.
+const { subscribeToWebViewEvent } = vi.hoisted(() => ({
+  subscribeToWebViewEvent: (eventName: string) => (handler: (eventData: unknown) => void) => {
     let handlers = webViewEventHandlers.get(eventName);
     if (!handlers) {
       handlers = new Set();
@@ -29,15 +30,25 @@ vi.mock('@shared/services/network.service', () => ({
     }
     handlers.add(handler);
     return () => handlers?.delete(handler);
-  }),
+  },
 }));
 
 vi.mock('@shared/services/logger.service', () => ({
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
+// The hook consumes the ready-made events this module exports rather than building its own, so the
+// doubles live here rather than behind a `getNetworkEvent` mock.
 vi.mock('@renderer/services/web-view.service-host', () => ({
   getAllOpenWebViewDefinitionsSync: vi.fn(() => []),
+  // The event name is read when the subscriber runs, not when this factory is evaluated: vi.mock is
+  // hoisted above the imports, so the constants do not exist yet at factory time.
+  onDidOpenWebView: (handler: (eventData: unknown) => void) =>
+    subscribeToWebViewEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW)(handler),
+  onDidUpdateWebView: (handler: (eventData: unknown) => void) =>
+    subscribeToWebViewEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW)(handler),
+  onDidCloseWebView: (handler: (eventData: unknown) => void) =>
+    subscribeToWebViewEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW)(handler),
 }));
 
 vi.mock('@shared/services/project-data-provider.service', () => ({

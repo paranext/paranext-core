@@ -339,9 +339,11 @@ describe('BookChapterControl additional books', () => {
     await userEvent.type(getSearchInput(), 'e');
 
     const revelation = await screen.findByRole('option', {
-      name: /Revelation \(REV\), not in this project/,
+      name: /Revelation is not in this project/,
     });
-    expect(revelation).toHaveClass('tw:opacity-70');
+    expect(revelation).toHaveClass('tw:bg-muted/50');
+    // The label stays readable while the row is highlighted, unlike a hover-only tooltip
+    expect(revelation).toHaveTextContent('Not in project');
   });
 
   test('additional ids already in the project are not dimmed', async () => {
@@ -357,7 +359,7 @@ describe('BookChapterControl additional books', () => {
     await userEvent.click(getTrigger());
 
     const genesis = await screen.findByRole('option', { name: /Genesis/ });
-    expect(genesis).not.toHaveClass('tw:opacity-70');
+    expect(genesis).not.toHaveClass('tw:bg-muted/50');
   });
 
   test('the toggle is absent when there are no books outside the project', async () => {
@@ -432,7 +434,57 @@ describe('BookChapterControl additional books', () => {
     await user.click(await screen.findByRole('button', { name: 'Show more books' }));
 
     const revelation = await screen.findByRole('option', { name: /Revelation/ });
-    expect(revelation).toHaveClass('tw:opacity-70');
+    expect(revelation).toHaveClass('tw:bg-muted/50');
+  });
+
+  // Search deliberately spans every reachable book whatever the toggle says, so a book in an open
+  // resource is findable by name without expanding first. Matches stay labelled, so nothing the
+  // search surfaces is presented as a project book.
+  test('search reaches a book outside the project while the list is collapsed', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+      />,
+    );
+
+    await user.click(getTrigger());
+    // Collapsed: the toggle still offers to expand, so nothing has been revealed yet
+    expect(await screen.findByRole('button', { name: 'Show more books' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Revelation/ })).not.toBeInTheDocument();
+
+    await user.type(getSearchInput(), 'e');
+
+    const revelation = await screen.findByRole('option', {
+      name: /Revelation is not in this project/,
+    });
+    expect(revelation).toHaveClass('tw:bg-muted/50');
+  });
+
+  // The toggle governs the book list, so it has nothing to act on once quick navigation hides it
+  test('the toggle is not offered while the book list is hidden', async () => {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(
+      <BookChapterControl
+        scrRef={{ book: 'GEN', chapterNum: 1, verseNum: 1 }}
+        handleSubmit={() => {}}
+        getActiveBookIds={getProjectBooks}
+        getAdditionalBookIds={getExtraBooks}
+        getEndVerse={() => 31}
+      />,
+    );
+
+    await user.click(getTrigger());
+    expect(await screen.findByRole('button', { name: 'Show more books' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Next chapter' }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Show more books' })).not.toBeInTheDocument(),
+    );
   });
 
   test('selecting a revealed book navigates to it', async () => {

@@ -13,7 +13,12 @@ import { cn } from '@/utils/shadcn-ui/utils';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { IconSelector } from '@tabler/icons-react';
-import { formatScrRef, getSectionForBook, Section } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  formatScrRef,
+  getSectionForBook,
+  Section,
+} from 'platform-bible-utils';
 import {
   getSectionLongName,
   getLocalizedBookName,
@@ -26,7 +31,6 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
-  useId,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
@@ -114,9 +118,6 @@ export function BookChapterControl({
   // Whether the book list is expanded past the active project's books. Governs browsing only —
   // searching always spans every reachable book.
   const [isShowingMoreBooks, setIsShowingMoreBooks] = useState(false);
-  // Ties the show-more/show-fewer toggle to the list it governs. Generated rather than fixed
-  // because more than one BookChapterControl can be mounted at a time.
-  const bookListId = useId();
 
   // Reference to the PopoverTrigger button. Used by `onPointerDownOutside` to detect
   // clicks on our own trigger while the popover is open — see that handler for the full
@@ -513,8 +514,14 @@ export function BookChapterControl({
 
   // Only offer the expansion while browsing: searching already spans every reachable book, so the
   // control would sit there doing nothing.
+  // `!isCommandListHidden` because the toggle governs that list: quick navigation hides it while
+  // leaving viewMode 'books', and a control offering to expand a list that is not on screen does
+  // nothing a user can see.
   const canShowMoreBooksToggle =
-    viewMode === 'books' && !inputValue.trim() && booksOutsideProject.size > 0;
+    viewMode === 'books' &&
+    !isCommandListHidden &&
+    !inputValue.trim() &&
+    booksOutsideProject.size > 0;
 
   const isBookDisabled = useCallback(
     (bookId: string) =>
@@ -546,7 +553,19 @@ export function BookChapterControl({
   const selectVerseTitle =
     localizedStrings?.['%webView_bookChapterControl_selectVerse%'] || 'Select verse';
   const bookNotInProjectLabel =
-    localizedStrings?.['%webView_bookChapterControl_bookNotInProject%'] || 'not in this project';
+    localizedStrings?.['%webView_bookChapterControl_bookNotInProject%'] || 'Not in project';
+  const bookNotInProjectDescriptionTemplate =
+    localizedStrings?.['%webView_bookChapterControl_bookNotInProjectDescription%'] ||
+    '{book} is not in this project';
+  // A localized template that places the book name itself, rather than appending the short label to
+  // a name here: word order, punctuation, and any inflection of the name belong to the translation.
+  const getBookNotInProjectDescription = useCallback(
+    (bookId: string) =>
+      formatReplacementString(bookNotInProjectDescriptionTemplate, {
+        book: getLocalizedBookName(bookId, localizedBookNames),
+      }),
+    [bookNotInProjectDescriptionTemplate, localizedBookNames],
+  );
   const showMoreBooksLabel =
     localizedStrings?.['%webView_bookChapterControl_showMoreBooks%'] || 'Show more books';
   const showProjectBooksOnlyLabel =
@@ -1161,7 +1180,7 @@ export function BookChapterControl({
 
           {/** Body */}
           {!isCommandListHidden && (
-            <CommandList ref={commandListRef} id={bookListId}>
+            <CommandList ref={commandListRef}>
               {/** Book list mode (also used in case of top matches) */}
               {viewMode === 'books' && (
                 <>
@@ -1188,6 +1207,11 @@ export function BookChapterControl({
                               disabled={isBookDisabled(bookId)}
                               dimmedReason={
                                 booksOutsideProject.has(bookId) ? bookNotInProjectLabel : undefined
+                              }
+                              dimmedDescription={
+                                booksOutsideProject.has(bookId)
+                                  ? getBookNotInProjectDescription(bookId)
+                                  : undefined
                               }
                             />
                           ))}
@@ -1322,7 +1346,10 @@ export function BookChapterControl({
                 // No aria-expanded: the label names the action and so already carries the state,
                 // and the two encode it in opposite directions — "Show project books only" plus
                 // `aria-expanded="true"` reads as a contradiction.
-                aria-controls={bookListId}
+                //
+                // No aria-controls either: cmdk's List spreads incoming props before setting its
+                // own `id`, so an id passed to CommandList never reaches the DOM and the attribute
+                // would reference nothing. cmdk does not expose the id it generates.
                 onClick={() => setIsShowingMoreBooks((wasShowing) => !wasShowing)}
               >
                 {isShowingMoreBooks ? showProjectBooksOnlyLabel : showMoreBooksLabel}

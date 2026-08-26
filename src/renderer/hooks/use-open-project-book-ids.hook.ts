@@ -1,13 +1,12 @@
-import { getAllOpenWebViewDefinitionsSync } from '@renderer/services/web-view.service-host';
+import {
+  getAllOpenWebViewDefinitionsSync,
+  onDidCloseWebView,
+  onDidOpenWebView,
+  onDidUpdateWebView,
+} from '@renderer/services/web-view.service-host';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { logger } from '@shared/services/logger.service';
-import { getNetworkEvent } from '@shared/services/network.service';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
-import {
-  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
-  EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
-  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
-} from '@shared/services/web-view.service-model';
 import { useEvent } from 'platform-bible-react';
 import { getErrorMessage, isPlatformError, UnsubscriberAsyncList } from 'platform-bible-utils';
 import {
@@ -88,21 +87,9 @@ export function useOpenProjectBookIds(
 
   // Undefined while disabled: `useEvent` subscribes to nothing when its event is undefined, so a
   // disabled hook does not even listen for the web view changes it would have reacted to.
-  const onDidOpenWebView = useMemo(
-    () => (isEnabled ? getNetworkEvent(EVENT_NAME_ON_DID_OPEN_WEB_VIEW) : undefined),
-    [isEnabled],
-  );
-  useEvent(onDidOpenWebView, refreshOpenWebViews);
-  const onDidUpdateWebView = useMemo(
-    () => (isEnabled ? getNetworkEvent(EVENT_NAME_ON_DID_UPDATE_WEB_VIEW) : undefined),
-    [isEnabled],
-  );
-  useEvent(onDidUpdateWebView, refreshOpenWebViews);
-  const onDidCloseWebView = useMemo(
-    () => (isEnabled ? getNetworkEvent(EVENT_NAME_ON_DID_CLOSE_WEB_VIEW) : undefined),
-    [isEnabled],
-  );
-  useEvent(onDidCloseWebView, refreshOpenWebViews);
+  useEvent(isEnabled ? onDidOpenWebView : undefined, refreshOpenWebViews);
+  useEvent(isEnabled ? onDidUpdateWebView : undefined, refreshOpenWebViews);
+  useEvent(isEnabled ? onDidCloseWebView : undefined, refreshOpenWebViews);
 
   const openProjectIds = useMemo(
     () => (isEnabled ? getOpenProjectIds(activeProjectId) : EMPTY_IDS),
@@ -139,7 +126,7 @@ export function useOpenProjectBookIds(
     // this flag skips the resulting pointless state update after unmount. Unsubscription itself is
     // handled by `unsubscribers` sealing once runAllUnsubscribers starts, below.
     let disposed = false;
-    const unsubscribers = new UnsubscriberAsyncList('Open resource book ids');
+    const unsubscribers = new UnsubscriberAsyncList('Open project book ids');
 
     projectIds.forEach((projectId) => {
       papiFrontendProjectDataProviderService
