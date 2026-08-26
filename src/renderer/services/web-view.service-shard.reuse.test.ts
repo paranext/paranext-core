@@ -206,4 +206,21 @@ describe("openWebView's '?' reuse search", () => {
       module.openWebView('test.type', { type: 'tab' } as Layout, { existingProjectId: 'B' }),
     ).rejects.toThrow(/existingProjectId requires existingId/);
   });
+  test('a window layout arriving on a create reports a lost race, not a routing-contract break', async () => {
+    // Main resolved this window as holding the web view the caller asked to reuse, then the web
+    // view left before this call arrived. The dock's own error for a `'window'` layout says the
+    // routing contract broke, which would send a reader hunting for a broken invariant instead of
+    // a tab that moved.
+    const module = await openWebViewOver([]);
+
+    await expect(
+      module.openWebView(
+        'test.type',
+        { type: 'window' } as Layout,
+        // The reuse search misses and the caller allows a create, which is the only route to the
+        // guard: a search that declines to create returns before reaching it
+        findOptions({ createNewIfNotFound: true }),
+      ),
+    ).rejects.toThrow(/no longer holds/);
+  });
 });

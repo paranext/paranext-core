@@ -24,7 +24,12 @@ describe('deciding what happens to a window that reports its dock empty', () => 
     closeWindow = vi.fn();
     markedIds = new Set();
     markWindowClosing = vi.fn((windowId: number) => markedIds.add(windowId));
-    handler = createWindowEmptinessHandler({ countWindows, closeWindow, markWindowClosing });
+    handler = createWindowEmptinessHandler({
+      countWindows,
+      closeWindow,
+      isWindowTracked: () => true,
+      markWindowClosing,
+    });
   });
 
   test('a window born empty docks Home rather than closing, even as the only window', async () => {
@@ -201,6 +206,7 @@ describe('re-checking whether a window is still empty before closing it', () => 
     return createWindowEmptinessHandler({
       countWindows,
       closeWindow,
+      isWindowTracked: () => true,
       markWindowClosing,
       // `markedIds` stands in for the shared registry in main: `markWindowClosing` writes it, the
       // count subtracts it, and the user's own close button writes it too — so a scenario that
@@ -420,6 +426,7 @@ describe('a close decided outside this handler', () => {
       const handler = createWindowEmptinessHandler({
         countWindows,
         closeWindow,
+        isWindowTracked: () => true,
         markWindowClosing,
         isWindowClosing: (windowId: number) => closingIds.has(windowId),
       });
@@ -444,6 +451,7 @@ describe('a close decided outside this handler', () => {
     const handler = createWindowEmptinessHandler({
       countWindows: () => 2,
       closeWindow,
+      isWindowTracked: () => true,
       markWindowClosing,
       isWindowClosing: (windowId: number) => closingIds.has(windowId),
     });
@@ -452,5 +460,51 @@ describe('a close decided outside this handler', () => {
 
     expect(closeWindow).not.toHaveBeenCalled();
     expect(markWindowClosing).not.toHaveBeenCalled();
+  });
+  describe('reports naming a window main is not tracking', () => {
+    test('an untracked id is refused without deciding anything', async () => {
+      const countWindows = vi.fn(() => 1);
+      const closeWindow = vi.fn();
+      const markWindowClosing = vi.fn();
+      const handler = createWindowEmptinessHandler({
+        countWindows,
+        closeWindow,
+        isWindowTracked: () => false,
+        markWindowClosing,
+      });
+
+      const response = await handler(999, 'emptied-by-removal');
+
+      expect(response).toEqual({ action: 'open-home' });
+      expect(closeWindow).not.toHaveBeenCalled();
+      expect(markWindowClosing).not.toHaveBeenCalled();
+    });
+
+    test('a real window later minted with a refused id is still answered normally', async () => {
+      // The damage a fabricated report does is not the answer it gets — it is being recorded in the
+      // closing set, which nothing removes for a window that never existed. Electron reuses ids
+      // within a process, so the window that eventually holds that number would be told it is
+      // closing, never be closed, and latch there refusing content for the rest of the session.
+      const closeWindow = vi.fn();
+      const markWindowClosing = vi.fn();
+      let isTracked = false;
+      const handler = createWindowEmptinessHandler({
+        countWindows: () => 2,
+        closeWindow,
+        isWindowTracked: () => isTracked,
+        markWindowClosing,
+      });
+
+      await handler(7, 'emptied-by-removal');
+
+      // Electron now hands out 7 for real
+      isTracked = true;
+      const response = await handler(7, 'emptied-by-removal');
+
+      // A decided close answers `closing` and marks the window; the close itself is scheduled a
+      // tick later, so the mark is the synchronous evidence the decision was actually taken
+      expect(response).toEqual({ action: 'closing' });
+      expect(markWindowClosing).toHaveBeenCalledWith(7);
+    });
   });
 });

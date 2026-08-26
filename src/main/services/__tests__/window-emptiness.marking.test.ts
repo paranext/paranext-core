@@ -38,7 +38,12 @@ describe('marking a window closing at the moment its close is decided', () => {
     countWindows = vi.fn();
     closeWindow = vi.fn();
     markWindowClosing = vi.fn();
-    handler = createWindowEmptinessHandler({ countWindows, closeWindow, markWindowClosing });
+    handler = createWindowEmptinessHandler({
+      countWindows,
+      closeWindow,
+      isWindowTracked: () => true,
+      markWindowClosing,
+    });
   });
 
   test('an emptied-by-removal close marks the window closing at decision time', async () => {
@@ -124,6 +129,7 @@ describe('a window nothing can run in is not a reason to close the last working 
     const handler = createWindowEmptinessHandler({
       countWindows: countWindowsThatCouldBeTheLastOne,
       closeWindow,
+      isWindowTracked: () => true,
       markWindowClosing,
     });
 

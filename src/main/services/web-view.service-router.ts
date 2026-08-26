@@ -394,13 +394,12 @@ async function findLayoutTargetOwner(
  * tab is appearing in front of the user there anyway and taking OS focus would interrupt whatever
  * else they are doing to show it to them.
  *
- * It happens only once some window in this app has been focused, which keeps a raise from firing
- * during startup before the user has interacted. That is the whole of what the gate establishes:
- * the flag latches on the first focus and nothing clears it, so this does NOT know whether the app
- * holds focus right now, and a raise can still take focus from another application. An open routed
- * here need not be something the user just asked for — an extension can re-open a web view by id at
- * any moment — and pulling the app in front of whatever they are working in is the wrong answer to
- * every one of those, so the blur-aware check that would make this safe is TODO(PT-4281).
+ * It happens only while this application holds OS focus. An open routed here need not be something
+ * the user just asked for — an extension can re-open a web view by id at any moment — so a raise
+ * that fired while they were working in another application would pull this app in front of them
+ * for something they never requested. `isApplicationFocused()` is blur-aware, so it answers whether
+ * the foreground is ours at this instant rather than whether it once was; it also rules out a raise
+ * during startup, before anything has been focused at all.
  *
  * It happens only when the caller did not opt out with `bringToFront: false` — see the comment
  * below.
@@ -643,11 +642,20 @@ async function openWebViewInNewWindow(
 /** Where a move sends a web view: an existing window's id, or `'new'` for a window created for it */
 type MoveWebViewTarget = number | 'new';
 
-/** How many times {@link findWebViewAdoptedAfterTimeout} asks the target whether the adopt landed */
-const LATE_ADOPT_PROBE_ATTEMPTS = 3;
+/**
+ * How many times {@link findWebViewAdoptedAfterTimeout} asks the target whether the adopt landed.
+ *
+ * Attempts and delay are sized together to cover a provider slower than the request timeout on a
+ * machine slower than the one this was written on. Ending the probe early does not fail the move —
+ * it drops into recovery, which reopens the web view elsewhere while the target may still be
+ * finishing, and that is the collision this probe exists to avoid. So the cost of probing too
+ * briefly is worse than the cost of a user waiting a few seconds longer for a move that was already
+ * in trouble.
+ */
+const LATE_ADOPT_PROBE_ATTEMPTS = 4;
 
-/** How long {@link findWebViewAdoptedAfterTimeout} waits between attempts */
-const LATE_ADOPT_PROBE_RETRY_DELAY_MS = 2_000;
+/** How long {@link findWebViewAdoptedAfterTimeout} waits between attempts. See the attempt count */
+const LATE_ADOPT_PROBE_RETRY_DELAY_MS = 3_000;
 
 /**
  * Whether a move's target holds the web view whose adopt call timed out — asked before any

@@ -50,6 +50,19 @@ export type WindowEmptinessHandlerDependencies = {
   /** Close the window with the given id */
   closeWindow: (windowId: number) => void;
   /**
+   * Whether the reported id names a window main is actually tracking.
+   *
+   * A report arrives over the network and names its own subject, so any process can report any
+   * number. An id main does not know is not a window that emptied — it is either a window already
+   * gone or a number nobody minted — and answering it does more than waste a decision: a `closing`
+   * answer records the id in this handler's closing set, where nothing will ever remove it, because
+   * removal happens when the window is seen to go away and this one never existed. Electron reuses
+   * ids within a process, so a real window minted with that number later would be told `closing` on
+   * its first report, never be closed, and latch there refusing content for the rest of the
+   * session.
+   */
+  isWindowTracked: (windowId: number) => boolean;
+  /**
    * Record that this window's close has been decided, so the count above excludes it from every
    * later decision and nothing routes new content into it while its close is in flight
    */
@@ -88,8 +101,13 @@ export type WindowEmptinessHandlerDependencies = {
  * Bounded and never retried: a window that is slow to answer is holding up every other window's
  * decision behind it (they are taken one at a time), and the answer it owes is one a renderer reads
  * out of a variable.
+ *
+ * Sized for the slowest machine rather than the fastest, because the two ways of being wrong are
+ * not equally bad. Waiting too long leaves a window the user cannot work in on screen a moment
+ * longer; giving up too early closes a window whose content was on its way, and the thing the user
+ * asked to open never appears. Generous here costs a pause; mean here costs the operation.
  */
-const CONTENT_RECHECK_TIMEOUT_MS = 2000;
+const CONTENT_RECHECK_TIMEOUT_MS = 5000;
 
 /**
  * Build a `windowLayout:emptied` handler over the given dependencies.
@@ -160,6 +178,15 @@ export function createWindowEmptinessHandler(
     if (typeof windowId !== 'number' || !isWindowEmptiedReason(reason)) {
       logger.warn(
         `windowLayout:emptied called with invalid arguments (windowId: ${windowId}, reason: ${reason}); answering open-home`,
+      );
+      return { action: 'open-home' };
+    }
+
+    // Ahead of every decision, including the closing-set read below, because the damage is done by
+    // recording the id rather than by acting on it — see `isWindowTracked`.
+    if (!deps.isWindowTracked(windowId)) {
+      logger.warn(
+        `windowLayout:emptied named window ${windowId}, which is not tracked; answering open-home without deciding anything`,
       );
       return { action: 'open-home' };
     }
