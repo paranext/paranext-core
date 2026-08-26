@@ -37,7 +37,14 @@ vi.mock('@shared/services/logger.service', () => ({
   logger: { error: mocks.loggerError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 
-/** Stand-in for a BrowserWindow — the service only reads `id` and `isDestroyed` */
+/**
+ * Stand-in for a BrowserWindow.
+ *
+ * `id` is Electron's and the service never reads it — it only tells these stand-ins apart in
+ * assertions about which window objects are still tracked. A window's PLATFORM id is whatever
+ * {@link addWindow} hands back, so any test naming a window to the service must use that and not
+ * this number, which is free to disagree with it.
+ */
 function fakeWindow(id: number): BrowserWindow {
   // Constructing a real BrowserWindow needs the Electron runtime; these are the only members the
   // service under test touches
@@ -129,14 +136,47 @@ describe('window state tracking', () => {
   });
 
   test('falls back to the first window when nothing is focused', () => {
-    addWindow(fakeWindow(7));
+    const firstWindowId = addWindow(fakeWindow(7));
     addWindow(fakeWindow(8));
 
-    expect(getTargetWindowId()).toBe(7);
+    expect(getTargetWindowId()).toBe(firstWindowId);
   });
 
   test('has no target when no windows are open', () => {
     expect(getTargetWindowId()).toBeUndefined();
+  });
+
+  describe('minting window ids', () => {
+    test('never hands out an id a closed window already had', () => {
+      const first = fakeWindow(1);
+      const second = fakeWindow(2);
+      const firstId = addWindow(first);
+      const secondId = addWindow(second);
+      removeWindow(first, firstId);
+      removeWindow(second, secondId);
+
+      const thirdId = addWindow(fakeWindow(3));
+      const fourthId = addWindow(fakeWindow(4));
+
+      // Asserted as the whole sequence rather than as "the new ids differ from the old ones": the
+      // sequence is what a reuse would break, and it also pins the increasing order that the
+      // router's tie-breaks and the e2e page ordering read as creation order.
+      expect([firstId, secondId, thirdId, fourthId]).toEqual([1, 2, 3, 4]);
+    });
+
+    test('continues the sequence across a restart rather than starting over', async () => {
+      const firstId = addWindow(fakeWindow(1));
+      const secondId = addWindow(fakeWindow(2));
+      expect([firstId, secondId]).toEqual([1, 2]);
+
+      // A restart is a fresh module over the same storage: drop the in-memory counter without
+      // clearing what it wrote. Reaching for `resetForTesting` here would clear both and prove
+      // nothing, since starting over is the failure this is looking for.
+      vi.resetModules();
+      const reloaded = await import('@main/services/window-state.service');
+
+      expect(reloaded.addWindow(fakeWindow(3))).toBe(3);
+    });
   });
 
   test('reports no target once the last window is removed, so callers fail loudly', () => {
