@@ -94,8 +94,8 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
  * "Unsynced changes" — are not implemented, because none is derivable from what Send/Receive
  * currently emits; each needs a new event from that extension, so showing them now would mean
  * guessing at state, which is precisely the untruthfulness this control exists to fix. Sync FAILURE
- * is derivable (from the last sync's per-project results) and is reported. See ADR-0024 in
- * `.context/standards/Architecture-Decisions.md`.
+ * is derivable (from the last sync's per-project results) and is reported. See
+ * `adr-toolbar-sync-status-is-local` in `.context/standards/Architecture-Decisions.md`.
  */
 export function SyncStatusButton() {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
@@ -152,9 +152,10 @@ export function SyncStatusButton() {
   }, [status]);
 
   const handleCancel = useCallback(async () => {
-    // The editor's sync-blocked banner (`extensions/src/platform-scripture-editor/`) offers the same
-    // cancel and can be on screen at the same time as this popover; neither observes the other's
-    // click. See ADR-0024 in `.context/standards/Architecture-Decisions.md`.
+    // The editor's sync-blocked banner (`extensions/src/platform-scripture-editor/`) offers the
+    // same cancel and can be on screen at the same time as this popover; neither observes the
+    // other's click. See `adr-toolbar-sync-status-is-local` in
+    // `.context/standards/Architecture-Decisions.md`.
     // Single-shot: one cancel request per click-through. Disabled immediately so a second click
     // can't queue another request, and re-enabled only if this one is rejected while a sync is
     // still running, so the user can retry.
@@ -262,7 +263,7 @@ export function SyncStatusButton() {
   // the status leaving `syncing` and by the popover being reopened, at the cost of a genuinely new
   // overlapping sync keeping a dim "Cancelling…" until the whole union goes idle. That is the safe
   // half of the trade: the alternative offers a live Cancel while a cancel is still in flight.
-  // Settling it positively needs a monotonic sync-episode id in `SyncState` (ADR-0024 follow-up 4).
+  // Settling it positively needs a monotonic sync-episode id in `SyncState` (`adr-toolbar-sync-status-is-local` follow-up 4).
   useEffect(() => {
     if (status === 'syncing') {
       // A running sync has no settled outcome to attribute to a cancel yet.

@@ -347,8 +347,8 @@ function seedWithRetry<T>({
  * (`syncOnProjectSwitch`). That gap is what {@link SyncActivitySnapshot} closes: it is derived from
  * the C# sync run marker rather than the extension's claim map, so it sees every path including
  * these two. This hook unions the two signals (see the `status` derivation below) rather than
- * relying on the claim alone. See ADR-0024 in `.context/standards/Architecture-Decisions.md` for
- * the fuller history of that gap.
+ * relying on the claim alone. See `adr-toolbar-sync-status-is-local` in
+ * `.context/standards/Architecture-Decisions.md` for the fuller history of that gap.
  *
  * Projects are resolved from project metadata rather than the event, which carries no ids. They are
  * absent (empty, with `status` still `syncing`) in several cases callers must handle: a

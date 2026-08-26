@@ -87,8 +87,8 @@ const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 //
 // Individual controls then COLLAPSE by width: `useShrinkStep` publishes a discrete step from a
 // measured width and the labels below pick a shorter form at each one.
-// ADR-toolbar-shrink-measurement records why that measurement is done in JS rather than with CSS
-// container queries — their failure mode here is silent.
+// `adr-toolbar-shrink-measurement` records why that measurement is done in JS rather than
+// with CSS container queries — their failure mode here is silent.
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
