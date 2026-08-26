@@ -45,7 +45,12 @@ re-records that row: the pin is the last SHA *this round* put on the remote, not
 saw.
 
 `behind_by > 0` or `mergeable: CONFLICTING` → **rebase before anything else**; every fix estimate is
-against a tree that will change. On a stack each PR's base is the branch below it, not `main`.
+against a tree that will change. On a stack each PR's base is the branch below it, not `main`, and
+**rebasing a base means restacking every branch above it right then**, bottom up, with 10.1's
+command. A child left on a rewritten base is broken for the rest of the round and its `behind_by`
+will not say so, because that number is measured against a base tip which no longer exists. The
+same holds whenever a base is rewritten later: restack its children with it, or land the fix as a
+new commit rather than a rewrite.
 
 Three traps:
 - **`mergeable: UNKNOWN` is a non-answer, not a pass.** GitHub computes it lazily, so the first
