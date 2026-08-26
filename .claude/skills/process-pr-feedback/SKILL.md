@@ -38,9 +38,11 @@ gh api repos/paranext/paranext-core/compare/<base>...<headRefOid> --jq '{ahead_b
 
 Run this per PR the round covers and record a row each **in `findings.md`**: PR · branch · base ·
 `headRefOid` · behind-count · mergeable. `headRefOid` is also step 10's lease pin, so take it from
-the API rather than `git rev-parse origin/<branch>`, which reports whenever this checkout last
+the API rather than `git rev-parse origin/<branch>`, which reports whatever this checkout last
 fetched. The gates can take days — a pin that lives only in this session's context is one the
-session running step 10 cannot read.
+session running step 10 cannot read. Any push this round makes — the step-0 rebase included —
+re-records that branch's row: the pin is the last SHA *this round* put on the remote, not the one
+it first saw.
 
 `behind_by > 0` or `mergeable: CONFLICTING` → **rebase before anything else**; every fix estimate is
 against a tree that will change. On a stack each PR's base is the branch below it, not `main`.
@@ -219,7 +221,7 @@ SHA that is not on GitHub is a broken citation in public. Approval here also cov
    failure looks exactly like an empty commit. Then
    **re-run step 7's battery at each new tip**, since the restack rewrote the commits it passed on.
 2. **Push** every branch you touched, bottom of the stack first, one command at a time, with
-   `--force-with-lease=<branch>:<the `headRefOid` step 0 recorded>`. Never bare: with no
+   `--force-with-lease=<branch>:<step-0 headRefOid>`. Never bare: with no
    expected value the lease is checked against the remote-tracking ref, which any fetch across the
    two stops has already advanced, so it protects nothing. A restacked branch that is never pushed
    leaves its PR on the old commits while the replies cite a tip that exists only on disk.
