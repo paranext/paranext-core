@@ -6,7 +6,8 @@ import {
   USJ_TYPE,
 } from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
-import { at, isWhiteSpace, slice, split, startsWith } from '../string-util';
+import { isWhiteSpace, split, startsWith } from '../string-util';
+import { GraphemeString } from '../grapheme-string-util';
 import { LocalizeKey } from '../extension-contributions/menus.model';
 import { isString } from '../util';
 
@@ -306,6 +307,9 @@ export async function getLocalizedIdFromBookNumber(
     localizeKey: `Book.${id}`,
     languagesToSearch: [localizationLanguage],
   });
+  // Grapheme-aware `split`, deliberately, even though both separators are single characters: the
+  // string being split is a localized book name, so a separator could sit next to a combining mark
+  // and native splitting would cut through the middle of a cluster. Keep this off native.
   const parts = split(bookName, '-');
   // some entries had a second name inside ideographic parenthesis
   const parts2 = split(parts[0], '\xff08');
@@ -829,8 +833,14 @@ function areUsjContentsEqualExceptWhitespaceInternal(
     // be equal if they are at the end of a block-level marker and the only difference is space at the end.
     // If at the end of a block-level marker with space at the end, take off the final space and compare again
     if (aNormalized !== bNormalized) {
+      // Segment each string once and reuse it. The trim below walks off one grapheme at a time, and
+      // a derived GraphemeString keeps the parent's segmentation, so the loop costs one pass over
+      // the text rather than re-segmenting the whole string on every iteration.
+      const aGraphemes = new GraphemeString(aNormalized);
+      const bGraphemes = new GraphemeString(bNormalized);
+
       // If neither ends in whitespace, they are not equal
-      if (!isWhiteSpace(at(aNormalized, -1) ?? '') && !isWhiteSpace(at(bNormalized, -1) ?? ''))
+      if (!isWhiteSpace(aGraphemes.at(-1) ?? '') && !isWhiteSpace(bGraphemes.at(-1) ?? ''))
         return false;
 
       // If either is not at the end of a block-level marker, they are not equal
@@ -838,12 +848,13 @@ function areUsjContentsEqualExceptWhitespaceInternal(
       if (!isAtEndOfBlockMarker(b, bParent)) return false;
 
       // Trim the end of each string
-      let aTrimmed = aNormalized;
-      while (isWhiteSpace(at(aTrimmed, -1) ?? '')) aTrimmed = slice(aTrimmed, 0, -1);
-      let bTrimmed = bNormalized;
-      while (isWhiteSpace(at(bTrimmed, -1) ?? '')) bTrimmed = slice(bTrimmed, 0, -1);
-      // If they are not equal after trimming, they are not equal
-      if (aTrimmed !== bTrimmed) return false;
+      let aTrimmed = aGraphemes;
+      while (isWhiteSpace(aTrimmed.at(-1) ?? '')) aTrimmed = aTrimmed.slice(0, -1);
+      let bTrimmed = bGraphemes;
+      while (isWhiteSpace(bTrimmed.at(-1) ?? '')) bTrimmed = bTrimmed.slice(0, -1);
+      // If they are not equal after trimming, they are not equal.
+      // Compare the text, not the instances: two GraphemeStrings are never `===` each other.
+      if (aTrimmed.toString() !== bTrimmed.toString()) return false;
     }
   } else if (!aIsString && !bIsString) {
     // We have determined they are not strings, so they must be objects with various simple properties and possibly a `content` array
