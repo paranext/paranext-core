@@ -516,15 +516,13 @@ describe('Tab menu', () => {
   }
 
   const commandsIn = (menu: { items: unknown[] } | undefined) =>
-    (menu?.items ?? []).map((item) =>
+    (menu?.items ?? []).map((item) => {
       // Items are either a command item or a submenu host; both are identified for these assertions
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      'command' in (item as object)
-        ? // eslint-disable-next-line no-type-assertion/no-type-assertion
-          (item as { command: string }).command
-        : // eslint-disable-next-line no-type-assertion/no-type-assertion
-          (item as { id: string }).id,
-    );
+      if (typeof item !== 'object' || !item) return undefined;
+      if ('command' in item && typeof item.command === 'string') return item.command;
+      if ('id' in item && typeof item.id === 'string') return item.id;
+      return undefined;
+    });
 
   test('the shipped document offers both move actions and the float item', async () => {
     const engine =

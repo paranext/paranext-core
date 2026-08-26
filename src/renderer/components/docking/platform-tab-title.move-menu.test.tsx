@@ -378,6 +378,16 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
       </div>,
     );
 
+  /**
+   * The rendered tab title. Throws rather than returning null so a test that expects no forwarding
+   * cannot pass because nothing rendered.
+   */
+  const tabTitleIn = (container: HTMLElement): Element => {
+    const title = container.querySelector('.platform-tab-title');
+    if (!title) throw new Error('The tab title did not render');
+    return title;
+  };
+
   afterEach(() => {
     cleanup();
     vi.mocked(useIsPowerMode).mockReturnValue(true);
@@ -386,28 +396,30 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
 
   it('forwards a contextmenu raised on the tab into the trigger', () => {
     const { container } = renderInTab();
-    const title = container.querySelector('.platform-tab-title');
-    const received: EventTarget[] = [];
-    title?.addEventListener('contextmenu', (event) => received.push(event.target!));
+    const title = tabTitleIn(container);
+    const received: Node[] = [];
+    title.addEventListener('contextmenu', (event) => {
+      if (event.target instanceof Node) received.push(event.target);
+    });
 
     fireEvent.contextMenu(screen.getByTestId('tab'));
 
     // Exactly one forwarded event, and it arrived inside the trigger where Radix can see it
     expect(received).toHaveLength(1);
-    expect(title?.contains(received[0] as Node)).toBe(true);
+    expect(title.contains(received[0])).toBe(true);
   });
 
   it('leaves a contextmenu raised inside the trigger alone', () => {
     // The positive control for the guard: an ordinary right-click on the title already reaches the
     // trigger by bubbling, so forwarding it would double it
     const { container } = renderInTab();
-    const title = container.querySelector('.platform-tab-title');
+    const title = tabTitleIn(container);
     let count = 0;
-    title?.addEventListener('contextmenu', () => {
+    title.addEventListener('contextmenu', () => {
       count += 1;
     });
 
-    fireEvent.contextMenu(title!);
+    fireEvent.contextMenu(title);
 
     expect(count).toBe(1);
   });
@@ -415,9 +427,9 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
   it('does not forward in Simple mode, where the tab menu is not offered', () => {
     vi.mocked(useIsPowerMode).mockReturnValue(false);
     const { container } = renderInTab();
-    const title = container.querySelector('.platform-tab-title');
+    const title = tabTitleIn(container);
     let count = 0;
-    title?.addEventListener('contextmenu', () => {
+    title.addEventListener('contextmenu', () => {
       count += 1;
     });
 
@@ -430,6 +442,15 @@ describe('PlatformTabTitle keyboard access to the tab menu', () => {
 describe('PlatformTabTitle "Move tab to window" submenu', () => {
   const MAIN_WINDOW = { windowId: 1, label: 'MRK — wgPIDGIN', isMain: true };
   const OTHER_WINDOW = { windowId: 2, label: 'Biblical Terms', isMain: false };
+
+  /**
+   * Stand-ins for the web views open in this window. The tab menu only reads their ids, so a full
+   * `WebViewDefinition` each would be noise; the assertion is what keeps them to that one field.
+   */
+  const openWebViews = (...ids: string[]): ReturnType<typeof getAllOpenWebViewDefinitionsSync> =>
+    // The literals carry only `id` on purpose, so TypeScript cannot see them as full definitions
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    ids.map((id) => ({ id })) as ReturnType<typeof getAllOpenWebViewDefinitionsSync>;
 
   /** Mount a web view tab and open its menu, which is when the window list is read */
   const openMenuOn = async (windows: unknown[]) => {
@@ -446,12 +467,9 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     vi.mocked(sendCommand).mockReset();
     vi.mocked(logger.warn).mockClear();
     vi.mocked(notificationService.send).mockClear();
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'web-view-1' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'web-view-2' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
-    ]);
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue(
+      openWebViews('web-view-1', 'web-view-2'),
+    );
     globalThis.windowId = undefined;
   });
 
@@ -510,10 +528,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
     // primary entry AND holds a single web view. `buildTabMenuItems` is unit-tested for the flag,
     // but nothing else exercises the three reads that compute it here
     globalThis.windowId = '2';
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'web-view-1' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
-    ]);
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue(openWebViews('web-view-1'));
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
 
     expect(screen.queryByText('Move tab to new window')).not.toBeInTheDocument();
@@ -526,12 +541,9 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   it('keeps move-to-new-window when the window holds more than this tab', async () => {
     // The other side of the same wiring: same window, more than one web view
     globalThis.windowId = '2';
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'web-view-1' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'web-view-2' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
-    ]);
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue(
+      openWebViews('web-view-1', 'web-view-2'),
+    );
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
 
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
@@ -540,10 +552,7 @@ describe('PlatformTabTitle "Move tab to window" submenu', () => {
   it('keeps move-to-new-window for a lone tab in the window holding the primary role', async () => {
     // And the third read: alone, but this IS the primary window, so the move is not a no-op
     globalThis.windowId = '1';
-    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue([
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      { id: 'web-view-1' } as ReturnType<typeof getAllOpenWebViewDefinitionsSync>[number],
-    ]);
+    vi.mocked(getAllOpenWebViewDefinitionsSync).mockReturnValue(openWebViews('web-view-1'));
     await openMenuOn([MAIN_WINDOW, OTHER_WINDOW]);
 
     expect(screen.getByText('Move tab to new window')).toBeInTheDocument();
