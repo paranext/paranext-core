@@ -28,7 +28,7 @@
 #
 # The wrap only helps when the Electron app is launched INSIDE it. Suites built on
 # fixtures/cdp.fixture.ts attach over port 9223 to an app you started separately
-# (all of tests/enhanced-resources/, plus isolated/title-bar/ and isolated/navigation-history/),
+# (all of tests/enhanced-resources/, plus isolated/title-bar/),
 # so wrapping the Playwright process alone changes nothing for them. On Linux
 # .erb/scripts/refresh.sh already starts that app under its own Xvfb, so those runs are off the
 # desktop without this script.
