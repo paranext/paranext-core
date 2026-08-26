@@ -45,9 +45,9 @@ const COMMAND_TIMEOUT_MS = 30_000;
 // approach as comment.fixture.ts.
 test.use({
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
-  // The verse-in-viewport assertions are geometry: how far down the pane Obadiah 1:21 sits, and
-  // therefore whether it starts off screen, is decided by the window size. 1280x800 is the size
-  // the book choice above is reasoned against.
+  // The verse-in-viewport assertions are geometry: how far down the pane Lamentations 3:66 sits,
+  // and therefore whether it starts off screen, is decided by the window size. 1280x800 is the size
+  // the chapter choice above is reasoned against.
   windowSize: { width: 1280, height: 800 },
 });
 
@@ -130,8 +130,8 @@ test.describe('scroll group sync', () => {
   //   read-only viewer rather than replacing it.
   // - firstRunComplete: without it the app starts on the first-run wizard, a modal that aria-hides
   //   the rest of the app and swallows pointer events.
-  // - interfaceLanguage: the toolbar assertion below reads the English book name "Obadiah 1:15"
-  //   off the BCV trigger.
+  // - interfaceLanguage: the toolbar assertion below reads the English book name
+  //   "Lamentations 3:60" off the BCV trigger.
   test.beforeAll(() => {
     restoreSettings = preConfigureSettings({
       'platform.firstRunComplete': true,
