@@ -735,17 +735,25 @@ export async function waitForOverlayGone(page: Page, timeout: number): Promise<v
 
 /**
  * LocalStorage key persisting onboarding-tour completion. Mirrors ONBOARDING_TOUR_DONE_KEY in
- * src/renderer/services/first-run-store.ts — keep in sync (renderer source cannot be imported into
- * the Playwright Node context).
+ * src/renderer/components/onboarding-tour/onboarding-tour.store.ts — keep in sync (renderer source
+ * cannot be imported into the Playwright Node context).
  */
 export const ONBOARDING_TOUR_DONE_KEY = 'platform-bible.onboardingTourComplete';
 
 /** Options accepted by {@link waitForAppReady}. */
 export interface WaitForAppReadyOptions {
   /**
+   * Budget for the whole readiness sequence, shared across its three waits.
+   *
+   * @default 90_000
+   */
+  timeout?: number;
+  /**
    * Set true only in tests that are ABOUT the onboarding tour and need it to show. By default the
    * helper suppresses the tour (see {@link waitForAppReady}) because its full-screen overlay blocks
    * all pointer events for every other test.
+   *
+   * @default false
    */
   allowOnboardingTour?: boolean;
 }
@@ -767,30 +775,26 @@ export interface WaitForAppReadyOptions {
  */
 export async function waitForAppReady(
   page: Page,
-  // Not a default parameter (would trip default-param-last, since `options` follows it);
-  // callers pass `undefined` to keep the default while supplying options.
-  timeout?: number,
-  options?: WaitForAppReadyOptions,
+  { timeout = 90_000, allowOnboardingTour = false }: WaitForAppReadyOptions = {},
 ): Promise<void> {
-  const effectiveTimeout = timeout ?? 90_000;
   const start = Date.now();
   await page.waitForSelector('div[class*="dock-layout"]', {
     state: 'attached',
-    timeout: effectiveTimeout,
+    timeout,
   });
   // Waited on together: the renderer starts them together too, so they arrive within a poll of one
   // another and waiting one after another would spend the timeout budget several times over
-  const remainingForShards = Math.max(1000, effectiveTimeout - (Date.now() - start));
+  const remainingForShards = Math.max(1000, timeout - (Date.now() - start));
   await Promise.all(
     SCOPED_SHARD_METHODS.map((scopedShardMethod) =>
       waitForPapiMethodRegistered(scopedShardMethod, DEFAULT_WEBSOCKET_PORT, remainingForShards),
     ),
   );
-  const remainingForOverlay = Math.max(1000, effectiveTimeout - (Date.now() - start));
+  const remainingForOverlay = Math.max(1000, timeout - (Date.now() - start));
   // Services like settings and theme finish async work after the dock layout mounts and the shards
   // register, so the overlay can outlast both earlier signals.
   await waitForOverlayGone(page, remainingForOverlay);
-  if (!options?.allowOnboardingTour) {
+  if (!allowOnboardingTour) {
     await page.evaluate((key) => {
       localStorage.setItem(key, 'true');
     }, ONBOARDING_TOUR_DONE_KEY);
