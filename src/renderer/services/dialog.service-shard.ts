@@ -373,7 +373,8 @@ const dialogServiceShard: IDialogServiceShard = {
 /** Register the network object that backs the PAPI dialog service for this window */
 export async function startDialogServiceShard(): Promise<void> {
   await initialize();
-  if (!globalThis.windowId) throw new Error('Cannot start DialogService: windowId is not set');
+  if (globalThis.windowId === undefined)
+    throw new Error('Cannot start DialogService: windowId is not set');
 
   // Registered under this window's scoped name (e.g. `DialogService-1`) so every window can own its
   // own dialogs. The object type and window id are how the main process's dialog service router

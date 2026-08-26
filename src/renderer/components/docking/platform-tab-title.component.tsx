@@ -333,9 +333,9 @@ export function PlatformTabTitle({
       return;
     }
 
-    const otherWindows = windows.filter((window) => `${window.windowId}` !== globalThis.windowId);
+    const otherWindows = windows.filter((window) => window.windowId !== globalThis.windowId);
     const isThisWindowSecondary = !windows.some(
-      (window) => `${window.windowId}` === globalThis.windowId && window.isMain,
+      (window) => window.windowId === globalThis.windowId && window.isMain,
     );
 
     // Counting this window's tabs is guarded separately because it can fail for reasons that say
