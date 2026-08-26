@@ -96,8 +96,8 @@ export const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
  * "Unsynced changes" — are not implemented, because none is derivable from what Send/Receive
  * currently emits; each needs a new event from that extension, so showing them now would mean
  * guessing at state, which is precisely the untruthfulness this control exists to fix. Sync FAILURE
- * is derivable (from the last sync's per-project results) and is reported. See ADR-0024 in
- * `.context/standards/Architecture-Decisions.md`.
+ * is derivable (from the last sync's per-project results) and is reported. See
+ * `adr-toolbar-sync-status-is-local` in `.context/standards/Architecture-Decisions.md`.
  */
 export function SyncStatusButton() {
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
@@ -121,9 +121,10 @@ export function SyncStatusButton() {
   statusRef.current = status;
 
   const handleCancel = useCallback(async () => {
-    // The editor's sync-blocked banner (`extensions/src/platform-scripture-editor/`) offers the same
-    // cancel and can be on screen at the same time as this popover; neither observes the other's
-    // click. See ADR-0024 in `.context/standards/Architecture-Decisions.md`.
+    // The editor's sync-blocked banner (`extensions/src/platform-scripture-editor/`) offers the
+    // same cancel and can be on screen at the same time as this popover; neither observes the
+    // other's click. See `adr-toolbar-sync-status-is-local` in
+    // `.context/standards/Architecture-Decisions.md`.
     // Single-shot: one cancel request per click-through. Disabled immediately so a second click
     // can't queue another request, and re-enabled only if this one is rejected while a sync is
     // still running, so the user can retry.
