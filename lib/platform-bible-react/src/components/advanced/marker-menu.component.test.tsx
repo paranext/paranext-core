@@ -401,3 +401,83 @@ describe('MarkerMenu — consumer-disabled rows', () => {
     expect(row).not.toHaveTextContent('Deprecated');
   });
 });
+
+describe('MarkerMenu — row layout', () => {
+  const ITEMS = [
+    { marker: 'p', title: 'Paragraph', subtitle: 'Normal paragraph text', action: vi.fn() },
+  ];
+
+  it('renders the marker code as code, not prose', () => {
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    expect(screen.getByText('p').className).toMatch(/(?:^|\s)tw:font-mono(?:\s|$)/);
+  });
+
+  it('places the detail after the title so it reads as a trailing annotation rather than a second line', () => {
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    // Reading the row's text in document order says "detail comes after title" directly, and
+    // survives the two being nested differently — which a `compareDocumentPosition` bitmask check
+    // does not.
+    const row = screen.getByRole('option', { name: /Paragraph/ });
+
+    expect(row.textContent).toMatch(/Paragraph.*Normal paragraph text/);
+  });
+
+  it('renders the detail smaller and muted so it never competes with the title', () => {
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    const detail = screen.getByText('Normal paragraph text');
+    expect(detail.className).toMatch(/(?:^|\s)tw:text-xs(?:\s|$)/);
+    expect(detail.className).toMatch(/(?:^|\s)tw:text-muted-foreground(?:\s|$)/);
+    expect(detail.className).toMatch(/(?:^|\s)tw:truncate(?:\s|$)/);
+  });
+
+  it('keeps both the title and the detail able to clip, so neither wraps in a narrow popover', () => {
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    expect(screen.getByText('Paragraph').className).toMatch(/(?:^|\s)tw:min-w-0(?:\s|$)/);
+    expect(screen.getByText('Normal paragraph text').className).toMatch(
+      /(?:^|\s)tw:min-w-0(?:\s|$)/,
+    );
+  });
+
+  it('weights the detail to give up its space first, so the title keeps as much of the row as it can', () => {
+    // The title identifies the row; the detail restates it. Both truncate, but a shrink factor
+    // this lopsided means the detail is down to an ellipsis before the title loses a character.
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    expect(screen.getByText('Normal paragraph text').className).toMatch(
+      /(?:^|\s)tw:shrink-\[9999\](?:\s|$)/,
+    );
+    expect(screen.getByText('Paragraph').className).toMatch(/(?:^|\s)tw:shrink(?:\s|$)/);
+  });
+
+  it('keeps the detail reachable at every width, since the popover has its own fixed width', () => {
+    // The menu portals out of the toolbar, so the toolbar's width says nothing about how much room
+    // the popover has. CSS truncation handles narrow popovers; the `title` attribute keeps the full
+    // text available either way.
+    render(<MarkerMenu localizedStrings={DEFAULT_LOCALIZED_STRINGS} markerMenuItems={ITEMS} />);
+
+    expect(screen.getByText('Normal paragraph text')).toHaveAttribute(
+      'title',
+      'Normal paragraph text',
+    );
+  });
+
+  it('renders a row with no detail as title only', () => {
+    render(
+      <MarkerMenu
+        localizedStrings={DEFAULT_LOCALIZED_STRINGS}
+        markerMenuItems={[{ marker: 'q1', title: 'Poetry line 1', action: vi.fn() }]}
+      />,
+    );
+
+    // Two children — the marker slot and the title — with no empty third element where the detail
+    // would sit.
+    const row = screen.getByRole('option', { name: /Poetry line 1/ });
+    const titleRow = screen.getByText('Poetry line 1').parentElement;
+    expect(titleRow?.children).toHaveLength(1);
+    expect(row).toHaveTextContent('q1');
+  });
+});

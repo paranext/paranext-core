@@ -20,23 +20,28 @@ step, no automation. Just a record.
   fold the rule into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
   `.claude/rules/` file — that is what the agents read and enforce on the next feature. This log
   keeps the rationale and history; the standards keep the current rule.
-- **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-NNNN` instead of deleting
-  it; add the new decision as a new entry.
-- **Append at the end**, newest last. Number entries `ADR-NNNN`.
-- **Numbers are claimed at merge, not at write.** Several branches in flight at once each append the
-  next free number as of the day they branched, so two unmerged branches routinely carry the SAME
-  number for different decisions — and because the file is append-only, nothing catches it: the
-  second merge simply leaves `main` with two identical headings. Before merging a PR that adds an
-  entry, re-read the last heading on `main` and renumber yours to follow it, updating any
-  cross-references. Whoever merges second does the renumbering.
+- **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-<slug>` instead of
+  deleting it; add the new decision as a new entry.
+- **Append at the end**, newest last. Identify entries `ADR-<slug>`, where the slug is a short
+  kebab-case name for the decision's subject — 3 to 5 words, the same style as the repo's rule and
+  skill names (`ADR-toolbar-shrink-measurement`, `ADR-simple-mode-column-minimums`). The heading
+  still carries the full title after it.
+- **A slug is claimed at write and never has to move.** This replaces sequential `ADR-NNNN`
+  numbering, which collided constantly: several branches in flight each appended the next free
+  number as of the day they branched, so two unmerged branches routinely carried the SAME number for
+  different decisions, and because the file is append-only nothing caught it — the second merge just
+  left `main` with two identical headings, and whoever merged second had to renumber the entry and
+  chase its cross-references. Two branches picking the same slug would mean they are describing the
+  same decision, which is worth catching rather than papering over. Entries written before this
+  keep their numbers; don't renumber them.
 
 ### Entry template
 
 ```markdown
-## ADR-NNNN: {short title}
+## ADR-{slug}: {short title}
 
 - **Date:** YYYY-MM-DD
-- **Status:** Proposed | Accepted | Superseded by ADR-NNNN
+- **Status:** Proposed | Accepted | Superseded by ADR-{slug}
 - **Context:** what situation forced a decision (with file:line / source where useful).
 - **Decision:** what we chose.
 - **Alternatives:** what we considered and why we rejected/deferred them.
@@ -1429,7 +1434,78 @@ step, no automation. Just a record.
   future reader.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
-## ADR-0029: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
+
+## ADR-toolbar-shrink-measurement: Responsive toolbars measure their own width in JS, not with CSS container queries
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** Toolbar items were disappearing at narrow widths — most seriously the
+  structure-protection lock, a safety indicator, which vanished entirely in Simple mode at the
+  smallest window. Making items shrink in steps instead needs a width signal. Tailwind container
+  queries are the obvious mechanism and were already used in two places, but both were broken:
+  `platform-enhanced-resources`' tab bar had written `tw-@container/toolbar` with a dash where
+  Tailwind v4's prefix needs `tw:`, so the class emitted nothing, the container was never
+  established, and its four tab labels were hidden at every width — silently, for as long as that
+  code had shipped. `manage-books-dialog.component.tsx` records the same conclusion reached
+  independently (its `@md/…:` variants never reached the web view bundle), and
+  `platform-tab-title.component.tsx` records a third failure, where `container-type: inline-size`
+  corrupted rc-dock's content-driven ancestor sizing.
+- **Decision:** Width-driven collapse goes through `useShrinkStep` — a `ResizeObserver` on the
+  toolbar root that maps width to a discrete step, published to descendants via
+  `ShrinkStepContext`. Items read the step and pick a label form. `ToolbarCompoundLabel` encodes the
+  shared rule that a two-field label always sacrifices its second field first.
+- **Alternatives:** **Fix the prefix and keep container queries** — rejected: it repairs one
+  instance of a mechanism that has now failed three times in this repo, and its failure mode is
+  silent (no class, no error, no visible difference until someone resizes). **A hook per component**
+  — rejected: three toolbars would each grow their own observer and thresholds. **Measure in the
+  consumer and pass a prop** — rejected: every consumer would re-derive the same ladder.
+- **Consequences:** One observer per toolbar rather than per item. Steps are testable under
+  jsdom, which CSS queries are not. The cost is that thresholds are pixel constants that must be
+  tuned by eye, and that a consumer reading the step must render *inside* the toolbar — a component
+  that renders the provider sits above it and silently reads the default. Two existing hand-rolled
+  `ResizeObserver` width thresholds (`platform-tab-title`, `manage-books-dialog`) were left alone
+  and could migrate later.
+- **Source:** PT-4344.
+
+## ADR-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** Simple mode's three columns each carried `panelLock.minWidth: 300`, totalling 900px
+  inside a window that could be dragged to 800px. The dock overflowed and the third column was
+  reachable only by scrolling. UX then confirmed a 900px window minimum is safe (2025 analytics:
+  99.83% of 11,587 users on screens 900px or wider), which appears to make three 300px columns fit
+  exactly — but it does not. rc-dock adds `(children - 1) * 4` to a box's minimum width in its own
+  arithmetic, a hard-coded 4px per divider unrelated to the 2px Simple mode paints, so three 300px
+  columns demand 902px.
+- **Decision:** Raise the window minimum to 900 and derive the column floor from it, budgeting
+  rc-dock's reserve: `SIMPLE_COLUMN_MIN_WIDTH_PX = 297`, since `3 × 297 + 2 × 4 = 899`. Both numbers
+  are named constants, and `simple-layout.data.test.ts` asserts the arithmetic including the divider
+  reserve.
+- **Alternatives:** **Clip the 2px overrun** (`min-width: 0 !important` + `overflow-x: clip` on the
+  dock box) — implemented first, then reverted: it treated a 2px arithmetic error as a layout
+  problem, and clipping the dock box also clips rc-dock's float and max boxes, cutting off dialogs
+  wider than the window. **Patch rc-dock's divider constant** via the existing `patches/` mechanism —
+  viable, and it would also fix Power mode, where 8px dividers are under-reserved by the same
+  hard-coded 4; deferred as a larger change than this ticket warranted. **Equal-thirds column
+  weights** — rejected: it would give the editor 266px at the minimum window, below what its own
+  toolbar needs, and would narrow the editor at every width, not just the smallest.
+- **Consequences:** No horizontal scrollbar at any supported window size — measured in the running
+  app on macOS 2026-08-24, during review of PR #2701. At a 900px window the columns come out
+  297 / 302 / 297 = 896, plus rc-dock's 4px-per-divider reserve, for exactly 900; the dock box
+  reports `min-width: 899px` and `scrollWidth === clientWidth`. A 1600px window is clean too
+  (399 / 798 / 399). That confirms the model this floor was derived from — rc-dock's `Algorithm.js`
+  sums child `minWidth`s and then adds `(children - 1) * 4` — rather than only the arithmetic.
+  Worth knowing if this is ever re-measured: `simple-layout.data.test.ts` asserts that arithmetic
+  and nothing else, so it cannot fail if the model turns out to be wrong; only an app run can catch
+  that. The 1:2:1 weighting is retained and pinned by a test, so the editor grows twice as fast as
+  its neighbours above the floor. Columns are proportional with no JS: rc-dock renders each as
+  `flex: (size) (size × 1e6) (size)px`, so removing the floor is all that "proportional resize"
+  required. The window minimum and the column floor are two constants in different files that must
+  move together; the test cannot import the Electron-side value, so its comment says to change both.
+- **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
+
+## ADR-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
 
 - **Date:** 2026-08-20
 - **Status:** Accepted
@@ -1547,7 +1623,7 @@ step, no automation. Just a record.
   scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
   review.
 
-## ADR-0030: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
+## ADR-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
 
 - **Date:** 2026-08-25
 - **Status:** Accepted

@@ -186,6 +186,14 @@ async function placeWindowAndSettle(
 const FALLBACK_WINDOW_SIZE = { width: 1024, height: 728 };
 
 /**
+ * Narrowest width the app allows a window to be. Keep in sync with `minWidth` on the BrowserWindow
+ * in `src/main/main.ts` (not imported here because the e2e project cannot resolve the app's path
+ * aliases). Electron enforces this by silently clamping `setBounds`, so a placement request below
+ * it does not fail loudly — the window simply comes back wider than asked.
+ */
+const WINDOW_MIN_WIDTH = 900;
+
+/**
  * Assert a restored window honors its saved placement the way the app specifies, and return a
  * description of which rule applied (for the runner log, so a pass records which branch it
  * exercised):
@@ -400,10 +408,21 @@ test.describe('window layout persistence', () => {
       const workArea = await ctx.electronApp.evaluate(
         ({ screen }) => screen.getPrimaryDisplay().workArea,
       );
+      // Both widths have to clear WINDOW_MIN_WIDTH: Electron clamps a smaller `setBounds` silently,
+      // and `placeWindowAndSettle` asserts the window ended up exactly the width it asked for, so a
+      // sub-minimum request retries for its full 30s and then fails. Deriving the main window's
+      // width from the second's also keeps the two distinct once both are clamped up to the floor —
+      // phase 2 tells the saved entries apart by width, and equal widths would make a swapped pair
+      // invisible.
+      const secondWindowWidth = Math.max(WINDOW_MIN_WIDTH, Math.min(940, workArea.width - 200));
+      const mainWindowWidth = Math.max(
+        secondWindowWidth + 80,
+        Math.min(1_100, workArea.width - 80),
+      );
       const placedMainBounds = await placeWindowAndSettle(ctx.electronApp, window1Id, {
         x: workArea.x + 40,
         y: workArea.y + 40,
-        width: Math.min(1_100, workArea.width - 80),
+        width: mainWindowWidth,
         height: Math.min(700, workArea.height - 80),
       });
       logStep(`phase 1: window ${window1Id} placed at ${JSON.stringify(placedMainBounds)}`);
@@ -418,7 +437,7 @@ test.describe('window layout persistence', () => {
       const placedSecondBounds = await placeWindowAndSettle(ctx.electronApp, window2Id, {
         x: workArea.x + 120,
         y: workArea.y + 100,
-        width: Math.min(940, workArea.width - 200),
+        width: secondWindowWidth,
         height: Math.min(620, workArea.height - 160),
       });
       logStep(

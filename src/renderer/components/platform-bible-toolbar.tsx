@@ -47,12 +47,15 @@ import {
   SelectTrigger,
   SelectValue,
   ScrollGroupSelector,
+  SHRINK_STEP,
   Toolbar,
+  ToolbarCompoundLabel,
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
   usePromise,
+  useShrinkStepValue,
 } from 'platform-bible-react';
 import {
   getErrorMessage,
@@ -60,7 +63,7 @@ import {
   isPlatformError,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { CSSProperties, useCallback, useMemo } from 'react';
+import { CSSProperties, ReactNode, useCallback, useMemo } from 'react';
 
 const TOOLTIP_DELAY = 300;
 
@@ -72,15 +75,19 @@ const MAIN_MENU_DEFAULT = { columns: {}, groups: {}, items: [] };
 const RESERVED_SPACE_BREATHING_ROOM_PX = 4;
 
 // Simple mode packs a project selector, the reference-history buttons and the BCV control into the
-// title bar. Together they need more room than the app's minimum window width leaves once the OS
-// caption buttons are reserved, so the trailing controls used to be clipped outright by the
-// Toolbar's `overflow-hidden`.
+// title bar. Together they want more room than the app's minimum window width leaves once the OS
+// caption buttons are reserved, so two mechanisms share the job of fitting them — and neither one
+// hides a control, because the Toolbar's `overflow-hidden` would clip it silently rather than
+// signal it.
 //
-// The fix here is confined to letting the bar's contents SHRINK: `min-w-0` on the Toolbar's content
-// area (see toolbar.component.tsx) plus a smaller floor on the project selector below. Nothing is
-// hidden. Width-driven collapse of individual controls — abbreviating labels, dropping to icon-only
-// — is deliberately out of scope here and belongs to `useShrinkStep` per ADR-0016, which rejects
-// CSS container queries for this job (their failure mode is silent) and PT-4344 implements.
+// The bar's contents SHRINK: `min-w-0` on the Toolbar's content area (see toolbar.component.tsx)
+// defeats the `min-width: auto` floor a flex item gets by default, so the row can absorb the
+// squeeze instead of pushing its trailing controls under that clip.
+//
+// Individual controls then COLLAPSE by width: `useShrinkStep` publishes a discrete step from a
+// measured width and the labels below pick a shorter form at each one.
+// ADR-toolbar-shrink-measurement records why that measurement is done in JS rather than with CSS
+// container queries — their failure mode here is silent.
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
@@ -90,6 +97,104 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%projectPicker_toolbar_no_projects%',
   '%projectPicker_toolbar_more_projects%',
 ];
+
+/**
+ * Radix's `SelectValue` hard-codes `style={{ pointerEvents: 'none' }}` on its span and discards any
+ * `className` or `style` passed to it, so anything rendered inside it is invisible to the pointer:
+ * no `:hover`, no pointer events, and a native `title` that can never open. `pointer-events` is
+ * inherited, so re-declaring `auto` on the descendant that needs it restores hit-testing for that
+ * subtree only. Presses still reach the trigger, which is an ancestor and gets the bubbled event.
+ */
+const POINTER_EVENTS_INSIDE_SELECT_VALUE = 'tw:pointer-events-auto';
+
+/**
+ * The project selector's trigger label.
+ *
+ * A separate component rather than inline JSX because it reads `ShrinkStepContext`, which `Toolbar`
+ * publishes. `PlatformBibleToolbar` _renders_ `Toolbar`, so a hook call there would sit above the
+ * provider and read the widest step forever. This renders as `Toolbar`'s descendant, so it sees the
+ * real value.
+ */
+function ProjectSelectorLabel({
+  fullName,
+  shortName,
+  errorMessage,
+}: {
+  fullName: string;
+  shortName: string;
+  errorMessage?: string;
+}) {
+  const shrinkStep = useShrinkStepValue();
+  const isAtMinimum = shrinkStep >= SHRINK_STEP.MINIMUM;
+
+  // An error replaces the label rather than sharing it. Putting it in the compound label's
+  // secondary slot would clip it mid-sentence and then drop it entirely at the narrowest step,
+  // leaving red text as the only signal that anything is wrong.
+  if (errorMessage) {
+    return (
+      <span
+        className={cn(
+          'tw:min-w-0 tw:flex-1 tw:truncate tw:text-destructive',
+          POINTER_EVENTS_INSIDE_SELECT_VALUE,
+        )}
+        title={errorMessage}
+      >
+        {errorMessage}
+      </span>
+    );
+  }
+
+  return (
+    <ToolbarCompoundLabel
+      // The short name is the identifying part, so it is the field that must survive — but it reads
+      // second, hence `secondaryFirst`.
+      primary={isAtMinimum ? shortName : `(${shortName})`}
+      secondary={fullName}
+      secondaryFirst
+      showSecondary={!isAtMinimum}
+      fullText={`${fullName} (${shortName})`}
+      className={POINTER_EVENTS_INSIDE_SELECT_VALUE}
+    />
+  );
+}
+
+/**
+ * The project selector's trigger, sized to the space the toolbar currently has.
+ *
+ * The width floor lives here rather than inline at the call site for the same reason
+ * {@link ProjectSelectorLabel} is its own component: the step comes from `ShrinkStepContext`, which
+ * `Toolbar` publishes, so it can only be read from a component rendered as `Toolbar`'s descendant.
+ *
+ * The floor has to move with the step or dropping the full name buys nothing — the label would just
+ * get shorter inside a box still reserving 192px, and the space it was supposed to free would come
+ * out of `BookChapterControl` instead.
+ */
+function ProjectSelectorTrigger({
+  placeholder,
+  children,
+}: {
+  placeholder: string | undefined;
+  children?: ReactNode;
+}) {
+  const shrinkStep = useShrinkStepValue();
+
+  return (
+    <SelectTrigger
+      data-testid="toolbar-project-selector"
+      className={cn(
+        'tw:max-w-64 tw:border-0 tw:bg-transparent',
+        // Still a floor at the narrowest step, just a smaller one: `min-w-24` (96px) is the
+        // measured width a short project name needs (~97px for `ESVUS16`, including the trigger's
+        // padding and chevron), so the name stays readable while the trigger remains a comfortable
+        // click target. Not `min-w-0`: with everything else in the row shrinkable too, the trigger
+        // would collapse to just its chevron.
+        shrinkStep >= SHRINK_STEP.MINIMUM ? 'tw:min-w-24' : 'tw:min-w-48',
+      )}
+    >
+      <SelectValue placeholder={placeholder}>{children}</SelectValue>
+    </SelectTrigger>
+  );
+}
 
 export function PlatformBibleToolbar() {
   const { currentProject, recentProjects, allProjects, currentProjectError } =
@@ -387,37 +492,21 @@ export function PlatformBibleToolbar() {
             }}
             disabled={!hasProjectPickerItems}
           >
-            {/* Replaces a `min-w-48` (192px) floor that alone was a quarter of the usable bar at
-                the app's minimum window width and could not be shrunk past (PT-4218). Not dropped
-                to `min-w-0`: with everything else in the row shrinkable too, the trigger would
-                collapse to just its chevron. `min-w-24` (96px) is the measured width a short project
-                name needs (~97px for `ESVUS16`, including the trigger's padding and chevron), so the
-                name stays readable at the narrowest window while the `truncate` on the value handles
-                longer names. The `max-w-64` cap continues to govern the roomy case. */}
-            <SelectTrigger
-              data-testid="toolbar-project-selector"
-              className="tw:max-w-64 tw:min-w-24 tw:border-0 tw:bg-transparent"
+            <ProjectSelectorTrigger
+              placeholder={
+                hasProjectPickerItems
+                  ? localizedStrings['%projectPicker_toolbar_select_project%']
+                  : localizedStrings['%projectPicker_toolbar_no_projects%']
+              }
             >
-              <SelectValue
-                placeholder={
-                  hasProjectPickerItems
-                    ? localizedStrings['%projectPicker_toolbar_select_project%']
-                    : localizedStrings['%projectPicker_toolbar_no_projects%']
-                }
-              >
-                {currentProject && (
-                  <span
-                    className={cn(
-                      'tw:min-w-0 tw:flex-1 tw:truncate',
-                      currentProjectError && 'tw:text-destructive',
-                    )}
-                  >
-                    {currentProjectError ??
-                      `${currentProject.fullName} (${currentProject.shortName})`}
-                  </span>
-                )}
-              </SelectValue>
-            </SelectTrigger>
+              {currentProject && (
+                <ProjectSelectorLabel
+                  fullName={currentProject.fullName}
+                  shortName={currentProject.shortName}
+                  errorMessage={currentProjectError}
+                />
+              )}
+            </ProjectSelectorTrigger>
             {hasProjectPickerItems && (
               <SelectContent>
                 {projectPickerItems.map((p) => (
