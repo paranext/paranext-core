@@ -159,12 +159,17 @@ vi.mock('platform-bible-react', async (importOriginal) => {
       className,
       configAreaChildren,
       children,
+      menuData,
     }: {
       className?: string;
       configAreaChildren?: React.ReactNode;
       children?: React.ReactNode;
+      menuData?: unknown;
     }) => (
       <div data-testid="toolbar-root" className={className}>
+        {/* The real Toolbar renders its menubar only when `menuData` is truthy; this marker mirrors
+            that so tests can assert which windows get a menu without the real Radix internals. */}
+        {menuData ? <div data-testid="toolbar-menubar" /> : undefined}
         <div data-testid="toolbar-config-area">{configAreaChildren}</div>
         <div data-testid="toolbar-main-area">{children}</div>
       </div>
@@ -794,6 +799,13 @@ describe('PlatformBibleToolbar — main menu data stays live', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSendCommand(true);
+    // The renderer sets this from a URL search parameter, which vitest has no equivalent of, so it
+    // is `undefined` here unless a test says otherwise. These tests are about the MAIN window.
+    globalThis.isMainWindow = true;
+  });
+
+  afterEach(() => {
+    globalThis.isMainWindow = undefined;
   });
 
   it('subscribes to MainMenu via useData instead of a one-shot fetch, so interface-mode and localization updates reach it without reopening the menu', async () => {
@@ -806,6 +818,38 @@ describe('PlatformBibleToolbar — main menu data stays live', () => {
       undefined,
       expect.objectContaining({ columns: {}, groups: {}, items: [] }),
     );
+  });
+});
+
+describe('PlatformBibleToolbar — the menu belongs to the main window only', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendCommand(true);
+  });
+
+  afterEach(() => {
+    globalThis.isMainWindow = undefined;
+  });
+
+  it('gives the Toolbar menu data in the main window', async () => {
+    globalThis.isMainWindow = true;
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-menubar')).toBeInTheDocument();
+    });
+  });
+
+  it('withholds menu data in a secondary window, and does not subscribe to the provider at all', async () => {
+    globalThis.isMainWindow = false;
+    render(<PlatformBibleToolbar />);
+    await waitFor(() => {
+      expect(screen.getByTestId('toolbar-root')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('toolbar-menubar')).not.toBeInTheDocument();
+    // The gate is upstream of the subscription, not just of the prop: passing `undefined` as the
+    // source is what keeps every secondary window from paying for a merged, localized menu it
+    // then discards.
+    expect(useData).not.toHaveBeenCalledWith(menuDataService.dataProviderName);
   });
 });
 

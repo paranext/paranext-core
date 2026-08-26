@@ -372,7 +372,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'menubar-close',
     purpose: 'Close the open application menu',
     category: 'Menus',
-    context: 'Application menu bar',
+    context: 'Application menu bar (main window only — secondary windows have no menu bar)',
     keys: { macOS: '⌥', windows: 'Alt', linux: 'Alt' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
@@ -382,7 +382,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'menubar-project',
     purpose: 'Open the Project menu',
     category: 'Menus',
-    context: 'Application menu bar',
+    context: 'Application menu bar (main window only — secondary windows have no menu bar)',
     keys: { macOS: '⌥P', windows: 'Alt+P', linux: 'Alt+P' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
@@ -392,7 +392,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'menubar-window',
     purpose: 'Open the Window menu',
     category: 'Menus',
-    context: 'Application menu bar',
+    context: 'Application menu bar (main window only — secondary windows have no menu bar)',
     keys: { macOS: '⌥L', windows: 'Alt+L', linux: 'Alt+L' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
@@ -402,7 +402,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'menubar-layout',
     purpose: 'Open the Layout menu',
     category: 'Menus',
-    context: 'Application menu bar',
+    context: 'Application menu bar (main window only — secondary windows have no menu bar)',
     keys: { macOS: '⌥N', windows: 'Alt+N', linux: 'Alt+N' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',
@@ -412,7 +412,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'menubar-help',
     purpose: 'Open the Help menu',
     category: 'Menus',
-    context: 'Application menu bar',
+    context: 'Application menu bar (main window only — secondary windows have no menu bar)',
     keys: { macOS: '⌥H', windows: 'Alt+H', linux: 'Alt+H' },
     locations: [
       'lib/platform-bible-react/src/components/advanced/menus/platform-menubar.component.tsx',

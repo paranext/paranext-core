@@ -23,7 +23,7 @@ export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
 /**
  * Query parameter passed to the renderer. Present only on the main window, absent on every
  * secondary window, so the renderer can tell which chrome to draw — the main window keeps the
- * top-level menu and secondary windows do not (PT-4279).
+ * top-level menu and secondary windows do not.
  *
  * Fixed at window creation, which is a deliberate limitation: it cannot describe a window becoming
  * the main one later. PT-4278's window-manager service is the durable answer; replace this when it

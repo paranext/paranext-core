@@ -23,12 +23,26 @@ import { test, expect } from '../../../fixtures/isolated.fixture';
 import { preConfigureSettings, waitForAppReady } from '../../../fixtures/helpers';
 import { createSecondWindow, createStepLogger, getWindowIdOfPage } from './multi-window.util';
 
+test.use({
+  // Same launch shape as the sibling multi-window specs — see multi-window.spec.ts's test.use for
+  // the full rationale. isolatedProjectRoot keeps the run off the developer's real projects;
+  // DEV_NOISY=false keeps test-only extensions from contributing menu items, which would change the
+  // very structure this spec asserts on.
+  electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+});
+
 /** Radix's Menubar root, which the shared `Toolbar` renders only when it is given `menuData`. */
 const MENUBAR = '[data-slot="menubar"]';
 /** The toolbar wrapper `platform-bible-toolbar.tsx` always renders, menu or no menu. */
 const TOOLBAR = '[data-testid="toolbar-reserved-space-wrapper"]';
 /** The app-menu-area logo, which sits beside the menubar and must survive its removal. */
 const APP_LOGO = 'img[alt="Application Logo"]';
+/**
+ * A real toolbar control, asserted separately from the toolbar container: `TOOLBAR` is the
+ * component's unconditional root, so on its own it cannot fail independently of the menubar
+ * assertions and proves nothing about the toolbar's contents surviving.
+ */
+const BCV_CONTROL = 'button[aria-label="book-chapter-trigger"]';
 
 /**
  * Give a menubar that should not exist time to appear before asserting it is absent. Menu data
@@ -66,19 +80,27 @@ test.describe('secondary window chrome', () => {
     // ── The main window is the control ────────────────────────────────────────────────────────
     await expect(mainPage.locator(TOOLBAR)).toBeAttached({ timeout: 60_000 });
     await expect(mainPage.locator(MENUBAR)).toHaveCount(1, { timeout: 60_000 });
-    logStep(`window ${window1Id} has the toolbar and the menubar`);
+    // A populated menubar, not merely a rendered one: MAIN_MENU_DEFAULT is `{columns:{},groups:{},
+    // items:[]}`, which is truthy, so a main window whose menu data never arrived still renders an
+    // empty menubar and would satisfy the count assertion above on its own.
+    await expect(mainPage.getByRole('menuitem').first()).toBeVisible({ timeout: 60_000 });
+    logStep(`window ${window1Id} has the toolbar and a populated menubar`);
 
     // ── The secondary window keeps everything but the menu ────────────────────────────────────
     const page2 = await createSecondWindow(electronApp);
     const window2Id = getWindowIdOfPage(page2);
     await expect(page2.locator(TOOLBAR)).toBeAttached({ timeout: 60_000 });
     await expect(page2.locator(APP_LOGO)).toBeAttached({ timeout: 60_000 });
-    logStep(`window ${window2Id} has the toolbar and the app-menu-area logo`);
+    // The spec's third claim — "removed only the menu" — needs a real control, not just the
+    // toolbar's own root, which renders whether or not anything inside it survived.
+    await expect(page2.locator(BCV_CONTROL).first()).toBeAttached({ timeout: 60_000 });
+    logStep(`window ${window2Id} has the toolbar, the logo and its navigation control`);
 
     await new Promise<void>((resolve) => {
       setTimeout(resolve, MENU_SETTLE_MS);
     });
     await expect(page2.locator(MENUBAR)).toHaveCount(0);
+    await expect(page2.getByRole('menuitem')).toHaveCount(0);
     // The main window keeps its menubar throughout — the flag is per window, not app-global.
     await expect(mainPage.locator(MENUBAR)).toHaveCount(1);
     logStep(`window ${window2Id} has no menubar; window ${window1Id} still does`);
