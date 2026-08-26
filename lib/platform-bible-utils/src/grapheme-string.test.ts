@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { GraphemeString, testingGraphemeStringUtils } from './grapheme-string-util';
+import { GraphemeString, testingGraphemeStringUtils } from './grapheme-string';
 
 // #region Native-parity harness
 
@@ -15,8 +15,12 @@ const ASCII = ['', 'a', 'abc', 'abcab', 'abab', 'aaa'];
 /** Index arguments straddling every boundary: past both ends, both edges, and non-integers. */
 const INDEXES = [-Infinity, -6, -4, -3, -1, -0.5, 0, 0.5, 1, 2, 2.5, 3, 4, 6, Infinity, NaN];
 
-/** Smaller index set for methods taking two indexes, to keep the cross product quick. */
-const RANGE_INDEXES = [-Infinity, -4, -1.5, -1, 0, 1, 1.5, 3, 4, Infinity, NaN];
+/**
+ * Smaller index set for methods taking two indexes, to keep the cross product quick. `-0.5` earns
+ * its place: it is the only value here that truncates to `-0` rather than to a negative integer, so
+ * it is what distinguishes returning `-0` from native's `+0`.
+ */
+const RANGE_INDEXES = [-Infinity, -4, -1.5, -1, -0.5, 0, 1, 1.5, 3, 4, Infinity, NaN];
 
 const NEEDLES = ['', 'a', 'b', 'ab', 'abc', 'z', 'bc'];
 
@@ -72,7 +76,7 @@ describe('native parity: point accessors', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(INDEXES),
-      (gs, index) => gs.at(index),
+      (graphemeString, index) => graphemeString.at(index),
       (str, index) => str.at(index),
     );
     expect(grapheme).toEqual(native);
@@ -82,7 +86,7 @@ describe('native parity: point accessors', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(INDEXES),
-      (gs, index) => gs.charAt(index),
+      (graphemeString, index) => graphemeString.charAt(index),
       (str, index) => str.charAt(index),
     );
     expect(grapheme).toEqual(native);
@@ -92,7 +96,7 @@ describe('native parity: point accessors', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(INDEXES),
-      (gs, index) => gs.codePointAt(index),
+      (graphemeString, index) => graphemeString.codePointAt(index),
       (str, index) => str.codePointAt(index),
     );
     expect(grapheme).toEqual(native);
@@ -102,7 +106,7 @@ describe('native parity: point accessors', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       [[]],
-      (gs) => gs.length,
+      (graphemeString) => graphemeString.length,
       (str) => str.length,
     );
     expect(grapheme).toEqual(native);
@@ -114,7 +118,7 @@ describe('native parity: ranges', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(RANGE_INDEXES),
-      (gs, start) => gs.slice(start),
+      (graphemeString, start) => graphemeString.slice(start),
       (str, start) => str.slice(start),
     );
     expect(grapheme).toEqual(native);
@@ -124,7 +128,7 @@ describe('native parity: ranges', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       pairs(RANGE_INDEXES, RANGE_INDEXES),
-      (gs, start, end) => gs.slice(start, end),
+      (graphemeString, start, end) => graphemeString.slice(start, end),
       (str, start, end) => str.slice(start, end),
     );
     expect(grapheme).toEqual(native);
@@ -134,7 +138,7 @@ describe('native parity: ranges', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(RANGE_INDEXES),
-      (gs, start) => gs.substring(start),
+      (graphemeString, start) => graphemeString.substring(start),
       (str, start) => str.substring(start),
     );
     expect(grapheme).toEqual(native);
@@ -144,7 +148,7 @@ describe('native parity: ranges', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       pairs(RANGE_INDEXES, RANGE_INDEXES),
-      (gs, start, end) => gs.substring(start, end),
+      (graphemeString, start, end) => graphemeString.substring(start, end),
       (str, start, end) => str.substring(start, end),
     );
     expect(grapheme).toEqual(native);
@@ -156,7 +160,7 @@ describe('native parity: search', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       pairs(NEEDLES, RANGE_INDEXES),
-      (gs, needle, position) => gs.indexOf(needle, position),
+      (graphemeString, needle, position) => graphemeString.indexOf(needle, position),
       (str, needle, position) => str.indexOf(needle, position),
     );
     expect(grapheme).toEqual(native);
@@ -166,7 +170,7 @@ describe('native parity: search', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(NEEDLES),
-      (gs, needle) => gs.indexOf(needle),
+      (graphemeString, needle) => graphemeString.indexOf(needle),
       (str, needle) => str.indexOf(needle),
     );
     expect(grapheme).toEqual(native);
@@ -176,7 +180,7 @@ describe('native parity: search', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       pairs(NEEDLES, RANGE_INDEXES),
-      (gs, needle, position) => gs.lastIndexOf(needle, position),
+      (graphemeString, needle, position) => graphemeString.lastIndexOf(needle, position),
       (str, needle, position) => str.lastIndexOf(needle, position),
     );
     expect(grapheme).toEqual(native);
@@ -186,7 +190,7 @@ describe('native parity: search', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(NEEDLES),
-      (gs, needle) => gs.lastIndexOf(needle),
+      (graphemeString, needle) => graphemeString.lastIndexOf(needle),
       (str, needle) => str.lastIndexOf(needle),
     );
     expect(grapheme).toEqual(native);
@@ -196,7 +200,7 @@ describe('native parity: search', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(NEEDLES),
-      (gs, needle) => gs.lastIndexOf(needle, undefined),
+      (graphemeString, needle) => graphemeString.lastIndexOf(needle, undefined),
       (str, needle) => str.lastIndexOf(needle, undefined),
     );
     expect(grapheme).toEqual(native);
@@ -206,7 +210,7 @@ describe('native parity: search', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       pairs(NEEDLES, RANGE_INDEXES),
-      (gs, needle, position) => gs.includes(needle, position),
+      (graphemeString, needle, position) => graphemeString.includes(needle, position),
       (str, needle, position) => str.includes(needle, position),
     );
     expect(grapheme).toEqual(native);
@@ -216,7 +220,7 @@ describe('native parity: search', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       pairs(NEEDLES, RANGE_INDEXES),
-      (gs, needle, position) => gs.startsWith(needle, position),
+      (graphemeString, needle, position) => graphemeString.startsWith(needle, position),
       (str, needle, position) => str.startsWith(needle, position),
     );
     expect(grapheme).toEqual(native);
@@ -226,7 +230,7 @@ describe('native parity: search', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       pairs(NEEDLES, RANGE_INDEXES),
-      (gs, needle, endPosition) => gs.endsWith(needle, endPosition),
+      (graphemeString, needle, endPosition) => graphemeString.endsWith(needle, endPosition),
       (str, needle, endPosition) => str.endsWith(needle, endPosition),
     );
     expect(grapheme).toEqual(native);
@@ -236,7 +240,7 @@ describe('native parity: search', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(NEEDLES),
-      (gs, needle) => gs.endsWith(needle),
+      (graphemeString, needle) => graphemeString.endsWith(needle),
       (str, needle) => str.endsWith(needle),
     );
     expect(grapheme).toEqual(native);
@@ -252,7 +256,7 @@ describe('native parity: padding', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       pairs(PAD_LENGTHS, PAD_STRINGS),
-      (gs, targetLength, pad) => gs.padStart(targetLength, pad),
+      (graphemeString, targetLength, pad) => graphemeString.padStart(targetLength, pad),
       (str, targetLength, pad) => str.padStart(targetLength, pad),
     );
     expect(grapheme).toEqual(native);
@@ -262,7 +266,7 @@ describe('native parity: padding', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       pairs(PAD_LENGTHS, PAD_STRINGS),
-      (gs, targetLength, pad) => gs.padEnd(targetLength, pad),
+      (graphemeString, targetLength, pad) => graphemeString.padEnd(targetLength, pad),
       (str, targetLength, pad) => str.padEnd(targetLength, pad),
     );
     expect(grapheme).toEqual(native);
@@ -272,7 +276,7 @@ describe('native parity: padding', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(PAD_LENGTHS),
-      (gs, targetLength) => gs.padStart(targetLength),
+      (graphemeString, targetLength) => graphemeString.padStart(targetLength),
       (str, targetLength) => str.padStart(targetLength),
     );
     expect(grapheme).toEqual(native);
@@ -282,7 +286,7 @@ describe('native parity: padding', () => {
     const { grapheme, native } = nativeParity(
       ASCII,
       singles(PAD_LENGTHS),
-      (gs, targetLength) => gs.padEnd(targetLength),
+      (graphemeString, targetLength) => graphemeString.padEnd(targetLength),
       (str, targetLength) => str.padEnd(targetLength),
     );
     expect(grapheme).toEqual(native);
@@ -291,14 +295,35 @@ describe('native parity: padding', () => {
 
 describe('native parity: split', () => {
   const SPLIT_STRINGS = ['', 'a', 'abc', 'a,b,c', 'a1b2c', 'ab', ',a,', 'aaa'];
-  const SEPARATORS = ['', ',', 'a', 'b', 'z', ',b', /,/, /[abc]/, /(\d)/, /b*/, /(?:)/, /,/g];
+  // `/(a)|(1)/` is the only separator whose capture groups can go unused in a match, which is
+  // what makes `undefined` entries reachable at all.
+  const SEPARATORS = [
+    '',
+    ',',
+    'a',
+    'b',
+    'z',
+    ',b',
+    /,/,
+    /[abc]/,
+    /(\d)/,
+    /(a)|(1)/,
+    /b*/,
+    /(?:)/,
+    /,/g,
+  ];
   const LIMITS = [undefined, 0, 1, 2, 3, 10, -1, NaN, 1.5];
 
   it('with a limit', () => {
     const { grapheme, native } = nativeParity(
       SPLIT_STRINGS,
       pairs(SEPARATORS, LIMITS),
-      (gs, separator, limit) => gs.split(separator, limit),
+      // `split` is overloaded so a literal separator never yields `undefined` entries; a caller
+      // holding a `string | RegExp` union has to pick the overload explicitly.
+      (graphemeString, separator, limit) =>
+        separator instanceof RegExp
+          ? graphemeString.split(separator, limit)
+          : graphemeString.split(separator, limit),
       (str, separator, limit) => str.split(separator, limit),
     );
     expect(grapheme).toEqual(native);
@@ -308,7 +333,10 @@ describe('native parity: split', () => {
     const { grapheme, native } = nativeParity(
       SPLIT_STRINGS,
       singles(SEPARATORS),
-      (gs, separator) => gs.split(separator),
+      (graphemeString, separator) =>
+        separator instanceof RegExp
+          ? graphemeString.split(separator)
+          : graphemeString.split(separator),
       (str, separator) => str.split(separator),
     );
     expect(grapheme).toEqual(native);
@@ -343,6 +371,30 @@ describe('graphemes are the unit, not UTF-16 code units', () => {
   it('toArray returns whole grapheme clusters', () => {
     expect(new GraphemeString(MIXED).toArray()).toEqual(MIXED_GRAPHEMES);
     expect(new GraphemeString('').toArray()).toEqual([]);
+  });
+
+  it('padding past the practical limit throws RangeError instead of exhausting memory', () => {
+    const graphemeString = new GraphemeString('abc');
+    [2 ** 20 + 1, 2 ** 24, 2 ** 29, Infinity, Number.MAX_SAFE_INTEGER].forEach((targetLength) => {
+      expect(() => graphemeString.padStart(targetLength, 'x')).toThrow(RangeError);
+      expect(() => graphemeString.padEnd(targetLength, 'x')).toThrow(RangeError);
+    });
+  });
+
+  it('pads right up to the limit without throwing', () => {
+    const graphemeString = new GraphemeString('abc');
+    expect(graphemeString.padStart(2 ** 20, 'x').length).toEqual(2 ** 20);
+    expect(graphemeString.padEnd(2 ** 20, 'x').length).toEqual(2 ** 20);
+  });
+
+  it('toArray returns a copy, so mutating it cannot corrupt the instance', () => {
+    const graphemeString = new GraphemeString('abc');
+    const graphemes = graphemeString.toArray();
+    graphemes.push('XX');
+    expect(graphemeString.length).toEqual(3);
+    expect(graphemeString.toString()).toEqual('abc');
+    expect(graphemeString.toArray()).toEqual(['a', 'b', 'c']);
+    expect(graphemeString.slice(0, 2).toString()).toEqual('ab');
   });
 
   it('at returns a whole grapheme where native returns half a surrogate pair', () => {
@@ -405,6 +457,13 @@ describe('graphemes are the unit, not UTF-16 code units', () => {
         .map((part) => part?.toString()),
     ).toEqual(['Look', 'At🦄This', 'Thing👮🏽‍♀️Its', 'Awesome']);
   });
+
+  it('a regex separator matching inside a cluster does not split it', () => {
+    // U+1F468 MAN is the first code point of the family cluster, so native cuts the cluster open.
+    // A match that does not begin and end on grapheme boundaries is skipped instead.
+    expect(family.split(/\u{1F468}/u).map((part) => part?.toString())).toEqual([FAMILY]);
+    expect(FAMILY.split(/\u{1F468}/u)).toEqual(['a', '\u200d👩‍👧‍👦b']);
+  });
 });
 
 describe('toString', () => {
@@ -414,15 +473,15 @@ describe('toString', () => {
   });
 
   it('drops into a template literal without an accessor', () => {
-    const gs = new GraphemeString(FAMILY);
-    expect(`${gs}`).toEqual(FAMILY);
-    expect(`<${gs.slice(1, 2)}>`).toEqual('<👨‍👩‍👧‍👦>');
+    const graphemeString = new GraphemeString(FAMILY);
+    expect(`${graphemeString}`).toEqual(FAMILY);
+    expect(`<${graphemeString.slice(1, 2)}>`).toEqual('<👨‍👩‍👧‍👦>');
   });
 
   it('works with String() and string concatenation', () => {
-    const gs = new GraphemeString('abc');
-    expect(String(gs)).toEqual('abc');
-    expect(`${gs}d`).toEqual('abcd');
+    const graphemeString = new GraphemeString('abc');
+    expect(String(graphemeString)).toEqual('abc');
+    expect(`${graphemeString}d`).toEqual('abcd');
   });
 
   it('a derived instance stringifies to its own text, not the whole parent', () => {
@@ -432,12 +491,12 @@ describe('toString', () => {
 
 describe('derived values keep the parent segmentation', () => {
   it('range and pad methods return GraphemeString', () => {
-    const gs = new GraphemeString(MIXED);
-    expect(gs.slice(1)).toBeInstanceOf(GraphemeString);
-    expect(gs.substring(1)).toBeInstanceOf(GraphemeString);
-    expect(gs.padStart(20)).toBeInstanceOf(GraphemeString);
-    expect(gs.padEnd(20)).toBeInstanceOf(GraphemeString);
-    expect(gs.split('o')[0]).toBeInstanceOf(GraphemeString);
+    const graphemeString = new GraphemeString(MIXED);
+    expect(graphemeString.slice(1)).toBeInstanceOf(GraphemeString);
+    expect(graphemeString.substring(1)).toBeInstanceOf(GraphemeString);
+    expect(graphemeString.padStart(20)).toBeInstanceOf(GraphemeString);
+    expect(graphemeString.padEnd(20)).toBeInstanceOf(GraphemeString);
+    expect(graphemeString.split('o')[0]).toBeInstanceOf(GraphemeString);
   });
 
   it('a derived instance indexes correctly without re-segmenting', () => {
@@ -449,19 +508,24 @@ describe('derived values keep the parent segmentation', () => {
     expect(tail.indexOf('👨‍👩‍👧‍👦')).toEqual(3);
   });
 
-  it('accepts a precomputed grapheme array without re-segmenting', () => {
-    const gs = new GraphemeString('ab', ['a', 'b']);
-    expect(gs.length).toEqual(2);
-    expect(gs.toArray()).toEqual(['a', 'b']);
+  it('reuses the parent segmentation on every derived-instance route', () => {
+    const mixed = new GraphemeString(MIXED);
+    // slice/substring derive a child from a grapheme range
+    expect(mixed.slice(4, 6).toArray()).toEqual(MIXED_GRAPHEMES.slice(4, 6));
+    // splitting on '' derives one child per grapheme
+    expect(mixed.split('').map((part) => part?.toString())).toEqual(MIXED_GRAPHEMES);
+    // padding concatenates the pad graphemes onto the parent's
+    expect(new GraphemeString('ab').padStart(4, 'xy').toArray()).toEqual(['x', 'y', 'a', 'b']);
+    expect(new GraphemeString('ab').padEnd(4, 'xy').toArray()).toEqual(['a', 'b', 'x', 'y']);
   });
 
   it('accepts a GraphemeString as a search needle', () => {
-    const gs = new GraphemeString(MIXED);
-    expect(gs.indexOf(new GraphemeString('At'))).toEqual(5);
-    expect(gs.includes(new GraphemeString('At'))).toEqual(true);
-    expect(gs.startsWith(new GraphemeString('Look'))).toEqual(true);
-    expect(gs.endsWith(new GraphemeString(OFFICER))).toEqual(true);
-    expect(gs.lastIndexOf(new GraphemeString('o'))).toEqual(2);
+    const graphemeString = new GraphemeString(MIXED);
+    expect(graphemeString.indexOf(new GraphemeString('At'))).toEqual(5);
+    expect(graphemeString.includes(new GraphemeString('At'))).toEqual(true);
+    expect(graphemeString.startsWith(new GraphemeString('Look'))).toEqual(true);
+    expect(graphemeString.endsWith(new GraphemeString(OFFICER))).toEqual(true);
+    expect(graphemeString.lastIndexOf(new GraphemeString('o'))).toEqual(2);
   });
 });
 

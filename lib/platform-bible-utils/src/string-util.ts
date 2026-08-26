@@ -1,6 +1,6 @@
 import { ensureArray } from './array-util';
 import { LocalizeKey } from './extension-contributions/menus.model';
-import { GraphemeString } from './grapheme-string-util';
+import { GraphemeString } from './grapheme-string';
 
 /*
  * The functions below are thin wrappers over `GraphemeString`. Each mirrors the same-named method on
@@ -259,16 +259,15 @@ export function slice(string: string, indexStart: number, indexEnd?: number): st
  * @returns An array of strings, split at each point where separator occurs in the starting string
  */
 export function split(string: string, separator: string | RegExp, splitLimit?: number): string[] {
-  const parts = new GraphemeString(string)
-    .split(separator, splitLimit)
-    .map((part) => part?.toString());
+  const graphemeString = new GraphemeString(string);
+  if (typeof separator === 'string')
+    return graphemeString.split(separator, splitLimit).map((part) => part.toString());
   // A capture group that did not participate in the match yields `undefined`, exactly as native
   // `String.prototype.split` does at runtime — and, as in native's own type declaration, that is not
-  // reflected in the `string[]` return type. Only a capturing regular expression separator can
-  // produce one, so widening this signature would break every existing caller's types for a case
-  // none of them hit.
+  // reflected in the `string[]` return type. Widening this signature would break every existing
+  // caller's types for a case only a capturing separator reaches.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return parts as string[];
+  return graphemeString.split(separator, splitLimit).map((part) => part?.toString()) as string[];
 }
 
 /**
