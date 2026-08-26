@@ -3,8 +3,10 @@ import {
   PlatformMenubar,
 } from '@/components/advanced/menus/platform-menubar.component';
 import { cn } from '@/utils/shadcn-ui/utils';
+import { ShrinkStepContext } from '@/context/shrink-step.context';
+import { useShrinkStep } from '@/hooks/use-shrink-step.hook';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
-import { PropsWithChildren, ReactNode, useRef } from 'react';
+import { PropsWithChildren, ReactNode, useCallback, useState } from 'react';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
@@ -45,7 +47,34 @@ export type ToolbarProps = PropsWithChildren<{
 
   /** Variant of the menubar */
   menubarVariant?: 'default' | 'muted';
+
+  /**
+   * Overrides the shrink step this toolbar would otherwise measure from its own width, and
+   * publishes it to descendants through `ShrinkStepContext`. Higher means narrower.
+   *
+   * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
+   * the app, leave this unset and let the toolbar measure itself.
+   */
+  shrinkStep?: number;
 }>;
+
+/**
+ * Breakpoints for the application titlebar, widest first, measured against the width actually
+ * available to the toolbar's content — the inner row, inside whatever padding reserves the OS
+ * caption buttons — and never against the window's width.
+ *
+ * Which box is measured is load-bearing here. The caption-button reserve sits INSIDE the toolbar's
+ * own box on macOS (`tw:ps-[85px]`) and on the Windows/Linux fallback (`tw:pe-[…]`), but OUTSIDE it
+ * when Electron reports a live overlay rect and the wrapper reserves the space instead (see
+ * `platform-bible-toolbar.tsx`). Measuring the outer box would therefore report up to ~150px more
+ * room on one path than another for the same window width, and the same window would abbreviate the
+ * scripture reference on one OS but not on the next. The inner row is the space the controls really
+ * get, on every path.
+ *
+ * Estimated from the widths of the controls the toolbar carries rather than measured, so expect to
+ * adjust them the first time this is watched in a running app.
+ */
+export const APP_TOOLBAR_SHRINK_THRESHOLDS_PX = Object.freeze([950, 800, 700]);
 
 /**
  * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing
@@ -95,75 +124,89 @@ export function Toolbar({
   configAreaChildren,
   shouldUseAsAppDragArea,
   menubarVariant = 'default',
+  shrinkStep: shrinkStepOverride,
 }: ToolbarProps) {
-  // This ref will always be defined
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const containerRef = useRef<HTMLDivElement>(undefined!);
+  // The content row lives in state, not a ref: mutating `ref.current` does not re-run the effect
+  // inside `useShrinkStep`, so a ref would leave the observer permanently unattached.
+  const [contentRowNode, setContentRowNode] = useState<HTMLDivElement | undefined>(undefined);
+  const attachContentRow = useCallback(
+    (node: HTMLDivElement | null) => setContentRowNode(node ?? undefined),
+    [],
+  );
+  const measuredShrinkStep = useShrinkStep(contentRowNode, APP_TOOLBAR_SHRINK_THRESHOLDS_PX);
+  const shrinkStep = shrinkStepOverride ?? measuredShrinkStep;
 
   return (
-    <div
-      className={cn('tw:border tw:px-4 tw:text-foreground', className)}
-      ref={containerRef}
-      style={{ position: 'relative' }}
-      id={id}
-    >
+    <ShrinkStepContext.Provider value={shrinkStep}>
       <div
-        /* The element that clips when the bar's contents do not fit, so it is also the one whose
-           `scrollWidth > clientWidth` proves an overflow regression (see the narrow-title-bar e2e
-           test). */
-        data-testid="toolbar-content-row"
-        className="tw:flex tw:h-full tw:w-full tw:justify-between tw:overflow-hidden"
-        /* @ts-ignore Electron-only property */
-        style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
+        className={cn('tw:border tw:px-4 tw:text-foreground', className)}
+        style={{ position: 'relative' }}
+        id={id}
       >
-        {/* App Menu area */}
-        <div className="tw:flex tw:grow tw:basis-0">
-          <div
-            className="tw:flex tw:items-center tw:gap-2"
-            /* @ts-ignore Electron-only property */
-            style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
-          >
-            {appMenuAreaChildren}
-
-            {menuData && (
-              <PlatformMenubar
-                menuData={menuData}
-                onOpenChange={onOpenChange}
-                onSelectMenuItem={onSelectMenuItem}
-                variant={menubarVariant}
-              />
-            )}
-          </div>
-        </div>
-
-        {/* Content area */}
+        {/* Observed for the shrink step, not the bordered wrapper above: this row's box is the
+          space the controls actually have, with the OS caption-button reserve already taken out of
+          it however the current platform reserves that space. See
+          APP_TOOLBAR_SHRINK_THRESHOLDS_PX. */}
         <div
-          /* `min-w-0` defeats the `min-width: auto` a flex item gets by default, which floors this
-             area at its content's intrinsic width. Without it the area cannot shrink at all, so a
-             narrow window pushes the trailing controls under the `overflow-hidden` above and they
-             are silently clipped rather than shrunk (PT-4218). The app menu area intentionally does
-             NOT get the same treatment: it holds the menubar, which has nowhere to shrink to, and
-             its `basis-0` already keeps it from claiming space it does not need. */
-          data-testid="toolbar-content-area"
-          className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:px-2"
+          data-testid="toolbar-content-row"
+          className="tw:flex tw:h-full tw:w-full tw:justify-between tw:overflow-hidden"
+          ref={attachContentRow}
           /* @ts-ignore Electron-only property */
-          style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
+          style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
         >
-          {children}
-        </div>
+          {/* App Menu area — rigid. Deliberately NOT `tw:min-w-0`: letting the logo and main menubar
+            shrink would clip menu titles, which is the failure this design exists to prevent.
+            Shrinking flows to the content area instead. */}
+          <div className="tw:flex tw:shrink-0 tw:grow tw:basis-0">
+            <div
+              className="tw:flex tw:items-center tw:gap-2"
+              /* @ts-ignore Electron-only property */
+              style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
+            >
+              {appMenuAreaChildren}
 
-        {/* Configure area */}
-        <div className="tw:flex tw:min-w-0 tw:grow tw:basis-0 tw:justify-end">
+              {menuData && (
+                <PlatformMenubar
+                  menuData={menuData}
+                  onOpenChange={onOpenChange}
+                  onSelectMenuItem={onSelectMenuItem}
+                  variant={menubarVariant}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Content area — absorbing. Holds the project selector, reference-history buttons and
+            BookChapterControl, each of which has a shorter label form to fall back to.
+            `tw:overflow-clip` is the same backstop every TabToolbar zone carries, and it is needed
+            for the same reason: these children have width floors of their own, so once the zone is
+            squeezed past their sum they overflow it. Sibling flex items do not clip each other and
+            the nearest clipping ancestor is the row edge, past the Configure area — so without it
+            the overrun paints on top of the Send/Receive, settings and profile buttons and makes
+            them partly un-clickable. Tooltips and popovers are portalled, so nothing that needs to
+            escape the box is clipped by this. */}
           <div
-            className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:pe-1"
+            data-testid="toolbar-content-area"
+            className="tw:flex tw:min-w-0 tw:shrink tw:items-center tw:gap-2 tw:overflow-clip tw:px-2"
             /* @ts-ignore Electron-only property */
             style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >
-            {configAreaChildren}
+            {children}
+          </div>
+
+          {/* Configure area */}
+          <div className="tw:flex tw:min-w-0 tw:grow tw:basis-0 tw:justify-end">
+            <div
+              className="tw:flex tw:min-w-0 tw:items-center tw:gap-2 tw:pe-1"
+              /* @ts-ignore Electron-only property */
+              style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
+            >
+              {configAreaChildren}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </ShrinkStepContext.Provider>
   );
 }
 

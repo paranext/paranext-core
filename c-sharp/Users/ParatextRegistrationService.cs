@@ -61,6 +61,10 @@ internal class ParatextRegistrationService(
                 InternetSettingsDataProvider.SetInternetSettings(newInternetSettings);
             }
         );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.getParatextRegistryUrl",
+            GetParatextRegistryUrl
+        );
 
         // Lookup localized strings where they may be needed by callers without access to PapiClient
         RegistrationRequiredException.ExceptionMessage = LocalizationService.GetLocalizedString(
@@ -224,6 +228,19 @@ internal class ParatextRegistrationService(
             );
         }
     }
+
+    /// <summary>
+    /// Returns the Paratext Registry website URL for the environment currently selected in
+    /// ParatextData internet settings.
+    /// <para>
+    /// ParatextData owns this mapping, so the link always points at the registry the rest of the
+    /// app is actually talking to. Today it resolves Production to
+    /// <c>https://registry.paratext.org</c> and Development, Test, and QualityAssurance all to
+    /// <c>https://registry-dev.paratext.org</c> — deliberately not mirrored here, because a copy
+    /// would silently drift the moment ParatextData changes it.
+    /// </para>
+    /// </summary>
+    private string GetParatextRegistryUrl() => InternetAccess.RegistryServer;
 
     /// <summary>
     /// For any project with uncommitted changes on this machine, marks a point in project history in

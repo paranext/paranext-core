@@ -170,23 +170,31 @@ function MarkerMenuCommandItem({
       )}
       <div className="tw:w-8 tw:min-w-8">
         {item.marker ? (
-          <span className="tw:text-xs">{item.marker}</span>
+          // Monospace: a USFM marker is a code, not prose, and should read as one. Deliberately
+          // inherits the row's own foreground rather than taking a marker-specific colour.
+          <span className="tw:font-mono tw:text-xs">{item.marker}</span>
         ) : (
           <div>
             <MenuMarkerIcon icon={item.icon} />
           </div>
         )}
       </div>
-      {/* tw:min-w-0 lets this flex child shrink below its content width so tw:truncate can clip
-          the title and subtitle instead of letting them wrap, per the Responsiveness guideline's
-          rule that menu entries truncate in small widths (consumers pin this popover as narrow as
-          200px). The native `title` tooltips keep the full text reachable on hover. */}
-      <div className="tw:min-w-0 tw:flex-1">
-        <p className="tw:truncate tw:text-sm" title={item.title}>
+      {/* Title and detail sit side by side, detail trailing and subordinate. Both truncate rather
+          than wrap — consumers pin this popover as narrow as 200px — and the detail's much larger
+          shrink factor means it gives up its space first, so the title, which identifies the row,
+          keeps as much as it can.
+
+          Native `title` attributes rather than the Tooltip component: a Radix tooltip inside a cmdk
+          list fights the list's own hover and focus handling. */}
+      <div className="tw:flex tw:min-w-0 tw:flex-1 tw:items-baseline tw:gap-2">
+        <p className="tw:min-w-0 tw:shrink tw:truncate tw:text-sm" title={item.title}>
           {item.title}
         </p>
         {item.subtitle && (
-          <p className="tw:truncate tw:text-xs tw:text-muted-foreground" title={item.subtitle}>
+          <p
+            className="tw:min-w-0 tw:shrink-[9999] tw:truncate tw:text-end tw:text-xs tw:text-muted-foreground"
+            title={item.subtitle}
+          >
             {item.subtitle}
           </p>
         )}

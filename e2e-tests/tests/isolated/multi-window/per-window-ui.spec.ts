@@ -75,6 +75,24 @@ const SAMPLE_WEB_PROJECT_ID = '32664dc3288a28df2e2bb75ded887fc8f17a15fb';
 const BCV_TRIGGER = 'button[aria-label="book-chapter-trigger"]';
 
 /**
+ * Matches a reference in the BCV trigger whichever label form the toolbar has room for.
+ *
+ * The trigger abbreviates the book to its three-letter id once the titlebar's content row drops
+ * below its widest shrink step, so the same reference reads `Mark 4:2` or `MRK 4:2` depending on
+ * the window's width AND on how much of it the platform reserves for caption buttons. Windows
+ * created without an explicit size land near that boundary, so pinning either spelling would make
+ * these tests fail on some platforms and pass on others for reasons that have nothing to do with
+ * what they are testing — which is which window a scroll group drives, not how a label is worded.
+ */
+function referencePattern(bookName: string, bookId: string, chapterVerse: string): RegExp {
+  return new RegExp(`(?:${bookName}|${bookId})\\s+${chapterVerse.replace(':', '\\s*:\\s*')}`);
+}
+
+const MARK_4_2 = referencePattern('Marks?', 'MRK', '4:2');
+const JOHN_3_16 = referencePattern('John', 'JHN', '3:16');
+const PSALMS_23_1 = referencePattern('Psalms?', 'PSA', '23:1');
+
+/**
  * The toolbar's scroll-group selector trigger: a select trigger (`role="combobox"`) whose text is
  * the current group's single-letter label — which distinguishes it from the BCV trigger (the only
  * other combobox in the toolbar, and it carries an aria-label).
@@ -356,10 +374,10 @@ test.describe('per-window UI isolation', () => {
     // ITS OWN toolbar selector (which must act on window 2's tab, not window 1's), after which
     // group A navigation moves window 1 only and group C navigation moves window 2 only.
     await setScrollGroupRef(0, { book: 'MRK', chapterNum: 4, verseNum: 2 });
-    await expect(mainPage.locator(BCV_TRIGGER).first()).toContainText('Mark 4:2', {
+    await expect(mainPage.locator(BCV_TRIGGER).first()).toContainText(MARK_4_2, {
       timeout: 15_000,
     });
-    await expect(page2.locator(BCV_TRIGGER).first()).toContainText('Mark 4:2', {
+    await expect(page2.locator(BCV_TRIGGER).first()).toContainText(MARK_4_2, {
       timeout: 15_000,
     });
     logStep('group A navigation drove both windows (both tabs in group A)');
@@ -371,20 +389,22 @@ test.describe('per-window UI isolation', () => {
     expect(window2GroupCRefText).not.toBe('');
 
     await setScrollGroupRef(0, { book: 'JHN', chapterNum: 3, verseNum: 16 });
-    await expect(mainPage.locator(BCV_TRIGGER).first()).toContainText('John 3:16', {
+    await expect(mainPage.locator(BCV_TRIGGER).first()).toContainText(JOHN_3_16, {
       timeout: 15_000,
     });
     // Window 2's tab is in group C now — the group A move must not touch it. (Had the selector
     // wrongly acted on window 1's tab instead, the toolbars would move the other way around: the
-    // group A navigation would leave window 1 still and the group C one would move it.)
-    await expect(page2.locator(BCV_TRIGGER).first()).not.toContainText('John 3:16');
+    // group A navigation would leave window 1 still and the group C one would move it.) Matched
+    // against both label forms deliberately: pinning only the spelled-out one would make this pass
+    // whenever the toolbar abbreviates, which is the width where a real regression would hide.
+    await expect(page2.locator(BCV_TRIGGER).first()).not.toContainText(JOHN_3_16);
     await expect(page2.locator(BCV_TRIGGER).first()).toContainText(window2GroupCRefText.trim());
 
     await setScrollGroupRef(2, { book: 'PSA', chapterNum: 23, verseNum: 1 });
-    await expect(page2.locator(BCV_TRIGGER).first()).toContainText(/Psalms? 23:1/, {
+    await expect(page2.locator(BCV_TRIGGER).first()).toContainText(PSALMS_23_1, {
       timeout: 15_000,
     });
-    await expect(mainPage.locator(BCV_TRIGGER).first()).toContainText('John 3:16');
+    await expect(mainPage.locator(BCV_TRIGGER).first()).toContainText(JOHN_3_16);
     logStep('after moving window 2 to group C: A drove window 1 only, C drove window 2 only');
 
     // ── Notification routing: toast renders in the focused window, not a minimized one ─────────

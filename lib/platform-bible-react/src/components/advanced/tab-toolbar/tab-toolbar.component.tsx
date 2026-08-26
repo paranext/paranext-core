@@ -47,6 +47,15 @@ export type TabToolbarProps = TabToolbarCommonProps & {
    * side in ltr, left side in rtl). Recommended for secondary tools and view options.
    */
   endAreaChildren?: ReactNode;
+
+  /**
+   * Overrides the shrink step this toolbar would otherwise measure from its own width, and
+   * publishes it to descendants. Higher means narrower.
+   *
+   * For stories and tests: measuring needs a layout engine, which jsdom does not have. In the app,
+   * leave it unset and let the toolbar measure itself.
+   */
+  shrinkStep?: number;
 };
 
 /**
@@ -65,9 +74,14 @@ export function TabToolbar({
   centerAreaChildren,
   endAreaChildren,
   menuButtonIcon,
+  shrinkStep,
 }: TabToolbarProps) {
   return (
-    <TabToolbarContainer className={`tw:w-full tw:border-b ${className}`} id={id}>
+    <TabToolbarContainer
+      className={`tw:w-full tw:border-b ${className}`}
+      id={id}
+      shrinkStep={shrinkStep}
+    >
       {projectMenuData && (
         <TabDropdownMenu
           onSelectMenuItem={onSelectProjectMenuItem}
@@ -77,17 +91,34 @@ export function TabToolbar({
           buttonVariant="ghost"
         />
       )}
+      {/* Absorbing zone. `tw:min-w-0` is what lets the flex algorithm shrink this below its content
+          width — without it a flex item's `min-width: auto` pins it at min-content, and the space
+          is taken out of the end zone instead, which the container then clips. That is the
+          "toolbar items silently disappear" bug. `tw:overflow-clip` stays as the backstop for
+          consumers whose children have no shorter form of their own. */}
       {startAreaChildren && (
-        <div className="tw:flex tw:shrink tw:grow-[10] tw:flex-row tw:flex-nowrap tw:items-start tw:gap-x-1 tw:gap-y-2 tw:overflow-clip">
+        <div className="tw:flex tw:min-w-0 tw:shrink tw:grow-[10] tw:flex-row tw:flex-nowrap tw:items-start tw:gap-x-1 tw:gap-y-2 tw:overflow-clip">
           {startAreaChildren}
         </div>
       )}
+      {/* Deliberately NOT `tw:min-w-0`, unlike the start zone. This zone's flex base is 0 below the
+          `@sm` container width, and a zero-basis item absorbs none of a deficit — its used size is
+          whatever its floor says. `min-width: auto` (min-content) is therefore the only thing
+          keeping its contents on screen at narrow widths; adding `tw:min-w-0` here would resolve
+          the zone to 0px and `tw:overflow-clip` would erase it outright. Center-zone content is
+          typically a single toggle with no shorter form, so that is the disappearing-item bug
+          rather than a graceful degradation. */}
       {centerAreaChildren && (
         <div className="tw:flex tw:shrink tw:grow-[1] tw:basis-0 tw:flex-row tw:flex-nowrap tw:items-start tw:justify-center tw:gap-x-1 tw:gap-y-2 tw:overflow-clip tw:@sm:basis-auto">
           {centerAreaChildren}
         </div>
       )}
-      <div className="tw:flex tw:shrink tw:grow-[1] tw:flex-row-reverse tw:flex-nowrap tw:items-start tw:gap-x-1 tw:gap-y-2 tw:overflow-clip">
+      {/* Rigid zone: `tw:shrink-0` and deliberately NOT `tw:min-w-0`. This holds the view-info menu
+          and small icon buttons, none of which have a shorter form to fall back to, so shrinking
+          must flow to the start and center zones instead. `tw:grow-[1]` is kept — grow and shrink
+          are independent, and dropping it would change how leftover space is split at wide widths
+          and visibly shift the center zone. */}
+      <div className="tw:flex tw:shrink-0 tw:grow-[1] tw:flex-row-reverse tw:flex-nowrap tw:items-start tw:gap-x-1 tw:gap-y-2 tw:overflow-clip">
         {tabViewMenuData && (
           <TabDropdownMenu
             onSelectMenuItem={onSelectViewInfoMenuItem}
