@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => {
     getUnreachableWindowIds: vi.fn(),
     getAbandonedWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
+    isWindowTracked: vi.fn(() => true),
     getFocusedWindowId: vi.fn(),
     focusWindow: vi.fn(),
     networkObjectGet: vi.fn(),
@@ -73,6 +74,8 @@ vi.mock('@main/services/window-state.service', () => ({
   isWindowReady: mocks.isWindowReady,
   // No test here names a closing window; the routed-open guard just needs an answer
   isWindowClosing: () => false,
+  // Driven by the window fixture, so a routed open names a window these tests actually set up
+  isWindowTracked: mocks.isWindowTracked,
   getFocusedWindowId: mocks.getFocusedWindowId,
   // No test here is about the cross-window raise; the app holding focus is what allows one
   isApplicationFocused: () => true,

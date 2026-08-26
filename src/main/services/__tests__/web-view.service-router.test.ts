@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
     isWindowReady: vi.fn(),
     wasWindowEverReady: vi.fn(),
     isWindowClosing: vi.fn(),
+    isWindowTracked: vi.fn(() => true),
     getFocusedWindowId: vi.fn(),
     isApplicationFocused: vi.fn(),
     focusWindow: vi.fn(),
@@ -73,6 +74,7 @@ vi.mock('@main/services/window-state.service', () => ({
   isWindowReady: mocks.isWindowReady,
   wasWindowEverReady: mocks.wasWindowEverReady,
   isWindowClosing: mocks.isWindowClosing,
+  isWindowTracked: mocks.isWindowTracked,
   getFocusedWindowId: mocks.getFocusedWindowId,
   isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,
@@ -973,25 +975,19 @@ describe('web view service router', () => {
     });
 
     test('fails rather than guessing when the named window does not exist', async () => {
-      // Same 5 s grace concern as the window-layout rung's "shard never appears" test: the target
-      // shard resolver waits out the announcement grace period for a window id it has never
-      // indexed before giving up.
-      vi.useFakeTimers();
-      try {
-        const focused = windowShard([]);
-        withWindows({ 1: focused });
-        const router = await getRouter();
+      // `options` reaches this over the network, so the id is the caller's word — fabricated, or
+      // real until the window closed while the caller was deciding. Rejected on the spot rather
+      // than at shard resolution, which would spend its announcement grace period on an id it has
+      // never indexed and then fail as though a real window had been slow to answer. No fake
+      // timers here on purpose: needing them would mean the check had moved back down the stack.
+      const focused = windowShard([]);
+      withWindows({ 1: focused });
+      const router = await getRouter();
 
-        const opening = router.openWebView('someType', { type: 'tab' }, { targetWindowId: 42 });
-        opening.catch(() => undefined);
-
-        await vi.runAllTimersAsync();
-
-        await expect(opening).rejects.toThrow();
-        expect(focused.openWebView).not.toHaveBeenCalled();
-      } finally {
-        vi.useRealTimers();
-      }
+      await expect(
+        router.openWebView('someType', { type: 'tab' }, { targetWindowId: 42 }),
+      ).rejects.toThrow(/window id 42, which no open window has/);
+      expect(focused.openWebView).not.toHaveBeenCalled();
     });
 
     test('lets an existing web view decide the window before the named target does', async () => {
