@@ -618,7 +618,7 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'View',
     context: 'Onboarding tour overlay',
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
-    locations: ['lib/platform-bible-react/src/components/advanced/tour/tour.component.tsx'],
+    locations: ['src/renderer/components/onboarding-tour/tour.component.tsx'],
   },
   {
     id: 'tour-focus-cycle',
@@ -626,6 +626,6 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Navigation',
     context: 'Onboarding tour overlay',
     keys: { macOS: '⇥ / ⇧⇥', windows: 'Tab / Shift+Tab', linux: 'Tab / Shift+Tab' },
-    locations: ['lib/platform-bible-react/src/components/advanced/tour/tour.component.tsx'],
+    locations: ['src/renderer/components/onboarding-tour/tour.component.tsx'],
   },
 ];
