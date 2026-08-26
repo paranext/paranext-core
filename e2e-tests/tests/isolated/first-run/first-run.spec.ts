@@ -3,8 +3,9 @@
  *
  * These tests use isolated.fixture (fresh Electron per test) because the first-run wizard is a
  * one-time modal that only shows on a clean profile. preConfigureSettings forces
- * platform.firstRunComplete: false so the wizard always appears even on a dev machine where the
- * developer has already completed first-run.
+ * platform.firstRunComplete: false so a developer's completed first-run does not suppress the gate,
+ * and every test then enters the wizard through demo mode — see startWizardInDemoMode for why the
+ * setting alone cannot get there on a registered machine.
  *
  * Tests cover:
  *
@@ -20,6 +21,7 @@
  * (`platform-bible.firstRunDemoMode` localStorage flag): "Save and restart" calls onNext()
  * directly, and "Sync" resolves immediately without a real backend call.
  */
+import type { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import { preConfigureSettings } from '../../../fixtures/helpers';
 import { FirstRunPage } from './first-run.page';
@@ -40,24 +42,34 @@ test.afterEach(() => {
 });
 
 /**
- * Activate demo mode by injecting the localStorage flag before resolveInternal() reads it. In demo
- * mode:
+ * Put the wizard in demo mode before the renderer boots, then reload so the flag is already there
+ * when the first-run store computes its initial status and resolves. In demo mode:
  *
  * - The wizard always starts at the language step (bypasses registration + wizardActive checks).
  * - IdentifyStep's "Save and restart" calls onNext() directly instead of restarting the app.
  * - Completion is not persisted, so the wizard re-runs on every launch.
  *
- * ResolveInternal() is async (involves a network call to check registration validity). Injecting
- * immediately after the page is obtained exploits the gap before that async call reads the flag.
+ * Demo mode is what makes this suite runnable anywhere. Outside it the gate asks the machine's
+ * Paratext registration (`paratextRegistration.doesUserHaveValidRegistration` reads ParatextData's
+ * machine-level RegistrationInfo, not anything the profile owns), and for a registered developer
+ * `decideFirstRun` answers `completeThenShowApp`: the wizard is never meant to appear at all. That
+ * registration-driven decision is a pure function with its own unit coverage
+ * (src/renderer/services/first-run.reducer.test.ts); what only an E2E can cover, and what these
+ * tests cover, is the wizard the decision leads to.
+ *
+ * `addInitScript` + `reload` rather than a bare `evaluate` on the loaded page: the store reads the
+ * flag while the renderer is first painting, so a write afterwards is racing it.
  */
-async function injectDemoMode(mainPage: import('@playwright/test').Page): Promise<void> {
-  await mainPage.evaluate(() => {
+async function startWizardInDemoMode(mainPage: Page): Promise<void> {
+  await mainPage.addInitScript(() => {
     localStorage.setItem('platform-bible.firstRunDemoMode', 'true');
   });
+  await mainPage.reload();
 }
 
 test.describe('First-run wizard', () => {
-  test('shows wizard dialog on a clean launch', async ({ mainPage }) => {
+  test('shows the wizard dialog', async ({ mainPage }) => {
+    await startWizardInDemoMode(mainPage);
     const frPage = new FirstRunPage(mainPage);
     await frPage.waitForWizard();
     await expect(frPage.dialog).toBeVisible();
@@ -66,6 +78,7 @@ test.describe('First-run wizard', () => {
   test('advances forward: Language → Internet Settings → Identify (Next hidden)', async ({
     mainPage,
   }) => {
+    await startWizardInDemoMode(mainPage);
     const frPage = new FirstRunPage(mainPage);
     await frPage.waitForWizard();
 
@@ -100,13 +113,14 @@ test.describe('First-run wizard', () => {
 
   test('skip automatic sync on Sync consent closes the wizard', async ({ mainPage }) => {
     // Demo mode: "Save and restart" calls onNext() directly without a real backend call.
-    await injectDemoMode(mainPage);
+    await startWizardInDemoMode(mainPage);
     const frPage = new FirstRunPage(mainPage);
     await frPage.waitForWizard();
 
     // Navigate to Sync consent.
     await frPage.clickNext(); // Language → Internet Settings
     await frPage.clickNext(); // Internet Settings → Identify
+    await frPage.fillRegistrationName('First-run e2e');
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
 
     // "Skip automatic sync" invokes completeFirstRun({ skippedStep: 'syncConsent' }) which marks
@@ -123,13 +137,14 @@ test.describe('First-run wizard', () => {
     mainPage,
   }) => {
     // Demo mode: "Save and restart" calls onNext() directly without a real backend call.
-    await injectDemoMode(mainPage);
+    await startWizardInDemoMode(mainPage);
     const frPage = new FirstRunPage(mainPage);
     await frPage.waitForWizard();
 
     // Navigate to Sync progress (the step under test for PT-4179).
     await frPage.clickNext(); // Language → Internet Settings
     await frPage.clickNext(); // Internet Settings → Identify
+    await frPage.fillRegistrationName('First-run e2e');
     await frPage.clickSaveAndRestart(); // Identify → Sync consent (demo: calls onNext())
     // SyncConsentStep (PT-4178) hides Next and shows its own "Sync" primary button. In demo mode,
     // clicking "Sync" resolves the defaultSyncFn immediately without a real backend call.

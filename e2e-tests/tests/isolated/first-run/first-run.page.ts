@@ -73,8 +73,20 @@ export class FirstRunPage {
   }
 
   /**
+   * Type a registration name on the Identify step. The step's own primary action stays disabled
+   * until this field is non-empty — demo mode drops the registration-code validation, not the name
+   * requirement (see `isSaveDisabled` in
+   * src/renderer/components/first-run/steps/identify-step.component.tsx), and nothing pre-fills the
+   * field from the machine's existing registration.
+   */
+  async fillRegistrationName(name: string): Promise<void> {
+    await this.dialog.locator('#identify-name').fill(name);
+  }
+
+  /**
    * Click the "Save and restart" button on the Identify step. In demo mode this calls onNext()
    * directly without restarting; in production it saves registration data and restarts the app.
+   * Enter a name with {@link fillRegistrationName} first, or the button is disabled.
    */
   async clickSaveAndRestart(): Promise<void> {
     await this.dialog.getByRole('button', { name: /save and restart/i }).click();
