@@ -6,7 +6,8 @@ import {
   USJ_TYPE,
 } from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
-import { at, isWhiteSpace, slice, split } from '../string-util';
+import { isWhiteSpace, split, startsWith } from '../string-util';
+import { GraphemeString } from '../grapheme-string-util';
 import { LocalizeKey } from '../extension-contributions/menus.model';
 import { isString } from '../util';
 
@@ -322,6 +323,9 @@ export async function getLocalizedIdFromBookNumber(
     localizeKey: `Book.${id}`,
     languagesToSearch: [localizationLanguage],
   });
+  // Grapheme-aware `split`, deliberately, even though both separators are single characters: the
+  // string being split is a localized book name, so a separator could sit next to a combining mark
+  // and native splitting would cut through the middle of a cluster. Keep this off native.
   const parts = split(bookName, '-');
   // some entries had a second name inside ideographic parenthesis. This is the fullwidth left
   // parenthesis U+FF08, which needs the four-digit `\u` escape — the two-digit `\xff08` is `ÿ08`.
@@ -865,8 +869,14 @@ function areUsjContentsEqualExceptWhitespaceInternal(
     // be equal if they are at the end of a block-level marker and the only difference is space at the end.
     // If at the end of a block-level marker with space at the end, take off the final space and compare again
     if (aNormalized !== bNormalized) {
+      // Segment each string once and reuse it. The trim below walks off one grapheme at a time, and
+      // a derived GraphemeString keeps the parent's segmentation, so the loop costs one pass over
+      // the text rather than re-segmenting the whole string on every iteration.
+      const aGraphemes = new GraphemeString(aNormalized);
+      const bGraphemes = new GraphemeString(bNormalized);
+
       // If neither ends in whitespace, they are not equal
-      if (!isWhiteSpace(at(aNormalized, -1) ?? '') && !isWhiteSpace(at(bNormalized, -1) ?? ''))
+      if (!isWhiteSpace(aGraphemes.at(-1) ?? '') && !isWhiteSpace(bGraphemes.at(-1) ?? ''))
         return false;
 
       // If either is not at the end of a block-level marker, they are not equal
@@ -874,22 +884,13 @@ function areUsjContentsEqualExceptWhitespaceInternal(
       if (!isAtEndOfBlockMarker(b, bParent)) return false;
 
       // Trim the end of each string
-      // TODO: Delete this comment along with these loops when the construct-once `GraphemeString`
-      // work lands — its `trimEndOfGraphemes` already replaces them with a single segmentation.
-      // Kept until then only to record what it costs: `at` and `slice` each re-segment the whole
-      // string and the loop calls both per character removed, so trimming n characters costs 2n
-      // segmentations — ~256 ms per call on a 10,000-character string with 200 trailing spaces.
-      // Whatever replaces this must keep comparing whole clusters. `stringz` groups a zero-width
-      // joiner with the character after it, so a trailing ZWJ+space is one cluster that is not
-      // entirely white space and does not get trimmed; native `String` or a `/\s+$/` replace would
-      // trim it. (Whether a caller can reach that difference is unproven — the guard above returns
-      // early on those shapes.)
-      let aTrimmed = aNormalized;
-      while (isWhiteSpace(at(aTrimmed, -1) ?? '')) aTrimmed = slice(aTrimmed, 0, -1);
-      let bTrimmed = bNormalized;
-      while (isWhiteSpace(at(bTrimmed, -1) ?? '')) bTrimmed = slice(bTrimmed, 0, -1);
-      // If they are not equal after trimming, they are not equal
-      if (aTrimmed !== bTrimmed) return false;
+      let aTrimmed = aGraphemes;
+      while (isWhiteSpace(aTrimmed.at(-1) ?? '')) aTrimmed = aTrimmed.slice(0, -1);
+      let bTrimmed = bGraphemes;
+      while (isWhiteSpace(bTrimmed.at(-1) ?? '')) bTrimmed = bTrimmed.slice(0, -1);
+      // If they are not equal after trimming, they are not equal.
+      // Compare the text, not the instances: two GraphemeStrings are never `===` each other.
+      if (aTrimmed.toString() !== bTrimmed.toString()) return false;
     }
   } else if (!aIsString && !bIsString) {
     // We have determined they are not strings, so they must be objects with various simple properties and possibly a `content` array
