@@ -229,7 +229,7 @@ export function createEmptyOpenRpc(papiVersion: string): OpenRpc {
         url: 'https://discord.gg/tzw22PUEAY',
       },
       license: {
-        name: 'MIT',
+        name: 'AGPL-3.0-or-later',
         url: 'https://github.com/paranext/paranext-core/blob/main/LICENSE',
       },
     },

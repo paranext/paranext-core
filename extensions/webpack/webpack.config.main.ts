@@ -4,11 +4,13 @@ import merge from 'webpack-merge';
 import CopyPlugin from 'copy-webpack-plugin';
 import configBase, { rootDir } from './webpack.config.base';
 import WebViewResolveWebpackPlugin from './web-view-resolve-webpack-plugin';
+import { EmitShippedModulesPlugin } from '../../.erb/configs/emit-shipped-modules-plugin';
 import {
   outputFolder,
   getExtensions,
   getMainCopyFilePatterns,
   getMainEntries,
+  extensionCacheDirectory,
   LIBRARY_TYPE,
 } from './webpack.util';
 
@@ -62,7 +64,21 @@ const configMain: () => Promise<webpack.Configuration> = async () => {
       new CopyPlugin({
         patterns: getMainCopyFilePatterns(extensions),
       }),
+      // Writes .notices/modules/extension-main.json: the modules webpack actually compiled into
+      // this bundle, for the third-party notices generator. Emitted on every build rather than only
+      // a production one - see the matching comment in webpack.config.web-view.ts for why the
+      // production gate silently cost the notices generator two of its five manifests.
+      new EmitShippedModulesPlugin({
+        bundleName: 'extension-main',
+        outputDir: path.join(rootDir, '..', '.notices', 'modules'),
+      }),
     ],
+
+    // Its own cache directory, not the one `webpack.config.base.ts` names for every extension
+    // bundle. This config declares `dependencies: ['webView']`, so it starts only after
+    // `extension-web-view` has written its entries - and sharing a directory with it meant this
+    // bundle read as warm on a build that was cold. See `extensionCacheDirectory`.
+    cache: { cacheDirectory: extensionCacheDirectory('main') },
   });
 };
 

@@ -1,0 +1,411 @@
+{
+  "allowed": [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "0BSD",
+    "Unlicense",
+    "CC0-1.0",
+    "Zlib",
+    "Python-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "BlueOak-1.0.0",
+    "OFL-1.1"
+  ],
+  "copyleft": [
+    "AGPL-3.0-or-later",
+    "AGPL-3.0-only",
+    "GPL-2.0-only",
+    "GPL-2.0-or-later",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "LGPL-2.1-only",
+    "LGPL-2.1-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "MPL-1.1",
+    "MPL-2.0",
+    "CDDL-1.0",
+    "CDDL-1.1",
+    "EPL-1.0",
+    "EPL-2.0",
+    "MS-RL",
+    "SSPL-1.0",
+    "OSL-3.0",
+    "EUPL-1.2",
+    "CPAL-1.0",
+    "AGPL-1.0-only",
+    "AGPL-1.0-or-later",
+    "GPL-1.0-only",
+    "GPL-1.0-or-later",
+    "LGPL-2.0-only",
+    "LGPL-2.0-or-later",
+    "MPL-1.0",
+    "OSL-1.0",
+    "OSL-1.1",
+    "OSL-2.0",
+    "OSL-2.1",
+    "CPL-1.0",
+    "QPL-1.0",
+    "RPL-1.1",
+    "RPL-1.5",
+    "Sleepycat",
+    "EUPL-1.0",
+    "EUPL-1.1",
+    "CC-BY-SA-3.0",
+    "CC-BY-SA-4.0",
+    "CC-BY-NC-3.0",
+    "CC-BY-NC-4.0",
+    "CC-BY-NC-SA-3.0",
+    "CC-BY-NC-SA-4.0",
+    "BUSL-1.1",
+    "Elastic-2.0"
+  ],
+  "elections": {
+    "npm:jszip": {
+      "elected": "MIT",
+      "of": "MIT OR GPL-3.0-or-later",
+      "reason": "MIT is the permissive branch; the GPL branch would impose copyleft on the bundle."
+    },
+    "npm:dompurify": {
+      "elected": "Apache-2.0",
+      "of": "MPL-2.0 OR Apache-2.0",
+      "reason": "Apache-2.0 avoids MPL file-level copyleft, which webpack bundling makes awkward to reason about, and adds an express patent grant."
+    },
+    "nuget:CsvHelper": {
+      "elected": "Apache-2.0",
+      "of": "MS-PL OR Apache-2.0",
+      "reason": "MS-PL is GPL-incompatible (section 3(C) reciprocity cannot be satisfied alongside the GPL) and CsvHelper links into ParanextDataProvider, whose own source is AGPL-3.0-or-later. Apache-2.0 is explicitly GPLv3/AGPLv3 compatible and carries an express patent grant. See LICENSING.md."
+    }
+  },
+  "platformOnlyPackagesNote": "npm honours a package's os/cpu constraints, so a platform-restricted optional dependency is absent from the tree on every other platform - and this artifact is generated on Linux. List here every package that IS redistributed in another platform's installer and that no Linux run can observe; they are described from package-lock.json (collectPlatformOnlyPackages in shipping-set.ts). The npm counterpart of the NuGet half's four-RID union. Forgetting one is not silent: it fails that platform's leg of CI with \"added: <name>\".",
+  "platformOnlyPackages": ["fsevents"],
+  "unbundledDependenciesNote": "Each entry names a package a first-party package.json declares under \"dependencies\" that reaches no bundle, with the reason nothing this repository ships contains it. missingDirectDependencies (shipping-set.ts) cross-checks the derived npm shipping set against those declarations, the way missingDirectReferences does for the NuGet closure and the project file's PackageReference entries. The npm half's other guards measure SIZE and cannot see an omission: when a package's modules are never recorded the artifact simply lacks a row, so no removal appears in a PR diff and there is nothing to sign off on. A file: range is a workspace link to first-party code and is discounted without an entry; everything else that is declared but not bundled has to be recorded here.",
+  "unbundledDependencies": {
+    "electron-updater": {
+      "reason": "Declared as a root runtime dependency, but its only import in src/main/main.ts is commented out, so webpack compiles no module for it and electron-builder does not pack it either - release/app/package.json, whose closure is the one packed unbundled, declares no dependencies. Nothing this repository distributes contains it."
+    },
+    "posthog-node": {
+      "reason": "Declared as a root runtime dependency and resolved by package-lock.json, but nothing in first-party source imports it yet, so webpack compiles no module for it. It gains a row on its own the moment something does."
+    }
+  },
+  "exceptionsNote": "An exception is the instrument that lets an otherwise-blocked package past the gate, so a new entry is a code-review question rather than a build one. Each entry's \"reason\" must state what is actually in that package's licence file, so a later reader can check it against the package without repeating the reading, and \"reviewer\" and \"date\" must name who signed it off and when. Every entry is pinned to one version AND one text hash, so the block returns the moment the package changes its licence text. See .erb/scripts/third-party-notices/README.md for when an exception is the right instrument and when it is not.",
+  "exceptions": [
+    {
+      "package": "npm:bowser@2.14.1",
+      "spdx": "MIT",
+      "reason": "LICENSE is the MIT grant with one clause added between the permission notice and the warranty disclaimer, requiring a substantially altered redistribution to replace the original author's bug-reporting addresses; that is an attribution requirement rather than a use restriction, and the modified text identifies as no single license.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "dfde54fedc270c2a305d9a9f993d93f706d34624455a2fd2d2a05ca34d8ae8c3"
+    },
+    {
+      "package": "npm:chroma-js@3.2.0",
+      "spdx": "(BSD-3-Clause AND Apache-2.0)",
+      "reason": "LICENSE holds two grants in one file - BSD-3-Clause for chroma.js itself and Apache-2.0 for the colorbrewer2.org colour tables it embeds - which is exactly the conjunction its package.json declares; no single-licence matcher identifies a two-grant document, and both operands are on the allowed list.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "85aae6740628115550c6e67a85e8f8e70835cd5b14d4a2cb878c90c998f506db"
+    },
+    {
+      "package": "npm:fast-uri@3.1.4",
+      "spdx": "BSD-3-Clause",
+      "reason": "LICENSE is BSD-3-Clause whose non-endorsement clause reads 'The names of any contributors' rather than the canonical wording, above a two-line copyright and below a trailing contributors pointer; the grant is the declared BSD-3-Clause.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "b010b0dfdfdb23d7396e03b82cd4621fc9bb8f95d6b0aea70b9c24e12074c786"
+    },
+    {
+      "package": "npm:jsonpath-plus@10.3.0",
+      "spdx": "MIT",
+      "reason": "LICENSE is the canonical MIT text; only its copyright notice wrapping onto a second line defeats licensee's normalizer, which strips one copyright line and leaves the continuation behind as unmatched prose.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "f21ce68006d5bd12fef2f5463039783a50848f115d6e7287f04bb9d0fd0ed546"
+    },
+    {
+      "package": "npm:jszip@3.10.1",
+      "spdx": "MIT",
+      "reason": "LICENSE.markdown concatenates the complete MIT and GPL-3.0 texts into one document, so no single-licence matcher identifies it and the recorded election cannot reach a verdict that requires identified text; this project takes the MIT branch of the declared choice, per the elections entry for npm:jszip.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "566c953c6090b1218ca6217dd7359d45dde46581968586dc607d59a78af6a9c4"
+    },
+    {
+      "package": "npm:lodash@4.18.1",
+      "spdx": "MIT",
+      "reason": "LICENSE is lodash's compound document: a contributions preamble, the MIT grant covering all parts of the software, a CC0 waiver covering only sample code shown in the documentation prose, and a pointer to node_modules/vendor directories the published tarball does not contain. The grant over the shipped code is MIT.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "f71e8ed126b46346494aad5486874cd8f0aafe95092ed67d2e3cb6110f939abc"
+    },
+    {
+      "package": "npm:lodash.clonedeep@4.5.0",
+      "spdx": "MIT",
+      "reason": "LICENSE is lodash's compound document (see npm:lodash@4.18.1), differing only in the copyright holder line; the grant over the shipped code is MIT.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "ffd8b33b354585f4ce119f19c53728281e48a97b074491eb6bf6d5c5ff305272"
+    },
+    {
+      "package": "npm:lodash.isequal@4.5.0",
+      "spdx": "MIT",
+      "reason": "LICENSE is lodash's compound document (see npm:lodash@4.18.1), differing only in the copyright holder line; the grant over the shipped code is MIT.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "e159c6d48c989185448658f276375bfb2300362ec6d4ae5525a2d49c4bcb947d"
+    },
+    {
+      "package": "npm:lucide-react@1.8.0",
+      "spdx": "(ISC AND MIT)",
+      "reason": "LICENSE is the ISC grant for the package, followed by an MIT grant covering the named icons derived from the Feather project; two grants in one file identify as neither, and both are on the allowed list.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "b495047bd93a9b06913511076f504daba17d5bbeb3e0650f3bb53a4220329c57"
+    },
+    {
+      "package": "npm:mkdirp@0.5.6",
+      "spdx": "MIT",
+      "reason": "LICENSE is the MIT text introduced as 'the MIT/X11 license' beneath a copyright line, which licensee's normalizer leaves as unmatched preamble; the grant is the declared MIT.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "05991c2e8f070b69ec5b656c2c12fd07cd0153dd157d39b050b82af59b319a01"
+    },
+    {
+      "package": "npm:pako@1.0.11",
+      "spdx": "(MIT AND Zlib)",
+      "reason": "package.json declares a conjunction rather than a choice, and correctly so: pako is a JavaScript port of zlib, so the zlib terms bind on the ported algorithm alongside MIT on pako's own code. No election can resolve a conjunction, both operands are permissive and on the allowed list, and the LICENSE the package ships carries only the MIT half, which is therefore the only text reproduced for it.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "a04665b3b2de56c66730c1f720f528175739e4104f79073614aa611da1e85539"
+    },
+    {
+      "package": "npm:quill-delta@5.1.0",
+      "spdx": "BSD-3-Clause",
+      "reason": "package.json declares MIT but the LICENSE the package ships is the BSD 3-Clause text (Copyright (c) 2022, Slab, Inc.). The file is the grant and the manifest field is wrong, so the verdict rests on the text; both licences are permissive and on the allowed list, and the discrepancy should be reported upstream.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "2a61fd00f6f3b446a049b71531eba0b3575096249c1a841e2e6b8fe7fa979455"
+    },
+    {
+      "package": "npm:readable-stream@2.3.8",
+      "spdx": "MIT",
+      "reason": "LICENSE is Node.js's own two-part licence document - the Node.js contributors' MIT grant followed by Joyent's MIT grant for the parts originating in joyent/node - which identifies as neither on its own; both parts are MIT.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "ec62dc96da0099b87f4511736c87309335527fb7031639493e06c95728dc8c54"
+    },
+    {
+      "package": "npm:source-map@0.7.6",
+      "spdx": "BSD-3-Clause",
+      "reason": "LICENSE is BSD-3-Clause whose non-endorsement clause names the Mozilla Foundation and project contributors rather than using the canonical wording, under a leading blank line; the grant is the declared BSD-3-Clause.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "6cb0631f71c7749763fd3dd1d5bee52dd1070ec17f2edc1710079ad070bd2fbd"
+    },
+    {
+      "package": "npm:string_decoder@1.1.1",
+      "spdx": "MIT",
+      "reason": "LICENSE is Node.js's own two-part licence document (see npm:readable-stream@2.3.8); both parts are MIT.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "11f2aafb37d06b3ee5bdaf06e9811141d0da05263c316f3d627f45c20d43261b"
+    },
+    {
+      "package": "npm:yjs@13.6.30",
+      "spdx": "MIT",
+      "reason": "LICENSE is the canonical MIT text; only its three-line copyright block - two holders on their own bulleted lines - defeats licensee's normalizer, which strips a single copyright line.",
+      "reviewer": "matt_lyons@sil.org",
+      "date": "2026-08-21",
+      "textSha256": "341baa53605ed85d6f95782322854cca56c655ebc7fd4712649b8e7afc6020ff"
+    }
+  ],
+  "copyrightNoticesNote": "Every entry is a copyright notice read from that package's own licence file, never a holder inferred from an \"author\" field. Where a package publishes no licence file in its TARBALL, read the notice from the licence file in the repository its own package.json names - the same document by a different route, and the bulk of this table: the ten @radix-ui/* packages are published from one monorepo whose LICENSE they do not each carry. Two packages (imurmurhash, isarray) embed their licence text in README.md and the notice comes from there. Re-verify an entry against the package when its major version changes, and for a notice read from a repository, that the repository still publishes that package. A package that asserts no copyright notice anywhere gets NO entry - inventing a holder is worse than the document recording that none was found. npm:rc-new-window is the worked example: its tarball ships no licence file, its repository LICENSE is the stock Apache-2.0 text whose only occurrences of the word are the \"Grant of Copyright License\" heading and the unfilled boilerplate appendix, and it publishes no NOTICE file. Apache-2.0 section 4(c) obliges retaining the notices FROM the work and there are none, so nothing is outstanding; the document reproduces its licence text, which is what section 4(a) asks for.",
+  "copyrightNotices": {
+    "npm:@eten-tech-foundation/platform-editor": "Copyright © 2023-2025 ETEN Tech Foundation",
+    "npm:@eten-tech-foundation/scripture-utilities": "Copyright © 2023-2025 ETEN Tech Foundation",
+    "npm:@radix-ui/number": "Copyright (c) 2022 WorkOS",
+    "npm:@radix-ui/react-compose-refs": "Copyright (c) 2022 WorkOS",
+    "npm:@radix-ui/react-context": "Copyright (c) 2022 WorkOS",
+    "npm:@radix-ui/react-direction": "Copyright (c) 2022 WorkOS",
+    "npm:@radix-ui/react-id": "Copyright (c) 2022 WorkOS",
+    "npm:@radix-ui/react-use-callback-ref": "Copyright (c) 2022 WorkOS",
+    "npm:@radix-ui/react-use-escape-keydown": "Copyright (c) 2022 WorkOS",
+    "npm:@radix-ui/react-use-layout-effect": "Copyright (c) 2022 WorkOS",
+    "npm:@radix-ui/react-use-previous": "Copyright (c) 2022 WorkOS",
+    "npm:@radix-ui/react-use-size": "Copyright (c) 2022 WorkOS",
+    "npm:@xmldom/xmldom": "Copyright 2019 - present Christopher J. Brody and other contributors, as listed in: https://github.com/xmldom/xmldom/graphs/contributors; Copyright 2012 - 2017 @jindw <jindw@xidea.org> and other contributors, as listed in: https://github.com/jindw/xmldom/graphs/contributors",
+    "npm:fsevents": "Copyright (C) 2010-2020 by Philipp Dunkel, Ben Noordhuis, Elan Shankar, Paul Miller",
+    "npm:imurmurhash": "Copyright (c) 2013 Gary Court, Jens Taylor",
+    "npm:isarray": "Copyright (c) 2013 Julian Gruber <julian@juliangruber.com>",
+    "npm:react-remove-scroll-bar": "Copyright (c) 2025 Anton Korzunov <thekashey@gmail.com>"
+  },
+  "licenseTextsNote": "A licence text this repository holds on behalf of a package that publishes its terms at a URL and bundles no copy of them. Reproduced verbatim as that package's licence, INSTEAD of the canonical SPDX text of its recorded identifier - which is the right substitute only where a package's grant is the unmodified standard text. Each entry is pinned to the version the terms were read from and to the text's own hash, and names the source it was read from, so neither a version change nor an edit to the checked-in copy can pass unreviewed. Classification is unaffected: the \"overrides\" entry decides which terms apply and is checked against the lists above; this decides only what text is reproduced.",
+  "licenseTexts": {
+    "nuget:Icu4c.Win.Min": {
+      "file": "icu4c-59.1-LICENSE.txt",
+      "sha256": "8588d2e020c1313b7ef44dbfafaa8234ce2ddddc42168b3afb37ae09e9ce5c2d",
+      "source": "https://github.com/sillsdev/icu4c/blob/release-59-1/LICENSE",
+      "version": "59.1.7",
+      "reason": "ICU's own LICENSE, verbatim, from the tag this package version builds from. Its first section is the Unicode-DFS-2016 grant SPDX publishes; the rest is a \"Third-Party Software Licenses\" section listing five components ICU redistributes inside its data library - the pre-58 IBM ICU grant, the Chinese/Japanese, Lao and Burmese word-break dictionaries, and the time zone database. This package ships icudt59.dll, which is that data library, so those notices travel with it and reproducing SPDX's copy of the first section alone would discharge one obligation and drop four."
+    }
+  },
+  "staticAssetNoticesNote": "Each extension's `assets/` and `public/` directories are copied into `extensions/dist` verbatim by copy-webpack-plugin and packed into every installer, so a third-party file placed there is redistributed without being compiled into anything - and the npm half of this pipeline is derived from webpack's module graph, which has no module for a copied file. This is the inventory that closes that gap: every notice-shaped file under those trees must be recorded here or `assertStaticAssetNoticesRecorded` refuses the build. A `sha256` entry pins a tracked file whose text the document reproduces verbatim; `notTracked` records a file fetched at install time, which has nothing stable to pin and is described in the document's prose instead.",
+  "staticAssetNotices": {
+    "extensions/src/quick-verse/assets/ATTRIBUTION.md": {
+      "reason": "States the author and terms of letter-q.png, the quick-verse extension's icon, which is third-party artwork obtained from veryicon.com.",
+      "sha256": "2ca689877a890ccd7b54b318700f934eacdb03f30ac13ce196e72336b86022df"
+    },
+    "extensions/src/platform-lexical-tools/assets/lexical-db/LICENSE.md": {
+      "reason": "The CC BY-SA 4.0 text for the UBS portions of the lexical database. Fetched from the dependencies repo at install time by download-db.ts, so it is not in this repository and has no stable bytes to pin; the database's terms are set out in the document's \"Lexical database\" section.",
+      "notTracked": true
+    },
+    "extensions/src/platform-lexical-tools/assets/lexical-db/SOURCE.md": {
+      "reason": "The attribution and copyright statement that travels with the lexical database. Fetched at install time like LICENSE.md above, and covered by the same section of the document.",
+      "notTracked": true
+    }
+  },
+  "snapStagePackagesNote": "The Ubuntu packages snapcraft stages inside the Linux .snap are redistributed inside that artifact but appear in neither the npm nor the NuGet graph, so nothing else in this pipeline can see them. This table is what the notices document's \"Linux snap\" section is written FROM: every name in electron-builder.json5's snap.stagePackages must appear here or the build refuses, so a library added to the installer cannot be described by prose that predates it. `terms` is deliberately as coarse as the source it was read from (\"the LGPL\", not a version) - recording a version nobody established would be inventing precision. A library whose terms nobody has settled is recorded as not-established rather than guessed, the same treatment LICENSING.md gives System.Net.Http; the way out of that state is to read its terms and record what they say.",
+  "snapStagePackages": {
+    "libappindicator3-1": {
+      "classification": "copyleft",
+      "terms": "LGPL v2.1, offered as an alternative to GPL v3",
+      "copyright": {
+        "file": "libappindicator3-1-copyright.txt",
+        "sha256": "518f65dcd8b7a81d83c5e9dcdad5635b3d18e3e529a85ae53af0090a94ab508d",
+        "source": "usr/share/doc/libappindicator3-1/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libasound2": {
+      "classification": "copyleft",
+      "terms": "LGPL",
+      "copyright": {
+        "file": "libasound2-copyright.txt",
+        "sha256": "1e389062b3d44557d569d488e6075b162efd946e4bced56d20cbf62f9f53d7f6",
+        "source": "usr/share/doc/libasound2/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libdrm-nouveau2": {
+      "classification": "permissive",
+      "copyright": {
+        "file": "libdrm-nouveau2-copyright.txt",
+        "sha256": "512c9a57fd8b449aa157351da9df07bf8e19f767e496a72205a4020268ddb2e0",
+        "source": "usr/share/doc/libdrm-nouveau2/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libdrm2": {
+      "classification": "permissive",
+      "copyright": {
+        "file": "libdrm2-copyright.txt",
+        "sha256": "512c9a57fd8b449aa157351da9df07bf8e19f767e496a72205a4020268ddb2e0",
+        "source": "usr/share/doc/libdrm2/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libgbm1": {
+      "classification": "permissive",
+      "copyright": {
+        "file": "libgbm1-copyright.txt",
+        "sha256": "55268f06fbc193ee1a4fe694045a9cec58ba727d74bb17b5b1d54de36873a038",
+        "source": "usr/share/doc/libgbm1/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libgl1": {
+      "classification": "permissive",
+      "copyright": {
+        "file": "libgl1-copyright.txt",
+        "sha256": "cf246da9d8979f9be80e5b9c3ce0010c09786f11a55637ff3d09f1a36d269b25",
+        "source": "usr/share/doc/libgl1/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libgtk-3-0": {
+      "classification": "copyleft",
+      "terms": "LGPL",
+      "copyright": {
+        "file": "libgtk-3-0-copyright.txt",
+        "sha256": "b1fb413d22da493a7e4a2bf256905399cf1401e271c5da9eb9022a4313656bbd",
+        "source": "usr/share/doc/libgtk-3-0/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libnspr4": {
+      "classification": "copyleft",
+      "terms": "MPL-2.0",
+      "copyright": {
+        "file": "libnspr4-copyright.txt",
+        "sha256": "3c4fcc131809b2b6993513bfe4cf6f1ede391ec84f1d5ceca78fb75537b22452",
+        "source": "usr/share/doc/libnspr4/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libnss3": {
+      "classification": "copyleft",
+      "terms": "MPL-2.0",
+      "copyright": {
+        "file": "libnss3-copyright.txt",
+        "sha256": "d91076658d63a9486e031cedd9dec97d99cfb13ddc3296ac7b22552dbb1ea503",
+        "source": "usr/share/doc/libnss3/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libsecret-1-0": {
+      "classification": "copyleft",
+      "terms": "LGPL",
+      "copyright": {
+        "file": "libsecret-1-0-copyright.txt",
+        "sha256": "56631836af8a67c9531d462b78023f12b04a75cb50d900ad14f482b51d75f1cd",
+        "source": "usr/share/doc/libsecret-1-0/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libtinfo5": {
+      "classification": "permissive",
+      "copyright": {
+        "file": "libtinfo5-copyright.txt",
+        "sha256": "f0974fb41778e23c94111ff90da0546de8971f8270c58877283d372e6bd7f17e",
+        "source": "usr/share/doc/libtinfo5/copyright, Ubuntu 22.04 (core22)"
+      }
+    },
+    "libxss1": {
+      "classification": "permissive",
+      "copyright": {
+        "file": "libxss1-copyright.txt",
+        "sha256": "3ebbe713ac6980aefc18dcf407c94f51bbf02852463294bbb6dc1ee1f9fad9c3",
+        "source": "usr/share/doc/libxss1/copyright, Ubuntu 22.04 (core22)"
+      }
+    }
+  },
+  "overrides": {
+    "nuget:ParatextData": {
+      "license": "Proprietary — SIL Global / United Bible Societies",
+      "nonSpdx": true,
+      "versionIndependent": true
+    },
+    "nuget:ParatextChecks": {
+      "license": "Proprietary — SIL Global / United Bible Societies",
+      "nonSpdx": true,
+      "versionIndependent": true
+    },
+    "nuget:ParatextCorePluginInterfaces": {
+      "license": "Proprietary — SIL Global / United Bible Societies",
+      "nonSpdx": true,
+      "versionIndependent": true,
+      "note": "First-party. Its nuspec declares no license and its copyright notice reserves all rights, but it is code of the same SIL Global / United Bible Societies team that owns Platform.Bible, published from a different product release on the same internal feed as ParatextData. Listed here because it ships in the packaged application, not because it carries a third-party disclosure obligation."
+    },
+    "nuget:Microsoft.ICU.ICU4C.Runtime": {
+      "license": "Unicode-DFS-2016",
+      "version": "72.1.0.3",
+      "note": "Windows only. Permissive; requires the Unicode copyright and permission notice to travel with copies.",
+      "reason": "ICU 72. ICU moved to the Unicode License Agreement for Data Files and Software (Unicode-DFS-2016) at ICU 58 and to the Unicode License v3 (Unicode-3.0) only at ICU 74, and Microsoft publishes no ICU4C runtime package at 74 or later - so Unicode-DFS-2016 is the licence this version is under, and it is the text reproduced on the package's behalf.",
+      "alwaysList": true
+    },
+    "nuget:Spart": {
+      "license": "Zlib",
+      "version": "1.0.0",
+      "reason": "Its nuspec carries the pre-SPDX <licenseUrl> https://opensource.org/licenses/Zlib, which is OSI's page for the zlib License, so the determination is the SPDX identifier Zlib - already on the allowed list, and the canonical text is reproduced on the package's behalf."
+    },
+    "nuget:Icu4c.Win.Min": {
+      "license": "Unicode-DFS-2016",
+      "version": "59.1.7",
+      "reason": "Its nuspec carries the pre-SPDX <licenseUrl> https://github.com/sillsdev/icu4c/blob/trunk/license.html, which is now a stub pointing at the repository's plain-text LICENSE. The terms have been read at the tag this version builds from, sillsdev/icu4c release-59-1: that file opens \"COPYRIGHT AND PERMISSION NOTICE (ICU 58 and later)\" with \"Copyright \u00a9 1991-2017 Unicode, Inc.\", which is the Unicode License Agreement for Data Files and Software - SPDX Unicode-DFS-2016. It confirms this package's own heading that ICU moved to those terms at ICU 58; ICU moved on again to the Unicode License v3 (Unicode-3.0) only at ICU 74. The text reproduced is the package's own LICENSE rather than SPDX's copy of the first section, because that file also carries the five third-party notices for data inside icudt59.dll - see licenseTexts."
+    }
+  }
+}
