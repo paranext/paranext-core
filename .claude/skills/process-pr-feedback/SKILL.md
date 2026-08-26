@@ -34,13 +34,13 @@ has to mean "ask again".
 ```bash
 gh pr view <pr> --json state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefOid
 gh api repos/paranext/paranext-core/compare/<base>...<headRefOid> --jq '{ahead_by,behind_by}'
-git rev-parse origin/<branch>    # step 10's lease pin — record it now, per branch
 ```
 
 Run this per PR the round covers and record a row each **in `findings.md`**: PR · branch · base ·
-head SHA · the `origin/<branch>` SHA · behind-count · mergeable. The `origin/<branch>` SHA is what
-step 10 leases against, and the gates can take days — a pin that lives only in this session's
-context is one the session running step 10 cannot read.
+`headRefOid` · behind-count · mergeable. `headRefOid` is also step 10's lease pin, so take it from
+the API rather than `git rev-parse origin/<branch>`, which reports whenever this checkout last
+fetched. The gates can take days — a pin that lives only in this session's context is one the
+session running step 10 cannot read.
 
 `behind_by > 0` or `mergeable: CONFLICTING` → **rebase before anything else**; every fix estimate is
 against a tree that will change. On a stack each PR's base is the branch below it, not `main`.
@@ -167,8 +167,10 @@ npm run build:types    # state the expected papi.d.ts delta BEFORE running
 npm run build:main     # writes buildInfo.json, which typecheck imports
 ```
 
-Both builds first — then run the tests, lint and format checks with the `test-runner` skill rather
-than a hand-written command line.
+Both builds first, then `npm run typecheck && npm run lint && npm run format:check`, and the test
+suites through the `test-runner` skill. Keep `format:check` named: it is a separate prettier pass,
+`lint` is eslint over script extensions only, and a round that edits an `.md` — which step 10.3
+anticipates — passes lint and lands red on CI.
 
 Then **run the app and reproduce the reviewer's scenario** — `app-runner` to start it,
 `visual-verification` to drive it, `log-inspector` for logs, `papi-client` to hit a command
@@ -209,26 +211,30 @@ SHA that is not on GitHub is a broken citation in public. Approval here also cov
 
 1. **Restack first, push second.** If anything sits on top of this branch, rebase it before
    pushing anything: `git rebase --onto <new-base-tip> <old-base-tip> <branch>`, bottom of the
-   stack up. Never blanket `--continue || --skip` in a loop — `--skip` silently drops real commits,
-   and an untracked-file collision or a hook failure looks exactly like an empty commit. Then
+   stack up. Both placeholders come from step 0's table: `<old-base-tip>` is the base branch's
+   recorded head, the tip before step 5 committed onto it and by now on no ref at all;
+   `<new-base-tip>` is that same branch's tip now. Guess `<old-base-tip>` and the rebase replays
+   either nothing or the base's own commits onto the child. Never blanket `--continue || --skip`
+   in a loop — `--skip` silently drops real commits, and an untracked-file collision or a hook
+   failure looks exactly like an empty commit. Then
    **re-run step 7's battery at each new tip**, since the restack rewrote the commits it passed on.
 2. **Push** every branch you touched, bottom of the stack first, one command at a time, with
-   `--force-with-lease=<branch>:<the origin/<branch> SHA step 0 recorded>`. Never bare: with no
+   `--force-with-lease=<branch>:<the `headRefOid` step 0 recorded>`. Never bare: with no
    expected value the lease is checked against the remote-tracking ref, which any fetch across the
    two stops has already advanced, so it protects nothing. A restacked branch that is never pushed
    leaves its PR on the old commits while the replies cite a tip that exists only on disk.
+   A rejected lease means the branch moved since step 0 — do not re-pin to the current remote,
+   which is the defeated form; read the remote back and put it to the user as a new decision.
    A force-push can dismiss approvals; record `reviewDecision` before and after, and re-request
    review from whoever had approved.
 3. **Post** — and only now, because a rebase orphans every SHA a reply cites. They still resolve,
    but they leave the PR's commit list, and anything *renumbered* such as an
    `Architecture-Decisions.md` entry now points at something else entirely. One comment at a time,
-   no retries, **spaced a second or two apart**. A batch posted as fast as the API answers trips
-   GitHub's secondary rate limit, which answers `HTTP 422 Validation Failed` with `"code":"abuse"`
-   in the body, rather than the `403` the primary limit returns. Read as "validation failed" it
-   looks like a malformed body — which invites editing a reply the user already approved in order
-   to get past it. It is neither malformed nor rejected on content. If one fails: stop, read the
-   live state back, and only re-post once you have a clean stray list. A `gh` failure does **not**
-   prove nothing was created.
+   no retries, **spaced a second or two apart**. If a POST fails with `422` and `"code":"abuse"` in
+   the body, that is the secondary rate limit and not a malformed body — however much "Validation
+   Failed" invites it, do not edit a reply the user has already approved to get past it. Stop,
+   read the live state back, and only re-post once you have a clean stray list. A `gh` failure
+   does **not** prove nothing was created.
 4. **Read back** what landed and compare it against what you meant to post. "Posted successfully"
    without a read-back is not a result.
 
