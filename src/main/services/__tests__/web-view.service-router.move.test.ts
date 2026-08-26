@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => {
     getAbandonedWindowIds: vi.fn(),
     isWindowReady: vi.fn(),
     isWindowClosing: vi.fn(),
+    isWindowTracked: vi.fn((_windowId: number) => true),
     getFocusedWindowId,
     // The real answer is false only while no window holds OS focus, which in this suite is exactly
     // when getFocusedWindowId answers undefined — derived so the focus-driven tests keep meaning
@@ -83,6 +84,7 @@ vi.mock('@main/services/window-state.service', () => ({
   getAbandonedWindowIds: mocks.getAbandonedWindowIds,
   isWindowReady: mocks.isWindowReady,
   isWindowClosing: mocks.isWindowClosing,
+  isWindowTracked: mocks.isWindowTracked,
   getFocusedWindowId: mocks.getFocusedWindowId,
   isApplicationFocused: mocks.isApplicationFocused,
   focusWindow: mocks.focusWindow,
@@ -841,6 +843,18 @@ describe('the move commands', () => {
     const handler = await getCommandHandler('platform.moveWebViewToWindow');
 
     await expect(handler('view-1', 'not-a-number')).rejects.toThrow(/target window id/);
+  });
+
+  test('the to-window command rejects a window id no open window has, before asking a shard', async () => {
+    // A window id is the caller's word for something only main can confirm: fabricated, or real
+    // until the window closed while the caller was deciding. Refused here rather than at shard
+    // resolution, which would spend its announcement grace period first and then fail as though a
+    // real window had been slow to answer.
+    mocks.isWindowTracked.mockImplementation((windowId: number) => windowId === 1);
+    const handler = await getCommandHandler('platform.moveWebViewToWindow');
+
+    await expect(handler('view-1', 999)).rejects.toThrow(/window id 999, which no open window has/);
+    expect(mocks.networkObjectGet).not.toHaveBeenCalled();
   });
 
   test('the commands are declared owner-routed with a first webViewId param', async () => {

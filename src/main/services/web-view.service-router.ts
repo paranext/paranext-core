@@ -17,6 +17,7 @@ import {
   getUnreachableWindowIds,
   isApplicationFocused,
   isWindowClosing,
+  isWindowTracked,
   wasWindowEverReady,
 } from '@main/services/window-state.service';
 import { assertCommandRoutingMatchesDocs } from '@main/services/owner-routed-command.util';
@@ -1161,6 +1162,26 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
   },
 };
 
+/**
+ * Assert that a window id supplied by a caller names a window this process actually has.
+ *
+ * Every entry point here takes the id from another process, so it is the caller's word for
+ * something only main can confirm — a fabricated id, or one belonging to a window that closed while
+ * the caller was deciding, arrives looking exactly like a good one. Refusing it here rather than
+ * letting it reach shard resolution is what tells a caller it named nothing, instead of spending
+ * the resolver's retry and failing as though a real window were slow to answer.
+ *
+ * @param windowId Window id as it arrived, before anything has assumed it is a number
+ * @param operation Name of the operation to quote back, so a caller can tell which of its calls was
+ *   rejected
+ */
+function assertWindowExists(windowId: unknown, operation: string): asserts windowId is number {
+  if (typeof windowId !== 'number')
+    throw new Error(`${operation} needs a target window id number; got ${typeof windowId}`);
+  if (!isWindowTracked(windowId))
+    throw new Error(`${operation} was given window id ${windowId}, which no open window has.`);
+}
+
 /** Handle `platform.moveWebViewToNewWindow`. Arguments arrive untyped over the network */
 async function moveWebViewToNewWindow(webViewId: unknown): Promise<WebViewId> {
   if (typeof webViewId !== 'string')
@@ -1175,10 +1196,7 @@ async function moveWebViewToWindow(
 ): Promise<WebViewId> {
   if (typeof webViewId !== 'string')
     throw new Error(`platform.moveWebViewToWindow needs a web view id; got ${typeof webViewId}`);
-  if (typeof targetWindowId !== 'number')
-    throw new Error(
-      `platform.moveWebViewToWindow needs a target window id number; got ${typeof targetWindowId}`,
-    );
+  assertWindowExists(targetWindowId, 'platform.moveWebViewToWindow');
   return moveWebView(webViewId, targetWindowId);
 }
 
@@ -1313,6 +1331,10 @@ async function openWebView(
   // A named window outranks placement inference: the caller said where. It never outranks
   // `existingId` reuse above — an existing view stays wherever it lives.
   if (options?.targetWindowId !== undefined) {
+    // `options` is a network message, so its type here describes what a well-behaved caller sends
+    // rather than what arrived. The move commands have always checked their target; this one is
+    // reached the same way and by the same callers, so it is checked identically.
+    assertWindowExists(options.targetWindowId, 'openWebView');
     // A window whose close has been decided is a stale target the caller cannot know about — same
     // rule the move commands apply: opening into it would report success and then lose the web
     // view when the close lands
