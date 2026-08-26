@@ -32,6 +32,9 @@ export const MODEL_TEXT_PANEL_STRING_KEYS = Object.freeze([
   // `..._emptyChapter_message%`, which sits beside an "Add chapter number" action this read-only
   // panel must not offer.
   '%webView_platformScriptureEditor_emptyChapter_messageResource%',
+  // Shared with the resource text panel's terminal-failure branch. The sentence names neither a
+  // panel nor a resource type, because what failed is the read rather than the kind of text.
+  '%webView_resourcePanel_textUnavailable%',
 ] as const);
 
 export type ModelTextPanelLocalizedStringKey = (typeof MODEL_TEXT_PANEL_STRING_KEYS)[number];

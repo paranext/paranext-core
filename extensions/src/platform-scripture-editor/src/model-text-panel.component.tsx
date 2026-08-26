@@ -35,8 +35,9 @@ import type { EffectiveResourceReferenceListState } from './use-effective-resour
 import { scrollToVerse } from './editor-dom.util';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { ResourceBlankChapter } from './resource-blank-chapter.component';
+import { ResourceTextUnavailable } from './resource-text-unavailable.component';
 import {
-  isChapterBlank,
+  isBlankChapterOnScreen,
   isMissingBookError,
   isMissingBookOnScreen,
 } from './platform-scripture-editor.utils';
@@ -46,6 +47,13 @@ import type {
 } from './model-text-panel.const';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
+
+/**
+ * Identifies the wrapper around `Editorial`. The wrapper, not the editor, is what carries the
+ * hidden/shown state, so a test asserting that a message or spinner replaced the text on screen —
+ * without the editor being torn down and rebuilt — has to address this element.
+ */
+export const MODEL_TEXT_EDITOR_CONTAINER_TEST_ID = 'model-text-editor-container';
 
 // The editor's default view options never change, so build them once at module scope. Rebuilding a
 // fresh `view` object inside the `options` memo would give `options` a new identity on every fetch,
@@ -322,9 +330,11 @@ export function ModelTextPanel({
   // reference, because `usj` keeps the previous chapter's content until the new fetch lands —
   // deriving this from stale content would paint the message over a chapter that is still arriving,
   // or over a book the model text does not have at all.
+  //
+  // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
   const isBlankChapter = useMemo(
-    () => isAnswerCurrent && !isUsjLoading && usj !== undefined && isChapterBlank(usj),
-    [isAnswerCurrent, usj, isUsjLoading],
+    () => isAnswerCurrent && !isUsjLoading && isBlankChapterOnScreen(usj, scrRef.chapterNum),
+    [isAnswerCurrent, usj, isUsjLoading, scrRef.chapterNum],
   );
 
   // Whether the failure in hand still describes what this panel is showing. Derived rather than
@@ -336,6 +346,20 @@ export function ModelTextPanel({
       currentBookNum: Canon.bookIdToNumber(scrRef.book),
       projectId: resourceProjectId,
     });
+
+  // A failure that is not a missing book in the text on screen: an unreadable project, a permissions
+  // failure, a data provider that cannot open the resource. Terminal, because the fetch already
+  // rejected and nothing retries it until the reference or the model text changes — so a spinner
+  // would claim progress that never arrives.
+  //
+  // A missing-book rejection naming some OTHER book or model text is excluded rather than treated as
+  // a fault: that is the previous reference's answer, and `isAnswerCurrent` will clear it as soon as
+  // the current fetch lands.
+  const isTextUnavailable =
+    isAnswerCurrent &&
+    fetchError !== undefined &&
+    !isBookMissing &&
+    !isMissingBookError(fetchError);
 
   // --- Editor ---
 
@@ -363,16 +387,13 @@ export function ModelTextPanel({
     [textDirection, extraValidMarkers],
   );
 
-  // Read-only: push incoming USJ directly into the editor whenever it changes.
-  //
-  // `isBookMissing` and `isBlankChapter` are deps because those branches UNMOUNT `Editorial` rather
-  // than hiding it. A remounted editor holds nothing, and this effect is its only feed — so without
-  // re-running when the panel comes back to the editor, the reader gets Lexical's "Enter some
-  // Scripture…" placeholder (an edit invitation in a text they cannot edit) until the next USJ
-  // happens to arrive.
+  // Read-only: push incoming USJ directly into the editor whenever it changes. This effect is the
+  // editor's only feed, and `renderContent` below hides `Editorial` rather than unmounting it, so
+  // one instance is fed for the panel's lifetime — a message or a spinner taking the content area
+  // never costs the editor its content.
   useEffect(() => {
     if (usj) editorRef.current?.setUsj(usj);
-  }, [usj, isBookMissing, isBlankChapter]);
+  }, [usj]);
 
   // --- Resource picker / selection ---
 
@@ -546,19 +567,17 @@ export function ModelTextPanel({
   // chrome: inheriting it would lay a left-to-right UI string out right-to-left whenever the model
   // text is RTL.
   const renderContent = () => {
-    if (isBookMissing)
-      return (
-        <div className="tw:flex-1 tw:overflow-auto">
+    const message = (() => {
+      if (isBookMissing)
+        return (
           <ResourceBookNotAvailable
             message={localize(localizedStrings, '%webView_modelTextPanel_bookNotAvailable%')}
             announcementKey={`${resourceProjectId}:${scrRef.book}`}
           />
-        </div>
-      );
+        );
 
-    if (isBlankChapter)
-      return (
-        <div className="tw:flex-1 tw:overflow-auto">
+      if (isBlankChapter)
+        return (
           <ResourceBlankChapter
             message={localize(
               localizedStrings,
@@ -566,30 +585,57 @@ export function ModelTextPanel({
             )}
             announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
           />
-        </div>
-      );
+        );
 
-    // Nothing in hand for the reference on screen: either the fetch is still out, or it failed in a
-    // way this panel has no message for. Keep waiting rather than mounting `Editorial` with nothing
-    // set, which paints Lexical's "Enter some Scripture…" placeholder — an edit invitation in a text
-    // the reader cannot edit.
-    if (!isAnswerCurrent || isUsjLoading || usj === undefined)
-      return (
-        <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
-          <Spinner />
-        </div>
-      );
+      if (isTextUnavailable)
+        return (
+          <ResourceTextUnavailable
+            message={localize(localizedStrings, '%webView_resourcePanel_textUnavailable%')}
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+          />
+        );
+
+      return undefined;
+    })();
+
+    // Nothing to say and nothing in hand yet: the fetch for this reference is still out.
+    const isWaiting = !message && (!isAnswerCurrent || isUsjLoading || usj === undefined);
 
     return (
-      <div className="tw:flex-1 tw:overflow-auto" dir={options.textDirection}>
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={handleScrRefChange}
-          options={options}
-          logger={logger}
-        />
-      </div>
+      <>
+        {message && <div className="tw:flex-1 tw:overflow-auto">{message}</div>}
+        {isWaiting && (
+          <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">
+            <Spinner />
+          </div>
+        )}
+        {/*
+          `Editorial` is HIDDEN rather than unmounted whenever something else occupies the content
+          area. Unmounting it disposes the whole `LexicalComposer` — plugins and nodes deregister,
+          the DOM is torn down — and bringing it back costs a full rebuild plus a whole-chapter
+          `setUsj`. `isWaiting` is true from the instant the reference changes until the round trip
+          completes, so unmounting on it would pay that price on every chapter step, the panel's
+          primary interaction. Hiding keeps one editor instance for the panel's lifetime; the main
+          editor hides its subtree the same way behind `EmptyChapterView`.
+
+          `tw:hidden` is `display: none`, which also takes the editor out of the accessibility tree
+          and the tab order while a message is showing — wanted here, since the message is the thing
+          to read and this panel is read-only, so there is nothing in the editor to reach.
+        */}
+        <div
+          data-testid={MODEL_TEXT_EDITOR_CONTAINER_TEST_ID}
+          className={message || isWaiting ? 'tw:hidden' : 'tw:flex-1 tw:overflow-auto'}
+          dir={options.textDirection}
+        >
+          <Editorial
+            ref={editorRef}
+            scrRef={scrRef}
+            onScrRefChange={handleScrRefChange}
+            options={options}
+            logger={logger}
+          />
+        </div>
+      </>
     );
   };
 

@@ -1539,14 +1539,14 @@ step, no automation. Just a record.
   an awaited call.
 
   **What is NOT yet shared is the decision that leaf predicate feeds.** Each surface still spells out
-  its own loading / bookNotAvailable / ready ordering — `resolveResourceContentState`,
-  `deriveCellState`, the model panel's `renderContent` chain, and the main editor's `bookExists` — and
-  they do not agree for every input. A missing-book failure describing the resource the user just
-  navigated away from makes a grid cell say "loading" while a panel says "ready"; a failure that is
-  not about a missing book at all makes a cell say "Download failed" while a panel waits. A fifth
-  surface would invent a fifth ordering. Converging these on one resolver returning a discriminated
-  union — so the disagreement is unrepresentable rather than merely undocumented — is tracked as
-  PT-4416.
+  its own ordering — `resolveResourceContentState`, `deriveCellState`, the model panel's
+  `renderContent` chain, and the main editor's `bookExists`. The two that disagreed have since been
+  brought into line: `resolveResourceContentState` now reads a missing-book failure naming some other
+  book or resource as `'loading'` and any other failure as `'failed'`, which is the ordering
+  `deriveCellState` already used, so a grid cell and a panel can no longer give opposite answers about
+  one error. The model panel derives the same three answers from its own local fetch state. Converging
+  all of them on one resolver returning a discriminated union — so the disagreement is unrepresentable
+  rather than merely absent today — is tracked as PT-4416.
 
   The message itself is `EmptyState`, per ADR-0016's reservation of that component for the
   bare-sentence case; `ResourceBookNotAvailable` contributes only panel-sized centring and the focus
@@ -1595,6 +1595,16 @@ step, no automation. Just a record.
   the Bible texts tab can display a project, that distinction is currently drawn by *surface* rather
   than by what is on screen; PT-4416 covers closing the gap.
 
+  A resource panel now has FOUR content states, not three, because deciding that a missing book earns
+  a dedicated message forced the question of what the other failures earn. Once the panel stops
+  mounting an editor it has no scripture for, "no USJ" can no longer stand for both "still arriving"
+  and "this read failed" — the first is a spinner and the second is terminal, and a spinner shown for
+  a terminal failure claims progress that never comes. So an unreadable project or a permissions
+  failure gets its own named message (`%webView_resourcePanel_textUnavailable%`, shared by both
+  panels) and a `logger.error`, which is the only place the cause survives, since every terminal
+  failure looks the same on screen. This is a change of behaviour from before the feature, where such
+  a failure fell through to an editor with nothing in it.
+
   Detection still rests on matching a C# exception message, now in one place: reword
   `MissingBookException` and every consumer silently reports "book present". `MissingBookExceptionTests`
   pins the exact wording on the C# side so that rewording fails a test rather than a user. Reordering
@@ -1602,8 +1612,9 @@ step, no automation. Just a record.
   positionally. Detection and identity use two different patterns on purpose: the identity pattern
   captures the two values and so can fail on an unexpected message shape, while detection matches only
   the invariant part of the sentence and so still succeeds there. What a caller does with that gap
-  depends on whether it has a neutral outcome. The resource panels do: an identity failure renders the
-  editor, which shows no content, exactly as before this feature existed. The main editor does NOT —
+  depends on whether it has a neutral outcome. The resource panels do: an identity failure falls to
+  `'failed'`, which names the failure on screen and logs it — not silently correct, but diagnosable,
+  and terminal rather than a spinner that never resolves. The main editor does NOT —
   its gate is the identity comparison, and a miss means `bookExists` stays true while no USJ ever
   arrives, i.e. an indefinite spinner rather than the pre-feature book-not-available view. It
   therefore falls back to detection alone when the identities cannot be parsed, which is sound

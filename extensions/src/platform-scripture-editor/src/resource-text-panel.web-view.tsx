@@ -57,7 +57,12 @@ import {
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
 import { ResourceBookNotAvailable } from './resource-book-not-available.component';
 import { ResourceBlankChapter } from './resource-blank-chapter.component';
-import { isChapterBlank, resolveResourceContentState } from './platform-scripture-editor.utils';
+import { ResourceTextUnavailable } from './resource-text-unavailable.component';
+import {
+  isBlankChapterOnScreen,
+  isMissingBookError,
+  resolveResourceContentState,
+} from './platform-scripture-editor.utils';
 import {
   RESOURCE_PANEL_TYPED_STRING_KEYS,
   resolveResourcePanelStringKeys,
@@ -87,6 +92,7 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_loading%',
   '%webView_resourcePanel_catalogUnavailable%',
   '%webView_resourcePanel_downloadResources%',
+  '%webView_resourcePanel_textUnavailable%',
   ...RESOURCE_PANEL_TYPED_STRING_KEYS,
 ];
 
@@ -440,9 +446,11 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // (here, `scrRef`) changes — it keeps the previous chapter's USJ until the new subscription's
   // first update lands, and its default is `EMPTY_USJ`, which is itself blank. Without the gate the
   // panel would claim "empty" over a chapter that is still arriving, and again on first mount.
+  //
+  // Chapter 0 is front matter rather than a chapter; `isBlankChapterOnScreen` has that rationale.
   const isBlankChapter = useMemo(
-    () => !isUsjLoading && usjFromPdp !== undefined && isChapterBlank(usjFromPdp),
-    [usjFromPdp, isUsjLoading],
+    () => !isUsjLoading && isBlankChapterOnScreen(usjFromPdp, scrRef.chapterNum),
+    [usjFromPdp, isUsjLoading, scrRef.chapterNum],
   );
 
   // The book-not-available message is withheld unless the failure names the book AND project on
@@ -458,6 +466,22 @@ globalThis.webViewComponent = function ResourceTextPanel({
       }),
     [resourceProjectId, usjPossiblyError, scrRef.book],
   );
+
+  // A chapter read that fails is otherwise invisible outside the UI, and the state it produces — a
+  // named, terminal message — looks the same whatever went wrong, so the log is the only place the
+  // cause survives. Keyed on the error alone so paging through books on a sticky failure does not
+  // re-emit it once per book.
+  //
+  // A missing book is ordinary navigation rather than a fault and is already explained on screen, so
+  // it goes to `debug`, which packaged builds drop. If detection ever broke, the same failure would
+  // fall to `error` below and be loud in production rather than silent.
+  useEffect(() => {
+    if (!isPlatformError(usjPossiblyError)) return;
+    const message = getErrorMessage(usjPossiblyError);
+    if (isMissingBookError(usjPossiblyError))
+      logger.debug(`Book not found in resource text: ${message}`);
+    else logger.error(`Error getting resource chapter USJ: ${message}`);
+  }, [usjPossiblyError]);
 
   // #endregion
 
@@ -683,10 +707,23 @@ globalThis.webViewComponent = function ResourceTextPanel({
         </div>
       );
 
-    // No USJ in hand for the reference on screen: either none has arrived yet, or the failure in
-    // hand is not one this panel has a message for. Keep waiting rather than mounting `Editorial`
-    // with nothing set, which paints Lexical's "Enter some Scripture…" placeholder — an edit
-    // invitation in a text the reader cannot edit.
+    // A failure that is not a missing book in the text on screen. Terminal, because the value in
+    // hand is an error rather than USJ and nothing re-emits until the data provider does — so a
+    // spinner here would claim progress that never arrives.
+    if (contentState === 'failed')
+      return (
+        <div className="tw:flex-1 tw:overflow-auto">
+          <ResourceTextUnavailable
+            message={localizedStrings['%webView_resourcePanel_textUnavailable%']}
+            announcementKey={`${resourceProjectId}:${scrRef.book}:${scrRef.chapterNum}`}
+          />
+        </div>
+      );
+
+    // No USJ in hand for the reference on screen, and no failure to name: the chapter is still on
+    // its way. Keep waiting rather than mounting `Editorial` with nothing set, which paints
+    // Lexical's "Enter some Scripture…" placeholder — an edit invitation in a text the reader
+    // cannot edit.
     if (!usjFromPdp)
       return (
         <div className="tw:flex tw:flex-1 tw:items-center tw:justify-center tw:p-8">

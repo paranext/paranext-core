@@ -1142,6 +1142,26 @@ export function isChapterBlank(usj: Usj): boolean {
 }
 
 /**
+ * Whether a resource panel should say the chapter on screen is empty.
+ *
+ * Chapter 0 is excluded because it is not a chapter. It addresses the book's front matter — `\id`,
+ * `\h`, `\toc`, `\mt`, `\ip` — which carries neither a chapter nor a verse node, so
+ * {@link isChapterBlank} reports it blank and the message would replace real content the reader can
+ * see. It is reachable rather than theoretical: `calculateTopMatch('GEN 0')` yields `chapterNum: 0`
+ * and `handleTopMatchSelect` passes it through with `?? 1`, which a 0 survives.
+ *
+ * Psalm superscriptions and chapter introductions are NOT affected: a chapter carrying a `\d` still
+ * carries its `\c` marker, so {@link isChapterBlank} answers `false` on its own.
+ *
+ * @param usj The chapter-scoped USJ in hand, or `undefined` if none has arrived for this reference.
+ * @param chapterNum The chapter number the panel is displaying.
+ * @returns `true` only when the panel is showing a real chapter and that chapter is empty.
+ */
+export function isBlankChapterOnScreen(usj: Usj | undefined, chapterNum: number): boolean {
+  return chapterNum > 0 && usj !== undefined && isChapterBlank(usj);
+}
+
+/**
  * Builds the Delta operations that insert a blank `\c` + `\v 1..N` scaffold — one chapter marker
  * followed by one verse marker per verse, each with empty text content. Intended for
  * `EditorRef.applyUpdate` when reinstating a chapter number in an effectively-blank chapter.
@@ -1392,10 +1412,11 @@ export function isOverrunProjectIdParse(
 }
 
 /** What a resource panel (Model text, Bible texts, Commentaries) should show in its content area. */
-export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'ready';
+export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'failed' | 'ready';
 
 /**
- * Decides whether a resource panel shows a spinner, the book-not-available message, or its editor.
+ * Decides whether a resource panel shows a spinner, the book-not-available message, a terminal
+ * failure message, or its editor.
  *
  * The message is shown only when the failure names BOTH the book and the project the panel is
  * currently displaying. That identity check, rather than any timing signal, is what keeps a stale
@@ -1423,7 +1444,7 @@ export type ResourceContentState = 'loading' | 'bookNotAvailable' | 'ready';
  *   `'loading'`.
  * @param options.currentBookNum The book number the panel is currently displaying. A value of 0 or
  *   less means the panel has no book it can name, so no claim is made about one.
- * @returns Which of the three content states to render.
+ * @returns Which of the four content states to render.
  */
 export function resolveResourceContentState({
   resourceProjectId,
@@ -1436,14 +1457,23 @@ export function resolveResourceContentState({
 }): ResourceContentState {
   if (!resourceProjectId || usjPossiblyError === undefined) return 'loading';
   if (!isPlatformError(usjPossiblyError)) return 'ready';
-  if (
-    isMissingBookOnScreen({ error: usjPossiblyError, currentBookNum, projectId: resourceProjectId })
-  )
+
+  // Parsed once and compared, rather than calling `isMissingBookOnScreen` and then
+  // `isMissingBookError`: one decision should not match the same message against both regexes twice.
+  const missingBook = parseMissingBookError(usjPossiblyError);
+  if (isMissingBookInfoOnScreen({ missingBook, currentBookNum, projectId: resourceProjectId }))
     return 'bookNotAvailable';
 
-  // Every other failure keeps the pre-existing behaviour: the panel renders its editor, which shows
-  // no content. Only a missing book in the text on screen right now earns the dedicated message.
-  return 'ready';
+  // A missing-book failure naming some other book or resource is the previous selector's result,
+  // held while the new subscription's first update is in flight — a spinner, not a fault. This is
+  // the same ordering `deriveCellState` uses for the Scripture Text Grid, so the two surfaces cannot
+  // give opposite answers about one error.
+  if (missingBook || isMissingBookError(usjPossiblyError)) return 'loading';
+
+  // Any other failure is terminal: the value in hand is an error rather than USJ, and nothing
+  // re-emits until the data provider does. Naming it beats both a spinner that never resolves and an
+  // editor with no scripture in it.
+  return 'failed';
 }
 
 // #endregion Missing Book Detection

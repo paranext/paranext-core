@@ -7,7 +7,11 @@ import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
 import type { EffectiveResourceReferenceList } from 'platform-scripture';
 import type { EffectiveResourceReferenceListState } from './use-effective-resource-reference-list.hook';
-import { ModelTextPanel, ModelTextPanelProps } from './model-text-panel.component';
+import {
+  MODEL_TEXT_EDITOR_CONTAINER_TEST_ID,
+  ModelTextPanel,
+  ModelTextPanelProps,
+} from './model-text-panel.component';
 
 /**
  * Records every `setUsj` the panel pushes into the editor, across editor instances.
@@ -55,6 +59,7 @@ const STRINGS = {
   '%webView_modelTextPanel_loading%': 'Loading…',
   '%webView_modelTextPanel_settingsUnavailable%':
     "Couldn't load your model text. It will appear once it's available.",
+  '%webView_resourcePanel_textUnavailable%': 'This text could not be loaded.',
 };
 
 const INSTALLED_RESOURCE: DblResourceData = {
@@ -340,14 +345,16 @@ describe('ModelTextPanel', () => {
       ),
     ).toBeInTheDocument();
     // No editor alongside the message: a blank editor would give the user no reason for the
-    // emptiness, and its placeholder invites an edit this text does not accept.
-    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    // emptiness, and its placeholder invites an edit this text does not accept. It is HIDDEN rather
+    // than unmounted, so the reader sees only the message while the panel keeps one editor instance
+    // instead of rebuilding Lexical each time a message comes and goes.
+    expect(screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID)).toHaveClass('tw:hidden');
     // The label header stays, so the message is attributed to a named model text rather than
     // floating in an anonymous panel.
     expect(screen.getByTestId('model-text-header')).toBeInTheDocument();
   });
 
-  it('keeps showing the editor for an unrelated fetch failure', async () => {
+  it('names an unrelated fetch failure rather than spinning or showing a blank editor', async () => {
     const getResourceChapter = vi.fn(async () => {
       throw new Error('Project project-web is not available');
     });
@@ -364,9 +371,15 @@ describe('ModelTextPanel', () => {
         'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
       ),
     ).not.toBeInTheDocument();
-    // And no editor either: there is no USJ to put in one, so mounting it would show Lexical's
-    // "Enter some Scripture…" placeholder — an edit invitation in a text the reader cannot edit.
-    await waitFor(() => expect(screen.queryByTestId('editorial')).not.toBeInTheDocument());
+    // The failure is named instead. A spinner would be a false claim here: the fetch already
+    // rejected and nothing retries it until the reference or the model text changes, so the progress
+    // it promises never arrives.
+    expect(await screen.findByText('This text could not be loaded.')).toBeInTheDocument();
+    // The editor is hidden behind the message rather than showing Lexical's "Enter some Scripture…"
+    // placeholder, and is never fed, since there is no USJ to feed it.
+    await waitFor(() =>
+      expect(screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID)).toHaveClass('tw:hidden'),
+    );
     expect(setUsjSpy).not.toHaveBeenCalled();
   });
 
@@ -407,9 +420,9 @@ describe('ModelTextPanel', () => {
         'This book does not exist in this model text. Choose a different model text or go to a book it contains.',
       ),
     ).not.toBeInTheDocument();
-    // The editor is a FRESH instance — the message branch unmounted the previous one — so it holds
-    // nothing until the panel feeds it. Asserting only that it mounted would pass just as well over
-    // a permanently blank editor showing Lexical's "Enter some Scripture…" placeholder.
+    // The editor holds nothing until the panel feeds it, so asserting only that it is shown would
+    // pass just as well over a permanently blank editor showing Lexical's "Enter some Scripture…"
+    // placeholder.
     await waitFor(() => expect(setUsjSpy).toHaveBeenCalledWith(SAMPLE_USJ));
   });
 
@@ -430,7 +443,7 @@ describe('ModelTextPanel', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       'This chapter is empty in this resource.',
     );
-    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    expect(screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID)).toHaveClass('tw:hidden');
   });
 
   it('distinguishes a blank chapter from a book the resource does not have', async () => {
@@ -463,6 +476,7 @@ describe('ModelTextPanel', () => {
       scrRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
     });
     await screen.findByText('This chapter is empty in this resource.');
+    const editorBeforeNavigating = screen.getByTestId('editorial');
 
     // The next chapter's load never settles, so the in-flight state is observable.
     const neverResolves = vi.fn(() => new Promise<never>(() => {}));
@@ -477,10 +491,15 @@ describe('ModelTextPanel', () => {
       />,
     );
     expect(screen.queryByText('This chapter is empty in this resource.')).not.toBeInTheDocument();
-    // Nor the editor. `usj` still holds the PREVIOUS chapter's content, so the panel has nothing to
-    // put in an editor for the chapter on screen; mounting one shows Lexical's
-    // "Enter some Scripture…" placeholder over a chapter that is still arriving.
-    expect(screen.queryByTestId('editorial')).not.toBeInTheDocument();
+    // Nor the text. `usj` still holds the PREVIOUS chapter's content, so showing the editor here
+    // would show the chapter the user just left as though it were the one they asked for.
+    expect(screen.getByTestId(MODEL_TEXT_EDITOR_CONTAINER_TEST_ID)).toHaveClass('tw:hidden');
+    // But the editor itself SURVIVES the wait. Node identity, not merely presence: unmounting
+    // `Editorial` disposes the whole `LexicalComposer` — plugins and nodes deregister, the DOM is
+    // torn down — and every chapter step goes through this in-flight window, so unmounting here
+    // would pay a full editor rebuild plus a whole-chapter `setUsj` on the panel's primary
+    // interaction. Presence alone would pass over a fresh instance.
+    expect(screen.getByTestId('editorial')).toBe(editorBeforeNavigating);
     // The label header stays mounted across the wait, so the panel does not go anonymous between
     // every chapter step.
     expect(screen.getByTestId('model-text-header')).toBeInTheDocument();
