@@ -7,7 +7,9 @@
      written with literal `rgba()` / a plain `var(--muted-foreground, <hex>)` instead of the
      source's `hsl(var(--muted-foreground, 215 16% 65%) / alpha)`.
    - `.verse-selected` and the armed-verse blink bind to this repo's `--destructive` theme token
-     instead of the editor library's literal reds. */
+     instead of the editor library's literal reds.
+   - The table-cell box border binds to `var(--foreground, #000000)` instead of the source's
+     literal black, so it stays visible against a dark app theme. */
 
 /* stylelint-disable */
 
@@ -2454,7 +2456,10 @@
    border nor the padding until `th` was named here too. */
 .usfm td,
 .usfm th {
-  border: 1px solid #000000;
+  /* Theme-aware where PT9's literal black is not: the shipping sheet renders inside the themed
+     app, where a hard #000000 border disappears against a dark background. The literal is the
+     fallback for hosts (like this demo) that define no --foreground. */
+  border: 1px solid var(--foreground, #000000);
   page-break-inside: avoid;
   /* FB27281 adding padding based on font size*/
   padding-right: 0.28em;

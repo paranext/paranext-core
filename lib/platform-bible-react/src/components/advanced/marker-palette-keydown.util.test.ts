@@ -290,6 +290,23 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.update).not.toHaveBeenCalled();
   });
 
+  it('selection session: `*` on an EMPTY filter closes the palette and keeps the selection', () => {
+    // Owner-directed: with nothing typed there is no marker to close, and a bare-closer commit
+    // would delete the selected content for one (likely mistyped) keystroke. The palette declines
+    // visibly instead — claimed, so the `*` cannot land over the selection either, and dismissed
+    // with no commit of any kind. (The collapsed-caret palette's bare-closer commit above is
+    // unchanged: nothing is selected there, so `\*` is just the bytes the user typed.)
+    const driver = makeDriver();
+    const state = session('selection', '');
+    const event = makeEvent('*');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(true); // claimed — the asterisk must not replace the selection
+    expect(driver.commitTypedCloser).not.toHaveBeenCalled();
+    expect(driver.commitTyped).not.toHaveBeenCalled();
+    expect(driver.commit).not.toHaveBeenCalled();
+    expect(driver.dismiss).toHaveBeenCalled();
+  });
+
   it('backslash session: `\\` commits the typed marker WITHOUT a space and reopens', () => {
     // Owner-directed: `\qt-s` then `\` inserts the full `\qt-s` and opens a new palette for the
     // backslash just pressed, so a milestone pair is one continuous flow. No terminating space —

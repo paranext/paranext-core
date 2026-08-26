@@ -168,8 +168,10 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
     // run-together text rather than a table.
     it('boxes tables everywhere, not only in handbook resources', () => {
       expect(scss).toContain('.usfm table {\n  border-collapse: collapse;\n}');
+      // The border color is theme-aware (var(--foreground, ...)) with PT9's literal black as the
+      // no-theme fallback — a hard #000000 vanishes against a dark app theme.
       expect(scss).toMatch(
-        /\.usfm td,\n\.usfm th \{[^}]*border: 1px solid #000000;[^}]*padding-right: 0\.28em;[^}]*\}/,
+        /\.usfm td,\n\.usfm th \{[^}]*border: 1px solid var\(--foreground, #000000\);[^}]*padding-right: 0\.28em;[^}]*\}/,
       );
       expect(scss).toMatch(/\.usfm td\.markercell \{\s*border-style: none;\s*\}/);
     });

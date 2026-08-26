@@ -240,7 +240,7 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
     // real <th> for th* markers, which PT9's td-only rule predates.
     it('boxes header cells alongside body cells', () => {
       expect(css).toMatch(rule(['.usfm table'], 'border-collapse: collapse;'));
-      expect(css).toMatch(rule(['.usfm td', '.usfm th'], 'border: 1px solid #000000;'));
+      expect(css).toMatch(rule(['.usfm td', '.usfm th'], 'border: 1px solid var(--foreground, #000000);'));
       expect(css).toMatch(rule(['.usfm td', '.usfm th'], 'padding-right: 0.28em;'));
     });
   });

@@ -2419,7 +2419,11 @@
 
 .usfm td,
 .usfm th {
-  border: 1px solid #000000;
+  /* Theme-aware where PT9's literal black is not: this sheet renders inside the themed app, where
+     a hard #000000 border disappears against a dark background. The literal stays as the fallback
+     for a host that defines no --foreground — and in marker-styles/commentary-overrides.scss's
+     handbook copy, whose iframes are always light and never define the app theme variables. */
+  border: 1px solid var(--foreground, #000000);
   page-break-inside: avoid;
   /* FB27281 adding padding based on font size*/
   padding-right: 0.28em;

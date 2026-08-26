@@ -364,6 +364,18 @@ export function handleMarkerPaletteSessionKeyDown(
   }
 
   if (event.key === '*') {
+    if (kind === 'selection' && session.filter === '') {
+      // Over a selection with NOTHING typed there is no marker to close, and committing anyway
+      // would delete the selected content and leave a bare `\*` in its place — one (likely
+      // mistyped) keystroke destroying the selection the user was about to wrap. Decline
+      // visibly instead, the same way Space refuses a marker that is not offered: claimed (the
+      // `*` must not land on the selection either) and dismissed, selection intact. The
+      // collapsed-caret palette below deliberately keeps committing a bare `\*` — nothing is
+      // selected there, so the commit is just the literal bytes the user typed.
+      claim(event);
+      driver.dismiss();
+      return 'ended';
+    }
     // The palette's CLOSING-marker commit, the counterpart to Space's opening one: commit
     // `\` + filter + `*`, with no terminating space and no opening glyph, and close.
     // Claimed: nothing may land on top of the commit.
