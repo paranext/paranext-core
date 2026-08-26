@@ -33,3 +33,10 @@ temp-build
 package-lock.json
 
 # #endregion
+
+# The UBS lexical database and the notice files that travel with it, downloaded at install time by
+# `lib/download-db.ts` rather than committed. `LICENSE.md` (CC BY-SA 4.0) and `SOURCE.md` are
+# third-party legal texts that have to be redistributed verbatim - reformatting one would ship an
+# approximation of a licence - and prettier rewrites Markdown it is pointed at. Outside the shared
+# region above: the extension template has no such download.
+assets/lexical-db/

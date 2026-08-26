@@ -152,6 +152,31 @@ jobs:
           npm ci
           npm run build
 
+      # `npm run build` builds the extensions in DEVELOPMENT mode: its extensions leg sets no
+      # NODE_ENV, and `extensions/webpack/webpack.config.base.ts` reads `mode` from it. electron-
+      # builder copies `extensions/dist/` into the artifact as it finds it, so without this step the
+      # installers this job uploads carry unminified extension bundles with inline source maps,
+      # while `npm run package` produces production ones from the same commit.
+      - name: Build extensions for production
+        run: npm run build:extensions:production
+
+      # THIRD-PARTY-NOTICES.md is packaged into every installer this job produces, so a release cut
+      # from a ref whose Linux test.yml leg never ran green would ship a stale legal document with
+      # nothing to say so. The full check needs Ruby and four dotnet restores and cannot run here;
+      # this is the cheap cross-platform half - this platform's resolved npm shipping set against
+      # the committed lock the document was generated from. No Ruby, no dotnet, no network.
+      #
+      # AFTER the production extension build, so it reads the manifests of the graph this job
+      # actually packages rather than the development one it built first. It reads module manifests,
+      # which have to come from a COLD webpack cache - a module restored from cache does not re-run
+      # its loaders, so a manifest written over a warm one can be short (see `isWarmFilesystemCache`)
+      # - and each extension bundle now caches per bundle AND per mode (`extensionCacheDirectory`),
+      # so the production build above is the first to touch its own directories and is genuinely
+      # cold. Running it here used to leave the two extension manifests warm, which is why it was
+      # placed before the production build and verified a graph this job does not ship.
+      - name: Verify third-party notices describe what this build ships
+        run: npm run verify:third-party-notices:shipping-set
+
       - name: Prepare release - Windows
         if: ${{ matrix.os == env.OS_WINDOWS }}
         env:

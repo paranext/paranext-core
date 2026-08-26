@@ -11,7 +11,7 @@
     "type": "git",
     "url": "git+https://github.com/paranext/paranext-core.git"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "author": {
     "name": "Paranext",
     "url": "https://github.com/paranext/"
