@@ -2294,7 +2294,8 @@ step, no automation. Just a record.
   worse than a badly-timed foreground.
 - **Source:** PR #2670 review item 6 (2026-08-25) and the review rounds that followed; PT-4465,
   which carries the design, the call-site table and the `show` hazard in full.
-## ADR-0031: The tab context menu is a contribution channel, and a window is named by its content
+
+## ADR-0034: The tab context menu is a contribution channel, and a window is named by its content
 
 - **Date:** 2026-08-25
 - **Status:** Accepted
