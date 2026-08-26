@@ -646,7 +646,14 @@ async function main() {
       ...(boundsState?.bounds ? { x: boundsState.bounds.x, y: boundsState.bounds.y } : {}),
       width: windowWidth,
       height: windowHeight,
-      minWidth: 800, // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
+      // Floor set by UX (2026-08-18): 2025 analytics show 99.83% of 11,587 users on a screen 900px
+      // or wider, so nothing narrower has to be supported. It buys Simple mode three ~300px columns
+      // that fit without a horizontal scrollbar — SIMPLE_COLUMN_MIN_WIDTH_PX in
+      // simple-layout.data.ts is derived from this number. That file cannot import this one (main.ts
+      // pulls in Electron), so simple-layout.data.test.ts mirrors the 900 as a local constant:
+      // lowering the number here will NOT fail that test by itself. Change both together.
+      // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
+      minWidth: 900,
       icon: getAssetPath('icon.png'),
       // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
       ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),

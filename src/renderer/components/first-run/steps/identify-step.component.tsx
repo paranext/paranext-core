@@ -7,7 +7,16 @@ import {
 } from '@renderer/services/first-run-store';
 import { settingsService } from '@shared/services/settings.service';
 import { logger } from '@shared/services/logger.service';
-import { Alert, AlertTitle, Button, Checkbox, Input, Label, Spinner } from 'platform-bible-react';
+import {
+  Alert,
+  AlertTitle,
+  Button,
+  Checkbox,
+  Input,
+  Label,
+  Spinner,
+  usePromise,
+} from 'platform-bible-react';
 import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { AlertCircle, CircleCheck } from 'lucide-react';
 import { ChangeEvent, ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -32,7 +41,29 @@ export const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 export const VALIDATION_DEBOUNCE_MS = 1000;
 export const INVALID_CODE_DISPLAY_DEBOUNCE_MS = 1000;
 
-const PARATEXT_REGISTRY_LINK = 'https://registry.paratext.org/';
+// No trailing slash: this is the exact string ParatextData returns for the Production environment,
+// so the fallback and a real backend response are the same value.
+const PRODUCTION_REGISTRY_URL = 'https://registry.paratext.org';
+
+/**
+ * Fetches the registry site URL for the selected server environment, falling back to production so
+ * the link always has a target rather than going blank (and skips the lookup entirely in demo
+ * mode). That is all the fallback guarantees — whether the target is reachable is a separate matter
+ * (a retired host, or access blocked from the user's network or country, still reads as a broken
+ * link). Module-scope so it is a stable `usePromise` callback.
+ */
+async function fetchRegistryUrl() {
+  if (isDemoMode()) return PRODUCTION_REGISTRY_URL;
+  try {
+    const url = await commandService.sendCommand('paratextRegistration.getParatextRegistryUrl');
+    return url || PRODUCTION_REGISTRY_URL;
+  } catch (error) {
+    logger.warn(
+      `Could not resolve the selected registry URL; falling back to production: ${getErrorMessage(error)}`,
+    );
+    return PRODUCTION_REGISTRY_URL;
+  }
+}
 
 // Eight %paratextRegistration_*% keys below are provided at runtime by the paratext-registration
 // extension's localizedStrings.json via PAPI — they will not appear in en.json.
@@ -128,6 +159,11 @@ export function IdentifyStep({
       );
     }
   };
+
+  // The registry link follows the selected server. This step remounts each time the wizard
+  // navigates to it, so the URL re-reads the latest selection (including a change made on the
+  // preceding Internet Settings step).
+  const [registryUrl] = usePromise(fetchRegistryUrl, PRODUCTION_REGISTRY_URL);
 
   const isMounted = useRef(false);
   const validationTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -366,12 +402,7 @@ export function IdentifyStep({
 
         <p className="tw:text-sm tw:text-muted-foreground">
           {strings['%firstRun_step_identify_registryHelp%']}{' '}
-          <a
-            href={PARATEXT_REGISTRY_LINK}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="tw:underline"
-          >
+          <a href={registryUrl} target="_blank" rel="noopener noreferrer" className="tw:underline">
             {strings['%firstRun_step_identify_registryLink%']}
           </a>
         </p>

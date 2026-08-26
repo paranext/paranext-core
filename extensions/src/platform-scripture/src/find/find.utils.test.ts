@@ -18,6 +18,7 @@ import {
   prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
+  shouldClearResultsForInvalidQuery,
 } from './find.utils';
 
 /** Default character categorizer matching the project-settings defaults used in production */
@@ -535,6 +536,51 @@ describe('gateStartSearch', () => {
     expect(
       gateStartSearch({ isSearchQueryValid: true, hasPdp: false, isAlreadyStarting: false }),
     ).toEqual({ action: 'skip', shouldRetryWhenPdpReady: true });
+  });
+});
+
+describe('shouldClearResultsForInvalidQuery', () => {
+  // THE REGRESSION THIS EXISTS FOR. Emptying the box with the keyboard (select-all + delete, or
+  // backspacing) only changes the term: the auto-search that follows is gated off as an invalid
+  // query, so the previous search's results stayed on screen with nothing in the box.
+  it('clears when the query goes invalid while results are still showing', () => {
+    expect(
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: false,
+        hasResults: true,
+        searchStatus: 'completed',
+      }),
+    ).toBe(true);
+  });
+
+  it('clears a search still in flight when the query goes invalid', () => {
+    expect(
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: false,
+        hasResults: false,
+        searchStatus: 'running',
+      }),
+    ).toBe(true);
+  });
+
+  it('does nothing on an invalid query with nothing to clear, so mount does not fire it', () => {
+    expect(
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: false,
+        hasResults: false,
+        searchStatus: undefined,
+      }),
+    ).toBe(false);
+  });
+
+  it('leaves results alone while the query is still valid', () => {
+    expect(
+      shouldClearResultsForInvalidQuery({
+        isSearchQueryValid: true,
+        hasResults: true,
+        searchStatus: 'completed',
+      }),
+    ).toBe(false);
   });
 });
 

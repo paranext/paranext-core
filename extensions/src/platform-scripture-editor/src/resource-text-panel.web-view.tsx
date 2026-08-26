@@ -19,8 +19,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Spinner,
-  usePromise,
   useExtraValidMarkers,
   useTabIconSelection,
   type TabIconUrls,
@@ -42,6 +40,9 @@ import type {
 } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
+import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
+import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
+import { PanelReadinessView } from './panel-readiness-view.component';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
 import { useDblResourceAutoInstall } from './use-dbl-resource-auto-install.hook';
 import { useInstallDblResource } from './use-install-dbl-resource.hook';
@@ -52,7 +53,7 @@ import {
   getRefLabel,
 } from './resource-reference.utils';
 import { findCachedDblResource } from './scripture-text-grid/dbl-resource-lookup.utils';
-import { InstallFailedView, InstallingView } from './install-state-views.component';
+import { RetryableErrorView, LoadingView } from './panel-state-views.component';
 import { selectTextConnection } from './select-dbl-resource';
 
 const DEFAULT_TEXT_DIRECTION = 'ltr';
@@ -64,6 +65,9 @@ const RESOURCE_PANEL_STRING_KEYS: LocalizeKey[] = [
   '%webView_resourcePanel_installFailed%',
   '%webView_resourcePanel_installFailedOffline%',
   '%webView_resourcePanel_retry%',
+  '%webView_resourcePanel_settingsUnavailable%',
+  '%webView_resourcePanel_loading%',
+  '%webView_resourcePanel_catalogUnavailable%',
   '%webView_resourcePanel_downloadResources%',
   '%webView_resourcePanel_bibleTexts_emptyState_prompt%',
   '%webView_resourcePanel_bibleTexts_pick%',
@@ -226,35 +230,20 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // #region Data sources
 
-  const [effectiveResources] = useEffectiveResourceReferenceList(
+  const effectiveResourcesState = useEffectiveResourceReferenceList(
     projectId,
     'platformScripture.referencedProjectsAndResources',
   );
+  const effectiveResources =
+    effectiveResourcesState.status === 'ready' ? effectiveResourcesState.list : undefined;
 
   const textConnectionsProvider = useProjectDataProvider(
     'platformScripture.textConnectionSettings',
     projectId,
   );
 
-  const [fetchResources, setFetchResources] = useState(true);
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  const [resourcesPossiblyUndefined, isLoadingResources] = usePromise(
-    useCallback(async () => {
-      if (fetchResources) {
-        // Sets the `fetchResources` flag to false which will trigger the promise again next render
-        // to fetch the resources
-        setFetchResources(false);
-        return Promise.resolve(undefined);
-      }
-
-      return papi.commands.sendCommand('platformGetResources.getCachedResources');
-    }, [fetchResources]),
-    undefined,
-  );
-  const dblResources = useMemo(
-    () => resourcesPossiblyUndefined ?? [],
-    [resourcesPossiblyUndefined],
-  );
+  const { dblResources, isCatalogReady, hasCatalogError, refetchCatalog } = useDblResourceCatalog();
   const getUserResourceTexts = useCallback(
     async () => textConnectionsProvider?.getUserReferencedProjectsAndResources(),
     [textConnectionsProvider],
@@ -269,11 +258,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // installed and renders; the install itself lives in the shared hook. Returns a no-op until the
   // provider resolves — its identity change then re-fires the auto-install effect for the real
   // install.
-  const markResourcesStale = useCallback(() => setFetchResources(true), []);
   const installResource = useInstallDblResource(
     dblResourcesProvider,
     'resource text panel',
-    markResourcesStale,
+    refetchCatalog,
   );
 
   // #endregion
@@ -293,6 +281,15 @@ globalThis.webViewComponent = function ResourceTextPanel({
       return false;
     });
   }, [effectiveResources, dblResources, resourceType]);
+
+  // Readiness is decided from whether the sources have ARRIVED, never from whether the filtered
+  // result came out empty — see `getResourcePanelReadiness`.
+  const readiness = getResourcePanelReadiness({
+    listState: effectiveResourcesState,
+    isCatalogReady,
+    hasCatalogError,
+    matchingCount: filteredResources.length,
+  });
 
   // #endregion
 
@@ -556,23 +553,23 @@ globalThis.webViewComponent = function ResourceTextPanel({
     );
   }
 
-  // Also shows spinner for if loading resources, except if there is no resources then it should
-  // directly show the button to pick a resource bellow
-  if (!effectiveResources || (isLoadingResources && filteredResources.length !== 0)) {
+  // Front of the state machine: still resolving, unreadable setting, or genuinely nothing
+  // configured. Driven by one readiness value so the empty prompt can only appear once emptiness is
+  // actually known — the loading branch deliberately outlasts the catalog fetch when something is
+  // configured, which is the window the old guard let fall through to the empty state.
+  if (readiness !== 'configured') {
     return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  // Zero state: the filtered list is empty (nothing configured for this resourceType)
-  if (filteredResources.length === 0) {
-    return (
-      <div className="tw:flex tw:h-screen tw:flex-col tw:items-center tw:justify-center tw:gap-4 tw:p-8 tw:text-center">
-        <p>{localizedStrings[emptyStatePromptKey]}</p>
-        <Button onClick={() => showResourcePicker()}>{localizedStrings[pickButtonKey]}</Button>
-      </div>
+      <PanelReadinessView
+        readiness={readiness}
+        errorMessage={localizedStrings['%webView_resourcePanel_settingsUnavailable%']}
+        emptyPrompt={localizedStrings[emptyStatePromptKey]}
+        catalogErrorMessage={localizedStrings['%webView_resourcePanel_catalogUnavailable%']}
+        loadingLabel={localizedStrings['%webView_resourcePanel_loading%']}
+        pickLabel={localizedStrings[pickButtonKey]}
+        retryLabel={localizedStrings['%webView_resourcePanel_retry%']}
+        onPick={() => showResourcePicker()}
+        onRetryCatalog={refetchCatalog}
+      />
     );
   }
 
@@ -581,7 +578,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // (the usual first-run cause), hint at the connection.
   if (installFailed) {
     return (
-      <InstallFailedView
+      <RetryableErrorView
         message={
           localizedStrings[
             isOnline
@@ -601,7 +598,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
   // downloading — reads "Installing…".
   if (isSelecting || isInstalling) {
     return (
-      <InstallingView
+      <LoadingView
         label={
           localizedStrings[
             isSelecting ? '%webView_resourcePanel_selecting%' : '%webView_resourcePanel_installing%'
@@ -613,11 +610,7 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // Loading state: USJ not yet available
   if (!resourceProjectId || usjPossiblyError === undefined) {
-    return (
-      <div className="tw:flex tw:h-screen tw:items-center tw:justify-center tw:p-8 tw:text-center">
-        <Spinner />
-      </div>
-    );
+    return <LoadingView label={localizedStrings['%webView_resourcePanel_loading%']} />;
   }
 
   // Active state: resource is installed and USJ is available

@@ -20,23 +20,28 @@ step, no automation. Just a record.
   fold the rule into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
   `.claude/rules/` file — that is what the agents read and enforce on the next feature. This log
   keeps the rationale and history; the standards keep the current rule.
-- **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-NNNN` instead of deleting
-  it; add the new decision as a new entry.
-- **Append at the end**, newest last. Number entries `ADR-NNNN`.
-- **Numbers are claimed at merge, not at write.** Several branches in flight at once each append the
-  next free number as of the day they branched, so two unmerged branches routinely carry the SAME
-  number for different decisions — and because the file is append-only, nothing catches it: the
-  second merge simply leaves `main` with two identical headings. Before merging a PR that adds an
-  entry, re-read the last heading on `main` and renumber yours to follow it, updating any
-  cross-references. Whoever merges second does the renumbering.
+- **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-<slug>` instead of
+  deleting it; add the new decision as a new entry.
+- **Append at the end**, newest last. Identify entries `ADR-<slug>`, where the slug is a short
+  kebab-case name for the decision's subject — 3 to 5 words, the same style as the repo's rule and
+  skill names (`ADR-toolbar-shrink-measurement`, `ADR-simple-mode-column-minimums`). The heading
+  still carries the full title after it.
+- **A slug is claimed at write and never has to move.** This replaces sequential `ADR-NNNN`
+  numbering, which collided constantly: several branches in flight each appended the next free
+  number as of the day they branched, so two unmerged branches routinely carried the SAME number for
+  different decisions, and because the file is append-only nothing caught it — the second merge just
+  left `main` with two identical headings, and whoever merged second had to renumber the entry and
+  chase its cross-references. Two branches picking the same slug would mean they are describing the
+  same decision, which is worth catching rather than papering over. Entries written before this
+  keep their numbers; don't renumber them.
 
 ### Entry template
 
 ```markdown
-## ADR-NNNN: {short title}
+## ADR-{slug}: {short title}
 
 - **Date:** YYYY-MM-DD
-- **Status:** Proposed | Accepted | Superseded by ADR-NNNN
+- **Status:** Proposed | Accepted | Superseded by ADR-{slug}
 - **Context:** what situation forced a decision (with file:line / source where useful).
 - **Decision:** what we chose.
 - **Alternatives:** what we considered and why we rejected/deferred them.
@@ -602,7 +607,9 @@ step, no automation. Just a record.
   offers a Manage Books button). Three candidate shapes already existed and nothing said which to
   reach for. `EmptyState` (`lib/platform-bible-react/src/components/basics/empty-state.component.tsx`,
   2 consumers) renders a single `role="status"` message and has no slot for a title or an action.
-  `InstallFailedView` (`extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`,
+  `InstallFailedView` (then at
+  `extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`; renamed
+  `RetryableErrorView` in `panel-state-views.component.tsx` by PT-4347 — see ADR-0022,
   2 consumers) is genuinely "full-panel message + action button" but is scoped to DBL install
   recovery. Neither is a general primitive, and the next three tickets in the same epic (PT-4132,
   PT-4347, PT-4349) each need a zero-state too, so an ad-hoc fourth shape would have compounded.
@@ -1117,7 +1124,7 @@ step, no automation. Just a record.
     gap: it shipped a _gate_-derived signal (`onSyncWriteLockChanged`), and Studio's patch
     deliberately suppresses the gate's initial arm on the scheduled path (`if (!isScheduledSync)`
     guards `SetSyncing(...)` in `RunWithSyncNotification`), which is precisely the startup sync. What
-    closed it is PT-4398 (ADR-0027): a run-marker signal taken from the `BeginSyncRun`/`EndSync`
+    closed it is PT-4398 (ADR-sync-surface-per-interface-mode): a run-marker signal taken from the `BeginSyncRun`/`EndSync`
     bracket, entered before that suppression branch and held across the whole resolution phase.
   - Of the four richer UX states in the design for that non-negotiable, three ("Connection problem",
     "Unsaved changes", "Unsynced changes") are deferred and marked as such in
@@ -1290,7 +1297,187 @@ step, no automation. Just a record.
   `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
   a manual pass rather than by automation.
 
-## ADR-0027: One sync surface per interface mode, closed by a run-marker signal rather than the gate
+## ADR-0027: Panel readiness is derived from whether data sources arrived, never from a filtered result
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** The Model Text and Resource (Bible Texts / Commentaries) panels each decided "is
+  anything configured?" from a value that is only meaningful *after* its data had arrived, and each
+  did it differently. `useEffectiveResourceReferenceList` returned `[list | undefined, boolean]`
+  where the list accounted for two async sources (the project-level setting and a user-level PDP
+  subscription) but the boolean reported only the first — so the normal interleaving on essentially
+  every mount, where the project setting resolves before the user subscription delivers, was
+  reported as "not loading, nothing configured". The resource panel separately gated its spinner on
+  `filteredResources.length !== 0`, a list filtered against a DBL catalog that had not loaded yet,
+  so the guard could not fire during the exact window it existed for. Both rendered "No … selected"
+  with a Pick button for a correctly-configured resource, inviting the user to replace something
+  that was already set. A read failure compounded it: `useBufferedLayoutSetting` applied a
+  `PlatformError` to its held copy and disarmed, so a transient failure latched for the session.
+- **Decision:** Readiness is a first-class, data-derived signal evaluated before any empty or
+  not-found branch. `useEffectiveResourceReferenceList` returns a discriminated
+  `{ status: 'loading' | 'error' | 'ready' }` whose `loading` covers *both* sources and whose
+  `ready` may legitimately carry zero items — the only state in which a panel may render its empty
+  prompt. `getResourcePanelReadiness` (`resource-panel-readiness.utils.ts`) maps list status
+  plus catalog arrival to `loading | error | catalogError | empty | configured`, and
+  `PanelReadinessView` renders those states. **Both** panels route through them: the Model Text
+  panel takes the list status as one prop rather than separate loading/error booleans, so neither
+  panel can drift from the other on the question that caused this bug. The catalog itself is fetched
+  by one hook, `useDblResourceCatalog`, which owns the "has it arrived?" distinction the whole fix
+  hinges on and catches a rejected fetch — `usePromise` has no rejection path, so an uncaught
+  rejection never clears its loading flag and would strand the panel on a spinner forever. `useBufferedLayoutSetting` no longer latches a read error:
+  its mount arm skips a `PlatformError` and stays armed, and reports the live error on a third
+  tuple element, because at that point the held value is the placeholder and is indistinguishable
+  from a genuinely empty setting.
+- **Alternatives:** **Split the model panel's merged loading/empty conditional, as the ticket
+  proposed** — rejected as insufficient: in the failing window both `isEffectiveModelTextsLoading`
+  and `isLoadingResources` are `false`, so there is no honest signal to split on; the hook's
+  contract had to be fixed first. **Keep the tuple and widen the boolean** — rejected: it makes the
+  error state unrepresentable, and an unreadable setting would have to masquerade as either loading
+  (spins forever) or ready-and-empty (the original bug). **Treat an unreadable setting as
+  not-ready** — rejected: it trades a premature empty state for an endless spinner with no recovery.
+- **Consequences:** "Nothing configured at all" is deliberately kept catalog-independent, so a
+  genuinely unconfigured project still gets its pick prompt immediately rather than waiting on a
+  fetch; only "does a configured item belong to *this* panel?" waits for the catalog. The two failure
+  states differ in whether they offer a control, and that difference is the point. A catalog fetch
+  can genuinely be re-driven, so `catalogError` carries a working retry. A project-setting read
+  cannot be — nothing in either panel can force one, and user-layer errors are swallowed to the
+  default list — so `error` shows a message alone. An inert control in a state that withholds every
+  other affordance is worse than no control, so that message carries the recovery expectation
+  instead: the setting stays watched and the panel recovers on its own. The error is also reported only while no
+  readable value has ever been applied; once one has, holding it across a failed re-read is the job
+  the buffer exists to do, so a later failure must not replace working content. Un-latching is not a free
+  improvement for existing consumers: because the held value is now the placeholder rather than the
+  error, any consumer that detected failure via `isPlatformError(heldValue)` alone silently starts
+  reading an unreadable setting as an empty one. `useTextCollectionSources`, the hook's other
+  consumer, had to be updated to read the error channel for exactly this reason — a new consumer of
+  `useBufferedLayoutSetting` must check the third tuple element, not just the held value.
+  `RetryableErrorView` (renamed from `InstallFailedView` and moved to
+  `panel-state-views.component.tsx`) is scoped to failures a retry can act on — a failed install or a
+  failed catalog fetch. The settings-read failure is not one, so it renders a message alone. All
+  four front states compose the shadcn `Empty` primitive per ADR-0016, each with its own icon:
+  without one, the pick prompt and the catalog error rendered as identical screens whose buttons did
+  opposite things (reconfigure vs. retry), which is what AC-4 asks these states to prevent. Panels that grow a third async source must extend the readiness
+  signal rather than add another flag — the bug class here is precisely one guard being unaware of
+  one source.
+- **Source:** PT-4347 (NN 5C Resource panel shows correct loading state), whose named root cause —
+  the merged conditional in `model-text-panel.component.tsx` — proved to be the symptom site rather
+  than the defect.
+
+## ADR-0028: Async hook state shape — discriminated union when the payload is state-specific, flat object otherwise
+
+- **Date:** 2026-08-21
+- **Status:** Proposed — the rule is drawn from exactly two hooks, both introduced by PT-4347. It
+  stands as the default for new async hook state, but the next hook that does not fit either shape
+  should reopen it rather than contort to satisfy it. Promote to Accepted once a third hook has
+  exercised it independently.
+- **Context:** PT-4347 introduced `useEffectiveResourceReferenceList`'s
+  `EffectiveResourceReferenceListState` — the repo's first discriminated-union async state. A review
+  grep confirmed no other exists: siblings use a tuple (`useBufferedLayoutSetting` →
+  `[value, isLoading, settingError]`) or a flat named state object (`useStructureProtectionState` →
+  `StructureProtectionState.adminSettingError`). The same PR also added `useDblResourceCatalog`, which
+  uses the flat-object shape, so one change shipped two shapes. The reviewer flagged the divergence as
+  a pattern question: either converge, or say why not.
+- **Decision:** Keep both, chosen by whether the payload is state-specific.
+  - **Discriminated union** when data exists in only one state, so the type can make the other
+    combinations unrepresentable. `useEffectiveResourceReferenceList` returns
+    `{ status: 'loading' } | { status: 'error' } | { status: 'ready'; list }` — there is no list to
+    hand out while loading or on error, and the union is what prevents a caller reading one anyway.
+  - **Flat named state object** when the values are always present and the flags describe them.
+    `useDblResourceCatalog` returns a catalog (coerced to `[]`), loading/ready/error flags, and a
+    refetch callback — all meaningful together, with nothing to make unrepresentable.
+  - **Corollary — do not unpack a union at a boundary.** A union's guarantee is lost the moment a
+    consumer splits it into a nullable payload plus a bare status: indexing the discriminant
+    (`SomeState['status']`) strips the payload and hands the callee two values free to disagree, which
+    is the shape the union existed to forbid. Pass the whole state so narrowing survives. PT-4347 hit
+    this exactly — `ModelTextPanelProps` took `modelTextsStatus` plus an `undefined`-able list until it
+    was corrected to take `modelTextsState`.
+- **Alternatives:** **Converge everything on the flat object** for consistency with the existing
+  majority — rejected: it makes `ready`-implies-`list` unenforceable and reintroduces the
+  nullable-payload-plus-flag shape this epic spent its effort removing. **Converge everything on the
+  union** — rejected: it would force a discriminant onto hooks like `useDblResourceCatalog` whose
+  values are all always present, inventing states to satisfy a form. **Leave it unstated** — rejected:
+  with one instance of each shape and no rule, the next hook re-litigates it.
+- **Consequences:** Reviewers should expect both shapes and ask which fits rather than flagging
+  either as wrong. The union costs something real: consumers must narrow, and it cannot be spread into
+  props piecemeal — that constraint is the point. `resource-panel-readiness.utils.ts` keeps a
+  `*.utils.ts` → `*.hook.ts` type import to derive the status union, which is the only such import in
+  the extension and would have become moot had the flat shape won; with the union kept it stands as a
+  known wart, and moving the union into the utils module (or a `.types.ts`) is the fix if it bothers a
+  future reader.
+- **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
+  author rather than decided in the review pass.
+
+## ADR-toolbar-shrink-measurement: Responsive toolbars measure their own width in JS, not with CSS container queries
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** Toolbar items were disappearing at narrow widths — most seriously the
+  structure-protection lock, a safety indicator, which vanished entirely in Simple mode at the
+  smallest window. Making items shrink in steps instead needs a width signal. Tailwind container
+  queries are the obvious mechanism and were already used in two places, but both were broken:
+  `platform-enhanced-resources`' tab bar had written `tw-@container/toolbar` with a dash where
+  Tailwind v4's prefix needs `tw:`, so the class emitted nothing, the container was never
+  established, and its four tab labels were hidden at every width — silently, for as long as that
+  code had shipped. `manage-books-dialog.component.tsx` records the same conclusion reached
+  independently (its `@md/…:` variants never reached the web view bundle), and
+  `platform-tab-title.component.tsx` records a third failure, where `container-type: inline-size`
+  corrupted rc-dock's content-driven ancestor sizing.
+- **Decision:** Width-driven collapse goes through `useShrinkStep` — a `ResizeObserver` on the
+  toolbar root that maps width to a discrete step, published to descendants via
+  `ShrinkStepContext`. Items read the step and pick a label form. `ToolbarCompoundLabel` encodes the
+  shared rule that a two-field label always sacrifices its second field first.
+- **Alternatives:** **Fix the prefix and keep container queries** — rejected: it repairs one
+  instance of a mechanism that has now failed three times in this repo, and its failure mode is
+  silent (no class, no error, no visible difference until someone resizes). **A hook per component**
+  — rejected: three toolbars would each grow their own observer and thresholds. **Measure in the
+  consumer and pass a prop** — rejected: every consumer would re-derive the same ladder.
+- **Consequences:** One observer per toolbar rather than per item. Steps are testable under
+  jsdom, which CSS queries are not. The cost is that thresholds are pixel constants that must be
+  tuned by eye, and that a consumer reading the step must render *inside* the toolbar — a component
+  that renders the provider sits above it and silently reads the default. Two existing hand-rolled
+  `ResizeObserver` width thresholds (`platform-tab-title`, `manage-books-dialog`) were left alone
+  and could migrate later.
+- **Source:** PT-4344.
+
+## ADR-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** Simple mode's three columns each carried `panelLock.minWidth: 300`, totalling 900px
+  inside a window that could be dragged to 800px. The dock overflowed and the third column was
+  reachable only by scrolling. UX then confirmed a 900px window minimum is safe (2025 analytics:
+  99.83% of 11,587 users on screens 900px or wider), which appears to make three 300px columns fit
+  exactly — but it does not. rc-dock adds `(children - 1) * 4` to a box's minimum width in its own
+  arithmetic, a hard-coded 4px per divider unrelated to the 2px Simple mode paints, so three 300px
+  columns demand 902px.
+- **Decision:** Raise the window minimum to 900 and derive the column floor from it, budgeting
+  rc-dock's reserve: `SIMPLE_COLUMN_MIN_WIDTH_PX = 297`, since `3 × 297 + 2 × 4 = 899`. Both numbers
+  are named constants, and `simple-layout.data.test.ts` asserts the arithmetic including the divider
+  reserve.
+- **Alternatives:** **Clip the 2px overrun** (`min-width: 0 !important` + `overflow-x: clip` on the
+  dock box) — implemented first, then reverted: it treated a 2px arithmetic error as a layout
+  problem, and clipping the dock box also clips rc-dock's float and max boxes, cutting off dialogs
+  wider than the window. **Patch rc-dock's divider constant** via the existing `patches/` mechanism —
+  viable, and it would also fix Power mode, where 8px dividers are under-reserved by the same
+  hard-coded 4; deferred as a larger change than this ticket warranted. **Equal-thirds column
+  weights** — rejected: it would give the editor 266px at the minimum window, below what its own
+  toolbar needs, and would narrow the editor at every width, not just the smallest.
+- **Consequences:** No horizontal scrollbar at any supported window size — measured in the running
+  app on macOS 2026-08-24, during review of PR #2701. At a 900px window the columns come out
+  297 / 302 / 297 = 896, plus rc-dock's 4px-per-divider reserve, for exactly 900; the dock box
+  reports `min-width: 899px` and `scrollWidth === clientWidth`. A 1600px window is clean too
+  (399 / 798 / 399). That confirms the model this floor was derived from — rc-dock's `Algorithm.js`
+  sums child `minWidth`s and then adds `(children - 1) * 4` — rather than only the arithmetic.
+  Worth knowing if this is ever re-measured: `simple-layout.data.test.ts` asserts that arithmetic
+  and nothing else, so it cannot fail if the model turns out to be wrong; only an app run can catch
+  that. The 1:2:1 weighting is retained and pinned by a test, so the editor grows twice as fast as
+  its neighbours above the floor. Columns are proportional with no JS: rc-dock renders each as
+  `flex: (size) (size × 1e6) (size)px`, so removing the floor is all that "proportional resize"
+  required. The window minimum and the column floor are two constants in different files that must
+  move together; the test cannot import the Electron-side value, so its comment says to change both.
+- **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
+
+## ADR-sync-surface-per-interface-mode: One sync surface per interface mode, closed by a run-marker signal rather than the gate
 
 - **Date:** 2026-08-20
 - **Status:** Accepted
