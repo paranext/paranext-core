@@ -3579,14 +3579,18 @@ async function captureAndCloseWebView(
     throw new Error(
       `captureAndCloseWebView needs a web view id; got ${typeof webViewId}. This method is reachable from any process, so it checks rather than trusts.`,
     );
-  const dockLayout = await getDockLayout();
-  // The dock-entering paths all wait for a load in flight; this is the dock-LEAVING half of the
-  // same move and needs it for the same reason. A capture that removes the tab while a load is
-  // still running can have that load put the web view back from the entry it was loaded with,
-  // while the adopt opens it in the target — one id, two windows, which is exactly what the
-  // timed-out-adopt machinery exists to prevent. Waiting first means a load that drops this web
+  // Ahead of reading the dock layout out, not after it: a wait is exactly the stretch in which a
+  // re-register invalidates a dock layout already read into a variable — see `getDockLayout`'s own
+  // doc, and the sibling call sites that order it the same way.
+  //
+  // The wait is needed here because the dock-entering paths all have it and this is the
+  // dock-LEAVING half of the same move, racing the same way: remove the tab while a load is still
+  // running and the finishing load can put the web view back from the entry it was loaded with
+  // while the adopt opens it in the target — one id, two windows, which is what the
+  // timed-out-adopt machinery exists to prevent. Waiting first means a load that dropped this web
   // view leaves nothing to capture and the move fails cleanly instead.
   await waitForLayoutLoadToSettle();
+  const dockLayout = await getDockLayout();
   const webViewDefinition = dockLayout.getWebViewDefinition(webViewId);
   if (!webViewDefinition) return undefined;
 
@@ -3596,8 +3600,9 @@ async function captureAndCloseWebView(
   // definition and mirrors the same value into this window's storage, and reads come from the
   // definition. The two cannot drift apart while that is the only writer of definition state.
   //
-  // This window's stored copy is deliberately left in place rather than deleted: if the move fails
-  // and the web view comes back to this window, that copy is what the recovery reads.
+  // This window's stored copy is left alone rather than deleted, but nothing depends on it: a
+  // failed move re-adopts from the captured bundle, and the adopt re-seeds storage from that. It
+  // survives only until the state service's own cleanup sweeps ids no longer open here.
   // A window re-scopes web view ids to itself when it reloads a layout. Hand the target the
   // minted id — the spelling a fresh open would use — so the id does not carry this window's
   // scope into a window it does not belong to
@@ -3623,7 +3628,9 @@ async function adoptWebView(
     typeof savedWebViewDefinition.webViewType !== 'string' ||
     !savedWebViewDefinition.webViewType ||
     (savedWebViewDefinition.state !== undefined &&
-      (typeof savedWebViewDefinition.state !== 'object' || savedWebViewDefinition.state === null))
+      // `typeof null` is `'object'`, so the truthiness check is what actually rejects a null the
+      // wire handed us; undefined is already excluded by the clause above
+      (typeof savedWebViewDefinition.state !== 'object' || !savedWebViewDefinition.state))
   )
     throw new Error(
       'adoptWebView needs a web view definition carrying a non-empty id and webViewType, and state must be an object when present',
