@@ -12,9 +12,7 @@ How each subset gets its app differs — see "Subdirectories" below.
 ## How to run
 
 ```bash
-# Every subset. Does not currently pass end to end — title-bar/ attaches to a running app, which
-# this project's global setup refuses to start alongside (it aborts when port 8876 is bound).
-# Run the other subsets individually.
+# Every subset. Every spec here launches its own Electron, so this runs as one command.
 # The bare form runs nothing: it lists the subsets and exits 1.
 npm run test:e2e:isolated all
 
@@ -23,9 +21,8 @@ npm run test:e2e:isolated all
 npm run test:e2e:isolated tests/isolated/comments-tab.spec.ts
 npx playwright test --config e2e-tests/playwright.config.ts --project=isolated e2e-tests/tests/isolated/<file>.spec.ts
 
-# On WSL2, wrap a subset that launches its own Electron to keep its windows off the desktop.
-# Not title-bar/ — it uses fixtures/cdp.fixture.ts and attaches to an app started separately by
-# ./.erb/scripts/refresh.sh, which already runs it under its own Xvfb.
+# On WSL2, wrap a subset to keep its windows off the desktop. Everything here launches its own
+# Electron, so the wrap applies to all of it.
 e2e-tests/run-e2e-wsl.sh --wrap npm run test:e2e:isolated <subset>
 ```
 
@@ -47,5 +44,5 @@ These belong to no subset; run them by path (see "How to run").
 - `navigation-history/` (one Electron per test) — tests for back/forward reference history navigation
 - `overlay/` (one Electron per test) — tests for the project-switch transition overlay
 - `scroll-groups/` (one Electron per test) — tests for scroll-group synchronization between scripture editors
-- `title-bar/` (attaches over CDP; see "How to run") — tests for title bar layout, e.g. reserved space for native window controls
+- `title-bar/` (one Electron per test) — tests for title bar layout at narrow window widths. The reserved-space spec, which attaches to a running app, lives in `tests/attached/`
 - `verse-navigation/` (one Electron per worker) — tests for verse navigation keyboard shortcuts
