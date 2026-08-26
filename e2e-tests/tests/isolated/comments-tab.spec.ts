@@ -181,6 +181,10 @@ async function clickCommentsTab(mainPage: Page, actionTimeoutMs = 30_000): Promi
     .click({ timeout: 5_000 });
 }
 
+// Own this spec's Electron app so it is not inherited from another spec that has already replaced
+// the Column 2 scripture-editor slot waitForSimpleLayout waits for. See comment.fixture.ts.
+test.use({ commentAppOwner: 'comments-tab' });
+
 test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   // First 3 tests: app startup (up to 180 s) + waitForSimpleLayout (up to 120 s) + test actions.
   // "Project changes" test: two openScriptureEditor calls at 150 s each on top of startup.

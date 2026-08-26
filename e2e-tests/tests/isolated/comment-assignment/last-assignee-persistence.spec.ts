@@ -52,6 +52,10 @@ import {
 // Test suite
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Own this spec's Electron app rather than inheriting another spec's; openCommentList replaces the
+// simple layout's Column 2 slot, so a shared app leaks that change onward. See comment.fixture.ts.
+test.use({ commentAppOwner: 'comment-assignment' });
+
 test.describe('Comment last-assignee persistence (PT-3878)', () => {
   let project: CommentTestProject;
 
