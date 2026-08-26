@@ -1,7 +1,35 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { readDirection } from '@/utils/dir-helper.util';
-import { Z_INDEX_ONBOARDING_TOUR } from '../../z-index';
-import { Button } from '../../shadcn-ui/button';
+import { Button, Z_INDEX_ONBOARDING_TOUR } from 'platform-bible-react';
+import { readDirection } from 'platform-bible-react/experimental';
+import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
+
+/**
+ * Localize keys for the tour's own chrome — the navigation buttons and the step counter. The
+ * consumer resolves these (together with its own per-step title/description keys) and passes the
+ * result down as {@link TourProps.localizedStrings}, so the key list has a single typed source
+ * rather than being restated by hand at the call site.
+ *
+ * Back and Next reuse the first-run wizard's labels rather than shipping two more "Back"/"Next"
+ * strings for translators; `%general_countOfTotal%` supplies the counter.
+ */
+export const TOUR_STRING_KEYS = Object.freeze([
+  '%firstRun_button_back%',
+  '%firstRun_button_next%',
+  '%onboardingTour_button_done%',
+  '%onboardingTour_button_skip%',
+  '%general_countOfTotal%',
+] as const);
+
+/** Same keys as {@link TOUR_STRING_KEYS}, widened for `useLocalizedStrings`. */
+export const TOUR_LOCALIZE_KEYS: LocalizeKey[] = [...TOUR_STRING_KEYS];
+
+/**
+ * Localized strings consumed by {@link Tour}. Every key is optional; each read falls back to English
+ * so the component still renders readable chrome in a story or test that supplies nothing.
+ */
+export type TourLocalizedStrings = {
+  [key in (typeof TOUR_STRING_KEYS)[number]]?: string;
+};
 
 /** One stop in the guided tour. */
 export interface TourStep {
@@ -50,19 +78,8 @@ export interface TourProps {
   onDone: () => void;
   /** Called when the user dismisses the tour (Skip button or Escape). */
   onSkip: () => void;
-  /**
-   * Returns the step-counter string for the given 1-based step index and total step count. Used to
-   * localize the "current / total" display. Falls back to `"{current} / {total}"` when omitted.
-   */
-  stepCounter?: (current: number, total: number) => string;
-  /** @default 'Next' */
-  nextLabel?: string;
-  /** @default 'Back' */
-  backLabel?: string;
-  /** @default 'Skip' */
-  skipLabel?: string;
-  /** @default 'Done' */
-  doneLabel?: string;
+  /** Resolved values for {@link TOUR_STRING_KEYS}. Absent keys fall back to English. */
+  localizedStrings?: TourLocalizedStrings;
 }
 
 interface TargetRect {
@@ -76,6 +93,12 @@ const CARD_WIDTH_PX = 288;
 const CARD_APPROX_HEIGHT_PX = 176;
 const CARD_GAP_PX = 12;
 const SPOTLIGHT_PADDING_PX = 6;
+/**
+ * Opacity of the dimming scrim outside the spotlight cutout. Heavier than the dialog and drawer
+ * overlays on purpose: those sit under an opaque panel that supplies its own contrast, whereas the
+ * tour's un-cut area has to read as clearly de-emphasized against the lit cutout beside it.
+ */
+const SCRIM_OPACITY = 0.55;
 
 /**
  * Returns the bounding rect of the first element matching `selector`, or `undefined` if absent. An
@@ -92,7 +115,14 @@ function measureTarget(selector: string): TargetRect | undefined {
   return { top: r.top, left: r.left, width: r.width, height: r.height };
 }
 
-/** Resolves a logical side to a physical one for the current layout direction. */
+/**
+ * Resolves a logical side to a physical one for the current layout direction.
+ *
+ * `readDirection()` reports the UI's global layout direction — the same signal the rest of the app
+ * mirrors from, so the tour inherits whatever direction the surrounding layout is laid out in
+ * rather than deciding one of its own. It is not on its own evidence that any particular
+ * container's children are mirrored; see the RTL story in `tour.stories.tsx` for the visual check.
+ */
 function resolvePhysicalSide(
   side: 'top' | 'bottom' | 'start' | 'end',
 ): 'top' | 'bottom' | 'left' | 'right' {
@@ -125,6 +155,12 @@ function computeCardPosition(
       VIEWPORT_MARGIN_PX,
       Math.min(t, window.innerHeight - cardHeightPx - VIEWPORT_MARGIN_PX),
     );
+  // Above or below the target the card runs along the inline axis, so it hangs from the target's
+  // inline-start edge: its left edge in LTR, its right edge in RTL. Aligning to `rect.left` in both
+  // directions would push the card away from the reading direction, and into the opposite clamp for
+  // a target sitting near the inline-start edge of an RTL viewport.
+  const inlineStartLeft =
+    readDirection() === 'rtl' ? rect.left + rect.width - CARD_WIDTH_PX : rect.left;
   const fits = {
     top: rect.top - CARD_GAP_PX - cardHeightPx >= VIEWPORT_MARGIN_PX,
     bottom:
@@ -142,14 +178,17 @@ function computeCardPosition(
     case 'top':
       return {
         top: clampTop(rect.top - CARD_GAP_PX - cardHeightPx),
-        left: clampLeft(rect.left),
+        left: clampLeft(inlineStartLeft),
       };
     case 'left':
       return { top: clampTop(rect.top), left: clampLeft(rect.left - CARD_WIDTH_PX - CARD_GAP_PX) };
     case 'right':
       return { top: clampTop(rect.top), left: clampLeft(rect.left + rect.width + CARD_GAP_PX) };
     default: // bottom
-      return { top: clampTop(rect.top + rect.height + CARD_GAP_PX), left: clampLeft(rect.left) };
+      return {
+        top: clampTop(rect.top + rect.height + CARD_GAP_PX),
+        left: clampLeft(inlineStartLeft),
+      };
   }
 }
 
@@ -166,17 +205,13 @@ function computeCardPosition(
  * that renders nothing. Returns `null` when `open` is false or the current step is not yet
  * measured.
  */
-export function Tour({
-  steps,
-  open,
-  onDone,
-  onSkip,
-  stepCounter,
-  nextLabel = 'Next',
-  backLabel = 'Back',
-  skipLabel = 'Skip',
-  doneLabel = 'Done',
-}: TourProps) {
+export function Tour({ steps, open, onDone, onSkip, localizedStrings }: TourProps) {
+  const backLabel = localizedStrings?.['%firstRun_button_back%'] ?? 'Back';
+  const nextLabel = localizedStrings?.['%firstRun_button_next%'] ?? 'Next';
+  const doneLabel = localizedStrings?.['%onboardingTour_button_done%'] ?? 'Done';
+  const skipLabel = localizedStrings?.['%onboardingTour_button_skip%'] ?? 'Skip tour';
+  const counterTemplate = localizedStrings?.['%general_countOfTotal%'] ?? '{count} of {total}';
+
   // Resolve which steps actually have a target in the DOM, computed when the tour opens.
   // Steps whose targets mount after open() fires are not picked up until the tour re-opens.
   const [visibleSteps, setVisibleSteps] = useState<TourStep[]>([]);
@@ -245,7 +280,8 @@ export function Tour({
   // re-run when the card appears, not only when the step changes.
   const isCardRendered = targetRect !== undefined;
 
-  // Measure the current target; re-measure on resize or scroll.
+  // Measure the current target; re-measure on resize, on scroll, and when the target's own box
+  // changes.
   useEffect(() => {
     if (!open || !currentStep) return undefined;
     let remeasureFrameId: number | undefined;
@@ -289,9 +325,24 @@ export function Tour({
     window.addEventListener('resize', scheduleRemeasure);
     // Capture-phase passive scroll catches scrolls inside nested containers (panel columns, toolbar).
     window.addEventListener('scroll', scheduleRemeasure, { capture: true, passive: true });
+    // A target's box can change with neither a window resize nor a scroll: an rc-dock panel reflows
+    // once its web view's content loads, and the toolbar's config area reflows as the sync button
+    // and the version tooltip resolve. Both toolbar steps sit in that row, so without this the
+    // cutout and card settle on stale geometry — and `measure()`'s last-known-good branch would
+    // hide the drift rather than surface it. Observing the root as well catches reflows that move
+    // the target without resizing it (font or theme swap, zoom).
+    let resizeObserver: ResizeObserver | undefined;
+    // ResizeObserver is absent in some test environments; there the resize/scroll listeners stand.
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(scheduleRemeasure);
+      const targetElement = document.querySelector(currentStep.target);
+      if (targetElement) resizeObserver.observe(targetElement);
+      resizeObserver.observe(document.documentElement);
+    }
     return () => {
       window.removeEventListener('resize', scheduleRemeasure);
       window.removeEventListener('scroll', scheduleRemeasure, { capture: true });
+      resizeObserver?.disconnect();
       if (remeasureFrameId !== undefined) cancelAnimationFrame(remeasureFrameId);
     };
   }, [open, currentStep]);
@@ -369,8 +420,8 @@ export function Tour({
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [open, isCardRendered, onSkip]);
 
-  // Focus trap: cycle Tab/Shift+Tab among the card's buttons while the dialog is open. Depends on
-  // the card being mounted — on first open the card mounts a commit later than the step, and a
+  // Focus trap: keep Tab and Shift+Tab inside the card's buttons while the dialog is open. Depends
+  // on the card being mounted — on first open the card mounts a commit later than the step, and a
   // trap snapshotted before that would be a permanent no-op for step 1.
   useEffect(() => {
     if (!open || !currentStep || !isCardRendered) return undefined;
@@ -382,12 +433,22 @@ export function Tour({
       if (e.key !== 'Tab' || focusable.length === 0) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      // Focus can sit outside the card entirely: clicking the dimmed backdrop blurs the card button
+      // and leaves `document.activeElement` on `<body>`, which is neither boundary. Pulling it back
+      // here is what keeps Tab from walking into the toolbar and dock behind an `aria-modal`
+      // overlay.
+      if (!active || !cardRef.current?.contains(active)) {
+        e.preventDefault();
+        (e.shiftKey ? last : first).focus();
+        return;
+      }
       if (e.shiftKey) {
-        if (document.activeElement === first) {
+        if (active === first) {
           e.preventDefault();
           last.focus();
         }
-      } else if (document.activeElement === last) {
+      } else if (active === last) {
         e.preventDefault();
         first.focus();
       }
@@ -419,7 +480,7 @@ export function Tour({
       // Stable hook for tests: generic modal-dialog selectors also match other overlay dialogs,
       // so anything that needs to find (or avoid) specifically the tour targets this test id.
       data-testid="tour-dialog"
-      className="tw:fixed tw:inset-0"
+      className="pr-twp tw:fixed tw:inset-0"
       style={{ zIndex: Z_INDEX_ONBOARDING_TOUR }}
     >
       {/* Announces step title + description to screen readers when the step changes. */}
@@ -453,7 +514,15 @@ export function Tour({
             />
           </mask>
         </defs>
-        <rect width="100%" height="100%" fill="rgba(0,0,0,0.55)" mask={`url(#${maskId})`} />
+        {/* The scrim takes the theme's foreground token, so it darkens a light theme and veils a
+            dark one rather than being a fixed black wash. */}
+        <rect
+          width="100%"
+          height="100%"
+          className="tw:fill-foreground"
+          fillOpacity={SCRIM_OPACITY}
+          mask={`url(#${maskId})`}
+        />
       </svg>
 
       {/* Step card — positioned adjacent to the spotlight target.
@@ -461,7 +530,7 @@ export function Tour({
           card buttons is the intended interaction while the tour is open. */}
       <div
         ref={cardRef}
-        className="tw:fixed tw:flex tw:flex-col tw:gap-2 tw:rounded-lg tw:border tw:border-border tw:bg-popover tw:p-4 tw:shadow-lg tw:overflow-y-auto"
+        className="tw:fixed tw:flex tw:flex-col tw:gap-2 tw:overflow-y-auto tw:rounded-lg tw:border tw:border-border tw:bg-popover tw:p-4 tw:shadow-lg"
         style={{
           top: cardPos.top,
           left: cardPos.left,
@@ -469,12 +538,15 @@ export function Tour({
           maxHeight: 'calc(100vh - 16px)',
         }}
       >
-        <p className="tw:text-xs tw:text-muted-foreground">
-          {stepCounter
-            ? stepCounter(stepIndex + 1, visibleSteps.length)
-            : `${stepIndex + 1} / ${visibleSteps.length}`}
+        <p data-testid="tour-step-counter" className="tw:text-xs tw:text-muted-foreground">
+          {formatReplacementString(counterTemplate, {
+            count: String(stepIndex + 1),
+            total: String(visibleSteps.length),
+          })}
         </p>
-        <h3 className="tw:text-sm tw:font-semibold">{currentStep.title}</h3>
+        <h3 data-testid="tour-step-title" className="tw:text-sm tw:font-semibold">
+          {currentStep.title}
+        </h3>
         <p id={descId} className="tw:text-sm tw:text-muted-foreground">
           {currentStep.description}
         </p>
@@ -498,3 +570,5 @@ export function Tour({
     </div>
   );
 }
+
+export default Tour;

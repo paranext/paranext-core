@@ -215,7 +215,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   });
 
   test('Comments tab is visible in Column 3 in the English UI', async ({ mainPage }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
     // The UUID-based locator confirms the tab is in the DOM regardless of scroll position.
     await expect(
@@ -224,7 +224,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   });
 
   test('selecting the Comments tab displays the panel', async ({ mainPage }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     // Assert on rendered panel UI, not just the iframe body: the body is "attached" as soon as
@@ -252,7 +252,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   test('when a project has comments, at least one is visible in the Comments tab', async ({
     mainPage,
   }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     await createCommentThreads(project, ['GEN 1:1'], ['Visible comment for PT-4068 test']);
@@ -286,7 +286,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   test('filter toolbar stays visible when the comment list is scrolled to the bottom (PT-4070)', async ({
     mainPage,
   }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     // Seed enough threads to force the comment list to scroll. GEN 1 has 31 verses, so 30
@@ -353,7 +353,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   // first attempt (relying on Playwright's worker-relaunch retry to recover — a guaranteed slow
   // flake, and a hard failure under --retries=0).
   test('filter dropdowns are operable with the keyboard (PT-4070)', async ({ mainPage }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     // The toolbar renders in the loaded state even with zero threads, but seed a few so the panel
@@ -408,7 +408,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   test('Comments tab scope filter offers "Current chapter" in Simple mode (PT-4070)', async ({
     mainPage,
   }) => {
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     await createCommentThreads(projectScroll, ['GEN 3:1'], ['PT-4070 scope-option test']);
@@ -462,7 +462,7 @@ test.describe('Comments tab in P10 Simple mode (PT-4068 / PT-4069)', () => {
   test('Comments tab updates when the active project changes (PT-4069)', async ({ mainPage }) => {
     // Two openScriptureEditor calls on top of normal startup. 10 minutes is comfortable.
     test.setTimeout(600_000);
-    await waitForAppReady(mainPage, 180_000);
+    await waitForAppReady(mainPage, { timeout: 180_000 });
     await waitForSimpleLayout(mainPage);
 
     await createCommentThreads(projectA, ['GEN 1:1'], ['Project A unique comment text']);
