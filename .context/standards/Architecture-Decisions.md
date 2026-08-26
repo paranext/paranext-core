@@ -20,17 +20,27 @@ step, no automation. Just a record.
   fold the rule into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
   `.claude/rules/` file — that is what the agents read and enforce on the next feature. This log
   keeps the rationale and history; the standards keep the current rule.
-- **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-NNNN` instead of deleting
-  it; add the new decision as a new entry.
-- **Append at the end**, newest last. Number entries `ADR-NNNN`.
+- **Don't rewrite history.** Mark a superseded decision `Superseded by adr-<slug>` instead of
+  deleting it; add the new decision as a new entry.
+- **Append at the end**, newest last. Identify entries by an `adr-`-prefixed kebab-case **slug**,
+  not a number: `## adr-per-window-service-scoping: {short title}`. Choose a slug that reads as the
+  decision itself, short enough to type in a code comment, and cross-reference it in backticks.
+  Name the decision, never its status — a slug never changes, but a status does, so record
+  `Withdrawn`/`Superseded` on the entry's `**Status:**` line rather than in its slug.
+- **Slugs are chosen at write time and never change.** Two branches in flight pick different slugs
+  on their own, so nothing has to be claimed, reserved, or reconciled at merge. If both branches
+  append at the end of this file and git reports a conflict there, resolve it by **keeping both
+  entries** — there is nothing to renumber and no cross-reference to update. (Entries through
+  `adr-async-hook-state-shape` were originally numbered `ADR-NNNN`; each carries a `**Formerly:**`
+  line so older references still resolve. Don't add `**Formerly:**` to new entries.)
 
 ### Entry template
 
 ```markdown
-## ADR-NNNN: {short title}
+## adr-{slug}: {short title}
 
 - **Date:** YYYY-MM-DD
-- **Status:** Proposed | Accepted | Superseded by ADR-NNNN
+- **Status:** Proposed | Accepted | Superseded by adr-{slug}
 - **Context:** what situation forced a decision (with file:line / source where useful).
 - **Decision:** what we chose.
 - **Alternatives:** what we considered and why we rejected/deferred them.
@@ -39,8 +49,9 @@ step, no automation. Just a record.
 
 ---
 
-## ADR-0001: Keep a lightweight, gate-free architecture-decisions log
+## adr-lightweight-decision-log: Keep a lightweight, gate-free architecture-decisions log
 
+- **Formerly:** ADR-0001
 - **Date:** 2026-06-18
 - **Status:** Accepted
 - **Context:** Feature and PRD work surfaces cross-cutting architecture decisions whose rationale
@@ -59,8 +70,9 @@ step, no automation. Just a record.
   discipline — the log only helps if it is actually updated, which is why CLAUDE.md makes updating it
   a standing instruction rather than an optional nicety.
 
-## ADR-0002: App-global keyboard shortcuts go through the main-process `before-input-event` handler
+## adr-app-global-shortcuts-in-main: App-global keyboard shortcuts go through the main-process `before-input-event` handler
 
+- **Formerly:** ADR-0002
 - **Date:** 2026-06-18
 - **Status:** Accepted (current approach)
 - **Context:** The core Send/Receive investigation found paranext-core has **no declarative
@@ -81,15 +93,16 @@ step, no automation. Just a record.
   multi-week, touches the menu schema, `platform-bible-utils` types, the macOS/renderer menubars,
   generated `papi.d.ts`, and docs.
 - **Consequences:** shortcuts are app-global and cross-platform from one place; couples `main.ts` to
-  an extension's command name by string (degrades gracefully if the extension is absent). **Revisit**
-  (and likely supersede this) once enough shortcuts accumulate to justify the declarative API.
-  Narrowed by ADR-0015: this applies to shortcuts whose command needs nothing from the focused view;
-  a shortcut whose command needs the focused web view's id, project, or text selection stays in the
-  renderer, in one shared hook.
+  an extension's command name by string (degrades gracefully if the extension is absent).
+  **Revisit** (and likely supersede this) once enough shortcuts accumulate to justify the
+  declarative API. Narrowed by `adr-per-web-view-ctrl-f-for-find`: this applies to shortcuts whose
+  command needs nothing from the focused view; a shortcut whose command needs the focused web view's
+  id, project, or text selection stays in the renderer, in one shared hook.
 - **Source:** discovery brief for "Donna syncs her project with the team (core Send/Receive)".
 
-## ADR-0003: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
+## adr-menus-always-available-gate-at-submission: Menus stay always-available; back ends gate at submission. Writers of mutable shared state are DataProviders, not NetworkObjects
 
+- **Formerly:** ADR-0003
 - **Date:** 2026-06-18
 - **Status:** Accepted
 - **Context:** Two placement questions recur when porting a PT9 tool that mutates project data.
@@ -133,8 +146,9 @@ step, no automation. Just a record.
   NetworkObject → DataProvider promotion). See `Entry-Point-Guide.md` for the menu mechanics
   and `Paranext-Core-Patterns.md` for the DataProvider-vs-NetworkObject pattern.
 
-## ADR-0004: Surface ParatextData alerts via `AlertCapture` instead of swallowing them
+## adr-paratext-data-alerts-via-alert-capture: Surface ParatextData alerts via `AlertCapture` instead of swallowing them
 
+- **Formerly:** ADR-0004
 - **Date:** 2026-06-18
 - **Status:** Accepted
 - **Context:** Many ParatextData operations report user-facing warnings/errors through `Alert.Show` /
@@ -161,8 +175,9 @@ step, no automation. Just a record.
 - **Source:** manage-books port (`AlertCapture` introduced for `ImportBooks`). See
   `Paranext-Core-Patterns.md` for the code pattern.
 
-## ADR-0005: PT10 has no production create-project primitive
+## adr-no-production-create-project: PT10 has no production create-project primitive
 
+- **Formerly:** ADR-0005
 - **Date:** 2026-06-18
 - **Status:** Accepted
 - **Context:** Porting the project backup-and-restore feature surfaced a "restore as a **new**
@@ -194,8 +209,9 @@ step, no automation. Just a record.
 - **Source:** project backup-and-restore port (restore-to-new-project scope cut, PT10 source grep
   2026-05-19).
 
-## ADR-0006: Reuse the shared checklist framework when porting a new checklist tool
+## adr-reuse-shared-checklist-framework: Reuse the shared checklist framework when porting a new checklist tool
 
+- **Formerly:** ADR-0006
 - **Date:** 2026-06-18
 - **Status:** Accepted
 - **Context:** PT9 has a family of checklist tools (markers, punctuation, ...) sharing one WinForms
@@ -231,8 +247,9 @@ step, no automation. Just a record.
 - **Source:** punctuation-checklist port (markers-consumption verdict); see `08_Checklists.md` in the
   PT9 feature inventory for the per-tool behavior and the verse-range divergence.
 
-## ADR-0007: Per-window service scoping via `${name}-${windowId}` network-object names
+## adr-per-window-service-scoping: Per-window service scoping via `${name}-${windowId}` network-object names
 
+- **Formerly:** ADR-0007
 - **Date:** 2026-08-05
 - **Status:** Accepted
 - **Context:** Multi-window support needs each window to run its own instance of window-scoped
@@ -243,7 +260,8 @@ step, no automation. Just a record.
 - **Decision:** Each window's renderer registers its own copy of these services under its own
   `globalThis.windowId` suffix (e.g. `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${windowId}`,
   `${NotificationServiceNetworkObjectName}-${windowId}`, per-window dialog request names, per-window
-  command names). The pre-existing generic name is kept working via a routing proxy (ADR-0008).
+  command names). The pre-existing generic name is kept working via a routing proxy
+  (`adr-generic-name-routing-proxies`).
 - **Alternatives:** One shared instance for all windows — rejected: state (open web views, toasts,
   dialogs) is inherently per-window. A single object internally keyed by window id under the old
   generic name only — rejected: reinvents what `networkObjectService`'s per-name registration and
@@ -261,20 +279,22 @@ step, no automation. Just a record.
   consumers have to tolerate resolving one that is already gone.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
-## ADR-0008: Generic-name routing proxies in main forward to the focused/owning window's scoped service
+## adr-generic-name-routing-proxies: Generic-name routing proxies in main forward to the focused/owning window's scoped service
 
+- **Formerly:** ADR-0008
 - **Date:** 2026-08-05
 - **Status:** Accepted
 - **Context:** Existing PAPI consumers call services by their historical generic name
   (`platform.webViewService`, `dialog:showDialog`, `platform.about`, ...) with no window argument.
-  After ADR-0007 scoped each window's copy under its own name, nothing answers the generic name.
+  After `adr-per-window-service-scoping` scoped each window's copy under its own name, nothing
+  answers the generic name.
 - **Decision:** Main registers one routing proxy per generic name (`command-routing.service.ts` —
   which also registers the dialog-request proxies, `notification-routing.service.ts`,
   `web-view-routing.service.ts`, `window-routing.service.ts`) that forwards to the scoped service of
   the window that should handle it: the owning window when ownership is determinable (e.g. a command
   whose first argument names a web view routes to the window that owns that web view), otherwise the
-  routing target (ADR-0010). A few read-only queries fan out and merge across all windows instead,
-  where a merged view is the meaningful answer.
+  routing target (`adr-window-readiness-in-main`). A few read-only queries fan out and merge across
+  all windows instead, where a merged view is the meaningful answer.
 - **Alternatives:** Push a window-id argument onto every external caller — rejected: breaks every
   existing extension/PAPI consumer and the documented `papi.d.ts` signatures. Always fan out to every
   window — rejected as the general answer: most of these calls are single-target actions where
@@ -288,8 +308,9 @@ step, no automation. Just a record.
   did not answer may be the one that owns the web view.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
-## ADR-0009: App-global singleton services elect a host window first-come, with takeover on host-window close
+## adr-singleton-services-elect-host-window: App-global singleton services elect a host window first-come, with takeover on host-window close
 
+- **Formerly:** ADR-0009
 - **Date:** 2026-08-05
 - **Status:** Accepted
 - **Context:** Some services are conceptually app-global, not per-window (the theme engine, the
@@ -310,13 +331,15 @@ step, no automation. Just a record.
   extracting into a shared helper.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
-## ADR-0010: Window readiness is tracked in main via window-service registration, used to pick routing targets
+## adr-window-readiness-in-main: Window readiness is tracked in main via window-service registration, used to pick routing targets
 
+- **Formerly:** ADR-0010
 - **Date:** 2026-08-05
 - **Status:** Accepted
 - **Context:** A window's `BrowserWindow` exists (and is enumerable) well before its renderer has
   registered any window-scoped service, because window creation and renderer service startup are
-  asynchronous. Routing proxies (ADR-0008) need to avoid picking a window that can't yet answer.
+  asynchronous. Routing proxies (`adr-generic-name-routing-proxies`) need to avoid picking a window
+  that can't yet answer.
 - **Decision:** Main tracks a `readyWindowIds` set (`window-state.service.ts`); a window is marked
   ready when its `platform.windowServiceDataProvider-{id}-data` registration appears (observed via
   `onDidCreateNetworkObject`), used as a single proxy signal for "this window's services are up," and
@@ -344,8 +367,9 @@ step, no automation. Just a record.
   a true invariant.
 - **Source:** PT-4275 (multi-window epic); introduced in PR #2621.
 
-## ADR-0011: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
+## adr-character-marker-removal-peels-one-layer: Character-marker removal peels one nesting layer per activation; the row is labelled to match rather than looping
 
+- **Formerly:** ADR-0011
 - **Date:** 2026-08-10
 - **Status:** Accepted
 - **Context:** The character-marker menu's catch-all remove row calls the editor's
@@ -381,8 +405,9 @@ step, no automation. Just a record.
 - **Source:** PRD "Saroj easily works with character-level markers" (appetite 2 developer weeks);
   character-marker removal work on `remove-character-marker`.
 
-## ADR-0012: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
+## adr-editor-edit-side-effects-shared-module: Editor edit side effects (version-history snapshot, sync-blocked notice) live in one shared module
 
+- **Formerly:** ADR-0012
 - **Date:** 2026-08-11
 - **Status:** Accepted
 - **Context:** Every destructive or sync-gated edit in `platform-scripture-editor` needs the same two
@@ -410,17 +435,19 @@ step, no automation. Just a record.
   handler, not at render time; the web view wraps the plain function in its own `useCallback` where it
   needs a stable identity for dependency lists.
 - **Consequences:** One place to change either contract. The removal path additionally gates its
-  snapshot on a resolved editor ref, because unlike the insert paths it has a reachable no-op (the ref
-  is null until the editor mounts) and would otherwise write a restore point for an edit that never
-  happened. One no-op remains documented-but-undefended — the editor silently declines a removal it
-  cannot confine to the selection — for the same reason ADR-0011 records: there is no outcome signal
-  from `removeCharacterMarker` to branch on. New edit paths should route through this module rather
-  than inlining a fourth copy.
+  snapshot on a resolved editor ref, because unlike the insert paths it has a reachable no-op (the
+  ref is null until the editor mounts) and would otherwise write a restore point for an edit that
+  never happened. One no-op remains documented-but-undefended — the editor silently declines a
+  removal it cannot confine to the selection — for the same reason
+  `adr-character-marker-removal-peels-one-layer` records: there is no outcome signal from
+  `removeCharacterMarker` to branch on. New edit paths should route through this module rather than
+  inlining a fourth copy.
 - **Source:** Review of PR #2665 (`remove-character-marker`) — reuse findings on duplicated snapshot
   and sync-notice blocks.
 
-## ADR-0013: `InstalledExtensions.packaged` reports discovered extensions, not activated ones
+## adr-packaged-extensions-are-discovered: `InstalledExtensions.packaged` reports discovered extensions, not activated ones
 
+- **Formerly:** ADR-0013
 - **Date:** 2026-08-13
 - **Status:** Accepted
 - **Context:** `getInstalledExtensions` in `extension.service.ts` built its `packaged` list from the
@@ -470,8 +497,9 @@ step, no automation. Just a record.
 - **Source:** PT-3954 (Sync button on toolbar sometimes does not show), with the activation timeline
   measured from a Paratext 10 Studio `main.log`.
 
-## ADR-0014: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
+## adr-analytics-in-extension-host: Analytics abstraction layer hosted in extension-host; environment resolved once and fail-safe toward test
 
+- **Formerly:** ADR-0014
 - **Date:** 2026-08-14
 - **Status:** Accepted
 - **Context:** PT-4337 asked for a provider-agnostic analytics abstraction (call sites never touch a
@@ -543,40 +571,43 @@ step, no automation. Just a record.
   of the implementing branch, which surfaced and fixed a startup-path regression (analytics
   initialization briefly gated extension-host activation) before merge.
 
-## ADR-0015: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
+## adr-per-web-view-ctrl-f-for-find: Per-web-view Ctrl+F for Find, not a main-process `before-input-event` branch
 
+- **Formerly:** ADR-0015
 - **Date:** 2026-08-18
-- **Status:** Accepted (narrows ADR-0002 rather than superseding it)
+- **Status:** Accepted (narrows `adr-app-global-shortcuts-in-main` rather than superseding it)
 - **Context:** PT-4341 makes Find (Ctrl+F) reachable from every scripture tab type, not just the
-  Scripture editor. ADR-0002 says app-global shortcuts belong in the Electron main-process
-  `before-input-event` handler (`src/main/main.ts`) and explicitly rejects "renderer-level global
-  `keydown` — duplicated into every web-view" as the alternative. Find is app-wide in the sense that
-  the user expects Ctrl+F to work wherever scripture is on screen, so on its face this work looks
-  like an ADR-0002 case. But `platformScripture.openFind` is not a zero-argument command: it needs
-  the id of the web view the user is *in*, the project of the scripture that web view is *showing*
-  (for a reference panel this is the displayed resource, not the tab's own `projectId`), and that
-  web view's current **text selection** to pre-fill the search box. `before-input-event` fires in the
-  main process, which has none of those: it can identify the focused window, not the focused tab, and
-  it cannot read a selection inside an `about:srcdoc` iframe. Routing them back would mean inventing
-  a "focused scripture tab reports its selection" channel — a platform capability that does not exist.
+  Scripture editor. `adr-app-global-shortcuts-in-main` says app-global shortcuts belong in the
+  Electron main-process `before-input-event` handler (`src/main/main.ts`) and explicitly rejects
+  "renderer-level global `keydown` — duplicated into every web-view" as the alternative. Find is
+  app-wide in the sense that the user expects Ctrl+F to work wherever scripture is on screen, so on
+  its face this work looks like an `adr-app-global-shortcuts-in-main` case. But
+  `platformScripture.openFind` is not a zero-argument command: it needs the id of the web view the
+  user is *in*, the project of the scripture that web view is *showing* (for a reference panel this
+  is the displayed resource, not the tab's own `projectId`), and that web view's current **text
+  selection** to pre-fill the search box. `before-input-event` fires in the main process, which has
+  none of those: it can identify the focused window, not the focused tab, and it cannot read a
+  selection inside an `about:srcdoc` iframe. Routing them back would mean inventing a "focused
+  scripture tab reports its selection" channel — a platform capability that does not exist.
 - **Decision:** Keep the Ctrl+F handler in the renderer, inside the web views, but hold it in **one
   shared hook** — `useOpenFindShortcut` in
   `extensions/src/platform-scripture-editor/src/use-open-find-shortcut.hook.ts` — that every
   scripture tab type mounts (Scripture editor, model text, Bible text, commentary, Text Collection).
   The hook owns the key match, the "no scripture resolved yet" no-op, the selection read, and the
   error logging; a tab supplies only its web view id and the project id of the scripture it is
-  showing. ADR-0002 continues to govern shortcuts whose command needs nothing from the focused view.
-  The Text Collection tab shows several resources at once and so has no single displayed resource: it
-  supplies the project of the resource holding the **caret**, tracked by `useFocusedResourceProjectId`
-  off the cells' `data-project-id`.
-- **Alternatives:** (a) **A `before-input-event` branch per ADR-0002** — rejected: it cannot supply
-  the triggering web view id, the displayed resource's project, or the selection, so Find would open
-  against the wrong scripture and never pre-fill. (b) **`before-input-event` plus a new "focused
-  scripture tab" PAPI channel that reports id + project + selection** — deferred: that is the
-  general fix (and the honest precondition for making Ctrl+F app-global), but it is a platform
-  capability well beyond this ticket's scope. (c) **Duplicate the listener per web view** (what the
-  first draft of this branch did, with the editor keeping its own inline copy) — rejected: two
-  implementations of the same shortcut drift, which is exactly ADR-0002's stated objection.
+  showing. `adr-app-global-shortcuts-in-main` continues to govern shortcuts whose command needs
+  nothing from the focused view. The Text Collection tab shows several resources at once and so has
+  no single displayed resource: it supplies the project of the resource holding the **caret**,
+  tracked by `useFocusedResourceProjectId` off the cells' `data-project-id`.
+- **Alternatives:** (a) **A `before-input-event` branch per `adr-app-global-shortcuts-in-main`** —
+  rejected: it cannot supply the triggering web view id, the displayed resource's project, or the
+  selection, so Find would open against the wrong scripture and never pre-fill. (b)
+  **`before-input-event` plus a new "focused scripture tab" PAPI channel that reports id + project +
+  selection** — deferred: that is the general fix (and the honest precondition for making Ctrl+F
+  app-global), but it is a platform capability well beyond this ticket's scope. (c) **Duplicate the
+  listener per web view** (what the first draft of this branch did, with the editor keeping its own
+  inline copy) — rejected: two implementations of the same shortcut drift, which is exactly
+  `adr-app-global-shortcuts-in-main`'s stated objection.
 - **Consequences:** Ctrl+F works only in tabs that mount the hook, so **each new scripture tab type
   is an opt-in** — the real coverage gap of the renderer-level approach, and the one thing the
   main-process handler would have given for free. Adding a tab type is one hook call plus a resolved
@@ -585,23 +616,25 @@ step, no automation. Just a record.
   accurate is what stops the gap from going unnoticed. **Revisit** if (b) is ever built, or once
   enough view-context-dependent shortcuts accumulate to justify a general channel.
 - **Source:** PT-4341 "Open Find from any scripture tab type" (PR #2677) — review finding that the
-  branch diverged from ADR-0002 without recording why.
+  branch diverged from `adr-app-global-shortcuts-in-main` without recording why.
 
-## ADR-0016: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
+## adr-empty-is-zero-state-primitive: shadcn `Empty` is the zero-state-with-action primitive; `EmptyState` stays message-only
 
+- **Formerly:** ADR-0016
 - **Date:** 2026-08-18
 - **Status:** Accepted
 - **Context:** PT-4111 needed a zero-state carrying a title, a description, and an optional action
   button (the scripture editor's "this book is not in this project" state, whose Power-mode variant
   offers a Manage Books button). Three candidate shapes already existed and nothing said which to
-  reach for. `EmptyState` (`lib/platform-bible-react/src/components/basics/empty-state.component.tsx`,
-  2 consumers) renders a single `role="status"` message and has no slot for a title or an action.
-  `InstallFailedView` (then at
-  `extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`; renamed
-  `RetryableErrorView` in `panel-state-views.component.tsx` by PT-4347 — see ADR-0022,
-  2 consumers) is genuinely "full-panel message + action button" but is scoped to DBL install
-  recovery. Neither is a general primitive, and the next three tickets in the same epic (PT-4132,
-  PT-4347, PT-4349) each need a zero-state too, so an ad-hoc fourth shape would have compounded.
+  reach for. `EmptyState`
+  (`lib/platform-bible-react/src/components/basics/empty-state.component.tsx`, 2 consumers) renders
+  a single `role="status"` message and has no slot for a title or an action. `InstallFailedView`
+  (then at `extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`; renamed
+  `RetryableErrorView` in `panel-state-views.component.tsx` by PT-4347 — see
+  `adr-panel-readiness-from-sources`, 2 consumers) is genuinely "full-panel message + action button"
+  but is scoped to DBL install recovery. Neither is a general primitive, and the next three tickets
+  in the same epic (PT-4132, PT-4347, PT-4349) each need a zero-state too, so an ad-hoc fourth shape
+  would have compounded.
 - **Decision:** Vendor shadcn's `empty` into `lib/platform-bible-react/src/components/shadcn-ui/` and
   treat it as the primitive for any zero-state that needs more than a bare sentence — title,
   description, media, or an action. `EmptyState` keeps its existing consumers and remains the
@@ -612,9 +645,10 @@ step, no automation. Just a record.
   changes a shared design-system component for the benefit of consumers that do not need the new
   props, and still would not be the primitive UX specified. **Follow the `InstallFailedView` idiom
   with a new local view** — rejected: cheapest for one ticket, but it is an install-recovery view by
-  intent, and copying its shape for a fourth time is exactly the drift ADR-0012 warns about; UX also
-  specified the shadcn primitive by name. **Hand-write an equivalent component** — rejected: forfeits
-  the upstream-diffable baseline that `/add-shadcn-component` exists to preserve.
+  intent, and copying its shape for a fourth time is exactly the drift
+  `adr-editor-edit-side-effects-shared-module` warns about; UX also specified the shadcn primitive
+  by name. **Hand-write an equivalent component** — rejected: forfeits the upstream-diffable
+  baseline that `/add-shadcn-component` exists to preserve.
 - **Consequences:** `empty.tsx` must keep its two-commit history (raw shadcn baseline, then the
   standard `pr-twp`/TSDoc customizations) so future shadcn upgrades can diff generated against
   customized — its PR must not be squash-merged. One upstream quirk was kept deliberately:
@@ -637,13 +671,15 @@ step, no automation. Just a record.
   `docs/superpowers/specs/`, so it is not a citable reference — the reasoning is reproduced here
   precisely because that path is not readable from the repo.)
 
-## ADR-0017: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
+## adr-one-shot-launch-parameters: One-shot launch parameters on `open*` commands: optional scalar, options field, scrubbed on rebuild
 
+- **Formerly:** ADR-0017
 - **Date:** 2026-08-18
-- **Status:** Accepted. (Briefly amended by ADR-0018, now withdrawn: ADR-0018 asserted that point (4)
-  rested on a false premise about `reloadWebView`. Tracing the nonce showed the opposite — the premise
-  here is correct and the mechanism is stronger than stated. Point (4)'s wording is corrected below to
-  say why the reload works, and the "a nonce or launch token — rejected" alternative stands.)
+- **Status:** Accepted. (Briefly amended by `adr-launch-token-withdrawn`, now withdrawn:
+  `adr-launch-token-withdrawn` asserted that point (4) rested on a false premise about
+  `reloadWebView`. Tracing the nonce showed the opposite — the premise here is correct and the
+  mechanism is stronger than stated. Point (4)'s wording is corrected below to say why the reload
+  works, and the "a nonce or launch token — rejected" alternative stands.)
 - **Context:** Opening a tool web view sometimes needs a value that applies to *this* launch only —
   text to pre-fill, a section to land on, a row to pre-select — as distinct from the durable state the
   web view persists. The pattern existed in the codebase but was never written down: `openFind` takes
@@ -698,14 +734,15 @@ step, no automation. Just a record.
 - **Source:** PT-4111 implementation; generalizes `openFind`'s `selectedText` and the two existing
   transient-state scrubs.
 
-## ADR-0018: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
+## adr-launch-token-withdrawn: A launch token is required to deliver launch parameters to an already-open web view — WITHDRAWN
 
+- **Formerly:** ADR-0018
 - **Date:** 2026-08-18 (withdrawn 2026-08-19)
 - **Status:** **Withdrawn.** Its central factual claim is wrong, and the mechanism it introduced was
-  dead code. ADR-0017 stands unamended in substance. Kept rather than deleted because the *way* it was
-  wrong is the useful part: it is a worked example of a plausible mechanism claim that survived
-  implementation, five duplicated code comments and a passing test, and was caught only by tracing the
-  nonce to its use site.
+  dead code. `adr-one-shot-launch-parameters` stands unamended in substance. Kept rather than
+  deleted because the *way* it was wrong is the useful part: it is a worked example of a plausible
+  mechanism claim that survived implementation, five duplicated code comments and a passing test,
+  and was caught only by tracing the nonce to its use site.
 - **What was wrong:** it asserted "the generated `content` string and per-id nonce are unchanged." Two
   nonces exist and they were conflated. `getWebViewNonce(id)` is indeed stable per id — but it never
   enters `content`. `srcNonce = newNonce()` does, regenerating on every `getWebView` call and
@@ -714,57 +751,61 @@ step, no automation. Just a record.
   destroyed and recreated. The service host even carries a standing TODO saying so in as many words
   ("Generating nonces every time causes webviews to rerender every time `getWebView` is used on an
   existing webview").
-- **Consequences of the withdrawal:** the launch token could never have fired — every guard seeded its
-  ref from the incoming token at mount, so `launchToken === ref.current` was always true and no effect
-  body ever ran. The feature worked throughout because ADR-0017's lazy initializers were correct all
-  along. The token plumbing has been removed from all five files, and the inverted trade-off ADR-0018
-  claimed to avoid is recorded honestly in ADR-0017's consequences instead: the remount really does
-  discard in-dialog state, which is the cost of the mechanism rather than something a token avoided.
-  The sibling `projectId` bug ADR-0018 reported is likewise not a bug: a mount-only initializer is
-  correct precisely because the reload remounts.
+- **Consequences of the withdrawal:** the launch token could never have fired — every guard seeded
+  its ref from the incoming token at mount, so `launchToken === ref.current` was always true and no
+  effect body ever ran. The feature worked throughout because `adr-one-shot-launch-parameters`'s
+  lazy initializers were correct all along. The token plumbing has been removed from all five files,
+  and the inverted trade-off this withdrawn decision claimed to avoid is recorded honestly in
+  `adr-one-shot-launch-parameters`'s consequences instead: the remount really does discard in-dialog
+  state, which is the cost of the mechanism rather than something a token avoided. The sibling
+  `projectId` bug reported here is likewise not a bug: a mount-only initializer is correct
+  precisely because the reload remounts.
 - **Process lesson:** a claim about platform behavior belongs in ONE place. This one was duplicated into
   five code comments, and when it turned out false all five were wrong together — and their number read
   as corroboration. Assert platform mechanics once, at the site that depends on them, and link to it.
 - **Superseded content follows, for the record.**
-- **Original status:** Accepted (supersedes ADR-0017's delivery mechanism)
-- **Context:** ADR-0017 rejected a launch token on the stated premise that force-calling
-  `reloadWebView` re-triggers the launch. Code review traced the call and found the premise false.
-  `reloadWebView` -> `openOrReloadWebView` (`src/renderer/services/web-view.service-host.ts`) calls the
-  provider's `getWebView` and saves the new state, but the iframe is **not** reloaded: the generated
-  `content` string and per-id nonce are unchanged, so only `onDidUpdateWebView` fires
-  (`src/renderer/components/web-view.component.tsx` re-sets `srcDoc` only when `content` changes). The
-  existing React root re-renders and never unmounts. `useWebViewState` does surface the new values, but
-  ADR-0017's prescribed consumer shape — a lazy `useState` initializer — does not re-run on re-render,
-  and a mount-only `useLayoutEffect([])` does not re-fire. Net user-visible effect for PT-4111: with
+- **Original status:** Accepted (supersedes `adr-one-shot-launch-parameters`'s delivery mechanism)
+- **Context:** `adr-one-shot-launch-parameters` rejected a launch token on the stated premise that
+  force-calling `reloadWebView` re-triggers the launch. Code review traced the call and found the
+  premise false. `reloadWebView` -> `openOrReloadWebView`
+  (`src/renderer/services/web-view.service-host.ts`) calls the provider's `getWebView` and saves the
+  new state, but the iframe is **not** reloaded: the generated `content` string and per-id nonce are
+  unchanged, so only `onDidUpdateWebView` fires (`src/renderer/components/web-view.component.tsx`
+  re-sets `srcDoc` only when `content` changes). The existing React root re-renders and never
+  unmounts. `useWebViewState` does surface the new values, but `adr-one-shot-launch-parameters`'s
+  prescribed consumer shape — a lazy `useState` initializer — does not re-run on re-render, and a
+  mount-only `useLayoutEffect([])` does not re-fire. Net user-visible effect for PT-4111: with
   Manage Books already open, choosing "Manage books" from the not-available view fronted the tab but
   left it on the previous section with no preselection and no scroll — the feature's core affordance
   silently no-opped. Implementing the fix surfaced a second latent bug: a `useEffect` resetting
-  `selectionsByAction` on `projectId` also ran on mount, wiping the lazy-initialized preselection, so
-  even the *first*-launch case never worked.
-- **Decision:** Carry a monotonically increasing **launch token** in the web view's options alongside
-  the launch parameters, bumped on every `open*` invocation, scrubbed by the same unconditional
-  assignment ADR-0017 point (3) prescribes. Consumers apply launch parameters in an **effect keyed on
-  the token**, not in a lazy `useState` initializer. A token — rather than comparing the parameter
-  values — is required because two consecutive identical launches produce identical parameters and are
-  otherwise indistinguishable.
+  `selectionsByAction` on `projectId` also ran on mount, wiping the lazy-initialized preselection,
+  so even the *first*-launch case never worked.
+- **Decision:** Carry a monotonically increasing **launch token** in the web view's options
+  alongside the launch parameters, bumped on every `open*` invocation, scrubbed by the same
+  unconditional assignment `adr-one-shot-launch-parameters` point (3) prescribes. Consumers apply
+  launch parameters in an **effect keyed on the token**, not in a lazy `useState` initializer. A
+  token — rather than comparing the parameter values — is required because two consecutive identical
+  launches produce identical parameters and are otherwise indistinguishable.
 - **Alternatives:** **Compare parameter values and re-apply on change** — rejected: cannot distinguish
   a repeat launch with the same parameters, which is a normal case. **Remount via a `key` derived from
   the token** — viable and simpler to reason about, but discards all unrelated in-dialog state (scroll,
   other sections' selections) that the user may care about; the keyed effect preserves it. **Make
   `reloadWebView` genuinely reload the iframe** — rejected as out of scope and far more disruptive: it
   would change behavior for every existing caller.
-- **Consequences:** ADR-0017's "no re-apply effect" consequence is reversed; the re-apply is scoped so
-  it overrides only the launched-to section's selection and leaves the user's other in-dialog state
-  intact. The same token fixes the sibling case where `projectId` was seeded by a mount-only
-  initializer, so "reload updates the existing tab with the new project context" now holds. The
-  already-open relaunch path needs a test — it is invisible in the mount-only tests that previously
-  covered this feature (see `manage-books-dialog.component.test.tsx`). More generally: `reloadWebView`
-  should not be assumed to remount anything.
+- **Consequences:** `adr-one-shot-launch-parameters`'s "no re-apply effect" consequence is reversed;
+  the re-apply is scoped so it overrides only the launched-to section's selection and leaves the
+  user's other in-dialog state intact. The same token fixes the sibling case where `projectId` was
+  seeded by a mount-only initializer, so "reload updates the existing tab with the new project
+  context" now holds. The already-open relaunch path needs a test — it is invisible in the
+  mount-only tests that previously covered this feature (see
+  `manage-books-dialog.component.test.tsx`). More generally: `reloadWebView` should not be assumed
+  to remount anything.
 - **Source:** PT-4111 `/review-paratext` code review. Withdrawn after PR #2691 review traced
   `srcNonce` to its use site.
 
-## ADR-0019: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
+## adr-single-verse-surfaces-resolve-verse-zero-to-one: Verse 0 resolves to verse 1 on single-verse display surfaces (display-only)
 
+- **Formerly:** ADR-0019
 - **Date:** 2026-08-05
 - **Status:** Accepted
 - **Context:** A verse-0 reference means "everything preceding verse 1" — book/chapter intros,
@@ -901,8 +942,9 @@ step, no automation. Just a record.
   turn a deliberate single-verse-vs-whole-chapter difference into apparent drift from a shared util.
 - **Source:** PT-4061 (B3), which resolves PT-3133; Ian Hewerdine confirmed parity 2026-08-05.
 
-## ADR-0020: Find follows the editor onto read-only resources, with replace withheld
+## adr-find-follows-editor-to-read-only: Find follows the editor onto read-only resources, with replace withheld
 
+- **Formerly:** ADR-0020
 - **Date:** 2026-08-17
 - **Status:** Accepted
 - **Context:** Simple mode's Column 3 panels follow the *active translation project*: the editor gates
@@ -940,10 +982,12 @@ step, no automation. Just a record.
   anything that later assumes all four are on the same project must account for Find.
 - **Source:** Review of the `pt-4342-dock-find-in-simple` branch — merge-blocking findings on Find
   re-binding to read-only resources and on Find not following project switches. Mechanism reconciled
-  with PT-4343's `platform.isEditable` read (ADR-0015's sibling work) when the branch rebased.
+  with PT-4343's `platform.isEditable` read (`adr-per-web-view-ctrl-f-for-find`'s sibling work) when
+  the branch rebased.
 
-## ADR-0021: Column 3 tab order is expressed as anchor + insert-before in the layout supplement, not as a pinning mechanism
+## adr-tab-order-anchor-insert-before: Column 3 tab order is expressed as anchor + insert-before in the layout supplement, not as a pinning mechanism
 
+- **Formerly:** ADR-0021
 - **Date:** 2026-08-17
 - **Status:** Accepted
 - **Context:** Simple mode's Column 3 is assembled from two sources: `simple-layout.data.ts`, baked
@@ -992,8 +1036,9 @@ step, no automation. Just a record.
 - **Source:** Review of the `pt-4342-dock-find-in-simple` branch — findings on the supplement's silent
   append fallback and the untested shipped column order; open question raised in the PR body.
 
-## ADR-0022: A book selection is summarized, not listed, on a scope trigger; its details surface is the picker, not a tooltip
+## adr-book-selection-is-summarized: A book selection is summarized, not listed, on a scope trigger; its details surface is the picker, not a tooltip
 
+- **Formerly:** ADR-0022
 - **Date:** 2026-08-24
 - **Status:** Accepted
 - **Context:** The Find panel's "Showing" row rendered a selected-books scope by joining every
@@ -1039,8 +1084,9 @@ step, no automation. Just a record.
   localized full names, and the empty-selection placeholder); the whole set belongs to PT-3363's UX
   owner rather than to this change.
 
-## ADR-0023: `BooksPresent` decoding degrades to a partial read; `platform-bible-utils` owns the wire format
+## adr-books-present-partial-decode: `BooksPresent` decoding degrades to a partial read; `platform-bible-utils` owns the wire format
 
+- **Formerly:** ADR-0023
 - **Date:** 2026-08-24
 - **Status:** Accepted
 - **Context:** `getAvailableBookIds` (platform-bible-react) threw when its input length did not
@@ -1071,8 +1117,9 @@ step, no automation. Just a record.
   `SectionButton`'s `isDisabled`.
 - **Source:** PT-4092, review of #2699.
 
-## ADR-0024: The toolbar's sync status is local renderer UI, and names in-progress projects from a new upstream field
+## adr-toolbar-sync-status-is-local: The toolbar's sync status is local renderer UI, and names in-progress projects from a new upstream field
 
+- **Formerly:** ADR-0024
 - **Date:** 2026-08-17
 - **Status:** Accepted
 - **Context:** PT-4336 NN-4 asks for a single truthful sync status with a one-click cancel. Two
@@ -1224,8 +1271,9 @@ step, no automation. Just a record.
 - **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
   the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
 
-## ADR-0025: Find excludes extra material by narrowing its book lists, not by gating its scopes
+## adr-find-narrows-book-lists: Find excludes extra material by narrowing its book lists, not by gating its scopes
 
+- **Formerly:** ADR-0025
 - **Date:** 2026-08-24
 - **Status:** Accepted
 - **Context:** Find reports a result's location by walking the `\c` and `\v` markers of the book it
@@ -1261,12 +1309,13 @@ step, no automation. Just a record.
   loaded, so the error branch has to be recognized on its own.
 - **Source:** PT-3299, review of #2708.
 
-## ADR-0026: A tab’s own web view supplies its selection to Find, rather than a shared selection store
+## adr-tab-supplies-its-own-selection: A tab’s own web view supplies its selection to Find, rather than a shared selection store
 
+- **Formerly:** ADR-0026
 - **Date:** 2026-08-16
 - **Status:** Accepted
 - **Source:** PT-3216 (pass editor text selection to Find), PR #2692; builds on the shared Ctrl+F
-  hook from ADR-0015 / PT-4341.
+  hook from `adr-per-web-view-ctrl-f-for-find` / PT-4341.
 - **Context:** Opening Find from a scripture editor tab's menu needed that tab's text selection. The
   work item proposed publishing the selection into the platform's shared store so a command handler
   could read it. Two facts made that unnecessary and unavailable: (a) the scripture editor sets
@@ -1276,17 +1325,17 @@ step, no automation. Just a record.
   menu handler already runs in the document that owns the selection; (b) `sharedStoreService`
   (`src/shared/services/shared-store.service.ts`) is explicitly not part of the public API and is not
   reachable from extensions.
-- **Decision:** Find takes the selection of the tab it was triggered from, read in that tab's own web
-  view via `window.getSelection()` and passed through the existing `platformScripture.openFind`
+- **Decision:** Find takes the selection of the tab it was triggered from, read in that tab's own
+  web view via `window.getSelection()` and passed through the existing `platformScripture.openFind`
   `selectedText` parameter. No cross-tab selection state. `resolveFindSelectionText`
   (`extensions/src/platform-scripture-editor/src/find-trigger.util.ts`) is the single normalizer
   every trigger goes through, so all of them apply the same two rules: trim (a double-click word
-  selection often carries a trailing space), and reject anything spanning lines (Find's search box is
-  a single-line input, so a Ctrl+A selection cannot be shown honestly and must not be flattened into
-  a run-on term). The two trigger paths deliberately
-  differ in one respect: the tab menu additionally consults a capture-phase pointer-press snapshot
-  (`use-selection-snapshot.hook.ts`), because the click that opens the dropdown is itself what
-  collapses the selection; Ctrl+F (`use-open-find-shortcut.hook.ts`, ADR-0015) reads only the live
+  selection often carries a trailing space), and reject anything spanning lines (Find's search box
+  is a single-line input, so a Ctrl+A selection cannot be shown honestly and must not be flattened
+  into a run-on term). The two trigger paths deliberately differ in one respect: the tab menu
+  additionally consults a capture-phase pointer-press snapshot (`use-selection-snapshot.hook.ts`),
+  because the click that opens the dropdown is itself what collapses the selection; Ctrl+F
+  (`use-open-find-shortcut.hook.ts`, `adr-per-web-view-ctrl-f-for-find`) reads only the live
   selection, because a keystroke destroys nothing, and a fallback there would let a long-abandoned
   selection pre-fill and immediately re-run a search over whatever term an open Find panel already
   held.
@@ -1314,8 +1363,9 @@ step, no automation. Just a record.
   not be run in this development environment, and `test:e2e:isolated` (the only runner that reaches
   `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
   a manual pass rather than by automation.
-## ADR-0027: Panel readiness is derived from whether data sources arrived, never from a filtered result
+## adr-panel-readiness-from-sources: Panel readiness is derived from whether data sources arrived, never from a filtered result
 
+- **Formerly:** ADR-0027
 - **Date:** 2026-08-19
 - **Status:** Accepted
 - **Context:** The Model Text and Resource (Bible Texts / Commentaries) panels each decided "is
@@ -1354,34 +1404,36 @@ step, no automation. Just a record.
   not-ready** — rejected: it trades a premature empty state for an endless spinner with no recovery.
 - **Consequences:** "Nothing configured at all" is deliberately kept catalog-independent, so a
   genuinely unconfigured project still gets its pick prompt immediately rather than waiting on a
-  fetch; only "does a configured item belong to *this* panel?" waits for the catalog. The two failure
-  states differ in whether they offer a control, and that difference is the point. A catalog fetch
-  can genuinely be re-driven, so `catalogError` carries a working retry. A project-setting read
-  cannot be — nothing in either panel can force one, and user-layer errors are swallowed to the
+  fetch; only "does a configured item belong to *this* panel?" waits for the catalog. The two
+  failure states differ in whether they offer a control, and that difference is the point. A catalog
+  fetch can genuinely be re-driven, so `catalogError` carries a working retry. A project-setting
+  read cannot be — nothing in either panel can force one, and user-layer errors are swallowed to the
   default list — so `error` shows a message alone. An inert control in a state that withholds every
   other affordance is worse than no control, so that message carries the recovery expectation
-  instead: the setting stays watched and the panel recovers on its own. The error is also reported only while no
-  readable value has ever been applied; once one has, holding it across a failed re-read is the job
-  the buffer exists to do, so a later failure must not replace working content. Un-latching is not a free
-  improvement for existing consumers: because the held value is now the placeholder rather than the
-  error, any consumer that detected failure via `isPlatformError(heldValue)` alone silently starts
-  reading an unreadable setting as an empty one. `useTextCollectionSources`, the hook's other
-  consumer, had to be updated to read the error channel for exactly this reason — a new consumer of
-  `useBufferedLayoutSetting` must check the third tuple element, not just the held value.
-  `RetryableErrorView` (renamed from `InstallFailedView` and moved to
-  `panel-state-views.component.tsx`) is scoped to failures a retry can act on — a failed install or a
-  failed catalog fetch. The settings-read failure is not one, so it renders a message alone. All
-  four front states compose the shadcn `Empty` primitive per ADR-0016, each with its own icon:
-  without one, the pick prompt and the catalog error rendered as identical screens whose buttons did
-  opposite things (reconfigure vs. retry), which is what AC-4 asks these states to prevent. Panels that grow a third async source must extend the readiness
-  signal rather than add another flag — the bug class here is precisely one guard being unaware of
-  one source.
+  instead: the setting stays watched and the panel recovers on its own. The error is also reported
+  only while no readable value has ever been applied; once one has, holding it across a failed
+  re-read is the job the buffer exists to do, so a later failure must not replace working content.
+  Un-latching is not a free improvement for existing consumers: because the held value is now the
+  placeholder rather than the error, any consumer that detected failure via
+  `isPlatformError(heldValue)` alone silently starts reading an unreadable setting as an empty one.
+  `useTextCollectionSources`, the hook's other consumer, had to be updated to read the error channel
+  for exactly this reason — a new consumer of `useBufferedLayoutSetting` must check the third tuple
+  element, not just the held value. `RetryableErrorView` (renamed from `InstallFailedView` and moved
+  to `panel-state-views.component.tsx`) is scoped to failures a retry can act on — a failed install
+  or a failed catalog fetch. The settings-read failure is not one, so it renders a message alone.
+  All four front states compose the shadcn `Empty` primitive per
+  `adr-empty-is-zero-state-primitive`, each with its own icon: without one, the pick prompt and the
+  catalog error rendered as identical screens whose buttons did opposite things (reconfigure vs.
+  retry), which is what AC-4 asks these states to prevent. Panels that grow a third async source
+  must extend the readiness signal rather than add another flag — the bug class here is precisely
+  one guard being unaware of one source.
 - **Source:** PT-4347 (NN 5C Resource panel shows correct loading state), whose named root cause —
   the merged conditional in `model-text-panel.component.tsx` — proved to be the symptom site rather
   than the defect.
 
-## ADR-0028: Async hook state shape — discriminated union when the payload is state-specific, flat object otherwise
+## adr-async-hook-state-shape: Async hook state shape — discriminated union when the payload is state-specific, flat object otherwise
 
+- **Formerly:** ADR-0028
 - **Date:** 2026-08-21
 - **Status:** Proposed — the rule is drawn from exactly two hooks, both introduced by PT-4347. It
   stands as the default for new async hook state, but the next hook that does not fit either shape
@@ -1424,8 +1476,79 @@ step, no automation. Just a record.
 - **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
   author rather than decided in the review pass.
 
-## layout-persistence-guard-retirement (Formerly numbered 0024): Two layout-persistence guards kept side by side pending deliberate retirement of the older one
+## adr-toolbar-shrink-measurement: Responsive toolbars measure their own width in JS, not with CSS container queries
 
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** Toolbar items were disappearing at narrow widths — most seriously the
+  structure-protection lock, a safety indicator, which vanished entirely in Simple mode at the
+  smallest window. Making items shrink in steps instead needs a width signal. Tailwind container
+  queries are the obvious mechanism and were already used in two places, but both were broken:
+  `platform-enhanced-resources`' tab bar had written `tw-@container/toolbar` with a dash where
+  Tailwind v4's prefix needs `tw:`, so the class emitted nothing, the container was never
+  established, and its four tab labels were hidden at every width — silently, for as long as that
+  code had shipped. `manage-books-dialog.component.tsx` records the same conclusion reached
+  independently (its `@md/…:` variants never reached the web view bundle), and
+  `platform-tab-title.component.tsx` records a third failure, where `container-type: inline-size`
+  corrupted rc-dock's content-driven ancestor sizing.
+- **Decision:** Width-driven collapse goes through `useShrinkStep` — a `ResizeObserver` on the
+  toolbar root that maps width to a discrete step, published to descendants via
+  `ShrinkStepContext`. Items read the step and pick a label form. `ToolbarCompoundLabel` encodes the
+  shared rule that a two-field label always sacrifices its second field first.
+- **Alternatives:** **Fix the prefix and keep container queries** — rejected: it repairs one
+  instance of a mechanism that has now failed three times in this repo, and its failure mode is
+  silent (no class, no error, no visible difference until someone resizes). **A hook per component**
+  — rejected: three toolbars would each grow their own observer and thresholds. **Measure in the
+  consumer and pass a prop** — rejected: every consumer would re-derive the same ladder.
+- **Consequences:** One observer per toolbar rather than per item. Steps are testable under
+  jsdom, which CSS queries are not. The cost is that thresholds are pixel constants that must be
+  tuned by eye, and that a consumer reading the step must render *inside* the toolbar — a component
+  that renders the provider sits above it and silently reads the default. Two existing hand-rolled
+  `ResizeObserver` width thresholds (`platform-tab-title`, `manage-books-dialog`) were left alone
+  and could migrate later.
+- **Source:** PT-4344.
+
+## adr-simple-mode-column-minimums: Simple-mode column minimums are derived from the window minimum, dividers included
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** Simple mode's three columns each carried `panelLock.minWidth: 300`, totalling 900px
+  inside a window that could be dragged to 800px. The dock overflowed and the third column was
+  reachable only by scrolling. UX then confirmed a 900px window minimum is safe (2025 analytics:
+  99.83% of 11,587 users on screens 900px or wider), which appears to make three 300px columns fit
+  exactly — but it does not. rc-dock adds `(children - 1) * 4` to a box's minimum width in its own
+  arithmetic, a hard-coded 4px per divider unrelated to the 2px Simple mode paints, so three 300px
+  columns demand 902px.
+- **Decision:** Raise the window minimum to 900 and derive the column floor from it, budgeting
+  rc-dock's reserve: `SIMPLE_COLUMN_MIN_WIDTH_PX = 297`, since `3 × 297 + 2 × 4 = 899`. Both numbers
+  are named constants, and `simple-layout.data.test.ts` asserts the arithmetic including the divider
+  reserve.
+- **Alternatives:** **Clip the 2px overrun** (`min-width: 0 !important` + `overflow-x: clip` on the
+  dock box) — implemented first, then reverted: it treated a 2px arithmetic error as a layout
+  problem, and clipping the dock box also clips rc-dock's float and max boxes, cutting off dialogs
+  wider than the window. **Patch rc-dock's divider constant** via the existing `patches/` mechanism —
+  viable, and it would also fix Power mode, where 8px dividers are under-reserved by the same
+  hard-coded 4; deferred as a larger change than this ticket warranted. **Equal-thirds column
+  weights** — rejected: it would give the editor 266px at the minimum window, below what its own
+  toolbar needs, and would narrow the editor at every width, not just the smallest.
+- **Consequences:** No horizontal scrollbar at any supported window size — measured in the running
+  app on macOS 2026-08-24, during review of PR #2701. At a 900px window the columns come out
+  297 / 302 / 297 = 896, plus rc-dock's 4px-per-divider reserve, for exactly 900; the dock box
+  reports `min-width: 899px` and `scrollWidth === clientWidth`. A 1600px window is clean too
+  (399 / 798 / 399). That confirms the model this floor was derived from — rc-dock's `Algorithm.js`
+  sums child `minWidth`s and then adds `(children - 1) * 4` — rather than only the arithmetic.
+  Worth knowing if this is ever re-measured: `simple-layout.data.test.ts` asserts that arithmetic
+  and nothing else, so it cannot fail if the model turns out to be wrong; only an app run can catch
+  that. The 1:2:1 weighting is retained and pinned by a test, so the editor grows twice as fast as
+  its neighbours above the floor. Columns are proportional with no JS: rc-dock renders each as
+  `flex: (size) (size × 1e6) (size)px`, so removing the floor is all that "proportional resize"
+  required. The window minimum and the column floor are two constants in different files that must
+  move together; the test cannot import the Electron-side value, so its comment says to change both.
+- **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
+
+## adr-layout-persistence-guard-retirement: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
+
+- **Formerly:** ADR-0024
 - **Date:** 2026-08-20
 - **Status:** Accepted (interim — retirement of the superseded guard is deferred, not decided against)
 - **Context:** Two PRs independently added a guard to `saveLayout` in

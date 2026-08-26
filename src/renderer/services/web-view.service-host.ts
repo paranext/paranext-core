@@ -1223,7 +1223,7 @@ async function getPersistedLayout(
  * Simple mode's fixed tab ids (`SIMPLE_LAYOUT_TAB_IDS`) while not in Simple mode. This is a strict
  * subset of what the structural `layoutLoadGenerationInDock` check above catches; it is retained as
  * a redundant safeguard and is slated for removal once the structural check's coverage is verified.
- * See ADR `layout-persistence-guard-retirement` in `.context/standards/Architecture-Decisions.md`
+ * See `adr-layout-persistence-guard-retirement` in `.context/standards/Architecture-Decisions.md`
  * for the full reasoning.
  *
  * @param layout Layout to persist
@@ -1234,8 +1234,8 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
   if (interfaceMode === 'simple') return;
   if (layoutLoadGenerationInDock !== layoutLoadGeneration) return;
   // TODO: retire this content-based guard in favor of the structural `layoutLoadGenerationInDock`
-  // check above once its coverage is verified — see the doc comment above, and ADR
-  // `layout-persistence-guard-retirement`, for context.
+  // check above once its coverage is verified — see the doc comment above, and
+  // `adr-layout-persistence-guard-retirement`, for context.
   const containedWebViewIds = collectWebViewIdsFromLayoutInfo(layout);
   // `SIMPLE_LAYOUT_TAB_IDS` is always unscoped (derived from the static `simpleLayout` at module
   // load, before any window id is involved), but a contaminating tab's live id may carry this
