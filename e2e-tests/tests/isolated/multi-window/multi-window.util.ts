@@ -424,8 +424,8 @@ export async function waitForRendererRegistered(
  * that loaded the single-Home-tab fallback layout ({@link HOME_TAB_UUID}), i.e. the first window of
  * a fresh profile or one restored from a saved layout that already carried that id. A window whose
  * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) gets a freshly
- * generated web view id each time, so this locator will not find it — identify that one by title
- * text instead.
+ * generated web view id each time, so this locator will not find it — look that one up with
+ * {@link webViewTabTitle}, passing the id it minted.
  */
 export function homeTabTitle(page: Page, windowId: number) {
   return webViewTabTitle(page, `${HOME_TAB_UUID}-w${windowId}`);
