@@ -139,9 +139,9 @@ taken at a ref that is gone is not a basis for a fix.
 Use the Superpowers flow — `superpowers:brainstorming` → `superpowers:writing-plans` →
 `superpowers:test-driven-development` — scaled to the ruling; a one-line correction needs the TDD
 skill and nothing above it. Point their specs and plans at the notes directory: they default to
-`docs/superpowers/` inside the working tree, which is the one place this flow works to keep
-clean. **The rulings are fixed constraints on that flow, not inputs to it.**
-Brainstorming widens a solution space; step 4 closed one. If the design work surfaces a reason a
+`docs/superpowers/` inside the working tree, which is the one place this flow works to keep clean.
+**The rulings are fixed constraints on that flow, not inputs to it.** Brainstorming widens a
+solution space; step 4 closed one. If the design work surfaces a reason a
 ruling is wrong, stop and put it back to the user as a new decision.
 
 Implement only what was ruled. Red-first for every behaviour change. Never `--no-verify`. New public
@@ -170,9 +170,9 @@ npm run build:main     # writes buildInfo.json, which typecheck imports
 ```
 
 Both builds first, then `npm run typecheck && npm run lint && npm run format:check`, and the test
-suites through the `test-runner` skill. Keep `format:check` named: it is a separate prettier pass,
-`lint` is eslint over script extensions only, and a round that edits an `.md` — which step 10.3
-anticipates — passes lint and lands red on CI.
+suites through the `test-runner` skill. Keep `format:check` named: `lint` is eslint over
+`.cjs,.js,.jsx,.ts,.tsx` only, so a JSON, YAML or SCSS change is seen by nothing but the separate
+prettier pass that CI gates on.
 
 Then **run the app and reproduce the reviewer's scenario** — `app-runner` to start it,
 `visual-verification` to drive it, `log-inspector` for logs, `papi-client` to hit a command
@@ -218,12 +218,12 @@ SHA that is not on GitHub is a broken citation in public. Approval here also cov
    `<new-base-tip>` is that same branch's tip now. Guess `<old-base-tip>` and the rebase replays
    either nothing or the base's own commits onto the child. Never blanket `--continue || --skip`
    in a loop — `--skip` silently drops real commits, and an untracked-file collision or a hook
-   failure looks exactly like an empty commit. Then
-   **re-run step 7's battery at each new tip**, since the restack rewrote the commits it passed on.
+   failure looks exactly like an empty commit. Then **re-run step 7's battery at each new tip**,
+   since the restack rewrote the commits it passed on.
 2. **Push** every branch you touched, bottom of the stack first, one command at a time, with
-   `--force-with-lease=<branch>:<step-0 headRefOid>`. Never bare: with no
-   expected value the lease is checked against the remote-tracking ref, which any fetch across the
-   two stops has already advanced, so it protects nothing. A restacked branch that is never pushed
+   `--force-with-lease=<branch>:<step-0 headRefOid>`. Never bare: with no expected value the lease
+   is checked against the remote-tracking ref, which any fetch across the two stops has already
+   advanced, so it protects nothing. A restacked branch that is never pushed
    leaves its PR on the old commits while the replies cite a tip that exists only on disk.
    A rejected lease means the branch moved since step 0 — do not re-pin to the current remote,
    which is the defeated form; read the remote back and put it to the user as a new decision.
