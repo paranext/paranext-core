@@ -51,10 +51,16 @@ restack needs the base's tip from *before* the rebase, so capture it first — n
 afterwards:
 
 ```bash
-OLD=$(git rev-parse <base>)                # BEFORE rewriting the base
+git rev-parse <base> <child> <grandchild>          # BEFORE any rewrite — keep every tip
 # …rebase <base>…
-git rebase --onto <base> "$OLD" <child>    # each branch above, bottom up
+git rebase --onto <base>  <base's kept tip>  <child>        # then, bottom up:
+git rebase --onto <child> <child's kept tip> <grandchild>
 ```
+
+Each level's upstream is its **own** base's kept tip, never the bottom one's: `--onto X Y Z`
+replays `Y..Z`, so reusing the bottom tip higher up replays the intermediate branches' commits
+too. Git's patch-id check often skips those silently, which hides the mistake until a restack
+that resolved a conflict makes the duplicates real.
 
 Do **not** reach for 10.1's `merge-base` form here. A child that has not been restacked yet still
 forks from the base's pre-rebase tip, so `merge-base` resolves below the base's own commits and the
