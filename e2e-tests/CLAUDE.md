@@ -14,10 +14,10 @@ keep its windows off the Windows desktop — e.g.
 
 This does nothing for suites that attach to an app you started separately — `fixtures/cdp.fixture.ts`
 over port 9223, and the two `*-commands.spec.ts` files' `fixtures/papi-live.fixture.ts` over port
-8876. Between them that is all of `tests/enhanced-resources/`, `tests/manage-books/`,
-`tests/markers-checklist/` and `tests/navigation-history/`, plus the `title-bar/` isolated subset.
-Start the app with `./.erb/scripts/refresh.sh` — on Linux that already runs it under its own Xvfb —
-and run those suites through `playwright-cdp.config.ts`, which has no globalSetup.
+8876. Between them that is all of `tests/enhanced-resources/`, `tests/manage-books/` and
+`tests/markers-checklist/`, plus the `title-bar/` isolated subset. Start the app with
+`./.erb/scripts/refresh.sh` — on Linux that already runs it under its own Xvfb — and run those
+suites through `playwright-cdp.config.ts`, which has no globalSetup.
 
 `title-bar/` is the exception to the exception: it sits under `tests/isolated/`, which
 `playwright-cdp.config.ts` ignores, while the `isolated` project's globalSetup refuses to start
