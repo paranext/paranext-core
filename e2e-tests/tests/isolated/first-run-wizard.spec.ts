@@ -35,6 +35,7 @@ test.describe('First-run wizard overlay', () => {
   // locally may have firstRunComplete: true in dev-appdata, which would let resolveInternal
   // dismiss the overlay immediately even though the loading state briefly appeared.
   test.use({
+    requiredInterfaceMode: 'simple',
     interfaceMode: 'simple',
     seedSettings: { 'platform.firstRunComplete': false },
   });

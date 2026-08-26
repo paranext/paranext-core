@@ -202,6 +202,56 @@ export async function assertDeclaredWindowSize(
   }
 }
 
+/** The two interface modes a spec can require. Mirrors `SettingTypes['platform.interfaceMode']`. */
+export type RequiredInterfaceMode = 'simple' | 'power';
+
+/**
+ * Fail loudly when the running app is not in the interface mode the spec was written for.
+ *
+ * A launch-mode spec pins the mode before starting its own app. An attach-mode spec cannot: it
+ * drives an app someone else started, whose mode is whatever the shared `dev-appdata/settings.json`
+ * last held — and that file keeps a pin from any run that was killed before its teardown restored
+ * it. The two modes render genuinely different layouts (Simple has no Home tab and locks three
+ * columns; Power tabs everything), so a spec run in the wrong one does not fail at the assertion it
+ * cares about. It fails much later, waiting for an element the mode never renders, and reads as a
+ * timeout rather than as a setup problem.
+ *
+ * Read from `document.body[data-interface-mode]`, which the app sets from the live setting
+ * (`app.component.tsx`) rather than from the settings file, so it reflects a mode changed at
+ * runtime too.
+ */
+export async function assertInterfaceMode(
+  page: Page,
+  required: RequiredInterfaceMode,
+  timeoutMs = 30_000,
+): Promise<void> {
+  // Poll rather than read once: the attribute is written by a React effect, so it is absent for a
+  // moment after the page exists. Reading once would report 'unknown' for a correctly configured
+  // app purely on timing.
+  const deadline = Date.now() + timeoutMs;
+  let actual: string | undefined;
+  while (Date.now() < deadline) {
+    // Polling loop: each read depends on the previous result being wrong.
+    // eslint-disable-next-line no-await-in-loop
+    actual =
+      (await page.evaluate(() => document.body.getAttribute('data-interface-mode'))) ?? undefined;
+    if (actual === required) return;
+    // Polling loop: the wait between reads must be sequential, or every iteration would fire at
+    // once and the loop would spin instead of pacing itself.
+    // eslint-disable-next-line no-await-in-loop
+    await page.waitForTimeout(250);
+  }
+  throw new Error(
+    `e2e precondition: this spec requires '${required}' interface mode, but the running app is in ` +
+      `'${actual ?? 'unknown (the attribute is missing — the renderer may not have finished mounting)'}'. ` +
+      `Attach-mode specs cannot set the mode; they inherit it from the app you started. Switch the ` +
+      `running app to ${required} mode and re-run, or restart it after setting ` +
+      `'platform.interfaceMode': '${required}' in dev-appdata/settings.json. If you did not choose ` +
+      `this mode, a killed e2e run probably left it behind: preConfigureSettings merges into that ` +
+      `file and only restores in teardown.`,
+  );
+}
+
 /**
  * Launch a fresh Electron instance with an isolated user-data directory (or, for relaunch tests, an
  * existing one via {@link LaunchElectronAppOptions.userDataDir}). Returns the app handle, the

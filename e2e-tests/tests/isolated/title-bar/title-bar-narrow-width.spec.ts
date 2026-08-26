@@ -30,7 +30,13 @@ const ROUNDING_TOLERANCE_PX = 1;
 // Seeded through the fixture's own options — a hand-rolled preConfigureSettings in a beforeEach
 // would be silently overwritten by the fixture's later seeding pass (Playwright resolves a test's
 // fixtures AFTER its beforeEach hooks run), flipping the spec to the fixture's Power-mode default.
-test.use({ interfaceMode: 'simple', seedSettings: { 'platform.firstRunComplete': true } });
+test.use({
+  // Verifies the seeded mode actually took effect: preConfigureSettings MERGES into a shared
+  // settings file, so the seed can fail silently and leave this suite driving Power layout.
+  requiredInterfaceMode: 'simple',
+  interfaceMode: 'simple',
+  seedSettings: { 'platform.firstRunComplete': true },
+});
 
 /**
  * Closes the docked DevTools the dev-mode launch opens.

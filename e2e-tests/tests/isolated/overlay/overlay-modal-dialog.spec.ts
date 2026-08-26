@@ -3,6 +3,10 @@ import { preConfigureSettings, waitForAppReady } from '../../../fixtures/helpers
 import { findHelloRock3Frame, DEFAULT_PERSON_NAME } from './overlay-helpers';
 
 test.use({
+  // Verifies the `platform.interfaceMode` pin below actually took effect. The pin merges
+  // into a shared settings file, so it can silently fail and leave this suite driving the
+  // other mode's layout.
+  requiredInterfaceMode: 'power',
   // The context-menu step drives a Radix submenu by pointer coordinates, so it needs the
   // hello-rock3 web view to sit in a pane wide enough for the submenu to open beside its trigger
   // rather than being flipped or clipped against the window edge.
