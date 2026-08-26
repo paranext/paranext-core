@@ -209,53 +209,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('ResourceTextPanel — More info disclosure toggle', () => {
-  it('shows the "More info" button when resourceType is ScriptureResource and no resources configured', () => {
+// The disclosure's own expand/collapse, `hidden` and `aria-expanded` behaviour is covered directly
+// in panel-state-views.component.test.tsx. What belongs to this consumer — and only to it — is
+// which resource types get a disclosure at all.
+describe('ResourceTextPanel — More info disclosure', () => {
+  it('renders the disclosure for Bible texts, carrying the panel’s own body copy', () => {
     renderZeroState('ScriptureResource');
     expect(screen.getByRole('button', { name: 'More info' })).toBeInTheDocument();
+    expect(screen.getByText('Bible texts detail here.')).toBeInTheDocument();
   });
 
-  it('does NOT show the "More info" button when resourceType is Commentary and no resources configured', () => {
+  it('renders no disclosure for commentaries, whose prompt is self-explanatory', () => {
     renderZeroState('Commentary');
     expect(screen.queryByRole('button', { name: 'More info' })).not.toBeInTheDocument();
-  });
-
-  it('"More info" button starts with aria-expanded={false}', () => {
-    renderZeroState('ScriptureResource');
-    const btn = screen.getByRole('button', { name: 'More info' });
-    expect(btn).toHaveAttribute('aria-expanded', 'false');
-  });
-
-  it('clicking "More info" expands the body and sets aria-expanded={true}', () => {
-    renderZeroState('ScriptureResource');
-    const btn = screen.getByRole('button', { name: 'More info' });
-
-    // Body hidden initially — element is in the DOM but hidden via the `hidden` attribute.
-    expect(screen.getByText('Bible texts detail here.')).not.toBeVisible();
-
-    fireEvent.click(btn);
-
-    // Body now visible; button label changed to "Less info"
-    expect(screen.getByText('Bible texts detail here.')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Less info' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
-  });
-
-  it('clicking "Less info" collapses the body and sets aria-expanded={false}', () => {
-    renderZeroState('ScriptureResource');
-
-    // Expand first
-    fireEvent.click(screen.getByRole('button', { name: 'More info' }));
-    expect(screen.getByText('Bible texts detail here.')).toBeVisible();
-
-    // Collapse — element stays in DOM but is hidden again via the `hidden` attribute.
-    fireEvent.click(screen.getByRole('button', { name: 'Less info' }));
-    expect(screen.getByText('Bible texts detail here.')).not.toBeVisible();
-    expect(screen.getByRole('button', { name: 'More info' })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
   });
 });
