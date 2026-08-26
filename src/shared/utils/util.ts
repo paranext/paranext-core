@@ -1,5 +1,5 @@
 import { ProcessType } from '@shared/global-this.model';
-import { charAt, indexOf, isString, stringLength, substring } from 'platform-bible-utils';
+import { charAt, isString, stringLength } from 'platform-bible-utils';
 
 const NONCE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const NONCE_CHARS_LENGTH = stringLength(NONCE_CHARS);
@@ -97,13 +97,17 @@ export function serializeRequestType(category: string, directive: string): Seria
 export function deserializeRequestType(requestType: SerializedRequestType): RequestType {
   if (!requestType) throw new Error('deserializeRequestType: must be a non-empty string');
 
-  const colonIndex = indexOf(requestType, REQUEST_TYPE_SEPARATOR);
-  if (colonIndex <= 0 || colonIndex >= stringLength(requestType) - 1)
+  // Native string methods, not the grapheme-aware helpers: the separator and the identifiers around
+  // it are ASCII by construction, and the index never leaves this function — it is produced and
+  // consumed in the same index space, so UTF-16 and grapheme counting land on the same split.
+  // Segmenting here would cost four passes over the string on every message crossing PAPI.
+  const colonIndex = requestType.indexOf(REQUEST_TYPE_SEPARATOR);
+  if (colonIndex <= 0 || colonIndex >= requestType.length - 1)
     throw new Error(
       `deserializeRequestType: Must have two parts divided by a ${REQUEST_TYPE_SEPARATOR} (${requestType})`,
     );
-  const category = substring(requestType, 0, colonIndex);
-  const directive = substring(requestType, colonIndex + 1);
+  const category = requestType.substring(0, colonIndex);
+  const directive = requestType.substring(colonIndex + 1);
   return { category, directive };
 }
 
