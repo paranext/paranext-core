@@ -1,6 +1,9 @@
 /** Get the windowId or throw if it is not set */
-function getWindowIdOrThrow(): string {
-  if (!globalThis.windowId)
+function getWindowIdOrThrow(): number {
+  // Compared against `undefined` rather than tested for truthiness: the id is a number now, and a
+  // falsiness test would also reject 0 — which is not a window id today, but relying on that is
+  // how this breaks quietly if the counter ever starts elsewhere.
+  if (globalThis.windowId === undefined)
     throw new Error('windowId is not set. Check that the URL includes the windowId parameter.');
   return globalThis.windowId;
 }

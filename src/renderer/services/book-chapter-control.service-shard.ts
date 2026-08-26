@@ -81,7 +81,7 @@ const bookChapterControlServiceShard: IBookChapterControlServiceShard = {
 
 /** Register the network object that backs this window's BookChapterControl command */
 export async function startBookChapterControlServiceShard(): Promise<void> {
-  if (!globalThis.windowId)
+  if (globalThis.windowId === undefined)
     throw new Error('Cannot start BookChapterControlService: windowId is not set');
 
   await networkObjectService.set<IBookChapterControlServiceShard>(

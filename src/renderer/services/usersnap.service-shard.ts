@@ -45,7 +45,8 @@ const usersnapServiceShard: IUsersnapServiceShard = {
  * to route to, turning an unavailable feedback form into a routing error on a menu item.
  */
 export async function startUsersnapServiceShard(): Promise<void> {
-  if (!globalThis.windowId) throw new Error('Cannot start UsersnapService: windowId is not set');
+  if (globalThis.windowId === undefined)
+    throw new Error('Cannot start UsersnapService: windowId is not set');
 
   await networkObjectService.set<IUsersnapServiceShard>(
     `${USERSNAP_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`,

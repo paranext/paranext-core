@@ -119,7 +119,7 @@ describe('dialog.service-shard float layout', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    globalThis.windowId = '1';
+    globalThis.windowId = 1;
 
     mockNetworkObjectSet.mockImplementation(
       async (_id: string, objectToShare: Record<string, unknown>) => {

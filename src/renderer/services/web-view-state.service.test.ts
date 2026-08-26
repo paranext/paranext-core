@@ -29,7 +29,7 @@ function readPersistedState(): [string, Record<string, unknown>][] {
 describe('web view state service', () => {
   beforeEach(() => {
     localStorage.clear();
-    globalThis.windowId = '1';
+    globalThis.windowId = 1;
   });
 
   test('finds state saved under the minted id when the layout brings that id back window-scoped', async () => {
