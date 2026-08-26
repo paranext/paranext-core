@@ -42,3 +42,71 @@ meant to be run routinely.
   experiments not wired into any standard test run. See the README in each directory.
 - Do not create a new top-level directory just to give a feature its own folder; prefer adding
   a well-named spec file to `isolated/` instead.
+
+## State that leaks between runs
+
+None of this is visible in CI: CI runs on a fresh checkout with no `dev-appdata/`, so it always
+sees defaults while a developer machine accumulates residue. "Green in CI, red for me" is usually
+one of these.
+
+- **`preConfigureSettings` MERGES into `dev-appdata/data/settings.json` and only restores in an
+  `afterAll`.** A run killed before teardown never restores. The three `multi-window` specs pin
+  `'platform.interfaceMode': 'power'`, so a killed multi-window run leaves the whole checkout in
+  Power mode. A suite that pins nothing inherits it. With no pin at all the app falls back to
+  `'simple'` (`src/renderer/hooks/use-interface-mode.hook.ts`).
+  - Check it first when a suite behaves differently than it did yesterday: `cat dev-appdata/data/settings.json`
+  - A suite that depends on a mode should pin it AND declare `test.use({ requiredInterfaceMode })`,
+    which asserts the pin took effect against `document.body[data-interface-mode]` instead of
+    failing later on an element the other mode never renders.
+- **Find search history persists to `dev-appdata/extensions/platformScripture/user-data/`**, caps at
+  15 entries, and survives the test, the Electron process, and the whole run. A history assertion
+  that passed yesterday can fail today on what an earlier run left behind.
+
+## Reading a failing run
+
+- **`Window URL: chrome-error://chromewebdata/`** — the renderer dev server on port 1212 is dead;
+  the app cannot load anything. Every subsequent test fails at its full timeout. This is an
+  environment failure, not a branch regression. Its output is captured at
+  `e2e-tests/.dev-server.log`.
+- **A whole file reported "did not run" / "skipped"** — a worker died. Read the FIRST failing test in
+  that file; the skips are downstream of it. The `no-silent-skips` reporter fails a run in which
+  tests are reported skipped that nobody asked to skip.
+- **`%localization_key%` text in a failure screenshot** — the assertion ran before the localization
+  data provider answered. `waitForAppReady` does not cover this. The raw keys are WIDER than the
+  strings they stand for, so geometry assertions report overflow that is not real.
+- **Fail-then-pass is reported as "flaky", and flaky is a defect.** `retries` is 1 locally and 2 in
+  CI. Never re-run to get green: an order-dependent test is telling you it depends on state it does
+  not control.
+
+## Window size and DevTools
+
+- Docked DevTools takes ~555px out of the renderer's layout viewport, so an 800px window lays the
+  title bar out in 245px and every geometry assertion is wrong. Launch with `PT_NO_DEVTOOLS=true`.
+- `--maximize` is a no-op under a bare Xvfb — there is no compositor to honour it. Pass an explicit
+  size.
+- The size must be its own argv token: `--window-size 1920x1080`. The `--window-size=WxH` form never
+  matches, because the flag is looked up by exact token (`src/node/utils/command-line.util.ts`).
+
+## Killing a run
+
+**Killing Electron is not killing the run.** Playwright respawns it. Kill the runner tree from the
+`xvfb-run`/`npm` root, then confirm with `pstree` that nothing survives. A surviving runner keeps
+spawning Electron on `:0`, outside any Xvfb wrapper, alongside a correctly wrapped run — which looks
+exactly like the wrapper having failed.
+
+Ports are shared across sessions and worktrees: 8876 (PAPI), 1212 (renderer dev server), 9223 (CDP).
+The `isolated` project's globalSetup refuses to start while 8876 is bound. `npm stop` kills by
+process NAME machine-wide and will take out another session's app, so identify the owner first with
+`readlink /proc/<pid>/cwd`.
+
+## Inspecting an Xvfb display
+
+```bash
+# xvfb-run's display needs its own auth file, or these fail with "Authorization required"
+XAUTHORITY=$(pgrep -af 'Xvfb :99' | grep -oP -- '-auth \K[^ ]+') xlsclients -display :99
+XAUTHORITY=$(pgrep -af 'Xvfb :99' | grep -oP -- '-auth \K[^ ]+') xwininfo -display :99 -root -children
+```
+
+`xvfb-run --auto-servernum` silently moves to the next free number when one is taken. **Pin the
+display (`xvfb-run -n 105`) before concluding anything from what is on it** — otherwise you may be
+reading another session's run.
