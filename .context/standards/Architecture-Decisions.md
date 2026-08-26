@@ -1546,7 +1546,7 @@ step, no automation. Just a record.
   move together; the test cannot import the Electron-side value, so its comment says to change both.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
 
-## ADR-0029: `GraphemeString` mirrors native `String` semantics one-for-one; `string-util` is a thin wrapper over it
+## adr-grapheme-string-native-parity: `GraphemeString` mirrors native `String` semantics one-for-one; `string-util` is a thin wrapper over it
 
 - **Date:** 2026-08-25
 - **Status:** Accepted
