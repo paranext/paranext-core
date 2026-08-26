@@ -1,4 +1,3 @@
-
 /**
  * Converts a character to its Unicode hexadecimal representation
  *
