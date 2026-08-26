@@ -114,7 +114,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   mocks.publishedShards.length = 0;
   handleBeforeUnload = undefined;
-  globalThis.windowId = '1';
+  globalThis.windowId = 1;
   clearAllOverlays();
   resetDebounceState();
   vi.spyOn(window, 'addEventListener').mockImplementation((type, listener) => {

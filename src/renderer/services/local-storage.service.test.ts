@@ -6,7 +6,7 @@ const KEY = 'some.storage.key';
 describe('localWindowStorage', () => {
   beforeEach(() => {
     localStorage.clear();
-    globalThis.windowId = '1';
+    globalThis.windowId = 1;
   });
 
   test('reads back what it wrote, under a key namespaced by window', () => {
@@ -19,11 +19,11 @@ describe('localWindowStorage', () => {
   test('keeps each window separate', () => {
     localWindowStorage.setItem(KEY, 'value for window 1');
 
-    globalThis.windowId = '2';
+    globalThis.windowId = 2;
 
     expect(localWindowStorage.getItem(KEY)).toBeNull();
     localWindowStorage.setItem(KEY, 'value for window 2');
-    globalThis.windowId = '1';
+    globalThis.windowId = 1;
     expect(localWindowStorage.getItem(KEY)).toBe('value for window 1');
   });
 
@@ -46,7 +46,7 @@ describe('localWindowStorage', () => {
 
     expect(localStorage.getItem(KEY)).toBe('value from before multi-window');
 
-    globalThis.windowId = '9';
+    globalThis.windowId = 9;
     expect(localWindowStorage.getItem(KEY)).toBe('value from before multi-window');
   });
 
