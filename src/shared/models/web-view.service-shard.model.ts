@@ -74,14 +74,19 @@ export interface WebViewServiceShard extends WebViewServiceType {
   setDetachedScrRef(webViewId: WebViewId, scrRef: SerializedVerseRef): Promise<boolean>;
 
   /**
-   * Capture a web view's definition — including its live `useWebViewState` state, which lives in
-   * this window's storage and would otherwise stay behind — and close its tab through the normal
-   * close lifecycle. The move primitive's source half: closing first is what lets a one-instance
-   * web view be opened in a target window at all, since reuse logic would find and raise the
-   * still-open source instead.
+   * Capture a web view's definition — carrying the live `useWebViewState` state the definition
+   * already holds — and close its tab through the normal close lifecycle. The move primitive's
+   * source half: closing first is what lets a one-instance web view be opened in a target window at
+   * all, since reuse logic would find and raise the still-open source instead.
+   *
+   * Waits for a layout load in flight before reading the dock, so a load that drops this web view
+   * leaves nothing to capture rather than letting the tab be removed and then restored underneath
+   * the move.
    *
    * @param webViewId Web view to capture and close
    * @returns The captured definition, or `undefined` if this window does not hold the web view
+   * @throws If `webViewId` is not a non-empty string. Reachable from any process, so it checks
+   *   rather than trusts
    * @experimental
    */
   captureAndCloseWebView(webViewId: WebViewId): Promise<SavedWebViewDefinition | undefined>;
@@ -91,8 +96,16 @@ export interface WebViewServiceShard extends WebViewServiceType {
    * target half: seeds the captured `useWebViewState` state into this window's storage before the
    * provider runs, then opens through the normal open lifecycle (open event, fresh controller).
    *
+   * The seed is undone if the open does not complete — whether the provider throws or declines — so
+   * an adopt that fails leaves no state behind under an id this window does not hold.
+   *
    * @param savedWebViewDefinition Captured definition to open from
    * @returns Id of the web view this window now holds, or `undefined` if the provider declined
+   * @throws If the definition does not carry a non-empty `id` and `webViewType`, or if `state` is
+   *   present and is not a plain serializable object. Reachable from any process, so it checks
+   *   rather than trusts — and checks before the seed, since the seed persists immediately
+   * @throws If this window's close has already been decided, at arrival and again after the layout
+   *   wait
    * @experimental
    */
   adoptWebView(savedWebViewDefinition: SavedWebViewDefinition): Promise<WebViewId | undefined>;
