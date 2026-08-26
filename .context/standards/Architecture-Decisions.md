@@ -1546,7 +1546,7 @@ step, no automation. Just a record.
   move together; the test cannot import the Electron-side value, so its comment says to change both.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
 
-## ADR-0029: Find expresses whitespace and diacritic tolerance as engine options, never by rewriting the query
+## adr-find-tolerance-as-engine-options: Find expresses whitespace and diacritic tolerance as engine options, never by rewriting the query
 
 - **Date:** 2026-08-26
 - **Status:** Accepted
@@ -1570,7 +1570,7 @@ step, no automation. Just a record.
   user gets unless they opt out of exactness. The UI adapter that maps Find's state onto
   `FindOptions` lives in its own module (`find/find-options.utils.ts`) rather than in `find.utils.ts`,
   which the backend PDP engine imports.
-- **Alternatives considered:**
+- **Alternatives:**
   - **Set `ignoreWhitespaceDifferences: true` unconditionally.** Rejected: it makes every invisible
     character interchangeable with an ordinary space, removing any way to search for an exact
     invisible character outside regex mode. Correct as an option, wrong as a default.
