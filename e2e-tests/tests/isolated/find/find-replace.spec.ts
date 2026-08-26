@@ -95,13 +95,6 @@ const COMMENTARIES_WEB_VIEW_UUID = '6c950d23-f8d7-4482-a384-93ea0481698b';
 const COMMON_SEARCH_TERM = 'the';
 
 /**
- * Search term reserved for the "interacting with a result adds to history" test. It must (a) return
- * results in any book, and (b) never be searched by another test, so that finding it in the history
- * proves the result interaction put it there.
- */
-const RESULT_INTERACTION_TERM = 'and';
-
-/**
  * A rare term whose result count stays under the 100-result batch cap, so its counter is
  * distinguishable from a common word's capped "1 of 100".
  */
@@ -417,12 +410,7 @@ function firstResultCard(frame: FrameLocator): Locator {
  * pre-fill assertion in "Editor selection to Find" pass without the selection ever reaching Find,
  * because the panel restores the project's last search term into an empty box on mount.
  */
-const SEARCHED_TERMS = [
-  COMMON_SEARCH_TERM,
-  RESULT_INTERACTION_TERM,
-  RARE_SEARCH_TERM,
-  NO_MATCH_TERM,
-];
+const SEARCHED_TERMS = [COMMON_SEARCH_TERM, RARE_SEARCH_TERM, NO_MATCH_TERM];
 
 /**
  * Select the first word in the editor's text that is long enough to be distinctive and is not one
@@ -742,6 +730,12 @@ test.describe('Search Results', () => {
 
 // ---------------------------------------------------------------------------
 // Tests: Search History
+//
+// Two things commit a term to the recent-searches list, and only two: pressing Enter, and five
+// seconds of inactivity. `addToHistory` has exactly four callers — unmount, the idle debounce, a
+// search-options change, and an explicit search — so neither clearing the box nor opening a result
+// records anything, and a test asserting either would be asserting behaviour the panel does not
+// have. Add one only alongside the product change that makes it true.
 // ---------------------------------------------------------------------------
 
 test.describe('Search History', () => {
@@ -771,74 +765,6 @@ test.describe('Search History', () => {
     // History updates synchronously on Enter — no debounce wait needed
     await openHistoryDropdown(frame);
     await expect(frame.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
-  });
-
-  // Marked failing, not deleted: whether clearing should commit the term to history is an open
-  // product question, and the assertion below is the record of it. The panel does not do it today —
-  // the clear handler empties the term and stops the search, and neither route reaches
-  // `addToHistory`, whose only callers are unmount, the idle debounce, a search-options change, and
-  // an explicit search. `test.fail` keeps that visible without leaving the suite permanently red,
-  // and it will fail loudly the moment the behaviour is added, which is when this needs revisiting.
-  test('should add search term to history when the clear (X) button is clicked', async ({
-    mainPage,
-  }) => {
-    // Scoped to this test deliberately: a bare `test.fail()` in the describe body applies to EVERY
-    // test in the describe, which marks the three passing history tests as expected failures and
-    // turns them red with "Expected to fail, but passed".
-    test.fail();
-    const frame = await openFindPanel(mainPage);
-
-    const term = `histtest-clear-${Date.now()}`;
-    await frame.locator('#search-term').fill(term);
-
-    await clickClearSearch(frame);
-
-    await openHistoryDropdown(frame);
-    await expect(frame.getByRole('option', { name: term })).toBeVisible({ timeout: 5_000 });
-  });
-
-  test('should add search term to history when interacting with a search result', async ({
-    mainPage,
-  }) => {
-    const frame = await openFindPanel(mainPage);
-
-    // WARNING: this test does not measure what its title says, and the safeguard described here
-    // does not hold. Clicking a result cannot add to history — `addToHistory` has exactly four
-    // callers (unmount, the 5 s idle debounce, a search-options change, and an explicit search),
-    // and a result click routes to `handleFocusedResultChange`/`handleOpenAtResult`, which are none
-    // of them. In book scope the options-change effect cannot fire for a same-book result either.
-    // The term reaches history via the 5 s idle debounce started by the fill below, so the timing
-    // decides the outcome: if results take longer than 5 s the debounce fires first and the
-    // "not already in history" pre-check fails, and if they arrive sooner the debounce fires during
-    // the assertion window and the test passes for a reason unrelated to the click.
-    //
-    // Left in place pending a product decision — either result activation should add to history, or
-    // this test should be deleted. It is NOT evidence that result interaction works.
-    await frame.locator('#search-term').fill(RESULT_INTERACTION_TERM);
-
-    await expect(firstResultCard(frame)).toBeVisible({ timeout: SEARCH_TIMEOUT_MS });
-
-    // Confirm the term is not already in history, so the assertion after the click is meaningful.
-    // The button is absent entirely while history is empty, which proves the same thing.
-    const historyButton = frame.getByRole('button', { name: /show recent searches/i });
-    if (await historyButton.isVisible()) {
-      await historyButton.click();
-      await expect(frame.getByRole('option', { name: RESULT_INTERACTION_TERM })).toHaveCount(0);
-      // Close the popover and wait for it to actually go: Radix consumes the first outside click
-      // to dismiss, so clicking the result card while it is still open would dismiss the popover
-      // instead of selecting the result.
-      await historyButton.press('Escape');
-      await expect(frame.getByRole('option')).toHaveCount(0);
-    }
-
-    await firstResultCard(frame).click();
-
-    await openHistoryDropdown(frame);
-    // Scope the match to the history dropdown's CommandItem elements (role="option"), not the many
-    // result card texts that also contain the search term.
-    await expect(frame.getByRole('option', { name: RESULT_INTERACTION_TERM })).toBeVisible({
-      timeout: 5_000,
-    });
   });
 });
 
