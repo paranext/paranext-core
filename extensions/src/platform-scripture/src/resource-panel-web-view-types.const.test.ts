@@ -3,6 +3,7 @@ import {
   BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
   COMMENTARIES_PANEL_WEBVIEW_TYPE,
   FIND_SEARCHABLE_WEB_VIEW_TYPES,
+  REFERENCE_PANEL_WEB_VIEW_TYPES,
   FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY,
   MODEL_TEXT_PANEL_WEBVIEW_TYPE,
 } from './resource-panel-web-view-types.const';
@@ -41,5 +42,21 @@ describe('FIND_SEARCHABLE_WEB_VIEW_TYPES', () => {
     expect(FIND_SEARCHABLE_WEB_VIEW_TYPES.has('platformScriptureEditor.scriptureTextGrid')).toBe(
       false,
     );
+  });
+});
+
+describe('REFERENCE_PANEL_WEB_VIEW_TYPES', () => {
+  it('holds exactly the three read-only reference panels', () => {
+    expect([...REFERENCE_PANEL_WEB_VIEW_TYPES].sort()).toEqual(
+      [
+        'platformScriptureEditor.modelText',
+        'platformScriptureEditor.bibleTexts',
+        'platformScriptureEditor.commentaries',
+      ].sort(),
+    );
+  });
+
+  it('excludes the Scripture editor, which is driven by its web view controller instead', () => {
+    expect(REFERENCE_PANEL_WEB_VIEW_TYPES.has('platformScriptureEditor.react')).toBe(false);
   });
 });

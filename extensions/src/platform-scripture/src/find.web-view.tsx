@@ -62,6 +62,7 @@ import {
   prunePresentBookIds,
   resolveScrollGroupForPickedProject,
   resolveTargetEditorWebViewId,
+  resolveTargetReferencePanelWebViewId,
   resolveSelectedProjectScrollGroup,
   shouldClearResultsForInvalidQuery,
 } from './find/find.utils';
@@ -78,7 +79,10 @@ import {
 import { DEFAULT_REPLACE_PREVIEW_OPTIONS, PreviewOptions } from './find/replace-preview-types';
 import { SCRIPTURE_EDITOR_WEBVIEW_TYPE } from './scripture-editor-web-view-type.const';
 import { useOpenProjectTabs } from './hooks/use-open-project-tabs';
-import { FIND_SEARCHABLE_WEB_VIEW_TYPES } from './resource-panel-web-view-types.const';
+import {
+  FIND_SEARCHABLE_WEB_VIEW_TYPES,
+  REFERENCE_PANEL_WEB_VIEW_TYPES,
+} from './resource-panel-web-view-types.const';
 import { useFindSearchTriggers } from './find/use-find-search-triggers.hook';
 import { useAutoSearchDebounce } from './find/use-auto-search-debounce.hook';
 
@@ -504,6 +508,19 @@ global.webViewComponent = function FindWebView({
   );
 
   // #endregion
+
+  // Which reference panel tab a "go to result" activation should bring to the front, when the
+  // selected scripture is showing in one rather than in an editor. See
+  // `resolveTargetReferencePanelWebViewId`.
+  const targetReferencePanelWebViewId = useMemo(
+    () =>
+      resolveTargetReferencePanelWebViewId(
+        projectId,
+        allOpenProjectTabs,
+        REFERENCE_PANEL_WEB_VIEW_TYPES,
+      ),
+    [projectId, allOpenProjectTabs],
+  );
 
   const editorWebViewController = useWebViewController(
     SCRIPTURE_EDITOR_WEBVIEW_TYPE,
@@ -1734,11 +1751,23 @@ global.webViewComponent = function FindWebView({
     [editorWebViewController, targetEditorWebViewId, setVerseRefSetting],
   );
 
-  /** Navigate to a result AND shift focus to the editor (double-click / reference-click). */
+  /**
+   * Navigate to a result AND shift focus to the tab showing it (double-click / reference-click):
+   * the Scripture editor when one is open for the project, otherwise the reference panel displaying
+   * it. Single-click preview (`handleFocusedResultChange`) never changes the active tab.
+   */
   const handleOpenAtResult = useCallback(
     (searchResult: HidableFindResult, index: number) => {
       setFocusedResultIndex(index);
       setVerseRefSetting(searchResult.start.verseRef);
+      if (targetReferencePanelWebViewId && !targetEditorWebViewId) {
+        // The scripture is showing in a read-only reference panel, which registers no web view
+        // controller — so activating its tab IS the navigation. In Simple mode that panel shares
+        // Find's tab stack, so this necessarily hides Find; that is the point of this gesture
+        // (single-click preview leaves Find in front). `setVerseRefSetting` above already moved the
+        // panel's scroll group, so it renders the result's reference once shown.
+        papi.window.setFocus({ focusType: 'webView', id: targetReferencePanelWebViewId });
+      }
       if (targetEditorWebViewId && editorWebViewController) {
         papi.window.setFocus({ focusType: 'webView', id: targetEditorWebViewId });
         // Await selectRange before setAnnotation so the websocket is settled (avoids
@@ -1762,7 +1791,12 @@ global.webViewComponent = function FindWebView({
         );
       }
     },
-    [editorWebViewController, targetEditorWebViewId, setVerseRefSetting],
+    [
+      editorWebViewController,
+      targetEditorWebViewId,
+      targetReferencePanelWebViewId,
+      setVerseRefSetting,
+    ],
   );
 
   const handleHideResult = useCallback((index: number) => {

@@ -505,6 +505,40 @@ export function resolveTargetEditorWebViewId(
 }
 
 /**
+ * Resolve which read-only reference panel tab is displaying the selected scripture, so a "go to
+ * result" activation can bring that tab to the front.
+ *
+ * Used only when {@link resolveTargetEditorWebViewId} finds no editor: a project open in a real
+ * editor is driven through the editor's web view controller, which also selects and highlights the
+ * match. A reference panel exposes no controller, so activating its tab is the whole interaction —
+ * the panel is already following the reference through its scroll group, so it renders the right
+ * place on its own once shown.
+ *
+ * Deliberately does NOT match on scroll group, unlike the editor resolver. That resolver's group
+ * match picks _which_ of several editor tabs a result click drives; here the only action is
+ * activating the one tab showing this scripture, and the panel's own group membership is what moves
+ * its content.
+ *
+ * @param projectId Find's currently selected project id, or `undefined` when none is selected.
+ * @param openTabs Currently open searchable tabs, editors and reference panels alike.
+ * @param referencePanelWebViewTypes The reference panel web view types.
+ * @returns The reference panel tab's web view id, or `undefined` when no panel shows this project.
+ */
+export function resolveTargetReferencePanelWebViewId(
+  projectId: string | undefined,
+  openTabs: readonly OpenProjectTabWithWebView[],
+  referencePanelWebViewTypes: ReadonlySet<string>,
+): string | undefined {
+  if (!projectId) return undefined;
+  const normalizedProjectId = normalizeProjectId(projectId);
+  return openTabs.find(
+    (tab) =>
+      referencePanelWebViewTypes.has(tab.webViewType) &&
+      normalizeProjectId(tab.projectId) === normalizedProjectId,
+  )?.webViewId;
+}
+
+/**
  * Character categorizer settings fetched from the project's `platformScripture.*` settings, used to
  * build project-specific find/replace regex patterns.
  */

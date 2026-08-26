@@ -22,6 +22,19 @@ export const COMMENTARIES_PANEL_WEBVIEW_TYPE = 'platformScriptureEditor.commenta
 export const FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY = 'focusedResourceProjectId';
 
 /**
+ * The read-only scripture reference panels, as a set.
+ *
+ * These share two properties Find depends on: they display one resource that is not their
+ * definition `projectId` (see {@link FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY}), and they register no
+ * web view controller — so Find can activate their tab but cannot drive their content directly.
+ */
+export const REFERENCE_PANEL_WEB_VIEW_TYPES = new Set<string>([
+  MODEL_TEXT_PANEL_WEBVIEW_TYPE,
+  BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
+  COMMENTARIES_PANEL_WEBVIEW_TYPE,
+]);
+
+/**
  * Tab types whose scripture Find can search, and therefore the ones whose projects the Find project
  * picker lists.
  *
@@ -34,7 +47,5 @@ export const FOCUSED_RESOURCE_PROJECT_ID_STATE_KEY = 'focusedResourceProjectId';
  */
 export const FIND_SEARCHABLE_WEB_VIEW_TYPES = new Set<string>([
   SCRIPTURE_EDITOR_WEBVIEW_TYPE,
-  MODEL_TEXT_PANEL_WEBVIEW_TYPE,
-  BIBLE_TEXTS_PANEL_WEBVIEW_TYPE,
-  COMMENTARIES_PANEL_WEBVIEW_TYPE,
+  ...REFERENCE_PANEL_WEB_VIEW_TYPES,
 ]);

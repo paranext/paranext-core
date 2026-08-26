@@ -19,6 +19,7 @@ import {
   resolveScrollGroupForPickedProject,
   resolveSelectedProjectScrollGroup,
   resolveTargetEditorWebViewId,
+  resolveTargetReferencePanelWebViewId,
   shouldClearResultsForInvalidQuery,
 } from './find.utils';
 
@@ -916,5 +917,56 @@ describe('resolveTargetEditorWebViewId', () => {
       { webViewId: 'wv-editor', projectId: 'proj-a', scrollGroupId: 2, webViewType: EDITOR },
     ];
     expect(resolveTargetEditorWebViewId('PROJ-A', 1, openTabs, EDITOR)).toBeUndefined();
+  });
+});
+
+describe('resolveTargetReferencePanelWebViewId', () => {
+  const EDITOR = 'platformScriptureEditor.react';
+  const BIBLE_TEXTS = 'platformScriptureEditor.bibleTexts';
+  const COMMENTARIES = 'platformScriptureEditor.commentaries';
+  const PANELS = new Set([BIBLE_TEXTS, COMMENTARIES, 'platformScriptureEditor.modelText']);
+
+  it('returns the reference panel displaying the selected project', () => {
+    const openTabs = [
+      { webViewId: 'wv-bible', projectId: 'res-1', scrollGroupId: 0, webViewType: BIBLE_TEXTS },
+    ];
+    expect(resolveTargetReferencePanelWebViewId('RES-1', openTabs, PANELS)).toBe('wv-bible');
+  });
+
+  it('matches case-insensitively, since tab project ids are lowercased', () => {
+    const openTabs = [
+      { webViewId: 'wv-comm', projectId: 'res-2', scrollGroupId: 0, webViewType: COMMENTARIES },
+    ];
+    expect(resolveTargetReferencePanelWebViewId('RES-2', openTabs, PANELS)).toBe('wv-comm');
+  });
+
+  it('ignores editor tabs — the editor is handled by its web view controller instead', () => {
+    const openTabs = [
+      { webViewId: 'wv-editor', projectId: 'proj-a', scrollGroupId: 0, webViewType: EDITOR },
+    ];
+    expect(resolveTargetReferencePanelWebViewId('PROJ-A', openTabs, PANELS)).toBeUndefined();
+  });
+
+  it('ignores a panel showing a different project', () => {
+    const openTabs = [
+      { webViewId: 'wv-bible', projectId: 'res-1', scrollGroupId: 0, webViewType: BIBLE_TEXTS },
+    ];
+    expect(resolveTargetReferencePanelWebViewId('RES-9', openTabs, PANELS)).toBeUndefined();
+  });
+
+  it('returns undefined with no selected project', () => {
+    const openTabs = [
+      { webViewId: 'wv-bible', projectId: 'res-1', scrollGroupId: 0, webViewType: BIBLE_TEXTS },
+    ];
+    expect(resolveTargetReferencePanelWebViewId(undefined, openTabs, PANELS)).toBeUndefined();
+  });
+
+  it('does not require a scroll group match, unlike the editor target', () => {
+    // Activating the tab is all this drives; the panel follows the reference through scroll group 0
+    // on its own, so which group the tab records is irrelevant here.
+    const openTabs = [
+      { webViewId: 'wv-bible', projectId: 'res-1', scrollGroupId: 7, webViewType: BIBLE_TEXTS },
+    ];
+    expect(resolveTargetReferencePanelWebViewId('RES-1', openTabs, PANELS)).toBe('wv-bible');
   });
 });
