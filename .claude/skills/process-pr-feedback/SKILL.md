@@ -41,8 +41,9 @@ Run this per PR the round covers and record a row each **in `findings.md`**: PR 
 the API rather than `git rev-parse origin/<branch>`, which reports whatever this checkout last
 fetched. The gates can take days — a pin that lives only in this session's context is one the
 session running step 10 cannot read. Any push this round makes — the step-0 rebase included —
-re-records that branch's row: the pin is the last SHA *this round* put on the remote, not the one
-it first saw.
+re-records that branch's pin: it is the last SHA *this round* put on the remote, not the one it
+first saw. **Keep the original head in the row as well.** The pin moves; step 10.1 needs the tip
+the branches above were forked from, and once the pin has moved it is no longer that.
 
 `behind_by > 0` or `mergeable: CONFLICTING` → **rebase before anything else**; every fix estimate is
 against a tree that will change. On a stack each PR's base is the branch below it, not `main`.
@@ -214,9 +215,10 @@ SHA that is not on GitHub is a broken citation in public. Approval here also cov
 1. **Restack first, push second.** If anything sits on top of this branch, rebase it before
    pushing anything: `git rebase --onto <new-base-tip> <old-base-tip> <branch>`, bottom of the
    stack up. Both placeholders come from step 0's table: `<old-base-tip>` is the base branch's
-   recorded head, the tip before step 5 committed onto it and by now on no ref at all;
-   `<new-base-tip>` is that same branch's tip now. Guess `<old-base-tip>` and the rebase replays
-   either nothing or the base's own commits onto the child. Never blanket `--continue || --skip`
+   **original** recorded head — the tip its children were forked from, which by now is on no ref
+   at all and is not the pin if the pin has moved; `<new-base-tip>` is that branch's tip now.
+   Guess `<old-base-tip>` and the rebase replays either nothing or the base's own commits onto
+   the child. Never blanket `--continue || --skip`
    in a loop — `--skip` silently drops real commits, and an untracked-file collision or a hook
    failure looks exactly like an empty commit. Then **re-run step 7's battery at each new tip**,
    since the restack rewrote the commits it passed on.
