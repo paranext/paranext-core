@@ -2162,7 +2162,7 @@ step, no automation. Just a record.
 - **Source:** windowbox spike record and patch (PRD folder, `2026-08-11-pt-4281-windowbox-spike.patch`,
   design doc § spike); multi-window epic architecture discussion.
 
-## ADR-0031: The tab context menu is a contribution channel, and a window is named by its content
+## ADR-0034: The tab context menu is a contribution channel, and a window is named by its content
 
 - **Date:** 2026-08-25
 - **Status:** Accepted
