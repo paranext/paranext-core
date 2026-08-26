@@ -192,7 +192,7 @@ const EDITOR_LOCALIZED_STRINGS: LocalizeKey[] = [
   // call directly.
   ...REMOVE_CHARACTER_MARKER_STRING_KEYS,
   // Read only by the BookChapterControl this web view mounts in Power mode — its section headings,
-  // recent-searches labels, and the show-all-books/not-in-this-project strings that appear once a
+  // recent-searches labels, and the show-more-books/not-in-project strings that appear once a
   // book outside this project is reachable.
   ...BOOK_CHAPTER_CONTROL_STRING_KEYS,
   ...Object.values(blockMarkerToBlockNames),

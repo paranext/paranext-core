@@ -192,11 +192,14 @@ export type BookChapterControlBookLists = {
   /** Every reachable book, grouped by section — what searching spans. */
   reachableBooksBySection: Record<Section, string[]>;
   /**
-   * `reachableBooksBySection` flattened — the candidate list for top-match parsing and quick
-   * navigation. Deliberately the flattened GROUPED list rather than the raw reachable ids: section
-   * grouping drops the peripheral ids no section claims (FRT, BAK, OTH, INT, CNC, GLO, TDX, NDX)
-   * and orders DC/Extra differently from raw canon order, so the raw list would offer callers books
-   * they have never been offered.
+   * `reachableBooksBySection` flattened — the candidate list for searching, top-match parsing, and
+   * quick navigation. Searching spans this list whether or not the widened list is on screen, so a
+   * book in an open resource is findable by name without expanding first; every match it surfaces
+   * is still rendered greyed and labelled, so search never presents one as a project book.
+   * Deliberately the flattened GROUPED list rather than the raw reachable ids: section grouping
+   * drops the peripheral ids no section claims (FRT, BAK, OTH, INT, CNC, GLO, TDX, NDX) and orders
+   * DC/Extra differently from raw canon order, so the raw list would offer callers books they have
+   * never been offered.
    */
   reachableBooks: string[];
   /**
@@ -212,6 +215,13 @@ export type BookChapterControlBookLists = {
  * Groups book ids into the sections the control renders. Ids no section claims — the peripheral
  * ones (FRT, BAK, OTH, INT, CNC, GLO, TDX, NDX) — are dropped, which is what keeps the control from
  * offering a book it cannot browse to.
+ *
+ * Deliberately NOT built on `getSectionForBook`, despite answering a similar question: that
+ * function classifies a book already known to belong to a section and throws otherwise, and it
+ * tests Extra with `Canon.isExtraMaterial`, which claims all eight peripheral ids. Routing this
+ * through it would turn front and back matter into browsable Extra books and throw on anything else
+ * — the opposite of the filtering this exists to do. `Canon.extraBooks()` is the narrow membership
+ * test that keeps peripheral ids out.
  *
  * @param bookIds Book ids to group, in the order they should appear within their section
  */

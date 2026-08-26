@@ -40,7 +40,10 @@ import type {
 } from 'platform-scripture';
 import { useOpenFindShortcut } from './use-open-find-shortcut.hook';
 import { useEffectiveResourceReferenceList } from './use-effective-resource-reference-list.hook';
-import { getResourcePanelReadiness } from './resource-panel-readiness.utils';
+import {
+  canPublishResourcePanelProjectIds,
+  getResourcePanelReadiness,
+} from './resource-panel-readiness.utils';
 import { useDblResourceCatalog } from './use-dbl-resource-catalog.hook';
 import { PanelReadinessView } from './panel-readiness-view.component';
 import { useCommentaryMarkerStyles } from './use-commentary-marker-styles.hook';
@@ -358,14 +361,10 @@ globalThis.webViewComponent = function ResourceTextPanel({
 
   // This web view's definition `projectId` is the container project whose reference list is shown,
   // so the displayed resource is invisible to global navigation UI unless declared here.
-  // `resourceProjectId` is undefined until the reference list is `ready` and the DBL catalog is
-  // ready, which is indistinguishable from "no resource is displayed". A catalog error is also not
-  // readiness: the configured resource cannot be resolved, so its id is unknown rather than absent,
-  // and `isCatalogReady` already excludes that case.
   usePublishNavigableProjectIds(
     useWebViewState,
     resourceProjectId ? [resourceProjectId] : [],
-    effectiveResourcesState.status === 'ready' && isCatalogReady,
+    canPublishResourcePanelProjectIds(effectiveResourcesState, isCatalogReady),
   );
 
   // #endregion
