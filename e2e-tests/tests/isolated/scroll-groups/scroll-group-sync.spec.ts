@@ -15,13 +15,16 @@
  * failure mode where new dock tabs never render (see comment.fixture.ts and isolated.fixture.ts).
  * One test = one Electron instance per spec file, matching every other isolated-fixture suite.
  *
- * Book choice: Obadiah — single chapter (21 verses, ~2 screens tall in the 1280x800 test window),
- * so the tested navigations (1:1 -> 1:21 external change, 1:1 -> 1:15 click-follow) never cross a
- * chapter/book boundary and no document reload races with the scroll.
+ * Chapter choice: Lamentations 3 — 66 verses of poetry, each laid out over two display lines, so
+ * the chapter is several screens tall in the 1280x800 test window and the verses these scenarios
+ * target genuinely start below the fold. The editor requests one chapter at a time (`ChapterUSJ` in
+ * platform-scripture-editor.web-view.tsx), so every navigation below stays inside the already
+ * loaded document and no reload races with the scroll.
  */
 import { Page } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
+  preConfigureSettings,
   sendPapiRequestOnce,
   waitForAtLeastOneProjectMetadata,
   waitForPapiMethodRegistered,
@@ -43,6 +46,10 @@ const COMMAND_TIMEOUT_MS = 30_000;
 // approach as comment.fixture.ts.
 test.use({
   electronLaunchOptions: { isolatedProjectRoot: true, envOverrides: { DEV_NOISY: 'false' } },
+  // The verse-in-viewport assertions are geometry: how far down the pane Obadiah 1:21 sits, and
+  // therefore whether it starts off screen, is decided by the window size. 1280x800 is the size
+  // the book choice above is reasoned against.
+  windowSize: { width: 1280, height: 800 },
 });
 
 /** Send one PAPI command over a short-lived WebSocket JSON-RPC connection. */
@@ -81,12 +88,25 @@ async function makeSampleProjectEditable(): Promise<void> {
   );
 }
 
-/** Navigate the main toolbar's book-chapter-verse control (drives scroll group A). */
-async function navigateToolbarBcv(mainPage: Page, reference: string): Promise<void> {
-  await mainPage.locator('button[aria-label="book-chapter-trigger"]').first().click();
+/**
+ * Navigate the main toolbar's book-chapter-verse control (drives scroll group A).
+ *
+ * @param reference Reference to type into the control, e.g. 'Lamentations 3:1'
+ * @param committedReference Display-text pattern the trigger must show once the navigation lands,
+ *   asserted before returning. Without it a navigation that silently activated a different item
+ *   would surface much later as a confusing viewport assertion failure.
+ */
+async function navigateToolbarBcv(
+  mainPage: Page,
+  reference: string,
+  committedReference: RegExp,
+): Promise<void> {
+  const trigger = mainPage.locator('button[aria-label="book-chapter-trigger"]').first();
+  await trigger.click();
   const input = mainPage.locator('[data-radix-popper-content-wrapper] input');
   await input.fill(reference);
   await input.press('Enter');
+  await expect(trigger).toContainText(committedReference, { timeout: 15_000 });
 }
 
 /**
@@ -99,6 +119,32 @@ async function waitForHomeTab(mainPage: Page): Promise<void> {
 }
 
 test.describe('scroll group sync', () => {
+  let restoreSettings: (() => void) | undefined;
+
+  // `preConfigureSettings` MERGES into the shared dev-appdata settings file, so any key this suite
+  // leaves unpinned is whatever the previous app session on this checkout happened to save. Pin
+  // every setting the scenarios below depend on, and restore the developer's file afterwards.
+  //
+  // - interfaceMode: power. Simple mode renders no dock tabs at all (no Home tab to wait for) and
+  //   shows a single project pane, while both scenarios need each opened view to become its own
+  //   dock tab — scenario 2 in particular relies on the editable editor opening ALONGSIDE the
+  //   read-only viewer rather than replacing it.
+  // - firstRunComplete: without it the app starts on the first-run wizard, a modal that aria-hides
+  //   the rest of the app and swallows pointer events.
+  // - interfaceLanguage: the toolbar assertion below reads the English book name "Obadiah 1:15"
+  //   off the BCV trigger.
+  test.beforeAll(() => {
+    restoreSettings = preConfigureSettings({
+      'platform.firstRunComplete': true,
+      'platform.interfaceLanguage': ['en'],
+      'platform.interfaceMode': 'power',
+    });
+  });
+
+  test.afterAll(() => {
+    restoreSettings?.();
+  });
+
   test('an external BCV change scrolls the verse into view, and clicking a verse reports it to the scroll group (PT9-style click-follow)', async ({
     mainPage,
   }) => {
@@ -114,19 +160,19 @@ test.describe('scroll group sync', () => {
     const resourceFrame = mainPage.frameLocator('iframe[title*="WEB"]:not([title*="Editable"])');
     await resourceFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
 
-    // Load Obadiah at its top; wait for the chapter content (last verse marker attached).
-    await navigateToolbarBcv(mainPage, 'Obadiah 1:1');
-    const lastVerse = resourceFrame.locator('span[data-marker="v"][data-number="21"]');
+    // Load Lamentations 3 at its top; wait for the chapter content (last verse marker attached).
+    await navigateToolbarBcv(mainPage, 'Lamentations 3:1', /Lamentations 3:1\b/);
+    const lastVerse = resourceFrame.locator('span[data-marker="v"][data-number="66"]');
     await expect(lastVerse).toBeAttached({ timeout: 60_000 });
 
     // Falsifiability precondition: the target verse starts outside the visible pane. Target the
-    // LAST verse (21), a full screen below the fold at 1280x800 — verse 15 (the design doc's
-    // first pick) sits exactly at the fold and flakes on pixel-level layout differences.
+    // LAST verse (66) — several screens below the fold at 1280x800, so the check cannot flip on
+    // pixel-level layout differences the way a verse sitting near the fold would.
     await expect(lastVerse).not.toBeInViewport();
 
     // The regression under test: a same-book reference change from another source (the main
     // toolbar drives scroll group A) must scroll the content, not just the BCV controls.
-    await navigateToolbarBcv(mainPage, 'Obadiah 1:21');
+    await navigateToolbarBcv(mainPage, 'Lamentations 3:66', /Lamentations 3:66\b/);
     await expect(lastVerse).toBeInViewport({ timeout: 15_000 });
 
     // ── Scenario 2: clicking a verse reports it to the scroll group ─────────────────────────
@@ -143,29 +189,29 @@ test.describe('scroll group sync', () => {
     const editorFrame = mainPage.frameLocator('iframe[title*="Editable"]');
     await editorFrame.locator('.editor-container').waitFor({ timeout: 60_000 });
 
-    // Return to the book's top and wait for the scroll to settle there (verse 1 visible) so the
+    // Return to the chapter's top and wait for the scroll to settle there (verse 1 visible) so the
     // content cannot shift under the pointer between the manual scroll below and the click.
-    await navigateToolbarBcv(mainPage, 'Obadiah 1:1');
-    await expect(editorFrame.locator('span[data-marker="v"][data-number="21"]')).toBeAttached({
+    await navigateToolbarBcv(mainPage, 'Lamentations 3:1', /Lamentations 3:1\b/);
+    await expect(editorFrame.locator('span[data-marker="v"][data-number="66"]')).toBeAttached({
       timeout: 60_000,
     });
     await expect(editorFrame.locator('span[data-marker="v"][data-number="1"]')).toBeInViewport({
       timeout: 15_000,
     });
 
-    // Manually bring verse 15 on screen WITHOUT changing the reference, then click it. The
+    // Manually bring verse 60 on screen WITHOUT changing the reference, then click it. The
     // editor must report the caret move so the shared scroll group (main toolbar BCV) follows.
     // Click the verse TEXT, not the verse number: the number is an immutable Lexical node, so
     // clicking it does not move the caret — the PT9-style gesture is clicking in the verse's
     // text anyway. The `+ span` selector assumes the marker's immediate element sibling is the
     // verse's Lexical text span, i.e. no footnote/xref decorator sits directly after the marker —
-    // verified for the pinned Obadiah 1:15 in the bundled sample WEB text.
-    const verse15Text = editorFrame.locator('span[data-marker="v"][data-number="15"] + span');
-    await verse15Text.scrollIntoViewIfNeeded();
-    await verse15Text.click();
+    // verified for the pinned Lamentations 3:60 in the bundled sample WEB text.
+    const verse60Text = editorFrame.locator('span[data-marker="v"][data-number="60"] + span');
+    await verse60Text.scrollIntoViewIfNeeded();
+    await verse60Text.click();
 
     await expect(
       mainPage.locator('button[aria-label="book-chapter-trigger"]').first(),
-    ).toContainText('Obadiah 1:15', { timeout: 15_000 });
+    ).toContainText('Lamentations 3:60', { timeout: 15_000 });
   });
 });
