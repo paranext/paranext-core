@@ -6,6 +6,13 @@
  * webpack renderer dev server fails to render new dock tabs (`openResourceViewer` returns an ID but
  * the editor iframe never appears in the DOM).
  *
+ * Worker-scoped means worker, not file: with `workers: 1` one worker runs every spec, so without
+ * {@link CommentWorkerFixtures.commentAppOwner} a second spec would inherit the first spec's app —
+ * and with it whatever that spec did to the simple layout. `openScriptureEditor` in Simple mode
+ * replaces the Column 2 scripture-editor slot with a fresh id and nothing re-applies the layout
+ * in-session, so an inherited app hands the next spec a layout its `waitForSimpleLayout` will wait
+ * out in full. Every spec using this fixture must declare its own owner.
+ *
  * `mainPage` remains test-scoped: each test gets a fresh reference to the first window, with its
  * own error/console listeners and failure-screenshot capture.
  *
@@ -32,6 +39,15 @@ export { expect } from '@playwright/test';
 
 /** Worker-scoped fixtures — one Electron app shared across all tests in the worker. */
 interface CommentWorkerFixtures {
+  /**
+   * Which spec owns this worker's Electron app; set with `test.use({ commentAppOwner: '<spec>' })`.
+   *
+   * Playwright starts a fresh worker — and so a fresh app — whenever a test needs a different
+   * worker-option value, so giving each spec its own name is what keeps one spec's layout changes
+   * out of the next spec. The value itself is only an identity; any string unique to the spec
+   * does.
+   */
+  commentAppOwner: string;
   commentElectronApp: ElectronApplication;
   /** Stored so teardown can clean up the user-data dir. */
   commentAppContext: ElectronAppContext;
@@ -48,11 +64,12 @@ interface CommentTestFixtures {
 }
 
 export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
-  // Worker-scoped: one Electron process for the entire worker (all tests in a file).
+  commentAppOwner: ['', { scope: 'worker', option: true }],
+
+  // Worker-scoped: one Electron process per owning spec (see commentAppOwner).
   commentAppContext: [
-    // Playwright worker-scoped fixtures use empty destructuring when they have no fixture dependencies
-    // eslint-disable-next-line no-empty-pattern
-    async ({}, use) => {
+    async ({ commentAppOwner }, use) => {
+      console.log(`[setup] Launching comment app for "${commentAppOwner}"`);
       // Pre-configure English locale and simple mode in the settings file before launching so
       // the app starts in the expected state. This avoids the mid-session locale-reload path
       // (which sequentially reloads every open WebView and can take 5+ minutes).
