@@ -7,7 +7,7 @@ import {
 } from '@eten-tech-foundation/scripture-utilities';
 import { BookInfo, ScrollGroupId } from './scripture.model';
 import { isWhiteSpace, split, startsWith } from '../string-util';
-import { GraphemeString } from '../grapheme-string-util';
+import { GraphemeString } from '../grapheme-string';
 import { LocalizeKey } from '../extension-contributions/menus.model';
 import { isString } from '../util';
 
@@ -311,8 +311,8 @@ export async function getLocalizedIdFromBookNumber(
   // string being split is a localized book name, so a separator could sit next to a combining mark
   // and native splitting would cut through the middle of a cluster. Keep this off native.
   const parts = split(bookName, '-');
-  // some entries had a second name inside ideographic parenthesis
-  const parts2 = split(parts[0], '\xff08');
+  // some entries carry a second name inside ideographic parentheses
+  const parts2 = split(parts[0], '\uff08');
   const retVal = parts2[0].trim();
   return retVal;
 }
@@ -784,6 +784,16 @@ function isUsjContentEmpty(content: MarkerContent[] | undefined) {
  * @returns `true` if `contentObject` is the final child of the closest block-level marker; `false`
  *   otherwise
  */
+/**
+ * The text of `graphemeString` with trailing whitespace graphemes removed. Scans the existing
+ * segmentation for the cut point and then slices once, so it costs a single pass over the text.
+ */
+function trimEndOfGraphemes(graphemeString: GraphemeString): string {
+  let end = graphemeString.length;
+  while (end > 0 && isWhiteSpace(graphemeString.charAt(end - 1))) end -= 1;
+  return graphemeString.slice(0, end).toString();
+}
+
 function isAtEndOfBlockMarker(
   contentObject: MarkerContent | Usj,
   parent: MarkerObject | Usj | undefined,
@@ -833,28 +843,28 @@ function areUsjContentsEqualExceptWhitespaceInternal(
     // be equal if they are at the end of a block-level marker and the only difference is space at the end.
     // If at the end of a block-level marker with space at the end, take off the final space and compare again
     if (aNormalized !== bNormalized) {
-      // Segment each string once and reuse it. The trim below walks off one grapheme at a time, and
-      // a derived GraphemeString keeps the parent's segmentation, so the loop costs one pass over
-      // the text rather than re-segmenting the whole string on every iteration.
+      // Segment `a` once: both the whitespace check and the trim below reuse that work instead of
+      // re-segmenting.
       const aGraphemes = new GraphemeString(aNormalized);
-      const bGraphemes = new GraphemeString(bNormalized);
+      // PERF: `b` is segmented only if something actually reads it. The check below short-circuits
+      // whenever `a` ends in whitespace, and either block-marker guard can return first.
+      let bGraphemesCache: GraphemeString | undefined;
+      const bGraphemes = () => {
+        bGraphemesCache ??= new GraphemeString(bNormalized);
+        return bGraphemesCache;
+      };
 
       // If neither ends in whitespace, they are not equal
-      if (!isWhiteSpace(aGraphemes.at(-1) ?? '') && !isWhiteSpace(bGraphemes.at(-1) ?? ''))
+      if (!isWhiteSpace(aGraphemes.at(-1) ?? '') && !isWhiteSpace(bGraphemes().at(-1) ?? ''))
         return false;
 
       // If either is not at the end of a block-level marker, they are not equal
       if (!isAtEndOfBlockMarker(a, aParent)) return false;
       if (!isAtEndOfBlockMarker(b, bParent)) return false;
 
-      // Trim the end of each string
-      let aTrimmed = aGraphemes;
-      while (isWhiteSpace(aTrimmed.at(-1) ?? '')) aTrimmed = aTrimmed.slice(0, -1);
-      let bTrimmed = bGraphemes;
-      while (isWhiteSpace(bTrimmed.at(-1) ?? '')) bTrimmed = bTrimmed.slice(0, -1);
-      // If they are not equal after trimming, they are not equal.
-      // Compare the text, not the instances: two GraphemeStrings are never `===` each other.
-      if (aTrimmed.toString() !== bTrimmed.toString()) return false;
+      // If they are not equal after trimming, they are not equal. Compare the text, not the
+      // instances: two GraphemeStrings are never `===` each other.
+      if (trimEndOfGraphemes(aGraphemes) !== trimEndOfGraphemes(bGraphemes())) return false;
     }
   } else if (!aIsString && !bIsString) {
     // We have determined they are not strings, so they must be objects with various simple properties and possibly a `content` array

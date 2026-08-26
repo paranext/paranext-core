@@ -29,6 +29,12 @@ async function mockGetLocalizedString(item: {
   if (localizeKey === 'Book.GEN') {
     if (language === 'zh-hans') return '创';
   }
+  if (localizeKey === 'Book.MAT') {
+    if (language === 'zh-hans') return '马太-福音';
+  }
+  if (localizeKey === 'Book.REV') {
+    if (language === 'zh-hans') return '启示\uff08默示录\uff09';
+  }
   return localizeKey;
 }
 
@@ -46,6 +52,16 @@ describe('getLocalizedIdFromBookNumber', () => {
   it('with khmer which defines a localization with localized.id', async () => {
     const result = await getLocalizedIdFromBookNumber(1, 'kh', mockGetLocalizedString);
     expect(result).toEqual('លប');
+  });
+
+  it('with chinese keeps only the part before a hyphen', async () => {
+    const result = await getLocalizedIdFromBookNumber(40, 'zh-hans', mockGetLocalizedString);
+    expect(result).toEqual('马太');
+  });
+
+  it('with chinese drops a second name in ideographic parentheses', async () => {
+    const result = await getLocalizedIdFromBookNumber(66, 'zh-hans', mockGetLocalizedString);
+    expect(result).toEqual('启示');
   });
 });
 

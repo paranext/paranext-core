@@ -5,6 +5,21 @@ import { isString } from './util';
 const MAX_UINT32 = 2 ** 32 - 1;
 
 /**
+ * Largest padding target the padding methods accept, in graphemes.
+ *
+ * This is the one place the class deliberately stops short of native. Native pads into a compact
+ * character buffer and gives up only at V8's string limit (`2**29 - 24`); a `GraphemeString` holds
+ * one string object per grapheme, so the same target costs roughly an order of magnitude more
+ * memory and exhausts the heap well before reaching it. Measured on the padding path: `2**20` costs
+ * ~9ms and ~9MB, `2**24` costs ~173ms and ~130MB, and V8's own limit cannot be reached at all.
+ *
+ * A million graphemes of padding is already far past any display or formatting use, so the limit is
+ * set where the cost is still negligible rather than where the engine finally gives out. Exceeding
+ * it throws `RangeError`, as native does for its own limit.
+ */
+const MAX_PADDING_LENGTH = 2 ** 20;
+
+/**
  * The ECMAScript `ToIntegerOrInfinity` abstract operation: `NaN` becomes 0, infinities are
  * preserved, and everything else truncates toward zero. Every index argument native `String`
  * accepts passes through this, which is why `'abc'.slice(1.7)` is `'bc'` and `'abc'.charAt(NaN)` is
@@ -34,7 +49,9 @@ function relativeIndex(index: number, length: number): number {
  */
 function clampIndex(index: number, length: number): number {
   const integer = toIntegerOrInfinity(index);
-  if (integer < 0) return 0;
+  // `<= 0` rather than `< 0` so that `-0` clamps to `+0`. `Math.trunc(-0.5)` is `-0`, which is not
+  // less than 0, so a `< 0` test would let the negative zero through to callers that return it.
+  if (integer <= 0) return 0;
   return Math.min(integer, length);
 }
 
@@ -77,45 +94,93 @@ function toUint32(value: number): number {
  * Range and padding methods return a `GraphemeString` rather than a `string` so the parent's
  * segmentation carries into the result instead of being recomputed. Call `toString()` for the
  * text.
+ *
+ * @example
+ *
+ * ```ts
+ * // Segment once, then run as many operations as you like against that work.
+ * const name = new GraphemeString('👨‍👩‍👧‍👦 Family');
+ * name.length; // 8 — the family emoji counts as one
+ * name.slice(0, 1).toString(); // '👨‍👩‍👧‍👦' — never cuts a cluster in half
+ * name.indexOf('Family'); // 2
+ * ```
  */
 export class GraphemeString {
-  /** The raw string. Used for `toString`, the native scans behind search, and regex split. */
-  private readonly str: string;
+  /**
+   * The raw string. Used for `toString`, the native scans behind search, and regex split. Not
+   * `readonly` only because {@link fromSegmented} assigns it; treat it as immutable after
+   * construction, since {@link offsetsCache} is derived from it.
+   */
+  private str: string;
 
-  /** Grapheme clusters — source of truth for indexing. Treat as read-only. */
-  private readonly graphemes: string[];
+  /**
+   * Grapheme clusters — source of truth for indexing. Not `readonly` only because
+   * {@link fromSegmented} assigns it; treat it as immutable after construction. Must always satisfy
+   * `graphemes.join('') === str`, or every index, offset, and search result disagrees with the
+   * text.
+   */
+  private graphemes: string[];
 
   /** Lazily built cache behind {@link offsets}. */
   private offsetsCache?: number[];
 
   /**
+   * Segment `string` into grapheme clusters once, up front. Every operation on the result reuses
+   * that work rather than re-segmenting.
+   *
    * @param string The raw string.
-   * @param graphemes Optional precomputed grapheme array. When provided, segmentation is skipped
-   *   entirely — this is how derived instances avoid re-parsing.
    */
-  constructor(string: string, graphemes?: string[]) {
+  constructor(string: string) {
     this.str = string;
-    // PERF: stringz segmentation is the one expensive step. Skip it when a caller
-    // already has the grapheme array (e.g. a substring reusing the parent's slice).
-    this.graphemes = graphemes ?? stringzToArray(string);
+    // PERF: stringz segmentation is the one expensive step, and the empty string never needs it.
+    // This also makes the seed instance in `fromSegmented` free.
+    this.graphemes = string === '' ? [] : stringzToArray(string);
   }
 
-  /** Number of grapheme clusters. Mirrors `String.prototype.length` in graphemes. */
+  /**
+   * Number of grapheme clusters. Mirrors `String.prototype.length` in graphemes.
+   *
+   * @returns Count of grapheme clusters. 0 for the empty string.
+   */
   get length(): number {
     return this.graphemes.length;
   }
 
   /**
+   * Build an instance from text plus its already-computed segmentation, skipping stringz entirely.
+   * This is how derived instances avoid re-parsing.
+   *
+   * Private on purpose: the two arguments carry an invariant that nothing validates —
+   * `graphemes.join('') === string`. A mismatched pair yields an instance whose `length`, offsets,
+   * and search results all silently disagree with its own text. Validating would cost an O(n) join
+   * on every derive, which is exactly the work this class exists to avoid, so the invariant is
+   * enforced by keeping the door shut instead.
+   */
+  private static fromSegmented(string: string, graphemes: string[]): GraphemeString {
+    const segmented = new GraphemeString('');
+    segmented.str = string;
+    segmented.graphemes = graphemes;
+    return segmented;
+  }
+
+  /**
    * The original raw string. Named `toString` rather than exposed as a property so an instance
    * drops straight into a template literal or `String(...)` without an accessor.
+   *
+   * @returns The raw string this instance was built from, unchanged.
    */
   toString(): string {
     return this.str;
   }
 
-  /** The grapheme clusters as an array. Treat the result as read-only. No native equivalent. */
+  /**
+   * The grapheme clusters as an array. Returns a fresh copy, so mutating it cannot corrupt this
+   * instance. No native equivalent.
+   *
+   * @returns A new array of the grapheme clusters, in order. Empty for the empty string.
+   */
   toArray(): string[] {
-    return this.graphemes;
+    return [...this.graphemes];
   }
 
   /**
@@ -127,6 +192,21 @@ export class GraphemeString {
    * No native counterpart, but it walks the string character by character, so it belongs here
    * rather than beside the plain string helpers: an instance built once from a template can be
    * formatted repeatedly without re-segmenting it.
+   *
+   * @example
+   *
+   * ```tsx
+   * new GraphemeString('Hi, {name}! I like \\{curly braces\\}!').formatReplacementToArray({
+   *   name: <b>Alice</b>,
+   * });
+   * // ['Hi, ', <b>Alice</b>, '! I like {curly braces}!']
+   * ```
+   *
+   * @param replacers Map from key text to its replacement. A key absent from the map is replaced by
+   *   the key text itself rather than treated as an error.
+   * @returns The formatted parts in order. Adjacent strings are merged into one entry, so a
+   *   non-string replacer is always its own entry. Never empty — an unmatched template yields a
+   *   single string entry.
    */
   formatReplacementToArray<T = unknown>(
     replacers: { [key: string | number]: T } | object,
@@ -134,9 +214,21 @@ export class GraphemeString {
     return buildReplacementParts(this, replacers);
   }
 
-  /** {@link formatReplacementToArray} with every part coerced to a string and joined. */
-  formatReplacement(replacers: { [key: string | number]: string | unknown } | object): string {
-    return buildReplacementParts(this, replacers)
+  /**
+   * {@link formatReplacementToArray} with every part coerced to a string and joined.
+   *
+   * @example
+   *
+   * ```ts
+   * new GraphemeString('a{n}b').formatReplacement({ n: 9000 }); // 'a9000b'
+   * ```
+   *
+   * @param replacers Map from key text to its replacement. A key absent from the map is replaced by
+   *   the key text itself.
+   * @returns The formatted string. `''` if this string is empty.
+   */
+  formatReplacement(replacers: { [key: string | number]: unknown } | object): string {
+    return this.formatReplacementToArray(replacers)
       .map((content) => `${content}`)
       .join('');
   }
@@ -144,6 +236,10 @@ export class GraphemeString {
   /**
    * Mirrors `String.prototype.at`. The grapheme at `index`, or `undefined` if out of bounds.
    * Negative indexes count back from the end.
+   *
+   * @param index Grapheme index. Negative counts back from the end; fractional truncates toward
+   *   zero and `NaN` becomes 0.
+   * @returns The grapheme cluster at `index`, or `undefined` when out of bounds.
    */
   at(index: number): string | undefined {
     const integer = toIntegerOrInfinity(index);
@@ -156,6 +252,9 @@ export class GraphemeString {
    * Mirrors `String.prototype.charAt`. The grapheme at `index`, or `''` if out of bounds. Like
    * native — and unlike {@link at} — a negative index is out of bounds rather than counted from the
    * end.
+   *
+   * @param index Grapheme index. Fractional truncates toward zero and `NaN` becomes 0.
+   * @returns The grapheme cluster at `index`, or `''` when out of bounds.
    */
   charAt(index: number): string {
     const position = toIntegerOrInfinity(index);
@@ -166,6 +265,9 @@ export class GraphemeString {
   /**
    * Mirrors `String.prototype.codePointAt`, indexed by grapheme. For a grapheme built from several
    * code points this reports only the first one.
+   *
+   * @param index Grapheme index. Fractional truncates toward zero and `NaN` becomes 0.
+   * @returns The first code point of the grapheme at `index`, or `undefined` when out of bounds.
    */
   codePointAt(index: number): number | undefined {
     const position = toIntegerOrInfinity(index);
@@ -176,6 +278,12 @@ export class GraphemeString {
   /**
    * Mirrors `String.prototype.slice`. Negative indexes count back from the end and a backwards
    * range yields an empty result.
+   *
+   * @param indexStart First grapheme to include. Defaults to 0; negative counts back from the end.
+   * @param indexEnd First grapheme to exclude. Defaults to the end; negative counts back from the
+   *   end.
+   * @returns A new instance over `[indexStart, indexEnd)`, reusing this instance's segmentation.
+   *   Empty when the range is backwards or empty.
    */
   slice(indexStart?: number, indexEnd?: number): GraphemeString {
     const { length } = this.graphemes;
@@ -187,6 +295,11 @@ export class GraphemeString {
   /**
    * Mirrors `String.prototype.substring`. Negative indexes clamp to 0 rather than counting from the
    * end, and — as in native — the arguments are swapped when `begin` is greater than `end`.
+   *
+   * @param begin First grapheme to include. Defaults to 0; negative clamps to 0.
+   * @param end First grapheme to exclude. Defaults to the end; negative clamps to 0.
+   * @returns A new instance over the range, reusing this instance's segmentation. Empty when
+   *   `begin` and `end` resolve to the same index.
    */
   substring(begin?: number, end?: number): GraphemeString {
     const { length } = this.graphemes;
@@ -197,19 +310,38 @@ export class GraphemeString {
 
   /**
    * Mirrors `String.prototype.padStart`, padding by whole graphemes so the result is exactly
-   * `targetLength` graphemes long.
+   * `targetLength` graphemes long. Throws `RangeError` above {@link MAX_PADDING_LENGTH} — a lower
+   * ceiling than native's, and the class's one deliberate departure from native behavior.
+   *
+   * @param targetLength Desired length in graphemes. No padding is added when it is at or below the
+   *   current length.
+   * @param padString Text to repeat, truncated at a grapheme boundary to hit `targetLength`
+   *   exactly. Defaults to a single space; an empty string adds no padding.
+   * @returns A new padded instance, or this instance unchanged when no padding is needed.
    */
   padStart(targetLength: number, padString?: string): GraphemeString {
     const padding = this.buildPadding(targetLength, padString);
     if (padding.length === 0) return this;
-    return new GraphemeString(padding.join('') + this.str, padding.concat(this.graphemes));
+    return GraphemeString.fromSegmented(
+      padding.join('') + this.str,
+      padding.concat(this.graphemes),
+    );
   }
 
-  /** Mirrors `String.prototype.padEnd`. See {@link padStart}. */
+  /**
+   * Mirrors `String.prototype.padEnd`. See {@link padStart}, including the `RangeError` ceiling.
+   *
+   * @param targetLength Desired length in graphemes.
+   * @param padString Text to repeat. Defaults to a single space.
+   * @returns A new padded instance, or this instance unchanged when no padding is needed.
+   */
   padEnd(targetLength: number, padString?: string): GraphemeString {
     const padding = this.buildPadding(targetLength, padString);
     if (padding.length === 0) return this;
-    return new GraphemeString(this.str + padding.join(''), this.graphemes.concat(padding));
+    return GraphemeString.fromSegmented(
+      this.str + padding.join(''),
+      this.graphemes.concat(padding),
+    );
   }
 
   /**
@@ -220,27 +352,29 @@ export class GraphemeString {
    * matching inside it.
    *
    * Accepts a raw string or a GraphemeString; the needle is used raw and is never segmented.
+   *
+   * @param searchString Needle to find. Used raw and never segmented.
+   * @param position Grapheme index to start from. Defaults to 0; negative clamps to 0.
+   * @returns The grapheme index of the first match, or `-1` if there is none. An empty needle
+   *   returns the clamped `position`.
    */
   indexOf(searchString: string | GraphemeString, position?: number): number {
     const needle = rawNeedle(searchString);
     const start = clampIndex(position ?? 0, this.graphemes.length);
     if (needle === '') return start;
-    // PERF: delegate scanning to native String.indexOf (C++), then validate that the hit begins
-    // AND ends on grapheme boundaries.
-    let from = this.offsetAt(start);
-    for (;;) {
-      const index = this.str.indexOf(needle, from);
-      if (index < 0) return -1;
-      const graphemeIndex = this.graphemeIndexAtOffset(index);
-      if (graphemeIndex >= 0 && this.isBoundary(index + needle.length)) return graphemeIndex;
-      from = index + 1;
-    }
+    return this.searchOnBoundaries(needle, this.offsetAt(start), 1);
   }
 
   /**
    * Mirrors `String.prototype.lastIndexOf`: the last grapheme index at or before `position` where
    * `searchString` occurs, or -1. As in native, an omitted or `NaN` position searches the whole
    * string while a negative one clamps to 0. See {@link indexOf} for the boundary rule.
+   *
+   * @param searchString Needle to find. Used raw and never segmented.
+   * @param position Grapheme index to search at or before. Omitted or `NaN` searches the whole
+   *   string; negative clamps to 0.
+   * @returns The grapheme index of the last match, or `-1` if there is none. An empty needle
+   *   returns the clamped `position`.
    */
   lastIndexOf(searchString: string | GraphemeString, position?: number): number {
     const needle = rawNeedle(searchString);
@@ -250,19 +384,17 @@ export class GraphemeString {
     const numeric = position === undefined ? NaN : Number(position);
     const start = Number.isNaN(numeric) ? length : clampIndex(numeric, length);
     if (needle === '') return start;
-    // PERF: native String.lastIndexOf scanning backward + boundary check.
-    let from = this.offsetAt(start);
-    for (;;) {
-      const index = this.str.lastIndexOf(needle, from);
-      if (index < 0) return -1;
-      const graphemeIndex = this.graphemeIndexAtOffset(index);
-      if (graphemeIndex >= 0 && this.isBoundary(index + needle.length)) return graphemeIndex;
-      if (index === 0) return -1;
-      from = index - 1;
-    }
+    return this.searchOnBoundaries(needle, this.offsetAt(start), -1);
   }
 
-  /** Mirrors `String.prototype.includes`. See {@link indexOf} for `position` and boundary rules. */
+  /**
+   * Mirrors `String.prototype.includes`. See {@link indexOf} for `position` and boundary rules.
+   *
+   * @param searchString Needle to find. Used raw and never segmented.
+   * @param position Grapheme index to start from. Defaults to 0; negative clamps to 0.
+   * @returns `true` if `searchString` occurs on grapheme boundaries at or after `position`. An
+   *   empty needle returns `true`.
+   */
   includes(searchString: string | GraphemeString, position?: number): boolean {
     return this.indexOf(searchString, position) !== -1;
   }
@@ -271,6 +403,11 @@ export class GraphemeString {
    * Mirrors `String.prototype.startsWith`: whether an occurrence of `searchString` begins at
    * `position`. A negative `position` clamps to 0 and an empty needle returns `true`. The match
    * must end on a grapheme boundary, so a prefix ending mid-cluster is rejected.
+   *
+   * @param searchString Needle to look for. Used raw and never segmented.
+   * @param position Grapheme index the match must begin at. Defaults to 0; negative clamps to 0.
+   * @returns `true` if `searchString` begins at `position` and ends on a grapheme boundary. An
+   *   empty needle returns `true`.
    */
   startsWith(searchString: string | GraphemeString, position?: number): boolean {
     const needle = rawNeedle(searchString);
@@ -284,6 +421,12 @@ export class GraphemeString {
    * Mirrors `String.prototype.endsWith`: whether an occurrence of `searchString` ends exactly at
    * `endPosition` (default: the end of the string). A negative `endPosition` clamps to 0 and an
    * empty needle returns `true`. The match must begin on a grapheme boundary.
+   *
+   * @param searchString Needle to look for. Used raw and never segmented.
+   * @param endPosition Grapheme index the match must end at. Defaults to the end of the string;
+   *   negative clamps to 0.
+   * @returns `true` if `searchString` ends exactly at `endPosition` and begins on a grapheme
+   *   boundary. An empty needle returns `true`.
    */
   endsWith(searchString: string | GraphemeString, endPosition?: number): boolean {
     const needle = rawNeedle(searchString);
@@ -306,13 +449,60 @@ export class GraphemeString {
    *
    * Entries are `undefined` exactly where native produces `undefined` — a capture group that did
    * not participate in the match.
+   *
+   * @param separator Literal string to split on, raw or as a GraphemeString. Omitted yields the
+   *   whole string as a single piece; `''` splits into individual graphemes.
+   * @param splitLimit Maximum number of entries to return, converted with `ToUint32`. Anything past
+   *   the limit is discarded rather than kept as a final piece. Omitted means no limit.
+   * @returns The pieces in order. Empty when `splitLimit` resolves to 0. Never contains `undefined`
+   *   — only a capture group can produce one, and a literal separator has none.
    */
-  split(separator?: string | RegExp, splitLimit?: number): (GraphemeString | undefined)[] {
+  split(separator?: string | GraphemeString, splitLimit?: number): GraphemeString[];
+  /**
+   * Splitting on a regular expression. See the string overload for the shared rules.
+   *
+   * @param separator Regular expression to split on. Its capture groups are interleaved into the
+   *   result.
+   * @param splitLimit Maximum number of entries to return, converted with `ToUint32`.
+   * @returns The pieces in order. An entry is `undefined` exactly where a capture group did not
+   *   participate in its match, as native does.
+   */
+  split(separator: RegExp, splitLimit?: number): (GraphemeString | undefined)[];
+  split(
+    separator?: string | GraphemeString | RegExp,
+    splitLimit?: number,
+  ): (GraphemeString | undefined)[] {
     const limit = splitLimit === undefined ? MAX_UINT32 : toUint32(splitLimit);
     if (limit === 0) return [];
     if (separator === undefined) return [this];
-    if (typeof separator === 'string') return this.splitOnString(separator, limit);
-    return this.splitOnRegExp(separator, limit);
+    if (separator instanceof RegExp) return this.splitOnRegExp(separator, limit);
+    return this.splitOnString(rawNeedle(separator), limit);
+  }
+
+  /**
+   * The scan behind {@link indexOf} and {@link lastIndexOf}.
+   *
+   * PERF: native `String.indexOf`/`lastIndexOf` do the scanning (C++); this only validates that a
+   * hit begins AND ends on grapheme boundaries, and steps one UTF-16 unit past a rejected hit to
+   * resume. That rejection is what keeps a needle matching inside a cluster from counting.
+   *
+   * @param needle Raw, already-unwrapped needle. Never empty — both callers handle that first.
+   * @param startOffset UTF-16 offset to begin scanning from.
+   * @param direction `1` to scan forward, `-1` to scan backward.
+   * @returns The grapheme index of the first hit on boundaries, or `-1`.
+   */
+  private searchOnBoundaries(needle: string, startOffset: number, direction: 1 | -1): number {
+    let from = startOffset;
+    for (;;) {
+      const index =
+        direction === 1 ? this.str.indexOf(needle, from) : this.str.lastIndexOf(needle, from);
+      if (index < 0) return -1;
+      const graphemeIndex = this.graphemeIndexAtOffset(index);
+      if (graphemeIndex >= 0 && this.isBoundary(index + needle.length)) return graphemeIndex;
+      // Scanning backward from offset 0 has nowhere left to go; forward is bounded by native.
+      if (direction === -1 && index === 0) return -1;
+      from = index + direction;
+    }
   }
 
   /** Split on a literal separator, in grapheme space. See {@link split}. */
@@ -321,7 +511,7 @@ export class GraphemeString {
     if (separator === '') {
       return this.graphemes
         .slice(0, Math.min(limit, length))
-        .map((grapheme) => new GraphemeString(grapheme, [grapheme]));
+        .map((grapheme) => GraphemeString.fromSegmented(grapheme, [grapheme]));
     }
     if (length === 0) return [this];
 
@@ -415,9 +605,15 @@ export class GraphemeString {
   private buildPadding(targetLength: number, padString?: string): string[] {
     const maxLength = toLength(targetLength);
     if (maxLength <= this.graphemes.length) return [];
+    // Check before allocating, so an out-of-range target fails immediately instead of grinding
+    // through — or dying on — a multi-million-element array first.
+    if (maxLength > MAX_PADDING_LENGTH)
+      throw new RangeError(
+        `Invalid string length: padding to ${maxLength} graphemes exceeds the limit of ${MAX_PADDING_LENGTH}`,
+      );
     const filler = padString === undefined ? ' ' : padString;
-    // Documented exception to "strict GraphemeString args": the pad string is segmented here. It is
-    // tiny and never a hot-loop culprit, so accepting a raw string is the ergonomic choice.
+    // The pad string is segmented here rather than taken pre-segmented: it is tiny and never a
+    // hot-loop culprit, so accepting a raw string is the ergonomic choice.
     const fillGraphemes = stringzToArray(filler);
     if (fillGraphemes.length === 0) return [];
     const count = maxLength - this.graphemes.length;
@@ -444,10 +640,10 @@ export class GraphemeString {
 
   /** Build a child from a resolved, clamped grapheme range `[begin, end)`. */
   private derive(begin: number, end: number): GraphemeString {
-    if (begin >= end) return new GraphemeString('', []);
+    if (begin >= end) return new GraphemeString('');
     // PERF: slice the parent string via cached offsets (single native call) and reuse
     // the parent grapheme slice, so the child never re-segments.
-    return new GraphemeString(
+    return GraphemeString.fromSegmented(
       this.str.substring(this.offsetAt(begin), this.offsetAt(end)),
       this.graphemes.slice(begin, end),
     );
@@ -487,22 +683,23 @@ function rawNeedle(searchString: string | GraphemeString): string {
  * and returns the index of the brace (not the backslash).
  */
 function indexOfClosestClosingCurlyBrace(
-  gs: GraphemeString,
+  graphemeString: GraphemeString,
   index: number,
   escaped: boolean,
 ): number {
   if (index < 0) return -1;
   if (escaped) {
-    if (gs.charAt(index) === '}' && gs.charAt(index - 1) === '\\') return index;
-    const closeIndex = gs.indexOf('\\}', index);
+    if (graphemeString.charAt(index) === '}' && graphemeString.charAt(index - 1) === '\\')
+      return index;
+    const closeIndex = graphemeString.indexOf('\\}', index);
     return closeIndex >= 0 ? closeIndex + 1 : closeIndex;
   }
 
   let i = index;
-  const len = gs.length;
+  const len = graphemeString.length;
   while (i < len) {
-    i = gs.indexOf('}', i);
-    if (i === -1 || gs.charAt(i - 1) !== '\\') break;
+    i = graphemeString.indexOf('}', i);
+    if (i === -1 || graphemeString.charAt(i - 1) !== '\\') break;
     i += 1;
   }
   return i >= len ? -1 : i;
@@ -514,7 +711,7 @@ function indexOfClosestClosingCurlyBrace(
  * strings are concatenated into one array entry.
  */
 function buildReplacementParts<T = unknown>(
-  gs: GraphemeString,
+  graphemeString: GraphemeString,
   replacers: { [key: string | number]: T } | object,
 ): (string | T)[] {
   const contents: (string | T)[] = [];
@@ -528,7 +725,9 @@ function buildReplacementParts<T = unknown>(
   ) {
     // `slice`, not `substring`: these indexes are always in order, and slice's no-argument-swapping
     // rule keeps a degenerate range empty instead of silently widening it.
-    const intermediateContent = gs.slice(nextIntermediateStartIndex, newContentIndex).toString();
+    const intermediateContent = graphemeString
+      .slice(nextIntermediateStartIndex, newContentIndex)
+      .toString();
     const baseSubstring =
       contents.length > 0 && isString(contents[contents.length - 1])
         ? `${contents.pop()}${intermediateContent}`
@@ -542,15 +741,15 @@ function buildReplacementParts<T = unknown>(
     nextIntermediateStartIndex = newContentIndex + newContentLength;
   }
 
-  const strLength = gs.length;
+  const strLength = graphemeString.length;
   while (i < strLength) {
-    const prev = gs.charAt(i - 1);
-    switch (gs.charAt(i)) {
+    const prev = graphemeString.charAt(i - 1);
+    switch (graphemeString.charAt(i)) {
       case '{':
         if (prev !== '\\') {
-          const closeCurlyBraceIndex = indexOfClosestClosingCurlyBrace(gs, i, false);
+          const closeCurlyBraceIndex = indexOfClosestClosingCurlyBrace(graphemeString, i, false);
           if (closeCurlyBraceIndex >= 0) {
-            const replacerKey = gs.slice(i + 1, closeCurlyBraceIndex).toString();
+            const replacerKey = graphemeString.slice(i + 1, closeCurlyBraceIndex).toString();
             const replacerContent =
               replacerKey in replacers
                 ? // `replacerKey in replacers` is a narrowing check; the cast is sound.
@@ -559,7 +758,6 @@ function buildReplacementParts<T = unknown>(
                 : replacerKey;
             addToContents(replacerContent, i, closeCurlyBraceIndex + 1 - i);
             i = closeCurlyBraceIndex;
-            nextIntermediateStartIndex = closeCurlyBraceIndex + 1;
           }
         } else {
           addToContents('{', i - 1, 2);
@@ -575,7 +773,7 @@ function buildReplacementParts<T = unknown>(
   }
 
   if (nextIntermediateStartIndex < strLength) {
-    const endContent = gs.slice(nextIntermediateStartIndex).toString();
+    const endContent = graphemeString.slice(nextIntermediateStartIndex).toString();
     contents.push(
       contents.length > 0 && isString(contents[contents.length - 1])
         ? `${contents.pop()}${endContent}`
