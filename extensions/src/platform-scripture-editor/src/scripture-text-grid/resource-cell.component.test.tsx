@@ -41,6 +41,7 @@ vi.mock('@papi/frontend/react', () => ({
       '%webView_scriptureTextGrid_cell_unavailable%': 'Resource unavailable',
       '%webView_scriptureTextGrid_cell_not_installed%': 'Resource not installed',
       '%webView_scriptureTextGrid_cell_status_loading%': 'Resource is loading…',
+      '%webView_scriptureTextGrid_cell_status_failed%': 'Download failed',
       '%webView_scriptureTextGrid_cell_status_noContent%': 'No content for this reference',
       '%webView_scriptureTextGrid_cell_verse_empty%': 'No text for this verse',
     },
@@ -217,7 +218,7 @@ describe('ResourceCell', () => {
   it('shows the failed subtitle for a PlatformError', () => {
     setUsjResult({ platformErrorVersion: 1, message: 'x' }, false);
     render(<ResourceCell {...props} />);
-    expect(screen.getByText('No content for this reference')).toBeInTheDocument();
+    expect(screen.getByText('Download failed')).toBeInTheDocument();
   });
   it('renders Editorial and feeds it the FULL chapter when ready', () => {
     setUsjResult(chapter, false);
