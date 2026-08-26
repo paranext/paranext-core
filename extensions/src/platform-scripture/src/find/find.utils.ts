@@ -8,7 +8,7 @@ import {
   ScrollGroupId,
   SELECTABLE_INVISIBLE_CHAR_OR_WHITESPACE_CLASS,
 } from 'platform-bible-utils';
-import { FindJobStatusReport, FindOptions } from 'platform-scripture';
+import { FindJobStatus, FindJobStatusReport, FindOptions } from 'platform-scripture';
 import type { OpenProjectTabWithWebView } from '../hooks/use-open-project-tabs';
 
 /** Maps invisible/whitespace code points to visible stand-in symbols */
@@ -217,6 +217,24 @@ export function gateStartSearch(params: {
 }
 
 /**
+ * Whether the query becoming invalid should clear the results area and abandon the find job. Making
+ * the query invalid is a request to stop searching, but it is not one the {@link gateStartSearch}
+ * path can express: the search an invalid query would start is gated off, so nothing on that path
+ * ever stops the job.
+ *
+ * Requires something to actually clear so mounting with an empty box (the common first-open case)
+ * does not abandon a job that was never started.
+ */
+export function shouldClearResultsForInvalidQuery(params: {
+  isSearchQueryValid: boolean;
+  hasResults: boolean;
+  searchStatus: FindJobStatus | undefined;
+}): boolean {
+  if (params.isSearchQueryValid) return false;
+  return params.hasResults || params.searchStatus !== undefined;
+}
+
+/**
  * Arms a single bounded wait: `onTimeout` fires once after `delayMs` unless `clear()` is called
  * first. Used to bound how long a search can sit waiting for the find data provider before giving
  * up — without this, a valid term with the provider never arriving would leave the pending/loading
@@ -321,22 +339,24 @@ export function isDifferentProjectSelection(
  * crash — but with the `selectedBooks` scope the search would silently cover fewer books than the
  * checkbox list shows.
  *
- * An EMPTY `availableBookIds` means "not known yet", NOT "the project has no books": `booksPresent`
- * sits at its all-zero default while the project setting resolves, and pruning against that
- * transient empty set would wipe the whole selection instead of narrowing it. In that case the
- * selection is returned untouched.
+ * Pass `undefined` for `availableBookIds` while the project's book list is still being read, and
+ * the selection is returned untouched: pruning against a not-yet-known list would wipe the whole
+ * selection instead of narrowing it. An EMPTY array is a real answer — a project with no searchable
+ * books — and does empty the selection. The distinction matters because Find excludes extra
+ * material, so a project holding nothing else genuinely has nothing to search, and treating that as
+ * "not known yet" would leave a stale selection live.
  *
- * @param availableBookIds Book ids the selected project has, or empty when not yet known.
+ * @param availableBookIds Book ids the selected project has, or `undefined` when not yet known.
  * @param selectedBookIds The currently selected book ids.
  * @returns The pruned ids, or the ORIGINAL `selectedBookIds` array reference when nothing needed
  *   removing — so callers can compare by identity to skip a redundant state write (which also keeps
  *   an effect that depends on this from re-triggering itself).
  */
 export function prunePresentBookIds(
-  availableBookIds: readonly string[],
+  availableBookIds: readonly string[] | undefined,
   selectedBookIds: string[],
 ): string[] {
-  if (availableBookIds.length === 0) return selectedBookIds;
+  if (!availableBookIds) return selectedBookIds;
   const availableBookIdSet = new Set(availableBookIds);
   const prunedBookIds = selectedBookIds.filter((bookId) => availableBookIdSet.has(bookId));
   return prunedBookIds.length === selectedBookIds.length ? selectedBookIds : prunedBookIds;

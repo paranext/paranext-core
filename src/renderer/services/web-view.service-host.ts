@@ -1225,7 +1225,8 @@ async function getPersistedLayout(
  * catches (confirmed in the #2681 PR discussion) — kept for now only so this merge doesn't silently
  * drop a guard; retiring it (once the structural check's coverage has been verified with this
  * guard's own tests still green) is tracked as deliberate follow-up work, not something to fold
- * into conflict resolution.
+ * into conflict resolution. See ADR `layout-persistence-guard-retirement` in
+ * `.context/standards/Architecture-Decisions.md` for the full reasoning.
  *
  * @param layout Layout to persist
  */
@@ -1235,7 +1236,8 @@ async function saveLayout(layout: LayoutInfo): Promise<void> {
   if (interfaceMode === 'simple') return;
   if (layoutLoadGenerationInDock !== layoutLoadGeneration) return;
   // TODO: retire this content-based guard in favor of the structural `layoutLoadGenerationInDock`
-  // check above once its coverage is verified — see the doc comment above for context.
+  // check above once its coverage is verified — see the doc comment above, and ADR
+  // `layout-persistence-guard-retirement`, for context.
   const containedWebViewIds = collectWebViewIdsFromLayoutInfo(layout);
   // `SIMPLE_LAYOUT_TAB_IDS` is always unscoped (derived from the static `simpleLayout` at module
   // load, before any window id is involved), but a contaminating tab's live id may carry this

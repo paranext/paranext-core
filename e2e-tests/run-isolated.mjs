@@ -3,7 +3,7 @@
 // subdirectories by feature under `e2e-tests/tests/isolated/`.
 //
 //   npm run test:e2e:isolated                     List the available subsets (exits non-zero; runs nothing)
-//   npm run test:e2e:isolated all                 Run every isolated test
+//   npm run test:e2e:isolated all                 Every subset (does not currently pass)
 //   npm run test:e2e:isolated <subset>            Run one subdirectory (e.g. scroll-groups)
 //   npm run test:e2e:isolated <path>              Run a path filter (e.g. tests/isolated/scroll-groups/)
 //   npm run test:e2e:isolated <subset> -- --debug Extra args after `--` go to Playwright
@@ -24,12 +24,19 @@ const subsets = readdirSync(isolatedDir, { withFileTypes: true })
   .sort();
 
 function printUsage() {
-  console.log('Isolated e2e subsets (each test launches its own Electron instance):\n');
+  console.log(
+    'Isolated e2e subsets (most launch their own Electron; title-bar and navigation-history\n' +
+      'instead attach to a running app over CDP, and cannot be run from this project today):\n',
+  );
   subsets.forEach((subset) => console.log(`  ${subset}`));
   console.log(`
 Usage:
-  npm run test:e2e:isolated all                  Run every isolated test
+  npm run test:e2e:isolated all                  Every subset (does not currently pass)
   npm run test:e2e:isolated <subset>             Run one subset (e.g. ${subsets[0]})
+  npm run test:e2e:isolated <path>               Run a path filter. This is how you select the
+                                                 specs directly under tests/isolated/, which
+                                                 belong to no subset, e.g.
+                                                 tests/isolated/comments-tab.spec.ts
   npm run test:e2e:isolated <subset> -- --debug  Extra args after -- go to Playwright
   npm run test:e2e:isolated -- --list            Enumerate individual tests`);
 }

@@ -26,10 +26,11 @@ export function useOpenFindShortcut(webViewId: string, sourceProjectId: string |
       // them app-wide. Ctrl rather than Cmd on macOS is deliberate; see the doc comment above.
       if (event.shiftKey || event.altKey || event.metaKey) return;
       if (!event.ctrlKey || event.key.toLowerCase() !== 'f') return;
+      // `getOpenFindTriggerArgs` normalizes the selection, so the raw value goes in here.
       const args = getOpenFindTriggerArgs(
         webViewId,
         sourceProjectId,
-        window.getSelection()?.toString() ?? '',
+        window.getSelection()?.toString(),
       );
       if (!args) {
         logger.debug(

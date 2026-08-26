@@ -23,6 +23,12 @@ step, no automation. Just a record.
 - **Don't rewrite history.** Mark a superseded decision `Superseded by ADR-NNNN` instead of deleting
   it; add the new decision as a new entry.
 - **Append at the end**, newest last. Number entries `ADR-NNNN`.
+- **Numbers are claimed at merge, not at write.** Several branches in flight at once each append the
+  next free number as of the day they branched, so two unmerged branches routinely carry the SAME
+  number for different decisions — and because the file is append-only, nothing catches it: the
+  second merge simply leaves `main` with two identical headings. Before merging a PR that adds an
+  entry, re-read the last heading on `main` and renumber yours to follow it, updating any
+  cross-references. Whoever merges second does the renumbering.
 
 ### Entry template
 
@@ -596,7 +602,9 @@ step, no automation. Just a record.
   offers a Manage Books button). Three candidate shapes already existed and nothing said which to
   reach for. `EmptyState` (`lib/platform-bible-react/src/components/basics/empty-state.component.tsx`,
   2 consumers) renders a single `role="status"` message and has no slot for a title or an action.
-  `InstallFailedView` (`extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`,
+  `InstallFailedView` (then at
+  `extensions/src/platform-scripture-editor/src/install-state-views.component.tsx`; renamed
+  `RetryableErrorView` in `panel-state-views.component.tsx` by PT-4347 — see ADR-0022,
   2 consumers) is genuinely "full-panel message + action button" but is scoped to DBL install
   recovery. Neither is a general primitive, and the next three tickets in the same epic (PT-4132,
   PT-4347, PT-4349) each need a zero-state too, so an ad-hoc fourth shape would have compounded.
@@ -1069,7 +1077,360 @@ step, no automation. Just a record.
   `SectionButton`'s `isDisabled`.
 - **Source:** PT-4092, review of #2699.
 
-## ADR-0024: Two layout-persistence guards kept side by side pending deliberate retirement of the older one
+## ADR-0024: The toolbar's sync status is local renderer UI, and names in-progress projects from a new upstream field
+
+- **Date:** 2026-08-17
+- **Status:** Accepted
+- **Context:** PT-4336 NN-4 asks for a single truthful sync status with a one-click cancel. Two
+  obstacles surfaced while implementing PT-4348. First, the existing toolbar button's only action was
+  `paratextBibleSendReceive.openSyncStatus`, which opens a second sync surface — a web view that
+  updates on its own schedule — alongside the button, which is exactly the "two messages that seem to
+  contradict each other" the NN exists to remove. Second, the ticket specified naming the syncing
+  projects from `SyncState.lastRequestedProjectIds`, but that field is written only by the Send/Receive
+  extension's `setResults` (on completion), never at `beginSync` — deliberately, so a failed sync
+  cannot pair its ids with the previous run's results. Read during a sync it names the PREVIOUS
+  sync's projects, so implementing the ticket as written would have shipped a confidently wrong label.
+- **Decision:** The status lives entirely in the renderer: `SyncStatusButton` renders a
+  `platform-bible-react` `Popover` in place (no overlay service, no web view) with the project list
+  and a single-shot Cancel wired to `paratextBibleSendReceive.cancelSync`. `useSyncStatus` seeds from
+  a one-shot `paratextBibleSendReceive.getSyncState` on mount, because `onSyncStateChanged` fires on
+  transitions only and a consumer mounting mid-sync would otherwise read idle until that sync ended.
+  For the names, a companion change to `paratext-bible-internal-extensions` adds
+  `SyncState.syncingProjectIds` (derived from the live claim map, so it cannot drift from `isSyncing`),
+  and core declares that field **optional** in its mirrored `src/@types/paratext-bible-send-receive`
+  copy so core merges independently of the upstream release. Absent field ⇒ a bare "Syncing" that
+  names no project.
+- **Alternatives:** **Read `lastRequestedProjectIds` during a sync** (the ticket as written) —
+  rejected: names the wrong projects, which is the specific failure NN-4 exists to fix. **Derive names
+  from `onSyncProgress.progressText`** — rejected: it carries the current *item*, not the set, and for
+  indeterminate progress it is a full localized sentence, so the label's meaning would change shape
+  mid-sync. **Ship without names** — viable and fully truthful, but misses the NN's explicit "shows
+  which project(s) are syncing". **Declare `syncingProjectIds` required in core** — rejected: it would
+  make core's types lie for any Studio build predating the upstream change.
+- **Consequences:** Core now ships a type declaration for a field that only exists once the companion
+  extension PR lands; the optional marker plus a fallback path is what makes that safe, and the same
+  pattern is available the next time core needs to consume an upstream contract addition ahead of its
+  release. `getSyncState` reflects only syncs run through the Send/Receive extension's own wrappers —
+  callers reaching the dotnet commands directly stay invisible (upstream PT-4214) — so this status is
+  best-effort, not ground truth. **Corrected 2026-08-17, after this decision was first written:** an
+  earlier draft of this entry claimed core's startup syncs were unaffected because they route through
+  `runScheduledSessionSync`. That holds for Power mode only. In Simple mode — the only mode this
+  button renders in — `main/startup-tasks.ts` calls the dotnet `syncProjects` command directly, and
+  the picker's `syncOnProjectSwitch` (`platform-scripture-editor`) does the same, so neither raises a
+  claim and nothing in `c-sharp/` emits `onSyncStateChanged`. The practical effect: NN-4's "status is
+  correct from app startup" is met for manual and scheduled syncs, but the Simple-mode startup sync
+  still shows no status. Closing that needs either PT-4214 or routing those two call sites through a
+  claiming wrapper (e.g. `runManualSync`); this decision deliberately does neither, since both are
+  changes to sync behavior rather than to how status is reported. Of the four richer UX
+  states in the NN-4 design, three ("Connection problem", "Unsaved changes", "Unsynced changes") are
+  deferred and marked as such in `sync-status-button.component.tsx`: none is derivable from what
+  Send/Receive currently emits, and inventing them would reintroduce the untruthfulness this work
+  removes. Sync FAILURE is the exception and IS reported, because it is derivable: the snapshot's
+  `lastResults.resultsInfo` carries a per-project `resultStatus`, so a completed sync that did not
+  succeed everywhere shows a failure state rather than a green check. A user-cancelled sync lands
+  there too, which is the case that most obviously must not read as "Synced". The detail behind a
+  failure (per-project conflicts, `failureMessage`, warnings) lives only in the sync status web view,
+  so the popover keeps a link to it via `paratextBibleSendReceive.openSyncStatus` — this decision
+  removes that command from the button's CLICK, not from the product. **A second sync surface exists outside core's tree, and it overlaps this one on most
+  syncs.** As of 2026-08-18, Paratext 10 Studio carries (in its unmerged `repo-patches/paranext-core.patch`)
+  a C#-side sync toast in `ParatextProjectSendReceiveService`, tracked by `_syncNotificationId` and
+  created by `RunWithSyncNotification`. Traced through that patch: `RunWithSyncNotification` defaults
+  `showNotification` to `true`; `SyncProjects` omits the argument entirely, so the `syncProjects` path
+  always toasts; and `SendReceiveProjects` derives it from a `suppressNotification` parameter that
+  defaults to `false`. Only the open S/R dialog opts out. The toast is `Duration = 0` (persistent) with
+  `ClickCommand = "paratextBibleSendReceive.cancelSync"`, i.e. the same cancel affordance this popover
+  offers. The resulting overlap in Simple mode:
+
+  | Sync | C# toast | This button | Result |
+  | --- | --- | --- | --- |
+  | Simple-mode startup (`startup-tasks.ts` → `syncProjects`) | yes | no claim | toast only |
+  | Picker `syncOnProjectSwitch` (direct dotnet) | yes | no claim | toast only |
+  | Scheduled / auto-sync engine (`runSync` → `syncProjects`) | yes | claims | **both** |
+  | Manual hamburger / background (`sendReceiveProjects`) | yes | claims | **both** |
+  | Open S/R dialog (`suppressNotification: true`) | no | claims | button only |
+
+  **A second cancel surface also exists INSIDE core.**
+  `extensions/src/platform-scripture-editor/src/sync-blocked-banner.component.tsx` renders its own
+  `role="status"` region with a single-shot Cancel wired to the same
+  `paratextBibleSendReceive.cancelSync`, shown while a sync is blocking the editor. During a blocking
+  scheduled sync in Simple mode both it and this popover can be on screen at once: two live regions,
+  two differently-labelled Cancel buttons, and neither aware the other was clicked, so cancelling in
+  one leaves the other reading as armed. They are not merged here because they answer different
+  questions — the banner explains why the editor is unavailable *right now* and is modal to that
+  editor, while the popover is an ambient whole-app indicator the user opens deliberately — and
+  because a shared cancel state would have to live in a service neither currently uses. The concrete
+  defect (a spent cancel still reading as armed in the other surface) is what a follow-up should fix,
+  by having both read one piece of cancel-requested state.
+
+  Two consequences worth carrying forward. First, the C# service is *broader* coverage than this
+  button, not narrower: it sits where every sync converges on the `_sendReceiveSemaphore`, so it sees
+  the direct-command syncs this button is blind to — which is the same reason a semaphore-derived
+  signal is the proper general fix. Second, each surface is individually sound; Power mode does not
+  render this button at all, so the toast is its sole truthful indicator there. The defect is
+  specifically the **Simple-mode overlap**, not the toast's existence. Note also that suppressing the
+  toast is only wired for `sendReceiveProjects`; `syncProjects` has no such parameter, so quieting the
+  scheduled path needs a C# change in Studio's patch plus a contract addition in both copies of the
+  Send/Receive declaration. NN-4's "a single, truthful notification" is therefore not achieved in the
+  shipped product by this decision alone, and the remaining work is cross-repo rather than a change to
+  this component.
+  One more consequence of the status resting on `resultStatus`: the green check is decided by the
+  *complement* of a three-value failure set, so any value outside `ResultStatus` would read as a
+  success. Because this contract is demonstrably still moving — `syncingProjectIds` was added to it by
+  this very work — the snapshot validator checks `resultStatus` for membership in the known union
+  rather than merely for being a string, and a snapshot carrying an unrecognised status reports
+  `unknown` instead of a possibly-false `synced`. `unknown` carries no icon and shares the plain
+  "Sync" label with `idle` — it is distinguished only in the popover text and the live region, which
+  is deliberate: a degraded read is not an error worth a persistent badge in the toolbar, and the
+  honest answer is available the moment the user asks for it. The cost is deliberate: a seventh
+  status added upstream degrades this button to `unknown` until core's mirrored declaration is
+  re-synced, which is the failure direction this whole entry chooses everywhere else.
+
+  **A pending Cancel cannot be settled by the project ids.** Upstream derives `syncingProjectIds`
+  from live, ref-counted per-project claims (`sync-state.ts` `initSyncState`), and a single
+  continuous `isSyncing: true` window spans however many overlapping claims the sync paths take out.
+  A project can therefore release and re-claim without a new sync having started, so "an id this
+  cancel did not cover" is not evidence of a different sync and cannot re-arm Cancel. The button
+  settles a pending cancel on the two signals that are sound — the status leaving `syncing`, and the
+  popover being reopened — and accepts the cost: a genuinely new overlapping sync keeps a dim
+  "Cancelling…" until the whole union goes idle. That is the safe half of the trade, since the
+  alternative offers a live Cancel while a cancel is still in flight. Settling this properly needs a
+  monotonic sync-episode identifier in `SyncState`, which is an upstream contract change.
+
+- **Follow-up (needs tickets under PT-4336, none filed as of this entry):** the items above are
+  deliberately out of this decision's scope and will not happen on their own.
+  1. *Close the Simple-mode startup-sync blind spot* — route `main/startup-tasks.ts` and the picker's
+     `syncOnProjectSwitch` through a claiming wrapper, or land upstream PT-4214. Owner: core.
+  2. *Achieve NN-4's "single, truthful notification"* — suppress the C# toast on the paths this
+     button covers. Needs a `suppressNotification` parameter on `syncProjects` in Studio's
+     `repo-patches/paranext-core.patch`, plus the matching contract addition in BOTH copies of the
+     Send/Receive declaration. Owner: whoever owns Studio's patch — this cannot be done from core.
+  3. *Reconcile the two in-core cancel surfaces* — share one piece of cancel-requested state between
+     this popover and `sync-blocked-banner.component.tsx`. Owner: core.
+  4. *Make a new sync episode provable* — add a monotonic episode id to `SyncState` so a pending
+     Cancel can be settled positively rather than waited out. Owner: upstream Send/Receive, then
+     core. Unblocks the "dim Cancelling…" cost recorded above.
+  5. *Validate the snapshot field-by-field rather than all-or-nothing* — `isValidSyncState` rejects a
+     whole snapshot for an unrecognised historical `resultStatus`, discarding live, well-formed
+     `isSyncing`/`syncingProjectIds` with it. Answer the completed-sync question with `unknown` and
+     keep the live fields. Owner: core.
+  6. *Close the remaining sync-status timing holes* — a newer sync starting before a finished sync's
+     follow-up read returns swallows that sync's `failed`; the first event ends the seed's retry
+     budget without the event path having a retry of its own; a cancel rejected just as the sync ends
+     can toast beside a popover that says it finished; a cancel accepted but not acted on leaves the
+     button wedged. All need a specific timing collision. Owner: core.
+  7. *Debounce the syncing-project metadata lookup* — it calls the retrying
+     `getMetadataForAllProjects` on every id-set change, including the transient blank each event
+     produces, and this component is mounted in every window's toolbar.
+     `use-project-picker-data.hook.ts` debounces the identical call. Owner: core.
+  8. *Resolve the shared-layout contradiction* — `shared-layout-receiver.model.ts` rests on
+     "`onSyncStateChanged` only fires for manual Send/Receives", while this work's declaration says
+     the state controller also covers `runScheduledSessionSync` and the auto-sync engine. Under the
+     new semantics a background sync raises the interactive "Apply now" prompt to someone who took no
+     action. This decision establishes the contradiction rather than causing it. Owner: core.
+- **Source:** PT-4348, under PT-4336 NN-4; `sync-state.ts` in `paratext-bible-internal-extensions` for
+  the `lastRequestedProjectIds` and `syncingProjectIds` contracts.
+
+## ADR-0025: Find excludes extra material by narrowing its book lists, not by gating its scopes
+
+- **Date:** 2026-08-24
+- **Status:** Accepted
+- **Context:** Find reports a result's location by walking the `\c` and `\v` markers of the book it
+  matched in. Extra material (GLO, FRT, INT, XXA, … — `Canon.nonCanonicalIds`) is organized by
+  paragraph markers rather than verses, so every match in one resolves to the same useless reference
+  (`GLO 1:0`), and the platform cannot open such a book to act on the result anyway. Find had three
+  independent paths to those books: the flag string the book picker offers, the book ids the search
+  runs over, and the `book`/`chapter` scopes, which build their scope from the current scripture
+  reference rather than from any book list.
+- **Decision:** Exclude extra material by clearing its flags in the `booksPresent` string Find
+  derives its lists from (`deriveFindBookLists`), which covers the picker and the search together.
+  Flags are cleared **in place** rather than removed, because consumers index into the string by
+  book number and reject a length that does not match the canon. The `book`/`chapter` scopes are
+  **deliberately not gated** in this change; PT-4415 covers them, and PT-4414 covers dropping the
+  whole exclusion once extra material can be opened and addressed.
+- **Alternatives considered:**
+  - **Filter `findScope` before the search runs**, as a second line of defence behind the prune.
+    Rejected here: it half-solves the `book`/`chapter` bypass, which would make PT-4415's real fix
+    harder to reason about — two partial filters in different layers rather than one gate.
+  - **Drop the excluded positions from the flag string.** Rejected: it breaks the canon-length
+    invariant every downstream decoder relies on.
+  - **Filter at each consumer.** Rejected: filtering the search but not the picker (or the reverse)
+    lets a user pick a book the search never covers.
+- **Consequences:** Find now needs two book lists where it had one — `availableBookIds` (what the
+  search covers) and `localizableBookIds` (every book, so a scope label reading from the current
+  reference can still name a book the search excludes). That split exists only to compensate for
+  the exclusion and collapses back to one list under PT-4414. Because a project can now hold
+  nothing but extra material, "no searchable books" became a real answer, which forced the
+  unknown-vs-empty distinction below to be explicit: `deriveFindBookLists(undefined)` reports
+  `availableBookIds: undefined` while the setting is unread OR its read errored, and only a genuine
+  empty list prunes the user's persisted selection. Treating a delivered `PlatformError` as an
+  answer would have wiped that selection permanently — `useProjectSetting` reports an error as
+  loaded, so the error branch has to be recognized on its own.
+- **Source:** PT-3299, review of #2708.
+
+## ADR-0026: A tab’s own web view supplies its selection to Find, rather than a shared selection store
+
+- **Date:** 2026-08-16
+- **Status:** Accepted
+- **Source:** PT-3216 (pass editor text selection to Find), PR #2692; builds on the shared Ctrl+F
+  hook from ADR-0015 / PT-4341.
+- **Context:** Opening Find from a scripture editor tab's menu needed that tab's text selection. The
+  work item proposed publishing the selection into the platform's shared store so a command handler
+  could read it. Two facts made that unnecessary and unavailable: (a) the scripture editor sets
+  `shouldShowToolbar: false` (`extensions/src/platform-scripture-editor/src/main.ts`) and instead
+  renders its own `TabToolbar` *inside* its web view
+  (`extensions/src/platform-scripture-editor/src/platform-scripture-editor.web-view.tsx`), so its
+  menu handler already runs in the document that owns the selection; (b) `sharedStoreService`
+  (`src/shared/services/shared-store.service.ts`) is explicitly not part of the public API and is not
+  reachable from extensions.
+- **Decision:** Find takes the selection of the tab it was triggered from, read in that tab's own web
+  view via `window.getSelection()` and passed through the existing `platformScripture.openFind`
+  `selectedText` parameter. No cross-tab selection state. `resolveFindSelectionText`
+  (`extensions/src/platform-scripture-editor/src/find-trigger.util.ts`) is the single normalizer
+  every trigger goes through, so all of them apply the same two rules: trim (a double-click word
+  selection often carries a trailing space), and reject anything spanning lines (Find's search box is
+  a single-line input, so a Ctrl+A selection cannot be shown honestly and must not be flattened into
+  a run-on term). The two trigger paths deliberately
+  differ in one respect: the tab menu additionally consults a capture-phase pointer-press snapshot
+  (`use-selection-snapshot.hook.ts`), because the click that opens the dropdown is itself what
+  collapses the selection; Ctrl+F (`use-open-find-shortcut.hook.ts`, ADR-0015) reads only the live
+  selection, because a keystroke destroys nothing, and a fallback there would let a long-abandoned
+  selection pre-fill and immediately re-run a search over whatever term an open Find panel already
+  held.
+- **Alternatives:** (a) Shared store — rejected: not extension-accessible, and unnecessary once the
+  menu handler's location is understood. (b) A global "last selection" registry in the editor
+  extension built on the existing `platformScriptureEditor.onDidSelectionChange` event — deferred:
+  every Find entry point today is tab-scoped, so the triggering tab *is* the focused editor; a
+  registry would add cross-tab state with no current consumer. (c) Deriving the text from the
+  existing `PlatformScriptureEditorWebViewController.getSelection()` — rejected: that carries USJ
+  document offsets, not text, so it would mean re-reading and slicing USJ to recover a string the
+  triggering document already has.
+- **Consequences:** The selection path stays inside one file per tab type and needs no new
+  cross-process state. The snapshot is deliberately narrow, because a remembered selection that
+  outlives the interaction that produced it would pre-fill — and immediately re-run — a search over
+  whatever term the user had since typed into an open Find panel. Three bounds keep it honest: it
+  only remembers selections anchored inside the tab's text content (chrome has its own selectable
+  text — a reference input, a search box — that is not scripture); a press inside that content clears
+  it; and reading it consumes it, so it bridges exactly the one pointer press it exists for.
+  **Revisit** if a Find entry point ever lives outside a tab (a top-toolbar or application-menu Find,
+  or an extension asking "what is selected right now" to enable/disable menu items) — that is the
+  point where alternative (b) becomes the right answer. The snapshot is load-bearing, not defensive: in Chromium, a menu item's `click` handler
+  reads an empty `window.getSelection()` even though the same selection is still live at the
+  capture-phase `pointerdown` on that item — the collapse lands between the two, which is exactly the
+  window the snapshot covers. The end-to-end test written to prove this inside the real editor could
+  not be run in this development environment, and `test:e2e:isolated` (the only runner that reaches
+  `e2e-tests/tests/isolated/find/`) appears in no CI workflow, so that verification gap is closed by
+  a manual pass rather than by automation.
+## ADR-0027: Panel readiness is derived from whether data sources arrived, never from a filtered result
+
+- **Date:** 2026-08-19
+- **Status:** Accepted
+- **Context:** The Model Text and Resource (Bible Texts / Commentaries) panels each decided "is
+  anything configured?" from a value that is only meaningful *after* its data had arrived, and each
+  did it differently. `useEffectiveResourceReferenceList` returned `[list | undefined, boolean]`
+  where the list accounted for two async sources (the project-level setting and a user-level PDP
+  subscription) but the boolean reported only the first — so the normal interleaving on essentially
+  every mount, where the project setting resolves before the user subscription delivers, was
+  reported as "not loading, nothing configured". The resource panel separately gated its spinner on
+  `filteredResources.length !== 0`, a list filtered against a DBL catalog that had not loaded yet,
+  so the guard could not fire during the exact window it existed for. Both rendered "No … selected"
+  with a Pick button for a correctly-configured resource, inviting the user to replace something
+  that was already set. A read failure compounded it: `useBufferedLayoutSetting` applied a
+  `PlatformError` to its held copy and disarmed, so a transient failure latched for the session.
+- **Decision:** Readiness is a first-class, data-derived signal evaluated before any empty or
+  not-found branch. `useEffectiveResourceReferenceList` returns a discriminated
+  `{ status: 'loading' | 'error' | 'ready' }` whose `loading` covers *both* sources and whose
+  `ready` may legitimately carry zero items — the only state in which a panel may render its empty
+  prompt. `getResourcePanelReadiness` (`resource-panel-readiness.utils.ts`) maps list status
+  plus catalog arrival to `loading | error | catalogError | empty | configured`, and
+  `PanelReadinessView` renders those states. **Both** panels route through them: the Model Text
+  panel takes the list status as one prop rather than separate loading/error booleans, so neither
+  panel can drift from the other on the question that caused this bug. The catalog itself is fetched
+  by one hook, `useDblResourceCatalog`, which owns the "has it arrived?" distinction the whole fix
+  hinges on and catches a rejected fetch — `usePromise` has no rejection path, so an uncaught
+  rejection never clears its loading flag and would strand the panel on a spinner forever. `useBufferedLayoutSetting` no longer latches a read error:
+  its mount arm skips a `PlatformError` and stays armed, and reports the live error on a third
+  tuple element, because at that point the held value is the placeholder and is indistinguishable
+  from a genuinely empty setting.
+- **Alternatives:** **Split the model panel's merged loading/empty conditional, as the ticket
+  proposed** — rejected as insufficient: in the failing window both `isEffectiveModelTextsLoading`
+  and `isLoadingResources` are `false`, so there is no honest signal to split on; the hook's
+  contract had to be fixed first. **Keep the tuple and widen the boolean** — rejected: it makes the
+  error state unrepresentable, and an unreadable setting would have to masquerade as either loading
+  (spins forever) or ready-and-empty (the original bug). **Treat an unreadable setting as
+  not-ready** — rejected: it trades a premature empty state for an endless spinner with no recovery.
+- **Consequences:** "Nothing configured at all" is deliberately kept catalog-independent, so a
+  genuinely unconfigured project still gets its pick prompt immediately rather than waiting on a
+  fetch; only "does a configured item belong to *this* panel?" waits for the catalog. The two failure
+  states differ in whether they offer a control, and that difference is the point. A catalog fetch
+  can genuinely be re-driven, so `catalogError` carries a working retry. A project-setting read
+  cannot be — nothing in either panel can force one, and user-layer errors are swallowed to the
+  default list — so `error` shows a message alone. An inert control in a state that withholds every
+  other affordance is worse than no control, so that message carries the recovery expectation
+  instead: the setting stays watched and the panel recovers on its own. The error is also reported only while no
+  readable value has ever been applied; once one has, holding it across a failed re-read is the job
+  the buffer exists to do, so a later failure must not replace working content. Un-latching is not a free
+  improvement for existing consumers: because the held value is now the placeholder rather than the
+  error, any consumer that detected failure via `isPlatformError(heldValue)` alone silently starts
+  reading an unreadable setting as an empty one. `useTextCollectionSources`, the hook's other
+  consumer, had to be updated to read the error channel for exactly this reason — a new consumer of
+  `useBufferedLayoutSetting` must check the third tuple element, not just the held value.
+  `RetryableErrorView` (renamed from `InstallFailedView` and moved to
+  `panel-state-views.component.tsx`) is scoped to failures a retry can act on — a failed install or a
+  failed catalog fetch. The settings-read failure is not one, so it renders a message alone. All
+  four front states compose the shadcn `Empty` primitive per ADR-0016, each with its own icon:
+  without one, the pick prompt and the catalog error rendered as identical screens whose buttons did
+  opposite things (reconfigure vs. retry), which is what AC-4 asks these states to prevent. Panels that grow a third async source must extend the readiness
+  signal rather than add another flag — the bug class here is precisely one guard being unaware of
+  one source.
+- **Source:** PT-4347 (NN 5C Resource panel shows correct loading state), whose named root cause —
+  the merged conditional in `model-text-panel.component.tsx` — proved to be the symptom site rather
+  than the defect.
+
+## ADR-0028: Async hook state shape — discriminated union when the payload is state-specific, flat object otherwise
+
+- **Date:** 2026-08-21
+- **Status:** Proposed — the rule is drawn from exactly two hooks, both introduced by PT-4347. It
+  stands as the default for new async hook state, but the next hook that does not fit either shape
+  should reopen it rather than contort to satisfy it. Promote to Accepted once a third hook has
+  exercised it independently.
+- **Context:** PT-4347 introduced `useEffectiveResourceReferenceList`'s
+  `EffectiveResourceReferenceListState` — the repo's first discriminated-union async state. A review
+  grep confirmed no other exists: siblings use a tuple (`useBufferedLayoutSetting` →
+  `[value, isLoading, settingError]`) or a flat named state object (`useStructureProtectionState` →
+  `StructureProtectionState.adminSettingError`). The same PR also added `useDblResourceCatalog`, which
+  uses the flat-object shape, so one change shipped two shapes. The reviewer flagged the divergence as
+  a pattern question: either converge, or say why not.
+- **Decision:** Keep both, chosen by whether the payload is state-specific.
+  - **Discriminated union** when data exists in only one state, so the type can make the other
+    combinations unrepresentable. `useEffectiveResourceReferenceList` returns
+    `{ status: 'loading' } | { status: 'error' } | { status: 'ready'; list }` — there is no list to
+    hand out while loading or on error, and the union is what prevents a caller reading one anyway.
+  - **Flat named state object** when the values are always present and the flags describe them.
+    `useDblResourceCatalog` returns a catalog (coerced to `[]`), loading/ready/error flags, and a
+    refetch callback — all meaningful together, with nothing to make unrepresentable.
+  - **Corollary — do not unpack a union at a boundary.** A union's guarantee is lost the moment a
+    consumer splits it into a nullable payload plus a bare status: indexing the discriminant
+    (`SomeState['status']`) strips the payload and hands the callee two values free to disagree, which
+    is the shape the union existed to forbid. Pass the whole state so narrowing survives. PT-4347 hit
+    this exactly — `ModelTextPanelProps` took `modelTextsStatus` plus an `undefined`-able list until it
+    was corrected to take `modelTextsState`.
+- **Alternatives:** **Converge everything on the flat object** for consistency with the existing
+  majority — rejected: it makes `ready`-implies-`list` unenforceable and reintroduces the
+  nullable-payload-plus-flag shape this epic spent its effort removing. **Converge everything on the
+  union** — rejected: it would force a discriminant onto hooks like `useDblResourceCatalog` whose
+  values are all always present, inventing states to satisfy a form. **Leave it unstated** — rejected:
+  with one instance of each shape and no rule, the next hook re-litigates it.
+- **Consequences:** Reviewers should expect both shapes and ask which fits rather than flagging
+  either as wrong. The union costs something real: consumers must narrow, and it cannot be spread into
+  props piecemeal — that constraint is the point. `resource-panel-readiness.utils.ts` keeps a
+  `*.utils.ts` → `*.hook.ts` type import to derive the status union, which is the only such import in
+  the extension and would have become moot had the flat shape won; with the union kept it stands as a
+  known wart, and moving the union into the utils module (or a `.types.ts`) is the fix if it bothers a
+  future reader.
+- **Source:** PT-4347 review (PR #2697), where the pattern question was raised and referred to the
+  author rather than decided in the review pass.
+
+## layout-persistence-guard-retirement (ADR-0024): Two layout-persistence guards kept side by side pending deliberate retirement of the older one
 
 - **Date:** 2026-08-20
 - **Status:** Accepted (interim — retirement of the superseded guard is deferred, not decided against)
@@ -1103,3 +1464,7 @@ step, no automation. Just a record.
   structural guard's test suite already covers every case `web-view.service-host.test.ts`'s
   content-based-guard test exercises, then delete the content-based branch and that guard's
   now-redundant test in one deliberate commit.
+- **Source:** PR #2425 / PR #2681 merge conflict resolution. Renamed from its original numeric-only
+  `ADR-0024` to the `layout-persistence-guard-retirement` slug on 2026-08-26 (team decision to
+  identify ADRs by kebab-case slug going forward; the number is kept parenthetically since it was
+  already referenced in Discord before the rename).

@@ -5,6 +5,10 @@ import { IdentifyStep } from './identify-step.component';
 
 const VALID_CODE = 'ABCDEF-ABCDEF-ABCDEF-ABCDEF-ABCDEF';
 const DEMO_MODE_KEY = 'platform-bible.firstRunDemoMode';
+// The registry site a non-production environment resolves to. ParatextData maps Development, Test,
+// and QualityAssurance all to this one host; only Production differs. Used here to show the "Visit
+// Paratext Registry" link following the selected environment rather than always Production.
+const NON_PRODUCTION_REGISTRY_URL = 'https://registry-dev.paratext.org';
 
 const meta: Meta<typeof IdentifyStep> = {
   title: 'First run/IdentifyStep',
@@ -23,16 +27,38 @@ type Story = StoryObj<typeof IdentifyStep>;
 export const Default: Story = {};
 
 /**
+ * The "Visit Paratext Registry" link points at whichever registry the selected server environment
+ * uses (resolved via `paratextRegistration.getParatextRegistryUrl`), not a hardcoded production
+ * URL. Here a non-production environment is selected, so the link targets the development registry
+ * site.
+ */
+export const RegistryLinkFollowsSelectedServer: Story = {
+  beforeEach: () => {
+    // Route by command name so the mount-time URL lookup returns the non-production site while
+    // any other command (none are triggered here) resolves harmlessly.
+    const spy = spyOn(commandService, 'sendCommand').mockImplementation((command: string) =>
+      command === 'paratextRegistration.getParatextRegistryUrl'
+        ? Promise.resolve(NON_PRODUCTION_REGISTRY_URL)
+        : Promise.resolve(undefined),
+    );
+    return () => spy.mockRestore();
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole('link', { name: /visit paratext registry/i });
+    await waitFor(() => expect(link).toHaveAttribute('href', NON_PRODUCTION_REGISTRY_URL));
+  },
+};
+
+/**
  * Name entered; Save and restart is enabled because demo mode skips backend validation.
  *
  * Toggle demo mode via: `localStorage.setItem('platform-bible.firstRunDemoMode', 'true')`
  */
 export const FilledValid: Story = {
-  parameters: {
-    beforeEach: () => {
-      localStorage.setItem(DEMO_MODE_KEY, 'true');
-      return () => localStorage.removeItem(DEMO_MODE_KEY);
-    },
+  beforeEach: () => {
+    localStorage.setItem(DEMO_MODE_KEY, 'true');
+    return () => localStorage.removeItem(DEMO_MODE_KEY);
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -48,12 +74,10 @@ export const FilledValid: Story = {
  * a correctly-formatted code are entered; the error appears after the validation debounce.
  */
 export const InvalidCode: Story = {
-  parameters: {
-    beforeEach: () => {
-      // Replaces sendCommand so every validation attempt returns false (not found).
-      const spy = spyOn(commandService, 'sendCommand').mockResolvedValue(false);
-      return () => spy.mockRestore();
-    },
+  beforeEach: () => {
+    // Replaces sendCommand so every validation attempt returns false (not found).
+    const spy = spyOn(commandService, 'sendCommand').mockResolvedValue(false);
+    return () => spy.mockRestore();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -90,14 +114,23 @@ export const ReRegisterMode: Story = {
  * until the story is reset.
  */
 export const RestartPending: Story = {
-  parameters: {
-    beforeEach: () => {
-      const spy = spyOn(commandService, 'sendCommand')
-        .mockResolvedValueOnce(true) // validateParatextRegistrationData → valid
-        .mockResolvedValueOnce(undefined) // setParatextRegistrationData → ok
-        .mockReturnValueOnce(new Promise<never>(() => {})); // platform.restart → never settles
-      return () => spy.mockRestore();
-    },
+  beforeEach: () => {
+    // Route by command name so the mount-time registry-URL lookup can't consume the
+    // validation/save mocks off a positional queue (it would leave Save disabled). Restart never
+    // settles because the real process reboots here.
+    const spy = spyOn(commandService, 'sendCommand').mockImplementation((command: string) => {
+      switch (command) {
+        case 'paratextRegistration.validateParatextRegistrationData':
+          return Promise.resolve(true);
+        case 'paratextRegistration.setParatextRegistrationData':
+          return Promise.resolve(undefined);
+        case 'platform.restart':
+          return new Promise<never>(() => {});
+        default:
+          return Promise.resolve(undefined);
+      }
+    });
+    return () => spy.mockRestore();
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

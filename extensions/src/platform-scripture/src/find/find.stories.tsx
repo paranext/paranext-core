@@ -108,6 +108,9 @@ const booksPresent = Canon.allBookIds
   .map((bookId) => (availableBookIds.includes(bookId) ? '1' : '0'))
   .join('');
 
+// The story project is scripture-only, so Find has no extra material to explain withholding.
+const hasExcludedExtraMaterial = false;
+
 const localizedBookData = new Map<string, LocalizedBookData>([
   ['GEN', { localizedId: 'Genesis', localizedName: 'Genesis' }],
   ['JHN', { localizedId: 'John', localizedName: 'John' }],
@@ -307,6 +310,10 @@ function FindHarness({ config }: { config: HarnessConfig }) {
     replacedKeysRef.current = replacedKeys;
   }, [replacedKeys]);
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Wired like the web view so the clear button's focus return is exercisable here: without both of
+  // these the button drops focus to the document body on click, which is the bug they prevent.
+  // eslint-disable-next-line no-null/no-null
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const verseRef = useMemo<SerializedVerseRef>(
     () => ({ book: 'GEN', chapterNum: 1, verseNum: 1 }),
@@ -508,6 +515,7 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       scope={scope}
       verseRef={verseRef}
       booksPresent={booksPresent}
+      hasExcludedExtraMaterial={hasExcludedExtraMaterial}
       selectedBookIds={selectedBookIds}
       localizedBookData={localizedBookData}
       shouldMatchCase={shouldMatchCase}
@@ -534,6 +542,8 @@ function FindHarness({ config }: { config: HarnessConfig }) {
       totalNumberOfResults={totalNumberOfResults}
       numberOfHiddenResults={numberOfHiddenResults}
       isPostReplaceSearch={false}
+      searchInputRef={searchInputRef}
+      onFocusSearchInput={() => searchInputRef.current?.focus()}
       onSearchTermChange={setSearchTerm}
       onStartSearch={() => addRecentSearchItem(searchTerm)}
       onStopSearch={() => {}}
