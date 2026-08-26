@@ -2240,7 +2240,13 @@ step, no automation. Just a record.
   and is converted with `ToUint32`. Index arguments go through the spec's `ToIntegerOrInfinity`, so
   fractional and `NaN` arguments behave as native does. The single substitution is the **unit**:
   grapheme cluster instead of UTF-16 code unit, with a search additionally required to begin and end
-  on cluster boundaries. Two additions are kept (`normalize('none')`, `ordinalCompare`), plus
+  on cluster boundaries. **One behavioral exception is accepted deliberately:** `padStart`/`padEnd`
+  throw `RangeError` above 2**20 graphemes, where native only gives up at V8's string limit
+  (2**29 - 24). A `GraphemeString` holds one string object per grapheme rather than a compact
+  character buffer, so the native ceiling is unreachable — it exhausts the V8 heap first — and the
+  band below it is slow enough to be a trap (2**24 costs ~173ms and ~130MB). The limit is set where
+  the cost is still negligible (~9ms, ~9MB) rather than where the engine finally fails, on the
+  grounds that padding a string to a million graphemes is never a deliberate act. Two additions are kept (`normalize('none')`, `ordinalCompare`), plus
   `toArray`. Range and padding methods still return `GraphemeString` rather than `string` so derived
   values inherit the parent's segmentation — a type-level difference, not a behavioral one. The raw
   text comes back from `toString()` rather than a `.string` getter, so an instance drops straight into
@@ -2278,5 +2284,15 @@ step, no automation. Just a record.
   `stringz` had clamped negative positions to 0 just as native does. External extension authors are
   the residual exposure. The previously-flagged hazard of a `-1` sentinel being read as
   "count from the end" is gone, because negative positions now clamp.
-- **Source:** PT-2626 grapheme-string-util work; perf investigation in
-  `~/repos/test/platform-bible-utils-perf/` (`GRAPHEME-STRING-FINDINGS.md`, `PERF-RESULTS.md`).
+- **Source:** PT-2626 grapheme-string-util work. The decision rests on a benchmark investigation by
+  Matthew Getgen comparing the old per-call `stringz` segmentation against a segment-once
+  `GraphemeString`, across the operations `string-util` exposes and over string lengths from tens to
+  tens of thousands of characters. That investigation also produced the candidate search
+  implementations weighed here (a native scan validated at grapheme boundaries, which was kept, versus
+  a pure grapheme walk, which was not). The headline figures worth carrying forward:
+  `formatReplacementString` went from ~48ms/call on a 1000-character string to ~0.085ms/call on a
+  1200-character template, and the trailing-whitespace trim in `areUsjContentsEqualExceptWhitespace`
+  from ~30ms/call to ~0.26ms/call on a 10,000-character string with 2,000 trailing spaces. The
+  benchmark harness and the full result write-ups were scratch work on the author's machine and were
+  deliberately not checked in — the numbers above are the durable part, and the parity suite in
+  `grapheme-string.test.ts` is what guards the behavior.
