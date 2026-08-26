@@ -77,14 +77,12 @@ import {
   deserialize,
   getErrorMessage,
   getStylesheetForTheme,
-  indexOf,
   isPlatformError,
   isSerializable,
   isString,
   newGuid,
   split,
   startsWith,
-  substring,
   THEME_STYLE_ELEMENT_ID,
   Unsubscriber,
   UnsubscriberAsync,
@@ -2147,14 +2145,20 @@ async function openOrReloadWebView(
     ">`;
 
   // Add some elements at the start of the head to give access to papi, CSP, styles, etc.
-  const headStart = indexOf(webViewContent, '<head');
-  const headEnd = indexOf(webViewContent, '>', headStart);
+  // Native string methods, not the grapheme-aware helpers: this scans ASCII markup for the opening
+  // `<head` tag and its closing `>`, and the index is only ever used to splice this same string, so
+  // it never escapes into another index space. The helpers would segment the entire web view
+  // document four times per web view, which measured as seconds of startup time.
+  // A document with no `<head` leaves headStart at -1, which `indexOf` clamps to 0 — the same
+  // behavior the grapheme-aware helper had, so malformed documents splice as they did before.
+  const headStart = webViewContent.indexOf('<head');
+  const headEnd = webViewContent.indexOf('>', headStart);
 
   // Inject the CSP, styles, and import scripts into the html if it is not a URL iframe
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
     const themeStylesheet = `<style nonce="${srcNonce}" id="${THEME_STYLE_ELEMENT_ID}" data-theme-id="${theme.id}">${getStylesheetForTheme(theme)}</style>`;
 
-    webViewContent = `${substring(webViewContent, 0, headEnd + 1)}
+    webViewContent = `${webViewContent.substring(0, headEnd + 1)}
     ${contentSecurityPolicy}
     <script nonce="${srcNonce}">
     ${imports}
@@ -2165,7 +2169,7 @@ async function openOrReloadWebView(
     <style nonce="${srcNonce}">
       ${SCROLLBAR_STYLES_RAW}
     </style>
-    ${themeStylesheet}${substring(webViewContent, headEnd + 1)}`;
+    ${themeStylesheet}${webViewContent.substring(headEnd + 1)}`;
   }
 
   const finalWebView: WebViewTabProps = {
