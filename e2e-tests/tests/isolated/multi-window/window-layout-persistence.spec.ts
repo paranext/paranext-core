@@ -616,7 +616,7 @@ test.describe('window layout persistence', () => {
       profileDir = userDataDir;
       const outputA = captureAppOutput(ctx.electronApp);
       const [pageA] = await waitForAppPages(ctx.electronApp, 1, 90_000);
-      await waitForAppReady(pageA, 180_000);
+      await waitForAppReady(pageA, { timeout: 180_000 });
       const windowAId = getWindowIdOfPage(pageA);
       await expect(homeTabTitle(pageA, windowAId)).toBeAttached({ timeout: 60_000 });
       logStep(`launch A: window ${windowAId} ready with its Home tab`);
@@ -686,7 +686,7 @@ test.describe('window layout persistence', () => {
       const pagesB = await waitForAppPages(ctx.electronApp, 1, 180_000);
       const pageB = pagesB[0];
       const windowBId = getWindowIdOfPage(pageB);
-      await waitForAppReady(pageB, 180_000);
+      await waitForAppReady(pageB, { timeout: 180_000 });
       logStep(`launch B: window ${windowBId} ready`);
 
       // Premise check on the harness itself: the seeded blob must have survived the quit (the
