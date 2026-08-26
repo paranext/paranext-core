@@ -152,13 +152,4 @@ export type BookChapterControlProps = {
    * {@link BookChapterControlHandle.open} is a no-op
    */
   disabled?: boolean;
-  /**
-   * Overrides the shrink step this control would otherwise read from the enclosing toolbar. Higher
-   * means narrower: at step 1 the trigger shows the abbreviated book id instead of the spelled-out
-   * book name, and at step 3 it drops the chapter:verse entirely.
-   *
-   * Intended for stories and tests — in the app the step comes from the toolbar's own measured
-   * width via `ShrinkStepContext`, and this control reads it automatically.
-   */
-  shrinkStep?: number;
 };

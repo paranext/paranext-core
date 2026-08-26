@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
 import { beforeAll, describe, expect, test } from 'vitest';
 import '@testing-library/jest-dom';
+import { ShrinkStepOverride } from '@/context/shrink-step-override.component';
 import { BookChapterControl } from './book-chapter-control.component';
 import { BookChapterControlHandle } from './book-chapter-control.types';
 
@@ -210,7 +211,11 @@ describe('BookChapterControl trigger shrink ladder', () => {
   const scrRef = { book: 'GEN', chapterNum: 1, verseNum: 1 };
 
   test('shows the full book name and the chapter:verse at the widest step', () => {
-    render(<BookChapterControl scrRef={scrRef} handleSubmit={() => {}} shrinkStep={0} />);
+    render(
+      <ShrinkStepOverride value={0}>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </ShrinkStepOverride>,
+    );
 
     const trigger = screen.getByRole('combobox');
     expect(trigger).toHaveTextContent('Genesis');
@@ -218,7 +223,11 @@ describe('BookChapterControl trigger shrink ladder', () => {
   });
 
   test('swaps the full book name for the three-letter id once space is tight', () => {
-    render(<BookChapterControl scrRef={scrRef} handleSubmit={() => {}} shrinkStep={1} />);
+    render(
+      <ShrinkStepOverride value={1}>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </ShrinkStepOverride>,
+    );
 
     const trigger = screen.getByRole('combobox');
     expect(trigger).toHaveTextContent('GEN');
@@ -227,7 +236,11 @@ describe('BookChapterControl trigger shrink ladder', () => {
   });
 
   test('drops the chapter:verse entirely at the narrowest step, keeping the book', () => {
-    render(<BookChapterControl scrRef={scrRef} handleSubmit={() => {}} shrinkStep={3} />);
+    render(
+      <ShrinkStepOverride value={3}>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </ShrinkStepOverride>,
+    );
 
     const trigger = screen.getByRole('combobox');
     expect(trigger).toHaveTextContent('GEN');
@@ -252,12 +265,13 @@ describe('BookChapterControl trigger shrink ladder', () => {
 
   test('prefers a localized book id over the plain id when the consumer supplies one', () => {
     render(
-      <BookChapterControl
-        scrRef={scrRef}
-        handleSubmit={() => {}}
-        shrinkStep={1}
-        localizedBookNames={new Map([['GEN', { localizedId: 'GN', localizedName: 'Génesis' }]])}
-      />,
+      <ShrinkStepOverride value={1}>
+        <BookChapterControl
+          scrRef={scrRef}
+          handleSubmit={() => {}}
+          localizedBookNames={new Map([['GEN', { localizedId: 'GN', localizedName: 'Génesis' }]])}
+        />
+      </ShrinkStepOverride>,
     );
 
     expect(screen.getByRole('combobox')).toHaveTextContent('GN');

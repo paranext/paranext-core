@@ -1,6 +1,6 @@
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import React, { PropsWithChildren, ReactNode, useCallback, useRef, useState } from 'react';
-import { ShrinkStepContext } from '@/context/shrink-step.context';
+import { ShrinkStepContext, useShrinkStepOverride } from '@/context/shrink-step.context';
 import { useShrinkStep } from '@/hooks/use-shrink-step.hook';
 import { SelectMenuItemHandler } from '../menus/platform-menubar.component';
 
@@ -51,14 +51,6 @@ export type TabToolbarContainerProps = PropsWithChildren<{
   id?: string;
   /** Additional css classes to help with unique styling of the extensible toolbar */
   className?: string;
-  /**
-   * Overrides the shrink step this toolbar would otherwise measure from its own width, and
-   * publishes it to descendants through `ShrinkStepContext`. Higher means narrower.
-   *
-   * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
-   * the app, leave this unset and let the toolbar measure itself.
-   */
-  shrinkStep?: number;
 }>;
 
 /**
@@ -76,7 +68,7 @@ export const TAB_TOOLBAR_SHRINK_THRESHOLDS_PX = Object.freeze([520, 420, 340]);
 
 /** Wrapper that allows consistent styling for both TabToolbar and TabFloatingMenu. */
 export const TabToolbarContainer = React.forwardRef<HTMLDivElement, TabToolbarContainerProps>(
-  ({ id, className, children, shrinkStep: shrinkStepOverride }, ref) => {
+  ({ id, className, children }, ref) => {
     // The root node lives in state, not a ref: mutating `ref.current` does not re-run the effect
     // inside `useShrinkStep`, so a ref would leave the observer permanently unattached. The
     // forwarded ref is still populated alongside it so callers keep the node they expect.
@@ -103,7 +95,9 @@ export const TabToolbarContainer = React.forwardRef<HTMLDivElement, TabToolbarCo
     }, []);
 
     const measuredShrinkStep = useShrinkStep(rootNode, TAB_TOOLBAR_SHRINK_THRESHOLDS_PX);
-    const shrinkStep = shrinkStepOverride ?? measuredShrinkStep;
+    // A `ShrinkStepOverride` above this wins, so stories and tests can pin a step where there is no
+    // layout engine to measure with.
+    const shrinkStep = useShrinkStepOverride() ?? measuredShrinkStep;
 
     return (
       <ShrinkStepContext.Provider value={shrinkStep}>

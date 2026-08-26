@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import * as React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import type { Usj } from '@eten-tech-foundation/scripture-utilities';
 import type { DblResourceData } from 'platform-bible-utils';
@@ -346,5 +346,25 @@ describe('ModelTextPanel', () => {
 
     expect(screen.queryByText('No model text selected.')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pick model text…' })).not.toBeInTheDocument();
+  });
+
+  it('puts the header label in its own element so a long resource name ellipsises', async () => {
+    // jsdom has no layout, so this pins the structure the ellipsis depends on rather than the
+    // rendered glyphs. `text-overflow` is inert on a flex container — its text becomes an anonymous
+    // flex item and hard-clips mid-glyph — so the header box must NOT carry `truncate`, and the
+    // label must sit in a child that does.
+    renderPanel({
+      modelTextsState: readyState(configuredModelText('uid-web')),
+      dblResources: [INSTALLED_RESOURCE],
+      getResourceChapter: vi.fn(async () => ({ usj: SAMPLE_USJ, textDirection: 'ltr' })),
+    });
+
+    const header = await screen.findByTestId('model-text-header');
+    expect(header).toHaveClass('tw:flex');
+    expect(header).not.toHaveClass('tw:truncate');
+
+    const label = within(header).getByText('World English Bible (WEB)');
+    expect(label).not.toBe(header);
+    expect(label).toHaveClass('tw:truncate');
   });
 });

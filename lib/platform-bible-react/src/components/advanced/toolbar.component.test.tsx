@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
+import { ShrinkStepOverride } from '@/context/shrink-step-override.component';
 import {
   getToolbarOSReservedSpaceClassName,
   Toolbar,
@@ -82,11 +83,13 @@ describe('Toolbar', () => {
     expect(screen.getByTestId('step')).toHaveTextContent(String(SHRINK_STEP.WIDE));
   });
 
-  it('publishes an explicitly supplied shrink step, so stories and tests can drive the ladder without a layout engine', () => {
+  it('publishes an overridden shrink step, so stories and tests can drive the ladder without a layout engine', () => {
     render(
-      <Toolbar onSelectMenuItem={() => {}} shrinkStep={SHRINK_STEP.MINIMUM}>
-        <StepProbe />
-      </Toolbar>,
+      <ShrinkStepOverride value={SHRINK_STEP.MINIMUM}>
+        <Toolbar onSelectMenuItem={() => {}}>
+          <StepProbe />
+        </Toolbar>
+      </ShrinkStepOverride>,
     );
 
     expect(screen.getByTestId('step')).toHaveTextContent(String(SHRINK_STEP.MINIMUM));

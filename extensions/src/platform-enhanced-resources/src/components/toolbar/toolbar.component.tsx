@@ -28,6 +28,7 @@ import {
   TooltipTrigger,
   cn,
   useShrinkStep,
+  useShrinkStepOverride,
 } from 'platform-bible-react';
 import { useCallback, useState } from 'react';
 import { BookA, LibraryBig, Image as ImageIcon, Info, MapPin, Menu, X } from 'lucide-react';
@@ -460,18 +461,6 @@ export type EnhancedResourceTabBarProps = {
    */
   hasMatches?: boolean;
   localizedStringsWithLoadingState?: [ToolbarLocalizedStrings, boolean];
-  /**
-   * Overrides the shrink step this bar would otherwise measure from its own width. Higher means
-   * narrower; anything above 0 collapses the tab labels to icon-only.
-   *
-   * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
-   * the app, leave this unset and let the bar measure itself.
-   */
-  // `EnhancedResourceTabBar` destructures and reads this. The rule mis-attributes both prop types
-  // in this file to the first component declared in it, which is why the props above carry the same
-  // disable — see the ones on `ToolbarProps`.
-  // eslint-disable-next-line react/no-unused-prop-types
-  shrinkStep?: number;
 };
 
 /**
@@ -503,7 +492,6 @@ export function EnhancedResourceTabBar({
   onSearchChange = () => {},
   hasMatches = true,
   localizedStringsWithLoadingState = [{}, false],
-  shrinkStep,
 }: EnhancedResourceTabBarProps) {
   // The node lives in state, not a ref: mutating `ref.current` does not re-run the effect inside
   // `useShrinkStep`, so a ref would leave the observer permanently unattached.
@@ -516,9 +504,9 @@ export function EnhancedResourceTabBar({
     rootNode,
     ENHANCED_RESOURCES_TAB_BAR_SHRINK_THRESHOLDS_PX,
   );
-  // This bar is not inside a `TabToolbar`, so there is no `ShrinkStepContext` above it to read —
-  // it measures its own width, unless a caller states the step outright.
-  const areTabLabelsHidden = (shrinkStep ?? measuredShrinkStep) > 0;
+  // This bar is not inside a `TabToolbar`, so there is no toolbar above it publishing a step — it
+  // measures its own width, unless a `ShrinkStepOverride` pins one for a story or test.
+  const areTabLabelsHidden = (useShrinkStepOverride() ?? measuredShrinkStep) > 0;
 
   const getLocalizedString = (key: ToolbarLocalizedStringKey) =>
     localizedStringsWithLoadingState[0][key] ?? key;
@@ -762,7 +750,6 @@ export function Toolbar(props: ToolbarProps) {
     onSearchChange,
     hasMatches,
     localizedStringsWithLoadingState,
-    shrinkStep,
   } = props;
 
   return (
@@ -791,7 +778,6 @@ export function Toolbar(props: ToolbarProps) {
         onSearchChange={onSearchChange}
         hasMatches={hasMatches}
         localizedStringsWithLoadingState={localizedStringsWithLoadingState}
-        shrinkStep={shrinkStep}
       />
     </div>
   );

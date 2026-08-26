@@ -195,15 +195,6 @@ export type BookChapterControlProps = {
 	 * {@link BookChapterControlHandle.open} is a no-op
 	 */
 	disabled?: boolean;
-	/**
-	 * Overrides the shrink step this control would otherwise read from the enclosing toolbar. Higher
-	 * means narrower: at step 1 the trigger shows the abbreviated book id instead of the spelled-out
-	 * book name, and at step 3 it drops the chapter:verse entirely.
-	 *
-	 * Intended for stories and tests — in the app the step comes from the toolbar's own measured
-	 * width via `ShrinkStepContext`, and this control reads it automatically.
-	 */
-	shrinkStep?: number;
 };
 /**
  * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
@@ -213,7 +204,7 @@ export type BookChapterControlProps = {
  * input, and managing highlighted selections. It also integrates with external handlers for
  * submitting selected references and retrieving active book IDs.
  */
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, showTriggerChevron, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, shrinkStep: shrinkStepOverride, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, localizedBookNames, localizedStrings, recentSearches, onAddRecentSearch, id, getEndVerse, disableReferencesUpTo, submitKeys, triggerContent, triggerVariant, showTriggerChevron, onOpenChange, onCloseAutoFocus, modal, align, ref, disabled, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -1920,21 +1911,13 @@ export type TabToolbarProps = TabToolbarCommonProps & {
 	 * side in ltr, left side in rtl). Recommended for secondary tools and view options.
 	 */
 	endAreaChildren?: React$1.ReactNode;
-	/**
-	 * Overrides the shrink step this toolbar would otherwise measure from its own width, and
-	 * publishes it to descendants. Higher means narrower.
-	 *
-	 * For stories and tests: measuring needs a layout engine, which jsdom does not have. In the app,
-	 * leave it unset and let the toolbar measure itself.
-	 */
-	shrinkStep?: number;
 };
 /**
  * Toolbar that holds the project menu icon on one side followed by three different areas/categories
  * for toolbar icons followed by an optional view info menu icon. See the Tab Floating Menu Button
  * component for a menu component that takes up less screen real estate yet is always visible.
  */
-export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, shrinkStep, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, menuButtonIcon, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Renders a TabDropdownMenu with a trigger button that looks like the menuButtonIcon or like the
  * default of three stacked horizontal lines (aka the hamburger). The menu "floats" over the content
@@ -2011,14 +1994,6 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	configAreaChildren?: React$1.ReactNode;
 	/** Variant of the menubar */
 	menubarVariant?: "default" | "muted";
-	/**
-	 * Overrides the shrink step this toolbar would otherwise measure from its own width, and
-	 * publishes it to descendants through `ShrinkStepContext`. Higher means narrower.
-	 *
-	 * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
-	 * the app, leave this unset and let the toolbar measure itself.
-	 */
-	shrinkStep?: number;
 }>;
 /**
  * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing
@@ -2045,7 +2020,7 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * @param {ToolbarProps} props - The props for the component.
  */
-export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, shrinkStep: shrinkStepOverride, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 export type ToolbarCompoundLabelProps = {
 	/** The field that identifies the item — a book abbreviation, project short name, marker code. */
 	primary: React$1.ReactNode;
@@ -3900,6 +3875,55 @@ export declare const ShrinkStepContext: import("react").Context<number>;
  * @returns The current step, or `SHRINK_STEP.WIDE` when there is no provider.
  */
 export declare function useShrinkStepValue(): number;
+/**
+ * A shrink step forced from outside, overriding what a toolbar would measure from its own width.
+ *
+ * Separate from {@link ShrinkStepContext} because the two answer different questions. A toolbar
+ * _publishes_ to `ShrinkStepContext` and cannot read its own value back, and that context defaults
+ * to `SHRINK_STEP.WIDE` rather than being unset — so a publisher reading it could never tell "no
+ * one is overriding me" from "someone is overriding me with the widest step". This context is
+ * `undefined` until something sets it, which is the distinction a publisher needs.
+ *
+ * Set it with {@link ShrinkStepOverride} rather than reaching for the provider directly.
+ */
+export declare const ShrinkStepOverrideContext: import("react").Context<number | undefined>;
+/**
+ * Reads a shrink step forced from outside, if any.
+ *
+ * Toolbars that measure their own width call this and prefer its value over their measurement, so
+ * stories and tests can pin a step in an environment with no layout engine. Components that only
+ * _read_ a step have no use for this — they call {@link useShrinkStepValue} instead.
+ *
+ * @returns The overriding step, or `undefined` when nothing is overriding.
+ */
+export declare function useShrinkStepOverride(): number | undefined;
+/** Props for {@link ShrinkStepOverride}. */
+export type ShrinkStepOverrideProps = React$1.PropsWithChildren<{
+	/** The shrink step to force on everything inside. Higher means narrower. */
+	value: number;
+}>;
+/**
+ * Forces a shrink step on everything it wraps, instead of letting toolbars measure their own width.
+ *
+ * Intended for stories and tests: measuring needs a layout engine, which jsdom does not have. In
+ * the app, render toolbars without this and let them measure themselves.
+ *
+ * It sets both shrink-step contexts, so it works whether or not a toolbar sits between it and the
+ * component under test. A toolbar inside it reads the override and republishes that same value to
+ * its descendants; a component that only reads a step picks the value up directly, with no toolbar
+ * needed in between.
+ *
+ * @example
+ *
+ * ```tsx
+ * render(
+ *   <ShrinkStepOverride value={SHRINK_STEP.MINIMUM}>
+ *     <BookChapterControl scrRef={scrRef} handleSubmit={handleSubmit} />
+ *   </ShrinkStepOverride>,
+ * );
+ * ```
+ */
+export declare function ShrinkStepOverride({ value, children }: ShrinkStepOverrideProps): import("react/jsx-runtime").JSX.Element;
 /** Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200) */
 export declare const Z_INDEX_ABOVE_DOCK = 600;
 /** Z-index for the footnote editor layer */

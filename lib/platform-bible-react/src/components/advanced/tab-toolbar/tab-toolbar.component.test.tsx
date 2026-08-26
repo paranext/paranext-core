@@ -4,6 +4,7 @@ import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { TabToolbar } from '@/components/advanced/tab-toolbar/tab-toolbar.component';
 import { SHRINK_STEP, useShrinkStepValue } from '@/context/shrink-step.context';
+import { ShrinkStepOverride } from '@/context/shrink-step-override.component';
 
 describe('TabToolbar', () => {
   it('does not force tw:h-full on the start/center/end area wrappers (breaks vertical centering)', () => {
@@ -102,20 +103,21 @@ describe('TabToolbar', () => {
   });
 
   it('publishes its shrink step down to the items inside it, so a laddered label sees the real value', () => {
-    // Guards the wiring end to end: `TabToolbar` forwards the prop, `TabToolbarContainer` puts it
-    // on the context, and a descendant reads it. Each piece is exercised elsewhere; only this
-    // catches them being connected wrongly.
+    // Guards the wiring end to end: `TabToolbarContainer` prefers the override over its own
+    // measurement, republishes it on `ShrinkStepContext`, and a descendant reads it. Each piece is
+    // exercised elsewhere; only this catches them being connected wrongly.
     function StepProbe() {
       return <span data-testid="step">{useShrinkStepValue()}</span>;
     }
 
     render(
-      <TabToolbar
-        onSelectProjectMenuItem={() => {}}
-        onSelectViewInfoMenuItem={() => {}}
-        shrinkStep={SHRINK_STEP.MINIMUM}
-        startAreaChildren={<StepProbe />}
-      />,
+      <ShrinkStepOverride value={SHRINK_STEP.MINIMUM}>
+        <TabToolbar
+          onSelectProjectMenuItem={() => {}}
+          onSelectViewInfoMenuItem={() => {}}
+          startAreaChildren={<StepProbe />}
+        />
+      </ShrinkStepOverride>,
     );
 
     expect(screen.getByTestId('step')).toHaveTextContent(String(SHRINK_STEP.MINIMUM));

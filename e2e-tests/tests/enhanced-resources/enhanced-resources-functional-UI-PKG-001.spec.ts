@@ -787,39 +787,34 @@ test.describe('Enhanced Resources Functional Tests (UI-PKG-001 — MarbleForm)',
   // FN-024 edge case — toolbar responsive shrinking.
   // When the lower split panel is narrowed below the threshold, the four research-tab labels all
   // collapse to icon-only at the same time. Filter input retains a min-width of 80px.
-  // FIXME(GAP-024): the container-query wiring this originally waited on is gone — the tab bar now
-  // collapses off a measured shrink step instead — but nobody has run this against a real app to
-  // confirm the numbers line up (the pane has to end up under ~384px for the labels to drop).
-  // Enable it once someone can watch it run rather than on the strength of the code reading alone.
-  test.fixme(
-    'should collapse research-tab labels to icon-only at narrow widths (FN-024)',
-    async ({ mainPage }) => {
-      await waitForAppReady(mainPage);
-      await openEnhancedResource(mainPage);
-      const frame = mainPage.frameLocator(ER_FRAME_SELECTOR);
-      await expect(frame.getByTestId('er-scripture-pane')).toBeVisible({ timeout: 15_000 });
+  test('should collapse research-tab labels to icon-only at narrow widths (FN-024)', async ({
+    mainPage,
+  }) => {
+    await waitForAppReady(mainPage);
+    await openEnhancedResource(mainPage);
+    const frame = mainPage.frameLocator(ER_FRAME_SELECTOR);
+    await expect(frame.getByTestId('er-scripture-pane')).toBeVisible({ timeout: 15_000 });
 
-      // Wide enough by default — labels visible.
-      const dictTabLabel = frame.getByRole('tab', { name: /Dictionary/i }).locator('span');
-      await expect(dictTabLabel).toBeVisible();
+    // Wide enough by default — labels visible.
+    const dictTabLabel = frame.getByRole('tab', { name: /Dictionary/i }).locator('span');
+    await expect(dictTabLabel).toBeVisible();
 
-      // Shrink the viewport until the pane holding the tab bar drops under its shrink threshold.
-      await mainPage.setViewportSize({ width: 600, height: 800 });
+    // Shrink the viewport until the pane holding the tab bar drops under its shrink threshold.
+    await mainPage.setViewportSize({ width: 600, height: 800 });
 
-      // All four tab labels become hidden simultaneously (per FN-024 — "drop labels all at
-      // once"). Run the assertions in parallel — each tab's visibility is independent.
-      await Promise.all(
-        ['Dictionary', 'Encyclopedia', 'Media', 'Maps'].map((label) =>
-          expect(
-            frame.getByRole('tab', { name: new RegExp(label, 'i') }).locator('span'),
-          ).toBeHidden(),
-        ),
-      );
+    // All four tab labels become hidden simultaneously (per FN-024 — "drop labels all at
+    // once"). Run the assertions in parallel — each tab's visibility is independent.
+    await Promise.all(
+      ['Dictionary', 'Encyclopedia', 'Media', 'Maps'].map((label) =>
+        expect(
+          frame.getByRole('tab', { name: new RegExp(label, 'i') }).locator('span'),
+        ).toBeHidden(),
+      ),
+    );
 
-      // Restore default viewport for subsequent tests.
-      await mainPage.setViewportSize({ width: 1280, height: 800 });
-    },
-  );
+    // Restore default viewport for subsequent tests.
+    await mainPage.setViewportSize({ width: 1280, height: 800 });
+  });
 
   // Edge case — render without console errors.
   // Cross-cutting check: opening the ER window must not produce critical console errors. Filters
