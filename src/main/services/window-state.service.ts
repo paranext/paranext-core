@@ -597,6 +597,17 @@ export function getTrackedWindows(): { windowId: number; window: BrowserWindow }
 }
 
 /**
+ * Get the platform id of a window, if it is still tracked.
+ *
+ * The inverse of {@link getWindowById}, for the few places holding a `BrowserWindow` that Electron
+ * handed them — `getFocusedWindow()` and the like — which need to name it to anything else here. A
+ * `BrowserWindow` does not carry its platform id, so this list is the only way to ask.
+ */
+export function getWindowIdOf(window: BrowserWindow): number | undefined {
+  return trackedWindows.find((tracked) => tracked.window === window)?.windowId;
+}
+
+/**
  * Get the window a platform id names, if it is still tracked.
  *
  * This is the platform-id half of `BrowserWindow.fromId`, which cannot be used now that the ids the

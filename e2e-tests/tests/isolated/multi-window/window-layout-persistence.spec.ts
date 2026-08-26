@@ -125,8 +125,13 @@ async function getWindowBounds(
   windowId: number,
 ): Promise<Rectangle> {
   return electronApp.evaluate(({ BrowserWindow }, id) => {
-    const win = BrowserWindow.fromId(id);
-    if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+    // Matched on the renderer URL's `windowId`, which carries the platform id.
+    // `BrowserWindow.fromId` takes Electron's, and the two diverge once the app has relaunched.
+    const win = BrowserWindow.getAllWindows().find(
+      (someWindow) =>
+        Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId')) === id,
+    );
+    if (!win) throw new Error(`No window with platform id ${id}`);
     return win.getBounds();
   }, windowId);
 }
@@ -169,8 +174,11 @@ async function placeWindowAndSettle(
   await expect(async () => {
     await electronApp.evaluate(
       ({ BrowserWindow }, { id, bounds }) => {
-        const win = BrowserWindow.fromId(id);
-        if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+        const win = BrowserWindow.getAllWindows().find(
+          (someWindow) =>
+            Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId')) === id,
+        );
+        if (!win) throw new Error(`No window with platform id ${id}`);
         // Normal-state placement is what gets persisted, so leave any special state first, and
         // re-show a window the host may have minimized (an unmapped window reads back at a
         // far-off-screen position).

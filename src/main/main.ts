@@ -88,6 +88,7 @@ import {
   getTargetWindowId,
   getTrackedWindows,
   getWindowById,
+  getWindowIdOf,
   getWindows,
   handleWindowBlurred,
   isWindowAbandoned,
@@ -555,7 +556,13 @@ async function main() {
     // so no window has OS focus and the fallback below is the ordinary path, not the edge case. It
     // asks where routed calls go, which is the window the user was last working in; the oldest
     // tracked window would be an arbitrary choice that also repoints routing there by focusing it.
-    const windowIdToRaise = BrowserWindow.getFocusedWindow()?.id ?? getTargetWindowId();
+    // Translated through the tracker rather than read off the window: `getFocusedWindow()` answers
+    // with a BrowserWindow, whose `id` is Electron's and means nothing to `focusWindow`. Both are
+    // numbers, so passing it straight through would raise whichever window happened to hold the
+    // platform id that Electron's number collides with — or none at all.
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    const windowIdToRaise =
+      (focusedWindow ? getWindowIdOf(focusedWindow) : undefined) ?? getTargetWindowId();
     // Deliberately NOT gated on `isApplicationFocused()` the way the in-app raises are. That gate
     // exists to stop us pulling the app in front of whatever the user is working in; this path
     // runs precisely when the app does not own the foreground, so the gate would suppress every

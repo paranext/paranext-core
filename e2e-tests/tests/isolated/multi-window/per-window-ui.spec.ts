@@ -432,7 +432,13 @@ test.describe('per-window UI isolation', () => {
     // the notification following FOCUS, which the routing wait above pinned deterministically —
     // does not depend on the compositor cooperating with the set dressing.
     const window1Minimized = await electronApp.evaluate(
-      ({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.isMinimized(),
+      ({ BrowserWindow }, id) =>
+        BrowserWindow.getAllWindows()
+          .find(
+            (someWindow) =>
+              Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId')) === id,
+          )
+          ?.isMinimized(),
       window1Id,
     );
     logStep(
@@ -455,8 +461,14 @@ test.describe('per-window UI isolation', () => {
     // matches single-window behaviour: a notification sent while the app is minimized shows when
     // the user brings the app back up, and none of it is lost or stuck.
     await electronApp.evaluate(({ BrowserWindow }, id) => {
-      const win = BrowserWindow.fromId(id);
-      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+      // `id` is the platform's; `BrowserWindow.fromId` understands only Electron's, and the two
+      // stop coinciding after a relaunch. Match on the `windowId` the main process puts in every
+      // renderer URL instead.
+      const win = BrowserWindow.getAllWindows().find(
+        (someWindow) =>
+          Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId')) === id,
+      );
+      if (!win) throw new Error(`No window with platform id ${id}`);
       win.minimize();
     }, window2Id);
     const probeToastText = 'per-window notification probe (minimized)';
