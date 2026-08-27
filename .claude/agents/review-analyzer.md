@@ -19,7 +19,7 @@ You will be given:
 
 ## Accuracy Requirement
 
-**Before reporting any finding, verify it against the actual code.** Read the relevant file (or use `git show $MERGE_BASE:<file>` for the before-state) to confirm the issue exists. Do not flag something based on pattern assumptions or file names alone. If you cannot confirm a finding from the actual code, omit it entirely or note that you could not verify it. A small number of accurate findings is better than a long list with errors.
+**Before reporting any finding, verify it against the actual code.** Read the relevant file (or use `git show $MERGE_BASE:<file>` for the before-state) to confirm the issue exists. Do not flag something based on pattern assumptions or file names alone. If you cannot confirm a finding from the actual code, omit it entirely or note that you could not verify it. A small number of accurate findings is better than a long list with errors. The checks a review completes before it is reported are in [Code-Review-Guide.md](../../.context/standards/Code-Review-Guide.md#before-the-verdict).
 
 ## Severity Rubric
 

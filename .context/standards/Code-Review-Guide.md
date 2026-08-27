@@ -1,10 +1,10 @@
 ---
 title: Code Review Guide
 description: Code review process, Reviewable workflow, code stewards, and PR approval best practices.
-version: 1.1.0
+version: 1.2.0
 status: active
 created: 2026-03-04
-last_updated: 2026-06-15
+last_updated: 2026-08-27
 ---
 
 # Code Review Guide
@@ -50,6 +50,37 @@ For current code steward assignments, see the [Code Stewards wiki](https://githu
 
 ---
 
+## Before the verdict
+
+Four checks that come before a review is reported. Each of them exists because a review that
+skipped it passed a defect the next stage caught.
+
+- **A checklist from the requester is a floor, not the review.** Run the full review pass alongside
+  it and hold the verdict until that pass finishes; then ask which branch of every two-way switch
+  the diff's tests never exercise — default versus non-default mode, tracked versus untracked,
+  first-load versus fallback. Rigour inside the places someone listed says nothing about the places
+  nobody listed, and the most-travelled path is often one of the latter.
+
+- **Run the control before attributing.** Before a symptom is blamed on a change, check the same
+  signal on the base and on unrelated branches. Two occurrences inside one population are not a
+  pattern until the population without that change has been looked at, and a wrong attribution
+  sends someone after a defect they did not write.
+
+- **Verify a premise in code, citing the line, before it reaches a rationale, an ADR or a report.**
+  Grep the type definitions before accepting "cannot be done" as the reason for a workaround. A
+  false premise costs far more to remove once it has been repeated across a design note, a decision
+  log and a commit message than it costs to check once.
+
+- **A change to a shutdown, close or persistence path keeps its end-to-end scenarios in the gate.**
+  Unit tests, mutation checks and review have each passed defects on those paths that only an
+  end-to-end run caught: what fails there is ordering and lifetime, which a mocked test reproduces
+  by construction rather than exercises.
+
+When a finding is a rule rather than a single site, state the rule and name every site it governs —
+a reviewer's scope becomes the fixer's scope.
+
+---
+
 ## Author Responsibilities
 
 - Merge pull requests after approval or enable auto-merge through GitHub
@@ -90,3 +121,4 @@ Request code reviews in the `#reviews` channel on the [Platform.Bible Discord se
 | ------- | ---------- | ------------------------------------------------------------------- |
 | 1.0.0   | 2026-03-04 | Initial version                                                     |
 | 1.1.0   | 2026-06-15 | De-ported the AI-Assisted-Review (porting) section for the general profile |
+| 1.2.0   | 2026-08-27 | Added "Before the verdict": checks a review completes before it is reported |
