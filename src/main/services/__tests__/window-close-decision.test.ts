@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import type { BrowserWindow } from 'electron';
-import { decideWindowClose } from '@main/services/window-close-decision.service';
+import {
+  decideWindowClose,
+  type CloseAllAnswer,
+} from '@main/services/window-close-decision.service';
 import {
   isAppQuitRequested,
   markQuitRequested,
@@ -13,6 +16,7 @@ import {
   setWindowPendingContentPredicate,
 } from '@main/services/window-state.service';
 import { isPrimaryWindow } from '@main/services/window-layout-persistence.service';
+import { logger } from '@shared/services/logger.service';
 
 vi.mock('electron', () => ({ BrowserWindow: class {} }));
 
@@ -85,6 +89,21 @@ describe('deciding what a window close means', () => {
 
       expect(decision).toBe('quit-all');
       expect(isAppQuitRequested()).toBe(true);
+    });
+
+    test('an asker that fails is treated as cancel, and the failure is reported rather than swallowed', async () => {
+      // The window is already held open by the time this runs, so leaving it open is the safe
+      // outcome — but silently would be indistinguishable from the user cancelling.
+      const askerFailure = new Error('dialog failed to open');
+      const confirm = vi.fn(async (): Promise<CloseAllAnswer> => {
+        throw askerFailure;
+      });
+
+      const decision = await decideWindowClose(1, confirm);
+
+      expect(decision).toBe('stay-open');
+      expect(isAppQuitRequested()).toBe(false);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining(askerFailure.message));
     });
   });
 
