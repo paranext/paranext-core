@@ -10,7 +10,7 @@
 
 import { isAppQuitRequested, markQuitRequested } from '@main/services/shutdown-latch.service';
 import {
-  countWindowsThatCouldBeTheLastOne,
+  countWindowsThatWouldStayOpen,
   isPrimaryWindow,
 } from '@main/services/window-state.service';
 
@@ -50,8 +50,9 @@ export async function decideWindowClose(
   // user has chosen, and asking again would be asking twice. A cancel here could not undo the
   // latch either, and would leave the app half-quit with the latch stuck for the session.
   if (isAppQuitRequested()) return 'close-this-window';
-  // Windows already on their way out are not left behind by this one closing
-  if (countWindowsThatCouldBeTheLastOne() <= 1) return 'close-this-window';
+  // Nothing left behind — windows already on their way out do not count, but a window still
+  // loading its content does
+  if (countWindowsThatWouldStayOpen(windowId) === 0) return 'close-this-window';
 
   const answer = await confirmCloseAll();
   if (answer === 'cancel') return 'stay-open';
