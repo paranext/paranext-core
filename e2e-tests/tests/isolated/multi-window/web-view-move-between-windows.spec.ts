@@ -38,11 +38,11 @@
  * the wrong reason. Everything here is therefore asserted on web view IDS:
  *
  * - The first window's Home tab comes from the fixed-id fallback layout, so before any move it is
- *   `{@link HOME_TAB_UUID}-w{windowId}` — an id no other Home tab in the session can have.
+ *   {@link homeTabWebViewId}`(windowId)` — an id no other Home tab in the session can have.
  * - A Home tab a window docks on the fly gets a freshly minted id (see
  *   {@link expectWindowDockHasOnlyHomeTab}), which can never be that one.
  * - A window that wrongly CLONED another window's layout would render that layout's ids re-scoped to
- *   itself — `{@link HOME_TAB_UUID}-w{itsOwnWindowId}` — ALONGSIDE the web view it received, so a
+ *   itself — {@link homeTabWebViewId}`(itsOwnWindowId)` — ALONGSIDE the web view it received, so a
  *   clone shows up as an EXTRA held id, never as a different value of the moved one. What catches
  *   it is therefore {@link expectWindowToHoldExactly}, which pins the destination's whole set of
  *   held ids: the cloned tab makes that set too big. Comparing the moved id itself against the
@@ -82,7 +82,6 @@ import {
 import {
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
-  HOME_TAB_UUID,
   MOVE_COMMAND_TIMEOUT_MS,
   RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
@@ -94,6 +93,7 @@ import {
   getHeldWebViewIds,
   getWindowIdOfPage,
   homeTabTitle,
+  homeTabWebViewId,
   pollUntil,
   quitAndExpectCleanExit,
   waitForRendererRegistered,
@@ -297,7 +297,7 @@ test.describe('moving a web view between windows', () => {
 
     // The web view about to be moved, identified by the fixed id the fallback layout gives it,
     // suffixed with this window's scope. Nothing else in the session can carry this id.
-    const webViewIdBeforeMove = `${HOME_TAB_UUID}-w${window1Id}`;
+    const webViewIdBeforeMove = homeTabWebViewId(window1Id);
     await expect(homeTabTitle(mainPage, window1Id)).toBeVisible({ timeout: 60_000 });
     await expect(
       mainPage.locator(`iframe[data-web-view-id="${webViewIdBeforeMove}"]`),
@@ -402,7 +402,7 @@ test.describe('moving a web view between windows', () => {
     const output = captureAppOutput(electronApp);
     await waitForAppReady(mainPage, 180_000);
     const window1Id = getWindowIdOfPage(mainPage);
-    const webViewIdBeforeMove = `${HOME_TAB_UUID}-w${window1Id}`;
+    const webViewIdBeforeMove = homeTabWebViewId(window1Id);
     await expect(homeTabTitle(mainPage, window1Id)).toBeVisible({ timeout: 60_000 });
     logStep(`window ${window1Id} holds web view ${webViewIdBeforeMove}`);
 
