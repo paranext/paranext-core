@@ -66,9 +66,11 @@ roborev skills install                                  # optional: /roborev-fix
 roborev agent-hook install --agent claude               # optional: mid-session fix reminders
 ```
 
-Per-commit review volume is high — every commit, and every commit a rebase re-mints — so pin the
-review model to Sonnet; the interactive `/code-review` command is unaffected and keeps whatever
-model the current session already runs on.
+Per-commit review volume is high, so pin the review model to Sonnet; the interactive
+`/code-review` command is unaffected and keeps whatever model the current session already runs on.
+A rebase re-mints commit SHAs but enqueues no reviews (a 130-commit restack queued zero jobs; only
+the real commit made afterwards was reviewed), so there is no reason to pause roborev while
+rebasing — fix-round commits made during a rebase are exactly the ones a review should catch.
 
 Do not skip `roborev check-agents`. A configured-but-unreachable agent makes every review fail,
 and that failure is genuinely invisible from the outside: the daemon rejects the enqueue with a
@@ -113,30 +115,6 @@ template. The values survive, but every explanatory comment is replaced by gener
 file balloons to roughly 225 lines, which `git commit -a` will happily carry into your branch.
 Machine-level settings belong in `~/.roborev/config.toml` anyway; edit `.roborev.toml` by hand
 when the repository genuinely needs a change.
-
-### Rebasing a branch stack
-
-A rebase re-mints every commit's SHA, and roborev enqueues one review per SHA — it has no way to
-tell that a rebased commit is unchanged from the one it already reviewed, even when `range-diff`
-confirms every commit as identical (`=`). Left alone, rebasing a stack of several commits re-triggers
-a review for every one of them.
-
-`roborev pause` stops the daemon from *processing* the queue, but jobs still *enqueue* while
-paused — pausing alone does not prevent the re-review, which is why the cancel step below is part
-of the procedure, not optional:
-
-```bash
-roborev pause
-# ...rebase the stack...
-roborev list --branch <branch> --status queued --json   # find the newly enqueued jobs
-roborev cancel <job_id>                                  # repeat for each rebased commit's job
-roborev unpause
-```
-
-`.roborev.toml`'s `excluded_commit_patterns` (`wip:`, `fixup!`, `squash!`, `[skip review]`) match
-on commit message, so they only exclude commits authored with one of those markers going forward.
-A rebase carries existing commit messages through unchanged, so it gives roborev no new signal to
-exclude on — the cancel step above is what actually stops the re-review.
 
 ---
 
@@ -210,4 +188,4 @@ Request code reviews in the `#reviews` channel on the [Platform.Bible Discord se
 | 1.0.0   | 2026-03-04 | Initial version                                                     |
 | 1.1.0   | 2026-06-15 | De-ported the AI-Assisted-Review (porting) section for the general profile |
 | 1.2.0   | 2026-08-13 | Added optional roborev per-commit review section with per-machine setup |
-| 1.3.0   | 2026-08-27 | Pinned roborev's review model to Sonnet per machine and documented pausing it during a branch-stack rebase |
+| 1.3.0   | 2026-08-27 | Pinned roborev's review model to Sonnet per machine; noted that a rebase enqueues no reviews |
