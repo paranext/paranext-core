@@ -92,6 +92,11 @@ export {
   type MarkerPaletteSessionState,
 } from './components/advanced/marker-palette-keydown.util';
 export {
+  type MarkerPaletteOpenSession,
+  runMarkerPaletteSession,
+  type RunMarkerPaletteSessionOptions,
+} from './components/advanced/marker-palette-session.util';
+export {
   filterAndRankPaletteItems,
   stripMarkerNestingPrefix,
   type PaletteFilterMode,

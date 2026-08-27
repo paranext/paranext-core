@@ -1254,6 +1254,97 @@ export declare function clearPaletteSessionIfCurrent<TSession extends {
 	token: number;
 }>(sessionRef: React$1.MutableRefObject<TSession | undefined>, token: number): void;
 /**
+ * The session record {@link runMarkerPaletteSession} creates and hands to the consumer's session
+ * ref — the forwarding table's {@link MarkerPaletteSessionState} plus the `token` that scopes async
+ * settle-time cleanup to THIS session (see `clearPaletteSessionIfCurrent`) and the consumer's own
+ * item type, so commit resolution (`items.find` by marker) returns full items.
+ */
+export interface MarkerPaletteOpenSession<TItem extends {
+	marker: string;
+}> extends MarkerPaletteSessionState {
+	/** Only the two forwarded kinds: the Enter-split (`'enter'`) palette has its own open path. */
+	kind: ForwardedSessionKind;
+	/** Identifies this session to async settle-time cleanup, from the consumer's monotonic counter. */
+	token: number;
+	items: readonly TItem[];
+}
+/**
+ * The per-consumer half of a marker-palette session — everything the shared spine cannot own
+ * because it differs between the web view and the footnote popover, plus the consumer-owned
+ * session bookkeeping the spine drives through narrow callbacks.
+ */
+export interface RunMarkerPaletteSessionOptions<TItem extends {
+	marker: string;
+}> {
+	/**
+	 * The entries the palette offers, in display order. An item's `marker` doubles as its palette
+	 * item id, which is how the show promise's resolved id maps back to the committed item.
+	 */
+	items: readonly TItem[];
+	/**
+	 * Selects the session flavor: `true` opens the collapsed-caret `'backslash'` session (shown in
+	 * the overlay's non-focus-stealing display), `false` the FOCUSED selection-wrap `'selection'`
+	 * session.
+	 */
+	passive: boolean;
+	/**
+	 * See {@link MarkerPaletteSessionState.shouldSpaceCommit}. Attached to `'backslash'` sessions
+	 * only — Space over a selection is the wrap commit, which has no typed-literal route to except.
+	 */
+	shouldSpaceCommit?: (filter: string) => boolean;
+	/**
+	 * The consumer's monotonic token allocator. Caller-owned (not module state) so ALL of a
+	 * consumer's palette opens — including kinds outside this spine, like the web view's
+	 * Enter-split palette — draw from ONE sequence and stale-settlement cleanup stays totally
+	 * ordered across them.
+	 */
+	sessionCounterRef: React$1.MutableRefObject<number>;
+	/** Stores the freshly created session as the consumer's current one. */
+	setSession(session: MarkerPaletteOpenSession<TItem>): void;
+	/**
+	 * Clears the consumer's session only when it still holds the session identified by `token`
+	 * (`clearPaletteSessionIfCurrent` over the consumer's ref).
+	 */
+	clearSessionIfCurrent(token: number): void;
+	/**
+	 * Runs the consumer's CURRENT forwarded-key handler. The palette captures this callback ONCE,
+	 * when shown, while the handler it must run is rebuilt whenever the session or its dependencies
+	 * change — so implementations read through a ref that always points at the current one.
+	 */
+	runSessionKey(event: MarkerPaletteKeyEvent): void;
+	/**
+	 * Shows the palette with the spine-built key-forwarding declaration and resolves the selected
+	 * item's id, or `undefined` when dismissed. The consumer owns the whole request/driver shape;
+	 * only `keyForwarding` is supplied, because its `keys` must be exactly the set the session's
+	 * kind claims.
+	 */
+	show(keyForwarding: PaletteKeyForwarding): Promise<string | undefined>;
+	/**
+	 * Restores the editor caret when the live selection was nulled, from the consumer's focus-out
+	 * capture. Runs BEFORE {@link RunMarkerPaletteSessionOptions.focusEditor} on a commit — see the
+	 * ordering comment in {@link runMarkerPaletteSession}.
+	 */
+	restoreSelectionIfLost(): void;
+	/** Focuses the consumer's editor. */
+	focusEditor(): void;
+	/** Applies the committed item to the consumer's editor. */
+	applyItem(item: TItem): void;
+	/**
+	 * Called whenever the show promise rejects, INCLUDING the routine replacement rejection
+	 * (PlatformError code ABORTED — the `\` reopen flow replaces the open palette on every commit
+	 * key), so implementations log conditionally: skip ABORTED, report everything else — a palette
+	 * that never opened should not fail silently.
+	 */
+	onShowError(error: unknown): void;
+}
+/**
+ * Opens one marker-palette session and sees it through to settlement. Fire-and-forget: the show
+ * promise's `.then`/`.catch` own all cleanup, so nothing is returned.
+ */
+export declare function runMarkerPaletteSession<TItem extends {
+	marker: string;
+}>(options: RunMarkerPaletteSessionOptions<TItem>): void;
+/**
  * THE single filter-and-rank implementation for marker command palettes — shared by the renderer's
  * overlay service (list rendering AND commit resolution) and the marker-palette keydown forwarding
  * table (zero-match detection), so what is on screen, what a commit resolves, and what the session

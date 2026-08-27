@@ -55,9 +55,10 @@ import {
   FOOTNOTE_EDITOR_STRING_KEYS,
   FootnoteEditor,
   type FootnoteEditorMarkerPalette,
-  getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
   type MarkerPaletteKeyEvent,
+  type MarkerPaletteOpenSession,
+  runMarkerPaletteSession,
   MarkdownRenderer,
   MARKER_MENU_STRING_KEYS,
   MarkerMenu,
@@ -588,16 +589,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * session, never a newer one (see `clearPaletteSessionIfCurrent`).
    */
   const paletteSession = useRef<
-    | {
-        kind: 'backslash';
-        token: number;
-        filter: string;
-        items: MarkerMenuItem[];
-        /** See {@link MarkerPaletteSessionState.shouldSpaceCommit} — Space commits note markers. */
-        shouldSpaceCommit?: (filter: string) => boolean;
-      }
+    | MarkerPaletteOpenSession<MarkerMenuItem>
     | { kind: 'enter'; token: number; filter: string; items: MarkerMenuItem[] }
-    | { kind: 'selection'; token: number; filter: string; items: MarkerMenuItem[] }
     | undefined
   >(undefined);
 
@@ -1980,94 +1973,64 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const openMarkerPalette = useCallback(
     (ctx: MarkerMenuAnchorContext, items: MarkerMenuItem[], openOptions: { passive: boolean }) => {
       const { passive } = openOptions;
-      paletteSessionCounter.current += 1;
-      const token = paletteSessionCounter.current;
-      paletteSession.current = passive
-        ? {
-            kind: 'backslash',
-            token,
-            filter: '',
-            items,
-            // Space COMMITS (like Enter) when the typed filter exactly names a NOTE marker:
-            // materializing the typed `\f ` literal instead would hand it to the Tier-2
-            // tokenizer, which mid-text absorbs the following word into the new footnote as its
-            // caller. Committing inserts an empty footnote exactly like `\f` + Enter.
-            shouldSpaceCommit: (filter: string) => shouldSpaceCommitNoteMarker(items, filter),
-          }
-        : { kind: 'selection', token, filter: '', items };
-
-      papi.overlays
-        .showCommandPalette(
-          {
-            // Every LocalizeKey already resolved: a request with no unresolved item text skips the
-            // overlay host's localization await, so the palette can receive forwarded keys the
-            // moment it is requested — marker palettes open MID-typing, and keystrokes during
-            // that await were dropped.
-            items: markerMenuItemsToResolvedPaletteItems(items, localizedStrings),
-            anchor: ctx.anchorRect,
-            passive,
-            // Marker palettes filter on the label ONLY (the label IS the marker): an exact typed
-            // marker must never be buried under items whose descriptions contain the typed text.
-            searchFields: ['label'],
-            // The same key `MarkerMenu` puts in its own search field, so the two ways of picking a
-            // marker read identically instead of this one falling back to a generic "Search...".
-            // Passed as the key, not a resolved string: the overlay renders in the renderer frame
-            // and localizes it there (the palette-open path only awaits localization for ITEM
-            // text, so a key here does not reintroduce the dropped-keystroke window). Inert for
-            // the passive flavor, which has no search field.
-            placeholder: '%markerMenu_searchPlaceholder%',
-            // The session owns these keys wherever focus ends up — without this, a palette that
-            // wins the focus race takes the session's keys with it and none of the ratified
-            // commit semantics run. Declared for the passive palette too: it never takes focus,
-            // so this is inert there, but one code path means a palette that unexpectedly
-            // receives a key routes it to the session rather than acting on it. The callback goes
-            // through a ref so it always runs the CURRENT handler — it is captured once, here,
-            // and the session it drives is replaced on every reopen.
-            keyForwarding: {
-              keys: getMarkerPaletteClaimedKeys(passive ? 'backslash' : 'selection'),
-              onKey: (event) => runPaletteSessionKeyRef.current(event),
+      runMarkerPaletteSession({
+        items,
+        passive,
+        // Space COMMITS (like Enter) when the typed filter exactly names a NOTE marker:
+        // materializing the typed `\f ` literal instead would hand it to the Tier-2
+        // tokenizer, which mid-text absorbs the following word into the new footnote as its
+        // caller. Committing inserts an empty footnote exactly like `\f` + Enter.
+        shouldSpaceCommit: (filter) => shouldSpaceCommitNoteMarker(items, filter),
+        sessionCounterRef: paletteSessionCounter,
+        setSession: (session) => {
+          paletteSession.current = session;
+        },
+        clearSessionIfCurrent: (token) => clearPaletteSessionIfCurrent(paletteSession, token),
+        // Through the ref so the palette always runs the CURRENT handler — the callback is
+        // captured once, at show time, while the session it drives is replaced on every reopen.
+        runSessionKey: (event) => runPaletteSessionKeyRef.current(event),
+        show: (keyForwarding) =>
+          papi.overlays.showCommandPalette(
+            {
+              // Every LocalizeKey already resolved: a request with no unresolved item text skips
+              // the overlay host's localization await, so the palette can receive forwarded keys
+              // the moment it is requested — marker palettes open MID-typing, and keystrokes
+              // during that await were dropped.
+              items: markerMenuItemsToResolvedPaletteItems(items, localizedStrings),
+              anchor: ctx.anchorRect,
+              passive,
+              // Marker palettes filter on the label ONLY (the label IS the marker): an exact
+              // typed marker must never be buried under items whose descriptions contain the
+              // typed text.
+              searchFields: ['label'],
+              // The same key `MarkerMenu` puts in its own search field, so the two ways of
+              // picking a marker read identically instead of this one falling back to a generic
+              // "Search...". Passed as the key, not a resolved string: the overlay renders in the
+              // renderer frame and localizes it there (the palette-open path only awaits
+              // localization for ITEM text, so a key here does not reintroduce the
+              // dropped-keystroke window). Inert for the passive flavor, which has no search
+              // field.
+              placeholder: '%markerMenu_searchPlaceholder%',
+              keyForwarding,
             },
-          },
-          webViewId,
-        )
-        .then((id) => {
-          clearPaletteSessionIfCurrent(paletteSession, token);
-          if (id !== undefined) {
-            const selected = items.find((item) => item.marker === id);
-            if (selected) {
-              // Restore focus BEFORE applying: a mouse click on the palette blurred the iframe,
-              // which can null Lexical's live selection — and the apply path's literal cleanup
-              // AND note insertion both silently no-op without a range selection (live-observed:
-              // the `\f` literal stranded in the document, no footnote created, and the literal
-              // then reached the PDP as data). Lexical's focus() synchronously restores the
-              // remembered selection — but it CANNOT restore a NULLED one (it selects the
-              // document end instead), so when the live selection is gone, put the caret back
-              // first from the focus-out capture; focus() then re-asserts it.
-              restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current);
-              editorRef.current?.focus();
-              editorRef.current?.applyMarkerMenuSelection(selected, {
-                trigger: 'backslash',
-                // ACTIVE palette: the trigger was claimed and never landed, so there is never a
-                // literal prefix for the apply to clean up.
-                literalPrefixLanded: false,
-              });
-            } else {
-              editorRef.current?.focus();
-            }
-          } else if (!passive) {
-            // Focused palette dismissed: focus never left the passive case, but the focused
-            // palette's own search input had it, so bring it back to the editor.
-            editorRef.current?.focus();
-          }
-          return undefined;
-        })
-        .catch((error: unknown) => {
-          // Replaced by a newer overlay request (PlatformError code ABORTED) or any other rejection
-          // — treat the same as an explicit dismissal.
-          clearPaletteSessionIfCurrent(paletteSession, token);
-          if (!passive) editorRef.current?.focus();
-          warnUnlessReplaced('marker palette', error);
-        });
+            webViewId,
+          ),
+        // The apply path's literal cleanup AND note insertion both silently no-op without a range
+        // selection (live-observed: the `\f` literal stranded in the document, no footnote
+        // created, and the literal then reached the PDP as data), so a nulled selection is
+        // restored from the focus-out capture before the spine focuses and applies.
+        restoreSelectionIfLost: () =>
+          restoreSelectionIfLost(editorRef.current, lastFocusOutSelectionRef.current),
+        focusEditor: () => editorRef.current?.focus(),
+        applyItem: (selected) =>
+          editorRef.current?.applyMarkerMenuSelection(selected, {
+            trigger: 'backslash',
+            // ACTIVE palette: the trigger was claimed and never landed, so there is never a
+            // literal prefix for the apply to clean up.
+            literalPrefixLanded: false,
+          }),
+        onShowError: (error) => warnUnlessReplaced('marker palette', error),
+      });
     },
     [webViewId, localizedStrings],
   );

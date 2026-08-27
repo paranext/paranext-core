@@ -20,11 +20,14 @@ import {
 import { Copy } from 'lucide-react';
 import {
   clearPaletteSessionIfCurrent,
-  getMarkerPaletteClaimedKeys,
   handleMarkerPaletteSessionKeyDown,
   isImeCompositionKeyEvent,
   type MarkerPaletteKeyEvent,
 } from '@/components/advanced/marker-palette-keydown.util';
+import {
+  runMarkerPaletteSession,
+  type MarkerPaletteOpenSession,
+} from '@/components/advanced/marker-palette-session.util';
 import {
   useCallback,
   useEffect,
@@ -312,15 +315,9 @@ export default function FootnoteEditor({
    * table claims wholesale because the cross-frame focus handoff can lose, and an unclaimed
    * keystroke would replace the wrapped selection.
    */
-  const paletteSession = useRef<
-    | {
-        kind: 'backslash' | 'selection';
-        token: number;
-        filter: string;
-        items: EditorMarkerMenuItem[];
-      }
-    | undefined
-  >(undefined);
+  const paletteSession = useRef<MarkerPaletteOpenSession<EditorMarkerMenuItem> | undefined>(
+    undefined,
+  );
 
   /** Monotonic allocator for {@link paletteSession} tokens. */
   const paletteSessionCounter = useRef(0);
@@ -700,10 +697,12 @@ export default function FootnoteEditor({
 
   /**
    * Opens this popover's `\`-triggered marker palette via the host-supplied `markerPalette` prop
-   * (PT9 parity, scoped to this popover's own editor). Mirrors `openMarkerPalette` in
-   * `platform-scripture-editor.web-view.tsx` function-for-function; the only structural difference
-   * is driving `markerPalette` instead of `papi.overlays` directly, so platform-bible-react never
-   * depends on the overlay service.
+   * (PT9 parity, scoped to this popover's own editor). The session spine — token, session record,
+   * key forwarding, settle handling — is the shared `runMarkerPaletteSession`, the same spine
+   * `openMarkerPalette` in `platform-scripture-editor.web-view.tsx` runs on; only this popover's
+   * genuine differences are supplied here (driving `markerPalette` instead of `papi.overlays`
+   * directly, so platform-bible-react never depends on the overlay service, and this editor's own
+   * caret-restore fallback).
    */
   const openMarkerPalette = useCallback(
     (
@@ -714,65 +713,45 @@ export default function FootnoteEditor({
       const { anchorRect } = ctx;
       if (!markerPalette || !anchorRect) return;
       const { passive } = openOptions;
-      paletteSessionCounter.current += 1;
-      const token = paletteSessionCounter.current;
-      paletteSession.current = {
-        kind: passive ? 'backslash' : 'selection',
-        token,
-        filter: '',
+      runMarkerPaletteSession({
         items,
-      };
-
-      markerPalette
-        .show(items.map(markerMenuItemToPaletteItem), anchorRect, passive, {
-          // The session owns these keys wherever focus ends up. Declared for the passive palette
-          // too: it never takes focus, so this is inert there, but keeping one code path means a
-          // palette that unexpectedly receives a key routes it to the session rather than acting
-          // on it. The callback goes through a ref so it always runs the CURRENT handler — it is
-          // captured once, here, and the session it drives is replaced on every reopen.
-          keys: getMarkerPaletteClaimedKeys(passive ? 'backslash' : 'selection'),
-          onKey: (event) => runPaletteSessionKeyRef.current(event),
-        })
-        .then((id) => {
-          clearPaletteSessionIfCurrent(paletteSession, token);
-          if (id !== undefined) {
-            // A mouse click on a palette item blurs this popover's editor before the commit
-            // round-trips, and Lexical's blur processing can NULL the live selection — focus()
-            // alone then falls back to selecting the document END (the note's closing marker),
-            // where the apply lands the marker as an invalid trailing span while the typed
-            // literal strands at the real caret (live-observed: a red `\fq` after `\f*`). When
-            // the live selection is gone, put the caret back BEFORE focusing: restore the
-            // focus-out capture (exactly where the user last saw the caret), or land at the end
-            // of the note content as a last resort. focus() then re-asserts the now-present
-            // selection instead of jumping to the end, so a mouse commit applies exactly like a
-            // keyboard one. A still-live selection is left completely alone.
-            if (!editorRef.current?.getSelection()) {
-              const lastFocusOutSelection = lastFocusOutSelectionRef.current;
-              if (lastFocusOutSelection) editorRef.current?.setSelection(lastFocusOutSelection);
-              else editorRef.current?.selectNote(0);
-            }
-            editorRef.current?.focus();
-            const selected = items.find((item) => item.marker === id);
-            if (selected) {
-              editorRef.current?.applyMarkerMenuSelection(selected, {
-                trigger: 'backslash',
-                // ACTIVE palette: the trigger was claimed and never landed, so there is never a
-                // literal prefix for the apply to clean up.
-                literalPrefixLanded: false,
-              });
-            }
-          } else if (!passive) {
-            // Focused palette dismissed: the palette's own search input had focus, so bring it
-            // back to the editor.
-            editorRef.current?.focus();
+        passive,
+        // No `shouldSpaceCommit`, deliberately: the Space note-marker exception exists for
+        // Standard-view BODY text, where a materialized `\f ` literal absorbs the following word
+        // as the new footnote's caller. This palette offers note-INTERNAL markers for content
+        // already inside a note, so Space keeps its plain typed-literal commit here.
+        sessionCounterRef: paletteSessionCounter,
+        setSession: (session) => {
+          paletteSession.current = session;
+        },
+        clearSessionIfCurrent: (token) => clearPaletteSessionIfCurrent(paletteSession, token),
+        // Through the ref so the palette always runs the CURRENT handler — the callback is
+        // captured once, at show time, while the session it drives is replaced on every reopen.
+        runSessionKey: (event) => runPaletteSessionKeyRef.current(event),
+        show: (keyForwarding) =>
+          markerPalette.show(items.map(markerMenuItemToPaletteItem), anchorRect, passive, keyForwarding),
+        restoreSelectionIfLost: () => {
+          // A nulled selection would send focus() to the document END — here the note's closing
+          // marker, where the apply lands the marker as an invalid trailing span while the typed
+          // literal strands at the real caret (live-observed: a red `\fq` after `\f*`). Restore
+          // the focus-out capture (exactly where the user last saw the caret), or land at the
+          // end of the note content as a last resort. A still-live selection is left completely
+          // alone.
+          if (!editorRef.current?.getSelection()) {
+            const lastFocusOutSelection = lastFocusOutSelectionRef.current;
+            if (lastFocusOutSelection) editorRef.current?.setSelection(lastFocusOutSelection);
+            else editorRef.current?.selectNote(0);
           }
-          return undefined;
-        })
-        .catch((error: unknown) => {
-          // Replaced by a newer overlay request (PlatformError code ABORTED) or any other
-          // rejection — treat the same as an explicit dismissal.
-          clearPaletteSessionIfCurrent(paletteSession, token);
-          if (!passive) editorRef.current?.focus();
+        },
+        focusEditor: () => editorRef.current?.focus(),
+        applyItem: (selected) =>
+          editorRef.current?.applyMarkerMenuSelection(selected, {
+            trigger: 'backslash',
+            // ACTIVE palette: the trigger was claimed and never landed, so there is never a
+            // literal prefix for the apply to clean up.
+            literalPrefixLanded: false,
+          }),
+        onShowError: (error) => {
           // ABORTED is routine — the `\` commit key reopens the palette, which replaces the
           // previous one. Anything else means the palette never opened (a request the host
           // rejected, e.g. more items than its cap allows), and swallowing that leaves a `\` that
@@ -781,7 +760,8 @@ export default function FootnoteEditor({
             console.warn(
               `FootnoteEditor: the marker palette did not open: ${getErrorMessage(error)}`,
             );
-        });
+        },
+      });
     },
     [markerPalette],
   );
