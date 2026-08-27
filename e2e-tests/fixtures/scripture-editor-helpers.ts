@@ -1,4 +1,4 @@
-import { type Page } from '@playwright/test';
+import { type Frame, type Page } from '@playwright/test';
 import { sendPapiRequestOnce, waitForPapiMethodRegistered } from './helpers';
 
 /** Options accepted by {@link openScriptureEditorForProject}. */
@@ -73,4 +73,55 @@ export async function openScriptureEditorForProject(
   /* eslint-enable no-await-in-loop, no-continue */
 
   throw new Error(`Could not open a Scripture editor for project ${projectId} after 5 attempts`);
+}
+
+/**
+ * The scripture editor's hamburger ("Project") menu button.
+ *
+ * The Find panel's own project picker carries the SAME `aria-label="Project"`, so a bare
+ * `button[aria-label="Project"]` scan can land on the Find frame instead of the editor's — Find is
+ * a permanent tab and is already mounted. `ProjectSelector` renders its trigger with
+ * `role="combobox"`; the editor hamburger is a `DropdownMenuTrigger` and is not, so excluding the
+ * combobox role separates them.
+ */
+export const EDITOR_HAMBURGER_SELECTOR = 'button[aria-label="Project"]:not([role="combobox"])';
+
+/**
+ * Find the scripture editor's frame by scanning all web-view iframes for the one that contains the
+ * Project hamburger button.
+ *
+ * We cannot use `nth(0)` because other webviews (the home page with DEV_NOISY=false, or helloRock3
+ * frames with DEV_NOISY=true) may be present before the scripture editor in the iframe list.
+ */
+export async function findScriptureEditorFrame(page: Page, timeout = 30_000): Promise<Frame> {
+  const deadline = Date.now() + timeout;
+
+  const checkFrames = async (): Promise<Frame | undefined> =>
+    // Using reduce to iterate without for-of (linter requirement). Each step checks a frame and
+    // short-circuits once a match is found.
+    page
+      .frames()
+      .filter((f) => f !== page.mainFrame())
+      .reduce<Promise<Frame | undefined>>(async (accPromise, frame) => {
+        const acc = await accPromise;
+        if (acc) return acc;
+        try {
+          const isVisible = await frame.locator(EDITOR_HAMBURGER_SELECTOR).isVisible();
+          if (isVisible) return frame;
+        } catch {
+          // Frame may not be accessible yet — keep polling
+        }
+        return undefined;
+      }, Promise.resolve(undefined));
+
+  while (Date.now() < deadline) {
+    // Polling loop: each check depends on the previous result
+    // eslint-disable-next-line no-await-in-loop
+    const found = await checkFrames();
+    if (found) return found;
+    // Polling loop: wait between frame-scan attempts must be sequential
+    // eslint-disable-next-line no-await-in-loop
+    await page.waitForTimeout(500);
+  }
+  throw new Error(`Scripture editor not found: no Project button visible after ${timeout}ms`);
 }
