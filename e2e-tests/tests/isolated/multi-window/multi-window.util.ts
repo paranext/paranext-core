@@ -543,6 +543,9 @@ export interface AppExitResult {
  * `app.quit()` is scheduled rather than called inline so the evaluate round-trip completes before
  * teardown begins.
  *
+ * Pass `triggerExit` to bring the app down some other way — closing a window through its ✕, say —
+ * and it is called in place of the quit, after the exit listener is armed.
+ *
  * Budget: the quit path is a bounded shutdown-sync attempt (which rejects immediately in this
  * suite's configuration, since no S/R extension is registered) plus bounded child-process waits of
  * a few seconds, so a healthy quit lands well under a minute — but only in that configuration: with
@@ -560,6 +563,7 @@ export interface AppExitResult {
 export async function quitAppAndWaitForExit(
   electronApp: ElectronApplication,
   output?: AppOutputCapture,
+  triggerExit?: () => Promise<void>,
 ): Promise<AppExitResult> {
   const electronProcess = electronApp.process();
   const processExit = new Promise<AppExitResult>((resolve) => {
@@ -568,9 +572,14 @@ export async function quitAppAndWaitForExit(
     );
   });
 
-  await electronApp.evaluate(({ app }) => {
-    setTimeout(() => app.quit(), 0);
-  });
+  // After the listener above, never before: a trigger whose own round trip outlives the exit would
+  // otherwise land the exit before anything is listening, and the wait would burn its whole budget
+  // on an event that already fired.
+  if (triggerExit) await triggerExit();
+  else
+    await electronApp.evaluate(({ app }) => {
+      setTimeout(() => app.quit(), 0);
+    });
 
   const exitResult = await Promise.race([
     processExit,
