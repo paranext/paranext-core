@@ -50,8 +50,8 @@ function mintWindowId(): number {
     const stored = Number(localStorage.getItem(NEXT_WINDOW_ID_KEY));
     // A missing, malformed or non-positive value restarts the sequence. That can repeat an id,
     // which is the one thing the counter exists to prevent — but refusing to open a window is a
-    // worse answer to a corrupt integer than reusing one, and every reuse hazard this replaced was
-    // survivable before.
+    // worse answer to a corrupt integer than reusing one, and a reused id is survivable: nothing
+    // persisted is keyed by it.
     nextWindowId = Number.isInteger(stored) && stored > 0 ? stored : 1;
   }
   const windowId = nextWindowId;
@@ -610,10 +610,10 @@ export function getWindowIdOf(window: BrowserWindow): number | undefined {
 /**
  * Get the window a platform id names, if it is still tracked.
  *
- * This is the platform-id half of `BrowserWindow.fromId`, which cannot be used now that the ids the
- * platform hands out are not Electron's. Answering `undefined` for a window that has closed is
- * correct rather than exceptional — a caller holding an id has no way to know the window went away
- * between one call and the next.
+ * `BrowserWindow.fromId` takes Electron's own id, which nothing outside this module holds; this is
+ * the lookup by the id the platform hands out. Answering `undefined` for a window that has closed
+ * is correct rather than exceptional — a caller holding an id has no way to know the window went
+ * away between one call and the next.
  */
 export function getWindowById(windowId: number): BrowserWindow | undefined {
   return trackedWindows.find((tracked) => tracked.windowId === windowId)?.window;

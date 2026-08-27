@@ -4,7 +4,10 @@
  * and is read and written ONLY by the main process — renderers get and push their layout through
  * the `windowLayout:get`/`windowLayout:save` request handlers registered here.
  *
- * Identity model: a window's position in the structure's list IS its identity across sessions.
+ * Identity model: a window's position in the structure's list IS its identity across sessions —
+ * position decides which saved layout and bounds a restored window gets — while the entry's
+ * `slotId` names the same slot for the renderer state stored outside this file, because a position
+ * shifts when an entry before it is dropped and stored state must not follow it to a neighbour.
  * Window ids are not what ties a slot to a window across a restart — an id is never handed out
  * twice, so a persisted one would name a window that no longer exists rather than the wrong one,
  * but the slot is what a restored window binds to. Every window has a slot in that list from the
@@ -146,23 +149,34 @@ function parseBoundsState(
  * the discriminator between a legitimately empty window (no tabs as saved: restore it) and junk
  * (tabs saved but none viewable: drop it). See the filter in {@link loadWindowLayouts}.
  */
-type ParsedEntry = { entry: WindowLayoutEntry; layoutHadTabs: boolean };
+type ParsedEntry = {
+  entry: WindowLayoutEntry;
+  layoutHadTabs: boolean;
+  /**
+   * Whether the entry had no slot id on disk and was given one here, which the file must catch up
+   * with
+   */
+  wasSlotIdMinted: boolean;
+};
 
 function parseEntry(value: unknown): ParsedEntry | undefined {
   const record = asRecord(value);
   if (!record) return undefined;
   const layout = asRecord(record.layout);
+  const slotIdOnDisk =
+    typeof record.slotId === 'string' && record.slotId !== '' ? record.slotId : undefined;
   return {
     entry: {
       ...parseBoundsState(record, record.bounds),
       // An entry written before slots carried an identity gets one now. It is minted rather than
       // derived from the entry's position so it never changes once the file is rewritten.
-      slotId: typeof record.slotId === 'string' && record.slotId ? record.slotId : newGuid(),
+      slotId: slotIdOnDisk ?? newGuid(),
       // Reconcile at load so phantom content in a saved layout never reaches a window
       layout: layout ? reconcileSavedLayout(layout) : undefined,
       isMain: record.isMain === true ? true : undefined,
     },
     layoutHadTabs: layout ? savedLayoutHasAnyTabs(layout) : false,
+    wasSlotIdMinted: slotIdOnDisk === undefined,
   };
 }
 
@@ -261,6 +275,11 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
         else delete entry.isMain;
       });
       fileSlots = keptEntries.map((entry) => ({ entry }));
+      // A slot id minted just now exists only here until the file carries it. Nothing else is
+      // certain to write before the session ends — a bounds change, a layout push and a clean quit
+      // all do, but a session that ends without any of them would mint again next launch and orphan
+      // every blob the renderer stored under this one.
+      if (keptParsedEntries.some(({ wasSlotIdMinted }) => wasSlotIdMinted)) scheduleWrite();
       return { kind: 'restore', entries: keptEntries, mainEntryIndex };
     }
     logger.warn(
@@ -311,6 +330,21 @@ export function trackLegacyWindow(windowId: number): void {
 export function trackNewWindow(windowId: number): void {
   if (findSlotByWindowId(windowId)) return;
   fileSlots.push({ entry: { slotId: newGuid() }, windowId });
+}
+
+/**
+ * Get the id of the slot a window occupies — what its renderer keys per-window storage by. Every
+ * window is tracked as it is created, ahead of its first load, so this is answerable for every
+ * window that exists; asking about one that is not tracked is a programming error, not a state.
+ *
+ * @param windowId Platform id of a tracked window
+ * @returns The stable slot id of that window's entry in the structure
+ * @throws If no tracked window has that id
+ */
+export function getSlotIdOf(windowId: number): string {
+  const slot = findSlotByWindowId(windowId);
+  if (!slot) throw new Error(`Window ${windowId} is not tracked, so it has no layout slot`);
+  return slot.entry.slotId;
 }
 
 /**
@@ -562,11 +596,10 @@ function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
     logger.warn(`${GET_WINDOW_LAYOUT_REQUEST_TYPE} called for untracked window ${windowId}`);
     return { kind: 'empty' };
   }
-  const { slotId } = slot.entry;
-  if (pendingContentWindowIds.has(windowId)) return { kind: 'pending-content', slotId };
-  if (slot.entry.layout) return { kind: 'entry', layout: slot.entry.layout, slotId };
-  if (slot.usesLegacyLayout) return { kind: 'legacy', slotId };
-  return { kind: 'empty', slotId };
+  if (pendingContentWindowIds.has(windowId)) return { kind: 'pending-content' };
+  if (slot.entry.layout) return { kind: 'entry', layout: slot.entry.layout };
+  if (slot.usesLegacyLayout) return { kind: 'legacy' };
+  return { kind: 'empty' };
 }
 
 function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
@@ -622,7 +655,7 @@ export async function initializeWindowLayoutPersistence(): Promise<void> {
           result: {
             name: 'return value',
             summary:
-              "The window's saved layout, the pre-multi-window layout to fall back to, or nothing to restore — plus the stable id of the window's slot, which it keys its per-window storage by",
+              "The window's saved layout, the pre-multi-window layout to fall back to, or nothing to restore",
             schema: {
               type: 'object',
               properties: {
@@ -631,11 +664,6 @@ export async function initializeWindowLayoutPersistence(): Promise<void> {
                   enum: ['entry', 'legacy', 'empty', 'pending-content'],
                 },
                 layout: { type: 'object' },
-                slotId: {
-                  type: 'string',
-                  description:
-                    "Stable identity of the window's entry in the persisted structure. Experimental: present on every answer for a tracked window, absent only on the defensive empty answer for an untracked one.",
-                },
               },
               required: ['kind'],
             },

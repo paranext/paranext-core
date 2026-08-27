@@ -6,17 +6,18 @@
  * never restored under the window id it had (ids are never reused), so keying by window id would
  * make every restart start empty; the slot is what survives a restart.
  *
- * The slot is not known until the main process answers the window's first layout request, so the
- * layout-load path calls {@link setWindowSlotId} before anything reads per-window storage. Until
- * then a read or write throws rather than guessing a key.
+ * The main process puts the slot on the window's URL, and the renderer's boot module
+ * (`global-this.model.ts`) calls {@link setWindowSlotId} with it before anything else runs — so
+ * storage works from the first render, in every interface mode. A read or write made without a slot
+ * throws rather than guessing a key.
  */
 
-/** Slot this window occupies in the persisted structure, once main has said which */
+/** Slot this window occupies in the persisted structure, as main put it on the window's URL */
 let windowSlotId: string | undefined;
 
 /**
- * Record which slot this window occupies. Called once, from the layout load, with the id the main
- * process returned — the only place a window can learn it.
+ * Record which slot this window occupies. Called once, at renderer boot, with the id the main
+ * process put on the window's URL.
  *
  * Reading or writing per-window storage before this has run throws: a key built from nothing would
  * file this window's state under a name no restored window ever asks for.
@@ -25,27 +26,32 @@ export function setWindowSlotId(slotId: string): void {
   windowSlotId = slotId;
 }
 
-/** Get this window's slot id or throw if main has not yet said which slot it occupies */
+/** Get this window's slot id or throw if this window was not told which slot it occupies */
 function getSlotIdOrThrow(): string {
   if (windowSlotId === undefined)
     throw new Error(
-      'This window does not yet know its slot. Per-window storage is only available once the layout has loaded.',
+      'This window does not know its slot. Per-window storage is only available to a window whose URL names one.',
     );
   return windowSlotId;
 }
 
 /**
- * Prefix under which state was keyed before slots existed: the window id at the time. Those keys
- * can never be found again — a restored window always has a new id — so they are removed on first
- * use rather than left to accumulate, one orphaned blob per window per session.
+ * The one key this store wrote under the scheme that preceded slots, prefixed by the window id at
+ * the time. Those blobs can never be found again — a restored window always has a new id — so they
+ * are removed on first use rather than left to accumulate, one orphaned blob per window per
+ * session.
+ *
+ * Exactly that key and no other `${digits}_` key: the pre-multi-window dock layout is still read
+ * from `${windowId}_dock-saved-layout` by the layout load, and this `localStorage` is shared with
+ * every web view iframe, whose own keys may happen to start with digits.
  */
-const OBSOLETE_WINDOW_ID_KEY_PATTERN = /^\d+_/;
+const OBSOLETE_WINDOW_ID_KEY_PATTERN = /^\d+_web-view-state$/;
 
 let haveObsoleteKeysBeenRemoved = false;
 
 /**
- * Remove every key written under the pre-slot `${windowId}_` scheme. Runs once per process, on the
- * first read or write, and is a no-op on a profile that never had them.
+ * Remove every web-view-state blob written under the pre-slot `${windowId}_` scheme. Runs once per
+ * process, on the first read or write, and is a no-op on a profile that never had them.
  *
  * Deliberately not migrated: nothing recorded which window id belonged to which slot, and windows
  * were never created in slot order, so any mapping would be a guess that could hand one window's

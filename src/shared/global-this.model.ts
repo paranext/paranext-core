@@ -83,7 +83,7 @@ declare global {
    *
    * The same id names this window everywhere else: in `platform.getWindows`, in a move's
    * `targetWindowId`, and in main. No window is ever given an id another window has had, in this
-   * run of the app or any earlier one.
+   * run of the app or any earlier one on the same profile.
    *
    * @experimental
    */
