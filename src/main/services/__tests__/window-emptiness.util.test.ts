@@ -393,6 +393,38 @@ describe('re-checking whether a window is still empty before closing it', () => 
     }
   });
 
+  test('a primary the user closes during its own re-check is told closing, not handed a Home tab', async () => {
+    // An emptied primary docks Home, but not while its own close is in flight: the close button
+    // marks it on a path this handler's serialization does not cover, so the mark can land while
+    // the re-check is out. Docking Home then puts a tab — and a web view provider's side effects
+    // with it — into a window that is on its way out.
+    vi.useFakeTimers();
+    try {
+      hasContentArrivedSinceEmptyReport.mockImplementation(async () => {
+        markedIds.add(1);
+        return false;
+      });
+      countWindows.mockImplementation(() => 3 - markedIds.size);
+      const handler = createWindowEmptinessHandler({
+        countWindows,
+        closeWindow,
+        isWindowTracked: () => true,
+        markWindowClosing,
+        isWindowClosing: (windowId: number) => markedIds.has(windowId),
+        hasContentArrivedSinceEmptyReport,
+        isPrimaryWindow: (windowId) => windowId === 1,
+      });
+
+      await expect(handler(1, 'emptied-by-removal')).resolves.toEqual({ action: 'closing' });
+
+      vi.runAllTimers();
+      expect(closeWindow).not.toHaveBeenCalled();
+      expect(markWindowClosing).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('a window the user closes during its own re-check docks nothing, even as the last one counted', async () => {
     // The same close with one fewer window open. Excluding the closing reporting window leaves a
     // count of one, so the last-window branch would answer open-home — docking a tab, and a web
