@@ -107,17 +107,22 @@ describe('RpcClient close logging', () => {
     expect(secondLabel).toMatch(/renderer#\S+/);
   });
 
-  test.each([1000, 1001, 4000])('logs a clean close (code %i) at info, not warn', async (code) => {
-    await connectedClient();
-    // connect() itself logs at info ("Websocket connected to ..."); clear that so the assertions
-    // below observe only the close-logging behavior under test.
-    mockLoggerInfo.mockClear();
+  // wasClean must be set explicitly: jsdom's CloseEvent defaults it to false, and a clean
+  // code paired with an incomplete handshake is not an event any engine actually emits.
+  test.each([1000, 1001, 1005, 4000])(
+    'logs a clean close (code %i) at info, not warn',
+    async (code) => {
+      await connectedClient();
+      // connect() itself logs at info ("Websocket connected to ..."); clear that so the assertions
+      // below observe only the close-logging behavior under test.
+      mockLoggerInfo.mockClear();
 
-    dispatch('close', new CloseEvent('close', { code }));
+      dispatch('close', new CloseEvent('close', { code, wasClean: true }));
 
-    expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
-    expect(mockLoggerWarn).not.toHaveBeenCalled();
-  });
+      expect(mockLoggerInfo).toHaveBeenCalledTimes(1);
+      expect(mockLoggerWarn).not.toHaveBeenCalled();
+    },
+  );
 
   test.each([1005, 1006])('logs an abnormal close (code %i) at warn, not info', async (code) => {
     await connectedClient();

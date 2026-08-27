@@ -7,6 +7,7 @@ import {
   describeWebSocketErrorEvent,
   INTENTIONAL_CLOSE_CODE,
   isCleanCloseCode,
+  isCleanCloseEvent,
   MAX_LOGGED_DETAIL_LENGTH,
   MAX_REQUEST_ATTEMPTS,
   REQUEST_ATTEMPT_WAIT_TIME_MS,
@@ -264,7 +265,7 @@ describe('isCleanCloseCode', () => {
     [1000, true],
     [1001, true],
     [INTENTIONAL_CLOSE_CODE, true],
-    [1005, false],
+    [1005, true],
     [1006, false],
     [4999, false],
   ])('code %i is clean: %s', (code, expected) => {
@@ -277,7 +278,46 @@ describe('isCleanCloseCode', () => {
   });
 });
 
+describe('isCleanCloseEvent', () => {
+  test('trusts wasClean over the code list', () => {
+    // A close frame carrying no status arrives as 1005 with wasClean true, which a plain
+    // close() produces on every window close and page reload.
+    expect(isCleanCloseEvent(new WsLikeCloseEvent(1005, '', true))).toBe(true);
+    // A socket that died never completed a handshake, whatever code accompanies it.
+    expect(isCleanCloseEvent(new WsLikeCloseEvent(1006, '', false))).toBe(false);
+  });
+
+  test('a clean handshake wins even when the code is not on the clean list', () => {
+    expect(isCleanCloseEvent(new WsLikeCloseEvent(4321, '', true))).toBe(true);
+  });
+
+  test('falls back to the code list when wasClean is absent', () => {
+    expect(isCleanCloseEvent({ code: 1000 })).toBe(true);
+    expect(isCleanCloseEvent({ code: 1006 })).toBe(false);
+  });
+
+  test.each([undefined, {}, 'nope', 42])('treats %p as not clean without throwing', (input) => {
+    expect(() => isCleanCloseEvent(input)).not.toThrow();
+    expect(isCleanCloseEvent(input)).toBe(false);
+  });
+});
+
 describe('describeWebSocketCloseEvent', () => {
+  test('never marks a cleanly-closed handshake abnormal', () => {
+    // Observed in a running app: a page reload produced `code=1005 (abnormal) wasClean=true`,
+    // a line that contradicted itself. The marker must agree with wasClean.
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1005, '', true));
+    expect(result).toContain('code=1005');
+    expect(result).not.toContain('(abnormal)');
+    expect(result).toContain('wasClean=true');
+  });
+
+  test('marks a died-without-handshake close abnormal', () => {
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(1006, '', false));
+    expect(result).toContain('code=1006 (abnormal)');
+    expect(result).toContain('wasClean=false');
+  });
+
   test('the fixture reproduces the JSON.stringify collapse the formatter exists to avoid', () => {
     // Guards the fixture itself: if this ever stops being `{}`, the fixture stopped
     // modeling `ws` and every test below is weaker than it looks.
@@ -305,15 +345,26 @@ describe('describeWebSocketCloseEvent', () => {
     expect(describeWebSocketCloseEvent(dom)).toBe(describeWebSocketCloseEvent(wsLike));
   });
 
+  // Each row is a coherent event: a code paired with the wasClean value that really
+  // accompanies it. Pairing every code with wasClean true would assert the very
+  // contradiction observed in a running app (`code=1006 (abnormal) wasClean=true`).
+  test.each([
+    [1000, true, false],
+    [1001, true, false],
+    [4000, true, false],
+    [1005, true, false],
+    [1006, false, true],
+  ])('code %i with wasClean %s is marked abnormal: %s', (code, wasClean, isAbnormal) => {
+    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(code, '', wasClean));
+    expect(result.includes('(abnormal)')).toBe(isAbnormal);
+  });
+
   test.each([
     [1000, false],
-    [1001, false],
-    [4000, false],
-    [1005, true],
+    [1005, false],
     [1006, true],
-  ])('marks code %i abnormal: %s', (code, isAbnormal) => {
-    const result = describeWebSocketCloseEvent(new WsLikeCloseEvent(code, '', true));
-    expect(result.includes('(abnormal)')).toBe(isAbnormal);
+  ])('falls back to the code list for code %i when wasClean is absent: %s', (code, isAbnormal) => {
+    expect(describeWebSocketCloseEvent({ code }).includes('(abnormal)')).toBe(isAbnormal);
   });
 
   test('renders code 0 rather than swallowing it as falsy', () => {

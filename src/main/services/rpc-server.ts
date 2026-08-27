@@ -25,7 +25,7 @@ import {
   describeWebSocketErrorEvent,
   INTENTIONAL_CLOSE_CODE,
   InternalRequestHandler,
-  isCleanCloseCode,
+  isCleanCloseEvent,
   REGISTER_EVENT,
   REGISTER_METHOD,
   RequestParams,
@@ -228,7 +228,7 @@ export class RpcServer implements IRpcHandler {
 
     this.jsonRpcClient.rejectAllPendingRequests(`Web socket ${this.name} has closed`);
     const detail = describeWebSocketCloseEvent(ev);
-    const wasClean = isCleanCloseCode(ev?.code);
+    const wasClean = isCleanCloseEvent(ev);
     const summary = `Websocket ${this.name} closed (${detail}). Removing ${this.rpcMethodDetailsByMethodName.size} methods`;
     if (wasClean) logger.info(summary);
     else logger.warn(summary);
