@@ -16,6 +16,7 @@ import {
 import {
   countWindowsThatWouldStayOpen,
   isPrimaryWindow,
+  isWindowClosing,
 } from '@main/services/window-state.service';
 
 /** What the user chose when asked whether to close every window */
@@ -48,6 +49,11 @@ export async function decideWindowClose(
   confirmCloseAll: () => Promise<CloseAllAnswer>,
 ): Promise<WindowCloseDecision> {
   if (!isPrimaryWindow(windowId)) return 'close-this-window';
+  // A close the app already decided on — the primary emptied of its last web view closes under the
+  // equal-siblings rule, and the emptiness handler marks it closing before scheduling that close —
+  // is not a ✕ the user pressed. Asking "close the application?" here would block a decision
+  // already taken, with a dialog on a window that has nothing in it.
+  if (isWindowClosing(windowId)) return 'close-this-window';
   // A quit already asked for (Cmd+Q, File → Quit, `platform.quit`) sets the latch from `before-quit`
   // and then closes each window in creation order, the primary first — before any secondary has
   // been marked closing, so from here it looks like a primary ✕ with others open. It is not: the
