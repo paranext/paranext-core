@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   networkRequest: vi.fn(),
   bufferedEmitters: new Map<string, { emit: ReturnType<typeof vi.fn> }>(),
   loggerDebug: vi.fn(),
+  loggerWarn: vi.fn(),
   loggerError: vi.fn(),
 }));
 
@@ -44,7 +45,12 @@ vi.mock('@shared/services/settings.service', () => ({
 // on the debug line the skipped load leaves behind, and on which level a refused dock write is
 // reported at, both of which need spies
 vi.mock('@shared/services/logger.service', () => ({
-  logger: { debug: mocks.loggerDebug, info: vi.fn(), warn: vi.fn(), error: mocks.loggerError },
+  logger: {
+    debug: mocks.loggerDebug,
+    info: vi.fn(),
+    warn: mocks.loggerWarn,
+    error: mocks.loggerError,
+  },
 }));
 vi.mock('@shared/services/network.service', () => ({
   createBufferedNetworkEventEmitter: (eventName: string) => {
@@ -282,6 +288,41 @@ beforeEach(() => {
 });
 
 describe('the initial layout load against a dock that gained content mid-load', () => {
+  test('still lets web views keep state when main never answers the layout request', async () => {
+    // Every attempt to ask main for the saved layout fails, so the window falls back to starting
+    // empty. It must still be able to open and run web views: per-window storage keys by the
+    // window's slot, which only main can name, so the fallback has to mint a session-only one or
+    // every state read after it would throw and the "start empty and keep going" recovery would
+    // be a window that cannot open anything.
+    vi.useFakeTimers();
+    try {
+      mocks.networkRequest.mockImplementation(async (requestType: string) => {
+        if (requestType === 'windowLayout:get') throw new Error('main is not answering');
+        return undefined;
+      });
+      const module = await import('@renderer/services/web-view.service-shard');
+      const storage = await import('@renderer/services/local-storage.service');
+      const { dockLayout } = makeLiveDockLayout();
+      module.registerDockLayout(dockLayout);
+      await module.startWebViewServiceShard();
+      await primeProvider();
+      // The load retries with a delay between attempts; run them all out
+      await vi.runAllTimersAsync();
+
+      await vi.waitFor(() =>
+        expect(mocks.loggerWarn).toHaveBeenCalledWith(
+          expect.stringMatching(/starting empty and holding layout pushes/i),
+        ),
+      );
+      // Storage works for the rest of the session — under a slot that will not be found again
+      // after a restart, which is the same standing this path already gives the layout
+      expect(() => storage.default.setItem('probe', 'value')).not.toThrow();
+      expect(storage.default.getItem('probe')).toBe('value');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test('a late initial answer does not wipe an adopted web view or emit close events', async () => {
     const { shard, loadedLayouts, dockedWebViews, releaseLayoutGet } =
       await registerWithHangingLayoutGet();
