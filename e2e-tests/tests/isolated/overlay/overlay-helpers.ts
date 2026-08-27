@@ -39,6 +39,7 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
   // Clicking once and then polling passively can never recover from that, because nothing clicks
   // again.
   let sawHiddenMatch = false;
+  let reclicks = 0;
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     // Polling loop: each iteration depends on the previous result, so awaits must be sequential
@@ -72,12 +73,26 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
       }, Promise.resolve(undefined));
 
     if (match === 'hidden') sawHiddenMatch = true;
-    else if (match) return match;
+    else if (match) {
+      if (reclicks > 0) {
+        console.log(
+          `[findHelloRock3Frame] Hello Rock3 pane became active after ${reclicks} re-click(s).`,
+        );
+      }
+      return match;
+    }
 
     // The right web view is there but its pane is not the active one, so re-assert the click. A
     // later-arriving sibling steals activation at most once per web view it opens, so this
     // converges rather than fighting anything indefinitely.
     if (match === 'hidden') {
+      // Logged because a silent recovery is indistinguishable from the race never happening. Without
+      // this, a green run cannot tell you whether re-clicking fixed anything — only that nothing
+      // failed — so the line is what makes one run enough to answer that.
+      reclicks += 1;
+      console.log(
+        `[findHelloRock3Frame] Hello Rock3 pane was not active; re-clicking its tab (attempt ${reclicks}).`,
+      );
       // Polling loop: the re-click must finish before the next read, or the read would race it.
       // eslint-disable-next-line no-await-in-loop
       await tab.first().click();

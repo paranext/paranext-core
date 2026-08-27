@@ -309,6 +309,15 @@ async function resetFindPanel(frame: FrameLocator): Promise<void> {
   if (await allowRegex.isChecked()) await allowRegex.click();
   const noWordRestriction = frame.locator('#wordRestriction-none');
   if (!(await noWordRestriction.isChecked())) await noWordRestriction.click();
+  // Every toggle in the filters panel has to be listed here, not just the ones a test happens to
+  // use today: the panel belongs to a worker-scoped app, so anything left on leaks into every later
+  // test in the file. A toggle added to the panel and not added here is invisible until some future
+  // test sets it, and then presents as that test corrupting its neighbours rather than as a gap in
+  // this reset.
+  const ignoreWhitespace = frame.locator('#ignoreWhitespaceDifferences');
+  if (await ignoreWhitespace.isChecked()) await ignoreWhitespace.click();
+  const ignoreDiacritics = frame.locator('#ignoreDiacritics');
+  if (await ignoreDiacritics.isChecked()) await ignoreDiacritics.click();
   await matchCase.press('Escape');
   await expect(matchCase).not.toBeVisible({ timeout: 5_000 });
 
