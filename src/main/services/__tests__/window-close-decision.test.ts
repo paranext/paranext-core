@@ -3,6 +3,7 @@ import type { BrowserWindow } from 'electron';
 import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
   isAppQuitRequested,
+  markQuitRequested,
   resetShutdownLatchesForNewSession,
 } from '@main/services/shutdown-latch.service';
 import {
@@ -101,6 +102,27 @@ describe('deciding what a window close means', () => {
       expect(confirm).not.toHaveBeenCalled();
       expect(decision).toBe('close-this-window');
       expect(isAppQuitRequested()).toBe(false);
+    });
+  });
+
+  describe('primary window during a quit the user already asked for', () => {
+    test('does not ask again, and does not touch the latch', async () => {
+      // Cmd+Q, File → Quit and platform.quit set the quit latch from `before-quit`, and Electron
+      // then closes each window in creation order — the primary first, before any secondary has
+      // been marked closing. That looks exactly like a primary ✕ with others open. It is not: the
+      // user already chose to quit, so asking "close all windows?" would be asking them twice, and
+      // a cancel here could never undo a latch that `before-quit` set.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      setPrimaryWindowId(1);
+      markQuitRequested();
+      const { confirm } = promptAnswering('cancel');
+
+      const decision = await decideWindowClose(1, confirm);
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(decision).toBe('close-this-window');
+      expect(isAppQuitRequested()).toBe(true);
     });
   });
 
