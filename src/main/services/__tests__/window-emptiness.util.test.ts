@@ -49,8 +49,8 @@ describe('deciding what happens to a window that reports its dock empty', () => 
   test('the primary window emptied by removal docks Home rather than closing, even with others open', async () => {
     // Moving the primary's last tab out is the same as closing that tab: Home reopens. The primary
     // does not stay empty and does not close — only its ✕ and the Quit menu may close it. Closing
-    // it here would leave the live primary reference naming a dead window and the survivor
-    // mis-classed as a secondary whose ✕ drops its layout.
+    // it here would leave no window holding the primary role at all, and the survivor mis-classed
+    // as a secondary whose ✕ drops its layout.
     const primaryHandler = createWindowEmptinessHandler({
       countWindows,
       closeWindow,
