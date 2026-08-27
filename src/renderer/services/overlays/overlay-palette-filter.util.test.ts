@@ -163,6 +163,37 @@ describe('filterPaletteItems', () => {
       expect(filterPaletteItems(items, 'pgh', 'active')).toEqual([]);
     });
 
+    it('should match a multi-word query whose tokens span label and description', () => {
+      // "insert foot" appears in no single field of "Insert footnote", but every token is
+      // contained somewhere among the searched fields — the multi-word affordance general command
+      // palettes rely on. Token matches trail whole-phrase matches.
+      const commandItems: CommandPaletteItem[] = [
+        { id: 'insert-footnote', label: 'Insert footnote', description: 'Adds a footnote' },
+        { id: 'insert-xref', label: 'Insert cross reference', description: 'Adds a reference' },
+        { id: 'find', label: 'Find', description: 'Search the text' },
+      ];
+      expect(filterPaletteItems(commandItems, 'insert foot', 'active').map((i) => i.id)).toEqual([
+        'insert-footnote',
+      ]);
+      // Tokens may match DIFFERENT fields: 'search' is description-only, 'find' is label-only.
+      expect(filterPaletteItems(commandItems, 'search find', 'active').map((i) => i.id)).toEqual([
+        'find',
+      ]);
+      // Every token must match — one stray token refuses the item.
+      expect(filterPaletteItems(commandItems, 'insert zzz', 'active')).toEqual([]);
+    });
+
+    it('should keep whole-phrase matches ahead of token-only matches', () => {
+      const commandItems: CommandPaletteItem[] = [
+        { id: 'token-only', label: 'Insert bold footnote', description: '' },
+        { id: 'phrase', label: 'A insert foot pedal', description: '' },
+      ];
+      expect(filterPaletteItems(commandItems, 'insert foot', 'active').map((i) => i.id)).toEqual([
+        'phrase',
+        'token-only',
+      ]);
+    });
+
     it('should return no items when nothing matches', () => {
       expect(filterPaletteItems(items, 'zzz', 'active')).toEqual([]);
     });

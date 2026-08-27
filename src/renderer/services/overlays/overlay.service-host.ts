@@ -138,6 +138,18 @@ export function resetDebounceState(): void {
   lastInvocationTime.clear();
 }
 
+/**
+ * Monotonic sequence over every `showCommandPalette` request, all webViews. Paired with
+ * {@link latestCommandPaletteRequestSeqByWebView} so a request that awaited item localization can
+ * tell "a newer request arrived while this one was localizing" apart from "this request is still
+ * the one the user asked for" — stored-entry creation order cannot, because overlapped requests add
+ * in localization-COMPLETION order, not arrival order.
+ */
+let commandPaletteRequestCounter = 0;
+
+/** The {@link commandPaletteRequestCounter} value of each webView's latest palette request. */
+const latestCommandPaletteRequestSeqByWebView = new Map<string, number>();
+
 // ── Focus Save/Restore ──
 
 /** Saved focus subject per overlay ID, captured via windowService.getFocus() */
@@ -787,6 +799,12 @@ async function showCommandPalette(
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
+  // This request is now the webView's LATEST palette request; anything older is stale. See the
+  // post-await check below for what the sequence buys.
+  commandPaletteRequestCounter += 1;
+  const requestSeq = commandPaletteRequestCounter;
+  latestCommandPaletteRequestSeqByWebView.set(webViewId, requestSeq);
+
   // Replace any existing command palette from this webView BEFORE the localization await below:
   // if the replace ran only on the far side of the await, a second request could start while the
   // first was still resolving localization and BOTH would end up added.
@@ -800,10 +818,16 @@ async function showCommandPalette(
   let { items } = request;
   if (itemLocalizeKeys.length > 0) {
     items = await localizePaletteItems(request.items, itemLocalizeKeys);
-    // The await reopened the window the pre-await sweep closed: another request could have added a
-    // palette while localization resolved. Sweep again so anything that landed during the await is
-    // replaced exactly like a pre-existing palette, keeping the one-palette-per-WebView invariant
-    // true in the store before this one is added.
+    // The await reopened the window the pre-await sweep closed: other requests for this webView
+    // may have arrived (and possibly added their palettes) while localization resolved. NEWEST
+    // WINS in both directions: a request that is no longer its webView's latest aborts itself
+    // exactly as if it had been replaced — overlapped awaits resolve in localization-COMPLETION
+    // order, so without this check an older request finishing LAST would sweep out the newer
+    // palette and mount its own — and a still-newest request sweeps again so anything that landed
+    // mid-await is replaced like any pre-existing palette, keeping one palette per webView.
+    if (latestCommandPaletteRequestSeqByWebView.get(webViewId) !== requestSeq) {
+      throw newPlatformError('Overlay was replaced by a new request', ABORTED);
+    }
     replaceExistingCommandPalettes(webViewId);
   }
 

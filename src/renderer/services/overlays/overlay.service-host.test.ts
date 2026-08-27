@@ -1073,6 +1073,53 @@ describe('overlay.service-host', () => {
       vi.mocked(localizationService.getLocalizedStrings).mockImplementation(async () => ({}));
     });
 
+    it('should let the NEWEST of two requests overlapping in the localization await win — never the older palette', async () => {
+      // Overlapped awaits resolve in localization-COMPLETION order, not arrival order. Hold the
+      // FIRST request's localization open so the second request lands mid-await and the first
+      // resolves LAST: without the request-sequence guard, the first request's post-await sweep
+      // would reject the newer palette and mount its own — the user would see the OLDER palette.
+      let releaseFirstLocalization: (strings: LanguageStrings) => void = () => {};
+      vi.mocked(localizationService.getLocalizedStrings).mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseFirstLocalization = resolve;
+          }),
+      );
+
+      const request1: CommandPaletteRequest = {
+        items: [{ id: 'ft', label: '%marker_ft_label%' }],
+      };
+      const promise1 = overlayService.showCommandPalette(request1, 'test-webview');
+      // Capture the settlement NOW (handler attached before the abort can fire)
+      const firstOutcome = promise1.then(
+        () => 'resolved',
+        (error: unknown) => error,
+      );
+
+      // Clear the cooldown so the second request is not a debounce duplicate — this test is about
+      // the localization-await window, not the debounce (request 1 has no palette mounted yet, so
+      // the replace bypass does not apply).
+      resetDebounceState();
+      const request2: CommandPaletteRequest = {
+        items: [{ id: 'fig', label: '%marker_fig_label%' }],
+      };
+      const promise2 = overlayService.showCommandPalette(request2, 'test-webview');
+      await vi.waitFor(() => expect(getOverlays()).toHaveLength(1));
+
+      releaseFirstLocalization({ '%marker_ft_label%': 'Footnote' });
+      const firstError = await firstOutcome;
+      expect(isPlatformError(firstError) && firstError.code === ABORTED).toBe(true);
+
+      const palettes = getOverlays().filter((o) => o.type === 'commandPalette');
+      expect(palettes).toHaveLength(1);
+      // The survivor is the NEWER request's palette
+      const survivor = palettes[0];
+      expect(survivor.items[0].id).toBe('fig');
+
+      survivor.resolve(undefined);
+      return promise2;
+    });
+
     it('should narrow and commit an ACTIVE palette by its LOCALIZED label when items use LocalizeKeys', async () => {
       const request: CommandPaletteRequest = {
         items: [
@@ -1173,9 +1220,10 @@ describe('overlay.service-host', () => {
 
     it('should keep only the NEWER palette when two localized requests overlap the localization await', async () => {
       // Both requests carry LocalizeKey items, so both take the localization await — the window in
-      // which the pre-await replace sweep cannot see the other request. The post-await sweep must
-      // reject the palette the first request added, leaving one palette that is also the one the
-      // WebView-keyed drivers drive.
+      // which the pre-await replace sweep cannot see the other request. The request-sequence guard
+      // makes the SUPERSEDED request abort itself the moment its await resolves (its palette is
+      // never mounted at all), leaving one palette that is also the one the WebView-keyed drivers
+      // drive.
       const pendingItemLookups: (() => void)[] = [];
       vi.mocked(localizationService.getLocalizedStrings).mockImplementation(
         async ({ localizeKeys }) => {
@@ -1222,16 +1270,17 @@ describe('overlay.service-host', () => {
       await flushMicrotasks();
       expect(pendingItemLookups).toHaveLength(2);
 
-      // A's localization resolves first: its palette lands
+      // A's localization resolves first, but B has already superseded it — A aborts itself
+      // without ever mounting its palette (previously it mounted briefly and B's sweep removed it)
       pendingItemLookups[0]();
-      await flushMicrotasks();
-      expect(getOverlays()).toHaveLength(1);
-
-      // B's localization resolves: its post-await sweep replaces A's palette
-      pendingItemLookups[1]();
       await flushMicrotasks();
       const abortError = await promiseAOutcome;
       expect(isPlatformError(abortError) && abortError.code === ABORTED).toBe(true);
+      expect(getOverlays()).toHaveLength(0);
+
+      // B's localization resolves: still the newest, so its palette mounts
+      pendingItemLookups[1]();
+      await flushMicrotasks();
       const palettes = getOverlays().filter((o) => o.type === 'commandPalette');
       expect(palettes).toHaveLength(1);
 

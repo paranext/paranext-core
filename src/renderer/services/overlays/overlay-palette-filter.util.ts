@@ -9,7 +9,7 @@ import {
   filterAndRankPaletteItems,
   stripMarkerNestingPrefix,
   type PaletteFilterMode,
-} from 'platform-bible-react';
+} from 'platform-bible-react/experimental';
 import type {
   CommandPaletteItem,
   PaletteSearchField,
@@ -40,7 +40,10 @@ export const DEFAULT_PALETTE_SEARCH_FIELDS: readonly PaletteSearchField[] = [
  *   {@link DEFAULT_PALETTE_SEARCH_FIELDS}): label matches come FIRST, ranked exact-first (exact
  *   label match, then prefix matches, then containment matches, ties keeping their original context
  *   order); items matching only on the other searched fields follow in their original order, so an
- *   exact label match can never be buried under description/badge hits.
+ *   exact label match can never be buried under description/badge hits. A MULTI-WORD query
+ *   additionally matches items where every whitespace-separated token is contained in SOME searched
+ *   field ("insert foot" finds an "Insert footnote" whose phrase appears in no single field); those
+ *   token matches follow the whole-phrase matches in their original order.
  *
  * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
  * never be case-picky), and every leg strips the `+` marker-nesting prefix from the filter before
@@ -98,5 +101,26 @@ export function filterPaletteItems(
       !labelMatchSet.has(item) &&
       extraFields.some((field) => item[field]?.toLowerCase().includes(normalizedFilter)),
   );
-  return [...labelMatches, ...extraMatches];
+
+  // Multi-word queries: an item also matches when EVERY whitespace-separated token is contained
+  // in some searched field, so "insert foot" finds an "Insert footnote" command whose full phrase
+  // appears in no single field. Strictly additive — whole-phrase matches are unaffected and rank
+  // first; token matches follow in their original order. Single-token queries change nothing here
+  // (the token IS the phrase). Inert for marker palettes: their filters cannot contain spaces
+  // (Space is a session commit key).
+  const searchesLabel = searchFields.includes('label');
+  const tokens = normalizedFilter.split(/\s+/).filter((token) => token.length > 0);
+  let tokenMatches: CommandPaletteItem[] = [];
+  if (tokens.length > 1) {
+    const alreadyMatched = new Set([...labelMatches, ...extraMatches]);
+    const fieldContainsToken = (item: CommandPaletteItem, token: string): boolean =>
+      (searchesLabel && item.label.toLowerCase().includes(token)) ||
+      extraFields.some((field) => item[field]?.toLowerCase().includes(token));
+    tokenMatches = items.filter(
+      (item) =>
+        !alreadyMatched.has(item) && tokens.every((token) => fieldContainsToken(item, token)),
+    );
+  }
+
+  return [...labelMatches, ...extraMatches, ...tokenMatches];
 }
