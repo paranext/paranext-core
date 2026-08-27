@@ -265,6 +265,23 @@ describe('window layout persistence service', () => {
     ]);
   });
 
+  test('derives the primary window from the entry marked main, not from entry order', async () => {
+    const service = await startService();
+    await loadAndAssignAll(
+      service,
+      [
+        { layout: layoutWithTab('one') },
+        { layout: layoutWithTab('two'), isMain: true },
+        { layout: layoutWithTab('three') },
+      ],
+      11,
+    );
+
+    expect(service.isPrimaryWindow(11)).toBe(false);
+    expect(service.isPrimaryWindow(12)).toBe(true);
+    expect(service.isPrimaryWindow(13)).toBe(false);
+  });
+
   test('a main entry that leaves the structure takes isMain with it; the next load picks the first', async () => {
     // Main-ness is a property of the ENTRY, so an entry that leaves takes the flag with it rather
     // than handing it to a neighbour at write time. A structure left carrying no flag at all is the
