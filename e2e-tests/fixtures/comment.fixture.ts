@@ -70,17 +70,20 @@ export const test = base.extend<CommentTestFixtures, CommentWorkerFixtures>({
   commentAppContext: [
     async ({ commentAppOwner }, use) => {
       console.log(`[setup] Launching comment app for "${commentAppOwner}"`);
-      // Pre-configure English locale and simple mode in the settings file before launching so
-      // the app starts in the expected state. This avoids the mid-session locale-reload path
-      // (which sequentially reloads every open WebView and can take 5+ minutes).
+      // Pin what these suites depend on before launching, rather than inheriting it. Anything left
+      // unpinned comes from the shared, gitignored dev-appdata settings file — see "State that leaks
+      // between runs" in e2e-tests/CLAUDE.md — so an unpinned key is whatever the last run on this
+      // checkout happened to leave.
       const restoreSettings = preConfigureSettings({
+        // Every text-based selector in these suites is English. Pinned before launch rather than
+        // switched afterwards, which would take the mid-session locale-reload path and sequentially
+        // reload every open WebView (5+ minutes).
         'platform.interfaceLanguage': ['en'],
+        // These suites are written against Simple mode's Column 3 layout.
         'platform.interfaceMode': 'simple',
-        // Pinned because this fixture pins simple mode, and simple is the one mode that shows the
-        // first-run wizard — power bypasses it. The wizard is a modal that cannot be dismissed
-        // (its Radix handlers all preventDefault) and aria-hides the rest of the app, so without
-        // this these suites depend on the checkout already holding a true value: they inherit it
-        // from whatever a previous run left in the shared dev-appdata settings file.
+        // Required BECAUSE simple mode is pinned above: simple is the one mode that shows the
+        // first-run wizard, and power bypasses it. The wizard is a modal that cannot be dismissed
+        // (its Radix handlers all preventDefault) and aria-hides the rest of the app.
         'platform.firstRunComplete': true,
       });
       const ctx = await launchElectronApp({ envOverrides: { DEV_NOISY: 'false' } });
