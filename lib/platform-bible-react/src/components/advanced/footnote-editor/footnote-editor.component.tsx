@@ -463,6 +463,15 @@ export default function FootnoteEditor({
       resolvedCallerType: FootnoteCallerType,
       resolvedCustomCaller: string,
       applyToParent = false,
+      /**
+       * Whether to apply the rewritten caller back to THIS popover's editor. The caller is not a
+       * chrome-only field — in editable marker mode the editor renders it as text the user can see
+       * (` + `), built from the note node's own caller state — so a change made in the dropdown is
+       * invisible until the note is replaced in the editor, exactly as `handleNoteTypeChange` does
+       * for the note style. Off for the auto-save path, which runs INSIDE an editor change and must
+       * not write back into it.
+       */
+      applyToSelf = false,
     ) => {
       // Every user-driven save funnels through here — the auto-save content path
       // (handleUsjChange) and both caller-change paths — and the initial content load never does
@@ -481,6 +490,10 @@ export default function FootnoteEditor({
             caller = HIDDEN_NOTE_CALLER;
           }
           currentNoteOp.insert.note.caller = caller;
+          // Replace the note in this popover's own editor so the displayed caller matches the
+          // dropdown. Same replace idiom the note-type switch uses: insert the rewritten embed,
+          // then delete the one unit it replaces.
+          if (applyToSelf) editorRef.current?.applyUpdate([currentNoteOp, { delete: 1 }]);
         }
         onChange?.([currentNoteOp]);
         if (applyToParent && parentEditorRef && noteKey) {
@@ -536,7 +549,7 @@ export default function FootnoteEditor({
   const handleCallerTypeChange = useCallback(
     (newCallerType: FootnoteCallerType) => {
       setCallerType(newCallerType);
-      saveCurrentNoteOp(newCallerType, customCaller);
+      saveCurrentNoteOp(newCallerType, customCaller, false, true);
     },
     [customCaller, saveCurrentNoteOp],
   );
@@ -544,7 +557,7 @@ export default function FootnoteEditor({
   const handleCustomCallerChange = useCallback(
     (newCustomCaller: string) => {
       setCustomCaller(newCustomCaller);
-      saveCurrentNoteOp(callerType, newCustomCaller);
+      saveCurrentNoteOp(callerType, newCustomCaller, false, true);
     },
     [callerType, saveCurrentNoteOp],
   );

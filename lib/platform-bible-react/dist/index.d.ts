@@ -1097,8 +1097,9 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  *   commits and immediately reopens the palette so `\qt-s\qt-e` is one flow.
  * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
  *   the split creates. Its only commit is the highlighted item. Always a FOCUSED palette with no
- *   key forwarding, so the forwarding table never drives it — the kind exists for session-tracking
- *   (re-entrancy guards, token cleanup) in the session owners.
+ *   key forwarding, so the forwarding table drives only the two keys that decide the session's
+ *   fate, and only while the overlay is still winning focus; the kind otherwise exists for
+ *   session-tracking (re-entrancy guards, token cleanup) in the session owners.
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
  *   selection in the marker the filter names exactly; `*` instead replaces the selection with the
@@ -1185,12 +1186,13 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
  */
 export type MarkerPaletteKeyOutcome = "passed" | "continue" | "ended";
 /**
- * The session kinds this forwarding table actually drives. `'enter'` is deliberately absent: the
- * Enter-split palette is always FOCUSED with no key forwarding (`openEnterPalette`'s own doc —
- * nothing lands on the Enter keypress itself, so there is no forwarding table to drive), which
- * makes any per-kind `'enter'` entries here dead code and a drift trap. An `'enter'` session that
- * still reaches {@link handleMarkerPaletteSessionKeyDown} (the sub-frame race before the overlay
- * takes focus) is passed through untouched.
+ * The session kinds whose FILTER and per-key semantics this forwarding table drives. `'enter'` is
+ * deliberately absent: the Enter-split palette is always FOCUSED with no key forwarding
+ * (`openEnterPalette`'s own doc — nothing lands on the Enter keypress itself), which makes per-kind
+ * `'enter'` filter entries here dead code and a drift trap. An `'enter'` session still reaches
+ * {@link handleMarkerPaletteSessionKeyDown} during the sub-frame race before the overlay takes
+ * focus, where Enter and Escape are claimed so they cannot reach the document; nothing else about
+ * an `'enter'` session is table-driven.
  */
 export type ForwardedSessionKind = Exclude<MarkerPaletteSessionKind, "enter">;
 /**
@@ -4178,8 +4180,16 @@ export declare const ShrinkStepContext: import("react").Context<number>;
 export declare function useShrinkStepValue(): number;
 /** Z-index for elements that need to appear above rc-dock floating tabs and potential modals (~200) */
 export declare const Z_INDEX_ABOVE_DOCK = 600;
-/** Z-index for the footnote editor layer */
-export declare const Z_INDEX_FOOTNOTE_EDITOR = 300;
+/**
+ * Z-index for the footnote editor's own portalled layers — its note-type and caller dropdowns.
+ *
+ * Must stay ABOVE {@link Z_INDEX_ABOVE_DOCK}: the footnote editor renders inside a `PopoverContent`,
+ * which sets that value on itself, and a Radix dropdown portals to `document.body` rather than
+ * nesting inside the popover — so the two are stacking siblings and a lower value puts the open
+ * dropdown behind the popover it belongs to. Below {@link Z_INDEX_FIRST_RUN}, which gates the whole
+ * app and must stay on top. Pinned by `z-index.test.ts`.
+ */
+export declare const Z_INDEX_FOOTNOTE_EDITOR = 650;
 /** Z-index for overlay popovers and context menus */
 export declare const Z_INDEX_OVERLAY = 400;
 /** Z-index for the semi-transparent backdrop behind modal dialogs */

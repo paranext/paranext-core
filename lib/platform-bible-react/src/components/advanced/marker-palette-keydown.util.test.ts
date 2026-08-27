@@ -496,15 +496,15 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.dismiss).not.toHaveBeenCalled();
   });
 
-  it('enter session: every key passes through untouched — the table does not drive it', () => {
+  it('enter session: keys other than the two that decide its fate pass through untouched', () => {
     // The Enter-split palette is always FOCUSED with no key forwarding (the overlay's own input
-    // owns every key), so its per-kind table entries were dead code — including a latent bug
-    // where Space appended a literal space no marker label matches. The only way a key reaches
-    // the table with an 'enter' session is the sub-frame race before the overlay takes focus;
-    // it passes through with nothing claimed and nothing driven.
+    // owns every key), so its per-kind filter/commit entries were dead code — including a latent
+    // bug where Space appended a literal space no marker label matches. The only way a key reaches
+    // the table with an 'enter' session is the sub-frame race before the overlay takes focus, and
+    // the palette owns these once it has focus.
     const driver = makeDriver();
     const state = session('enter', 'q');
-    ['1', ' ', 'Enter', 'Escape', 'Backspace', 'ArrowDown'].forEach((key) => {
+    ['1', ' ', 'Backspace', 'ArrowDown'].forEach((key) => {
       const event = makeEvent(key);
       expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('passed');
       expect(event.defaultPrevented).toBe(false);
@@ -512,6 +512,31 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(state.filter).toBe('q');
     expect(driver.update).not.toHaveBeenCalled();
     expect(driver.dismiss).not.toHaveBeenCalled();
+    expect(driver.commit).not.toHaveBeenCalled();
+  });
+
+  it('enter session: Enter commits during the focus race instead of reaching the document', () => {
+    // Enter-Enter is the whole gesture — open the split menu, accept its preselected choice — and
+    // the second Enter lands inside the palette's own focus retry window (up to twenty animation
+    // frames). Passing it through was not neutral: it reached Lexical, which performed the
+    // unmarked plain split this palette exists to prevent, and left the palette open with nothing
+    // committed.
+    const driver = makeDriver();
+    const event = makeEvent('Enter');
+    expect(handleMarkerPaletteSessionKeyDown(event, session('enter', ''), driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(true);
+    expect(driver.commit).toHaveBeenCalledTimes(1);
+    expect(driver.dismiss).not.toHaveBeenCalled();
+  });
+
+  it('enter session: Escape dismisses during the focus race', () => {
+    // The counterpart: Escape means "no split", and passing it through left the palette open.
+    const driver = makeDriver();
+    const event = makeEvent('Escape');
+    expect(handleMarkerPaletteSessionKeyDown(event, session('enter', ''), driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(true);
+    expect(driver.dismiss).toHaveBeenCalledTimes(1);
+    expect(driver.commit).not.toHaveBeenCalled();
   });
 
   it('selection session: Space with an exact typed match commits THAT item — the wrap commit', () => {

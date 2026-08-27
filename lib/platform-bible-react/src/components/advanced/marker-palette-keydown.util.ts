@@ -31,9 +31,11 @@
  *   ordinary character and no palette reopens. Because they commit, neither `*` nor `\` is a filter
  *   character — a close-tag entry can no longer be narrowed to by typing its trailing `*`, since
  *   pressing `*` commits the end state that entry would have applied.
- * - `'enter'` — FOCUSED Enter-split menu (collapsed caret). NOT driven by this table: the menu is
- *   always focused with no key forwarding (the overlay's own input owns every key), so the table
- *   passes an `'enter'` session's keys through untouched (see `ForwardedSessionKind`).
+ * - `'enter'` — FOCUSED Enter-split menu (collapsed caret). Barely driven by this table: the menu
+ *   is always focused with no key forwarding (the overlay's own input owns every key), so the only
+ *   keys that reach the table are the ones typed during the sub-frame race before the overlay wins
+ *   focus. Enter (commit) and Escape (dismiss) are claimed there, because letting them through
+ *   reaches the document; every other key passes through untouched (see `ForwardedSessionKind`).
  * - `'selection'` — FOCUSED selection-wrap palette: EVERY non-chord key is claimed — nothing may land
  *   while it is open, because typing would replace the wrapped selection. Space commits the item
  *   the typed filter names EXACTLY ({@link MarkerPaletteSessionDriver.commitItem} — the wrap), or
@@ -77,8 +79,9 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  *   commits and immediately reopens the palette so `\qt-s\qt-e` is one flow.
  * - `'enter'` — the Enter-split menu at a collapsed caret, for choosing the marker of the paragraph
  *   the split creates. Its only commit is the highlighted item. Always a FOCUSED palette with no
- *   key forwarding, so the forwarding table never drives it — the kind exists for session-tracking
- *   (re-entrancy guards, token cleanup) in the session owners.
+ *   key forwarding, so the forwarding table drives only the two keys that decide the session's
+ *   fate, and only while the overlay is still winning focus; the kind otherwise exists for
+ *   session-tracking (re-entrancy guards, token cleanup) in the session owners.
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
  *   selection in the marker the filter names exactly; `*` instead replaces the selection with the
@@ -184,12 +187,13 @@ export function isImeCompositionKeyEvent(event: MarkerPaletteKeyEvent): boolean 
 }
 
 /**
- * The session kinds this forwarding table actually drives. `'enter'` is deliberately absent: the
- * Enter-split palette is always FOCUSED with no key forwarding (`openEnterPalette`'s own doc —
- * nothing lands on the Enter keypress itself, so there is no forwarding table to drive), which
- * makes any per-kind `'enter'` entries here dead code and a drift trap. An `'enter'` session that
- * still reaches {@link handleMarkerPaletteSessionKeyDown} (the sub-frame race before the overlay
- * takes focus) is passed through untouched.
+ * The session kinds whose FILTER and per-key semantics this forwarding table drives. `'enter'` is
+ * deliberately absent: the Enter-split palette is always FOCUSED with no key forwarding
+ * (`openEnterPalette`'s own doc — nothing lands on the Enter keypress itself), which makes per-kind
+ * `'enter'` filter entries here dead code and a drift trap. An `'enter'` session still reaches
+ * {@link handleMarkerPaletteSessionKeyDown} during the sub-frame race before the overlay takes
+ * focus, where Enter and Escape are claimed so they cannot reach the document; nothing else about
+ * an `'enter'` session is table-driven.
  */
 export type ForwardedSessionKind = Exclude<MarkerPaletteSessionKind, 'enter'>;
 
@@ -276,7 +280,25 @@ export function handleMarkerPaletteSessionKeyDown(
     // The Enter-split palette is always FOCUSED with no key forwarding (see
     // ForwardedSessionKind), so its keys never legitimately reach this table — the only way in
     // is the sub-frame race between the session being recorded and the overlay taking focus.
-    // Pass such a key through untouched rather than keeping a dead per-kind branch set alive.
+    // That race is real and lasts up to twenty animation frames (the palette's own focus retry
+    // loop), which is well inside a two-keystroke Enter-Enter.
+    //
+    // The two keys that decide the session's fate are claimed there, because passing them through
+    // is not neutral: an Enter reaching Lexical performs the unmarked plain split this palette
+    // exists to prevent, AND leaves the palette open behind it with nothing committed. Both do
+    // exactly what the overlay's own input would have done had it won the race. Every other key is
+    // still passed through — the palette owns them once it has focus, and the filter it would have
+    // built is not reconstructible from here.
+    if (event.key === 'Enter') {
+      claim(event);
+      driver.commit();
+      return 'ended';
+    }
+    if (event.key === 'Escape') {
+      claim(event);
+      driver.dismiss();
+      return 'ended';
+    }
     return 'passed';
   }
 

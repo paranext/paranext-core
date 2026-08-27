@@ -219,7 +219,10 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Editing',
     context: 'Scripture editor web view, while the markers menu is open',
     // Enter and Tab are one commit gesture, matching the editor package's own menus. Over a
-    // zero-match filter both are claimed no-ops (PT9 parity — the menu stays open).
+    // zero-match filter both are claimed no-ops (PT9 parity — the menu stays open). Enter also
+    // commits the Enter-triggered paragraph menu — normally through the overlay's own input, and
+    // through the forwarding table during the frames before that input wins focus, so an
+    // Enter-Enter cannot reach the document.
     keys: { macOS: '⏎ / ⇥', windows: 'Enter / Tab', linux: 'Enter / Tab' },
     locations: ['lib/platform-bible-react/src/components/advanced/marker-palette-keydown.util.ts'],
   },

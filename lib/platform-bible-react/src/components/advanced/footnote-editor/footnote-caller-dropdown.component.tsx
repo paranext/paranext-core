@@ -80,6 +80,16 @@ export function FootnoteCallerDropdown({
   const [newCustomCaller, setNewCustomCaller] = useState<string>(customCaller);
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
 
+  // The selection is COMMITTED when the menu closes (below), and choosing an item closes the menu
+  // — so both happen in one React batch and the close handler's closure still holds the
+  // pre-selection values. Reading the pending choice through refs is what makes the commit see
+  // what the user just picked instead of what was selected when the menu opened; without them
+  // every selection committed the value it was replacing.
+  const selectedCallerTypeRef = useRef(selectedCallerType);
+  selectedCallerTypeRef.current = selectedCallerType;
+  const newCustomCallerRef = useRef(newCustomCaller);
+  newCustomCallerRef.current = newCustomCaller;
+
   // If the caller type changes, the selected caller type needs to change also
   useEffect(() => {
     setSelectedCallerType(callerType);
@@ -99,11 +109,15 @@ export function FootnoteCallerDropdown({
     isCustomCallerInputFocused.current = false;
     setIsDropdownOpen(open);
     if (!open) {
+      const pendingCallerType = selectedCallerTypeRef.current;
+      const pendingCustomCaller = newCustomCallerRef.current;
       // This makes it so that if the custom caller is invalid, then reverts back to the previous
       // selected caller
-      if (selectedCallerType !== 'custom' || newCustomCaller) {
-        updateCallerType(selectedCallerType);
-        updateCustomCaller(newCustomCaller);
+      if (pendingCallerType !== 'custom' || pendingCustomCaller) {
+        // Only what actually changed: each of these is a save, and with the note replaced in the
+        // popover's editor on the way through, firing both would replace it twice per close.
+        if (pendingCallerType !== callerType) updateCallerType(pendingCallerType);
+        if (pendingCustomCaller !== customCaller) updateCustomCaller(pendingCustomCaller);
       } else {
         setSelectedCallerType(callerType);
         setNewCustomCaller(customCaller);

@@ -5,6 +5,7 @@ import { act, render } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import type {
+  DeltaOpInsertNoteEmbed,
   EditorOptions,
   EditorRef,
   MarkerMenuContext,
@@ -178,6 +179,7 @@ function placeDomCaretOutsideNote(editorInput: HTMLElement): void {
 function renderFootnoteEditor(
   editorOptions: EditorOptions,
   markerPalette?: FootnoteEditorMarkerPalette,
+  onChange?: (noteOps: DeltaOpInsertNoteEmbed[]) => void,
 ) {
   // EditorRef has many required methods; using a partial mock via type assertion is simpler than
   // stubbing all of them in a test (same rationale as
@@ -225,6 +227,7 @@ function renderFootnoteEditor(
       defaultMarkerMenuTrigger={'\\'}
       localizedStrings={buildLocalizedStrings()}
       markerPalette={markerPalette}
+      onChange={onChange}
     />
   );
 
@@ -1556,5 +1559,70 @@ describe('note-type switch over content the note carries without char attributes
         }),
       ]),
     );
+  });
+});
+
+describe('caller dropdown', () => {
+  function makeNoteOp(caller: string) {
+    return {
+      insert: {
+        note: {
+          style: 'f',
+          caller,
+          contents: {
+            ops: [{ insert: 'note text', attributes: { char: { style: 'ft', closed: 'false' } } }],
+          },
+        },
+      },
+    };
+  }
+
+  async function openDropdownAndPickHidden() {
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const onChange = vi.fn();
+    const utils = renderFootnoteEditor(
+      { view: { markerMode: 'editable', hasSpacing: true, isFormattedFont: true } },
+      undefined,
+      onChange,
+    );
+    vi.mocked(utils.editorRef.getNoteOps).mockReturnValue([makeNoteOp('+')]);
+    vi.mocked(utils.editorRef.applyUpdate).mockClear();
+
+    await user.click(utils.getByRole('button', { name: /callerDropdown/i }));
+    // Choosing an item also CLOSES the menu, which is what commits the selection.
+    await user.click(utils.getByRole('menuitemcheckbox', { name: /hidden/i }));
+    return { ...utils, onChange };
+  }
+
+  it('commits the caller the user just picked, not the one it replaced', async () => {
+    // The commit runs from the menu's close handler, and picking an item closes the menu — so the
+    // state update and the close land in one React batch and the handler's closure still held the
+    // PREVIOUS selection. Every pick therefore committed the value it was replacing, which reads
+    // as a dropdown that does nothing.
+    const { onChange } = await openDropdownAndPickHidden();
+
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({
+        insert: expect.objectContaining({ note: expect.objectContaining({ caller: '-' }) }),
+      }),
+    ]);
+  });
+
+  it('applies the new caller to the editor showing the note, not only to the host', async () => {
+    // In editable marker mode the caller is TEXT the editor renders from the note node's own
+    // caller state, so the popover has to be told about the change the way `handleNoteTypeChange`
+    // tells it about a style change. The caller paths only mutated a fresh op read out of
+    // `getNoteOps` and handed it to the host, leaving the note on screen showing the old caller.
+    const { editorRef } = await openDropdownAndPickHidden();
+
+    expect(vi.mocked(editorRef.applyUpdate)).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          insert: expect.objectContaining({ note: expect.objectContaining({ caller: '-' }) }),
+        }),
+      ]),
+    );
+    // One replacement per close, not one per caller field.
+    expect(vi.mocked(editorRef.applyUpdate)).toHaveBeenCalledTimes(1);
   });
 });
