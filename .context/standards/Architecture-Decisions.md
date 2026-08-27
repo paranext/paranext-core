@@ -1633,9 +1633,10 @@ step, no automation. Just a record.
   PT9 data channel" is load-bearing for consumer UX.
 - **Consequences:** The transport shapes the contract: a single WebSocket message past its limit
   tears down the whole C# connection (an unaddressed platform-level issue), so the response is
-  bounded by an aggregate size cap and fails with a documented error-message prefix - a prefix,
-  because exception types do not cross the RPC boundary, making the message text the only
-  contract a consumer can recognize. Schema evolution now moves at platform speed: a field the
+  bounded by an aggregate size cap and fails with a documented error whose machine-readable
+  contract is the RESOURCE_EXHAUSTED platform error code (exception types do not cross the RPC
+  boundary, but Exception.Data does); the documented message prefix remains the fallback for
+  consumers that see only the message. Schema evolution now moves at platform speed: a field the
   payload drops costs a core release to recover, which is why the setup records deliberately
   carry the model text's identity even though nothing consumes it yet. A future PT9-legacy import
   should follow this shape - parsed models with PT9-parity semantics, a hashed manifest for

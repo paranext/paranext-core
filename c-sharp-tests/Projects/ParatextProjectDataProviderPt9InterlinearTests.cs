@@ -169,6 +169,20 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
             .Settings.GetSettingNamesMatchingPrefix("")
             .ToDictionary(name => name, name => scrText.Settings.GetSetting(name));
 
+    // A fixed registration for tests that need RegistrationInfo.DefaultUser to carry a name on
+    // machines with no Paratext registration. Assigning RegistrationInfo.Implementation clears
+    // the cached user in both directions, so swapping this in and back out leaks no state.
+    private sealed class DummyRegistrationInfo : RegistrationInfo
+    {
+        protected override bool AcceptLicense(UserLicenseFlags licenseFlags) => true;
+
+        protected override RegistrationData GetRegistrationData() => new("Test User", "");
+
+        protected override void HandleDeletedRegistration() { }
+
+        protected override void HandleChangedRegistrationData(RegistrationData registrationData) { }
+    }
+
     #region Manifest
 
     [Test]
@@ -539,20 +553,31 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     )]
     public void GetPt9InterlinearData_SkipsSettingsMergeForAConvertedUser()
     {
-        // PT9's conversion stamp records the registered user's name; with no registration there
-        // is no name to stamp, so the gated state cannot be constructed.
-        if (string.IsNullOrEmpty(RegistrationInfo.DefaultUser.Name))
-            Assert.Ignore("No registered Paratext user; the conversion stamp cannot name one.");
         using var modelScrText = new DummyScrText(
             CreateProjectDetails(HexId.CreateNew().ToString(), "MDL")
         );
         ParatextProjects.FakeAddProject(CreateProjectDetails(modelScrText), modelScrText);
         _scrText.Settings.SetSetting("InterlinearRelatedLanguages." + modelScrText.Name, "True");
-        _scrText.Settings.InterlinearConversionCompletedBy = [RegistrationInfo.DefaultUser.Name];
 
-        var data = _provider.GetPt9InterlinearData();
+        // A fixed registration, so the stamp can name a user on machines with no Paratext
+        // registration (the hosted CI runners) too.
+        var previousRegistration = RegistrationInfo.Implementation;
+        RegistrationInfo.Implementation = new DummyRegistrationInfo();
+        try
+        {
+            _scrText.Settings.InterlinearConversionCompletedBy =
+            [
+                RegistrationInfo.DefaultUser.Name,
+            ];
 
-        Assert.That(data.Setups, Is.Empty);
+            var data = _provider.GetPt9InterlinearData();
+
+            Assert.That(data.Setups, Is.Empty);
+        }
+        finally
+        {
+            RegistrationInfo.Implementation = previousRegistration;
+        }
     }
 
     [Test]
