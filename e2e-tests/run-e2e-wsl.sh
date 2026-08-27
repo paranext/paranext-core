@@ -27,9 +27,9 @@
 #   * Playwright needs `--config`; this script cd's to the repo root, where there is no config.
 #
 # The wrap only helps when the Electron app is launched INSIDE it. Suites built on
-# fixtures/cdp.fixture.ts attach over port 9223 to an app you started separately
-# (all of tests/enhanced-resources/ and tests/attached/),
-# so wrapping the Playwright process alone changes nothing for them. On Linux
+# fixtures/cdp.fixture.ts attach over port 9223 to an app you started separately, so wrapping the
+# Playwright process alone changes nothing for them; e2e-tests/CLAUDE.md lists which those are,
+# rather than a second list here that can drift out of step with it. On Linux
 # .erb/scripts/refresh.sh already starts that app under its own Xvfb, so those runs are off the
 # desktop without this script.
 

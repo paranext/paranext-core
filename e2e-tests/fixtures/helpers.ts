@@ -663,20 +663,62 @@ export async function waitForAtLeastOneProjectMetadata(
  * way to pre-configure locale and interface mode for E2E tests — it avoids triggering the
  * mid-session locale reload path, which sequentially reloads every open WebView.
  */
-const DEV_APPDATA_SETTINGS_PATH = path.resolve(__dirname, '../../dev-appdata/data/settings.json');
+/**
+ * The settings file the app reads at startup in development.
+ *
+ * Resolved on each call rather than captured once, so the unit tests covering the crash-recovery
+ * logic below can point it at a temp directory. Without that they would have to exercise it against
+ * the developer's real settings file — and a test that can eat your settings while proving settings
+ * are not eaten is not worth the coverage.
+ */
+function settingsPath(): string {
+  return (
+    process.env.PT_E2E_SETTINGS_PATH ??
+    path.resolve(__dirname, '../../dev-appdata/data/settings.json')
+  );
+}
 
 /**
  * Where {@link preConfigureSettings} parks the developer's real settings while a test's overrides
  * are in place, so a run that dies before its restore can be undone by the NEXT run's global setup
  * rather than leaving test values on disk forever.
- *
- * Exported for `global-setup.ts`, which is the only thing that should consume it.
  */
-export const DEV_APPDATA_SETTINGS_BACKUP_PATH = `${DEV_APPDATA_SETTINGS_PATH}.e2e-backup`;
+function settingsBackupPath(): string {
+  return `${settingsPath()}.e2e-backup`;
+}
 
 /**
- * Undo a settings pin left behind by a run that never reached its teardown, and report whether it
- * did. Safe to call when there is nothing to restore.
+ * What the backup file holds: whether a settings file existed before the first pin, and its exact
+ * bytes if it did.
+ *
+ * Recorded as a shape rather than a sentinel because "no settings file" and "an empty settings
+ * file" are different states that must restore differently, and any string sentinel conflates
+ * them.
+ */
+interface SettingsBackup {
+  existed: boolean;
+  contents?: string;
+}
+
+/** Read the backup, tolerating one written before it carried a shape. */
+function readSettingsBackup(): SettingsBackup {
+  const raw = fs.readFileSync(settingsBackupPath(), 'utf-8');
+  try {
+    // JSON.parse returns `any`; asserting the shape this function itself writes
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const parsed = JSON.parse(raw) as SettingsBackup;
+    if (typeof parsed?.existed === 'boolean') return parsed;
+  } catch {
+    // Not our shape — fall through to the raw-contents reading below.
+  }
+  // A backup left by an earlier version stored the file's contents directly, with '' meaning
+  // "there was no file". Honour that rather than discarding a developer's settings.
+  return raw === '' ? { existed: false } : { existed: true, contents: raw };
+}
+
+/**
+ * Undo a settings pin left behind by a run that never reached its teardown, and report which
+ * settings it found. Safe to call when there is nothing to restore.
  *
  * The restore returned by `preConfigureSettings` only runs in an `afterAll`, so Ctrl+C, a killed
  * worker, or a crashed run all leave the pinned values in the shared settings file. The three
@@ -684,17 +726,35 @@ export const DEV_APPDATA_SETTINGS_BACKUP_PATH = `${DEV_APPDATA_SETTINGS_PATH}.e2
  * silently running in the wrong interface mode days later. CI never sees any of this — it starts
  * from a fresh checkout with no `dev-appdata/` at all — which is what makes it present as "green in
  * CI, red for me".
+ *
+ * @returns The top-level keys of the file that was left behind, or `undefined` when there was
+ *   nothing to undo. Keys rather than contents: that file holds the developer's real settings too,
+ *   including registration details, and the diagnostic question is only ever WHICH settings
+ *   leaked.
  */
-export function restoreLeakedSettings(): string | undefined {
-  if (!fs.existsSync(DEV_APPDATA_SETTINGS_BACKUP_PATH)) return undefined;
-  const leaked = fs.existsSync(DEV_APPDATA_SETTINGS_PATH)
-    ? fs.readFileSync(DEV_APPDATA_SETTINGS_PATH, 'utf-8')
-    : '(no settings file)';
-  const backup = fs.readFileSync(DEV_APPDATA_SETTINGS_BACKUP_PATH, 'utf-8');
-  if (backup === '') fs.rmSync(DEV_APPDATA_SETTINGS_PATH, { force: true });
-  else fs.writeFileSync(DEV_APPDATA_SETTINGS_PATH, backup);
-  fs.rmSync(DEV_APPDATA_SETTINGS_BACKUP_PATH, { force: true });
-  return leaked;
+export function restoreLeakedSettings(): string[] | undefined {
+  if (!fs.existsSync(settingsBackupPath())) return undefined;
+
+  let leakedKeys: string[] = [];
+  if (fs.existsSync(settingsPath())) {
+    try {
+      // JSON.parse returns `any`; the settings file is a flat key-value object
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const leaked = JSON.parse(fs.readFileSync(settingsPath(), 'utf-8')) as Record<
+        string,
+        unknown
+      >;
+      leakedKeys = Object.keys(leaked);
+    } catch {
+      leakedKeys = ['(unparsable settings file)'];
+    }
+  }
+
+  const backup = readSettingsBackup();
+  if (backup.existed) fs.writeFileSync(settingsPath(), backup.contents ?? '');
+  else fs.rmSync(settingsPath(), { force: true });
+  fs.rmSync(settingsBackupPath(), { force: true });
+  return leakedKeys;
 }
 
 /**
@@ -709,11 +769,11 @@ export function restoreLeakedSettings(): string | undefined {
  *   developer's saved settings are not permanently replaced by test values.
  */
 export function preConfigureSettings(overrides: Record<string, unknown>): () => void {
-  const settingsDir = path.dirname(DEV_APPDATA_SETTINGS_PATH);
+  const settingsDir = path.dirname(settingsPath());
   let originalContents: string | undefined;
   let existing: Record<string, unknown> = {};
-  if (fs.existsSync(DEV_APPDATA_SETTINGS_PATH)) {
-    originalContents = fs.readFileSync(DEV_APPDATA_SETTINGS_PATH, 'utf-8');
+  if (fs.existsSync(settingsPath())) {
+    originalContents = fs.readFileSync(settingsPath(), 'utf-8');
     try {
       // JSON.parse returns `any`; asserting the known shape of the settings file
       // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -726,15 +786,26 @@ export function preConfigureSettings(overrides: Record<string, unknown>): () => 
   // Park the original on disk BEFORE overwriting it. The returned restore only runs in an
   // `afterAll`, so anything that kills the run first would otherwise leave the overrides in the
   // developer's file permanently. With the backup present, the next run's global setup undoes it.
-  // An empty backup encodes "there was no settings file", which restore treats as "delete it".
-  fs.writeFileSync(DEV_APPDATA_SETTINGS_BACKUP_PATH, originalContents ?? '');
-  fs.writeFileSync(DEV_APPDATA_SETTINGS_PATH, JSON.stringify({ ...existing, ...overrides }));
+  //
+  // Only the FIRST pin writes it. A second pin taken while the first is still active would
+  // otherwise back up the already-pinned file, and a crash after that would "recover" the first
+  // pin's values as though they were the developer's own — laundering the very leak this exists to
+  // close, under a reassuring recovery message. The earliest original is the only correct one, so
+  // whoever wrote the backup is also the only one allowed to remove it.
+  const createdBackup = !fs.existsSync(settingsBackupPath());
+  if (createdBackup) {
+    const backup: SettingsBackup =
+      originalContents !== undefined
+        ? { existed: true, contents: originalContents }
+        : { existed: false };
+    fs.writeFileSync(settingsBackupPath(), JSON.stringify(backup));
+  }
+  fs.writeFileSync(settingsPath(), JSON.stringify({ ...existing, ...overrides }));
 
   return () => {
-    if (originalContents !== undefined)
-      fs.writeFileSync(DEV_APPDATA_SETTINGS_PATH, originalContents);
-    else fs.rmSync(DEV_APPDATA_SETTINGS_PATH, { force: true });
-    fs.rmSync(DEV_APPDATA_SETTINGS_BACKUP_PATH, { force: true });
+    if (originalContents !== undefined) fs.writeFileSync(settingsPath(), originalContents);
+    else fs.rmSync(settingsPath(), { force: true });
+    if (createdBackup) fs.rmSync(settingsBackupPath(), { force: true });
   };
 }
 

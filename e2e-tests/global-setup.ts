@@ -129,11 +129,11 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   // Undo a settings pin left behind by a run that died before its teardown. Done first, so the
   // developer's real settings are back in place before anything reads them — and so a suite that
   // pins nothing does not silently inherit another suite's mode from a run that crashed days ago.
-  const leaked = restoreLeakedSettings();
-  if (leaked !== undefined) {
+  const leakedKeys = restoreLeakedSettings();
+  if (leakedKeys !== undefined) {
     console.log(
       'Recovered dev-appdata/data/settings.json from a previous run that was killed before it ' +
-        `could restore it. The file it left behind was: ${leaked}`,
+        `could restore it. Settings it had left behind: ${leakedKeys.join(', ') || '(none)'}`,
     );
   }
 
