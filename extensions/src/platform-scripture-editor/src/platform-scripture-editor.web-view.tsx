@@ -145,6 +145,7 @@ import {
   blockMarkerToBlockNames,
   buildChapterScaffoldOps,
   canAddChapterNumber,
+  canRouteNoteCallerClickToPane,
   correctEditorUsjVersion,
   decideNoteCallerClickAction,
   deepEqualAcrossIframes,
@@ -1126,15 +1127,21 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             logger.debug(
               `noteCallerOnClick: noteNodeKey=${noteNodeKey} isCollapsed=${isCollapsed} ` +
                 `editingNoteKey=${editingNoteKey.current} popoverShown=${showFootnoteEditorRef.current} ` +
-                `paneVisible=${footnotesPaneVisibleRef.current} paneRendered=${footnotesPaneRenderedRef.current}`,
+                `paneVisible=${footnotesPaneVisibleRef.current} paneRendered=${footnotesPaneRenderedRef.current} ` +
+                `viewType=${viewType}`,
             );
             const decision = decideNoteCallerClickAction({
               isCollapsed,
               editingNoteKey: editingNoteKey.current,
               popoverShown: showFootnoteEditorRef.current,
-              // The render condition, not just the toggle: the pane only consumes focus
-              // requests when it is actually rendered.
-              paneRendered: footnotesPaneRenderedRef.current,
+              // The render condition (not just the toggle: the pane only consumes focus requests
+              // when it is actually rendered) AND the view: outside Standard view the pane is a
+              // read-only projection with no footnote editor, so routing there would dead-end the
+              // click — those views keep the popover path.
+              paneRendered: canRouteNoteCallerClickToPane(
+                footnotesPaneRenderedRef.current,
+                viewType,
+              ),
             });
             if (decision.clearStaleEditingSession) {
               // A prior session's key survived without its popover — orphaned bookkeeping that
@@ -1183,6 +1190,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [
       isReadOnlyEffective,
       editingNoteKey,
+      viewType,
       chapterVerseSeparator,
       verseRangeSeparator,
       defaultFootnoteCaller,
@@ -3189,8 +3197,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         }).findAllNotes().length > 0
       );
     } catch (e) {
+      // Bounded snippet, never the whole chapter — same cap as the divergence logger's snippets
+      // (`describeUsjContentDivergence`).
+      const usjText = JSON.stringify(usjFromPdp);
+      const usjSnippet = usjText.length > 200 ? `${usjText.slice(0, 200)}…` : usjText;
       logger.warn(
-        `Error checking chapter USJ for notes (footnotes auto-show): ${getErrorMessage(e)}. USJ: ${JSON.stringify(usjFromPdp)}`,
+        `Error checking chapter USJ for notes (footnotes auto-show): ${getErrorMessage(e)}. USJ: ${usjSnippet}`,
       );
       return false;
     }

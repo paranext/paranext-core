@@ -59,6 +59,35 @@ test('scrolls the row of a newly selected footnote just far enough to reveal it'
   expect(scrollIntoView.mock.contexts[0]).toBe(screen.getAllByRole('option')[2]);
 });
 
+test('re-reveals the row when the SAME footnote is selected again (fresh selectionRequest)', () => {
+  const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+  const firstRequest = { index: 2 };
+  const { rerender } = render(
+    <FootnoteList
+      footnotes={footnotes}
+      listId="notes"
+      selectedFootnote={footnotes[2]}
+      selectionRequest={firstRequest}
+    />,
+  );
+  expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+  // Same footnote, same derived index — only the request identity is new. This models the host's
+  // repeat caller click, which promises to re-apply: the user may have scrolled the pane away, so
+  // the row must be brought back into view even though nothing derived from the selection changed.
+  rerender(
+    <FootnoteList
+      footnotes={footnotes}
+      listId="notes"
+      selectedFootnote={footnotes[2]}
+      selectionRequest={{ index: 2 }}
+    />,
+  );
+
+  expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  expect(scrollIntoView.mock.contexts[1]).toBe(screen.getAllByRole('option')[2]);
+});
+
 test('leaves keyboard focus alone when the selection changes', () => {
   // The gesture that changes the selection happens in the editor, so pulling focus into the list
   // would interrupt the typing that is already underway. The stand-in input is where focus must

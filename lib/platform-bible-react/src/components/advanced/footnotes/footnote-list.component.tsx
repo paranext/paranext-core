@@ -14,6 +14,7 @@ export function FootnoteList({
   layout = 'horizontal',
   listId,
   selectedFootnote,
+  selectionRequest,
   showMarkers = true,
   suppressFormatting = false,
   formatCaller,
@@ -87,10 +88,14 @@ export function FootnoteList({
   //
   // Deliberately does NOT call `focus()` (unlike the arrow-key path above): the gesture that drives
   // this happens in the EDITOR, and pulling keyboard focus into the pane would interrupt editing.
+  //
+  // `selectionRequest` is a dependency-only identity key: a REPEAT selection of the same footnote
+  // derives the same index, so keying on the index alone would never re-reveal a row the user has
+  // since scrolled away from (see `FootnoteListProps.selectionRequest`).
   useEffect(() => {
     if (selectedIndex < 0 || selectedIndex >= rowRefs.current.length) return;
     rowRefs.current[selectedIndex]?.scrollIntoView({ block: 'nearest' });
-  }, [selectedIndex]);
+  }, [selectedIndex, selectionRequest]);
 
   /*
    * TODO(PT-3743): After upgrading to Tailwind v4, move to using @container and @sm/@lg css

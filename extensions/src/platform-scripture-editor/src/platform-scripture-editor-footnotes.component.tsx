@@ -285,6 +285,11 @@ export function FootnotesLayout({
               showMarkers={showMarkers}
               formatCaller={showMarkers ? (c) => c : undefined}
               selectedFootnote={selectedFootnote?.footnote}
+              // The wrapper state object is minted fresh on every selection application (pane
+              // click or focus request), so its identity is the "reveal the row again" signal —
+              // a repeat focusRequest for the same footnote re-scrolls even though the derived
+              // footnote object and index are unchanged.
+              selectionRequest={selectedFootnote}
               onFootnoteSelected={handleFootnoteSelected}
             />
           </div>

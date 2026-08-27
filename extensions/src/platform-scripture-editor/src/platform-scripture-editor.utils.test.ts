@@ -8,6 +8,7 @@ import type { EditorRef } from '@eten-tech-foundation/platform-editor';
 import { USJ_TYPE, USJ_VERSION, type Usj } from '@eten-tech-foundation/scripture-utilities';
 import {
   convertScriptureRangeToEditorRange,
+  canRouteNoteCallerClickToPane,
   decideNoteCallerClickAction,
   formatEditorTitle,
   generateParagraphMenuListItems,
@@ -2643,6 +2644,26 @@ describe('decideNoteCallerClickAction (caller-click must not dead-end)', () => {
     expect(
       decideNoteCallerClickAction({ ...base, editingNoteKey: 'note-1', paneRendered: true }),
     ).toEqual({ clearStaleEditingSession: true, action: 'focus-pane' });
+  });
+});
+
+// The view term the caller composes into decideNoteCallerClickAction's `paneRendered` input:
+// outside Standard view the pane is a read-only projection with no footnote editor, so routing a
+// caller click there dead-ends (highlighted note, no path to editing it) — those views must keep
+// the popover path even while the pane is rendered.
+describe('canRouteNoteCallerClickToPane (pane routing is Standard-view-only)', () => {
+  it('routes to the rendered pane in standard view', () => {
+    expect(canRouteNoteCallerClickToPane(true, 'standard')).toBe(true);
+  });
+
+  it('keeps the popover path in formatted and markers view even while the pane is rendered', () => {
+    expect(canRouteNoteCallerClickToPane(true, 'formatted')).toBe(false);
+    expect(canRouteNoteCallerClickToPane(true, 'markers')).toBe(false);
+  });
+
+  it('never routes to a pane that is not rendered, in any view', () => {
+    expect(canRouteNoteCallerClickToPane(false, 'standard')).toBe(false);
+    expect(canRouteNoteCallerClickToPane(false, 'formatted')).toBe(false);
   });
 });
 

@@ -188,6 +188,21 @@ export function decideNoteCallerClickAction(state: NoteCallerClickState): NoteCa
   return { clearStaleEditingSession, action: 'open-popover' };
 }
 
+/**
+ * Whether a note-caller click may route to the footnotes pane: the pane must actually be rendered
+ * AND the editor must be in Standard view. Outside Standard view the pane is a read-only projection
+ * with no footnote editor, so routing a click there dead-ends — the note gets highlighted but there
+ * is no path to editing it; those views keep the popover path instead. Composed into
+ * {@link decideNoteCallerClickAction}'s `paneRendered` input at the call site, so that decision
+ * function stays a pure function of its snapshot.
+ */
+export function canRouteNoteCallerClickToPane(
+  paneRendered: boolean,
+  viewType: ScriptureEditorViewType,
+): boolean {
+  return paneRendered && viewType === 'standard';
+}
+
 // #region Editor Title Formatting
 
 const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
