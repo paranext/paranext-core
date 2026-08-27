@@ -8,7 +8,7 @@
  * be tested without a BrowserWindow.
  */
 
-import { markQuitRequested } from '@main/services/shutdown-latch.service';
+import { isAppQuitRequested, markQuitRequested } from '@main/services/shutdown-latch.service';
 import {
   countWindowsThatCouldBeTheLastOne,
   isPrimaryWindow,
@@ -44,6 +44,12 @@ export async function decideWindowClose(
   confirmCloseAll: () => Promise<CloseAllAnswer>,
 ): Promise<WindowCloseDecision> {
   if (!isPrimaryWindow(windowId)) return 'close-this-window';
+  // A quit already asked for (Cmd+Q, File → Quit, `platform.quit`) sets the latch from `before-quit`
+  // and then closes each window in creation order, the primary first — before any secondary has
+  // been marked closing, so from here it looks like a primary ✕ with others open. It is not: the
+  // user has chosen, and asking again would be asking twice. A cancel here could not undo the
+  // latch either, and would leave the app half-quit with the latch stuck for the session.
+  if (isAppQuitRequested()) return 'close-this-window';
   // Windows already on their way out are not left behind by this one closing
   if (countWindowsThatCouldBeTheLastOne() <= 1) return 'close-this-window';
 
