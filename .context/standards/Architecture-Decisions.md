@@ -2224,7 +2224,12 @@ step, no automation. Just a record.
   entry: that entry lets go of its runtime id the moment its window starts going down with the
   app, which is exactly when the close path asks. On confirm the quit latch is set BEFORE the other
   windows are told to close, so each reads a quit on its first pass and records `'entry-stays'` by
-  intent rather than by the last-window count happening to flip.
+  intent rather than by the last-window count happening to flip. Two closes of the primary are
+  NOT the user's ✕ and never ask: a quit already requested (the latch is set, and a quit arriving
+  while the question is open is taken as the answer, since a native dialog cannot be dismissed
+  from code), and a close the app decided itself — the primary emptied of its last web view closes
+  under the equal-siblings rule, and the emptiness handler marks it closing before scheduling that
+  close, which is the signal the decision reads.
 - **Alternatives:** Reading `getMainWindowId()` in the close path — rejected; it is the persisted
   lookup and goes `undefined` at the moment of use. A renderer-hosted confirm dialog — rejected;
   see the hanging-requester incident above. Re-electing a new primary when the primary closes —

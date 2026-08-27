@@ -127,6 +127,26 @@ describe('deciding what a window close means', () => {
     });
   });
 
+  describe('primary window the app has already decided to close', () => {
+    test('does not ask — an emptied window closes by rule, not by the user', async () => {
+      // When the last web view is moved out of the primary, the emptiness handler decides it
+      // closes and marks it closing BEFORE scheduling the close. That close is the app's own, made
+      // under the equal-siblings rule, not a ✕ the user pressed — asking "close the application?"
+      // here would block a decision already taken, with a dialog on a window that has nothing in it.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      setPrimaryWindowId(1);
+      markWindowClosing(1);
+      const { confirm } = promptAnswering('cancel');
+
+      const decision = await decideWindowClose(1, confirm);
+
+      expect(confirm).not.toHaveBeenCalled();
+      expect(decision).toBe('close-this-window');
+      expect(isAppQuitRequested()).toBe(false);
+    });
+  });
+
   describe('a quit arriving while the question is still open', () => {
     test('is the answer: the decision resolves to quit-all without waiting for the user', async () => {
       // The user is looking at the question when Cmd+Q, File → Quit or platform.quit fires. That
