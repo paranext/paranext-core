@@ -12,7 +12,10 @@
  * keeps the dialog's own sentence honest: it promises the windows will be restored the next time
  * the application is opened, so the relaunch half is not optional.
  *
- * TEST 3 — a quit during the question IS the answer. With the question showing and unanswered, a
+ * TEST 3 — the emptied primary. Its last tab is moved out; it docks Home rather than closing, and
+ * is still the primary, shown by its ✕ still asking.
+ *
+ * TEST 4 — a quit during the question IS the answer. With the question showing and unanswered, a
  * real quit arrives (`app.quit()`, which is what Cmd+Q, File → Quit and platform.quit all do). A
  * quit outranks any button, and the question cannot outlive it: the decision stops waiting and the
  * primary goes into its normal shutdown work. Both entries must survive and both windows return.
@@ -20,11 +23,8 @@
  * once had — the quit's own close is ignored while asking, and a prevented close cancels the quit,
  * so nothing but the decision giving way can end it.
  *
- * TEST 4 — the emptied primary. Its last tab is moved out; it docks Home rather than closing, and
- * is still the primary, shown by its ✕ still asking.
- *
  * The native dialog is stubbed in the main process through `electronApp.evaluate`, which records
- * each call and answers as the test directs, or holds the question open for test 3. `app.quit()` is
+ * each call and answers as the test directs, or holds the question open for test 4. `app.quit()` is
  * deliberately NOT how test 2 brings the app down: that path sets the quit latch first and never
  * asks, which is the behaviour the rule leaves unchanged.
  *
@@ -35,7 +35,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import type { ElectronApplication, Page } from '@playwright/test';
+import type { ElectronApplication } from '@playwright/test';
 import { test, expect } from '../../../fixtures/isolated.fixture';
 import {
   ElectronAppContext,
@@ -47,13 +47,17 @@ import {
   waitForAppReady,
 } from '../../../fixtures/helpers';
 import {
+  AppOutputCapture,
+  MOVE_COMMAND_TIMEOUT_MS,
   WEBSOCKET_PORT,
   captureAppOutput,
   createSecondWindow,
   createStepLogger,
+  expectWindowDockHasOnlyHomeTab,
+  getHeldWebViewIds,
   getWindowIdOfPage,
-  homeTabTitle,
   pollUntil,
+  quitAppAndWaitForExit,
   waitForAppPages,
   waitForRendererRegistered,
 } from './multi-window.util';
@@ -131,13 +135,6 @@ async function clickCloseOn(electronApp: ElectronApplication, windowId: number):
   }, windowId);
 }
 
-/** Web view ids a page currently holds, read from its tab titles */
-async function heldWebViewIds(page: Page): Promise<string[]> {
-  return page
-    .locator('.platform-tab-title[data-web-view-id]')
-    .evaluateAll((titles) => titles.map((title) => title.getAttribute('data-web-view-id') ?? ''));
-}
-
 /** IDs of the windows still alive in the main process */
 async function liveWindowIds(electronApp: ElectronApplication): Promise<number[]> {
   return electronApp.evaluate(({ BrowserWindow }) =>
@@ -148,36 +145,54 @@ async function liveWindowIds(electronApp: ElectronApplication): Promise<number[]
   );
 }
 
+/** Exit report of the Electron OS process. */
+type ProcessExitResult = { code: number | undefined; signal: string | undefined };
+
 /**
- * Wait for the Electron process to exit, reporting how; kills the process group afterwards.
+ * Arm a listener for the Electron process's exit, synchronously — before returning control to the
+ * caller, not merely before the caller's next `await`. Pair with {@link waitForArmedProcessExit},
+ * calling this FIRST and triggering the close only after, so an exit that lands before the
+ * trigger's own round trip returns is still caught rather than lost to a listener that attached too
+ * late.
+ */
+function armProcessExitWait(electronApp: ElectronApplication): Promise<ProcessExitResult> {
+  const electronProcess = electronApp.process();
+  return new Promise((resolve) => {
+    electronProcess.once('exit', (code, signal) =>
+      resolve({ code: code ?? undefined, signal: signal ?? undefined }),
+    );
+  });
+}
+
+/**
+ * Wait for an already-armed exit listener to fire, reporting how; kills the process group
+ * afterwards.
  *
- * Separate from `quitAppAndWaitForExit` because these tests bring the app down through a window's ✕
- * rather than `app.quit()`, and the wait has to be armed BEFORE that close is triggered. The output
- * tail on timeout is not decoration: the failure this guards is the app not exiting at all, and
- * without the app's last lines a hang reports only that it hung.
+ * A local pair rather than `quitAppAndWaitForExit`, because that shared helper triggers its own
+ * `app.quit()` — these tests bring the app down through a window's ✕ instead (a real quit is
+ * covered separately by the test that calls `quitAppAndWaitForExit` directly). The output tail on
+ * timeout is not decoration: the failure this guards is the app not exiting at all, and without the
+ * app's last lines a hang reports only that it hung.
  *
  * @param electronApp The app to wait on
+ * @param processExit The promise from {@link armProcessExitWait}, armed before the close was
+ *   triggered
  * @param output Capture whose tail is reported if the process never exits
  */
-async function waitForProcessExit(
+async function waitForArmedProcessExit(
   electronApp: ElectronApplication,
-  output?: { text: () => string },
-): Promise<{ code: number | undefined; signal: string | undefined }> {
+  processExit: Promise<ProcessExitResult>,
+  output: AppOutputCapture,
+): Promise<ProcessExitResult> {
   const electronProcess = electronApp.process();
   const result = await Promise.race([
-    new Promise<{ code: number | undefined; signal: string | undefined }>((resolve) => {
-      electronProcess.once('exit', (code, signal) =>
-        resolve({ code: code ?? undefined, signal: signal ?? undefined }),
-      );
-    }),
+    processExit,
     new Promise<never>((_resolve, reject) => {
       setTimeout(() => {
-        const outputTail = output?.text().split('\n').slice(-60).join('\n');
+        const outputTail = output.text().split('\n').slice(-60).join('\n');
         reject(
           new Error(
-            `Electron process did not exit within 120 s of closing all windows${
-              outputTail ? `; last app output:\n${outputTail}` : ''
-            }`,
+            `Electron process did not exit within 120 s of closing all windows; last app output:\n${outputTail}`,
           ),
         );
       }, 120_000);
@@ -207,7 +222,7 @@ test.describe('window close rule', () => {
 
   test.beforeAll(() => {
     // Power mode is REQUIRED: the startup restore recreates secondary windows only in Power mode,
-    // so without it tests 2 and 3 would see one window come back and fail for configuration
+    // so without it tests 2 and 4 would see one window come back and fail for configuration
     // reasons rather than for the rule under test. Restored afterwards so the developer's own
     // settings survive the suite.
     restoreSettings = preConfigureSettings({
@@ -285,11 +300,13 @@ test.describe('window close rule', () => {
       logStep(`phase 1: windows ${primaryId} (primary) and ${secondId} up`);
 
       await stubMessageBox(ctx.electronApp, CLOSE_ALL_BUTTON);
+      // Armed before the close is triggered — see `armProcessExitWait`.
+      const processExit = armProcessExitWait(ctx.electronApp);
       await clickCloseOn(ctx.electronApp, primaryId);
 
       // Every window goes down and the process exits cleanly — a real quit, not a hang and not a
       // crash. Asked exactly once: the secondary's own close must not ask again.
-      const exit = await waitForProcessExit(ctx.electronApp, output);
+      const exit = await waitForArmedProcessExit(ctx.electronApp, processExit, output);
       logStep(`phase 1: exited with code ${exit.code} signal ${exit.signal}`);
       expect(exit.signal).toBeUndefined();
       expect(exit.code).toBe(0);
@@ -339,18 +356,19 @@ test.describe('window close rule', () => {
     logStep(`windows ${primaryId} (primary) and ${secondId} up`);
 
     // Move the primary's only web view into window 2, emptying the primary
-    const [webViewInPrimary] = await heldWebViewIds(mainPage);
+    const [webViewInPrimary] = await getHeldWebViewIds(mainPage);
     expect(webViewInPrimary).toBeTruthy();
     const movedWebViewId = await sendPapiRequestOnce<string>(
       'command:platform.moveWebViewToWindow',
       [webViewInPrimary, secondId],
       WEBSOCKET_PORT,
-      120_000,
+      MOVE_COMMAND_TIMEOUT_MS,
     );
     logStep(`moved ${movedWebViewId} out of the primary and into window ${secondId}`);
 
-    // The primary stays, and docks Home rather than sitting empty
-    await expect(homeTabTitle(mainPage, primaryId)).toBeAttached({ timeout: 120_000 });
+    // The primary stays, and docks Home rather than sitting empty. Docked on the fly, so it carries
+    // a freshly minted id rather than the fixed fallback-layout one `homeTabTitle` builds.
+    await expectWindowDockHasOnlyHomeTab(mainPage);
     expect(mainPage.isClosed()).toBe(false);
     expect(await liveWindowIds(electronApp)).toHaveLength(2);
     logStep('primary stayed open and docked Home');
@@ -402,11 +420,9 @@ test.describe('window close rule', () => {
       );
       logStep('phase 1: question showing; quitting underneath it');
 
-      // Now a real quit arrives while the question is still up
-      await ctx.electronApp.evaluate(({ app }) => {
-        setTimeout(() => app.quit(), 0);
-      });
-      const exit = await waitForProcessExit(ctx.electronApp, output);
+      // Now a real quit arrives while the question is still up. `quitAppAndWaitForExit` triggers
+      // `app.quit()` itself and arms its exit listener first, which is exactly what this test needs.
+      const exit = await quitAppAndWaitForExit(ctx.electronApp, output);
       logStep(`phase 1: exited with code ${exit.code} signal ${exit.signal}`);
       expect(exit.signal).toBeUndefined();
       expect(exit.code).toBe(0);

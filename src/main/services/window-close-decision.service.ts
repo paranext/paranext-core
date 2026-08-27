@@ -73,10 +73,13 @@ export async function decideWindowClose(
     }),
     whenQuitRequested().then((): CloseAllAnswer => 'close-all'),
   ]);
-  // No second latch read here, deliberately. A quit taken down the question by aborting it, and
-  // that abort fires from the very promise this race is waiting on — so the latch side always
-  // settles first and the box's resulting `cancel` can never win. A `cancel` reaching this line is
-  // therefore always a real click made before any quit.
+  // No second latch read here, deliberately. A quit takes the question down by aborting it, but that
+  // abort still has to travel through the native dialog before the box's promise resolves as
+  // `cancel` — an event-loop turn at least — while `whenQuitRequested().then(...)` above resolves in
+  // plain microtasks off the same `markQuitRequested()` call. Microtasks always drain before the
+  // next event-loop turn, so the `'close-all'` branch of this race can never lose to an aborted
+  // box's `cancel`, whichever of the two subscribed to the latch first. A `cancel` reaching this line
+  // is therefore always a real click made before any quit.
   if (answer === 'cancel') return 'stay-open';
 
   markQuitRequested();
