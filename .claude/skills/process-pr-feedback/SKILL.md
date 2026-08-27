@@ -64,7 +64,10 @@ was commented on, and every branch we own above a changed one gets restacked and
 needs a row. Walk down from a PR's `baseRefName` with
 `gh pr list --head <baseRefName> --state all` until `main`, and up from its `headRefName` with
 `gh pr list --base <headRefName> --state all` until nothing answers — every PR, open or not,
-because a merged or closed one is where its branch's `baseRefName` and `author` still live. Only
+because a merged or closed one is where its branch's `baseRefName` and `author` still live. A
+branch with several PRs is read from the open one, else the most recently updated:
+`--json number,state,baseRefName,author,updatedAt --jq 'sort_by(.state != "OPEN", .updatedAt) | .[0]'`
+with `--limit 20`. Only
 **open** PRs join the stack that step 5 restacks and step 10 pushes. A merged or closed PR below
 ours ends the stack there and is decision item one at step 4: our branch's real base is now
 whatever that PR merged into. A closed PR above ours is simply not in the stack:
@@ -84,7 +87,8 @@ this
 round started from. Take both from the API, not from `git rev-parse origin/<branch>`, which
 reports only what was last fetched. A base branch with no PR at all gets a row from
 `git rev-parse origin/<branch>` — fresh, after the fetch above — with empty PR fields, and is ours
-only if `git log -1 --format=%ae <branch>` says so; step 5 re-checks it the same way. `main` itself
+only if `git log -1 --format=%ae origin/<branch>` equals
+`git config user.email`; step 5 re-checks it the same way. `main` itself
 has no row: it is never rewritten, so
 plain `merge-base` is always right against it.
 
