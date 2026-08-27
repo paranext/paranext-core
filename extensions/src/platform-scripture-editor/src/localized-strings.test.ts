@@ -6,6 +6,9 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.const';
 import { REMOVE_CHARACTER_MARKER_STRING_KEYS } from './character-marker-bar/use-remove-character-marker.hook';
 import { BOOK_NOT_AVAILABLE_VIEW_STRING_KEYS } from './book-not-available-view.const';
+import { RESOURCE_CELL_STRING_KEYS } from './scripture-text-grid/resource-cell.const';
+import { MODEL_TEXT_PANEL_STRING_KEYS } from './model-text-panel.const';
+import { RESOURCE_PANEL_TYPED_STRING_KEYS } from './resource-panel-strings.utils';
 
 type LocalizedStringsFile = {
   metadata?: Record<string, { fallbackKey?: string }>;
@@ -200,5 +203,52 @@ describe('retired book-not-found-in-project string', () => {
     expect(metadata?.[retiredKey]?.fallbackKey).toBe(
       '%webView_platformScriptureEditor_bookNotAvailable_simpleMessage%',
     );
+  });
+});
+
+// The resource panels' strings come in matched `bibleTexts_` / `commentaries_` pairs and the model
+// text panel's in a single set. Driven off the exported key lists so that an en-only addition, or a
+// dropped `es` value, fails here without anyone remembering to edit this file.
+describe.each([...RESOURCE_PANEL_TYPED_STRING_KEYS])('resource panel label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+describe.each([...MODEL_TEXT_PANEL_STRING_KEYS])('model text panel label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
+  });
+});
+
+// The Scripture Text Grid cell's status and action labels, likewise driven off the component's own
+// exported key list.
+describe.each([...RESOURCE_CELL_STRING_KEYS])('resource cell label %s', (key) => {
+  it('has an English label', () => {
+    expect(localizedStrings.en[key]).toBeTruthy();
+  });
+
+  it('has a Spanish label', () => {
+    expect(localizedStrings.es[key]).toBeTruthy();
+  });
+
+  it('Spanish label differs from English', () => {
+    expect(localizedStrings.es[key]).not.toBe(localizedStrings.en[key]);
   });
 });
