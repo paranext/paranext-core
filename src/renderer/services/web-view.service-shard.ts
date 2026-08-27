@@ -1323,6 +1323,12 @@ async function getPersistedLayout(
     logger.warn(
       `Could not get this window's saved layout after ${GET_PERSISTED_LAYOUT_ATTEMPTS} attempts; starting empty and holding layout pushes until a load succeeds`,
     );
+    // Main never said which slot this window occupies, and per-window storage cannot key on
+    // nothing. A session-only slot keeps every web view able to read and write its state for as
+    // long as this window runs; that state is simply not found again after a restart, which is
+    // the same standing this path already gives the layout by holding its pushes. Throwing
+    // instead would turn "start empty and keep going" into a window that cannot open anything.
+    setWindowSlotId(`session-only-${newGuid()}`);
     return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
   }
   isRunningOnFallbackLayout = false;

@@ -65,8 +65,10 @@ function removeObsoleteWindowIdKeys(): void {
 
 const localWindowStorage = {
   getItem(key: string): string | null {
-    removeObsoleteWindowIdKeys();
+    // The key is resolved before the sweep so that an access made too early throws without having
+    // destroyed anything first
     const slotKey = `${getSlotIdOrThrow()}_${key}`;
+    removeObsoleteWindowIdKeys();
     const value = localStorage.getItem(slotKey);
     // localStorage.getItem returns null when the key doesn't exist
     // eslint-disable-next-line no-null/no-null
@@ -87,8 +89,9 @@ const localWindowStorage = {
     return null;
   },
   setItem(key: string, value: string): void {
+    const slotKey = `${getSlotIdOrThrow()}_${key}`;
     removeObsoleteWindowIdKeys();
-    return localStorage.setItem(`${getSlotIdOrThrow()}_${key}`, value);
+    return localStorage.setItem(slotKey, value);
   },
 };
 

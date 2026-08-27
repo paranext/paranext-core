@@ -74,6 +74,19 @@ describe('localWindowStorage', () => {
     expect(localWindowStorage.getItem(KEY)).toBe('value for slot a');
   });
 
+  test('an access made before the slot is known destroys nothing', () => {
+    // The old-key sweep is a one-time upgrade step with a side effect on disk. An access that is
+    // going to throw because the slot is not yet known must throw BEFORE that sweep runs, or the
+    // throwing call would have quietly removed every old blob on its way out.
+    testingLocalWindowStorage.resetForTesting();
+    localStorage.setItem(`3_${KEY}`, 'stale, keyed by window id 3');
+
+    expect(() => localWindowStorage.getItem(KEY)).toThrow(/does not yet know its slot/);
+    expect(() => localWindowStorage.setItem(KEY, 'x')).toThrow(/does not yet know its slot/);
+
+    expect(localStorage.getItem(`3_${KEY}`)).toBe('stale, keyed by window id 3');
+  });
+
   test('refuses to guess at a key before main has said which slot this window is', () => {
     testingLocalWindowStorage.resetForTesting();
 
