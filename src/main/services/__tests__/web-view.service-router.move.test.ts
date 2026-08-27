@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 // `vi.mock` calls are hoisted above these imports, so the service resolves against the stubs below
 import {
+  getAllOpenWebViewDefinitionsWithReachability,
   setWebViewWindowCreator,
   startWebViewServiceRouter,
   testingWebViewServiceRouter,
@@ -619,13 +620,17 @@ describe('a web view that is between windows on a move', () => {
    * stand-in above leaves its list alone, which no window does — and the whole point of the gap is
    * that the source stops answering for the web view before the target starts.
    */
-  function sourceWindowShard(webViewId: WebViewId, capturedWebViewId: WebViewId = webViewId) {
+  function sourceWindowShard(
+    webViewId: WebViewId,
+    capturedWebViewId: WebViewId = webViewId,
+    extraCapturedFields: Partial<SavedWebViewDefinition> = {},
+  ) {
     const shard = windowShard([webViewId]);
     shard.captureAndCloseWebView.mockImplementation(async (id) => {
       if (id !== webViewId) return undefined;
       shard.getOpenWebViewDefinition.mockResolvedValue(undefined);
       shard.getAllOpenWebViewDefinitions.mockResolvedValue([]);
-      return { id: capturedWebViewId, webViewType: 'test.type' };
+      return { id: capturedWebViewId, webViewType: 'test.type', ...extraCapturedFields };
     });
     return shard;
   }
@@ -724,6 +729,76 @@ describe('a web view that is between windows on a move', () => {
     await expect(moveWebView('view-1', 3)).rejects.toThrow(/where it came from/);
 
     await expect(router.getOpenWebViewDefinition('view-1')).resolves.toBeUndefined();
+  });
+
+  test('the fan-out folds in a web view captured mid-move, with its project and state intact', async () => {
+    // Both windows answer the fan-out truthfully — the source closed the tab on capture, and the
+    // target has not adopted yet — so without folding in the move record a writable Scripture
+    // editor mid-move would be missing from a shutdown sync's project selection even though both
+    // windows are healthy and nothing looks unreachable.
+    const owner = sourceWindowShard('view-1', 'view-1', {
+      projectId: 'project-1',
+      state: { isReadOnly: false },
+    });
+    const target = windowShard([]);
+    let releaseAdopt: (webViewId: WebViewId) => void = () => {};
+    target.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdopt = resolve;
+        }),
+    );
+    withWindows({ 2: owner, 3: target });
+
+    const moving = moveWebView('view-1', 3);
+    await settle();
+
+    const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
+
+    expect(definitions).toContainEqual(
+      expect.objectContaining({
+        id: 'view-1',
+        projectId: 'project-1',
+        state: { isReadOnly: false },
+      }),
+    );
+
+    releaseAdopt('view-1');
+    await moving;
+  });
+
+  test('does not double-count a web view the target already reports while the move record is still open', async () => {
+    // A late-landing adopt (the router's own request timed out, but the target's state already has
+    // it) clears the move record only once its own probe confirms — so for a stretch the target
+    // already reports the definition AND the move record is still in the set. Folding in the move
+    // record unconditionally would count the same web view twice.
+    const owner = sourceWindowShard('view-1', 'view-1', { projectId: 'project-1' });
+    const target = windowShard([]);
+    let releaseAdopt: (webViewId: WebViewId) => void = () => {};
+    target.adoptWebView.mockImplementation(
+      async () =>
+        new Promise<WebViewId>((resolve) => {
+          releaseAdopt = resolve;
+        }),
+    );
+    withWindows({ 2: owner, 3: target });
+
+    const moving = moveWebView('view-1', 3);
+    await settle();
+
+    const alreadyAdoptedDefinition: SavedWebViewDefinition = {
+      id: 'view-1',
+      webViewType: 'test.type',
+      projectId: 'project-1',
+    };
+    target.getAllOpenWebViewDefinitions.mockResolvedValue([alreadyAdoptedDefinition]);
+
+    const { definitions } = await getAllOpenWebViewDefinitionsWithReachability();
+
+    expect(definitions.filter((definition) => definition.id === 'view-1')).toHaveLength(1);
+
+    releaseAdopt('view-1');
+    await moving;
   });
 });
 
