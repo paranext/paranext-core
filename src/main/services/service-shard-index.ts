@@ -21,6 +21,20 @@ import {
 } from '@shared/services/network-object.service';
 import { getErrorMessage, PlatformEvent, PlatformEventEmitter } from 'platform-bible-utils';
 
+/** A shard that has gone away, and the registration it went away from */
+export type ServiceShardDeparture = {
+  /** Window whose shard is gone */
+  windowId: number;
+  /**
+   * Network object id the departed shard was announced under.
+   *
+   * Carried on the event rather than looked up when it arrives: the index has already dropped the
+   * registration by then, and anything that named the shard's methods while it was alive needs the
+   * same id back to undo that.
+   */
+  networkObjectId: string;
+};
+
 /** The shards of one service, keyed by the window that registered each one */
 export interface ServiceShardIndex<T> {
   /**
@@ -35,6 +49,29 @@ export interface ServiceShardIndex<T> {
    * empty.
    */
   onDidAddShard: PlatformEvent<number>;
+
+  /**
+   * Fires when a window's shard leaves the index — the window closed, or its renderer navigated
+   * away from the page that registered it.
+   *
+   * The other half of {@link onDidAddShard}, for the routers that do something to the outside world
+   * when a shard appears and have to undo it when that shard goes. A window that has already
+   * registered a replacement does not fire this: the shard it is routed to did not go anywhere.
+   */
+  onDidRemoveShard: PlatformEvent<ServiceShardDeparture>;
+
+  /**
+   * The network object id the given window's shard is currently announced under, or `undefined` if
+   * that window has no shard in the index.
+   *
+   * The id is an internal detail of the registration, which is exactly why it is answered here
+   * rather than rebuilt: a caller that has to name the shard's methods (to set a request timeout on
+   * one, say) gets the id the shard actually announced, rather than a second spelling of the
+   * window-scoped name that would go silently wrong the moment the two disagreed.
+   *
+   * @param windowId Electron BrowserWindow ID of the window to get the shard's id for
+   */
+  getShardNetworkObjectId(windowId: number): string | undefined;
 
   /**
    * The given window's shard, or `undefined` if that window has not registered one — it may not
@@ -111,6 +148,7 @@ export function createServiceShardIndex<T>(options: {
   const openRegistrationsByShardId = new Map<string, ShardRegistration[]>();
 
   const onDidAddShardEmitter = new PlatformEventEmitter<number>();
+  const onDidRemoveShardEmitter = new PlatformEventEmitter<ServiceShardDeparture>();
 
   onDidCreateNetworkObject((networkObjectDetails) => {
     if (networkObjectDetails.objectType !== objectType) return;
@@ -186,14 +224,29 @@ export function createServiceShardIndex<T>(options: {
     logger.info(
       `Window ${disposedRegistration.windowId}'s ${objectType} shard '${networkObjectId}' is gone; nothing can be routed to that window until it registers again`,
     );
+
+    // Isolated for the same reason the arrival is: this is the only time anyone is told, and a
+    // subscriber throwing while cleaning up after one shard must not cost the rest the news.
+    onDidRemoveShardEmitter.emitIsolated(
+      { windowId: disposedRegistration.windowId, networkObjectId },
+      (error) => {
+        logger.error(
+          `A subscriber threw while being told window ${disposedRegistration.windowId}'s ${objectType} shard went away; the rest were still told: ${getErrorMessage(error)}`,
+        );
+      },
+    );
   });
 
   return {
     onDidAddShard: onDidAddShardEmitter.event,
+    onDidRemoveShard: onDidRemoveShardEmitter.event,
     async getShard(windowId: number): Promise<T | undefined> {
       const registration = liveRegistrationsByWindowId.get(windowId);
       if (!registration) return undefined;
       return resolveShard(registration.networkObjectId);
+    },
+    getShardNetworkObjectId(windowId: number): string | undefined {
+      return liveRegistrationsByWindowId.get(windowId)?.networkObjectId;
     },
     getShardWindowIds(): number[] {
       return [...liveRegistrationsByWindowId.keys()];

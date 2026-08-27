@@ -13,7 +13,7 @@ Read these when you need depth on a topic. Keep them in mind when writing or rev
 | Topic                   | File                                                                      | Key Content                                                  |
 | ----------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | Architecture            | [Architecture.md](.context/standards/Architecture.md)                     | Multi-process architecture, core services, IPC, key patterns |
-| Architecture Decisions  | [Architecture-Decisions.md](.context/standards/Architecture-Decisions.md) | Append-only log of significant architecture decisions + rationale; **update it whenever you make one** (see "Recording Architecture Decisions") |
+| Architecture Decisions  | [Architecture-Decisions.md](.context/standards/Architecture-Decisions.md) | Append-only log (one carve-out, stated in the log) of significant architecture decisions + rationale; **update it whenever you make one** (see "Recording Architecture Decisions") |
 | Code Style              | [Code-Style-Guide.md](.context/standards/Code-Style-Guide.md)             | TypeScript/C# conventions, API-surface TSDoc, localization, components, shadcn/ui |
 | Implementation Patterns | [Paranext-Core-Patterns.md](.context/standards/Paranext-Core-Patterns.md) | C# service/DataProvider/NetworkObject patterns, PAPI event registration, concurrency, extension structure, command naming |
 | Testing                 | [Testing-Guide.md](.context/standards/Testing-Guide.md)                   | Vitest/NUnit, TDD (outside-in), testing trophy, mutation/coverage, E2E, mocking, CI, platform gotchas |
@@ -209,7 +209,9 @@ deciding where a feature lives — record it in
 work, not just `/investigate-prd`.
 
 - **Capture the decision** as an append-only entry (date · status · context · decision · alternatives
-  · consequences). Mark superseded decisions rather than deleting them.
+  · consequences). Mark superseded decisions rather than deleting them — with the one carve-out the
+  log itself states: delete a superseded entry when leaving it would keep a dead approach readable as
+  available prior art, retire its number instead of reusing it, and leave a stub explaining the gap.
 - **Promote settled conventions:** when a decision hardens into a rule everyone should follow, also
   fold it into the relevant standard (`Architecture.md`, `Paranext-Core-Patterns.md`) or a
   `.claude/rules/` file — that is what the agents read and enforce on the next feature. The log keeps

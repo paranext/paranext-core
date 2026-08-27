@@ -103,14 +103,29 @@ more than one window.
 
 **Rules of the pattern:**
 
-- **Target state: platform code in the renderer registers zero globally-unique names.** Every global
-  name is registered by main, and a renderer only ever registers window-scoped objects, which makes
-  "a second window cannot start because the name is taken" structurally impossible rather than fixed
-  case by case. That is where the window-scoped services have arrived. Two app-global hosts have not
-  moved yet and are the exceptions: `theme.service-host.ts` and `scroll-group.service-host.ts` still
-  register their global names from whichever renderer gets there first, and the collision is handled
-  by host election with takeover instead — see ADR-0009. The invariant holds outright once those
-  hosts move to main.
+- **Platform code in the renderer registers zero globally-unique names, and no request or command
+  names at all.** Every global name is registered by main, and a renderer only ever registers
+  window-scoped network objects, which makes "a second window cannot start because the name is
+  taken" structurally impossible rather than fixed case by case. The window-scoped services got
+  there by scoping their network object names; the two app-global services got there by being hosted
+  in main — `src/main/services/scroll-group.service-host.ts` (`adr-scroll-group-hosted-in-main`) and
+  `src/main/services/theme.service-host.ts` (`adr-theme-hosted-in-main`). Main outlives every window, so a
+  globally-unique name it registers is held for the life of the app and no window's close can free
+  it.
+
+  Commands and request names went further than scoping: a renderer registers none of them. Every
+  command a window used to host — the dialogs, the settings tabs, the Usersnap forms, the
+  BookChapterControl, the scripture navigation steps — is registered in main and forwarded to a
+  window's shard as a method call (`adr-renderer-registers-no-names`). There is nothing left to keep a per-window name list
+  in step with.
+
+  **Two exceptions.** Extension and web-view code calls `papi.commands.registerCommand(...)` exactly
+  as it always has — that mechanism is unchanged and deliberately unguarded, and the rule above is
+  about platform code in `src/renderer`. And a name derived from a PER-INSTANCE id that only one
+  window can hold is not a globally-unique name at all: the web view message channel
+  (`webViewMessage:{webViewId}`, registered by `src/renderer/components/web-view.component.tsx`) is
+  the one such name platform code still registers, and a web view lives in exactly one window, so
+  two windows cannot collide on it.
 - **A shard declares what it is, and which window it is for.** It registers with a distinct
   `objectType` per service (`'webViewServiceShard'`, `'notificationServiceShard'`, …) and a
   `windowId` attribute — see `src/shared/models/service-shard.model.ts`. The window-scoped id stays
@@ -119,13 +134,20 @@ more than one window.
   (`src/main/services/service-shard-index.ts`) subscribes once to the network object create/dispose
   announcements, filters on the object type, and maintains a `windowId → shard` map. Lookups are
   O(1), and a window closing removes its shard for free.
-- **A router is a plain object declared as the service it answers for.**
-  `const router: WebViewServiceType = { ... }` plus `networkObjectService.set`, so a member added to
-  the service interface fails to compile until the router publishes it. The one piece that is shared
-  is `createTargetShardResolver` (`src/main/services/target-shard-resolver.util.ts`), which resolves
-  the shard of whichever window a call should currently run in. There is no router factory: with one
-  genuinely plain forward across four routers, generating them costs more than it saves and gives up
-  the free coverage the type annotation provides.
+- **A router that publishes a network object is a plain object declared as the service it answers
+  for.** `const router: WebViewServiceType = { ... }` plus `networkObjectService.set`, so a member
+  added to the service interface fails to compile until the router publishes it. The one piece that
+  is shared is `createTargetShardResolver` (`src/main/services/target-shard-resolver.util.ts`),
+  which resolves the shard of whichever window a call should currently run in. There is no router
+  factory: with one genuinely plain forward across the routers that have one, generating them costs
+  more than it saves and gives up the free coverage the type annotation provides.
+- **A router may claim command or request names instead of a network object** — the dialog, Usersnap
+  and BookChapterControl routers do, as does the scripture navigation command module. There is no
+  service interface to declare such a router as, so nothing type-checks the set of names it claims:
+  each one pins that set with an exact-set test in `src/main/services/__tests__/`, and each states
+  how it routes every command it claims so `assertCommandRoutingMatchesDocs`
+  (`src/main/services/owner-routed-command.util.ts`) can report a command whose OpenRPC parameters
+  say otherwise.
 - **The pattern does not depend on the transport.** Most routers and shards are plain network
   objects; the window service's are data providers, because it has subscription semantics.
   `registerEngine` passes `dataProviderType` / `dataProviderAttributes` straight through to
@@ -135,8 +157,20 @@ more than one window.
 (`extensions/src/platform-scripture/src/checks/check-aggregator.service.ts`) is a different shape —
 N sources holding different data, combined into one view.
 
-`theme.service-host.ts` and `scroll-group.service-host.ts` are NOT shards. They are app-global
-(one current theme, one scroll group 0) and keep the service-host name.
+`theme.service-host.ts` and `scroll-group.service-host.ts` are NOT shards. They are app-global (one
+current theme, one scroll group 0), they keep the service-host name, and both now live in
+`src/main/services/`.
+
+An app-global host in main pairs with a `*.service.ts` that is more than a proxy: where the UI needs
+a synchronous read, the service keeps a cache of the host's state, and where it needs a synchronous
+write it predicts the host's answer and reconciles afterwards. The cache is seeded synchronously at
+module load from the state main puts on the window's URL, so the first render is already right, and
+again from the host once the network is up — the scroll group from a snapshot call, the theme from
+its subscription's immediate delivery — and kept current by the host's events after that. In the
+renderer `papi.scrollGroups` and `papi.themes` resolve to those same caches, so everything in one
+window agrees. `src/renderer/services/scroll-group.service.ts` (predicting) and
+`src/renderer/services/theme.service.ts` (read-only) are the worked examples; the Do/Don't list is in
+[Paranext-Core-Patterns.md](Paranext-Core-Patterns.md#app-global-services-service-host-in-main--predicting-cache).
 
 ### Main Process Services (`src/main/services/`)
 
@@ -146,6 +180,8 @@ N sources holding different data, combined into one view.
 | `dotnet-data-provider.service.ts` | Spawns and manages .NET process |
 | `app.service-host.ts` | App metadata and lifecycle |
 | `data-protection.service-host.ts` | Encryption/decryption |
+| `scroll-group.service-host.ts` | App-global scroll group references and reference history |
+| `theme.service-host.ts` | App-global current theme, system-theme matching, and user themes |
 | `rpc-server.ts` | WebSocket JSON-RPC server |
 
 ### Shared Services (`src/shared/services/`)

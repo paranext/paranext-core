@@ -796,27 +796,66 @@ internal class DummyPapiClient : PapiClient
 
 ### TypeScript: Service Testing with Mocks
 
+> This example is executable and is meant to stay that way — it has shipped broken repeatedly
+> while being corrected by eye. `npm run verify:testing-guide` extracts the fence **verbatim**
+> and typechecks, lints and runs it; lint-staged runs it automatically whenever this file is
+> staged, so it does not depend on anyone remembering.
+
 ```typescript
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as networkService from '@shared/services/network.service';
+import { initialize as initializeSharedStore } from '@shared/services/shared-store.service';
 
+// Mock EVERY member the code under test touches, not just the one being asserted on — a missing
+// member is `undefined` at the call site, and the resulting throw is usually swallowed by the
+// service's own try/catch and surfaces only as a rejected promise.
 vi.mock('@shared/services/network.service', () => ({
-  createNetworkEventEmitter: vi.fn(),
+  createCoreMultiSourceEventEmitter: vi.fn(),
   getNetworkEvent: vi.fn(),
   request: vi.fn(),
+  registerRequestHandler: vi.fn(),
+}));
+
+// The same rule applies to collaborators, not just the module under assertion. `initialize` logs,
+// and the real logger module configures transports at import time, so leaving it unmocked gives a
+// copied test load-time side effects it never asked for.
+vi.mock('@shared/services/logger.service', () => ({
+  logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 describe('sharedStoreService', () => {
-  const mockEmitter = { emit: vi.fn(), subscribe: vi.fn(), dispose: vi.fn() };
+  // `event` matters as much as `emit`: the service subscribes through it during initialization.
+  const mockEmitter = {
+    emit: vi.fn(),
+    event: vi.fn(),
+    subscribe: vi.fn(),
+    subscribeOnce: vi.fn(),
+    dispose: vi.fn(),
+    emitLocal: vi.fn(),
+  };
 
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.mocked(networkService.createNetworkEventEmitter).mockReturnValue(mockEmitter);
+    // The factory returns the emitter alongside a promise for its central registration; the
+    // service consumes that promise in the background, so a mock must supply both. The cast is
+    // unavoidable: `PlatformEventEmitter` has private fields, so no object literal is assignable
+    // to it and the mock will not typecheck without it.
+    vi.mocked(networkService.createCoreMultiSourceEventEmitter).mockReturnValue(
+      // Needed for testing
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      {
+        emitter: mockEmitter,
+        registeredEmitterPromise: Promise.resolve(mockEmitter),
+      } as unknown as ReturnType<typeof networkService.createCoreMultiSourceEventEmitter>,
+    );
   });
 
   it('should initialize with network event emitter', async () => {
     await initializeSharedStore(networkService);
-    expect(networkService.createNetworkEventEmitter).toHaveBeenCalledWith('shared-store:change');
+    expect(networkService.createCoreMultiSourceEventEmitter).toHaveBeenCalledWith(
+      'shared-store:change',
+      expect.anything(),
+    );
   });
 });
 ```

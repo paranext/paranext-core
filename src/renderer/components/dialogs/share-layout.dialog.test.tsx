@@ -11,10 +11,9 @@ import { sendCommand } from '@shared/services/command.service';
 
 // Importing the real `DIALOGS` map transitively pulls in `project-picker.dialog.tsx` ->
 // `use-project-picker-data.hook.ts` -> the renderer web view host and `papi-frontend.service.ts`,
-// whose module-level `theme.service-host.ts` initialization calls `window.matchMedia`, which jsdom
-// does not implement. Mock both service boundaries (matching the precedent in
-// `use-project-picker-data.hook.test.ts`) since this smoke test only checks registration
-// metadata and never exercises project-picker behavior.
+// which start most of the renderer's services at module load. Mock both service boundaries
+// (matching the precedent in `use-project-picker-data.hook.test.ts`) since this smoke test only
+// checks registration metadata and never exercises project-picker behavior.
 vi.mock('@renderer/services/papi-frontend.service', () => ({
   webViews: {
     getAllOpenWebViewDefinitions: vi.fn(async () => []),
