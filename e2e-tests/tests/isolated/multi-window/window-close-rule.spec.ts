@@ -12,11 +12,16 @@
  * keeps the dialog's own sentence honest: it promises the windows will be restored the next time
  * the application is opened, so the relaunch half is not optional.
  *
- * TEST 3 — a quit during the question keeps the primary. With the question showing and unanswered,
- * a real quit arrives (`app.quit()`, which is what Cmd+Q, File → Quit and platform.quit all do).
- * The question is not a close in progress, so that quit must run the primary's normal shutdown work
- * rather than the escape hatch that skips it — otherwise the primary's entry is spliced out and the
- * main layout is lost through a timing window. Both entries must survive and both windows return.
+ * TEST 3 — a quit during the question IS the answer. With the question showing and unanswered, a
+ * real quit arrives (`app.quit()`, which is what Cmd+Q, File → Quit and platform.quit all do). A
+ * quit outranks any button, and the question cannot outlive it: the decision stops waiting and the
+ * primary goes into its normal shutdown work. Both entries must survive and both windows return.
+ * Written against a question that NEVER answers, which is the reproduction of the deadlock this
+ * once had — the quit's own close is ignored while asking, and a prevented close cancels the quit,
+ * so nothing but the decision giving way can end it.
+ *
+ * TEST 4 — the emptied primary. Its last tab is moved out; it docks Home rather than closing, and
+ * is still the primary, shown by its ✕ still asking.
  *
  * The native dialog is stubbed in the main process through `electronApp.evaluate`, which records
  * each call and answers as the test directs, or holds the question open for test 3. `app.quit()` is
@@ -143,9 +148,20 @@ async function liveWindowIds(electronApp: ElectronApplication): Promise<number[]
   );
 }
 
-/** Wait for the Electron process to exit, reporting how; kills the process group afterwards */
+/**
+ * Wait for the Electron process to exit, reporting how; kills the process group afterwards.
+ *
+ * Separate from `quitAppAndWaitForExit` because these tests bring the app down through a window's ✕
+ * rather than `app.quit()`, and the wait has to be armed BEFORE that close is triggered. The output
+ * tail on timeout is not decoration: the failure this guards is the app not exiting at all, and
+ * without the app's last lines a hang reports only that it hung.
+ *
+ * @param electronApp The app to wait on
+ * @param output Capture whose tail is reported if the process never exits
+ */
 async function waitForProcessExit(
   electronApp: ElectronApplication,
+  output?: { text: () => string },
 ): Promise<{ code: number | undefined; signal: string | undefined }> {
   const electronProcess = electronApp.process();
   const result = await Promise.race([
@@ -155,11 +171,16 @@ async function waitForProcessExit(
       );
     }),
     new Promise<never>((_resolve, reject) => {
-      setTimeout(
-        () =>
-          reject(new Error('Electron process did not exit within 120 s of closing all windows')),
-        120_000,
-      );
+      setTimeout(() => {
+        const outputTail = output?.text().split('\n').slice(-60).join('\n');
+        reject(
+          new Error(
+            `Electron process did not exit within 120 s of closing all windows${
+              outputTail ? `; last app output:\n${outputTail}` : ''
+            }`,
+          ),
+        );
+      }, 120_000);
     }),
   ]);
   if (electronProcess.pid) {
@@ -268,7 +289,7 @@ test.describe('window close rule', () => {
 
       // Every window goes down and the process exits cleanly — a real quit, not a hang and not a
       // crash. Asked exactly once: the secondary's own close must not ask again.
-      const exit = await waitForProcessExit(ctx.electronApp);
+      const exit = await waitForProcessExit(ctx.electronApp, output);
       logStep(`phase 1: exited with code ${exit.code} signal ${exit.signal}`);
       expect(exit.signal).toBeUndefined();
       expect(exit.code).toBe(0);
@@ -385,7 +406,7 @@ test.describe('window close rule', () => {
       await ctx.electronApp.evaluate(({ app }) => {
         setTimeout(() => app.quit(), 0);
       });
-      const exit = await waitForProcessExit(ctx.electronApp);
+      const exit = await waitForProcessExit(ctx.electronApp, output);
       logStep(`phase 1: exited with code ${exit.code} signal ${exit.signal}`);
       expect(exit.signal).toBeUndefined();
       expect(exit.code).toBe(0);
