@@ -2419,7 +2419,7 @@ step, no automation. Just a record.
   case it was added for.
 - **Source:** PT-4386.
 
-## adr-multi-window-uses-real-browser-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
+## adr-main-orchestrates-real-windows: Multi-window uses real BrowserWindows orchestrated by main, not rc-dock's windowbox
 
 - **Date:** 2026-08-11
 - **Status:** Accepted
