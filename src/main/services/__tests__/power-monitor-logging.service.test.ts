@@ -11,8 +11,8 @@ const { mockLoggerInfo, mockLoggerWarn } = vi.hoisted(() => ({
   mockLoggerWarn: vi.fn(),
 }));
 
-// vi.mock and vi.hoisted calls are hoisted above the imports above at transform time, so the
-// static imports can be written first here to satisfy import/first.
+// vi.mock and vi.hoisted calls are hoisted above the static imports at transform time, so the
+// imports can be written first here to satisfy import/first.
 vi.mock('@shared/services/logger.service', () => ({
   logger: { info: mockLoggerInfo, warn: mockLoggerWarn, error: vi.fn(), debug: vi.fn() },
 }));

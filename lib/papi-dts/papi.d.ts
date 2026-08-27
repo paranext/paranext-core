@@ -1125,8 +1125,20 @@ declare module 'shared/data/rpc.model' {
     errorCode?: JSONRPCErrorCode,
     requestId?: RequestId,
   ): JSONRPCErrorResponse;
-  /** Maximum characters retained from a single logged detail (close reason, error stack) */
+  /**
+   * Maximum characters retained from a single logged detail that can originate from a remote peer (a
+   * close `reason`, an error `message`)
+   */
   export const MAX_LOGGED_DETAIL_LENGTH = 200;
+  /**
+   * Maximum characters retained from a logged stack trace.
+   *
+   * Far more generous than {@link MAX_LOGGED_DETAIL_LENGTH} because a stack is generated locally
+   * rather than supplied by a peer, so the flood-protection rationale does not apply — and because a
+   * stack bounded to a couple of hundred characters is one or two frames, which is rarely the frame
+   * that explains a disconnect.
+   */
+  export const MAX_LOGGED_STACK_LENGTH = 4000;
   /**
    * Close code used when we close a PAPI socket on purpose (shutdown, teardown). The WebSocket spec
    * reserves 3000-4999 for application use, so carrying intent in the code itself lets a close

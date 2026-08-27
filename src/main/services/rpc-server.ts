@@ -228,9 +228,9 @@ export class RpcServer implements IRpcHandler {
 
     this.jsonRpcClient.rejectAllPendingRequests(`Web socket ${this.name} has closed`);
     const detail = describeWebSocketCloseEvent(ev);
-    const wasClean = isCleanCloseEvent(ev);
+    const isClean = isCleanCloseEvent(ev);
     const summary = `Websocket ${this.name} closed (${detail}). Removing ${this.rpcMethodDetailsByMethodName.size} methods`;
-    if (wasClean) logger.info(summary);
+    if (isClean) logger.info(summary);
     else logger.warn(summary);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
@@ -247,7 +247,7 @@ export class RpcServer implements IRpcHandler {
     // `ws` and Chromium keep the informative fields as prototype accessors, so the event
     // cannot be serialized directly — see describeWebSocketErrorEvent.
     const detail = describeWebSocketErrorEvent(ev);
-    this.handleError(`Server websocket error event occurred: ${detail}`, detail);
+    this.handleError('Server websocket error event occurred', detail);
   }
 
   private async onMessageReceivedByWebSocket(ev: MessageEvent) {

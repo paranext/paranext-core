@@ -8,8 +8,8 @@ const { mockLoggerError, mockLoggerWarn, mockLoggerInfo } = vi.hoisted(() => ({
   mockLoggerInfo: vi.fn(),
 }));
 
-// vi.mock and vi.hoisted calls are hoisted above the imports above at transform time, so the
-// static imports can be written first here to satisfy import/first.
+// vi.mock and vi.hoisted calls are hoisted above the static imports at transform time, so the
+// imports can be written first here to satisfy import/first.
 vi.mock('@shared/services/logger.service', () => ({
   logger: {
     error: mockLoggerError,
@@ -71,6 +71,20 @@ describe('RpcServer error logging', () => {
     expect(logged).toContain('socket hang up');
     expect(logged).toContain('ECONNRESET');
     expect(logged).not.toContain('{}');
+  });
+
+  test('logs the error detail exactly once, not doubled', async () => {
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+
+    dispatch('error', { message: 'read ECONNRESET' });
+
+    const logged = mockLoggerError.mock.calls[0][0];
+    // A regression that re-interpolates the detail into the message as well as the data
+    // argument would double it, so assert the occurrence count rather than pinning the full
+    // log line (which would break on harmless wording changes).
+    expect(logged.split('read ECONNRESET')).toHaveLength(2);
   });
 
   test('reports unknown rather than {} for a detail-free event', async () => {

@@ -10,12 +10,7 @@ export type PowerMonitorLike = { on(event: string, listener: () => void): unknow
  * Power transitions worth recording. A suspend tears down Chromium's WebSockets, so without these
  * markers a disconnect in the log has no attributable cause.
  */
-export const POWER_EVENTS: readonly string[] = [
-  'suspend',
-  'resume',
-  'lock-screen',
-  'unlock-screen',
-];
+export const POWER_EVENTS = ['suspend', 'resume', 'lock-screen', 'unlock-screen'] as const;
 
 // Guards against a second `registerPowerMonitorListeners` call on the same `powerMonitor`
 // doubling up listeners (and thus doubling every power log line) if a future caller invokes it

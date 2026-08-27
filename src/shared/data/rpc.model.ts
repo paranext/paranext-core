@@ -114,8 +114,21 @@ export function createErrorResponse(
   return { jsonrpc: JSONRPC, id: requestId, error: { code: errorCode, message: errorMessage } };
 }
 
-/** Maximum characters retained from a single logged detail (close reason, error stack) */
+/**
+ * Maximum characters retained from a single logged detail that can originate from a remote peer (a
+ * close `reason`, an error `message`)
+ */
 export const MAX_LOGGED_DETAIL_LENGTH = 200;
+
+/**
+ * Maximum characters retained from a logged stack trace.
+ *
+ * Far more generous than {@link MAX_LOGGED_DETAIL_LENGTH} because a stack is generated locally
+ * rather than supplied by a peer, so the flood-protection rationale does not apply — and because a
+ * stack bounded to a couple of hundred characters is one or two frames, which is rarely the frame
+ * that explains a disconnect.
+ */
+export const MAX_LOGGED_STACK_LENGTH = 4000;
 
 /**
  * Close code used when we close a PAPI socket on purpose (shutdown, teardown). The WebSocket spec
@@ -163,12 +176,13 @@ function readEventProperty(source: object, key: string): unknown {
 /**
  * Collapse whitespace that would break line-oriented log parsing and bound the length, so a single
  * event cannot flood a log line. Values here can originate from a remote peer.
+ *
+ * @param maxLength Characters to retain. Defaults to {@link MAX_LOGGED_DETAIL_LENGTH}; pass
+ *   {@link MAX_LOGGED_STACK_LENGTH} for a locally generated stack.
  */
-function sanitizeForLog(value: string): string {
+function sanitizeForLog(value: string, maxLength: number = MAX_LOGGED_DETAIL_LENGTH): string {
   const collapsed = value.replace(/[\r\n\t]+/g, ' ');
-  return collapsed.length > MAX_LOGGED_DETAIL_LENGTH
-    ? `${collapsed.slice(0, MAX_LOGGED_DETAIL_LENGTH)}…`
-    : collapsed;
+  return collapsed.length > maxLength ? `${collapsed.slice(0, maxLength)}…` : collapsed;
 }
 
 /**
@@ -248,7 +262,8 @@ export function describeWebSocketErrorEvent(ev: unknown): string {
         code = sanitizeForLog(`${errorCode}`);
 
       const errorStack = readEventProperty(error, 'stack');
-      if (typeof errorStack === 'string') stack = sanitizeForLog(errorStack);
+      if (typeof errorStack === 'string')
+        stack = sanitizeForLog(errorStack, MAX_LOGGED_STACK_LENGTH);
 
       const cause = readEventProperty(error, 'cause');
       if (typeof cause === 'object' && cause) {

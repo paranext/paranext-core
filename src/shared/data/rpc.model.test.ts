@@ -9,6 +9,7 @@ import {
   isCleanCloseCode,
   isCleanCloseEvent,
   MAX_LOGGED_DETAIL_LENGTH,
+  MAX_LOGGED_STACK_LENGTH,
   MAX_REQUEST_ATTEMPTS,
   REQUEST_ATTEMPT_WAIT_TIME_MS,
   requestWithRetry,
@@ -532,8 +533,18 @@ describe('describeWebSocketErrorEvent', () => {
 
   test('bounds a very long stack', () => {
     const error = new Error('long');
-    error.stack = 'y'.repeat(MAX_LOGGED_DETAIL_LENGTH * 3);
+    error.stack = 'y'.repeat(MAX_LOGGED_STACK_LENGTH * 3);
     expect(describeWebSocketErrorEvent(new WsLikeErrorEvent('e', error))).toContain('…');
+  });
+
+  test('keeps a stack longer than the peer-supplied detail bound', () => {
+    const error = new Error('long');
+    // A stack is generated locally, so it gets the more generous stack bound; truncating it to the
+    // peer-detail bound would discard the frames a disconnect is diagnosed from.
+    error.stack = 'y'.repeat(MAX_LOGGED_DETAIL_LENGTH * 3);
+    const result = describeWebSocketErrorEvent(new WsLikeErrorEvent('e', error));
+    expect(result).not.toContain('…');
+    expect(result).toContain('y'.repeat(MAX_LOGGED_DETAIL_LENGTH * 3));
   });
 
   test('surfaces a cross-realm error, which an instanceof check would miss', () => {
