@@ -619,18 +619,47 @@ describe('overlay.service-host', () => {
       return promise2;
     });
 
-    it('should reject with RESOURCE_EXHAUSTED within debounce cooldown', async () => {
+    it('should reject with RESOURCE_EXHAUSTED within debounce cooldown when no palette is open', async () => {
       const promise1 = overlayService.showCommandPalette(validRequest, 'test-webview');
-      // Second call within 50ms should throw
+      // Dismiss the first palette so the second show has nothing to replace — the debounce
+      // guards exactly this shape (an accidental rapid double-open with no palette on screen)
+      await overlayService.dismissCommandPalette('test-webview');
+      await promise1;
+
       await expect(
         overlayService.showCommandPalette(validRequest, 'test-webview'),
       ).rejects.toSatisfy(
         (error: unknown) => isPlatformError(error) && error.code === RESOURCE_EXHAUSTED,
       );
-      expect(getOverlays()).toHaveLength(1);
+      expect(getOverlays()).toHaveLength(0);
+    });
 
-      getOverlays()[0].resolve(undefined);
-      return promise1;
+    it('should bypass the debounce and replace when this webView already has a palette open', async () => {
+      // A second show inside the cooldown is a legitimate REPLACE when a palette is open (the `\`
+      // commit key reopens the palette back-to-back). Rejecting it left the old palette mounted
+      // while the owner's rejection cleanup cleared its session — keystrokes then fell through to
+      // the document under a visible palette.
+      const promise1 = overlayService.showCommandPalette(validRequest, 'test-webview');
+
+      const request2: CommandPaletteRequest = {
+        items: [{ id: 'p', label: 'Paragraph' }],
+        anchor: { x: 60, y: 110 },
+      };
+      // Immediately (well inside the 50ms cooldown): the second show must succeed and replace
+      const promise2 = overlayService.showCommandPalette(request2, 'test-webview');
+
+      await expect(promise1).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
+      const palettes = getOverlays().filter((o) => o.type === 'commandPalette');
+      expect(palettes).toHaveLength(1);
+      // Type narrowed by the filter above
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const palette = palettes[0] as Extract<(typeof palettes)[0], { type: 'commandPalette' }>;
+      expect(palette.items).toBe(request2.items);
+
+      palette.resolve(undefined);
+      return promise2;
     });
 
     it('should handle centered mode (no anchor)', () => {
@@ -1122,6 +1151,73 @@ describe('overlay.service-host', () => {
 
       palette.resolve(undefined);
       await promise;
+    });
+
+    it('should keep only the NEWER palette when two localized requests overlap the localization await', async () => {
+      // Both requests carry LocalizeKey items, so both take the localization await — the window in
+      // which the pre-await replace sweep cannot see the other request. The post-await sweep must
+      // reject the palette the first request added, leaving one palette that is also the one the
+      // WebView-keyed drivers drive.
+      const pendingItemLookups: (() => void)[] = [];
+      vi.mocked(localizationService.getLocalizedStrings).mockImplementation(
+        async ({ localizeKeys }) => {
+          const strings: LanguageStrings = {};
+          localizeKeys.forEach((localizeKey) => {
+            if (LOCALIZED_STRINGS[localizeKey] !== undefined)
+              strings[localizeKey] = LOCALIZED_STRINGS[localizeKey];
+          });
+          // Screen-reader announcement lookups resolve immediately; only ITEM localization (marker
+          // keys) is held open so both shows sit in the await together
+          if (!localizeKeys.some((localizeKey) => localizeKey.startsWith('%marker_')))
+            return strings;
+          return new Promise((resolve) => {
+            pendingItemLookups.push(() => resolve(strings));
+          });
+        },
+      );
+      const flushMicrotasks = async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      };
+
+      const requestA: CommandPaletteRequest = {
+        items: [{ id: 'ft', label: '%marker_ft_label%' }],
+      };
+      const requestB: CommandPaletteRequest = {
+        items: [
+          { id: 'ft', label: '%marker_ft_label%' },
+          { id: 'fig', label: '%marker_fig_label%' },
+        ],
+      };
+
+      const promiseA = overlayService.showCommandPalette(requestA, 'test-webview');
+      // The two requests are >50ms apart in production; collapse the cooldown for the test
+      resetDebounceState();
+      const promiseB = overlayService.showCommandPalette(requestB, 'test-webview');
+      const promiseARejects = expect(promiseA).rejects.toSatisfy(
+        (error: unknown) => isPlatformError(error) && error.code === ABORTED,
+      );
+      await flushMicrotasks();
+      expect(pendingItemLookups).toHaveLength(2);
+
+      // A's localization resolves first: its palette lands
+      pendingItemLookups[0]();
+      await flushMicrotasks();
+      expect(getOverlays()).toHaveLength(1);
+
+      // B's localization resolves: its post-await sweep replaces A's palette
+      pendingItemLookups[1]();
+      await flushMicrotasks();
+      await promiseARejects;
+      const palettes = getOverlays().filter((o) => o.type === 'commandPalette');
+      expect(palettes).toHaveLength(1);
+
+      // The surviving palette is the one the WebView-keyed drivers drive
+      await overlayService.updateCommandPalette('test-webview', { filterText: 'fi' });
+      await overlayService.commitCommandPaletteSelection('test-webview');
+      expect(await promiseB).toBe('fig');
+      expect(getOverlays()).toHaveLength(0);
     });
 
     it('should pass plain-string items through untouched and create the overlay synchronously', () => {
@@ -1728,6 +1824,39 @@ describe('overlay.service-host', () => {
       emitAppWindowInput('escape');
       await expect(olderPalettePromise).resolves.toBeUndefined();
       expect(getOverlays()).toHaveLength(0);
+    });
+
+    it('should leave a popover under a modal alone on escape — the topmost surface owns the key', async () => {
+      vi.useFakeTimers();
+
+      const popoverId = await overlayService.showPopover(popoverRequest, 'modal-over-popover');
+      expectPopoverId(popoverId);
+      const popoverDismissed = overlayService.onPopoverDismissed(popoverId);
+      const MockDialogComponent = vi.fn(
+        // vi.fn mock must satisfy React component return type; `any` cast is the standard pattern
+        // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+        () => undefined as any,
+      );
+      // The modal is created after the popover, so it is the topmost overlay
+      const modalPromise = showModalDialogOverlay(
+        MockDialogComponent,
+        { prompt: 'Confirm something', isDialog: true },
+        undefined,
+        'modal-over-popover',
+      );
+      vi.advanceTimersByTime(PAST_GRACE_MS);
+
+      emitAppWindowInput('escape');
+
+      // Escape unwinds ONE surface per press, and that surface is the modal — whose own shell
+      // answers the key. Nothing may be dismissed through this path, least of all the popover
+      // underneath, which an escape that skipped modals used to close alongside the modal.
+      expect(getOverlays().map((overlay) => overlay.type)).toEqual(['popover', 'modalDialog']);
+
+      // Clean up
+      getOverlays().forEach((overlay) => overlay.resolve(undefined));
+      await expect(popoverDismissed).resolves.toBeUndefined();
+      await modalPromise;
     });
 
     it('should keep a dismissOnClickOutside: false popover open on mouseDown but close it on escape', async () => {

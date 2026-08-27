@@ -173,12 +173,16 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     category: 'Menus',
     context: 'Main process (global)',
     // Announced without preventDefault, so the focused frame still receives Escape and may act on
-    // it too — e.g. the scripture editor's marker palette closes its own session
+    // it too — e.g. the scripture editor's marker palette closes its own session. Only the bare,
+    // initial press announces: a modified Escape (Shift/Ctrl/Alt/Meta) or an auto-repeat tick of a
+    // held Escape is not the dismissal gesture. A modal dialog on top is left to its own shell,
+    // and a focused command palette also answers Escape through its own keydown handler.
     keys: { macOS: '⎋', windows: 'Esc', linux: 'Esc' },
     locations: [
       'src/main/main.ts',
       'src/main/app-window-input.util.ts',
       'src/renderer/services/overlays/overlay.service-host.ts',
+      'src/renderer/components/overlays/overlay-command-palette.component.tsx',
     ],
   },
   {
@@ -204,7 +208,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-markers-menu-commit-typed',
     purpose: 'Commit the marker typed in the markers menu',
     category: 'Editing',
-    context: 'Scripture editor web view, while the markers menu is open',
+    context:
+      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Space commits what was TYPED, not the highlighted entry: at a collapsed caret it materializes
     // the typed marker; over a selection it wraps only on an exact (case-insensitive) match and
     // otherwise closes without touching the selection. (The Enter-triggered paragraph menu is a
@@ -217,7 +222,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-markers-menu-commit-highlighted',
     purpose: 'Commit the highlighted entry in the markers menu',
     category: 'Editing',
-    context: 'Scripture editor web view, while the markers menu is open',
+    context:
+      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Enter and Tab are one commit gesture, matching the editor package's own menus. Over a
     // zero-match filter both are claimed no-ops (PT9 parity — the menu stays open). Enter also
     // commits the Enter-triggered paragraph menu — normally through the overlay's own input, and
@@ -230,7 +236,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-markers-menu-filter',
     purpose: 'Move the highlight and widen or narrow the typed filter in the markers menu',
     category: 'Editing',
-    context: 'Scripture editor web view, while the markers menu is open',
+    context:
+      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Arrow keys move the highlighted entry; Backspace widens the typed filter, or closes the
     // menu when nothing is typed. Marker characters (letters, digits, `+`, `-`) narrow it.
     keys: {
@@ -244,7 +251,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-markers-menu-commit-closing-marker',
     purpose: 'Commit a closing marker from the markers menu',
     category: 'Editing',
-    context: 'Scripture editor web view, while the markers menu is open',
+    context:
+      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // The counterpart to Space's opening-marker commit: commits the typed marker's closing form
     // with no terminating space. Over a non-collapsed selection the selected content is replaced,
     // which is what typing a closing marker by hand has always done. Not offered in the
@@ -256,7 +264,8 @@ export const rootKeyboardShortcuts: KeyboardShortcutEntry[] = [
     id: 'scripture-markers-menu-commit-and-reopen',
     purpose: 'Commit the typed marker and immediately open the markers menu again',
     category: 'Editing',
-    context: 'Scripture editor web view, while the markers menu is open',
+    context:
+      'Scripture editor web view (main text or the footnote editor popover), while the markers menu is open',
     // Commits like Space but without the terminating space, then reopens for the backslash just
     // pressed, so a paired marker is one continuous flow. With nothing typed there is nothing to
     // commit and the backslash lands as an ordinary character.

@@ -327,26 +327,6 @@ describe('overlay-store', () => {
       expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(2);
     });
 
-    it('should let an absolute selectedIndex win when selectedIndexDelta is also provided', () => {
-      // From base index 0 with { selectedIndex: 2, selectedIndexDelta: 1 }: absolute-wins gives 2,
-      // delta-wins would give 1, and applying both would give 3 — so only the documented
-      // absolute-wins contract produces 2.
-      const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
-        selectedIndex: 0,
-      });
-      addOverlay(entry);
-
-      updateCommandPaletteState('palette-1', {
-        selectedIndex: 2,
-        selectedIndexDelta: 1,
-        itemCount: 5,
-      });
-      const overlay = getOverlayById('palette-1');
-      // overlay is a union type and we know it's a commandPalette from setup
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      expect((overlay as Extract<OverlayEntry, { type: 'commandPalette' }>).selectedIndex).toBe(2);
-    });
-
     it('should move selectedIndex by selectedIndexDelta and clamp to bounds', () => {
       const entry = createCommandPaletteEntry('palette-1', 'webview-1', undefined, {
         selectedIndex: 1,

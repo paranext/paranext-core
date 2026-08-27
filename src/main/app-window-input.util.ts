@@ -9,14 +9,27 @@ import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
 
 /**
  * The parts of Electron's keyboard `Input` and `MouseInputEvent` that app-window input
- * classification reads. Both event shapes carry a `type`; only the keyboard one carries a `key`.
+ * classification reads. Both event shapes carry a `type`; only the keyboard one carries the key
+ * identity, modifier flags, and auto-repeat flag.
  */
-type AppWindowInputSource = { type: string; key?: string };
+type AppWindowInputSource = {
+  type: string;
+  key?: string;
+  isAutoRepeat?: boolean;
+  shift?: boolean;
+  control?: boolean;
+  alt?: boolean;
+  meta?: boolean;
+};
 
 /**
  * Determine whether `input` is one of the gestures that dismisses transient overlays and, if so,
  * which kind it is. `mouseUp` and every non-Escape key are ignored so the app-window input event
- * stays limited to dismissal gestures.
+ * stays limited to dismissal gestures. An Escape only counts as the dismissal gesture when it is
+ * the bare, initial press: a modified Escape (Shift/Ctrl/Alt/Meta held) is a chord with its own
+ * meaning, and a HELD Escape's auto-repeat ticks would each emit another cross-process event for a
+ * gesture that already happened. This narrowing only rejects inputs — the announced payload is
+ * still the gesture kind alone, so the security boundary below is unchanged.
  *
  * SECURITY: this filter is a boundary, not just noise reduction. The hooks feeding it see every
  * keystroke and mouse event in the window — including input typed into other extensions' web views
@@ -30,8 +43,10 @@ type AppWindowInputSource = { type: string; key?: string };
  */
 export function getAppWindowInputKind(input: AppWindowInputSource): AppWindowInputKind | undefined {
   if (input.type === 'mouseDown') return 'mouseDown';
-  if (input.type === 'keyDown' && input.key === 'Escape') return 'escape';
-  return undefined;
+  if (input.type !== 'keyDown' || input.key !== 'Escape') return undefined;
+  if (input.isAutoRepeat) return undefined;
+  if (input.shift || input.control || input.alt || input.meta) return undefined;
+  return 'escape';
 }
 
 /** Emitter for {@link EVENT_NAME_ON_DID_APP_WINDOW_INPUT}, undefined until the event is started */

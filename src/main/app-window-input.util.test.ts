@@ -8,8 +8,18 @@ function mouse(type: string, button: 'left' | 'right' = 'left') {
 }
 
 /** Build the parts of an Electron keyboard `Input` the handlers pass along */
-function key(type: string, keyName: string) {
-  return { type, key: keyName };
+function key(
+  type: string,
+  keyName: string,
+  flags: {
+    isAutoRepeat?: boolean;
+    shift?: boolean;
+    control?: boolean;
+    alt?: boolean;
+    meta?: boolean;
+  } = {},
+) {
+  return { type, key: keyName, ...flags };
 }
 
 vi.mock('@shared/services/network.service', () => ({
@@ -58,6 +68,23 @@ describe('getAppWindowInputKind', () => {
     expect(getAppWindowInputKind(key('keyDown', 'a'))).toBeUndefined();
     expect(getAppWindowInputKind(key('keyDown', 'Enter'))).toBeUndefined();
     expect(getAppWindowInputKind(key('keyUp', 'Escape'))).toBeUndefined();
+  });
+
+  it('ignores a modified Escape — Shift/Ctrl/Alt/Meta chords are not the dismissal gesture', () => {
+    expect(getAppWindowInputKind(key('keyDown', 'Escape', { shift: true }))).toBeUndefined();
+    expect(getAppWindowInputKind(key('keyDown', 'Escape', { control: true }))).toBeUndefined();
+    expect(getAppWindowInputKind(key('keyDown', 'Escape', { alt: true }))).toBeUndefined();
+    expect(getAppWindowInputKind(key('keyDown', 'Escape', { meta: true }))).toBeUndefined();
+  });
+
+  it('ignores auto-repeat Escape ticks — a held Escape announces only its initial press', () => {
+    expect(getAppWindowInputKind(key('keyDown', 'Escape', { isAutoRepeat: true }))).toBeUndefined();
+    // The initial press (explicitly not auto-repeat) still announces
+    expect(getAppWindowInputKind(key('keyDown', 'Escape', { isAutoRepeat: false }))).toBe('escape');
+  });
+
+  it('classifies a mouse down regardless of modifier state (modifiers only narrow Escape)', () => {
+    expect(getAppWindowInputKind({ type: 'mouseDown', control: true })).toBe('mouseDown');
   });
 });
 

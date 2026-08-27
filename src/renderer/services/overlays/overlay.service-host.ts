@@ -733,6 +733,23 @@ async function localizePaletteItems(
 }
 
 /**
+ * Rejects (ABORTED) and removes every command palette this WebView already has open, restoring the
+ * focus each saved — a new request replaces its predecessors rather than stacking on them, which is
+ * what keeps the one-palette-per-WebView invariant true in the store.
+ */
+function replaceExistingCommandPalettes(webViewId: string): void {
+  getOverlaysByWebView(webViewId)
+    .filter((o) => o.type === 'commandPalette')
+    .forEach((existing) => {
+      rejectAndRemoveOverlay(
+        existing.id,
+        newPlatformError('Overlay was replaced by a new request', ABORTED),
+      );
+      restoreFocus(existing.id);
+    });
+}
+
+/**
  * Shows a command palette overlay with searchable/filterable items. Validates the request, checks
  * visibility, translates coordinates, and returns the user's selection or undefined if dismissed.
  *
@@ -744,7 +761,7 @@ async function localizePaletteItems(
  * @param webViewId The webViewId that originated the request
  * @returns The selected item's ID, or undefined if dismissed
  * @throws PlatformError with code RESOURCE_EXHAUSTED if a duplicate request arrives within the
- *   debounce cooldown
+ *   debounce cooldown while this WebView has no palette open
  */
 async function showCommandPalette(
   request: CommandPaletteRequest,
@@ -757,35 +774,38 @@ async function showCommandPalette(
     throw newPlatformError('Requesting WebView is not visible', FAILED_PRECONDITION);
   }
 
-  // Leading-edge debounce: drop rapid re-triggers within 50ms
-  if (!debounceCheck('commandPalette', webViewId)) {
+  // Leading-edge debounce: drop rapid re-triggers within 50ms — but only when this WebView has NO
+  // palette open. A show that REPLACES an open palette is a legitimate rapid second request (the
+  // `\` commit key reopens the palette back-to-back), and rejecting it here left the OLD palette
+  // mounted while the owner's rejection cleanup cleared its session — keystrokes then fell through
+  // to the document under a visible palette. The debounce exists to absorb accidental
+  // double-opens, not replaces.
+  const hasExistingPalette = getOverlaysByWebView(webViewId).some(
+    (o) => o.type === 'commandPalette',
+  );
+  if (!hasExistingPalette && !debounceCheck('commandPalette', webViewId)) {
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
-  // Replace any existing command palette from this webView — BEFORE the localization await
-  // below, never after it: with the replace on the far side of the await, a second request could
-  // start while the first was still resolving localization and BOTH ended up added, after which
-  // `getActiveCommandPalette` (`.find` in creation order) drove the OLDER one.
-  const existingOverlays = getOverlaysByWebView(webViewId).filter(
-    (o) => o.type === 'commandPalette',
-  );
-  existingOverlays.forEach((existing) => {
-    rejectAndRemoveOverlay(
-      existing.id,
-      newPlatformError('Overlay was replaced by a new request', ABORTED),
-    );
-    restoreFocus(existing.id);
-  });
+  // Replace any existing command palette from this webView BEFORE the localization await below —
+  // with the replace only on the far side of the await, a second request could start while the
+  // first was still resolving localization and BOTH ended up added.
+  replaceExistingCommandPalettes(webViewId);
 
   // Resolve LocalizeKey item text ONCE, up front, so the stored entry only ever holds the same
   // resolved strings the palette renders — host-side filtering and commit can then never disagree
   // with the on-screen list. Skipped entirely (no await) when every item field is a plain string,
   // preserving synchronous overlay creation for those callers.
   const itemLocalizeKeys = collectPaletteItemLocalizeKeys(request.items);
-  const items =
-    itemLocalizeKeys.length > 0
-      ? await localizePaletteItems(request.items, itemLocalizeKeys)
-      : request.items;
+  let items = request.items;
+  if (itemLocalizeKeys.length > 0) {
+    items = await localizePaletteItems(request.items, itemLocalizeKeys);
+    // The await reopened the window the pre-await sweep closed: another request could have added a
+    // palette while localization resolved. Sweep again so anything that landed during the await is
+    // replaced exactly like a pre-existing palette, keeping the one-palette-per-WebView invariant
+    // true in the store before this one is added.
+    replaceExistingCommandPalettes(webViewId);
+  }
 
   const overlayId = newGuid();
 
@@ -851,9 +871,11 @@ type CommandPaletteEntry = Extract<OverlayEntry, { type: 'commandPalette' }>;
  * @returns The active command palette overlay entry, or undefined if none is active
  */
 function getActiveCommandPalette(webViewId: string): CommandPaletteEntry | undefined {
-  return getOverlaysByWebView(webViewId).find(
-    (o): o is CommandPaletteEntry => o.type === 'commandPalette',
-  );
+  // Topmost rather than first-created: the show path keeps one palette per WebView (sweeping both
+  // before and after its localization await), but if two ever momentarily coexist, the newest is
+  // the one on screen — so it is the one the drivers must drive.
+  const entry = getTopmostOverlay((o) => o.type === 'commandPalette' && o.webViewId === webViewId);
+  return entry?.type === 'commandPalette' ? entry : undefined;
 }
 
 /**
@@ -1061,12 +1083,16 @@ function handleAppWindowInput(event: AppWindowInputEvent): void {
 
   if (event.kind === 'escape') {
     // Escape closes the topmost surface only, so a stack of overlays unwinds one press at a time
-    // (Dismissal Patterns → Accessibility in the platform-bible-react guidelines). Modal dialogs
-    // are skipped because their own shell answers Escape; every other type is dismissed here.
-    const topmost = getTopmostOverlay(
-      (overlay) => overlay.type !== 'modalDialog' && dismissableOverlayIds.has(overlay.id),
-    );
-    if (topmost) dismissTransientOverlays('escape', new Set([topmost.id]));
+    // (Dismissal Patterns → Accessibility in the platform-bible-react guidelines). The topmost
+    // overlay is found WITHOUT filtering any type out: when it is a modal dialog, this press
+    // belongs to the modal's own shell, and dismissing anything BENEATH it would unwind two
+    // surfaces on one press (the shell answers for the modal while this branch answered for the
+    // overlay under it). The same one-surface rule covers an overlay still inside its creation
+    // grace: it is the topmost surface, so nothing under it is dismissed either.
+    const topmost = getTopmostOverlay(() => true);
+    if (!topmost || topmost.type === 'modalDialog') return;
+    if (!dismissableOverlayIds.has(topmost.id)) return;
+    dismissTransientOverlays('escape', new Set([topmost.id]));
     return;
   }
 
