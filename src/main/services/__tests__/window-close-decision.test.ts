@@ -127,6 +127,31 @@ describe('deciding what a window close means', () => {
     });
   });
 
+  describe('a quit arriving while the question is still open', () => {
+    test('is the answer: the decision resolves to quit-all without waiting for the user', async () => {
+      // The user is looking at the question when Cmd+Q, File → Quit or platform.quit fires. That
+      // quit is a stronger statement than any button, and the dialog cannot be dismissed from
+      // code — so the decision has to notice the latch and stop waiting, or the app hangs with the
+      // question up and the quit swallowed underneath it.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      setPrimaryWindowId(1);
+      const confirm = vi.fn(
+        () =>
+          new Promise<'close-all' | 'cancel'>(() => {
+            // never resolves — the user never clicks
+          }),
+      );
+
+      const pending = decideWindowClose(1, confirm);
+      // The question is showing; now the quit arrives
+      markQuitRequested();
+
+      await expect(pending).resolves.toBe('quit-all');
+      expect(confirm).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('primary window while another is still loading', () => {
     test('asks — a window still waiting for its content would be left behind too', async () => {
       // A move-to-new-window target that has not finished loading is not a candidate to be the

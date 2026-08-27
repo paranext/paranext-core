@@ -16,9 +16,33 @@ import { areAllWindowsClosing } from '@main/services/window-state.service';
 let isQuitRequested = false;
 let shutdownTasksPromise: Promise<void> | undefined;
 
+/**
+ * Settles when a quit is requested, so something waiting on the user can stop waiting. A quit is a
+ * stronger statement than any answer the user could give, and a native dialog cannot be dismissed
+ * from code — so the wait has to end from this side.
+ */
+let quitRequested: { promise: Promise<void>; resolve: () => void } = makeQuitRequestedSignal();
+
+function makeQuitRequestedSignal(): { promise: Promise<void>; resolve: () => void } {
+  let resolveSignal: () => void = () => {};
+  const promise = new Promise<void>((resolve) => {
+    resolveSignal = resolve;
+  });
+  return { promise, resolve: resolveSignal };
+}
+
 /** Record that the whole app is quitting, not just one window. Called from `before-quit`. */
 export function markQuitRequested(): void {
   isQuitRequested = true;
+  quitRequested.resolve();
+}
+
+/**
+ * Resolves once a quit has been requested — immediately if one already has. For a wait that has to
+ * give way to a quit, such as a question the user has not yet answered.
+ */
+export function whenQuitRequested(): Promise<void> {
+  return quitRequested.promise;
 }
 
 /**
@@ -75,4 +99,5 @@ export function runShutdownTasksOnce(performShutdownTasks: () => Promise<void>):
 export function resetShutdownLatchesForNewSession(): void {
   isQuitRequested = false;
   shutdownTasksPromise = undefined;
+  quitRequested = makeQuitRequestedSignal();
 }

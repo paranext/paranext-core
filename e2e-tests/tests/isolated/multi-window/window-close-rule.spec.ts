@@ -36,6 +36,7 @@ import {
   ElectronAppContext,
   LaunchElectronAppOptions,
   launchElectronApp,
+  preConfigureSettings,
   teardownElectronApp,
   waitForAppReady,
 } from '../../../fixtures/helpers';
@@ -171,6 +172,24 @@ function countSavedWindowEntries(userDataDir: string): number {
 }
 
 test.describe('window close rule', () => {
+  let restoreSettings: (() => void) | undefined;
+
+  test.beforeAll(() => {
+    // Power mode is REQUIRED: the startup restore recreates secondary windows only in Power mode,
+    // so without it tests 2 and 3 would see one window come back and fail for configuration
+    // reasons rather than for the rule under test. Restored afterwards so the developer's own
+    // settings survive the suite.
+    restoreSettings = preConfigureSettings({
+      'platform.firstRunComplete': true,
+      'platform.interfaceLanguage': ['en'],
+      'platform.interfaceMode': 'power',
+    });
+  });
+
+  test.afterAll(() => {
+    restoreSettings?.();
+  });
+
   test('closing the primary with another window open asks, and cancel keeps everything', async ({
     electronApp,
     mainPage,
