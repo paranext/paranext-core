@@ -286,7 +286,7 @@ test.describe('window close rule', () => {
     electronApp,
     mainPage,
   }) => {
-    // D28: moving the primary's last tab out does what closing that tab does — Home reopens. The
+    // Moving the primary's last tab out does what closing that tab does — Home reopens. The
     // primary neither empties away nor closes. If it closed, nothing would hold the primary role
     // and the window the user moved their work into would be a secondary whose ✕ drops its layout.
     // So this asserts both halves: the primary stays and docks Home, and it is STILL the primary —
