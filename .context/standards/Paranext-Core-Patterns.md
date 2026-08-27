@@ -1165,6 +1165,8 @@ Add `/** @experimental */` to the type or member.
 
 Pass `'x-experimental': true` in the registration's documentation object. The marker becomes visible in the live OpenRPC document at the WebSocket `rpc.discover` endpoint.
 
+**Verifying the wire marker needs its own step — the usual check cannot see it.** `lib/papi-dts/papi.d.ts` is generated from the *type* surface, so a regenerated-types diff structurally cannot show whether `'x-experimental': true` is present on a registration: a command, network object, data provider or network event registered without it produces a byte-identical `papi.d.ts`. Confirm the wire marker by reading the registration's documentation object, or the live OpenRPC document at `rpc.discover`. Never infer it from the type surface.
+
 ### Quick reference per surface
 
 | Surface | TSDoc location | Wire field path |
