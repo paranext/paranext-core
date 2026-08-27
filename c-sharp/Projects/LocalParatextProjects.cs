@@ -97,9 +97,10 @@ internal class LocalParatextProjects : IDisposable
     // Published projects are read-only in PT9 — ResourceProjectFileManager.SetXml() throws
     // AttemptedResourceWritingException — and cannot accept comment writes. They therefore do not
     // advertise legacyCommentManager.comments; everything else still applies because published
-    // projects can still be read for scripture and resource-references. The unpublished list is
-    // defined as the published list plus the comment interface so the two stay in sync by
-    // construction.
+    // projects can still be read for scripture and resource-references. They also do not advertise
+    // PT9 interlinear: published projects are distributed archives that do not carry interlinear
+    // authoring data. The unpublished list is the published list plus the remaining interfaces,
+    // kept in sync with that base by construction.
     private static readonly List<string> s_paratextPublishedProjectInterfaces =
     [
         ProjectInterfaces.BASE,
@@ -121,6 +122,7 @@ internal class LocalParatextProjects : IDisposable
     [
         .. s_paratextPublishedProjectInterfaces,
         ProjectInterfaces.LEGACY_COMMENT,
+        ProjectInterfaces.PT9_INTERLINEAR,
     ];
 
     public LocalParatextProjects(PapiClient? papiClient = null)

@@ -1546,6 +1546,262 @@ step, no automation. Just a record.
   move together; the test cannot import the Electron-side value, so its comment says to change both.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
 
+## adr-resource-missing-book-message: A missing book in a *published resource* is mode-agnostic and action-free; a *project* splits Simple/Power
+
+- **Date:** 2026-08-20
+- **Status:** Accepted
+- **Context:** PT-4132 needed the "book not in this text" state for the Model text and Bible
+  texts/Commentaries panels, and the ticket asked to "compare expected behavior for PT-4111", which
+  had just built `BookNotAvailableView` with a deliberate Simple/Power split. The obvious reading was
+  to reuse that view, or to mirror its shape with a second interface-mode branch.
+- **Decision:** Resource panels get ONE message for both interface modes, with no action button, via
+  a separate `ResourceBookNotAvailable` component. The Simple/Power split in `BookNotAvailableView`
+  exists solely because a *project* missing a book is **actionable** in Power (Manage Books can
+  create it). A published resource cannot gain a book in either mode, so both arms would say the same
+  thing. PT-4111's own `isResource` branch already ignores interface mode for exactly this reason.
+  The panels swap only their content area, leaving the header mounted — the resource panel's selector
+  is the user's real remedy (switch to a text that has the book), and the model panel's label at
+  least attributes the message to a named text.
+
+  **Scope limit, known and deliberate.** "Published resource" is not the whole of what these panels
+  display. The Bible texts tab also lists real Paratext projects (`isProjectReference` in
+  `resource-text-panel.web-view.tsx`, whose `resourceProjectId` is then the project's own id), and
+  that panel is available in Power mode. Such a project CAN gain a book, so for it the premise above
+  does not hold and the action-free message is a weaker answer than the main editor's one-click
+  **Manage books**. This is accepted for now rather than unnoticed: giving a side panel a
+  project-data-mutating action is a product decision, and it reopens exactly the Simple/Power split
+  this ADR avoids for the resource case. Tracked as PT-4416.
+
+  Detection is centralized in `platform-scripture-editor.utils.ts`, which replaced a
+  `bookNotFoundRegex` local to `platform-scripture-editor.web-view.tsx`. All FOUR surfaces — the main
+  editor, the Bible texts/Commentaries panel, the Model text panel, and the Scripture Text Grid's
+  cells — answer "is the book on screen missing from the text on screen" through one function,
+  `isMissingBookOnScreen`, regardless of whether they read the error from a subscription hook or from
+  an awaited call.
+
+  **What is NOT yet shared is the decision that leaf predicate feeds.** Each surface still spells out
+  its own ordering — `resolveResourceContentState`, `deriveCellState`, the model panel's
+  `renderContent` chain, and the main editor's `bookExists`. The two that disagreed have since been
+  brought into line: `resolveResourceContentState` now reads a missing-book failure naming some other
+  book or resource as `'loading'` and any other failure as `'failed'`, which is the ordering
+  `deriveCellState` already used, so a grid cell and a panel can no longer give opposite answers about
+  one error. The model panel derives the same three answers from its own local fetch state. Converging
+  all of them on one resolver returning a discriminated union — so the disagreement is unrepresentable
+  rather than merely absent today — is tracked as PT-4416.
+
+  The message itself is `EmptyState`, per `adr-empty-is-zero-state-primitive`'s reservation of that component for the
+  bare-sentence case; `ResourceBookNotAvailable` contributes only panel-sized centring and the focus
+  target, and does not repeat the `role="status"` that `EmptyState` already sets. Every surface that
+  shows this sentence renders it through that one component — the two resource panels and the main
+  editor's `isResource` branch — so the wording, styling, live-region announcement, and focus repair
+  cannot drift apart between them.
+
+  The message is shown only when the failure names BOTH the book and the project the view is
+  displaying right now, compared in the RENDER BODY rather than latched when the failure arrived.
+  `parseMissingBookError` returns the `bookNum` and `projectId` the C# `MissingBookException` message
+  carries, and `isMissingBookOnScreen` compares them against what is on screen. Every surface that
+  can report a missing book goes through it — the main editor, both resource panels, and the
+  Scripture Text Grid's cells, which re-key their chapter subscription on the grid's shared
+  reference and so navigate exactly as the full-panel surfaces do. A data hook keeps serving the
+  previous selector's result until the new subscription's first update lands, so an error in hand may
+  describe a book the user has navigated away from or a resource they have switched off.
+  Project ids are compared case-insensitively via `normalizeProjectId`: C# canonicalizes them to
+  uppercase and reports that form, while a view's own id arrives verbatim from a resource reference,
+  and the PDP lookup folds case — so a casing mismatch would be invisible everywhere except here.
+  Non-`PlatformError` values are rejected structurally inside the shared helpers before any message is
+  read, because `getErrorMessage` falls back to `JSON.stringify` for an object with no string
+  `message`: letting a success value through would serialize the whole chapter USJ on every render and
+  match the regex against the scripture text itself.
+- **Alternatives considered:** **Reuse `BookNotAvailableView` with `isPowerMode`** — rejected: it
+  would drag in the `isLoading` gating hazard that view documents at length (a setting's default is
+  indistinguishable from an answer, so branching on it requires a spinner gate) to decide between two
+  identical messages. The model text panel reads `platform.interfaceMode` zero times today, so this
+  would also mean threading mode through a presentational component boundary. **One generic
+  "…in this resource" string** — rejected: the resource panel already keeps four `bibleTexts_` /
+  `commentaries_` key pairs selected by a `resourceType` ternary, including the sibling
+  `emptyState_prompt`; a shared string would be the deviation. **Promote the stale-data window to
+  `'loading'`** — rejected: it returns `'loading'` on every reference change, remounting the editor
+  on every chapter navigation. **Gate the message on the data hook's `isLoading`** — implemented
+  first, then withdrawn during `/review-paratext`. `isLoading` is raised by an effect keyed on the
+  data provider and selector (`create-use-data-hook.util.ts`), and effects run after the commit, so
+  the render that first pairs a new selector with the previous result still sees `isLoading` false and
+  would assert "this book does not exist in this Bible text" about a book that does. **A boolean
+  latched per fetch in the imperative panel** — rejected for the same reason in a different disguise:
+  clearing a flag at fetch start happens in an effect, one render after the navigation it is meant to
+  cover. Only deriving the answer from the failure's own identities makes the wrong frame
+  unrepresentable.
+- **Consequences:** Two book-not-available views coexist, and the distinction between them is
+  "can this thing gain a book", NOT "is this editable" and NOT "which mode are we in" — the same
+  project-kind-vs-permission distinction `adr-empty-is-zero-state-primitive`'s feature draws via `platform.isPublished`. Because
+  the Bible texts tab can display a project, that distinction is currently drawn by *surface* rather
+  than by what is on screen; PT-4416 covers closing the gap.
+
+  A resource panel now has FOUR content states, not three, because deciding that a missing book earns
+  a dedicated message forced the question of what the other failures earn. Once the panel stops
+  mounting an editor it has no scripture for, "no USJ" can no longer stand for both "still arriving"
+  and "this read failed" — the first is a spinner and the second is terminal, and a spinner shown for
+  a terminal failure claims progress that never comes. So an unreadable project or a permissions
+  failure gets its own named message (`%webView_resourcePanel_textUnavailable%`, shared by both
+  panels) and a `logger.error`, which is the only place the cause survives, since every terminal
+  failure looks the same on screen. This is a change of behaviour from before the feature, where such
+  a failure fell through to an editor with nothing in it.
+
+  Detection still rests on matching a C# exception message, now in one place: reword
+  `MissingBookException` and every consumer silently reports "book present". `MissingBookExceptionTests`
+  pins the exact wording on the C# side so that rewording fails a test rather than a user. Reordering
+  or renaming its two interpolated values is also breaking, since the identity regex reads them
+  positionally. Detection and identity use two different patterns on purpose: the identity pattern
+  captures the two values and so can fail on an unexpected message shape, while detection matches only
+  the invariant part of the sentence and so still succeeds there. What a caller does with that gap
+  depends on whether it has a neutral outcome. The resource panels do: an identity failure falls to
+  `'failed'`, which names the failure on screen and logs it — not silently correct, but diagnosable,
+  and terminal rather than a spinner that never resolves. The main editor does NOT —
+  its gate is the identity comparison, and a miss means `bookExists` stays true while no USJ ever
+  arrives, i.e. an indefinite spinner rather than the pre-feature book-not-available view. It
+  therefore falls back to detection alone when the identities cannot be parsed, which is sound
+  because a *stale* failure always parses (it names some other book or project), so an unparseable
+  message cannot be a stale one. The stale-content flash on navigation is untouched and remains
+  PT-4139's scope.
+
+  The focus repair both book-not-available views perform lives in `useFocusReplacedContent`
+  (`extensions/src/platform-scripture-editor/src/use-focus-replaced-content.hook.ts`). It requires
+  focus to have fallen to the document body, not merely `document.hasFocus()`: a panel that keeps a
+  header mounted beside the swapped content has focusable siblings in the SAME document, so the
+  looser guard stole focus off the resource selector — the one control that can remedy a missing
+  book. The cost is that the repair no-ops when focus rests on a control elsewhere in the same
+  document, including the main editor's own reference control; that is the intended trade, since
+  taking focus from a control the user is operating is the worse failure.
+- **Source:** PT-4132 (Empty state needs to be improved for the Model and Bible texts). Premise
+  scope, the shared-decision correction, and the `isLoading` mechanism correction from PR #2704
+  review.
+
+## adr-blank-chapter-simple-mode-only: The blank-chapter view stays Simple-mode-only, because it removes the editing surface
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** PT-4403 (#2710), squash-merged into PT-4132's branch, dropped the `!isPowerMode` gate
+  on `EmptyChapterView` in `platform-scripture-editor.web-view.tsx` so that a Power user would also
+  get the honest "this chapter is empty" message and the "Add chapter number" scaffold action.
+- **Decision:** Keep the gate. `EmptyChapterView` does not sit BESIDE the editor — it applies
+  `tw:hidden` to the editor subtree, and `display: none` removes it from the accessibility tree and
+  the tab order. The scaffold button is then the only way back to typing, and `showButton` withholds
+  it in three reachable cases: a read-only project, `chapterNum: 0` front matter (which
+  `calculateTopMatch('GEN 0')` produces and `handleTopMatchSelect` passes through), and the window
+  while versification is still loading (`usePromise(..., { preserveValue: false })`). In Power mode
+  — where typing straight into a blank chapter IS the workflow — each of those becomes a dead end
+  with no editor and no button. Simple mode accepts that trade because the scaffold, not free
+  typing, is its model for creating chapter content.
+- **Alternatives considered:** **Keep the unification and fix `showButton`'s three gaps** — the
+  better end state, but it is a Power-mode *editing* behaviour change that belongs in its own ticket
+  with a test pinning the new invariant, not folded into a PR about resource panels. **Show the
+  message without hiding the editor** — plausible, and it would make the mode question moot; it
+  changes the Simple-mode layout that PT-4403 shipped and reviewed, so it is not a drive-by either.
+  Both are PT-4416.
+- **Consequences:** A Power user sees an ordinary empty editor for a blank chapter, exactly as
+  before PT-4403 — no message, and no scaffold shortcut. `EmptyChapterView`'s docstring saying
+  "Simple mode only" stays true. The main editor's `isResource` case now passes `isResource` into
+  `EmptyChapterView` so a published resource gets
+  `%webView_platformScriptureEditor_emptyChapter_messageResource%` rather than the project-oriented
+  wording, matching the side panels.
+- **Source:** PT-4132, PR #2704 round-6 review (blocking finding 1).
+## adr-find-tolerance-as-engine-options: Find expresses whitespace and diacritic tolerance as engine options, never by rewriting the query
+
+- **Date:** 2026-08-26
+- **Status:** Accepted
+- **Context:** PT-3408 reported that a term typed with extra spaces returned no results. The first
+  fix collapsed runs of spaces in the query inside the Find web view's option builder, on the
+  premise that the searched text can never contain consecutive spaces because ParatextData's
+  `UsfmToken.RegularizeSpaces` normalizes them on write. **That premise is false.** Find searches
+  USJ, not USFM: `UsjReaderWriter` concatenates adjacent text nodes with `textChunks.join('')` and
+  no separator, so a trailing space in one node followed by a leading space in the next is a real
+  double space in the searched text. Running the engine against a fixture of that shape
+  (`<char style="it">Salvador. </char><unmatched/> porque`) confirmed it: the exact two-space query
+  matched, and the same query routed through the collapse matched nothing. Rewriting the query also
+  made the reported match span include the user's padding, so a replace spliced the surrounding
+  spaces away and fused the neighboring words; and it did nothing at all under any word restriction.
+- **Decision:** The search term reaches the engine **byte-identical**. Whitespace and diacritic
+  tolerance are expressed only as `FindOptions` the engine applies when _matching_
+  (`ignoreWhitespaceDifferences`, `ignoreDiacritics`, both already implemented in
+  `buildSearchRegex`), and both are surfaced as user-togglable Find filters, mirroring PT9's
+  `FindReplaceOptions`. Both default to off, so an exact search — including for a specific invisible
+  character such as NBSP or ZWSP, which the Find UI deliberately renders in results — is what the
+  user gets unless they opt out of exactness. The UI adapter that maps Find's state onto
+  `FindOptions` lives in its own module (`find/find-options.utils.ts`) rather than in `find.utils.ts`,
+  which the backend PDP engine imports.
+- **Alternatives:**
+  - **Set `ignoreWhitespaceDifferences: true` unconditionally.** Rejected: it makes every invisible
+    character interchangeable with an ordinary space, removing any way to search for an exact
+    invisible character outside regex mode. Correct as an option, wrong as a default.
+  - **Keep the collapse but also trim, and widen it to all whitespace via `normalizeScriptureSpaces`.**
+    Rejected: no amount of tuning fixes it. Any query rewrite destroys information the user typed,
+    so real consecutive whitespace in the text stays unsearchable whatever the pattern.
+  - **Revert and return PT-3408 to UX.** Viable — the ticket's Definition of Done still asks whether
+    spaces should be forgiven — but it ships no fix, and the toggle answers the question in the
+    user's hands rather than guessing at a global default.
+- **Consequences:** Extra spaces are forgiven only when the user asks for it, so the reported
+  PT-3408 symptom now has a remedy that costs nothing by default. Real consecutive whitespace stays
+  searchable, which the collapse had made impossible. Two more persisted web-view state keys and two
+  more search-invalidating dependencies. `ignoreDiacritics`, already implemented and tested at the
+  engine level but never reachable from the UI, becomes user-visible in the same change — it is the
+  sibling flag on the same PT9 dialog and gains its control alongside. The Storybook harness
+  approximates `ignoreWhitespaceDifferences` but not `ignoreDiacritics`, which its TSDoc records,
+  since emulating NFD normalization over the fixture text is out of proportion to a story.
+  Upstream ParatextData is separately moving to preserve consecutive spaces
+  (`PreserveConsecutiveSpacesInTextTokens`); this decision is unaffected by that, since it never
+  relied on the normalization holding.
+- **Source:** PT-3408, review of PR #2715.
+
+## adr-pt9-legacy-data-as-parsed-models: PT9 legacy interlinear data is served as parsed models through a read-only projectInterface
+
+- **Date:** 2026-08-25
+- **Status:** Accepted
+- **Context:** Importing Paratext 9 interlinear data into a Platform.Bible extension requires core
+  to expose project-folder files extensions cannot otherwise reach (extensions have no filesystem
+  access, and `ExtensionData` is confined to its own store). PT9 keeps this data in per-language
+  interlinear book files plus `Lexicon.xml`, `WordAnalyses.xml`, and `InterlinearSetup.xml`. This
+  is the first projectInterface serving PT9-legacy per-project file data, and the next PT9 import
+  (hyphenation, renderings, and spelling are all existing PT9 `ProjectFileType` categories) will
+  follow whatever precedent it sets. Decided on PR #2707.
+- **Decision:** Four coupled choices. (1) **Parsed models, not raw file text:**
+  `platformScripture.Pt9Interlinear` serves typed records deserialized through ParatextData's own
+  XML classes, read via each project's live `FileManager`, with PT9's own read semantics and never
+  stricter ones - duplicate keys keep the last occurrence, a missing range defaults, and a
+  malformed boolean or unknown enum name fails the file exactly as it would fail in Paratext 9.
+  Core owns the payload schema; consumers never re-derive PT9's file formats from bytes. (2)
+  **Change detection is a polled manifest, not events:** the interface emits no file-change
+  events; a manifest getter serves an opaque SHA-256 change token per covered file (the
+  interlinear book files, the lexicon, and the stored word analyses; the setups file rides the
+  payload without change detection). Content hashes rather than mtimes, because Send/Receive
+  rewrites timestamps without changing content.
+  (3) **Advertisement by project class:** the interface joins the unpublished-only list beside
+  `legacyCommentManager.comments` - published projects are distributed archives that do not carry
+  interlinear authoring data - and wire-method registration is gated on the advertised list, so
+  the wire surface always matches the advertisement. (4) **Namespace:** the interface lives under
+  `platformScripture.*` like the other Paratext-project interfaces; the project is the subject,
+  and the legacy on-disk format is an implementation detail of what the getters read.
+- **Alternatives:** (a) **Raw file text keyed by path** (the PR's original shape) - rejected after
+  building both and comparing: every consumer re-implements PT9's parsers and inherits their
+  divergences, raw text inflates ~1.65x when escaped into JSON, and path-keyed payloads leak
+  storage layout into the contract. (b) **File-watcher change events** - deferred to the planned
+  sync work; poll-on-open serves the importer today, and the manifest keeps the poll honest. (c)
+  **Advertising by editability** - rejected: `platform.isEditable` is a separate per-project
+  setting, and an unpublished project with `Editable=F` still carries importable interlinear
+  data. (d) **A command instead of a projectInterface** - rejected: per-project capability
+  advertisement is what projectInterfaces exist for, and "interface unsupported" doubling as "no
+  PT9 data channel" is load-bearing for consumer UX.
+- **Consequences:** The transport shapes the contract: a single WebSocket message past its limit
+  tears down the whole C# connection (an unaddressed platform-level issue), so the response is
+  bounded by an aggregate size cap and fails with a documented error whose machine-readable
+  contract is the RESOURCE_EXHAUSTED platform error code (exception types do not cross the RPC
+  boundary, but Exception.Data does); the documented message prefix remains the fallback for
+  consumers that see only the message. Schema evolution now moves at platform speed: a field the
+  payload drops costs a core release to recover, which is why the setup records deliberately
+  carry the model text's identity even though nothing consumes it yet. A future PT9-legacy import
+  should follow this shape - parsed models with PT9-parity semantics, a hashed manifest for
+  change detection, unpublished-only advertisement - rather than re-litigating it.
+- **Source:** PR #2707 review of the PT9 interlinear projectInterface - finding that the PR's
+  architecture decisions had no recorded precedent for the next PT9-legacy import to follow.
+
 ## adr-renderer-websocket-suspend-disconnect: Diagnose the renderer's Chromium WebSocket as the PT-1641 suspend failure, instrument before reconnecting
 
 - **Date:** 2026-08-27
@@ -1555,3 +1811,4 @@ step, no automation. Just a record.
 - **Alternatives:** A heartbeat/ping-pong keepalive, deferred — not because a heartbeat is a bad idea, but because the transport is loopback-only (`src/main/services/rpc-websocket-listener.ts:105` binds `localhost`, clients connect to `localhost`), and a half-open connection dying with no FIN — the failure a heartbeat exists to catch — is unlikely on loopback. It is deferred for that reason, not merely because this one repro happened to deliver a close event. This does not foreclose adding a heartbeat later; what would reopen it: an observed no-close-event case, or the shape-3 stall turning out to present as one.
 - **Consequences:** This rests on a single reproduction of a single trigger; it does not establish that every PT-1641 report is this failure. Three failure shapes are recorded above and only one (shape 1) is explained — the next reader should not mistake this entry for "PT-1641 is solved." A `TODO(PT-4435)` at `src/client/services/rpc-client.ts` records three pre-existing reconnect blockers, all traced to `AsyncVariable` being single-shot and freezing on settle so `connectionComplete` cannot be reused: a reconnect would report a false `Connected`, a timed-out first connect is permanently fatal, and `applyMiddleware` stacks per `connect()` call. All three are pinned by `test.fails` cases in `src/client/services/__tests__/rpc-client.reconnect-gaps.test.ts`, so the gap is visible in CI rather than only in prose, and will start failing the suite (by inverting to pass) the moment a real reconnect implementation lands, which is the intended trip wire. Also worth recording: the diagnosis is only as good as its instrumentation — before this work the client logged nothing at all on close, and the shipped comment explaining the observed `{}` log collapse was factually wrong (it blamed non-enumerable properties; `ws` marks its event properties enumerable, and `JSON.stringify` skips them because it serializes only own properties, not enumerability). That wrong comment went unnoticed because no test exercised a real `ws` close event until this work added one.
 - **Source:** PT-4434; diagnosed on macOS 2026-08-26.
+
