@@ -66,7 +66,7 @@ needs a row. Walk down from a PR's `baseRefName` with
 `gh pr list --base <headRefName> --state all` until nothing answers — every PR, open or not,
 because a merged or closed one is where its branch's `baseRefName` and `author` still live. A
 branch with several PRs is read from the open one, else the most recently updated:
-`--json number,state,baseRefName,author,updatedAt --jq 'sort_by(.state != "OPEN", .updatedAt) | .[0]'`
+`--json number,state,baseRefName,author,updatedAt --jq 'sort_by(.state == "OPEN", .updatedAt) | last'`
 with `--limit 20`. Only
 **open** PRs join the stack that step 5 restacks and step 10 pushes. A merged or closed PR below
 ours ends the stack there and is decision item one at step 4: our branch's real base is now
