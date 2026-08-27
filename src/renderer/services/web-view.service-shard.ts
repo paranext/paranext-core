@@ -1136,10 +1136,11 @@ async function loadLayout(
     const didDockGainWebViewsDuringLoad = () =>
       webViewsBeforeLoad.length === 0 && dockLayoutVar.getAllWebViewDefinitions().length > 0;
     // Every layout gets its web view ids scoped to this window, including one restored from
-    // persistence: a saved entry's ids carry the window id of the session that saved them, which
-    // is never this window's id (ids are never reused, so a restored window is always a new one),
-    // and the legacy pre-multi-window layout carries unscoped ids. Re-scoping replaces the suffix
-    // rather than stacking another one, so it is safe on both.
+    // persistence. Re-scoping is idempotent — it replaces any existing `-w<id>` suffix rather than
+    // stacking another one — so it is correct whichever ids the layout carries: this window's own
+    // id (the ordinary restore case, now that a window's id is durable and comes back with it),
+    // another window's id (a layout that came from elsewhere), or no scope at all (the legacy
+    // pre-multi-window layout).
     const layoutToLoad = withWindowScopedWebViewIds(persistedLayout);
     if (isPendingContent) {
       if (didDockGainWebViewsDuringLoad()) {
