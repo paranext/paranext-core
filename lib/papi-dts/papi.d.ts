@@ -1138,17 +1138,33 @@ declare module 'shared/data/rpc.model' {
    * Whether a WebSocket close `code` represents a clean, expected shutdown rather than a connection
    * that died.
    *
-   * 1000 (normal) and 1001 (going away, e.g. a page/window navigating away or closing) are the two
-   * codes the WebSocket spec itself defines as orderly closes, and {@link INTENTIONAL_CLOSE_CODE} is
-   * this codebase's own marker for a close we initiated on purpose. Everything else — most notably
-   * 1006 (abnormal closure: no close frame was ever received, the fingerprint of a socket that just
-   * died, e.g. across a suspend) and 1005 (no status code present) — is unexpected and worth a
-   * `warn`.
+   * Clean codes: 1000 (normal), 1001 (going away — a page or window navigating away or closing), 1005
+   * (no status code was present in the close frame, which a plain `close()` with no arguments
+   * produces), and {@link INTENTIONAL_CLOSE_CODE}, this codebase's own marker for a close we initiated
+   * on purpose. What all four have in common is that a closing handshake completed.
+   *
+   * The code that matters is 1006: no close frame was ever received, which is the fingerprint of a
+   * connection that died rather than being closed — the shape a suspend produces.
+   *
+   * Prefer {@link isCleanCloseEvent} at call sites that hold the event; `wasClean` is the
+   * authoritative signal and this code list is its fallback.
    *
    * Shared so the client and server close handlers cannot independently drift on which codes count as
    * clean.
    */
   export function isCleanCloseCode(code: unknown): boolean;
+  /**
+   * Whether a close event represents an orderly shutdown rather than a connection that died.
+   *
+   * `wasClean` is the authoritative answer — it reports whether a closing handshake completed — so it
+   * wins whenever the event carries it. Both Chromium and the `ws` library always set it; the
+   * {@link isCleanCloseCode} fallback covers a partial or foreign event shape that does not.
+   *
+   * Deciding on the code alone would misreport a close frame that carried no status: that arrives as
+   * 1005 with `wasClean` true, which a plain `close()` produces on every window close and page
+   * reload. Marking those abnormal would bury a genuine socket death under routine noise.
+   */
+  export function isCleanCloseEvent(ev: unknown): boolean;
   /**
    * Describe a WebSocket `close` event for a log line.
    *
@@ -1158,7 +1174,7 @@ declare module 'shared/data/rpc.model' {
    *
    * `code` is the single most diagnostic field: 1006 (abnormal, no close frame) means the connection
    * died rather than being closed politely. A reader should not need the WebSocket code table
-   * memorized to see that, so a code that {@link isCleanCloseCode} rejects is marked `(abnormal)`
+   * memorized to see that, so an event that {@link isCleanCloseEvent} rejects is marked `(abnormal)`
    * inline rather than left as a bare number.
    */
   export function describeWebSocketCloseEvent(ev: unknown): string;
