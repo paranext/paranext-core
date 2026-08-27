@@ -319,13 +319,18 @@ describe('describeWebSocketCloseEvent', () => {
     expect(result).toContain('wasClean=n/a');
   });
 
+  // Every non-object input (undefined, 'nope', 42) and null (typeof 'object' but falsy) hits the
+  // early-return branch; {} is a real object so it instead falls through to the property-reading
+  // path — but since it has no code/reason/wasClean properties, that path yields the identical
+  // n/a triple. All five inputs are therefore pinned to the same exact string, exercising both
+  // branches without forcing a shared expectation that isn't actually true of the implementation.
   // null is itself one of the garbage inputs under test
   // eslint-disable-next-line no-null/no-null
   test.each([undefined, null, {}, 'nope', 42])(
-    'returns a safe string for garbage input %p',
+    'returns the n/a triple verbatim for garbage input %p',
     (input) => {
       expect(() => describeWebSocketCloseEvent(input)).not.toThrow();
-      expect(typeof describeWebSocketCloseEvent(input)).toBe('string');
+      expect(describeWebSocketCloseEvent(input)).toBe('code=n/a reason=n/a wasClean=n/a');
     },
   );
 
