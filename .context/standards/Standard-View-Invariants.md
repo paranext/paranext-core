@@ -127,8 +127,13 @@ changing the serialization behavior itself.
 
 ## 6. One position language (spans both repos)
 
-Display bytes are excluded from document positions in exactly ONE place. The caret/selection half
-landed in the editor repo. **The collab half has not**: the ops stream and the delta-doc length side
-maintain separate exclusion predicates that already differ by one arm, so a loose display run's
-glyph bytes are counted on one side and not the other. Tracked as **PT-4399**. Do not add another
-private exclusion; extend the shared one.
+Display bytes — marker glyphs, separators, attribute-run text, verse glyphs, paragraph prefixes —
+are excluded from document positions in exactly ONE place. Caret anchoring, OT content-op offsets,
+and delta-doc positions all resolve through it.
+
+That is the rule. It is here because the cost of breaking it lands on both repos: each display-byte
+class that got its own private exclusion had to be found and fixed separately, once per consumer,
+each after a bug. **Do not add another private exclusion; extend the shared one.**
+
+The caret/selection half is unified in the editor repo. The collab half is not yet — the ops stream
+and the delta-doc length side still keep separate predicates.

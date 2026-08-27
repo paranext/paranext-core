@@ -349,6 +349,14 @@ export default function FootnoteEditor({
       view: {
         ...(editorOptions.view ?? getDefaultViewOptions()),
         noteMode: 'expanded',
+        // The note's marker and caller are governed by this popover's two dropdowns, so they are
+        // not text to type into — the same division Paratext 9 draws. Left editable they read as
+        // editable and are not: the edit does not persist, and because the note-scoped rebuild
+        // refuses a caller it cannot recognize, anything else typed into that slot goes with it
+        // (a `\cat` category run typed after the caller was silently discarded). Atomic here
+        // routes that typing to the note's CONTENT, which is where it belongs and where the
+        // category folds from.
+        isNoteShellEditable: false,
         // The wrapper paragraph is scaffolding (see PARAGRAPH_USJ above): suppress its `\p`
         // marker prefix so the popover's text starts with the footnote's own first glyph.
         showParaMarkerPrefixes: false,

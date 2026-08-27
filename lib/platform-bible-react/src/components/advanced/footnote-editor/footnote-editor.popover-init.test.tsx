@@ -117,4 +117,35 @@ describe('FootnoteEditor popover init (wrapper-para marker prefix suppressed)', 
     // glyph nor the stranding can exist.
     expect(wrapperParaChildTypes(lexical)).toEqual(['note']);
   });
+
+  it('renders the note marker and caller as atomic, not as text to type into', async () => {
+    // The two dropdowns above the editor govern the note's type and its caller, the same division
+    // Paratext 9 draws — so those bytes must not read as editable. Leaving them typeable was not
+    // merely cosmetic: the edit did not persist, and because the editor's note-scoped rebuild
+    // refuses a caller it cannot recognize, a `\cat` category run typed into that slot (where
+    // Paratext 9 puts it) was silently discarded along with it. `token` is Lexical's atomic text
+    // mode: no caret inside, no typing into it.
+    const { lexical } = await renderPopoverAndWaitForInit(editableView);
+
+    const modes = lexical.getEditorState().read(() => {
+      const findNote = (node: LexicalNode): LexicalNode | undefined => {
+        if (node.getType() === 'note') return node;
+        if (!$isElementNode(node)) return undefined;
+        return node.getChildren().reduce<LexicalNode | undefined>(
+          (found, child) => found ?? findNote(child),
+          undefined,
+        );
+      };
+      const note = findNote($getRoot());
+      if (!note || !$isElementNode(note)) return undefined;
+      return note
+        .getChildren()
+        .filter((child) => $isTextNode(child))
+        .slice(0, 2)
+        .map((child) => ($isTextNode(child) ? child.getMode() : undefined));
+    });
+
+    // The note's first two text children are its opening glyph and its caller.
+    expect(modes).toEqual(['token', 'token']);
+  });
 });
