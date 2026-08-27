@@ -103,7 +103,7 @@ TERMS-OF-SERVICE.md
 /.bundle/
 /vendor/bundle/
 
-# Licence texts this repository holds verbatim on behalf of packages that publish theirs at a URL
+# License texts this repository holds verbatim on behalf of packages that publish theirs at a URL
 # and bundle no copy (see `notices-policy.json` `licenseTexts`). They are hash-pinned and
 # reproduced byte for byte into THIRD-PARTY-NOTICES.md, so reformatting one would change a legal
 # claim and fail the pin.

@@ -74,7 +74,7 @@ describe('readJsonFile', () => {
   });
 
   // Deliberately the OPPOSITE contract to `readTextFile` in package-files.ts, which returns
-  // undefined for an optional licence text. Every caller here reads something structural, where a
+  // undefined for an optional license text. Every caller here reads something structural, where a
   // swallowed failure is a silently short shipping set.
   it('throws rather than returning undefined', () => {
     expect(() => readJsonFile(path.join(tmp, 'nope.json'), 'x')).toThrow();

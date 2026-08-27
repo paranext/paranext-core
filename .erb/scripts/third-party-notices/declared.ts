@@ -11,13 +11,13 @@ import deprecatedSpdxLicenseIds from 'spdx-license-ids/deprecated.json';
  *
  * `spdx-license-ids`' main export is the current list only, so the deprecated spellings of the
  * copyleft licenses - `GPL-3.0`, `AGPL-3.0`, `GPL-2.0`, `LGPL-2.1`, `LGPL-3.0`, which `policy.ts`'s
- * own `normalizeDetectedId` documents as still in wide circulation - were absent from it. A package
- * declaring plain `AGPL-3.0` therefore came back `hasNonGrantDisjunct: true` and blocked as "a
- * disjunct that is not a grant we can verify", which says nothing about copyleft and is the wrong
- * diagnosis on the single most important input this gate has; worse, the remedy `report.ts` prints
- * for it ("add that identifier to `allowed`") could never clear it, because `hasNonGrantDisjunct`
- * is checked BEFORE the allow list. Deprecated ids are real grants whose terms are known - what
- * they are not is current spelling, which `canonicalId` below fixes.
+ * own `normalizeDetectedId` documents as still in wide circulation - are absent from it. Read from
+ * that export alone, a package declaring plain `AGPL-3.0` comes back `hasNonGrantDisjunct: true`
+ * and blocks as "a disjunct that is not a grant we can verify", which says nothing about copyleft
+ * and is the wrong diagnosis on the single most important input this gate has; worse, the remedy
+ * `report.ts` prints for it ("add that identifier to `allowed`") could never clear it, because
+ * `hasNonGrantDisjunct` is checked BEFORE the allow list. Deprecated ids are real grants whose
+ * terms are known - what they are not is current spelling, which `canonicalId` below fixes.
  */
 const KNOWN_IDS = new Set([...spdxLicenseIds, ...deprecatedSpdxLicenseIds]);
 
@@ -50,11 +50,11 @@ function canonicalId(id: string): string {
 /**
  * The identifier an operand's `+` actually names, or `undefined` when SPDX has no way to say it.
  *
- * `+` means "this version of the licence, or any later one". `spdx-expression-parse` reports it as
- * a separate `plus` flag, and reading only `node.license` discarded it - after which `spdx-correct`
- * mapped the bare id to the `-only` spelling, which is the OPPOSITE grant. A package declaring
- * `GPL-2.0+` was recorded, rendered and locked as `GPL-2.0-only`: strictly narrower terms than the
- * package offers, asserted in a legal document.
+ * `+` means "this version of the license, or any later one". `spdx-expression-parse` reports it as
+ * a separate `plus` flag, and reading only `node.license` discards it - after which `spdx-correct`
+ * maps the bare id to the `-only` spelling, which is the OPPOSITE grant. A package declaring
+ * `GPL-2.0+` is then recorded, rendered and locked as `GPL-2.0-only`: strictly narrower terms than
+ * the package offers, asserted in a legal document.
  *
  * Where an `-or-later` identifier exists, that is exactly what `+` means and the operand resolves
  * to it. Where none exists - `Apache-2.0+` is the shape, since SPDX publishes no
@@ -108,9 +108,9 @@ function hasConjunction(node: SpdxAstNode): boolean {
 /**
  * Parses and validates a package's declared `license` field.
  *
- * Replaces a hand-rolled recursive-descent parser that overflowed the stack on deeply nested input
- * and let two classes of malformed expression through as permissive verdicts.
- * `spdx-expression-parse` is the parser npm itself uses and was already installed in this tree.
+ * `spdx-expression-parse` rather than a hand-rolled recursive-descent parser: it is the parser npm
+ * itself uses, it is already installed in this tree, and hand-rolling one costs a stack overflow on
+ * deeply nested input and two classes of malformed expression let through as permissive verdicts.
  */
 export function parseDeclared(field: string | undefined): ParsedDeclaration {
   if (!field || !field.trim()) return { ok: false, reason: 'no license declared' };

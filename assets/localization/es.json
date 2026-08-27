@@ -1,9 +1,10 @@
 {
+  "%about_copyright_format%": "Derechos de autor © {years} SIL Global y United Bible Societies",
   "%about_db_ip_attribution_format%": "{intro} {websiteLink} ({terms}: {license})",
   "%about_db_ip_attribution_intro%": "Las funciones de seguridad en Internet utilizan datos de",
   "%about_db_ip_attribution_terms%": "Licencia",
   "%about_licenseLabel_format%": "Licencia: {license}",
-  "%about_licenseLabel_termsOfService%": "Términos de Servicio de Paratext",
+  "%about_licenseLabel_termsOfService%": "Términos de servicio de Paratext",
   "%about_versionLabel_format%": "Versión: {version}",
   "%acceptButton_tooltip%": "Guardar",
   "%ariaLabel_opensInBrowser%": "Se abre externamente en el navegador.",

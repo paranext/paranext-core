@@ -35,7 +35,7 @@ describe('decideLicenseStamp', () => {
   });
 
   // Decided per FILE, this rewrote the manifest to AGPL while the package.json kept Apache-2.0:
-  // two files in one folder declaring different licences, and no text copied for either.
+  // two files in one folder declaring different licenses, and no text copied for either.
   it('leaves the whole folder alone when any file declares other terms', () => {
     const decision = decideLicenseStamp([
       declared('package.json', 'Apache-2.0'),
@@ -54,8 +54,8 @@ describe('decideLicenseStamp', () => {
   });
 
   // `extensions/src/c-sharp-provider-test/` has a manifest and no package.json. Reading the
-  // declaration from package.json alone left it permanently undefined, so the folder's hand-placed
-  // LICENSE was never checked against the terms it declares.
+  // declaration from package.json alone leaves it permanently undefined, so the folder's
+  // hand-placed LICENSE is never checked against the terms it declares.
   it('reads a manifest-only extension from its manifest', () => {
     expect(decideLicenseStamp([absent('package.json'), declared('manifest.json', 'MIT')])).toEqual({
       stamp: true,
@@ -108,9 +108,9 @@ describe('stampExtensionLicense', () => {
   });
 
   it('declares nothing it cannot also give the text for', async () => {
-    // The failure this orders against: the `license` field was written first and the canonical text
-    // read afterwards, so a root LICENSE that is not the AGPL left the folder declaring
-    // AGPL-3.0-or-later with a different licence text beside it - and a re-run could not repair it,
+    // The failure this orders against: writing the `license` field first and reading the canonical
+    // text afterwards leaves a folder whose root LICENSE is not the AGPL declaring
+    // AGPL-3.0-or-later with a different license text beside it - and a re-run cannot repair that,
     // because a folder that already declares the value is short-circuited before any text is
     // copied. Nothing may be stamped unless the text that has to accompany it is in hand.
     const { root, folder } = await makeTree('MIT License\n\nPermission is hereby granted...\n', {

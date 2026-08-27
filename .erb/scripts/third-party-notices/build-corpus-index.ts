@@ -1,28 +1,28 @@
 /**
  * Regenerates `spdx-corpus/index.json` - the provenance record `corpus.ts` verifies canonical
- * licence texts against before they are reproduced into `THIRD-PARTY-NOTICES.md`.
+ * license texts against before they are reproduced into `THIRD-PARTY-NOTICES.md`.
  *
  *     npm run build:third-party-notices:corpus
  *
  * The texts themselves live in the pinned `spdx-license-list` dependency rather than being
- * vendored: the full corpus is 10.47 MB for roughly 600 licences. What is committed is the source,
- * the dependency version, and a sha256 per licence, so provenance is mechanical and any drift or
+ * vendored: the full corpus is 10.47 MB for roughly 600 licenses. What is committed is the source,
+ * the dependency version, and a sha256 per license, so provenance is mechanical and any drift or
  * substitution in the dependency is detected rather than silently reproduced.
  *
  * Indexed for exactly the identifiers the policy can reach a verdict on, and no others. Every
  * checksum here is a text this repository may have to reproduce; a checksum for an identifier no
  * verdict path can produce is never read, is re-hashed by `verifyCorpus` on every run, and - since
- * SPDX names licences after the tools they cover - drags identifiers like `TermReadKey` and
+ * SPDX names licenses after the tools they cover - drags identifiers like `TermReadKey` and
  * `HIDAPI` in beside 64-char hex, which is a secret-scanner false positive waiting to be
  * allowlisted. `corpus-texts.test.ts` asserts this file equals what {@link reachableIds} derives, so
  * adding an `exceptions` entry that records a novel identifier fails until this is re-run.
  */
 
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import spdxLicenseList from 'spdx-license-list/full';
 import { parseDeclared } from './declared';
+import { sha256 } from './lock';
 import { loadPolicy } from './policy';
 import { readJsonFile } from './read-json';
 import type { Policy } from './types';
@@ -72,7 +72,7 @@ export function main(): void {
   );
 
   // Refused rather than skipped. A reachable identifier with no canonical text renders an empty
-  // licence block - an obligation that looks discharged and is not - and silently dropping it here
+  // license block - an obligation that looks discharged and is not - and silently dropping it here
   // is how that reaches the document.
   const missing = ids.filter((id) => !spdxLicenseList[id]?.licenseText);
   if (missing.length)
@@ -85,10 +85,7 @@ export function main(): void {
 
   const checksums: Record<string, string> = {};
   ids.forEach((id) => {
-    checksums[id] = crypto
-      .createHash('sha256')
-      .update(spdxLicenseList[id].licenseText)
-      .digest('hex');
+    checksums[id] = sha256(spdxLicenseList[id].licenseText);
   });
 
   fs.mkdirSync(DIR, { recursive: true });

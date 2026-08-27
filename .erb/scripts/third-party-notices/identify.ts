@@ -1,5 +1,6 @@
 import { execFileSync } from 'child_process';
 import * as path from 'path';
+import { codeOf } from './read-json';
 import type { Detection } from './types';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
@@ -35,9 +36,9 @@ export function identify(dirs: string[]): Map<string, Detection> {
     // start of one. This is the only path that needs the interpreter, so it is the only place the
     // remedy can be stated: `licenseeVersion` in `main.ts` reads the committed `Gemfile.lock` and
     // so never fires on a machine that simply has no Ruby.
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+    if (codeOf(error) === 'ENOENT')
       throw new Error(
-        'licence identification needs Bundler, which is not on PATH. This step runs licensee ' +
+        'license identification needs Bundler, which is not on PATH. This step runs licensee ' +
           '(pinned in Gemfile.lock) over each package directory, and nothing else can produce the ' +
           'verdicts this artifact rests on.\n' +
           'Install Ruby >= 3.2, then:\n' +

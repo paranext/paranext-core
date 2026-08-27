@@ -1,11 +1,12 @@
 {
   // Type-check gate for the build-time TypeScript under .erb, which the root tsconfig's `include`
-  // ("src", "assets") leaves out: the startup-waterfall parser + CLI, and the third-party-notices
-  // pipeline. Without this, a type error in either would keep CI green and surface only at manual
-  // runtime - and the notices pipeline is ~4,700 lines that decide which licences may ship and then
-  // write the artifact asserting it, so a renamed verdict field has to fail here rather than
-  // produce a wrong document. Scoped to these files (not all of .erb/scripts) because the older
-  // scripts there carry pre-existing type issues from their own heavy deps and are out of scope.
+  // ("src", "assets") leaves out: the packaging clean-up entry point, the startup-waterfall parser
+  // + CLI, and the third-party-notices pipeline. Without this, a type error in any of them would
+  // keep CI green and surface only at manual runtime - and the notices pipeline is ~4,700 lines
+  // that decide which licenses may ship and then write the artifact asserting it, so a renamed
+  // verdict field has to fail here rather than produce a wrong document. Scoped to these files (not
+  // all of .erb/scripts) because the older scripts there carry pre-existing type issues from their
+  // own heavy deps and are out of scope.
   // Test files are excluded for the same reason the root config excludes all `*.test.ts`: they rely
   // on Vitest's runtime rather than on tsc. Referenced by `npm run typecheck` via `typecheck:erb`.
   // Emits nothing - it is purely a gate.
@@ -20,6 +21,7 @@
     "types": ["node"]
   },
   "include": [
+    ".erb/scripts/clean.ts",
     ".erb/scripts/startup-waterfall.ts",
     ".erb/scripts/startup-waterfall.util.ts",
     ".erb/scripts/notices-build-id.ts",
