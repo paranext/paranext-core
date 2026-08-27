@@ -1141,10 +1141,14 @@ async function main() {
       try {
         decision = await decideWindowClose(windowId, () => confirmCloseAllWindows(newWindow));
       } catch (e) {
-        // Nothing has been latched and the window is already prevented from closing, so leaving it
-        // open is the safe outcome — but silently would be indistinguishable from the user
-        // cancelling, and the next ✕ would ask again with no record of why the first did nothing.
-        logger.warn(`Could not ask about closing window ${windowId}: ${getErrorMessage(e)}`);
+        // Whatever threw here — the primary/window-count checks `decideWindowClose` runs before it
+        // ever asks, or marking the quit latch after an answer — a failure to put the question to
+        // the user is already reported and folded into `stay-open` inside the decision itself, so
+        // this is a DIFFERENT failure. Nothing has been latched and the window is already prevented
+        // from closing, so leaving it open is the safe outcome — but silently would be
+        // indistinguishable from the user cancelling, and the next ✕ would ask again with no record
+        // of why the first did nothing.
+        logger.warn(`Could not decide how to close window ${windowId}: ${getErrorMessage(e)}`);
         decision = 'stay-open';
       } finally {
         isAskingAboutClose = false;
@@ -1615,6 +1619,7 @@ async function main() {
       [cancelKey]: 'Cancel',
     };
     let strings = fallbackStrings;
+    let localizeTimeoutHandle: ReturnType<typeof setTimeout> | undefined;
     try {
       // Bounded, because this is a NETWORK call to the extension host and the ✕ is already
       // committed by the time it runs: a rejection reaches the English fallback below, but a hang
@@ -1622,7 +1627,7 @@ async function main() {
       // ✕ a silent no-op — the close button would simply look dead. English on time beats
       // localized eventually.
       const localizeTimeout = new Promise<never>((_resolve, reject) => {
-        setTimeout(
+        localizeTimeoutHandle = setTimeout(
           () => reject(new Error(`no answer within ${CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS} ms`)),
           CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS,
         );
@@ -1640,6 +1645,11 @@ async function main() {
       logger.warn(
         `Could not localize the close-all prompt; showing English: ${getErrorMessage(e)}`,
       );
+    } finally {
+      // Cleared on every path, not just the timeout's own: when localization wins the race, the
+      // timer would otherwise sit armed for the rest of its bound, rejecting a promise nothing is
+      // waiting on any more.
+      if (localizeTimeoutHandle) clearTimeout(localizeTimeoutHandle);
     }
     const closeAllIndex = 0;
     const cancelIndex = 1;

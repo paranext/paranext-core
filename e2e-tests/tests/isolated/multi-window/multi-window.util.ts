@@ -445,6 +445,33 @@ export function webViewTabTitle(page: Page, webViewId: string) {
 }
 
 /**
+ * The web view ids a window is holding, read off its dock's tab titles
+ * (`platform-tab-title.component.tsx` stamps each web view tab with `data-web-view-id`;
+ * non-web-view tabs carry no such attribute and are therefore not matched).
+ *
+ * Tab titles rather than iframes: every tab in the tab bar renders its title whether or not it has
+ * ever been the active tab, while rc-dock mounts a tab's pane — and with it the web view's iframe —
+ * lazily. A window holding a tab the user has not looked at yet must still count as holding it.
+ */
+export async function getHeldWebViewIds(page: Page): Promise<string[]> {
+  return page
+    .locator('.platform-tab-title[data-web-view-id]')
+    .evaluateAll((titles) => titles.map((title) => title.getAttribute('data-web-view-id') ?? ''));
+}
+
+/**
+ * Per-request timeout for a move (`platform.moveWebViewToWindow` /
+ * `platform.moveWebViewToNewWindow` — see `src/declarations/papi-shared-types.ts`). A move to a new
+ * window pays a whole cold renderer start before it touches the web view — deliberately, so a
+ * window that never comes up costs a wait and an error rather than a web view open in no window —
+ * and a cold start on a loaded machine can take a minute. A budget shorter than that would report a
+ * transport timeout for a move that was still legitimately under way, even for a move whose target
+ * is already open and so pays no cold start of its own: it inherits the same CI machines as the
+ * moves that do.
+ */
+export const MOVE_COMMAND_TIMEOUT_MS = 180_000;
+
+/**
  * How long {@link expectWindowDockHasOnlyHomeTab} waits after the Home tab attaches before asserting
  * it is the ONLY thing docked. A dock that is about to receive more than Home — e.g. a
  * wrongly-cloned copy of another window's layout landing alongside the docked Home tab — can look

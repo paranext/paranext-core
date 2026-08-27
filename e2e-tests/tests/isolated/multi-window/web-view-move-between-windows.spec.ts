@@ -83,6 +83,7 @@ import {
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
   HOME_TAB_UUID,
+  MOVE_COMMAND_TIMEOUT_MS,
   RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
   captureAppOutput,
@@ -90,6 +91,7 @@ import {
   createStepLogger,
   expectWindowDockHasOnlyHomeTab,
   getAppPages,
+  getHeldWebViewIds,
   getWindowIdOfPage,
   homeTabTitle,
   pollUntil,
@@ -99,15 +101,6 @@ import {
 } from './multi-window.util';
 
 // #region move commands
-
-/**
- * Per-request timeout for a move. A move to a new window pays a whole cold renderer start before it
- * touches the web view — deliberately, so a window that never comes up costs a wait and an error
- * rather than a web view open in no window — and a cold start on a loaded machine can take a
- * minute. A budget shorter than that would report a transport timeout for a move that was still
- * legitimately under way.
- */
-const MOVE_COMMAND_TIMEOUT_MS = 180_000;
 
 /** Move a web view to a window created for it, answering its authoritative id after the move. */
 async function moveWebViewToNewWindow(webViewId: string): Promise<string> {
@@ -158,21 +151,6 @@ function idsMovedWebViewMayAnswerTo(webViewIdBeforeMove: string): string[] {
 // #endregion
 
 // #region window content probes
-
-/**
- * The web view ids a window is holding, read off its dock's tab titles
- * (`platform-tab-title.component.tsx` stamps each web view tab with `data-web-view-id`;
- * non-web-view tabs carry no such attribute and are therefore not matched).
- *
- * Tab titles rather than iframes: every tab in the tab bar renders its title whether or not it has
- * ever been the active tab, while rc-dock mounts a tab's pane — and with it the web view's iframe —
- * lazily. A window holding a tab the user has not looked at yet must still count as holding it.
- */
-async function getHeldWebViewIds(page: Page): Promise<string[]> {
-  return page
-    .locator('.platform-tab-title[data-web-view-id]')
-    .evaluateAll((titles) => titles.map((title) => title.getAttribute('data-web-view-id') ?? ''));
-}
 
 /**
  * Wait until `page` holds exactly one web view out of `candidateIds`, and answer which one.
@@ -478,7 +456,9 @@ test.describe('moving a web view between windows', () => {
       `window ${window1Id} to stay open after the move emptied it`,
     );
     expect(mainPage.isClosed()).toBe(false);
-    await expect(homeTabTitle(mainPage, window1Id)).toBeAttached({ timeout: 120_000 });
+    // Docked on the fly, so it carries a freshly minted id rather than the fixed fallback-layout one
+    // `homeTabTitle` builds — see {@link expectWindowDockHasOnlyHomeTab}.
+    await expectWindowDockHasOnlyHomeTab(mainPage);
     logStep(`window ${window1Id} docked Home after being emptied, as the primary`);
 
     // MOVE BACK OUT, to a window created for it. The source survives this one: it keeps its own
@@ -539,23 +519,30 @@ test.describe('moving a web view between windows', () => {
     // emptied — so this rides the same Electron instance rather than paying for another launch.
     //
     // Each window is named after the tab it is showing, which is what gives it its own OS switcher
-    // entry (NN-3) and what the submenu names its targets by. BOTH windows here show a Home tab, so
-    // both are called "Home": the design tolerates that collision deliberately, since nothing
-    // disambiguates two windows showing the same thing. So this asserts each window is named after
-    // its content — never that the two names differ, which would contradict the rule.
+    // entry (NN-3) and what the submenu names its targets by. Every window here shows a Home tab, so
+    // all three are called "Home": the design tolerates that collision deliberately, since nothing
+    // disambiguates windows showing the same thing. So this asserts each window is named after its
+    // content — never that the names differ, which would contradict the rule.
+    //
     // Auto-retrying, because the title is published asynchronously: a layout change localizes the
     // label before assigning it, and until that resolves the window still shows the document's
     // initial title. The expected value is read from the tab each window is showing rather than
-    // written as a literal, which is both the claim being made and immune to an English-string edit
-    // Located by the id window 2 minted for its own Home tab, not by `homeTabTitle`, which builds
-    // the FIXED-id spelling only window 1's fallback-layout tab carries
+    // written as a literal, which is both the claim being made and immune to an English-string edit.
+    // Located by the id window 2 minted for its own Home tab, not by `homeTabTitle`: no window still
+    // standing at this point carries the fixed fallback-layout id, since the primary re-docked its
+    // own Home when it emptied.
     const expectedWindowName = (
       await webViewTabTitle(page2, window2OwnHomeWebViewId).innerText()
     ).trim();
+    // All three windows must have settled on this title before the submenu opens — its target list
+    // is read once, with no refresh afterwards, so an unsettled window-1 title would leave the
+    // submenu one target short and read as the self-exclusion rule failing rather than as a timing
+    // gap.
+    await expect(mainPage).toHaveTitle(expectedWindowName, { timeout: 30_000 });
     await expect(page2).toHaveTitle(expectedWindowName, { timeout: 30_000 });
     await expect(page3).toHaveTitle(expectedWindowName, { timeout: 30_000 });
     const window2Title = await page2.title();
-    logStep(`both windows are named after the tab they show: "${window2Title}"`);
+    logStep(`all three windows are named after the tab they show: "${window2Title}"`);
 
     await webViewTabTitle(page3, idAfterSecondMove).click({ button: 'right' });
     const moveToWindowItem = page3.getByRole('menuitem', { name: 'Move tab to window' });
