@@ -7,7 +7,7 @@ import {
   handleMarkerPaletteSessionKeyDown,
   MarkerPaletteSessionDriver,
   MarkerPaletteSessionState,
-} from 'platform-bible-react';
+} from 'platform-bible-react/experimental';
 import {
   addOverlay,
   clearAllOverlays,

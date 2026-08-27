@@ -80,27 +80,8 @@ export {
   type FootnoteEditorMarkerPalette,
   markerMenuItemToPaletteItem,
 } from './components/advanced/footnote-editor/footnote-editor.component';
-export {
-  clearPaletteSessionIfCurrent,
-  type ForwardedSessionKind,
-  getMarkerPaletteClaimedKeys,
-  handleMarkerPaletteSessionKeyDown,
-  type MarkerPaletteKeyEvent,
-  type MarkerPaletteKeyOutcome,
-  type MarkerPaletteSessionDriver,
-  type MarkerPaletteSessionKind,
-  type MarkerPaletteSessionState,
-} from './components/advanced/marker-palette-keydown.util';
-export {
-  type MarkerPaletteOpenSession,
-  runMarkerPaletteSession,
-  type RunMarkerPaletteSessionOptions,
-} from './components/advanced/marker-palette-session.util';
-export {
-  filterAndRankPaletteItems,
-  stripMarkerNestingPrefix,
-  type PaletteFilterMode,
-} from './components/advanced/marker-palette-filter.util';
+// The marker-palette session/keydown/filter utilities are exported from `./experimental.ts` —
+// they are new, still-moving API surface.
 export {
   FOOTNOTE_EDITOR_STRING_KEYS,
   type FootnoteEditorLocalizedStrings,

@@ -9866,7 +9866,7 @@ declare module 'renderer/services/overlays/overlay.service-model' {
    */
   import { LocalizeKey, PaletteItem, PlatformError } from 'platform-bible-utils';
   import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
-  import type { PaletteFilterMode } from 'platform-bible-react';
+  import type { PaletteFilterMode } from 'platform-bible-react/experimental';
   import type { ReactElement } from 'react';
   import type { OverlayContextMenuItem } from 'renderer/components/overlays/overlay-context-menu.component';
   /**
@@ -12231,7 +12231,7 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    * runtime value import from `platform-bible-react` there pulled the component library into every
    * consumer of the contract's types.
    */
-  import { type PaletteFilterMode } from 'platform-bible-react';
+  import { type PaletteFilterMode } from 'platform-bible-react/experimental';
   import type {
     CommandPaletteItem,
     PaletteSearchField,
@@ -12256,7 +12256,10 @@ declare module 'renderer/services/overlays/overlay-palette-filter.util' {
    *   {@link DEFAULT_PALETTE_SEARCH_FIELDS}): label matches come FIRST, ranked exact-first (exact
    *   label match, then prefix matches, then containment matches, ties keeping their original context
    *   order); items matching only on the other searched fields follow in their original order, so an
-   *   exact label match can never be buried under description/badge hits.
+   *   exact label match can never be buried under description/badge hits. A MULTI-WORD query
+   *   additionally matches items where every whitespace-separated token is contained in SOME
+   *   searched field ("insert foot" finds an "Insert footnote" whose phrase appears in no single
+   *   field); those token matches follow the whole-phrase matches in their original order.
    *
    * Matching is case-insensitive (custom USFM markers may be capitalized, and search-box input should
    * never be case-picky), and every leg strips the `+` marker-nesting prefix from the filter before

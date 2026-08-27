@@ -12,7 +12,7 @@ import type { PaletteKeyForwarding } from 'platform-bible-utils/experimental';
 // runtime value import from `platform-bible-react` here pulled the whole component library into
 // every consumer of these types. The implementation half lives in
 // `overlay-palette-filter.util.ts`.
-import type { PaletteFilterMode } from 'platform-bible-react';
+import type { PaletteFilterMode } from 'platform-bible-react/experimental';
 import type { ReactElement } from 'react';
 import type { OverlayContextMenuItem } from '@renderer/components/overlays/overlay-context-menu.component';
 
