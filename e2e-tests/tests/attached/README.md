@@ -20,9 +20,15 @@ directory is collected by it automatically; there is nothing to register.
 
 ## What belongs here
 
-Only specs that genuinely cannot launch their own app — normally because they need to observe an app
-started with particular arguments, or OS-level window state that a test-managed launch cannot
-reproduce.
+**The rule:** an attach spec whose feature has no directory of its own goes here. A feature that
+already has its own directory keeps its attach specs there — which is why
+`tests/enhanced-resources/`, `tests/manage-books/` and `tests/markers-checklist/` hold their own
+`cdp.fixture` specs rather than moving here. This directory is for the leftovers, not for every
+attach spec in the tree.
+
+Beyond that, a spec should only attach at all if it genuinely cannot launch its own app — normally
+because it needs to observe an app started with particular arguments, or OS-level window state that
+a test-managed launch cannot reproduce.
 
 A spec that _can_ launch its own Electron belongs in `tests/isolated/` instead, where it runs
 without a manual setup step. `title-bar-narrow-width.spec.ts` stayed there for that reason even

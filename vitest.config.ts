@@ -16,6 +16,8 @@ const config = defineConfig(async () => {
         'src/**/*.test.tsx',
         'tools/pt9-css-converter/src/**/*.test.ts',
         '.erb/scripts/**/*.test.ts',
+        // e2e FIXTURE logic only — never the specs themselves, which are Playwright's.
+        'e2e-tests/fixtures/**/*.test.ts',
       ],
     },
   };
