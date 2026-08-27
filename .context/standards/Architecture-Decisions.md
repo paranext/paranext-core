@@ -2219,10 +2219,10 @@ step, no automation. Just a record.
   renderer modal — a renderer modal open during window close previously left its requester
   hanging) and on confirm closes every window with each layout kept for next session; alone, it
   quits as before; a secondary's ✕ closes only that window and its layout is dropped; Cmd+Q, File →
-  Quit and `platform.quit` keep their no-prompt behaviour. The primary is identified by a
-  main-owned reference set when the startup restore creates it, NOT by the persisted `isMain`
-  entry: that entry lets go of its runtime id the moment its window starts going down with the
-  app, which is exactly when the close path asks. On confirm the quit latch is set BEFORE the other
+  Quit and `platform.quit` keep their no-prompt behaviour. The primary is identified by the
+  persisted `isMain` entry: it releases its runtime id in the `closed` handler, one event after the
+  `close` handler where the close path asks, so the answer is present on every pass that asks.
+  On confirm the quit latch is set BEFORE the other
   windows are told to close, so each reads a quit on its first pass and records `'entry-stays'` by
   intent rather than by the last-window count happening to flip. A quit already requested is NOT
   the user's ✕ and never asks: the latch is set before any window's close, and a quit arriving
@@ -2231,8 +2231,8 @@ step, no automation. Just a record.
   reads. An emptied primary never reaches this path at all: moving its last tab out reopens Home,
   exactly as closing that tab does, so the primary cannot disappear except through its own ✕ or
   Quit.
-- **Alternatives:** Reading `getMainWindowId()` in the close path — rejected; it is the persisted
-  lookup and goes `undefined` at the moment of use. A renderer-hosted confirm dialog — rejected;
+- **Alternatives:** A second main-owned live reference alongside the persisted
+  `isMain` entry — rejected as two truths for one role. A renderer-hosted confirm dialog — rejected;
   see the hanging-requester incident above. Re-electing a new primary when the primary closes —
   rejected as unreachable: with this rule the primary cannot disappear while secondaries live, so
   there is nothing to elect. Relying on `areAllWindowsClosing()` flipping to make the secondaries
