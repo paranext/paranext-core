@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import DockLayout, { LayoutBase } from 'rc-dock';
+import DockLayout, { LayoutBase, LayoutData, TabData } from 'rc-dock';
 import { anything, capture, deepEqual, instance, mock, verify, when } from 'ts-mockito';
 import {
   FloatLayout,
@@ -9,6 +9,7 @@ import {
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
 import { WebViewDefinition } from '@shared/models/web-view.model';
+import { logger } from '@shared/services/logger.service';
 import {
   addTabToDock,
   addWebViewToDock,
@@ -256,18 +257,79 @@ describe('Dock Layout Component', () => {
       verify(mockDockLayout.dockMove(anything(), anything(), anything())).never();
     });
 
-    it('should throw on unknown target tab when adding panel', () => {
+    it('should still add the panel when its target tab is not in this window', () => {
+      // A `targetTabId` names a tab that can be in any window, and the window holding it is the one
+      // an open is routed to. Reaching here means no window claimed it — it was closed, or the
+      // caller is working from a stale id — and refusing to add the tab at all leaves the user with
+      // nothing to show for the command but a log line.
       // Ensure this is an add (rather than an update).
       when(mockDockLayout.find(anything())).thenReturn(undefined);
       const dockLayout = instance(mockDockLayout);
       const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
       const layout: Layout = { type: 'panel', direction: 'top', targetTabId: 'unknownTabId' };
 
-      expect(() => addWebViewToDock(webView, layout, false, dockLayout)).toThrow();
+      expect(() => addWebViewToDock(webView, layout, false, dockLayout)).not.toThrow();
 
-      verify(mockDockLayout.find(anything())).called();
-      verify(mockDockLayout.updateTab(anything(), anything())).never();
-      verify(mockDockLayout.dockMove(anything(), anything(), anything())).never();
+      verify(mockDockLayout.dockMove(anything(), anything(), anything())).once();
+    });
+
+    it('should name the target tab it could not find rather than dropping it silently', () => {
+      const warn = vi.spyOn(logger, 'warn');
+      when(mockDockLayout.find(anything())).thenReturn(undefined);
+      const dockLayout = instance(mockDockLayout);
+      const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
+      const layout: Layout = { type: 'panel', direction: 'top', targetTabId: 'unknownTabId' };
+
+      try {
+        addWebViewToDock(webView, layout, false, dockLayout);
+
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('unknownTabId'));
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('should name the target tab group it could not find rather than dropping it silently', () => {
+      // A maximized tab group is reachable here even though `findTabGroupById` only searches
+      // dockbox and floatbox: `containsTab` (used to route the open to this window in the first
+      // place) also searches maxbox, so a target that is maximized elsewhere lands in this branch.
+      const warn = vi.spyOn(logger, 'warn');
+      // A stand-in tab for every `find` lookup except the new tab's own id, which must miss so this
+      // is treated as an add rather than an update. The stand-in gives the previous-tab fallback
+      // (used once the tab group search below comes up empty) somewhere to place the new tab.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const standInTab = { id: 'stand-in-tab' } as unknown as TabData;
+      when(mockDockLayout.find(anything())).thenCall((idOrPredicate: string | unknown) =>
+        idOrPredicate === 'myId' ? undefined : standInTab,
+      );
+      when(mockDockLayout.getLayout()).thenReturn(
+        // Empty dockbox/floatbox so the tab group search below finds nothing.
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        { dockbox: { children: [] } } as unknown as LayoutData,
+      );
+      const dockLayout = instance(mockDockLayout);
+      const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
+      const layout: Layout = { type: 'tab', parentTabGroupId: 'unknownTabGroupId' };
+
+      try {
+        addWebViewToDock(webView, layout, false, dockLayout);
+
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('unknownTabGroupId'));
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it('should still refuse to replace a tab that is not here', () => {
+      // Unlike a panel, a replace-tab layout means nothing without its target: there is nothing to
+      // put the new tab in place of, so adding it elsewhere would be a different operation than the
+      // one the caller asked for.
+      when(mockDockLayout.find(anything())).thenReturn(undefined);
+      const dockLayout = instance(mockDockLayout);
+      const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
+      const layout: Layout = { type: 'replace-tab', targetTabId: 'unknownTabId' };
+
+      expect(() => addWebViewToDock(webView, layout, false, dockLayout)).toThrow();
     });
   });
 });

@@ -21,14 +21,15 @@ import { DialogData } from '@shared/models/dialog-options.model';
 
 import { testLayout } from '@renderer/testing/test-layout.data';
 import { simpleLayout } from '@renderer/components/docking/simple-layout.data';
-import { openWebView, registerDockLayout } from '@renderer/services/web-view.service-host';
-import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
+import { openWebView, registerDockLayout } from '@renderer/services/web-view.service-shard';
+import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-shard';
 import { logger } from '@shared/services/logger.service';
 
 import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrapper.component';
 import {
   addTabToDock,
   addWebViewToDock,
+  containsTab,
   floatTabById,
   getAllWebViewDefinitions,
   getTabInfoByElement,
@@ -110,6 +111,7 @@ export function PlatformDockLayout() {
         getTabInfoByElement(dockLayoutRef.current, tabElement),
       getTabInfoById: (tabId: string) =>
         getTabInfoById(dockLayoutRef.current, tabId, 'external getTabInfoById'),
+      containsTab: (tabOrTabGroupId: string) => containsTab(dockLayoutRef.current, tabOrTabGroupId),
       focusTab: (tabId: string) => focusTab(dockLayoutRef.current, tabId),
       // `LayoutInfo` is intentionally opaque in the shared model so callers don't need to know
       // about rc-dock's `LayoutBase`. Cross the boundary here at the only place we know the

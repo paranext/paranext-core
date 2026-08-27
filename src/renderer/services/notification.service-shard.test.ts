@@ -73,15 +73,17 @@ vi.mock('@shared/services/network-object.service', () => ({
   },
 }));
 
-describe('notification service host', () => {
+describe('notification service shard', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
+    // The shard registers under this window's scoped name and attributes, so it needs a window id
+    globalThis.windowId = '1';
     mockSendCommand.mockResolvedValue(undefined);
-    const { startNotificationService } = await import(
-      '@renderer/services/notification.service-host'
+    const { startNotificationServiceShard } = await import(
+      '@renderer/services/notification.service-shard'
     );
-    await startNotificationService();
+    await startNotificationServiceShard();
   });
 
   describe('send with duration', () => {

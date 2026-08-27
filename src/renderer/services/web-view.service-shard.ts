@@ -1,5 +1,11 @@
 /**
- * Service that handles WebView-related operations
+ * WebView service shard — the WebView service implementation for THIS window. Registered under a
+ * window-scoped network object id (e.g. "WebViewService-1") so several windows can coexist; the
+ * main process's `web-view.service-router.ts` publishes the generic name and forwards each call to
+ * the window that should handle it.
+ *
+ * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
+ * service shard".
  *
  * Don't expose this whole service on papi, just specific operations. The remaining exports are only
  * for services in the renderer to call.
@@ -50,6 +56,11 @@ import {
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import {
+  getServiceShardAttributes,
+  WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
+} from '@shared/models/service-shard.model';
+import { WebViewServiceShard } from '@shared/models/web-view.service-shard.model';
+import {
   createBufferedNetworkEventEmitter,
   getNetworkEvent,
   request as sendNetworkRequest,
@@ -66,7 +77,6 @@ import {
   getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   OpenWebViewEvent,
-  WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import { markStartupOnce } from '@shared/utils/startup-timing.util';
 import { newNonce } from '@shared/utils/util';
@@ -633,7 +643,7 @@ let currentInterfaceMode: 'simple' | 'power' | undefined;
 
 /** Create a new dock layout promise variable */
 function createDockLayoutAsyncVar(): AsyncVariable<PapiDockLayout> {
-  return new AsyncVariable<PapiDockLayout>('web-view.service-host.platformDockLayout');
+  return new AsyncVariable<PapiDockLayout>('web-view.service-shard.platformDockLayout');
 }
 
 /**
@@ -1500,7 +1510,7 @@ export function convertWebViewDefinitionToSaved(
   return webViewDefinitionCloned;
 }
 
-/** See {@link WebViewServiceType.getOpenWebViewDefinition} */
+/** See {@link WebViewServiceShard.getOpenWebViewDefinition} */
 async function getOpenWebViewDefinition(
   webViewId: WebViewId,
 ): Promise<SavedWebViewDefinition | undefined> {
@@ -1539,7 +1549,7 @@ export function getSavedWebViewDefinitionSync(
   return savedWebViewDefinition;
 }
 
-/** See {@link WebViewServiceType.getAllOpenWebViewDefinitions} */
+/** See {@link WebViewServiceShard.getAllOpenWebViewDefinitions} */
 async function getAllOpenWebViewDefinitions(): Promise<SavedWebViewDefinition[]> {
   // Wait for the dock layout to be registered, then delegate to the sync implementation so the
   // strip-and-keep-alive logic lives in one place
@@ -2199,7 +2209,7 @@ async function openOrReloadWebView(
   return webView.id;
 }
 
-/** See {@link WebViewServiceType.openWebView} */
+/** See {@link WebViewServiceShard.openWebView} */
 export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
@@ -2247,7 +2257,7 @@ export const openWebView = async (
   });
 };
 
-/** See {@link WebViewServiceType.reloadWebView} */
+/** See {@link WebViewServiceShard.reloadWebView} */
 export async function reloadWebView(
   // Keeping this parameter for the likelihood that we will add options per WebViewType sometime
   _webViewType: WebViewType,
@@ -2262,6 +2272,11 @@ export async function reloadWebView(
 
   // If the web view is found, open it again with the same ID
   return openOrReloadWebView(existingSavedWebView, undefined, getWebViewOptionsDefaults(options));
+}
+
+/** See {@link WebViewServiceShard.dockContainsTab} */
+async function dockContainsTab(tabOrTabGroupId: string): Promise<boolean> {
+  return (await getDockLayout()).containsTab(tabOrTabGroupId);
 }
 
 // #endregion openWebView and reloadWebView
@@ -2289,7 +2304,7 @@ export function waitForInitialize(): Promise<void> {
   if (isInitialized) return Promise.resolve();
 
   if (!initializeAsyncVariable) {
-    initializeAsyncVariable = new AsyncVariable<void>('web-view.service-host.initialize');
+    initializeAsyncVariable = new AsyncVariable<void>('web-view.service-shard.initialize');
   }
 
   return initializeAsyncVariable.promise;
@@ -2437,7 +2452,7 @@ export const initialize = () => {
 
 // #endregion Initialization
 
-const papiWebViewService: WebViewServiceType = {
+const papiWebViewService: WebViewServiceShard = {
   onDidAddWebView: onDidOpenWebView,
   onDidOpenWebView,
   onDidUpdateWebView,
@@ -2449,6 +2464,7 @@ const papiWebViewService: WebViewServiceType = {
   getOpenWebViewDefinition,
   getAllOpenWebViewDefinitions,
   getWebViewController,
+  dockContainsTab,
 };
 
 async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined> {
@@ -2473,19 +2489,27 @@ async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined
 
 /** Register the network object that backs the PAPI webview service */
 // To use this service, you should use `web-view.service.ts`
-export async function startWebViewService(): Promise<void> {
+export async function startWebViewServiceShard(): Promise<void> {
   await initialize();
   if (!globalThis.windowId) throw new Error('Cannot start WebViewService: windowId is not set');
 
-  // Register network object under a window-scoped name (e.g. "WebViewService-1") so multiple
-  // renderers can coexist. The main process registers a proxy under the generic name.
-  await networkObjectService.set<WebViewServiceType>(
+  // Register this window's shard under a window-scoped name (e.g. "WebViewService-1") so multiple
+  // renderers can coexist. The main process's WebView service router registers the generic name and
+  // forwards to the shard that should handle each call. The object type and window id are how the
+  // router finds this shard; the name it is registered under is nobody else's business.
+  await networkObjectService.set<WebViewServiceShard>(
     `${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`,
     papiWebViewService,
+    WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE,
+    getServiceShardAttributes(globalThis.windowId),
+    // Experimental at the object level, which fans out over every method: this is a window-scoped
+    // name that only the main process's router is meant to call, and both the name and the split
+    // between what a shard answers and what its router answers are still moving.
+    { 'x-experimental': true },
   );
 
   // Register commands under window-scoped names (e.g. "platform.openSettings-1") so multiple
-  // renderers can coexist. The main process registers proxies under the generic names. Typing this
+  // renderers can coexist. The main process registers routers under the generic names. Typing this
   // against RendererHostedCommandHandlers makes an unrecognized or misspelled key a compile error;
   // registerScopedCommands records each name so a command that is on RENDERER_HOSTED_COMMAND_NAMES
   // but never registered anywhere is caught too, at startup (see

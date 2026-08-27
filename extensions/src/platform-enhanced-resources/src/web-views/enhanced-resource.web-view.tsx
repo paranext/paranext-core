@@ -1109,7 +1109,7 @@ function mediaDtoToPresenterInput(dto: MediaDisplayItemDto): MediaDisplayItemInp
  * FN-009 seam: build a `papi-er://` URL for the renderer's `<img src>`. The custom protocol is
  * registered by `src/main/services/enhanced-resource-protocol.service.ts` and resolves the bytes
  * via `platform.enhancedResources.fetchImageBytes`. CSP is augmented in `src/renderer/index.ejs`
- * and `web-view.service-host.ts` so `<img src="papi-er://...">` works directly. The protocol does
+ * and `web-view.service-shard.ts` so `<img src="papi-er://...">` works directly. The protocol does
  * not appear in `connect-src` by design - calling `fetch('papi-er://...')` will be CSP-blocked.
  */
 function buildPapiErImageUrl(imageId: string, size?: 'full'): string {

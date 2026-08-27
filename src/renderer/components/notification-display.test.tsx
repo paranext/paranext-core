@@ -24,7 +24,7 @@ function commandStub(name: string): keyof CommandHandlers {
 }
 
 // This is the ONE render-level test in the notification suite that uses REAL Sonner instead of
-// mocking it (every other notification.service-host.test.ts case mocks 'sonner' wholesale, which is
+// mocking it (every other notification.service-shard.test.ts case mocks 'sonner' wholesale, which is
 // exactly why the cancel-slot-button-is-dead-when-dismissible-is-false blocker slipped through
 // review undetected). Rendering the real Toaster and clicking
 // the real DOM button pins the actual Sonner contract instead of just the shape we hand it.
@@ -90,13 +90,15 @@ describe('NotificationDisplay with real Sonner', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.clearAllMocks();
     vi.resetModules();
+    // The notification service shard registers per window, so it needs a window id
+    globalThis.windowId = '1';
     mockCurrentThemeType = 'light';
     mockSendCommand.mockResolvedValue(undefined);
     stubMatchMedia();
-    const { startNotificationService } = await import(
-      '@renderer/services/notification.service-host'
+    const { startNotificationServiceShard } = await import(
+      '@renderer/services/notification.service-shard'
     );
-    await startNotificationService();
+    await startNotificationServiceShard();
   });
 
   afterEach(() => {

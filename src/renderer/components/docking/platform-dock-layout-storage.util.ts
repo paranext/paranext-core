@@ -40,7 +40,7 @@ import {
 import {
   mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
   saveTabInfoBase,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';
@@ -830,6 +830,21 @@ export function findPreviousTab(dockLayout: DockLayout) {
 }
 
 /**
+ * Whether this dock holds the tab or tab group with the specified ID.
+ *
+ * `find` matches tabs and tab groups alike — docked, floating, windowed or maximized — so one
+ * question answers for either kind of ID and for every kind of tab, not just WebView tabs.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabOrTabGroupId ID of the tab or tab group to look for
+ * @returns `true` if this dock holds it, `false` otherwise
+ */
+export function containsTab(dockLayout: DockLayout, tabOrTabGroupId: string): boolean {
+  return !!dockLayout.find(tabOrTabGroupId);
+}
+
+/**
  * Sets an existing tab as the active tab in its tab group, makes sure it is unobscured by other
  * tabs, and sets the document focus in that tab
  *
@@ -965,6 +980,13 @@ export function addTabToDock(
           previousTabId = tab.id;
           break;
         }
+        // Placing the tab as if no group had been named keeps the user's command producing a tab,
+        // which refusing the whole add does not — the same trade-off the `panel` case below makes.
+        // Saying so is what keeps a tab that landed somewhere else from looking like a placement
+        // the caller asked for.
+        logger.warn(
+          `When adding a tab, parent tab group '${updatedLayout.parentTabGroupId}' is not in this window. Adding the tab without it.`,
+        );
       }
 
       const isDockBoxEmpty =
@@ -1011,10 +1033,20 @@ export function addTabToDock(
       if (updatedLayout.targetTabId !== undefined) {
         // Look for a specific tab
         targetTab = dockLayout.find(updatedLayout.targetTabId);
-        if (!isTab(targetTab))
-          throw new LogError(
-            `When adding a panel, unknown target tab: '${updatedLayout.targetTabId}'`,
+        // Every caller that names a target tab today goes through the WebView service router, which
+        // sends the open to whichever window holds that tab — so a target missing here is a target
+        // no window claimed: it closed, or the caller is holding an id it read a while ago.
+        // Placing the panel as if no target had been asked for keeps the user's command producing a
+        // tab, which refusing the whole add does not; the same fall-through already covers a `tab`
+        // layout whose `parentTabGroupId` is not here. A caller that reached this function without
+        // going through the router gets the same placement rather than an error, so a wrong id
+        // shows up as a tab in an odd spot and a log line rather than as nothing at all.
+        if (!isTab(targetTab)) {
+          logger.warn(
+            `When adding a panel, target tab '${updatedLayout.targetTabId}' is not in this window. Adding the panel without it.`,
           );
+          targetTab = findPreviousTab(dockLayout);
+        }
       }
       // Didn't ask for a specific tab, so just get the previous tab and go from there
       else targetTab = findPreviousTab(dockLayout);
