@@ -123,11 +123,11 @@ import {
 } from '@renderer/components/docking/simple-layout.builder';
 import { trackSimpleLayoutTabsResolved as trackSimpleLayoutTabsResolvedImpl } from '@renderer/services/simple-layout-tabs-resolved.tracker';
 import {
-  getSlotIdsWithStoredState,
-  removeStateOfSlots,
+  getWindowIdsWithStoredState,
+  removeStateOfWindows,
 } from '@renderer/services/local-storage.service';
 import {
-  FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE,
+  FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE,
   GET_WINDOW_LAYOUT_REQUEST_TYPE,
   SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
   WindowLayoutGetResponse,
@@ -3770,30 +3770,30 @@ const webViewServiceShard: WebViewServiceShard = {
   adoptWebView,
 };
 
-/** Register the network object that backs the PAPI webview service */
-// To use this service, you should use `web-view.service.ts`
 /**
- * Drop the state this profile is still storing for window-layout slots that no longer exist.
+ * Drop the state this profile is still storing for windows that no longer exist.
  *
- * Slot ids are never reissued, so state under a slot whose entry has gone can never be read again,
+ * Window ids are never reissued, so state under an id whose entry has gone can never be read again,
  * and nothing else removes it: every window a user deliberately closes would leave a blob behind
  * for the life of the profile, in the storage every window of the profile shares, until writes
  * start failing for all of them.
  *
- * Which slots are dead is the main process's answer, not this window's guess — it holds the
+ * Which windows are dead is the main process's answer, not this window's guess — it holds the
  * structure, and it answers about the ids this window actually holds state for, so a window created
  * while the question was in flight cannot have its state deleted by it.
  */
-async function removeStateOfDeadSlots(): Promise<void> {
-  const candidateSlotIds = getSlotIdsWithStoredState();
-  if (candidateSlotIds.length === 0) return;
-  const deadSlotIds = await sendNetworkRequest<[string[]], string[]>(
-    FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE,
-    candidateSlotIds,
+async function removeStateOfDeadWindows(): Promise<void> {
+  const candidateWindowIds = getWindowIdsWithStoredState();
+  if (candidateWindowIds.length === 0) return;
+  const deadWindowIds = await sendNetworkRequest<[string[]], string[]>(
+    FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE,
+    candidateWindowIds,
   );
-  removeStateOfSlots(deadSlotIds);
+  removeStateOfWindows(deadWindowIds);
 }
 
+/** Register the network object that backs the PAPI webview service */
+// To use this service, you should use `web-view.service.ts`
 export async function startWebViewServiceShard(): Promise<void> {
   await initialize();
   if (globalThis.windowId === undefined)
@@ -3817,9 +3817,7 @@ export async function startWebViewServiceShard(): Promise<void> {
   // Housekeeping, deliberately not awaited: it costs one request and no window's startup should
   // wait on it, or fail because it failed. Every window does it — the storage is shared, so
   // whichever gets there first cleans up for all of them.
-  removeStateOfDeadSlots().catch((e) => {
-    logger.warn(
-      `Could not drop the stored state of window slots that are gone: ${getErrorMessage(e)}`,
-    );
+  removeStateOfDeadWindows().catch((e) => {
+    logger.warn(`Could not drop the stored state of windows that are gone: ${getErrorMessage(e)}`);
   });
 }

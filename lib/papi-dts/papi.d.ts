@@ -1,6 +1,20 @@
 declare module 'shared/utils/util' {
   import { ProcessType } from 'shared/global-this.model';
   /**
+   * Source (no anchors, no flags) of the hex-grouped shape a durable window id has — the same shape
+   * `newGuid()` (`platform-bible-utils`) and Node's `crypto.randomUUID()` (main's
+   * `window-state.service.ts`, in `mintWindowId`) both produce. Shared so every matcher that needs to
+   * recognize a window id by shape (a scoped web view id's suffix, a per-window storage key's prefix)
+   * spells the shape out once rather than once per matcher.
+   *
+   * Deliberately NOT an RFC-4122 pattern: an RFC-4122 UUID constrains its variant nibble, and
+   * `newGuid()` does not, so an RFC-strict pattern would silently stop matching ids already on disk.
+   *
+   * @experimental This constant is unstable and may change or disappear without notice
+   */
+  export const WINDOW_ID_SHAPE_PATTERN_SOURCE =
+    '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  /**
    * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
    * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
    *
@@ -8949,21 +8963,14 @@ declare module 'shared/data/platform.data' {
   /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
   export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
   /**
-   * Query parameter key used to pass a window's platform id to its renderer process
+   * Query parameter key used to pass a window's platform id to its renderer process. Durable: on a
+   * restored window this is the id its persisted layout entry already carries (see
+   * `WindowLayoutEntry.windowId`), so the renderer's per-window storage keyed by it survives a
+   * restart under the same id.
    *
    * @experimental
    */
   export const WINDOW_ID = 'windowId';
-  /**
-   * Query parameter key used to pass a window's layout slot id — the stable identity of its entry in
-   * the persisted window-layouts structure — to its renderer process. The renderer keys its
-   * per-window storage by it, so it travels with the window rather than being asked for after the
-   * window loads: storage then works from the first render, in every interface mode, and before any
-   * layout request has been answered.
-   *
-   * @experimental
-   */
-  export const WINDOW_SLOT_ID_QUERY_PARAMETER = 'windowSlotId';
   /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
   export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
   /**

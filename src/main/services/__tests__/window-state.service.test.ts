@@ -9,12 +9,15 @@ import {
   getFocusedWindowId,
   getReadyWindowIds,
   getTargetWindowId,
+  getTrackedWindows,
+  getWindowCreationRank,
   getUnreachableWindowIds,
   getWindowIdOf,
   getWindows,
   isWindowAbandoned,
   isWindowClosing,
   isWindowReady,
+  isWindowTracked,
   markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
@@ -31,13 +34,34 @@ import {
 // imports above, so the static import resolves against this stub.
 vi.mock('electron', () => ({ BrowserWindow: class {} }));
 
-const mocks = vi.hoisted(() => ({ loggerError: vi.fn(), loggerWarn: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  loggerError: vi.fn(),
+  loggerWarn: vi.fn(),
+  nextMintedId: { current: 1 },
+  useRealRandomUuid: { current: false },
+}));
 
-/**
- * Key the id counter is persisted under, spelled here as the service spells it privately. The test
- * that seeds it proves the spelling still matches before it relies on it.
- */
-const NEXT_WINDOW_ID_KEY = 'window-state.service.nextWindowId';
+// A real mint is a random GUID, which would make every test below that names a window by the id
+// its `addWindow` call happens to return unreadable and order-dependent. Standing in for a
+// sequence — reset alongside the rest of this module's state in `beforeEach` — keeps every test
+// free to spell out the id it expects, the same way it could before ids were durable.
+//
+// `useRealRandomUuid` is the escape hatch for the one test that has to check the real shape
+// instead ('mints a fresh GUID for every window, not a repeatable value') — it flips this on for
+// just that test, and `beforeEach` flips it back off before the next one runs.
+vi.mock('crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('crypto')>();
+  const randomUUID: typeof actual.randomUUID = () => {
+    if (mocks.useRealRandomUuid.current) return actual.randomUUID();
+    const id = mocks.nextMintedId.current;
+    mocks.nextMintedId.current += 1;
+    // A stand-in id, not a real GUID — callers of this mock never rely on the real shape (that
+    // mocks.useRealRandomUuid.current branch above does)
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    return String(id) as ReturnType<typeof actual.randomUUID>;
+  };
+  return { ...actual, randomUUID, default: { ...actual, randomUUID } };
+});
 
 // Stood in for so a swallowed subscriber throw can be asserted to have been reported rather than
 // merely swallowed, and so the real logger's file/console transports stay out of the test run
@@ -132,6 +156,8 @@ describe('window state tracking', () => {
     // `getWindows()`, which is exactly the state this module exists to survive.
     resetForTesting();
     mocks.loggerError.mockClear();
+    mocks.nextMintedId.current = 1;
+    mocks.useRealRandomUuid.current = false;
   });
 
   test('targets the focused window when one is focused', () => {
@@ -154,6 +180,39 @@ describe('window state tracking', () => {
     expect(getTargetWindowId()).toBeUndefined();
   });
 
+  describe('where a window falls in creation order', () => {
+    // The router's two owner tie-breaks read this instead of comparing ids, because a GUID carries
+    // no order. Both call sites fall back with `?? 0`, so "untracked answers undefined" is part of
+    // the contract rather than an implementation detail.
+    test('orders windows by when they were added, and forgets one that is removed', () => {
+      const first = fakeWindow(1);
+      const firstId = addWindow(first);
+      const secondId = addWindow(fakeWindow(2));
+      const thirdId = addWindow(fakeWindow(3));
+
+      expect(getWindowCreationRank(firstId)).toBe(0);
+      expect(getWindowCreationRank(secondId)).toBe(1);
+      expect(getWindowCreationRank(thirdId)).toBe(2);
+
+      // Relative order has to survive an earlier window going away: the tie-break asks which of two
+      // live windows is older, and closing a third must not reverse that answer
+      removeWindow(first, firstId);
+
+      const secondRank = getWindowCreationRank(secondId);
+      const thirdRank = getWindowCreationRank(thirdId);
+      expect(secondRank).toBeDefined();
+      expect(thirdRank).toBeDefined();
+      expect(secondRank).toBeLessThan(thirdRank ?? -1);
+      expect(getWindowCreationRank(firstId)).toBeUndefined();
+    });
+
+    test('answers undefined for an id nothing tracks', () => {
+      addWindow(fakeWindow(1));
+
+      expect(getWindowCreationRank('a-window-that-never-existed')).toBeUndefined();
+    });
+  });
+
   describe('minting window ids', () => {
     test('never hands out an id a closed window already had', () => {
       const first = fakeWindow(1);
@@ -166,61 +225,22 @@ describe('window state tracking', () => {
       const thirdId = addWindow(fakeWindow(3));
       const fourthId = addWindow(fakeWindow(4));
 
-      // Asserted as the whole sequence rather than as "the new ids differ from the old ones": the
-      // sequence is what a reuse would break, and it also pins the increasing order that the
-      // router's tie-breaks and the e2e page ordering read as creation order.
-      expect([firstId, secondId, thirdId, fourthId]).toEqual(['1', '2', '3', '4']);
+      // Minted ids are random GUIDs, not a sequence, so uniqueness is what a reuse would break —
+      // there is no order left to pin
+      expect(new Set([firstId, secondId, thirdId, fourthId]).size).toBe(4);
     });
 
-    test('continues the sequence across a restart rather than starting over', async () => {
+    test('mints a fresh GUID for every window, not a repeatable value', () => {
+      // The one test in this file that needs the real generator instead of the sequence stand-in —
+      // see the note above the `crypto` mock.
+      mocks.useRealRandomUuid.current = true;
       const firstId = addWindow(fakeWindow(1));
       const secondId = addWindow(fakeWindow(2));
-      expect([firstId, secondId]).toEqual(['1', '2']);
 
-      // A restart is a fresh module over the same storage: drop the in-memory counter without
-      // clearing what it wrote. Reaching for `resetForTesting` here would clear both and prove
-      // nothing, since starting over is the failure this is looking for.
-      vi.resetModules();
-      const reloaded = await import('@main/services/window-state.service');
-
-      expect(reloaded.addWindow(fakeWindow(3))).toBe('3');
-    });
-
-    test('restarts the sequence rather than trusting a counter too large to increment', async () => {
-      // The positive control first: a sound stored value IS honoured, so the seeding below is
-      // reaching the counter rather than silently missing it.
-      localStorage.setItem(NEXT_WINDOW_ID_KEY, '5');
-      expect(addWindow(fakeWindow(1))).toBe('5');
-
-      // At or beyond 2^53, `+ 1` gives the same number back, so a counter left there would hand
-      // every window of the session the same id — and the tracker's lookups would answer with
-      // whichever window matched first. `Number.isInteger` accepts such a value; being able to
-      // count is what the guard is actually for.
-      resetForTesting();
-      localStorage.setItem(NEXT_WINDOW_ID_KEY, `${2 ** 53}`);
-
-      expect([addWindow(fakeWindow(1)), addWindow(fakeWindow(2))]).toEqual(['1', '2']);
-    });
-
-    test('keeps opening windows when the counter cannot be written', () => {
-      // main's `localStorage` is file-backed, so a full disk or a locked storage directory makes
-      // `setItem` throw. That happens inside `createWindow`, so a throw escaping here would leave
-      // the app unable to open any window at all — every session, until the directory is fixed.
-      const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-        throw new Error('no space left on device');
-      });
-      try {
-        const ids = [addWindow(fakeWindow(1)), addWindow(fakeWindow(2))];
-
-        // Unique for this session, which is what the tracker needs to stay correct while the app
-        // runs; a later launch may repeat one, which the module already treats as survivable
-        expect(ids).toEqual(['1', '2']);
-        expect(mocks.loggerWarn).toHaveBeenCalledWith(
-          expect.stringMatching(/could not persist the next window id/i),
-        );
-      } finally {
-        setItem.mockRestore();
-      }
+      expect(firstId).not.toBe(secondId);
+      // The shape a restored window's durable id and a fresh mint both have to share — see
+      // window-scoped-web-view-ids.util.ts for why this is deliberately not RFC-strict
+      expect(firstId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
     });
 
     test('answers a window’s platform id from the window itself, never from Electron’s', () => {
@@ -238,6 +258,22 @@ describe('window state tracking', () => {
 
       removeWindow(tracked, mintedId);
       expect(getWindowIdOf(tracked)).toBeUndefined();
+    });
+  });
+
+  describe('restoring a window’s durable id', () => {
+    test('reuses the id it is given instead of minting a fresh one', () => {
+      const restoredId = addWindow(fakeWindow(1), 'entry-durable-id');
+
+      expect(restoredId).toBe('entry-durable-id');
+      expect(isWindowTracked('entry-durable-id')).toBe(true);
+    });
+
+    test('a restored id and a fresh mint never collide', () => {
+      const restoredId = addWindow(fakeWindow(1), 'entry-durable-id');
+      const freshId = addWindow(fakeWindow(2));
+
+      expect(freshId).not.toBe(restoredId);
     });
   });
 
@@ -309,6 +345,19 @@ describe('window state tracking', () => {
     closing.destroyForTest();
 
     expect(getWindows().map((window) => window.id)).toEqual([2]);
+  });
+
+  test('leaves a window that was destroyed but not yet removed out of getTrackedWindows', () => {
+    // Callers of getTrackedWindows read properties off the window it hands back — e.g. `getTitle()`
+    // to list open windows for the user to choose from — and every one of those throws on a window
+    // Electron has already destroyed.
+    const closing = destroyableWindow(1);
+    addWindow(closing.window);
+    addWindow(fakeWindow(2));
+
+    closing.destroyForTest();
+
+    expect(getTrackedWindows().map(({ window }) => window.id)).toEqual([2]);
   });
 
   test('answers routing questions without reading a destroyed window', () => {

@@ -1,6 +1,21 @@
 import { ProcessType } from '@shared/global-this.model';
 import { charAt, indexOf, isString, stringLength, substring } from 'platform-bible-utils';
 
+/**
+ * Source (no anchors, no flags) of the hex-grouped shape a durable window id has — the same shape
+ * `newGuid()` (`platform-bible-utils`) and Node's `crypto.randomUUID()` (main's
+ * `window-state.service.ts`, in `mintWindowId`) both produce. Shared so every matcher that needs to
+ * recognize a window id by shape (a scoped web view id's suffix, a per-window storage key's prefix)
+ * spells the shape out once rather than once per matcher.
+ *
+ * Deliberately NOT an RFC-4122 pattern: an RFC-4122 UUID constrains its variant nibble, and
+ * `newGuid()` does not, so an RFC-strict pattern would silently stop matching ids already on disk.
+ *
+ * @experimental This constant is unstable and may change or disappear without notice
+ */
+export const WINDOW_ID_SHAPE_PATTERN_SOURCE =
+  '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
 const NONCE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const NONCE_CHARS_LENGTH = stringLength(NONCE_CHARS);
 /**

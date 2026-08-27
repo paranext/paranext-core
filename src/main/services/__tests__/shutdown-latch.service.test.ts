@@ -141,19 +141,19 @@ describe('shutdown latches', () => {
       // Closing the last window with the X button emits no `before-quit`, so the quit flag stays
       // false for the whole shutdown. Anything that refuses to start new work during a shutdown has
       // to catch this case too, or it only guards half of the ways the app goes down.
-      addWindow(fakeWindow(1));
+      const windowId = addWindow(fakeWindow(1));
 
-      markWindowClosing('1');
+      markWindowClosing(windowId);
 
       expect(isAppQuitRequested()).toBe(false);
       expect(isAppShuttingDown()).toBe(true);
     });
 
     test('does not report the app shutting down while a window is staying open', () => {
-      addWindow(fakeWindow(1));
+      const firstWindowId = addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
 
-      markWindowClosing('1');
+      markWindowClosing(firstWindowId);
 
       expect(isAppShuttingDown()).toBe(false);
     });
