@@ -121,9 +121,19 @@ export const test = appTest.extend<
         'platform.interfaceMode': 'simple',
         'platform.interfaceLanguage': ['en'],
       });
-      const ctx = await launchElectronApp({
-        envOverrides: { DEV_NOISY: 'false', PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: projectsDir },
-      });
+      // Inside its own try: a launch that throws — a bound port, a crash on start — would
+      // otherwise skip the restore below entirely and leave the pin in the developer's settings
+      // file. The next run's global setup does recover it from the backup, but restoring here means
+      // the developer's own next app start is already correct rather than one run later.
+      let ctx;
+      try {
+        ctx = await launchElectronApp({
+          envOverrides: { DEV_NOISY: 'false', PLATFORM_BIBLE_PROJECT_ROOT_FOLDER: projectsDir },
+        });
+      } catch (err) {
+        restoreSettings();
+        throw err;
+      }
       try {
         // Size the window before any test runs. app.fixture (unlike isolated.fixture) never
         // resizes, so without this the suite runs at whatever size the platform hands out — under a

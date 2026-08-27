@@ -210,6 +210,11 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined, SKIP_START_MAIN: '1' },
     });
 
+    // The child holds its own copy of the descriptors now, so release the parent's. Leaving it open
+    // keeps a write handle on a file this process never writes to, which on Windows blocks anything
+    // that later wants to truncate or delete the log.
+    fs.closeSync(devServerLog);
+
     // Allow the Playwright process to exit independently of the detached server
     devServer.unref();
 
@@ -219,17 +224,27 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       fs.writeFileSync(pidFile, String(devServer.pid));
     }
 
-    // Notice the server dying rather than waiting out the full port timeout and reporting the
-    // wrong cause. `detached` + `unref` do not stop this process from seeing the exit.
+    // Notice the server dying rather than waiting out the full port timeout and reporting the wrong
+    // cause. `detached` + `unref` do not stop this process from seeing the exit.
+    //
+    // Raced against the port wait rather than merely recorded: a server that dies BEFORE the port
+    // opens would otherwise leave `waitForPort` polling a port nothing will ever bind, for its full
+    // two minutes, before anyone looks at the exit. Racing makes that case fail when it happens.
     let devServerExit: { code: number | null; signal: string | null } | undefined;
-    devServer.on('exit', (code, signal) => {
-      devServerExit = { code, signal };
+    const devServerExited = new Promise<never>((_resolve, reject) => {
+      devServer.on('exit', (code, signal) => {
+        devServerExit = { code, signal };
+        reject(new Error(`The renderer dev server exited before port ${RENDERER_PORT} opened.`));
+      });
     });
+    // Nothing awaits this promise unless the race below rejects with it; without a no-op catch,
+    // an exit AFTER the port opened would surface as an unhandled rejection and take the run down.
+    devServerExited.catch(() => {});
 
     // Wait for the dev server to be ready
     console.log(`Waiting for renderer dev server on port ${RENDERER_PORT}...`);
     try {
-      await waitForPort(RENDERER_PORT, 120_000);
+      await Promise.race([waitForPort(RENDERER_PORT, 120_000), devServerExited]);
     } catch (err) {
       const why = devServerExit
         ? `The renderer dev server exited (code=${devServerExit.code}, signal=${devServerExit.signal}).`

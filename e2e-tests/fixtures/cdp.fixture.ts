@@ -252,7 +252,14 @@ export const test = base.extend<CdpFixtures>({
     // Assert the interface mode BEFORE the screenshot wrapper is installed, so a mode mismatch
     // reports itself rather than surfacing later as a timeout on an element the running mode never
     // renders. Only checked when the spec declared one — plenty of specs work in either mode.
-    if (requiredInterfaceMode) await assertInterfaceMode(page, requiredInterfaceMode);
+    if (requiredInterfaceMode)
+      await assertInterfaceMode(
+        page,
+        requiredInterfaceMode,
+        `Attach mode cannot set the mode — it inherits whatever app you started. Restart the app ` +
+          `in ${requiredInterfaceMode} mode, e.g. by setting 'platform.interfaceMode': ` +
+          `'${requiredInterfaceMode}' in dev-appdata/data/settings.json first.`,
+      );
 
     // AUTO-VALIDATE screenshot dimensions. Wrap `page.screenshot` so every screenshot taken via
     // the fixture is validated against the Full HD minimum the moment the file lands on disk.

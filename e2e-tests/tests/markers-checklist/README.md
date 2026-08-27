@@ -26,4 +26,4 @@ Collected only by `playwright-cdp.config.ts`, which testIgnores `smoke`, `isolat
 `manage-books` but not this directory. It is not a project in `playwright.config.ts`, so
 `test:e2e:all` does not see it, and there is no dedicated npm script.
 
-**Size:** 5 spec files — 43 `test(...)` declarations and 3 `test.fixme(...)`.
+**Size:** 5 spec files — 41 `test(...)` declarations and 3 `test.fixme(...)`.

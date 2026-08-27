@@ -223,33 +223,35 @@ export type RequiredInterfaceMode = 'simple' | 'power';
 export async function assertInterfaceMode(
   page: Page,
   required: RequiredInterfaceMode,
+  howToFix: string,
   timeoutMs = 30_000,
 ): Promise<void> {
-  // Poll rather than read once: the attribute is written by a React effect, so it is absent for a
-  // moment after the page exists. Reading once would report 'unknown' for a correctly configured
-  // app purely on timing.
-  const deadline = Date.now() + timeoutMs;
   let actual: string | undefined;
-  while (Date.now() < deadline) {
-    // Polling loop: each read depends on the previous result being wrong.
-    // eslint-disable-next-line no-await-in-loop
-    actual =
-      (await page.evaluate(() => document.body.getAttribute('data-interface-mode'))) ?? undefined;
-    if (actual === required) return;
-    // Polling loop: the wait between reads must be sequential, or every iteration would fire at
-    // once and the loop would spin instead of pacing itself.
-    // eslint-disable-next-line no-await-in-loop
-    await page.waitForTimeout(250);
+  try {
+    // Polled, not read once: the attribute is written by a React effect, so it is briefly absent
+    // after the page exists. A single read would report 'unknown' for a correctly configured app
+    // purely on timing.
+    await expect
+      .poll(
+        async () => {
+          actual =
+            (await page.evaluate(() => document.body.getAttribute('data-interface-mode'))) ??
+            undefined;
+          return actual;
+        },
+        { timeout: timeoutMs },
+      )
+      .toBe(required);
+  } catch {
+    // Rethrown rather than left as the poll's own assertion error, which reports the mismatch but
+    // none of the context that makes it actionable.
+    throw new Error(
+      `e2e precondition: this spec requires '${required}' interface mode, but the running app is in ` +
+        `'${actual ?? 'unknown (the attribute is missing — the renderer may not have finished mounting)'}'. ` +
+        `${howToFix} If you did not choose this mode, a killed e2e run probably left it behind: ` +
+        `preConfigureSettings merges into the shared settings file and only restores in teardown.`,
+    );
   }
-  throw new Error(
-    `e2e precondition: this spec requires '${required}' interface mode, but the running app is in ` +
-      `'${actual ?? 'unknown (the attribute is missing — the renderer may not have finished mounting)'}'. ` +
-      `Attach-mode specs cannot set the mode; they inherit it from the app you started. Switch the ` +
-      `running app to ${required} mode and re-run, or restart it after setting ` +
-      `'platform.interfaceMode': '${required}' in dev-appdata/settings.json. If you did not choose ` +
-      `this mode, a killed e2e run probably left it behind: preConfigureSettings merges into that ` +
-      `file and only restores in teardown.`,
-  );
 }
 
 /**

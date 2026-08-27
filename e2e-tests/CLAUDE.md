@@ -14,10 +14,14 @@ keep its windows off the Windows desktop — e.g.
 
 This does nothing for suites that attach to an app you started separately — `fixtures/cdp.fixture.ts`
 over port 9223, and the two `*-commands.spec.ts` files' `fixtures/papi-live.fixture.ts` over port
-8876. Between them that is all of `tests/enhanced-resources/`, `tests/manage-books/` and
-`tests/markers-checklist/`, plus `tests/attached/`. Start the app with
-`./.erb/scripts/refresh.sh` — on Linux that already runs it under its own Xvfb — and run those
-suites through `playwright-cdp.config.ts`, which has no globalSetup.
+8876. Between them that is all of `tests/enhanced-resources/` and `tests/markers-checklist/`, plus
+`tests/attached/`. Start the app with `./.erb/scripts/refresh.sh` — on Linux that already runs it
+under its own Xvfb — and run those suites through `playwright-cdp.config.ts`, which has no
+globalSetup.
+
+`tests/manage-books/` also attaches, but is deliberately excluded from that config and is collected
+by nothing: three of its specs mutate real project data with no restore. See its README before
+removing the exclusion.
 
 **An attach-based spec must not live under `tests/isolated/`.** `playwright-cdp.config.ts` ignores
 that tree, and the `isolated` project's globalSetup refuses to start while an app holds port 8876 —
