@@ -121,9 +121,9 @@ describe('a window nothing can run in is not a reason to close the last working 
     // it — but nothing runs in it any more, so counting it as a second real window would close the
     // only window the user can still work in.
     vi.useFakeTimers();
-    addWindow(fakeWindow(1));
-    addWindow(fakeWindow(2));
-    markWindowAbandoned('2');
+    const windowAId = addWindow(fakeWindow(1));
+    const windowBId = addWindow(fakeWindow(2));
+    markWindowAbandoned(windowBId);
     const closeWindow = vi.fn();
     const markWindowClosing = vi.fn(markWindowClosingInTracker);
     const handler = createWindowEmptinessHandler({
@@ -133,10 +133,10 @@ describe('a window nothing can run in is not a reason to close the last working 
       markWindowClosing,
     });
 
-    const response = await handler('1', 'emptied-by-removal');
+    const response = await handler(windowAId, 'emptied-by-removal');
 
     expect(response).toEqual({ action: 'open-home' });
-    expect(markWindowClosing).not.toHaveBeenCalledWith('1');
+    expect(markWindowClosing).not.toHaveBeenCalledWith(windowAId);
 
     vi.runAllTimers();
     expect(closeWindow).not.toHaveBeenCalled();

@@ -4,6 +4,7 @@
  * to the correct renderer window.
  */
 
+import { randomUUID } from 'crypto';
 import { BrowserWindow } from 'electron';
 import { getErrorMessage, PlatformEventEmitter } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
@@ -11,7 +12,9 @@ import { logger } from '@shared/services/logger.service';
 /** A tracked window, paired with the platform id minted for it */
 type TrackedWindow = {
   /**
-   * The window's platform id, minted by {@link mintWindowId} when the window was added.
+   * The window's platform id: minted by {@link mintWindowId} for a brand-new window, or supplied to
+   * {@link addWindow} for a window restoring a persisted entry, whose durable id this must match so
+   * per-window state survives the restart.
    *
    * This is the platform's own id, not Electron's `BrowserWindow.id` — nothing outside this module
    * has ever seen Electron's, and this list is the only mapping from one to the other. Reading it
@@ -26,48 +29,16 @@ type TrackedWindow = {
 };
 
 /**
- * Storage key holding the next window id to hand out.
- *
- * `localStorage` here is main's file-backed polyfill (`polyfillLocalStorage()` in
- * `src/main/global-this.model.ts`), which runs at module load before any service is imported, so it
- * is available by the time the first window is created.
- */
-const NEXT_WINDOW_ID_KEY = 'window-state.service.nextWindowId';
-
-/** The next id to hand out, or `undefined` until it has been read back from storage */
-let nextWindowId: number | undefined;
-
-/**
  * Mint a window id that has never been used before — not earlier in this launch, and not in any
- * previous one.
+ * previous one, and not by any other process that has ever run on this machine.
  *
- * The counter is persisted on every mint rather than at shutdown, so a crash cannot hand the same
- * id to a later window. Ids increase in creation order, which the routing tie-breaks in
- * `web-view.service-router.ts` and the e2e page ordering both depend on.
+ * A random GUID rather than a counter: the id is now a window's durable, persisted identity (see
+ * {@link addWindow}), so two windows minted in different launches must never collide the way two
+ * counters seeded from the same stored value could. This is the only process that mints a window id
+ * from nothing — a restored window is instead handed the id its persisted entry already carries.
  */
 function mintWindowId(): string {
-  if (nextWindowId === undefined) {
-    const stored = Number(localStorage.getItem(NEXT_WINDOW_ID_KEY));
-    // A missing, malformed, non-positive or unsafely large value restarts the sequence. That can
-    // repeat an id, which is the one thing the counter exists to prevent — but refusing to open a
-    // window is a worse answer to a corrupt integer than reusing one, and a reused id is
-    // survivable: nothing persisted is keyed by it. Safe rather than merely integral, because
-    // adding 1 to an integer at or beyond 2^53 gives the same number back — a counter there would
-    // hand every window of the session the same id, which the tracker's lookups take at face value.
-    nextWindowId = Number.isSafeInteger(stored) && stored > 0 ? stored : 1;
-  }
-  const windowId = nextWindowId;
-  nextWindowId += 1;
-  try {
-    localStorage.setItem(NEXT_WINDOW_ID_KEY, `${nextWindowId}`);
-  } catch (e) {
-    // Storage that cannot be written (full disk, locked directory) leaves the counter running in
-    // memory: ids stay unique for this session, and a later launch may repeat one, which the guard
-    // above already treats as survivable. Throwing would come out of `createWindow` instead, and a
-    // profile whose storage cannot be written would open no window at all.
-    logger.warn(`Could not persist the next window id: ${getErrorMessage(e)}`);
-  }
-  return String(windowId);
+  return randomUUID();
 }
 
 // Keep a global reference of the window objects. If you don't, the windows will
@@ -583,13 +554,18 @@ function announceRoutingTargetIfChanged(): void {
 /**
  * Add a window to the tracked list and give it its platform id.
  *
- * This is the only place a window id is minted, and the returned id is the only one the rest of the
- * platform ever sees — see {@link TrackedWindow}.
+ * A brand-new window gets a freshly minted id — this is the only place one is minted, and the
+ * returned id is the only one the rest of the platform ever sees (see {@link TrackedWindow}). A
+ * window restoring a persisted entry is instead given that entry's own durable id, so the id this
+ * returns matches what the caller already holds and per-window state keyed by it survives the
+ * restart.
  *
+ * @param existingId The durable id to use instead of minting one, for a window restoring a
+ *   persisted entry
  * @returns The window's platform id
  */
-export function addWindow(window: BrowserWindow): string {
-  const windowId = mintWindowId();
+export function addWindow(window: BrowserWindow, existingId?: string): string {
+  const windowId = existingId ?? mintWindowId();
   trackedWindows.push({ windowId, window });
   announceRoutingTargetIfChanged();
   return windowId;
@@ -859,8 +835,4 @@ export function resetForTesting(): void {
   doesFocusedWindowHoldOsFocus = false;
   announcedRoutingTarget = { windowId: undefined, isReady: false };
   isWindowPendingContent = () => false;
-  // Forget the counter as well as the windows, so each test mints from a known starting point
-  // instead of inheriting whatever the previous test left behind
-  nextWindowId = undefined;
-  localStorage.removeItem(NEXT_WINDOW_ID_KEY);
 }

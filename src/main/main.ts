@@ -111,7 +111,6 @@ import {
 import { decideWindowClose } from '@main/services/window-close-decision.service';
 import {
   assignEntryToWindow,
-  getSlotIdOf,
   getMainWindowId,
   handleWindowRemoved,
   initializeWindowLayoutPersistence,
@@ -161,7 +160,6 @@ import {
   STARTUP_MARKS_QUERY_PARAMETER,
   THEME_STATE_QUERY_PARAMETER,
   WINDOW_ID,
-  WINDOW_SLOT_ID_QUERY_PARAMETER,
 } from '@shared/data/platform.data';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
@@ -793,7 +791,14 @@ async function main() {
     // Track this window immediately, which is also where it is given the platform id everything
     // downstream names it by. Electron's own `BrowserWindow.id` is never used past this point, and
     // the id stays valid in the `closed` handler after the window itself is gone.
-    const windowId = addWindow(newWindow);
+    //
+    // A window restoring a persisted entry is handed that entry's own durable id, rather than a
+    // fresh mint, so per-window state keyed by it (see `local-storage.service.ts`) survives the
+    // restart.
+    const windowId = addWindow(
+      newWindow,
+      restoreInfo?.kind === 'entry' ? restoreInfo.entry.windowId : undefined,
+    );
 
     // Tie the window to its persisted identity so layout persistence can serve and save it
     if (restoreInfo?.kind === 'entry') assignEntryToWindow(windowId, restoreInfo.entryIndex);
@@ -1346,11 +1351,10 @@ async function main() {
     // Built URL search parameters for use in `src/renderer/global-this.model.ts`
     const searchParamsObject: Record<string, string> = {
       [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
+      // Durable (see `WindowLayoutEntry.windowId`), and settled when the window was tracked above —
+      // so the renderer's per-window storage, keyed by this same id, works from the first render in
+      // every interface mode rather than waiting on a request to main after the load.
       [WINDOW_ID]: `${windowId}`,
-      // The window's per-window storage is keyed by its slot, and the slot was settled when the
-      // window was tracked above — so it travels with the window rather than being asked for after
-      // the load, and storage works from the first render in every interface mode
-      [WINDOW_SLOT_ID_QUERY_PARAMETER]: getSlotIdOf(windowId),
     };
 
     if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';

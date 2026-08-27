@@ -1,5 +1,6 @@
 import { SavedTabInfo, TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import type { LayoutInfo } from '@shared/models/docking-framework.model';
+import { WINDOW_ID_SHAPE_PATTERN_SOURCE } from '@shared/utils/util';
 
 /**
  * An rc-dock box or panel: a box holds further boxes and panels, a panel holds tabs and remembers
@@ -15,17 +16,21 @@ type LayoutBoxes = {
   maxbox?: LayoutBox;
 };
 
-/** Matches the window suffix this module appends, so re-scoping replaces rather than stacks */
-const WINDOW_SUFFIX_PATTERN = /-w\d+$/;
+/**
+ * Matches the window suffix this module appends — `-w` followed by the window's (durable) platform
+ * id — so re-scoping replaces rather than stacks. See {@link WINDOW_ID_SHAPE_PATTERN_SOURCE} for why
+ * this matches by shape rather than requiring an RFC-4122-strict UUID.
+ */
+const WINDOW_SUFFIX_PATTERN = new RegExp(`-w${WINDOW_ID_SHAPE_PATTERN_SOURCE}$`, 'i');
 
 /**
  * Remove the window suffix {@link withWindowScopedWebViewIds} appends, giving back the id the web
  * view was minted with.
  *
  * Web view state is stored under this unscoped id. `localWindowStorage` already keeps each window's
- * storage under its own slot's key prefix, so the suffix would buy nothing there — and since ids
- * are minted unscoped and only pick up a suffix when a layout is loaded, storing state under the
- * scoped id would file a web view's state under one key while it was open and look for it under
+ * storage under its own window id's key prefix, so the suffix would buy nothing there — and since
+ * ids are minted unscoped and only pick up a suffix when a layout is loaded, storing state under
+ * the scoped id would file a web view's state under one key while it was open and look for it under
  * another after a restart.
  *
  * @param webViewId Web view id, window-scoped or not

@@ -2395,7 +2395,12 @@ step, no automation. Just a record.
 ## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
 - **Date:** 2026-08-26
-- **Status:** Accepted
+- **Status:** Superseded by adr-durable-window-ids (the slot indirection this entry's "Per-window
+  renderer state moves off the window id and onto the slot" and "State whose slot has left the
+  structure is pruned" sections describe is removed there). The numeric-vs-string and
+  never-reused-id decisions above them stand; a still-earlier, undocumented step of this same
+  work (PT-4464) had already made ids strings again by the time `adr-durable-window-ids` was
+  written, which that entry's Context notes but does not re-litigate.
 - **Context:** Every window-id surface exported Electron's `BrowserWindow.id`. Electron assigns
   those per session and hands the same number to a later window, so every mention of a window id
   carried a "runtime-only, reused, never persist" caveat, and several behaviours existed only to
@@ -2476,3 +2481,63 @@ step, no automation. Just a record.
   caller can never be told that everything is dead.
 - **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
   measured against the top of the multi-window stack.
+
+## adr-durable-window-ids: Window ids are durable across a restart; the separate persisted-layout "slot" indirection is removed
+
+- **Date:** 2026-08-28
+- **Status:** Accepted
+- **Context:** `adr-platform-minted-window-ids` made ids never-reused but still minted fresh on
+  every launch, so a restored window's id never matched the one that had saved its state. That
+  forced a second identity per window — a `slotId` on the persisted layout entry, handed to the
+  window on a dedicated `WINDOW_SLOT_ID_QUERY_PARAMETER` alongside the ordinary window id, with its
+  own dead-id sweep (`windowLayout:filterDeadSlots`) and its own vocabulary throughout
+  `local-storage.service.ts`, `window-scoped-web-view-ids.util.ts`, and the web view service shard.
+  Two ids naming the same window is exactly the kind of split `adr-platform-minted-window-ids`
+  removed for Electron's id versus the platform's; here it was reintroduced for a reason (id reuse)
+  that a durable id removes at the source. (By the time this decision was written, `mintWindowId`
+  had already gone back to a string — `randomUUID()` rather than a persisted counter — in an earlier,
+  undocumented step of this same PT-4464 work; that reversal of `adr-platform-minted-window-ids`'s
+  numeric-id decision is not re-litigated here.)
+- **Decision:** `mintWindowId` (`window-state.service.ts`) mints a random GUID instead of a
+  counter value, and `addWindow` accepts an optional `existingId` — supplied only when a window is
+  restoring a persisted entry, in which case `main.ts`'s `createWindow` passes
+  `restoreInfo.entry.windowId` rather than letting a fresh one be minted. The persisted entry's own
+  identity field is renamed `slotId` → `windowId` (`WindowLayoutEntry`,
+  `window-layout-persistence.model.ts`): it no longer names a second concept, it IS the window's own
+  durable id. The renderer's `globalThis.windowId` (already on the URL as `WINDOW_ID`) is therefore
+  both the id a restored window is given and the key its per-window storage
+  (`local-storage.service.ts`) uses directly — `WINDOW_SLOT_ID_QUERY_PARAMETER`, `setWindowSlotId`,
+  `getSlotIdOrThrow` and the module-level `windowSlotId` are deleted outright, not merely renamed.
+  `FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE` becomes `FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE` (wire name
+  `filterDeadWindowIds`) and answers about window ids instead of slot ids, on the same reasoning as
+  before. `FileSlot.windowId` in `window-layout-persistence.service.ts` — which live window
+  currently occupies a slot, separate from the slot's own persisted identity — is deliberately left
+  alone: collapsing it into the entry is a distinct, separately reviewable step this decision does
+  not take.
+- **Alternatives:** Keep the slot indirection and only stop re-minting the window id on restore —
+  rejected: it still carries two ids per window, one of them (`slotId`) doing nothing a durable
+  window id would not do itself, for the sole remaining reason of the old reuse defence this removes.
+  Collapse `FileSlot.windowId` into the entry at the same time, so a slot's occupancy and its
+  identity are one field — deferred, not rejected: it changes a second, independent axis (whether a
+  preserved entry with no live window can be told apart from one that has one) that deserves its own
+  review rather than riding in on an id-durability change.
+- **Consequences:** Every matcher that used to recognize a window id by requiring digits
+  (`WINDOW_SUFFIX_PATTERN` in `window-scoped-web-view-ids.util.ts`, the per-window storage prune in
+  `local-storage.service.ts`) now requires the GUID shape instead
+  (`WINDOW_ID_SHAPE_PATTERN_SOURCE`, `shared/utils/util.ts`) — deliberately shape-only rather than
+  RFC-4122-strict, since `newGuid()` (`platform-bible-utils`) leaves the variant nibble
+  unconstrained and ids of that shape are already on disk. The storage prune flips from an exclusion
+  (accept any prefix, reject all-digit ones) to a positive match, closing a real gap where an
+  extension's own `<prefix>_web-view-state` key in the shared origin storage could be swept up as a
+  dead window's. An entry parsed from disk still accepts the legacy `slotId` key as a fallback for
+  `windowId`, so a build already on this branch does not lose state a second time before this
+  lands. `loadWindowLayouts` tracks whether a structure was actually parsed from disk
+  (`hasStructureBeenLoaded`) and `handleFilterDeadWindowIdsRequest` gates on that instead of
+  `fileSlots.length === 0`: the legacy startup fallback (missing, unreadable, or empty structure
+  file) synchronously tracks one window — giving `fileSlots` a freshly minted entry — before any
+  renderer could ask, so the old empty-list guard never actually fired for the case it existed to
+  guard, and a transient read error would report every id a renderer already held as dead. The
+  pre-slot-era `${windowId}_dock-saved-layout` reader, its lowest-id heuristic, and the
+  `^\d+_web-view-state$` obsolete-key sweep are all untouched: they read numeric-era data no future
+  build can add to, and durability changes nothing about them.
+- **Source:** PT-4464.

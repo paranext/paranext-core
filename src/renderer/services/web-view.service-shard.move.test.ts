@@ -217,11 +217,18 @@ describe('captureAndCloseWebView', () => {
   });
 
   test('capture strips the window scope off the captured id', async () => {
+    // Unlike the fixtures above, this pins the actual strip transform, so the suffix has to be a
+    // real window id shape or the strip silently no-ops and the assertion passes for the wrong
+    // reason
+    const realWindowId = '11111111-1111-4111-8111-111111111111';
     const { getFullWebViewStateById } = await import('@renderer/services/web-view-state.service');
     vi.mocked(getFullWebViewStateById).mockReturnValue({});
-    const { shard } = await shardOverDockLayout(WINDOW_SCOPED_DEFINITION);
+    const { shard } = await shardOverDockLayout({
+      ...WINDOW_SCOPED_DEFINITION,
+      id: `abc-w${realWindowId}`,
+    });
 
-    const captured = await shard.captureAndCloseWebView('abc-w2');
+    const captured = await shard.captureAndCloseWebView(`abc-w${realWindowId}`);
 
     expect(captured?.id).toBe('abc');
   });

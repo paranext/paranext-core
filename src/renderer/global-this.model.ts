@@ -7,9 +7,7 @@ import {
   STARTUP_MARKS_QUERY_PARAMETER,
   URL_PARAMETERS,
   WINDOW_ID,
-  WINDOW_SLOT_ID_QUERY_PARAMETER,
 } from '@shared/data/platform.data';
-import { setWindowSlotId } from '@renderer/services/local-storage.service';
 import type { LogLevel } from 'electron-log';
 
 // #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
@@ -60,16 +58,12 @@ globalThis.startupMarks = searchParams.get(STARTUP_MARKS_QUERY_PARAMETER) !== nu
 
 // Id of the window this renderer is running in. Read here, once, so that everything downstream
 // holds the same id main routes by — and left `undefined` when the parameter is absent or empty,
-// since a window that cannot say which one it is must not claim to be some other one.
+// since a window that cannot say which one it is must not claim to be some other one. This id is
+// durable (see `WindowLayoutEntry.windowId`), so it is also what per-window storage
+// (`local-storage.service.ts`) keys by — a restored window is given the same id its entry already
+// carries, and storage works from this render, in every interface mode, before any request to main
+// has been answered.
 const requestedWindowId = searchParams.get(WINDOW_ID);
 globalThis.windowId = requestedWindowId || undefined;
-
-// Slot this window occupies in the persisted window-layouts structure, which its per-window storage
-// is keyed by. Main puts it on the URL because it knows the slot before the window loads, and this
-// is the one place that runs before anything could read that storage — in every interface mode,
-// and before any request to main has been answered. Left unset when absent: storage then throws
-// rather than filing this window's state under a key no restored window would ever ask for.
-const requestedWindowSlotId = searchParams.get(WINDOW_SLOT_ID_QUERY_PARAMETER);
-if (requestedWindowSlotId) setWindowSlotId(requestedWindowSlotId);
 
 // #endregion
