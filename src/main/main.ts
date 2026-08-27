@@ -1489,12 +1489,25 @@ async function main() {
    * Runs at startup and again on macOS re-activation after the last window closed (the quit-like
    * close path flushed the structure when that window went down).
    */
+  /**
+   * Give a freshly restored window the primary role on both of the surfaces that carry it. The two
+   * are deliberately separate and not derived from each other — the persisted `isMain` entry names
+   * which saved layout restores first, and lets go of its runtime id once that window starts going
+   * down; the live reference is what the close path consults, and survives that — so a restore site
+   * that set one without the other would leave the role half-assigned.
+   *
+   * @param windowId The window the restore created first
+   */
+  const assignPrimaryRole = (windowId: number) => {
+    setMainWindowId(windowId);
+    setPrimaryWindowId(windowId);
+  };
+
   const restoreWindows = async () => {
     const plan = await loadWindowLayouts();
     if (plan.kind === 'legacy') {
       const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
-      setMainWindowId(legacyWindow.id);
-      setPrimaryWindowId(legacyWindow.id);
+      assignPrimaryRole(legacyWindow.id);
       return;
     }
 
@@ -1507,8 +1520,7 @@ async function main() {
       entryIndex: mainEntryIndex,
       entry: entries[mainEntryIndex],
     });
-    setMainWindowId(mainWindow.id);
-    setPrimaryWindowId(mainWindow.id);
+    assignPrimaryRole(mainWindow.id);
     if (entries.length <= 1) return;
 
     // Simple mode is single-window: restore only the main window no matter how many entries the
@@ -1573,7 +1585,7 @@ async function main() {
     const cancelIndex = 1;
     const { response } = await dialog.showMessageBox(primaryWindow, {
       type: 'question',
-      title: strings['%closeApp_confirm_title%'],
+      // No `title`: macOS hides it, and on Windows and Linux it would print the question twice
       message: strings['%closeApp_confirm_title%'],
       detail: strings['%closeApp_confirm_message%'],
       buttons: [strings['%closeApp_confirm_closeAll%'], strings['%closeApp_confirm_cancel%']],

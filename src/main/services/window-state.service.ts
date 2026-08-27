@@ -233,6 +233,24 @@ export function countWindowsThatCouldBeTheLastOne(): number {
 }
 
 /**
+ * How many windows would still be open after a given window closed.
+ *
+ * Deliberately NOT {@link countWindowsThatCouldBeTheLastOne}: that answers "which windows are
+ * candidates to be the last one standing", and leaves out a window still waiting for its content —
+ * a move-to-new-window target that has not finished loading. Such a window cannot be the last one,
+ * but it is very much one the user would lose if the primary went down around it. The question here
+ * is what survives, so only windows already gone or already going are left out.
+ *
+ * @param closingWindowId The window whose close is being considered
+ */
+export function countWindowsThatWouldStayOpen(closingWindowId: number): number {
+  return trackedWindows.filter(
+    ({ windowId, window }) =>
+      windowId !== closingWindowId && !window.isDestroyed() && !closingWindowIds.has(windowId),
+  ).length;
+}
+
+/**
  * Record which window holds the primary role. Called once, when that window is created.
  *
  * @param windowId The window created first by the startup restore
