@@ -130,6 +130,29 @@ describe('debounce', () => {
     expect(mockFunction).not.toHaveBeenCalled();
   });
 
+  it('should mint a fresh promise for a call made right after flush — each caller gets its own outcome', async () => {
+    // While the flushed invocation settles (an async window), the stored promise must already be
+    // detached: a call in that window that reused it received the flushed call's result and had
+    // its own outcome — including this rejection — silently discarded.
+    vi.useFakeTimers();
+    const debounceFn = debounce(async (shouldReject: boolean) => {
+      if (shouldReject) throw new Error('second invocation failed');
+      return 'first result';
+    }, 1000);
+
+    const first = debounceFn(false);
+    const flushed = debounceFn.flush();
+    // Scheduled inside the flushed invocation's settling window; the rejection handler is
+    // attached before the timer fires so the rejection is never momentarily unhandled
+    const secondRejects = expect(debounceFn(true)).rejects.toThrow('second invocation failed');
+
+    await expect(flushed).resolves.toBe('first result');
+    await expect(first).resolves.toBe('first result');
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await secondRejects;
+  });
+
   it('should preserve a re-schedule made from inside the flushed invocation', async () => {
     vi.useFakeTimers();
     const runs: string[] = [];

@@ -105,16 +105,24 @@ export function debounce<TFunc extends (...args: any[]) => any>(
   // Shared between the trailing-edge timer and `flush` so both run exactly the same invocation.
   let pendingArgs: Parameters<TFunc> | undefined;
 
-  // Runs one invocation with the given args, settling the shared pending promise with its outcome.
+  // Runs one invocation with the given args, settling the promise that is pending as it starts.
   // `fn` itself is invoked synchronously (before any await), which is what lets `flush` run the
   // pending call even in teardown paths (pagehide/beforeunload) where async work never resumes.
+  //
+  // The promise and its settlers are captured AT ENTRY: while this invocation settles (an async
+  // window), a new debounced call may mint a fresh promise with fresh settlers — this invocation's
+  // outcome must reach the callers who were waiting on IT, and the cleanup must not detach the
+  // newer pending promise a fresh call installed.
   const runInvocation = async (args: Parameters<TFunc>): Promise<void> => {
+    const invocationPromise = promise;
+    const resolveInvocation = promiseResolve;
+    const rejectInvocation = promiseReject;
     try {
-      promiseResolve(await fn(...args));
+      resolveInvocation(await fn(...args));
     } catch (e) {
-      promiseReject(e);
+      rejectInvocation(e);
     } finally {
-      promise = undefined;
+      if (promise === invocationPromise) promise = undefined;
     }
   };
 
@@ -153,6 +161,11 @@ export function debounce<TFunc extends (...args: any[]) => any>(
     // Cleared BEFORE invoking so a re-schedule from inside `fn` is not wiped out
     pendingArgs = undefined;
     const pendingPromise = promise;
+    // Detach the stored promise BEFORE invoking (mirroring cancel), so a call made while the
+    // flushed invocation settles mints a FRESH promise. Left installed, that call reused the
+    // flushed invocation's promise and settlers: the new caller received the flushed call's
+    // result, and its own outcome — including a rejection — was silently discarded.
+    promise = undefined;
     runInvocation(argsToRun);
     return pendingPromise;
   };

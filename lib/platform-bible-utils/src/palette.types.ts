@@ -32,13 +32,16 @@ export interface PaletteItem {
 
 /**
  * The operations that drive an already-open palette from outside it — the shared driver contract
- * between every palette host and consumer: the renderer overlay service implements it (keyed by
- * webViewId), `platform-bible-react`'s marker-palette keydown forwarding table calls it, and the
- * `FootnoteEditor`'s host-supplied palette prop extends it with `show`. One contract instead of a
- * structural re-declaration per layer.
+ * between every palette host and consumer. Consumers reference it by name (`platform-bible-react`'s
+ * marker-palette keydown forwarding table calls it, and the `FootnoteEditor`'s host-supplied
+ * palette prop extends it with `show`); the renderer overlay service's per-WebView palette methods
+ * satisfy the shape structurally without naming the type. One contract instead of a structural
+ * re-declaration per layer.
  *
  * Return types are `void`: implementations may return promises (a `Promise<void>`-returning method
  * satisfies a `void` signature), and callers treat all three as fire-and-forget.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
  */
 export interface PaletteDriver {
   /** Updates the filter text and/or moves the highlighted selection of the active palette. */
@@ -68,6 +71,8 @@ export interface PaletteDriver {
  * (`platform.onDidAppWindowInput`), which deliberately does not. That restriction is about
  * broadcasting global input to arbitrary listeners; here a palette returns keystrokes only to the
  * one session that opened it and explicitly asked for exactly these keys.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
  */
 export interface ForwardedPaletteKeyEvent {
   /** `KeyboardEvent.key` — the value matched against the requester's declared key list. */
@@ -101,6 +106,8 @@ export interface ForwardedPaletteKeyEvent {
  * A requester's declaration that it owns some keys while its palette is open. Passed when showing
  * the palette; the palette forwards every keydown whose `key` is in {@link keys} to {@link onKey} and
  * does not act on it itself.
+ *
+ * @experimental This type is unstable and may change shape or disappear without notice
  */
 export interface PaletteKeyForwarding {
   /**
