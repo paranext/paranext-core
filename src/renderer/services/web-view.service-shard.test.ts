@@ -14,7 +14,7 @@ import {
 import { SAVE_WINDOW_LAYOUT_REQUEST_TYPE } from '@shared/data/window-layout-persistence.model';
 import { serialize } from 'platform-bible-utils';
 
-// The service host logs through the shared logger, which warns on every call when it cannot tell
+// The service shard logs through the shared logger, which warns on every call when it cannot tell
 // which process it is running in
 globalThis.processType = ProcessType.Renderer;
 
@@ -55,7 +55,7 @@ vi.mock('@renderer/components/docking/default-layout-supplement.json', () => ({
   },
 }));
 
-// web-view.service-host.ts creates buffered network event emitters and network-backed events at
+// web-view.service-shard.ts creates buffered network event emitters and network-backed events at
 // module load (`getNetworkEvent`, `createBufferedNetworkEventEmitter`). Stub the network layer so
 // importing the module never tries to talk to a real websocket. `getNetworkEvent` is a controllable
 // fake (not a bare no-op): most subscribers (e.g. the tabs-resolved tracker) never need their
@@ -321,7 +321,7 @@ function makeDockLayout(simpleLayout: LayoutInfo) {
 
 /** Register a dock layout and wait for the fire-and-forget initial `loadLayout` to land */
 async function registerWindow(simpleLayout: LayoutInfo) {
-  const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+  const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
   const { dockLayout, loadedLayouts } = makeDockLayout(simpleLayout);
   registerDockLayout(dockLayout);
   await vi.waitFor(() => expect(loadedLayouts.length).toBeGreaterThan(0));
@@ -475,7 +475,7 @@ function createFakeDockLayout(): PapiDockLayout {
 }
 
 async function importHost() {
-  return import('@renderer/services/web-view.service-host');
+  return import('@renderer/services/web-view.service-shard');
 }
 
 // File-wide, not per-describe: several describes register a dock layout (which subscribes to
@@ -1477,7 +1477,7 @@ describe('loadLayout when the saved-layout request fails', () => {
   /** Register a dock layout under fake timers and drive the retry delays until the load lands */
   async function registerWindowThroughRetries(simpleLayout: LayoutInfo) {
     vi.useFakeTimers();
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout, loadedLayouts } = makeDockLayout(simpleLayout);
     registerDockLayout(dockLayout);
     await vi.advanceTimersByTimeAsync(60_000);
@@ -1601,7 +1601,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
       });
     });
 
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(getLayoutCalls).toBe(1));
@@ -1653,7 +1653,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
     );
     respondToGetLayout({ kind: 'empty' });
 
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(releaseFirstModeRead).toBeDefined());
@@ -1705,7 +1705,7 @@ describe('loadLayout discards a load a newer one has superseded', () => {
     });
 
     vi.useFakeTimers();
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     // Drive the two retry delays so the initial load reaches its final, hanging attempt
@@ -1785,7 +1785,7 @@ describe('saveLayout pushes this window’s layout to the main process', () => {
     // empty from then on.
     const heldGet = holdGetLayout();
 
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout, loadedLayouts } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(heldGet.hasRequest()).toBe(true));
@@ -1906,7 +1906,7 @@ describe('saveLayout pushes this window’s layout to the main process', () => {
     );
     // The initial power load parks on a saved-layout request that never comes back
     const abandonedGet = holdGetLayout();
-    const { registerDockLayout } = await import('@renderer/services/web-view.service-host');
+    const { registerDockLayout } = await import('@renderer/services/web-view.service-shard');
     const { dockLayout } = makeDockLayout(layoutWithAnchor());
     registerDockLayout(dockLayout);
     await vi.waitFor(() => expect(abandonedGet.hasRequest()).toBe(true));

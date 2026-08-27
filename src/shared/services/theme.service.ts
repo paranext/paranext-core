@@ -19,10 +19,9 @@ let dataProvider: IThemeService | undefined;
  * for the rest of the session, so re-arm on disposal and resolve the new host on the next call.
  *
  * A closing window drops its RPC connection without disposing anything, so the disposal this relies
- * on is the one `networkObjectService.forgetUnreachableRemoteObjects` raises for objects the
- * network can no longer reach. Every process runs that cleanup when the main process announces a
- * window closing, which is what keeps this re-arm alive in the main and extension host processes as
- * well as the renderers.
+ * on is the one the process owning the connections announces for the objects that window was
+ * hosting, once its registrations are gone. That reaches every process, which is what keeps this
+ * re-arm alive in the main and extension host processes as well as the renderers.
  */
 let initialize = createCachedInitializer(initializeThemeService);
 

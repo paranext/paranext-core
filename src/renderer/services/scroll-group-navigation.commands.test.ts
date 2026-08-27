@@ -27,11 +27,11 @@ const { registeredCommandHandlers } = vi.hoisted(() => ({
   registeredCommandHandlers: new Map<string, (...args: unknown[]) => Promise<unknown>>(),
 }));
 
-vi.mock('@renderer/services/window.service-host', () => ({
+vi.mock('@renderer/services/window.service-shard', () => ({
   getLastSelectedScriptureNavigableWebViewId: mocks.getLastSelectedScriptureNavigableWebViewId,
   getNavigationTargetWebView: mocks.getNavigationTargetWebView,
 }));
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   updateWebViewDefinitionSync: mocks.updateWebViewDefinitionSync,
 }));
 vi.mock('@renderer/services/scroll-group.service-host', () => ({
@@ -154,8 +154,8 @@ describe('go-to commands with a tracked web view target', () => {
 
 describe('go-to commands with a main-editor target', () => {
   // The resolution chain that picks the main project editor when no web view is tracked lives in
-  // window.service-host (`getNavigationTargetWebView`) — resolution-order coverage lives in
-  // window.service-host.test.ts. These tests cover the command behavior once an editor IS the
+  // window.service-shard (`getNavigationTargetWebView`) — resolution-order coverage lives in
+  // window.service-shard.test.ts. These tests cover the command behavior once an editor IS the
   // resolved target.
 
   test("uses the editor's own scroll group and project", async () => {
@@ -490,7 +490,7 @@ describe('platform.openBookChapterControl', () => {
 describe('reference-history keyboard commands resolve the active toolbar scroll group', () => {
   async function getRegisteredHandler(commandName: string) {
     await startScrollGroupNavigationCommands();
-    // Handlers register under this window's scoped name; the main process proxies the generic one
+    // Handlers register under this window's scoped name; the main process routes the generic one
     const scopedName = `${commandName}-${TEST_WINDOW_ID}`;
     const handler = registeredCommandHandlers.get(scopedName);
     if (!handler) throw new Error(`${scopedName} was not registered`);
@@ -540,7 +540,7 @@ describe('reference-history keyboard commands resolve the active toolbar scroll 
 describe('navigation commands are registered per window', () => {
   // Every navigation command acts on its own window's navigation target, so two open windows must
   // not fight over one generic name — each renderer registers scoped names and the main process
-  // proxies the generic name to the focused window.
+  // routes the generic name to the focused window.
   const NAVIGATION_COMMAND_NAMES = [
     'platform.goToNextChapter',
     'platform.goToPreviousChapter',
@@ -561,7 +561,7 @@ describe('navigation commands are registered per window', () => {
     );
   });
 
-  test('registers nothing under the generic names the main process proxies', async () => {
+  test('registers nothing under the generic names the main process routes', async () => {
     await startScrollGroupNavigationCommands();
 
     NAVIGATION_COMMAND_NAMES.forEach((name) => {

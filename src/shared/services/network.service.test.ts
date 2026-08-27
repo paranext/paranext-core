@@ -33,6 +33,7 @@ function fakeRpcHandler() {
     unregisterMethod: vi.fn(),
     registerEvent: vi.fn(),
     unregisterEvent: vi.fn(),
+    onDidDisconnectClient: vi.fn().mockReturnValue(() => true),
   } as unknown as Awaited<ReturnType<typeof createRpcHandler>>;
 }
 

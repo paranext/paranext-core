@@ -4,11 +4,17 @@ import {
   addWindow,
   areAllWindowsClosing,
   doesNavigationReplaceRendererRegistrations,
+  focusWindow,
+  getAbandonedWindowIds,
   getFocusedWindowId,
   getReadyWindowIds,
   getTargetWindowId,
+  getUnreachableWindowIds,
   getWindows,
+  isWindowAbandoned,
+  isWindowClosing,
   isWindowReady,
+  markWindowAbandoned,
   markWindowClosing,
   markWindowNotReady,
   markWindowReady,
@@ -37,6 +43,41 @@ function fakeWindow(id: number): BrowserWindow {
   // service under test touches
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return { id, isDestroyed: () => false } as BrowserWindow;
+}
+
+/**
+ * Stand-in for a BrowserWindow that can be raised, recording what {@link focusWindow} did to it in
+ * the order it did it.
+ *
+ * @param id Window id
+ * @param options.doesActivationSucceed What the OS does with a client-initiated activation:
+ *   `focus()` makes `isFocused()` true when the OS honors it, and leaves it false when Windows
+ *   refuses it
+ * @param options.isMinimized Whether the window starts minimized
+ */
+function raisableWindow(
+  id: number,
+  options?: { doesActivationSucceed?: boolean; isMinimized?: boolean },
+): { window: BrowserWindow; calls: string[] } {
+  const doesActivationSucceed = options?.doesActivationSucceed ?? true;
+  const calls: string[] = [];
+  let isFocused = false;
+  const window = {
+    id,
+    isDestroyed: () => false,
+    isMinimized: () => options?.isMinimized ?? false,
+    restore: () => calls.push('restore'),
+    focus: () => {
+      calls.push('focus');
+      isFocused = doesActivationSucceed;
+    },
+    isFocused: () => isFocused,
+    flashFrame: (flash: boolean) => calls.push(`flashFrame(${flash})`),
+  };
+  // Constructing a real BrowserWindow needs the Electron runtime; these are the members raising a
+  // window touches
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return { window: window as unknown as BrowserWindow, calls };
 }
 
 /**
@@ -235,8 +276,8 @@ describe('window state tracking', () => {
     });
 
     test('stays quiet when the same window is re-reported as focused', () => {
-      // Electron re-fires `focus` in situations that do not change which window is focused; routing
-      // proxies re-point their update relay on every emission, so a repeat is real work for nothing
+      // Electron re-fires `focus` in situations that do not change which window is focused; service
+      // routers re-point their update relay on every emission, so a repeat is real work for nothing
       const heard: (number | undefined)[] = [];
       addWindow(fakeWindow(3));
       setFocusedWindowId(3);
@@ -365,6 +406,35 @@ describe('window state tracking', () => {
       }
 
       expect(getWindows().map((window) => window.id)).toEqual([2]);
+      expect(mocks.loggerError).toHaveBeenCalledOnce();
+    });
+
+    test('tells the subscribers queued behind one that threw', () => {
+      // Keeping the throw off the teardown path is only half of it: the announcement is the one time
+      // subscribers hear that routing moved, and it is never repeated for that change. A subscriber
+      // that throws must cost only itself the news, not everything subscribed after it.
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      addWindow(fakeWindow(2));
+      markWindowReady(2);
+      setFocusedWindowId(1);
+      const targetsSeenAfterTheThrow: (number | undefined)[] = [];
+      const unsubscribeThrower = onDidChangeRoutingTarget(() => {
+        throw new Error('subscriber blew up');
+      });
+      const unsubscribeListener = onDidChangeRoutingTarget((windowId) => {
+        targetsSeenAfterTheThrow.push(windowId);
+      });
+
+      // See the note on the sibling tests: an escaping subscriber outlives `resetForTesting`
+      try {
+        expect(() => markWindowClosing(1)).not.toThrow();
+      } finally {
+        unsubscribeThrower();
+        unsubscribeListener();
+      }
+
+      expect(targetsSeenAfterTheThrow).toEqual([2]);
       expect(mocks.loggerError).toHaveBeenCalledOnce();
     });
 
@@ -616,7 +686,218 @@ describe('window state tracking', () => {
     });
   });
 
+  describe('telling a window that never started from one that stopped serving', () => {
+    // Both are simply "not ready", and the routers have to treat them oppositely: the first has
+    // never held a web view and can be passed over, while the second may be holding the very thing
+    // a call just named and so has to fail the call rather than be answered for.
+
+    test('does not count a window whose renderer has not registered yet', () => {
+      // Every window is in this state for the seconds its renderer takes to start — every
+      // `File > New Window`, and the whole of app startup. Counting it there would fail every
+      // routed search in the app for the whole of it.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady(1);
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+    });
+
+    test('counts a window that was serving requests and stopped', () => {
+      // A crashed renderer, or a page being replaced. Its web views are still open in a window the
+      // user can see, and only that window could ever list them.
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+      markWindowReady(1);
+      markWindowReady(2);
+
+      markWindowNotReady(2);
+
+      expect(getUnreachableWindowIds()).toEqual([2]);
+    });
+
+    test('stops counting it once it is serving again', () => {
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      markWindowNotReady(1);
+
+      markWindowReady(1);
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+    });
+
+    test('does not let a recycled window id inherit the closed window’s history', () => {
+      // Electron reuses BrowserWindow ids. A new window arriving with a closed one's id has its own
+      // renderer to start, and remembering that the ID had served before would make it look, for
+      // the whole of its startup, like a window that had been serving and died — failing every
+      // routed search in the app until it registers.
+      const closed = fakeWindow(1);
+      addWindow(closed);
+      markWindowReady(1);
+      removeWindow(closed, 1);
+
+      addWindow(fakeWindow(1));
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+    });
+
+    test('drops a window that stopped serving when it finally goes away', () => {
+      const crashed = fakeWindow(1);
+      addWindow(crashed);
+      markWindowReady(1);
+      markWindowNotReady(1);
+
+      removeWindow(crashed, 1);
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+    });
+  });
+
+  describe('windows nothing will ever run in again', () => {
+    // "Unreachable" is a window the reload path is still working on: it stopped serving, but its
+    // dock layout is held here and its tabs really do come back, so a fan-out has to refuse to
+    // answer for it. Abandoned is the end of that road — the reloads ran out, no page will ever
+    // register from this window again — and a state nothing can leave has to stop poisoning every
+    // fan-out in the app for the rest of the session.
+
+    test('stops counting a window as unreachable once the reload path gives up on it', () => {
+      addWindow(fakeWindow(1));
+      markWindowReady(1);
+      markWindowNotReady(1);
+
+      markWindowAbandoned(1);
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+      expect(getAbandonedWindowIds()).toEqual([1]);
+      expect(isWindowAbandoned(1)).toBe(true);
+    });
+
+    test('records a window given up on before its renderer ever registered', () => {
+      // A renderer that dies at load never reaches ready, so it was never unreachable either — but
+      // it is still tracked, and it is just as dead as the one that had been serving
+      addWindow(fakeWindow(1));
+
+      markWindowAbandoned(1);
+
+      expect(getUnreachableWindowIds()).toEqual([]);
+      expect(getAbandonedWindowIds()).toEqual([1]);
+    });
+
+    test('does not let a recycled window id inherit the abandoned mark', () => {
+      // Electron reuses BrowserWindow ids. A new window arriving with a given-up window's id has
+      // its own renderer to start, and remembering the abandonment would write it off before it
+      // ever loaded.
+      const abandoned = fakeWindow(1);
+      addWindow(abandoned);
+      markWindowReady(1);
+      markWindowNotReady(1);
+      markWindowAbandoned(1);
+
+      removeWindow(abandoned, 1);
+      addWindow(fakeWindow(1));
+
+      expect(isWindowAbandoned(1)).toBe(false);
+      expect(getAbandonedWindowIds()).toEqual([]);
+    });
+
+    test('stops treating a window as abandoned once it is serving again', () => {
+      // Nothing in the app is expected to revive a given-up window, but a renderer registering is
+      // proof it did — a manual reload from the dev tools, an Electron recovery we did not ask for.
+      // Whatever the route back, the window is a live window again, and a later crash has to make
+      // it unreachable rather than land on a stale terminal mark.
+      addWindow(fakeWindow(1));
+      markWindowAbandoned(1);
+
+      markWindowReady(1);
+
+      expect(getAbandonedWindowIds()).toEqual([]);
+      expect(isWindowAbandoned(1)).toBe(false);
+      markWindowNotReady(1);
+      expect(getUnreachableWindowIds()).toEqual([1]);
+    });
+  });
+
+  describe('raising a window', () => {
+    test('takes the flash back down when the activation lands', () => {
+      // The flash is for a raise the OS refused. Leaving it up after a successful one flashes the
+      // taskbar at the user for a window that is already in front of them — which, hand-tested on
+      // native Windows, is ~5 flashes on the ordinary cross-window open.
+      const { window, calls } = raisableWindow(1, { isMinimized: true });
+      addWindow(window);
+
+      focusWindow(1);
+
+      // Restored first, or a merely focused window stays minimized; flashed before focusing,
+      // because Windows does not cancel a flash on activation and one started afterwards could not
+      // be taken back down
+      expect(calls).toEqual(['restore', 'flashFrame(true)', 'focus', 'flashFrame(false)']);
+    });
+
+    test('leaves the flash up when Windows refuses the activation', () => {
+      // `focus()` reports neither the refusal nor the success, so `isFocused()` right after it is
+      // the only thing that tells them apart. Where the raise was refused the flash is the whole
+      // signal the user gets that something happened in another window.
+      const { window, calls } = raisableWindow(1, { doesActivationSucceed: false });
+      addWindow(window);
+
+      focusWindow(1);
+
+      expect(calls).toEqual(['flashFrame(true)', 'focus']);
+    });
+
+    test('does not fail the operation that asked for the raise', () => {
+      // A window can be destroyed between the tracked-list lookup and any of these calls. Raising is
+      // feedback about where something already happened, so it must not take the operation with it.
+      const throwsOnFocus = {
+        id: 1,
+        isDestroyed: () => false,
+        isMinimized: () => false,
+        flashFrame: () => {},
+        focus: () => {
+          throw new TypeError('Object has been destroyed');
+        },
+      };
+      // Constructing a real BrowserWindow needs the Electron runtime; these are the members raising
+      // a window touches
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      addWindow(throwsOnFocus as unknown as BrowserWindow);
+
+      expect(() => focusWindow(1)).not.toThrow();
+    });
+
+    test('does nothing for a window that is already gone', () => {
+      const { window, destroyForTest } = destroyableWindow(1);
+      addWindow(window);
+      destroyForTest();
+
+      // Every member but `isDestroyed` throws on a destroyed window, so reaching any of them here
+      // would show up as a throw rather than as a silent misfire
+      expect(() => focusWindow(1)).not.toThrow();
+    });
+  });
+
   describe('windows on their way out', () => {
+    test('reports whether one specific window is on its way out', () => {
+      addWindow(fakeWindow(1));
+      addWindow(fakeWindow(2));
+
+      markWindowClosing(2);
+
+      expect(isWindowClosing(1)).toBe(false);
+      expect(isWindowClosing(2)).toBe(true);
+    });
+
+    test('stops reporting a window as closing once it is gone', () => {
+      // Electron reuses window ids, so a leftover flag would tell the next window to take this id
+      // that it is already on its way out
+      const closing = fakeWindow(1);
+      addWindow(closing);
+      markWindowClosing(1);
+
+      removeWindow(closing, 1);
+
+      expect(isWindowClosing(1)).toBe(false);
+    });
+
     test('reports the app going down when the only window closes', () => {
       addWindow(fakeWindow(1));
 

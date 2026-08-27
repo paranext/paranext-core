@@ -76,6 +76,68 @@ Extension Host Process              Main Process
 > Authoring". This section covers the cross-process host/proxy axis; that one covers how to structure
 > the implementation.
 
+### Service router and service shard
+
+The host/service pair above assumes the implementation lives in exactly ONE process. Several
+services are per-window instead: open web views, notification toasts, dialogs, and focus are each
+one window's business, and the app can have several windows. Those services use a third shape.
+
+| Term | File suffix | Lives | Role |
+| ---- | ----------- | ----- | ---- |
+| **Service router** | `*.service-router.ts` | main | Registers the generic global name. Holds no logic; resolves a target window and forwards. Fans out only where the operation is inherently cross-window |
+| **Service shard** | `*.service-shard.ts` | each renderer | The real implementation for **one** window. Registered under a window-scoped network object id with an `objectType` of its own |
+
+```
+Renderer (window 1)          Main Process                  Renderer (window 2)
+┌──────────────────────┐    ┌────────────────────────┐    ┌──────────────────────┐
+│ web-view.service-    │    │ web-view.service-      │    │ web-view.service-    │
+│ shard.ts             │◄──►│ router.ts              │◄──►│ shard.ts             │
+│ id: WebViewService-1 │    │ id: WebViewService     │    │ id: WebViewService-2 │
+│ objectType:          │    │ (the generic name      │    │ objectType:          │
+│  webViewServiceShard │    │  consumers call)       │    │  webViewServiceShard │
+└──────────────────────┘    └────────────────────────┘    └──────────────────────┘
+```
+
+Consumers never see any of this: they call the generic name, exactly as they did before there was
+more than one window.
+
+**Rules of the pattern:**
+
+- **Target state: platform code in the renderer registers zero globally-unique names.** Every global
+  name is registered by main, and a renderer only ever registers window-scoped objects, which makes
+  "a second window cannot start because the name is taken" structurally impossible rather than fixed
+  case by case. That is where the window-scoped services have arrived. Two app-global hosts have not
+  moved yet and are the exceptions: `theme.service-host.ts` and `scroll-group.service-host.ts` still
+  register their global names from whichever renderer gets there first, and the collision is handled
+  by host election with takeover instead — see ADR-0009. The invariant holds outright once those
+  hosts move to main.
+- **A shard declares what it is, and which window it is for.** It registers with a distinct
+  `objectType` per service (`'webViewServiceShard'`, `'notificationServiceShard'`, …) and a
+  `windowId` attribute — see `src/shared/models/service-shard.model.ts`. The window-scoped id stays
+  (`object:{id}.{method}` derives from it), but nothing DISCOVERS a shard by rebuilding that id.
+- **A router keeps an index, not a scan.** `createServiceShardIndex`
+  (`src/main/services/service-shard-index.ts`) subscribes once to the network object create/dispose
+  announcements, filters on the object type, and maintains a `windowId → shard` map. Lookups are
+  O(1), and a window closing removes its shard for free.
+- **A router is a plain object declared as the service it answers for.**
+  `const router: WebViewServiceType = { ... }` plus `networkObjectService.set`, so a member added to
+  the service interface fails to compile until the router publishes it. The one piece that is shared
+  is `createTargetShardResolver` (`src/main/services/target-shard-resolver.util.ts`), which resolves
+  the shard of whichever window a call should currently run in. There is no router factory: with one
+  genuinely plain forward across four routers, generating them costs more than it saves and gives up
+  the free coverage the type annotation provides.
+- **The pattern does not depend on the transport.** Most routers and shards are plain network
+  objects; the window service's are data providers, because it has subscription semantics.
+  `registerEngine` passes `dataProviderType` / `dataProviderAttributes` straight through to
+  `networkObjectService.set`, so a data provider shard is discovered exactly like any other.
+
+"Router", not "aggregator": a router selects ONE shard by policy and forwards; the check aggregator
+(`extensions/src/platform-scripture/src/checks/check-aggregator.service.ts`) is a different shape —
+N sources holding different data, combined into one view.
+
+`theme.service-host.ts` and `scroll-group.service-host.ts` are NOT shards. They are app-global
+(one current theme, one scroll group 0) and keep the service-host name.
+
 ### Main Process Services (`src/main/services/`)
 
 | Service | Purpose |
@@ -342,6 +404,7 @@ For complete security documentation, see [Security-Guide.md](Security-Guide.md).
 | Pattern | Description | Used For |
 |---------|-------------|----------|
 | Service Host/Proxy | Implementation in one process, proxy in others | Settings, menu data, themes |
+| Service Router/Shard | One shard per window in the renderer, one router in main that selects a shard by policy and forwards | Web view, window, notification, dialog, renderer-hosted commands |
 | Data Provider | Subscription-based data access | Project data, resources |
 | Network Object | Cross-process object exposure | Commands, services |
 | Event Emitter | Pub/sub pattern for notifications | Data updates, lifecycle events |

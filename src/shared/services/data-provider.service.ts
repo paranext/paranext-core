@@ -69,8 +69,14 @@ const SUBSCRIBE_PLACEHOLDER = {};
 /**
  * Gets the id for the data provider network object with the given name Don't add the suffix to the
  * provider name if it's already there to avoid duplication
+ *
+ * Exported because anything that has a provider NAME and needs to recognize that provider's network
+ * object — `useDataProvider`'s re-lookup listener, for one — has to derive the id the same way this
+ * service does rather than assume the name is the id.
+ *
+ * @experimental
  */
-const getDataProviderObjectId = (providerName: string) => {
+export const getDataProviderObjectId = (providerName: string) => {
   return endsWith(providerName, `-${DATA_PROVIDER_LABEL}`)
     ? providerName
     : `${providerName}-${DATA_PROVIDER_LABEL}`;

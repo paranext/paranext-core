@@ -3,18 +3,12 @@ import {
   EVENT_NAME_ON_DID_CHANGE_REFERENCE_HISTORY,
   EVENT_NAME_ON_DID_CHANGE_VERSIFICATION,
 } from '@shared/services/scroll-group.service-model';
-import { EVENT_NAME_ON_DID_CLOSE_WINDOW } from '@shared/data/network-event-names';
+import { logger } from '@shared/services/logger.service';
 
 // The host module reads localStorage and creates a network emitter at import time; stub those.
 // Emitters are captured by event name so tests can assert on a specific event (e.g.
 // onDidChangeVersification) without conflating it with the pre-existing onDidUpdateScrRef emitter.
-const {
-  emitters,
-  networkEventHandlers,
-  networkObjectSet,
-  networkObjectGet,
-  forgetUnreachableRemoteObjects,
-} = vi.hoisted(() => {
+const { emitters, networkEventHandlers, networkObjectSet, networkObjectGet } = vi.hoisted(() => {
   const hoistedEmitters: Record<string, { emit: ReturnType<typeof vi.fn> }> = {};
   /** Handlers the host registered, keyed by the network event name they subscribed to */
   const hoistedNetworkEventHandlers: Record<string, ((payload: unknown) => void)[]> = {};
@@ -23,7 +17,6 @@ const {
     networkEventHandlers: hoistedNetworkEventHandlers,
     networkObjectSet: vi.fn(),
     networkObjectGet: vi.fn(),
-    forgetUnreachableRemoteObjects: vi.fn(async () => []),
   };
 });
 vi.mock('@shared/services/network.service', () => ({
@@ -39,7 +32,6 @@ vi.mock('@shared/services/network.service', () => ({
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { set: networkObjectSet, get: networkObjectGet },
-  forgetUnreachableRemoteObjects,
 }));
 vi.mock('@shared/services/logger.service', () => ({
   logger: { debug: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -503,19 +495,25 @@ describe('scroll group service publishing across windows', () => {
     networkObjectSet.mockReset();
     networkObjectGet.mockReset();
     networkObjectGet.mockResolvedValue(undefined);
-    forgetUnreachableRemoteObjects.mockClear();
+    vi.mocked(logger.debug).mockClear();
+    vi.mocked(logger.warn).mockClear();
     Object.keys(networkEventHandlers).forEach((key) => delete networkEventHandlers[key]);
   });
 
-  /** Stand in for the main process announcing that a window closed */
-  function closeWindow(windowId: number) {
-    networkEventHandlers[EVENT_NAME_ON_DID_CLOSE_WINDOW]?.forEach((handler) => handler(windowId));
-  }
+  /**
+   * What `networkObjectService.set` really throws when another window already holds the name: it
+   * could not register any of the object's methods, and reports the per-method reasons together.
+   */
+  const NAME_TAKEN_REJECTION = new Error(
+    'Unable to register network object with id ScrollGroupService:\n' +
+      '\tError: Could not register request handler for object:ScrollGroupService\n' +
+      '\tError: Could not register request handler for object:ScrollGroupService.getScrRef',
+  );
 
   /**
    * Stand in for the object the window that won the race published, as this window sees it over the
-   * network. Returns a handle that fires its `onDidDispose` subscribers, standing in for the sweep
-   * that eventually confirms the publishing window is unreachable and forgets it.
+   * network. Returns a handle that fires its `onDidDispose` subscribers, standing in for the
+   * disposal announced on the publishing window's behalf once it goes away.
    */
   function mockPublishedElsewhere() {
     const disposeCallbacks: (() => void)[] = [];
@@ -540,37 +538,39 @@ describe('scroll group service publishing across windows', () => {
     });
   }
 
-  it('publishes the object when it hears the window that was publishing it closed', async () => {
-    networkObjectSet.mockRejectedValueOnce(new Error('already registered'));
+  // A window that closes never disposes what it published — a closing renderer drops its RPC
+  // connection without disposing anything — so what this window hears is the disposal announced on
+  // its behalf once its registrations are gone.
+  it('publishes the object when the one it attached to goes away', async () => {
+    const publishedElsewhere = mockPublishedElsewhere();
+    networkObjectSet.mockRejectedValue(new Error('already registered'));
     const host = await import('@renderer/services/scroll-group.service-host');
     await host.startScrollGroupService();
+    // Stepping aside is not enough: this window has to be watching the object it stepped aside for
+    expect(publishedElsewhere.isAttached).toBe(true);
     expect(networkObjectSet).toHaveBeenCalledTimes(1);
 
-    // The publishing window closes. It never disposed the object — a closing renderer drops its RPC
-    // connection without disposing anything — so this announcement is the only signal.
     networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
-    closeWindow(1);
+    publishedElsewhere.forget();
 
     await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(2));
-    // The name still looks taken while the closed window's object is cached, so the stale
-    // registration has to be dropped before re-registering can succeed.
-    expect(forgetUnreachableRemoteObjects).toHaveBeenCalled();
   });
 
-  // A takeover can be triggered again while one is already in flight — close announcements arrive
-  // in quick succession, and the sweep fires the dispose events of the cached objects it forgets.
-  // Concurrent triggers must share one takeover run: two concurrent runs would race each other for
-  // the object name, with the loser noisily failing against a registry that rejects even the same
-  // registrant. Sharing it is not enough on its own, though: the running sweep started before the
-  // second window died, so it cannot have cleared what that window left cached here.
-  it('shares an in-flight takeover run and sweeps again for a window that closed during it', async () => {
+  // A takeover can be triggered again while one is already in flight: the run steps aside for a new
+  // publisher partway through, and that publisher can go away in the same instant. Concurrent
+  // triggers must share one takeover run — two concurrent runs would race each other for the object
+  // name, with the loser noisily failing against a registry that rejects even the same registrant.
+  // Sharing is not enough on its own, though: the running attempt started before the second
+  // publisher went away, so it says nothing about that one.
+  it('shares an in-flight takeover run and races again for a trigger raised during it', async () => {
+    const publishedElsewhere = mockPublishedElsewhere();
     networkObjectSet.mockRejectedValueOnce(new Error('already registered'));
     const host = await import('@renderer/services/scroll-group.service-host');
     await host.startScrollGroupService();
     expect(networkObjectSet).toHaveBeenCalledTimes(1);
 
-    // Hold the takeover's registration attempt in flight so the second announcement arrives before
-    // the run started by the first has settled.
+    // Hold the takeover's registration attempt in flight so the second trigger arrives before the
+    // run started by the first has settled.
     let settleTakeoverRegistration = () => {};
     networkObjectSet.mockImplementationOnce(
       () =>
@@ -579,68 +579,74 @@ describe('scroll group service publishing across windows', () => {
         }),
     );
 
-    closeWindow(1);
-    closeWindow(2);
+    publishedElsewhere.forget();
+    publishedElsewhere.forget();
     await settlePendingWork();
 
-    // One sweep and one registration attempt shared by both announcements, not one per announcement
+    // One registration attempt shared by both triggers, not one per trigger
     expect(networkObjectSet).toHaveBeenCalledTimes(2);
-    expect(forgetUnreachableRemoteObjects).toHaveBeenCalledTimes(1);
 
-    // The in-flight attempt settles by losing the race to another surviving window. Window 2's
-    // registration is still cached — the sweep that just finished predates its close — so the
-    // announcement that shared this run needs a sweep and a race of its own.
+    // The in-flight attempt loses the race, and by the time it looks for the window that won, that
+    // window is gone too — which is what the trigger it swallowed was about. Nothing came of the
+    // run, so the swallowed trigger has to be answered with a race of its own.
+    networkObjectGet.mockResolvedValue(undefined);
     networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
     settleTakeoverRegistration();
 
     await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(3));
-    expect(forgetUnreachableRemoteObjects).toHaveBeenCalledTimes(2);
   });
 
-  it('takes over again when a window closes after an earlier takeover settled', async () => {
-    networkObjectSet.mockRejectedValue(new Error('already registered'));
+  // Losing the name is the routine outcome in every window but one, and the multi-window e2e proves
+  // a window stepped aside by finding this phrase in the log — so the real rejection has to keep
+  // being read as the routine outcome, not as a failure.
+  it('reports losing the race to another window as the routine step-aside', async () => {
+    mockPublishedElsewhere();
+    networkObjectSet.mockRejectedValue(NAME_TAKEN_REJECTION);
     const host = await import('@renderer/services/scroll-group.service-host');
+
     await host.startScrollGroupService();
 
-    closeWindow(1);
-    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(2));
-    await settlePendingWork();
-
-    // The guard must not latch: when the window that won that race closes later, this window
-    // re-enters the race again.
-    networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
-    closeWindow(2);
-    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(logger.debug)).toHaveBeenCalledWith(
+      expect.stringContaining('Another window is already publishing the scroll group service'),
+    );
+    expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
   });
 
-  // The close announcement can reach this window before the closing window's RPC connection is
-  // actually torn down. The sweep that announcement drives then finds the object still reachable and
-  // leaves it cached, and a cached registration makes the name look taken, so re-registering cannot
-  // succeed. The announcement is a one-shot signal, so with nothing else scheduled this window would
-  // never publish for the rest of the session even once the stale registration is finally dropped.
-  it('publishes the object when the one it attached to is forgotten after the takeover ran', async () => {
-    const publishedElsewhere = mockPublishedElsewhere();
+  // Every other way registering can fail lands in the same place and used to be reported as the
+  // expected outcome, at a severity nothing reads.
+  it('reports a publish failure that is not the name being taken', async () => {
+    mockPublishedElsewhere();
+    networkObjectSet.mockRejectedValue(
+      new Error('Network service has shut down; not reconnecting'),
+    );
+    const host = await import('@renderer/services/scroll-group.service-host');
+
+    await host.startScrollGroupService();
+
+    expect(vi.mocked(logger.warn)).toHaveBeenCalledWith(
+      expect.stringContaining('for a reason other than the name being taken'),
+    );
+  });
+
+  // Coming out of a race with nothing is the one state nothing else re-enters the race from: the
+  // trigger is the disposal of an object this window holds, and it holds none. If every surviving
+  // window lands here — which is what an interleaved re-race does, since a rejected registration
+  // rolls back the ones that already succeeded — no window publishes the object again for the rest
+  // of the session, while the mirrored navigation events keep every screen looking right.
+  it('races again when it neither published the object nor found the window that did', async () => {
     networkObjectSet.mockRejectedValue(new Error('already registered'));
+    networkObjectGet.mockResolvedValue(undefined);
     const host = await import('@renderer/services/scroll-group.service-host');
     await host.startScrollGroupService();
-    // Stepping aside is not enough: this window has to be watching the object it stepped aside for
-    expect(publishedElsewhere.isAttached).toBe(true);
-
-    // The announcement arrives while the closing window still answers, so the sweep forgets nothing
-    closeWindow(1);
-    await settlePendingWork();
-    // Nothing to take over yet — the object this window is using is still registered, and racing for
-    // a name that is still taken would only fail
     expect(networkObjectSet).toHaveBeenCalledTimes(1);
 
-    // A later sweep confirms the closed window is gone and drops the registration it left behind
+    // By the time it races again the name is free — the window that briefly held it is gone
     networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
-    publishedElsewhere.forget();
 
-    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(2), { timeout: 4000 });
   });
 
-  it('re-attaches after losing a re-race so a later close still hands the object over', async () => {
+  it('re-attaches after losing a re-race so a later disposal still hands the object over', async () => {
     const firstPublisher = mockPublishedElsewhere();
     networkObjectSet.mockRejectedValue(new Error('already registered'));
     const host = await import('@renderer/services/scroll-group.service-host');
@@ -652,25 +658,11 @@ describe('scroll group service publishing across windows', () => {
     await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(secondPublisher.isAttached).toBe(true));
 
-    // The re-arm must not be one-shot: when the window that won closes too, this window races again
+    // The re-arm must not be one-shot: when the window that won goes away too, this window races
+    // again
     networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
     secondPublisher.forget();
 
     await vi.waitFor(() => expect(networkObjectSet).toHaveBeenCalledTimes(3));
-  });
-
-  it('leaves the publishing window publishing when a different window closes', async () => {
-    networkObjectSet.mockResolvedValue({ onDidDispose: vi.fn() });
-    const host = await import('@renderer/services/scroll-group.service-host');
-    await host.startScrollGroupService();
-    expect(networkObjectSet).toHaveBeenCalledTimes(1);
-
-    closeWindow(2);
-    await settlePendingWork();
-
-    // Re-registering here would fail and leave this window logging that someone else owns the
-    // object it is actually serving
-    expect(networkObjectSet).toHaveBeenCalledTimes(1);
-    expect(forgetUnreachableRemoteObjects).not.toHaveBeenCalled();
   });
 });

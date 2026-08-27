@@ -14,6 +14,9 @@ vi.mock('@shared/services/network.service', async () => {
   const { PlatformEventEmitter } = await import('platform-bible-utils');
   return {
     getNetworkEvent: vi.fn(() => vi.fn(() => vi.fn())),
+    // network-object.service subscribes to this at module load so a process that leaves during
+    // startup is still announced, and this test reaches that module on its import path.
+    onDidDisconnectClient: vi.fn(() => vi.fn()),
     createNetworkEventEmitter: vi.fn(() => new PlatformEventEmitter()),
     papiNetworkService: {
       createNetworkEventEmitter: vi.fn(() => new PlatformEventEmitter()),
@@ -40,7 +43,7 @@ vi.mock('@renderer/services/papi-frontend.service', () => ({
 }));
 
 // This window's own open web views, which is what the picker reads.
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   getAllOpenWebViewDefinitionsSync: vi.fn(() => []),
 }));
 
@@ -109,7 +112,7 @@ async function importMocks() {
   const { getNetworkEvent } = await import('@shared/services/network.service');
   const { webViews } = await import('@renderer/services/papi-frontend.service');
   const { getAllOpenWebViewDefinitionsSync } = await import(
-    '@renderer/services/web-view.service-host'
+    '@renderer/services/web-view.service-shard'
   );
   const { projectLookupService } = await import('@shared/services/project-lookup.service');
   const { papiFrontendProjectDataProviderService } = await import(
@@ -215,7 +218,7 @@ describe('useProjectPickerData', () => {
   });
 
   it('names the current project from THIS window only, never another window’s editor', async () => {
-    // The `webViews` network object is the main process's routing proxy: its
+    // The `webViews` network object is the main process's service router: its
     // getAllOpenWebViewDefinitions fans out across every open window. The picker labels the project
     // of the editor in its OWN window (and feeds a toolbar that navigates this window's target), so
     // it must read the local dock layout and never that cross-window list - otherwise a background

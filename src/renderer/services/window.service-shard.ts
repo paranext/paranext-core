@@ -1,3 +1,13 @@
+/**
+ * Window service shard — the window service implementation for THIS window. Registered as a data
+ * provider under a window-scoped name (e.g. "platform.windowServiceDataProvider-1") so several
+ * windows can coexist; the main process's `window.service-router.ts` publishes the generic name and
+ * relays reads and updates from whichever window is the current routing target.
+ *
+ * See the router/shard pattern in `.context/standards/Architecture.md` § "Service router and
+ * service shard".
+ */
+
 import {
   WindowDataTypes,
   IWindowService,
@@ -11,6 +21,10 @@ import {
   getWebViewIdFromFocusSubject,
 } from '@shared/services/window.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import {
+  getServiceShardAttributes,
+  WINDOW_SERVICE_SHARD_OBJECT_TYPE,
+} from '@shared/models/service-shard.model';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
@@ -28,7 +42,7 @@ import {
   onDidCloseWebView,
   onDidOpenWebView,
   onDidUpdateWebView,
-} from '@renderer/services/web-view.service-host';
+} from '@renderer/services/web-view.service-shard';
 import {
   isScriptureNavigableWebViewDefinition,
   ResolvedWebView,
@@ -151,7 +165,7 @@ function isScriptureNavigableWebView(webViewId: WebViewId): boolean {
     return !!definition && isScriptureNavigableWebViewDefinition(definition);
   } catch (e) {
     logger.warn(
-      `window.service-host could not get web view definition for ${webViewId} to check navigability: ${getErrorMessage(e)}`,
+      `window.service-shard could not get web view definition for ${webViewId} to check navigability: ${getErrorMessage(e)}`,
     );
     return false;
   }
@@ -264,7 +278,7 @@ onDidCloseWebView(({ webView }) => {
       (newMode) => {
         if (isPlatformError(newMode)) {
           logger.warn(
-            `window.service-host failed to read platform.interfaceMode: ${getErrorMessage(newMode)}`,
+            `window.service-shard failed to read platform.interfaceMode: ${getErrorMessage(newMode)}`,
           );
           return;
         }
@@ -276,7 +290,7 @@ onDidCloseWebView(({ webView }) => {
     );
   } catch (e) {
     logger.warn(
-      `window.service-host failed to subscribe to platform.interfaceMode: ${getErrorMessage(e)}`,
+      `window.service-shard failed to subscribe to platform.interfaceMode: ${getErrorMessage(e)}`,
     );
   }
 })();
@@ -384,7 +398,7 @@ class WindowDataProviderEngine
         };
       } catch (e) {
         throw new Error(
-          `window.service-host.setFocus threw while getting tab info by direction from tab ${this.#focusSubject.id} in direction ${newSetFocusSpecifier}: ${getErrorMessage(e)}`,
+          `window.service-shard.setFocus threw while getting tab info by direction from tab ${this.#focusSubject.id} in direction ${newSetFocusSpecifier}: ${getErrorMessage(e)}`,
         );
       }
 
@@ -403,7 +417,7 @@ class WindowDataProviderEngine
         newFocusSubject = { ...newSetFocusSpecifier, tabType: tabInfo.tabType };
       } catch (e) {
         throw new Error(
-          `window.service-host.setFocus threw while getting tab info for id ${newSetFocusSpecifier.id}: ${getErrorMessage(e)}`,
+          `window.service-shard.setFocus threw while getting tab info for id ${newSetFocusSpecifier.id}: ${getErrorMessage(e)}`,
         );
       }
     }
@@ -524,16 +538,33 @@ export async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          // Register under this window's scoped name (e.g. "platform.windowServiceDataProvider-1")
-          // so multiple renderers can coexist. The main process routes the generic name to the
-          // focused window.
+          const { windowId } = globalThis;
+          if (!windowId) throw new Error('Cannot start the window service: windowId is not set');
+          // What a usable window id is gets decided in exactly one place. Building the scoped name
+          // below from an id the router would then reject as an attribute would register a shard
+          // under a name nothing looks for, so the check that decides that runs first.
+          const shardAttributes = getServiceShardAttributes(windowId);
+
+          // Register this window's shard under a window-scoped name (e.g.
+          // "platform.windowServiceDataProvider-1") so multiple renderers can coexist. The main
+          // process's window service router registers the generic name and relays from whichever
+          // window is the current routing target.
+          //
+          // The object type and window id are how the router finds this shard, so the
+          // window-scoped name stays an internal detail of the registration.
           dataProvider = await dataProviderService.registerEngine(
             // Only the name needs asserting — it is built at runtime, but registerEngine expects
             // the literal provider name and infers the right provider type from it, the same way
             // window.service.ts resolves it on the consuming side
             // eslint-disable-next-line no-type-assertion/no-type-assertion
-            `${windowServiceProviderName}-${globalThis.windowId}` as typeof windowServiceProviderName,
+            `${windowServiceProviderName}-${windowId}` as typeof windowServiceProviderName,
             new WindowDataProviderEngine(),
+            WINDOW_SERVICE_SHARD_OBJECT_TYPE,
+            shardAttributes,
+            // Experimental at the object level, which fans out over the provider's methods and its
+            // update notification: this is a window-scoped name only the main process's router is
+            // meant to resolve.
+            { 'x-experimental': true },
           );
           resolve();
         } catch (error) {

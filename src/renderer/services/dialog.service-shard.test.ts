@@ -6,7 +6,7 @@ vi.mock('@renderer/services/overlays/overlay.service-host', () => ({
   showModalDialogOverlay: mockShowModalDialogOverlay,
 }));
 
-// Mock overlay store (resolveAndRemoveOverlay/rejectAndRemoveOverlay imported by dialog.service-host)
+// Mock overlay store (resolveAndRemoveOverlay/rejectAndRemoveOverlay imported by dialog.service-shard)
 vi.mock('@renderer/services/overlays/overlay-store', () => ({
   resolveAndRemoveOverlay: vi.fn(),
   rejectAndRemoveOverlay: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock('@renderer/services/overlays/overlay-store', () => ({
 
 // Mock web-view service (needed by dialog service initialize)
 const mockCloseTab = vi.fn();
-vi.mock('@renderer/services/web-view.service-host', () => ({
+vi.mock('@renderer/services/web-view.service-shard', () => ({
   initialize: vi.fn().mockResolvedValue(undefined),
   addTab: vi.fn(),
   closeTab: mockCloseTab,
@@ -78,11 +78,14 @@ const mockRegisterRequestHandler = vi
   });
 vi.mock('@shared/services/network.service', () => ({
   registerRequestHandler: mockRegisterRequestHandler,
-  // dialog.service-host now reaches web-view.service-model (for RENDERER_HOSTED_COMMAND_NAMES) via
+  // dialog.service-shard now reaches web-view.service-model (for RENDERER_HOSTED_COMMAND_NAMES) via
   // renderer-hosted-command-registry, which pulls in network-object-status.service; that module
   // calls getNetworkEvent at load time, so the mock needs to provide it even though this test never
   // exercises it directly.
   getNetworkEvent: vi.fn(() => vi.fn()),
+  // network-object.service subscribes to this at module load so a process that leaves during
+  // startup is still announced, and this test reaches that module on its import path.
+  onDidDisconnectClient: vi.fn(() => vi.fn()),
 }));
 
 // Mock command service
@@ -121,7 +124,7 @@ vi.mock('platform-bible-utils', async () => {
   };
 });
 
-describe('dialog.service-host', () => {
+describe('dialog.service-shard', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
@@ -135,7 +138,7 @@ describe('dialog.service-host', () => {
       },
     );
 
-    const { initialize } = await import('@renderer/services/web-view.service-host');
+    const { initialize } = await import('@renderer/services/web-view.service-shard');
     vi.mocked(initialize).mockResolvedValue(undefined);
 
     const { registerCommand } = await import('@shared/services/command.service');
@@ -150,8 +153,8 @@ describe('dialog.service-host', () => {
     // Reset window.addEventListener mock
     vi.spyOn(window, 'addEventListener').mockImplementation(() => {});
 
-    const mod = await import('./dialog.service-host');
-    await mod.startDialogService();
+    const mod = await import('./dialog.service-shard');
+    await mod.startDialogServiceShard();
   });
 
   describe('modal dialog routing', () => {
@@ -177,10 +180,10 @@ describe('dialog.service-host', () => {
     });
 
     it('routes dialog without modal flag to rc-dock tab', async () => {
-      const { addTab } = await import('@renderer/services/web-view.service-host');
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
       vi.mocked(addTab).mockResolvedValue(undefined);
 
-      const { resolveDialogRequest } = await import('./dialog.service-host');
+      const { resolveDialogRequest } = await import('./dialog.service-shard');
 
       // Don't await - it won't resolve until manually resolved
       const dialogPromise = capturedShowDialog('platform.alert', {
@@ -203,23 +206,23 @@ describe('dialog.service-host', () => {
 
   describe('hasDialogRequest', () => {
     it('returns false when no dialog request exists for the given id', async () => {
-      const { hasDialogRequest } = await import('./dialog.service-host');
+      const { hasDialogRequest } = await import('./dialog.service-shard');
       expect(hasDialogRequest('nonexistent-id')).toBe(false);
     });
   });
 
   describe('resolveDialogRequest', () => {
     it('throws when resolving a non-existent dialog request', async () => {
-      const { resolveDialogRequest } = await import('./dialog.service-host');
+      const { resolveDialogRequest } = await import('./dialog.service-shard');
       expect(() => resolveDialogRequest('nonexistent-id', 'some-data')).toThrow(
         'request nonexistent-id not found to resolve',
       );
     });
 
     it('resolves dialog promise and closes the tab', async () => {
-      const { resolveDialogRequest, hasDialogRequest } = await import('./dialog.service-host');
+      const { resolveDialogRequest, hasDialogRequest } = await import('./dialog.service-shard');
 
-      const { addTab } = await import('@renderer/services/web-view.service-host');
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
       // addTab must resolve for the dialog setup to complete without rejecting
       vi.mocked(addTab).mockResolvedValue(undefined);
 
@@ -250,16 +253,16 @@ describe('dialog.service-host', () => {
 
   describe('rejectDialogRequest', () => {
     it('throws when rejecting a non-existent dialog request', async () => {
-      const { rejectDialogRequest } = await import('./dialog.service-host');
+      const { rejectDialogRequest } = await import('./dialog.service-shard');
       expect(() => rejectDialogRequest('nonexistent-id', 'error message')).toThrow(
         'request nonexistent-id not found to reject',
       );
     });
 
     it('rejects the dialog promise with the error message', async () => {
-      const { rejectDialogRequest, hasDialogRequest } = await import('./dialog.service-host');
+      const { rejectDialogRequest, hasDialogRequest } = await import('./dialog.service-shard');
 
-      const { addTab } = await import('@renderer/services/web-view.service-host');
+      const { addTab } = await import('@renderer/services/web-view.service-shard');
       vi.mocked(addTab).mockResolvedValue(undefined);
 
       const dialogPromise = capturedShowDialog('platform.selectProject', {});
