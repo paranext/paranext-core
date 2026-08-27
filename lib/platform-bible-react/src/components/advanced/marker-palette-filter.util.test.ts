@@ -52,6 +52,27 @@ describe('filterAndRankPaletteItems', () => {
       expect(filtered.map((item) => item.label)).toEqual(['w', 'wa', 'wj']);
     });
 
+    it('strips a leading + from item LABELS too — nested close-tag entries stay in the list', () => {
+      // The editor package's closeTagItems emits `+wj*` for every open char span except the
+      // outermost, so close-tag labels DO carry the nesting prefix. A `w` (or `+w`) query must
+      // keep them; ranking on the raw label keeps the plain markers ahead of the closer.
+      const nestedItems = [
+        { id: 'close-wj', label: '+wj*' },
+        { id: 'w', label: 'w' },
+        { id: 'wj', label: 'wj' },
+      ];
+      expect(filterAndRankPaletteItems(nestedItems, 'w', 'passive').map((i) => i.label)).toEqual([
+        'w',
+        'wj',
+        '+wj*',
+      ]);
+      expect(filterAndRankPaletteItems(nestedItems, '+w', 'passive').map((i) => i.label)).toEqual([
+        'w',
+        'wj',
+        '+wj*',
+      ]);
+    });
+
     it('matches case-insensitively (custom markers may be capitalized)', () => {
       const capitalized = [
         { id: 'Fig', label: 'Fig' },
@@ -88,6 +109,22 @@ describe('filterAndRankPaletteItems', () => {
     it('matches case-insensitively', () => {
       const filtered = filterAndRankPaletteItems(characterItems, 'W', 'active');
       expect(filtered[0]?.label).toBe('w');
+    });
+
+    it('strips a leading + from the filter and item labels — a `+w` query matches a `+wj*` closer', () => {
+      const nestedItems = [
+        { id: 'close-wj', label: '+wj*' },
+        { id: 'w', label: 'w' },
+        { id: 'nd', label: 'nd' },
+      ];
+      expect(filterAndRankPaletteItems(nestedItems, '+w', 'active').map((i) => i.label)).toEqual([
+        'w',
+        '+wj*',
+      ]);
+      expect(filterAndRankPaletteItems(nestedItems, 'w', 'active').map((i) => i.label)).toEqual([
+        'w',
+        '+wj*',
+      ]);
     });
   });
 });

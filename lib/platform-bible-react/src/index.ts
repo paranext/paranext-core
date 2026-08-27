@@ -93,6 +93,7 @@ export {
 } from './components/advanced/marker-palette-keydown.util';
 export {
   filterAndRankPaletteItems,
+  stripMarkerNestingPrefix,
   type PaletteFilterMode,
 } from './components/advanced/marker-palette-filter.util';
 export {

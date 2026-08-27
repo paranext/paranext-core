@@ -38,7 +38,8 @@
  *   reaches the document; every other key passes through untouched (see `ForwardedSessionKind`).
  * - `'selection'` — FOCUSED selection-wrap palette: EVERY non-chord key is claimed — nothing may land
  *   while it is open, because typing would replace the wrapped selection. Space commits the item
- *   the typed filter names EXACTLY ({@link MarkerPaletteSessionDriver.commitItem} — the wrap), or
+ *   the typed filter names EXACTLY, ignoring case and the `+` nesting prefix
+ *   ({@link MarkerPaletteSessionDriver.commitItem} — the wrap), or
  *   refuses visibly when the typed marker is not offered (claimed dismiss, selection intact). `*`
  *   commits here too, deleting the selection and landing the typed closer in its place (Paratext 9
  *   parity) — a different gesture from Space's wrap. `\` is NOT a commit key here: the wrap
@@ -49,16 +50,24 @@
  * consuming them — without that, whichever document holds focus is the only one that sees a
  * keystroke, and none of the semantics above run when the palette's own input wins that race.
  *
- * Modifier-only keydowns (the Shift half of a `+` chord) pass through untouched so chords like
- * `\+w` keep filtering. Real chords (Ctrl/Cmd/Alt + key) are never ingested into the filter and
- * never claimed — the session is dismissed and the chord does its normal job (e.g. Ctrl+C copies
- * the wrapped selection instead of being swallowed while a wrap palette is open).
+ * Modifier-only keydowns (the Shift half of a `+` chord) pass through untouched, and matching
+ * strips the `+` nesting prefix from BOTH the filter and item labels (`stripMarkerNestingPrefix`),
+ * so chords like `\+w` filter to the same items as `\w` — including nested close-tag entries,
+ * whose labels carry the prefix (`+wj*`). Real chords (Ctrl/Cmd/Alt + key) are never ingested into
+ * the filter — the session is dismissed and the chord does its normal job (e.g. Ctrl+C copies the
+ * wrapped selection instead of being swallowed while a wrap palette is open). The one chord that
+ * IS claimed is chord+Enter: cmdk acts on an un-prevented Enter regardless of modifiers, so on a
+ * focused palette an unclaimed Ctrl+Enter would click the highlighted item while the dismissal is
+ * in flight.
  */
 
 import { MODIFIER_KEYS } from 'platform-bible-utils';
 import type { ForwardedPaletteKeyEvent, PaletteDriver } from 'platform-bible-utils/experimental';
 import type { MutableRefObject } from 'react';
-import { filterAndRankPaletteItems } from '@/components/advanced/marker-palette-filter.util';
+import {
+  filterAndRankPaletteItems,
+  stripMarkerNestingPrefix,
+} from '@/components/advanced/marker-palette-filter.util';
 
 /**
  * What this table needs of a keydown. A DOM `KeyboardEvent` satisfies it, and so does a
@@ -84,8 +93,8 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  *   session-tracking (re-entrancy guards, token cleanup) in the session owners.
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
- *   selection in the marker the filter names exactly; `*` instead replaces the selection with the
- *   typed closing marker (Paratext 9 parity).
+ *   selection in the marker the filter names exactly (ignoring case and the `+` nesting prefix);
+ *   `*` instead replaces the selection with the typed closing marker (Paratext 9 parity).
  *
  * The full per-kind key table is documented at the top of this module.
  */
@@ -114,6 +123,11 @@ export interface MarkerPaletteSessionState {
    * misbehave — e.g. `\f ` in Standard view: mid-text the Tier-2 tokenizer absorbs the following
    * word into the new footnote as its caller, whereas committing the palette item inserts an empty
    * footnote exactly like `\f` + Enter.
+   *
+   * Implementations must compare the filter with the shared marker normalization (case-fold, `+`
+   * nesting prefix stripped — `stripMarkerNestingPrefix`), the same way the visible list matches:
+   * a raw compare lets `\F` + Space slip past the exception and materialize the very literal the
+   * exception exists to avoid.
    */
   shouldSpaceCommit?: (filter: string) => boolean;
 }
@@ -153,9 +167,10 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
    */
   commitTypedCloser(typed: string): void;
   /**
-   * Commit ONE SPECIFIC offered item, named by its bare marker code — the selection-wrap Space
-   * commit, where the marker is whatever was literally typed (an exact match against the offered
-   * entries), not whatever is highlighted. The session owner applies it through the editor
+   * Commit ONE SPECIFIC offered item, named by the item's OWN marker code — the selection-wrap
+   * Space commit, where the marker is whatever was literally typed (an exact match against the
+   * offered entries, ignoring case and the `+` nesting prefix on both sides), not whatever is
+   * highlighted. The session owner applies it through the editor
    * (`EditorRef.applyMarkerMenuSelection`, `trigger: "backslash"`). Only invoked for a
    * `'selection'` session's Space.
    */
@@ -253,6 +268,9 @@ const FILTER_CHAR_ALPHABET: readonly string[] = [
  * filter-character half is derived (from `FILTER_CHAR_REGEX`). The test suite's claimed-keys sweep
  * pins the reverse direction, failing on a listed key the handler no longer acts on. Pure modifiers
  * are excluded: the table only passes them through, and claiming them would break `+` chords.
+ *
+ * Both kinds currently claim the SAME set — the per-kind parameter is deliberate room for the key
+ * sets to diverge later, not a difference today.
  */
 export function getMarkerPaletteClaimedKeys(kind: ForwardedSessionKind): string[] {
   return [
@@ -319,11 +337,19 @@ export function handleMarkerPaletteSessionKeyDown(
   }
 
   if ((event.ctrlKey || event.metaKey || event.altKey) && !event.getModifierState?.('AltGraph')) {
-    // A real chord (Ctrl+C, Cmd+V, …): never ingest it into the filter and never claim it — let
-    // it do its normal job. The palette is no longer relevant to what happens next. AltGr is the
-    // exception: on Windows/Linux a character typed WITH AltGr held reports `ctrlKey && altKey`
-    // both set, so without the explicit exclusion ordinary typing on several European layouts
-    // dismissed the session.
+    // A real chord (Ctrl+C, Cmd+V, …): never ingest it into the filter, and normally never claim
+    // it — let it do its normal job. The palette is no longer relevant to what happens next. AltGr
+    // is the exception: on Windows/Linux a character typed WITH AltGr held reports `ctrlKey &&
+    // altKey` both set, so without the explicit exclusion ordinary typing on several European
+    // layouts dismissed the session.
+    //
+    // Chord+Enter alone IS claimed: on a focused palette the chord arrives through key forwarding,
+    // the palette's own handler does not preventDefault a forwarded key, and cmdk acts on any
+    // un-prevented Enter regardless of modifiers — synchronously clicking the highlighted item
+    // while this dismissal is in flight, committing a marker the user never chose. Claiming only
+    // Enter keeps ordinary chords (copy/paste) doing their job; cmdk's other keys (arrows) merely
+    // move the highlight of a palette that is already closing.
+    if (event.key === 'Enter') claim(event);
     driver.dismiss();
     return 'ended';
   }
@@ -389,15 +415,20 @@ export function handleMarkerPaletteSessionKeyDown(
       return 'ended';
     }
     // Wrap commit: the marker is whatever was literally TYPED — an exact match against the
-    // offered entries, compared case-insensitively because markers are unique ignoring case and
-    // custom markers may be capitalized (FILTER_CHAR_REGEX's own rule; a case-sensitive compare
-    // showed `ND` matching in the list and then refused the very commit it displayed). A marker
-    // not offered (unknown, or not valid here) has nothing to commit: the palette closes and
-    // the selection stays intact rather than wrapped in a guess (visible refusal). Claimed
-    // either way — nothing may replace the selection.
+    // offered entries under the same normalization the filter matches with: case-insensitive
+    // (markers are unique ignoring case and custom markers may be capitalized —
+    // FILTER_CHAR_REGEX's own rule) and ignoring the `+` nesting prefix on both sides
+    // (stripMarkerNestingPrefix — `+nd` visibly matches the `nd` entry, so the commit must find
+    // the same item the list shows instead of refusing it). The ITEM's own marker is what commits:
+    // the item is authoritative, so the offered casing wins and a nested closer keeps its leading
+    // `+`. A marker not offered (unknown, or not valid here) has nothing to commit: the palette
+    // closes and the selection stays intact rather than wrapped in a guess (visible refusal).
+    // Claimed either way — nothing may replace the selection.
     claim(event);
-    const typed = session.filter.toLowerCase();
-    const match = session.items.find((item) => item.marker.toLowerCase() === typed);
+    const typed = stripMarkerNestingPrefix(session.filter).toLowerCase();
+    const match = session.items.find(
+      (item) => stripMarkerNestingPrefix(item.marker).toLowerCase() === typed,
+    );
     if (match) driver.commitItem(match.marker);
     driver.dismiss();
     return 'ended';

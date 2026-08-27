@@ -121,6 +121,23 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(driver.dismiss).toHaveBeenCalledOnce();
   });
 
+  it('claims chord+Enter while dismissing — cmdk must not click the highlighted item mid-dismissal', () => {
+    // On a focused palette the chord arrives through key forwarding and cmdk acts on any
+    // un-prevented Enter regardless of modifiers, so an unclaimed Ctrl+Enter committed the
+    // highlighted item (wrapping the selection in a marker the user never chose) while the
+    // dismissal was in flight. The chord still only dismisses — no commit of any kind.
+    (['selection', 'backslash'] as const).forEach((kind) => {
+      const driver = makeDriver();
+      const event = makeEvent('Enter', { ctrlKey: true });
+      expect(handleMarkerPaletteSessionKeyDown(event, session(kind, 'nd'), driver)).toBe('ended');
+      expect(event.defaultPrevented).toBe(true); // claimed — cmdk skips its Enter case
+      expect(driver.dismiss).toHaveBeenCalledOnce();
+      expect(driver.commit).not.toHaveBeenCalled();
+      expect(driver.commitItem).not.toHaveBeenCalled();
+      expect(driver.commitTyped).not.toHaveBeenCalled();
+    });
+  });
+
   it('treats an AltGr chord (ctrl+alt with AltGraph) as a typed character — it filters, never dismisses', () => {
     // On Windows/Linux a character typed WITH AltGr held reports `ctrlKey && altKey` both set, so
     // without the AltGraph exclusion ordinary typing on several European layouts dismissed the
@@ -595,6 +612,39 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(driver.commitItem).toHaveBeenCalledExactlyOnceWith('nd');
     expect(driver.dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('selection session: Space strips the `+` nesting prefix — `+nd` typed commits the offered `nd`', () => {
+    // The filter strips a leading `+` in both modes, so `+nd` visibly matches the `nd` entry —
+    // the commit must find the same item instead of refusing the wrap it displayed. The ITEM's
+    // marker is what commits.
+    const driver = makeDriver();
+    const state = session('selection', '+nd');
+    const event = makeEvent(' ');
+    expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('ended');
+    expect(event.defaultPrevented).toBe(true);
+    expect(driver.commitItem).toHaveBeenCalledExactlyOnceWith('nd');
+    expect(driver.dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('backslash session: Space passes the literal typed filter to commitTyped — a typed `+` survives verbatim', () => {
+    // commitTyped's contract is literal bytes: the `+` is stripped for MATCHING only, never from
+    // what materializes in the document.
+    const driver = makeDriver();
+    const event = makeEvent(' ');
+    expect(handleMarkerPaletteSessionKeyDown(event, session('backslash', '+nd'), driver)).toBe(
+      'ended',
+    );
+    expect(driver.commitTyped).toHaveBeenCalledExactlyOnceWith('+nd');
+  });
+
+  it('Enter counts matches on the stripped query — a `+w` filter still commits (nested `\\+w` chord)', () => {
+    (['backslash', 'selection'] as const).forEach((kind) => {
+      const driver = makeDriver();
+      const event = makeEvent('Enter');
+      expect(handleMarkerPaletteSessionKeyDown(event, session(kind, '+w'), driver)).toBe('ended');
+      expect(driver.commit).toHaveBeenCalledOnce();
+    });
   });
 
   it('selection session: the Space exact match is against the full marker code, not a prefix', () => {

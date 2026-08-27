@@ -20,11 +20,13 @@ import { filterAndRankItems, type Item } from '@eten-tech-foundation/platform-ed
  * palette flavor:
  *
  * - `'passive'` — case-insensitive PREFIX match, mirroring PT9's marker dropdown
- *   (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in the filter text is stripped before
- *   matching, so `"+w"` matches the same items as `"w"`.
+ *   (`MarkerDropdownControl.UpdateMarkerList`).
  * - `'active'` — case-insensitive CONTAINMENT match (still label-only).
  *
- * Both modes rank exact-first via the editor's `filterAndRankItems`.
+ * Both modes strip the `+` nesting prefix from the filter text AND the item label before comparing
+ * ({@link stripMarkerNestingPrefix}), so `"+w"` matches the same items as `"w"` and a nested
+ * close-tag label like `"+wj*"` matches a `"w"` query. Both modes rank exact-first via the editor's
+ * `filterAndRankItems`.
  */
 export type PaletteFilterMode = 'active' | 'passive';
 
@@ -32,14 +34,18 @@ export type PaletteFilterMode = 'active' | 'passive';
 type RankableItem = Item & { label: string };
 
 /**
- * Strips the USFM nesting prefix (`+`) from typed filter text before matching: `\+nd` names the
- * same marker as `\nd` (PT9's dropdown strips it too), and item labels never carry it. THE one
- * strip for every matching site — both modes below and the legacy inline `MarkerMenu` — so the rule
- * cannot drift between them: it used to exist in `'passive'` only, so the same keystrokes that
- * filtered at a caret produced zero matches and a silent refusal over a selection.
+ * Strips the USFM nesting prefix (`+`) from marker text before matching: `\+nd` names the same
+ * marker as `\nd` (PT9's dropdown strips it too). Applied to BOTH sides of every comparison — the
+ * typed filter AND the item's marker text — because nested close-tag items DO carry the prefix in
+ * their labels (the editor package emits `+wj*` for every open char span except the outermost).
+ * THE one strip for every matching site — both modes below, the keydown table's commit-key
+ * lookups, and the legacy inline `MarkerMenu` — so the rule cannot drift between them.
+ *
+ * Matching only: commits preserve an item's own bytes (a nested closer keeps its leading `+`), and
+ * `commitTyped` passes the typed text verbatim.
  */
-export function stripMarkerNestingPrefix(filterText: string): string {
-  return filterText.replace(/^\+/, '');
+export function stripMarkerNestingPrefix(markerText: string): string {
+  return markerText.replace(/^\+/, '');
 }
 
 /**
@@ -69,18 +75,25 @@ export function filterAndRankPaletteItems<T extends { label: string }>(
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const rankableItems = [...items] as unknown as (T & RankableItem)[];
 
+  // Both the query and each label are normalized with stripMarkerNestingPrefix (see its doc): the
+  // `+` is nesting decoration, so `+w` filters like `w` and a nested closer's `+wj*` label matches
+  // a `w` query. Ranking still sorts by the RAW label (exact > prefix > containment on the
+  // stripped query), which naturally orders plain markers ahead of `+`-prefixed closers.
+  const query = stripMarkerNestingPrefix(filterText).toLowerCase();
+
   if (mode === 'passive') {
     return filterAndRankItems({
-      query: stripMarkerNestingPrefix(filterText),
+      query,
       items: rankableItems,
-      filter: (item, itemQuery) => item.label.toLowerCase().startsWith(itemQuery.toLowerCase()),
+      filter: (item) => stripMarkerNestingPrefix(item.label).toLowerCase().startsWith(query),
       sortBy: 'label',
     });
   }
 
   return filterAndRankItems({
-    query: stripMarkerNestingPrefix(filterText),
+    query,
     items: rankableItems,
-    filterBy: 'label',
+    filter: (item) => stripMarkerNestingPrefix(item.label).toLowerCase().includes(query),
+    sortBy: 'label',
   });
 }

@@ -16,6 +16,7 @@ import {
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
   type FootnotesPaneAutoVisibilityInput,
 } from './platform-scripture-editor.web-view.utils';
@@ -575,6 +576,31 @@ describe('markerMenuItemsToResolvedPaletteItems', () => {
       muted: true,
     });
     expect(items[0].badge).toBeUndefined();
+  });
+});
+
+describe('shouldSpaceCommitNoteMarker', () => {
+  const items = [
+    { kind: 'note', marker: 'f' },
+    { kind: 'character', marker: 'nd' },
+  ] as const;
+
+  it('is true when the typed filter names an offered note marker', () => {
+    expect(shouldSpaceCommitNoteMarker(items, 'f')).toBe(true);
+  });
+
+  it('matches case-insensitively — `\\F` + Space must hit the same exception `\\f` does', () => {
+    expect(shouldSpaceCommitNoteMarker(items, 'F')).toBe(true);
+  });
+
+  it('strips the `+` nesting prefix from the typed filter, like every other matching site', () => {
+    expect(shouldSpaceCommitNoteMarker(items, '+f')).toBe(true);
+  });
+
+  it('is false for non-note markers and for filters that only prefix a note marker', () => {
+    expect(shouldSpaceCommitNoteMarker(items, 'nd')).toBe(false);
+    expect(shouldSpaceCommitNoteMarker(items, '')).toBe(false);
+    expect(shouldSpaceCommitNoteMarker([{ kind: 'note', marker: 'fe' }], 'f')).toBe(false);
   });
 });
 

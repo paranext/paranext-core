@@ -167,6 +167,7 @@ import {
   resolveEditingSessionActivity,
   resolveFootnotesPaneAutoVisibility,
   restoreSelectionIfLost,
+  shouldSpaceCommitNoteMarker,
   STALE_NOTE_EDITING_SESSION_MS,
 } from './platform-scripture-editor.web-view.utils';
 import { ParagraphMarkerTooltipOverlay } from './paragraph-marker-tooltip/paragraph-marker-tooltip-overlay.component';
@@ -2025,8 +2026,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             // materializing the typed `\f ` literal instead would hand it to the Tier-2
             // tokenizer, which mid-text absorbs the following word into the new footnote as its
             // caller. Committing inserts an empty footnote exactly like `\f` + Enter.
-            shouldSpaceCommit: (filter: string) =>
-              items.some((item) => item.kind === 'note' && item.marker === filter),
+            shouldSpaceCommit: (filter: string) => shouldSpaceCommitNoteMarker(items, filter),
           }
         : { kind: 'selection', token, filter: '', items };
 

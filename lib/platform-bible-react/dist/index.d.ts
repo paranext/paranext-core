@@ -1102,8 +1102,8 @@ export type MarkerPaletteKeyEvent = ForwardedPaletteKeyEvent;
  *   session-tracking (re-entrancy guards, token cleanup) in the session owners.
  * - `'selection'` — the selection-wrap palette, opened with text selected. EVERY non-chord key is
  *   claimed, because anything that landed would replace the wrapped selection. Space wraps the
- *   selection in the marker the filter names exactly; `*` instead replaces the selection with the
- *   typed closing marker (Paratext 9 parity).
+ *   selection in the marker the filter names exactly (ignoring case and the `+` nesting prefix);
+ *   `*` instead replaces the selection with the typed closing marker (Paratext 9 parity).
  *
  * The full per-kind key table is documented at the top of this module.
  */
@@ -1133,6 +1133,11 @@ export interface MarkerPaletteSessionState {
 	 * misbehave — e.g. `\f ` in Standard view: mid-text the Tier-2 tokenizer absorbs the following
 	 * word into the new footnote as its caller, whereas committing the palette item inserts an empty
 	 * footnote exactly like `\f` + Enter.
+	 *
+	 * Implementations must compare the filter with the shared marker normalization (case-fold, `+`
+	 * nesting prefix stripped — `stripMarkerNestingPrefix`), the same way the visible list matches:
+	 * a raw compare lets `\F` + Space slip past the exception and materialize the very literal the
+	 * exception exists to avoid.
 	 */
 	shouldSpaceCommit?: (filter: string) => boolean;
 }
@@ -1171,9 +1176,10 @@ export interface MarkerPaletteSessionDriver extends PaletteDriver {
 	 */
 	commitTypedCloser(typed: string): void;
 	/**
-	 * Commit ONE SPECIFIC offered item, named by its bare marker code — the selection-wrap Space
-	 * commit, where the marker is whatever was literally typed (an exact match against the offered
-	 * entries), not whatever is highlighted. The session owner applies it through the editor
+	 * Commit ONE SPECIFIC offered item, named by the item's OWN marker code — the selection-wrap
+	 * Space commit, where the marker is whatever was literally typed (an exact match against the
+	 * offered entries, ignoring case and the `+` nesting prefix on both sides), not whatever is
+	 * highlighted. The session owner applies it through the editor
 	 * (`EditorRef.applyMarkerMenuSelection`, `trigger: "backslash"`). Only invoked for a
 	 * `'selection'` session's Space.
 	 */
@@ -1213,6 +1219,9 @@ export type ForwardedSessionKind = Exclude<MarkerPaletteSessionKind, "enter">;
  * filter-character half is derived (from `FILTER_CHAR_REGEX`). The test suite's claimed-keys sweep
  * pins the reverse direction, failing on a listed key the handler no longer acts on. Pure modifiers
  * are excluded: the table only passes them through, and claiming them would break `+` chords.
+ *
+ * Both kinds currently claim the SAME set — the per-kind parameter is deliberate room for the key
+ * sets to diverge later, not a difference today.
  */
 export declare function getMarkerPaletteClaimedKeys(kind: ForwardedSessionKind): string[];
 /**
@@ -1255,13 +1264,27 @@ export declare function clearPaletteSessionIfCurrent<TSession extends {
  * palette flavor:
  *
  * - `'passive'` — case-insensitive PREFIX match, mirroring PT9's marker dropdown
- *   (`MarkerDropdownControl.UpdateMarkerList`): a leading `+` in the filter text is stripped before
- *   matching, so `"+w"` matches the same items as `"w"`.
+ *   (`MarkerDropdownControl.UpdateMarkerList`).
  * - `'active'` — case-insensitive CONTAINMENT match (still label-only).
  *
- * Both modes rank exact-first via the editor's `filterAndRankItems`.
+ * Both modes strip the `+` nesting prefix from the filter text AND the item label before comparing
+ * ({@link stripMarkerNestingPrefix}), so `"+w"` matches the same items as `"w"` and a nested
+ * close-tag label like `"+wj*"` matches a `"w"` query. Both modes rank exact-first via the editor's
+ * `filterAndRankItems`.
  */
 export type PaletteFilterMode = "active" | "passive";
+/**
+ * Strips the USFM nesting prefix (`+`) from marker text before matching: `\+nd` names the same
+ * marker as `\nd` (PT9's dropdown strips it too). Applied to BOTH sides of every comparison — the
+ * typed filter AND the item's marker text — because nested close-tag items DO carry the prefix in
+ * their labels (the editor package emits `+wj*` for every open char span except the outermost).
+ * THE one strip for every matching site — both modes below, the keydown table's commit-key
+ * lookups, and the legacy inline `MarkerMenu` — so the rule cannot drift between them.
+ *
+ * Matching only: commits preserve an item's own bytes (a nested closer keeps its leading `+`), and
+ * `commitTyped` passes the typed text verbatim.
+ */
+export declare function stripMarkerNestingPrefix(markerText: string): string;
 /**
  * Filters `items` by matching `filterText` against each item's `label` and ranks the matches
  * exact-first (exact > prefix > containment, ties keeping their original order — the editor
