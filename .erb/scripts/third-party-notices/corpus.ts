@@ -15,12 +15,10 @@ let cachedIndex: CorpusIndex | undefined;
 /**
  * The committed checksum index, read on first use.
  *
- * Read at MODULE LOAD, this defeated the pipeline's message-only error convention on every entry
- * point that imports this file - and `main.ts` imports it at the top level, so a corpus index that
- * was missing or truncated threw during `require`, before `main` and its `try`/`catch` existed. The
- * developer got a raw stack trace where every other failure in this pipeline prints one line and a
- * remedy. It is the same reason `licenseList` below is a lazy `require`, applied to the other thing
- * this module reads.
+ * Lazily, not at module load. `main.ts` imports this file at the top level, so reading the index
+ * eagerly would put a missing or truncated one inside `require` - outside `main` and its
+ * `try`/`catch`, and so outside this pipeline's convention that a failure prints one line and a
+ * remedy rather than a stack trace. Same reason `licenseList` below is a lazy `require`.
  */
 function corpusIndex(): CorpusIndex {
   if (!cachedIndex)
@@ -47,10 +45,11 @@ function licenseList(): Record<string, { licenseText: string }> {
  * Canonical SPDX licence text for an identifier, verified against the committed checksum index.
  *
  * The texts live in the pinned `spdx-license-list` dependency rather than being vendored: the full
- * corpus is 10.47 MB for ~600 licences, of which this project uses about 13. What IS committed is
- * `index.json` - source, version, and a sha256 per licence - so provenance is mechanical and any
- * drift or substitution in the dependency is detected rather than silently reproduced. That was the
- * actual requirement; carrying 10 MB was not.
+ * corpus is 10.47 MB for roughly 600 licences. What IS committed is `index.json` - source, version,
+ * and a sha256 for each licence a verdict can resolve to - so provenance is mechanical and any
+ * drift or substitution in the dependency is detected rather than silently reproduced, without
+ * carrying 10 MB to do it. `build-corpus-index.ts` writes that file and defines which identifiers
+ * are in it.
  *
  * @returns Undefined when the id is not in the corpus - never an empty string, which would render
  *   as a discharged obligation while discharging nothing.
@@ -69,8 +68,9 @@ export function canonicalText(spdxId: string): string | undefined {
   if (actual !== expected)
     throw new Error(
       `canonical text for ${spdxId} does not match the committed checksum (expected ${expected}, ` +
-        `got ${actual}). The spdx-license-list dependency has drifted; regenerate ` +
-        'spdx-corpus/index.json deliberately and review the diff.',
+        `got ${actual}). The spdx-license-list dependency has drifted. Regenerate the index ` +
+        'deliberately and review the diff:\n' +
+        '    npm run build:third-party-notices:corpus',
     );
 
   return entry.licenseText;

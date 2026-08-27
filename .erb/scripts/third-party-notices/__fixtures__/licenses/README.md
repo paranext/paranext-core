@@ -2,9 +2,10 @@
 
 Copied verbatim from `node_modules`. **Never hand-write or edit a license text in this directory.**
 
-The bespoke matcher these replaced passed 251 tests while misidentifying five of these exact files,
-because its fixtures were hand-written stubs containing none of the cross-references that real
-license texts contain. MPL-2.0 section 1.12 defines "Secondary License" by quoting the GNU GPL, and
-an unanchored substring matcher fires on the quotation.
+Real texts, because a hand-written stub contains none of the cross-references a real license text
+carries, and those cross-references are what a matcher gets wrong: MPL-2.0 section 1.12 defines
+"Secondary License" by quoting the GNU GPL, so an unanchored substring match answers "GPL" for a
+file that is not GPL at all. A fixture suite of stubs can pass in full while every one of these
+files is misidentified.
 
 Refresh a fixture only by re-copying it from the installed package.

@@ -1,8 +1,10 @@
 import { spawnSync } from 'child_process';
 import * as path from 'path';
 import { describe, expect, it } from 'vitest';
+import { reachableIds } from './build-corpus-index';
 import { canonicalText, corpusVersion, verifyCorpus } from './corpus';
 import { loadPolicy } from './policy';
+import { readJsonFile } from './read-json';
 
 /**
  * Registers tsx in the child, so it can `require` this pipeline's `.ts` modules.
@@ -11,6 +13,8 @@ import { loadPolicy } from './policy';
  * drive is the shipped entry point rather than a separately compiled copy of it.
  */
 const TSX = ['--import', 'tsx'];
+
+const POLICY = loadPolicy(path.join(__dirname, 'notices-policy.json'));
 
 describe('corpus', () => {
   it.each(['MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'Zlib', 'Unicode-DFS-2016'])(
@@ -38,11 +42,24 @@ describe('corpus', () => {
 
   it('covers every license the shipped policy can reach a verdict on', () => {
     // A policy id with no canonical text would render an empty license block - an obligation that
-    // looks discharged and is not. Checking the two lists against the index closes that gap here
+    // looks discharged and is not. Checking the policy against the index closes that gap here
     // rather than at generation time.
-    const policy = loadPolicy(path.join(__dirname, 'notices-policy.json'));
-    const missing = [...policy.allowed, ...policy.copyleft].filter((id) => !canonicalText(id));
+    const missing = reachableIds(POLICY).filter((id) => !canonicalText(id));
     expect(missing).toEqual([]);
+  });
+
+  it('indexes those licenses and no others', () => {
+    // The other direction, which nothing else checks. Every checksum here is a text this repository
+    // may have to reproduce; one for an identifier no verdict path can produce is never read and is
+    // re-hashed by `verifyCorpus` on every run. It also keeps SPDX ids that merely LOOK like
+    // credentials - SPDX names licences after the tools they cover, so `TermReadKey`, `HIDAPI` and
+    // `ssh-keyscan` sit beside 64-char hex - out of a committed file, rather than allowlisting them
+    // in the secret scanner. `npm run build:third-party-notices:corpus` is what repairs a failure.
+    const index = readJsonFile<{ checksums: Record<string, string> }>(
+      path.join(__dirname, 'spdx-corpus', 'index.json'),
+      'the vendored SPDX corpus index',
+    );
+    expect(Object.keys(index.checksums).sort()).toEqual(reachableIds(POLICY));
   });
 
   it('records the corpus version so the artifact is traceable', () => {
@@ -51,12 +68,12 @@ describe('corpus', () => {
 });
 
 describe('a drifted corpus is detected', () => {
-  // `verifyCorpus()` gates every run in `buildReport`, and until now nothing ever made it return
-  // non-empty - so the one guard with no falsification was the one protecting the texts themselves.
-  // What it exists to catch is the `spdx-license-list` dependency changing or being substituted
-  // under a pinned version, after which the generator would reproduce whatever it now contains as
-  // if it were the licence. Simulated by mutating the dependency's own export in a child process,
-  // which is exactly the shape of that failure.
+  // `verifyCorpus()` gates every run in `buildReport`, and a committed tree can never make it
+  // return non-empty - so without these cases the one guard protecting the licence texts themselves
+  // is the one guard nothing falsifies. What it exists to catch is the `spdx-license-list`
+  // dependency changing or being substituted under a pinned version, after which the generator
+  // would reproduce whatever it now contains as if it were the licence. Simulated by mutating the
+  // dependency's own export in a child process, which is exactly the shape of that failure.
   function withMutatedCorpus(expression: string) {
     const script = `
       const target = require.resolve('spdx-license-list/full');
@@ -90,7 +107,8 @@ describe('a drifted corpus is detected', () => {
       "(() => { try { corpus.canonicalText('MIT'); return 'no error'; } catch (err) { return err.message; } })()",
     );
     expect(thrown).toMatch(/canonical text for MIT does not match the committed checksum/);
-    expect(thrown).toMatch(/regenerate/);
+    // Naming the drift is half an answer; the message has to carry the command that repairs it.
+    expect(thrown).toContain('npm run build:third-party-notices:corpus');
   });
 
   it('leaves every other identifier alone, so the report names only what drifted', () => {

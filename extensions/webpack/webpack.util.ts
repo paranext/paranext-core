@@ -95,18 +95,17 @@ export async function getWebViewEntries(): Promise<webpack.EntryObject> {
  *
  * Per BUNDLE and per MODE, because `EmitShippedModulesPlugin` reads the temperature of this
  * directory to decide whether the module manifest it writes can be trusted for a legal artifact
- * (see `isWarmFilesystemCache`), and one shared directory made that answer wrong in two ways:
+ * (see `isWarmFilesystemCache`), and one shared directory answers that wrong in two ways:
  *
  * - Per bundle: `webpack.config.main.ts` declares `dependencies: ['webView']`, so `extension-main`
- *   starts only after `extension-web-view` has finished writing ITS cache entries into the shared
- *   directory - and was therefore stamped warm on a build that was, in every other sense, cold.
+ *   starts only after `extension-web-view` has finished writing ITS cache entries - which would
+ *   stamp it warm on a build that is, in every other sense, cold.
  * - Per mode: a release job builds development extensions (`npm run build`) and then production ones
- *   from the same commit, so the production build inherited the development build's cache and its
- *   manifests could not be verified. That is why the per-platform notices check was placed BEFORE
- *   the production extension build, verifying the development graph and packaging the production
- *   one.
+ *   from the same commit, so the production build would inherit the development build's cache and
+ *   its manifests could not be verified - leaving the per-platform notices check nowhere to run
+ *   except before the production build, where it would verify a graph the job does not ship.
  *
- * Splitting the directory means each build's temperature is a fact about that build. Ordinary local
+ * Splitting the directory makes each build's temperature a fact about that build. Ordinary local
  * rebuilds are unaffected: they stay in the development directory and stay warm.
  */
 export function extensionCacheDirectory(bundleName: string): string {
