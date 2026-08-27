@@ -1,20 +1,15 @@
 using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Xml;
 using System.Xml.Linq;
-using System.Xml.Serialization;
 using System.Xml.XPath;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.NetworkObjects.Documentation;
 using Paranext.DataProvider.Projects.SendReceive;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
-using Paratext.Data.Interlinear;
-using Paratext.Data.Linguistics;
 using Paratext.Data.ProjectComments;
-using Paratext.Data.ProjectFileAccess;
 using Paratext.Data.ProjectSettingsAccess;
 using PtxUtils;
 using SIL.Scripture;
@@ -2444,8 +2439,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     #region Scripture-related methods
 
     /// <summary>
-    /// Send an event on the PAPI announcing that all the Scripture data has changed. This is used
-    /// for reloading all the Scripture, settings, etc. after a project has been S/Red.
+    /// Send an event on the PAPI announcing that all the Scripture data has changed, so clients
+    /// reload the Scripture, settings, etc. Currently emitted only by book management operations;
+    /// Send/Receive does not yet emit it.
     /// </summary>
     public void SendFullProjectUpdateEvent()
     {
@@ -2675,11 +2671,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// <summary>
     /// Gets a map of project-relative path to the SHA-256 hex of that file's current bytes: an
     /// opaque change-detection token per file, never content, covering the interlinear book
-    /// files, the lexicon, and the stored word analyses. The setups file rides the data payload
-    /// but is deliberately not covered, so a setups-only edit signals no change. Empty when the
-    /// project has no interlinear data. Throws if the project directory or
+    /// files, the lexicon, and the stored word analyses. Only interlinear file content is
+    /// change-detected: the setups (from the setups file or rebuilt from project settings) and
+    /// <c>HasAssociatedLexicalProject</c> derive partly from project settings and can change the
+    /// payload without any hash changing. Empty when the project has no interlinear data. Throws if the project directory or
     /// a file found by the scan cannot be read, so an unreadable project never poses as one with
-    /// no data and a caller never receives a partial manifest.
+    /// no data and a caller never receives a partial manifest. Shares
+    /// <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/> with the data read: files
+    /// over the cap throw the same too-large error instead of being hashed, so a probe never
+    /// reads more than a servable corpus.
     /// </summary>
     [NetworkTimeout(Pt9InterlinearNetworkTimeoutMs)]
     public Dictionary<string, string> GetPt9InterlinearManifest(object? param = null)
@@ -2702,8 +2702,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// the scan cannot be read, or a file cannot be parsed, so an unreadable project never poses
     /// as one with no data and a caller never receives a partial payload; and throws an error
     /// whose message starts with <see cref="Pt9InterlinearReader.Pt9InterlinearDataTooLargeMessagePrefix"/> when the
-    /// files exceed <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/>, so a response can never take down
-    /// the connection.
+    /// files exceed <see cref="Pt9InterlinearReader.MaxPt9InterlinearDataBytes"/> (the error also
+    /// carries <see cref="PlatformErrorCodes.ResourceExhausted"/> as its platform error code). The cap bounds
+    /// source bytes - the serialized size cannot be confirmed at this layer - and realistic data
+    /// serializes smaller than its indented on-disk XML, keeping real responses clear of the
+    /// transport's message size limit; content crafted of near-empty elements can still inflate
+    /// past it, an accepted residual risk.
     /// </summary>
     [NetworkTimeout(Pt9InterlinearNetworkTimeoutMs)]
     public Pt9InterlinearProjectData GetPt9InterlinearData(object? param = null)

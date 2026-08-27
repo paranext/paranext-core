@@ -1271,7 +1271,8 @@ declare module 'platform-scripture' {
   };
 
   /**
-   * One verse's interlinear data.
+   * One verse's interlinear data. Only verses whose key parses as a verse reference are served:
+   * PT9's own read drops the rest (e.g. Send/Receive conflict-marker keys), and so does this.
    *
    * @experimental
    */
@@ -1294,6 +1295,14 @@ declare module 'platform-scripture' {
     glossLanguage?: string;
     bookId?: string;
     verses: Pt9InterlinearVerse[];
+    /** Project-relative path this book was parsed from - its key in the manifest. */
+    filePath: string;
+    /**
+     * True when `filePath` is the path PT9's own reader loads this language and book from. A false
+     * value marks Send/Receive merge residue or a hand-placed copy, so the same language and book
+     * can appear more than once; the canonical entry is the one PT9 itself would read.
+     */
+    isCanonicalPath: boolean;
   };
 
   /**
@@ -1317,12 +1326,19 @@ declare module 'platform-scripture' {
   };
 
   /**
-   * One lexicon entry: the lexeme's morphological type (`Word`, `Phrase`, `Stem`, `Prefix`,
-   * `Suffix`, or `Lemma`), its form, its homograph number, and its senses.
+   * One lexicon entry: the lexeme's morphological type (one of `Phrase`, `Word`, `Lemma`, `Stem`,
+   * `Prefix`, `Suffix`, or `Infix`; an unknown name fails the file as corrupt), its form, its
+   * homograph number, and its senses.
    *
    * @experimental
    */
   export type Pt9LexiconEntry = {
+    /**
+     * PT9's composed lexeme id - `Type:Form`, with `:Homograph` appended only when it is not 1 -
+     * the exact string that cluster `lexemeId`s and word-parse analyses reference, so joins need
+     * not re-derive the grammar.
+     */
+    id: string;
     type: string;
     form: string;
     homograph: number;
@@ -1342,7 +1358,8 @@ declare module 'platform-scripture' {
 
   /**
    * The project's PT9 lexicon: gloss entries by lexeme plus the legacy word analyses that older
-   * Paratext versions stored inside Lexicon.xml.
+   * Paratext versions stored inside Lexicon.xml. Served as PT9 reads it: forms corrected to the
+   * project's normalization, `language` the project's language id, empty legacy analyses dropped.
    *
    * @experimental
    */
@@ -1355,9 +1372,11 @@ declare module 'platform-scripture' {
   /**
    * One configured interlinearization. Setups come from the project's setups file when present,
    * merged with the setups Paratext 9 reconstructs from legacy project settings; the merge is
-   * computed on read and never writes to the project. Settings-derived setups resolve model names
-   * against the locally installed projects, as PT9 itself does, so a setup whose model text is not
-   * installed is absent.
+   * computed on read and never writes to the project, and it runs only when PT9 itself would run it
+   * for the local user (a non-observer not yet stamped as converted), so a setup deleted after its
+   * one-time conversion is not resurrected. Settings-derived setups resolve model names against the
+   * locally installed projects, as PT9 itself does, so a setup whose model text is not installed is
+   * absent.
    *
    * @experimental
    */
@@ -1367,10 +1386,29 @@ declare module 'platform-scripture' {
     languageId?: string;
     /** Display name the user gave the language, for setups created without a model text. */
     languageName?: string;
+    /** Font used for the gloss language, for setups created without a model text. */
+    fontName?: string;
+    /** Font size for the gloss language; 0 when the setup never set one. */
+    fontSize: number;
+    /** Text direction for the gloss language. */
+    rightToLeft: boolean;
     /** Name of the model text this interlinearization reads from; absent when it has none. */
     modelScrTextName?: string;
-    /** Hex id of the model text; absent when the setup has no model text or PT9 stored no id. */
+    /**
+     * Hex id of the model text; served whenever PT9 stored one, including for model-less setups,
+     * which mint an id as their settings key.
+     */
     modelScrTextId?: string;
+    /** True when the model text is a resource project. */
+    modelIsResource: boolean;
+    /** True when the project being interlinearized and its model text are related languages. */
+    relatedLanguages: boolean;
+    /** True when approved verses export to the export project as they are approved. */
+    exportOnApprove: boolean;
+    /** Name of the project approved verses export to; absent when the setup exports nowhere. */
+    exportScrTextName?: string;
+    /** Hex id of the project approved verses export to. */
+    exportScrTextId?: string;
   };
 
   /**
@@ -1383,7 +1421,10 @@ declare module 'platform-scripture' {
    * Files are read with Paratext 9's own semantics, never more strictly: a duplicate verse
    * reference, lexicon key, or wordform keeps the last occurrence; a cluster missing its Range
    * element gets range (0, 0); and a malformed boolean or unknown enum name fails the whole file
-   * the same way it would fail in Paratext 9.
+   * the same way it would fail in Paratext 9. The consequence deliberately differs, though: PT9's
+   * per-file loads quietly serve an empty file in a corrupt one's place, costing one book silently,
+   * while here one bad file fails the whole request, so corruption is visible and no partial
+   * payload ever poses as complete data.
    *
    * @experimental
    */
@@ -1398,10 +1439,12 @@ declare module 'platform-scripture' {
   /**
    * Map of project-relative file path to the lowercase SHA-256 hex of that file's current bytes: an
    * opaque change-detection token per file, covering the interlinear book files, the lexicon, and
-   * the stored word analyses. The setups file rides the {@link Pt9InterlinearProjectData} payload
-   * but is deliberately not covered, so a setups-only edit signals no change. Path separators are
-   * forward slashes; a backslash inside a key is part of a file name, never a separator. Empty when
-   * the project has no interlinear data.
+   * the stored word analyses. Only interlinear file content is change-detected: the
+   * {@link Pt9InterlinearProjectData} payload's `setups` (from the setups file or rebuilt from
+   * project settings) and `hasAssociatedLexicalProject` derive partly from project settings and can
+   * change the payload without any hash changing. Path separators are forward slashes; a backslash
+   * inside a key is part of a file name, never a separator. Empty when the project has no
+   * interlinear data.
    *
    * @experimental
    */
@@ -1435,9 +1478,10 @@ declare module 'platform-scripture' {
    * Both data types are read-only: `set*` is unsupported and throws if called; the authoritative
    * source is the files on disk, not this projectInterface. The interface never tracks interlinear
    * file changes - editing those files fires no update. Subscribers still receive project-wide
-   * update events (book management operations, Send/Receive), which say nothing about whether
-   * interlinear data changed. Poll `getPt9InterlinearManifest` and compare hashes to detect
-   * changes.
+   * update events, which today only book management operations emit - nothing emits one on
+   * Send/Receive, the operation that actually changes interlinear files - and which say nothing
+   * about whether interlinear data changed. Poll `getPt9InterlinearManifest` and compare hashes to
+   * detect changes.
    *
    * Paratext saves interlinear files by two renames, so a concurrent save can make any read
    * transiently fail while a file is mid-replacement; retrying the call is safe.
@@ -1473,7 +1517,9 @@ declare module 'platform-scripture' {
        * The change-detection probe: reads and hashes every interlinear file, so it is cheap
        * relative to transferring and parsing the content, not free. Throws if the project directory
        * or a file found by the scan cannot be read, so an unreadable project never poses as one
-       * with no data and a caller never receives a partial manifest.
+       * with no data and a caller never receives a partial manifest. Shares the data read's size
+       * cap: files over it throw the same too-large error instead of being hashed, so a probe never
+       * reads more than a servable corpus.
        *
        * @returns The lowercase SHA-256 hex of each covered PT9 interlinear file's current bytes
        *   (see {@link Pt9InterlinearProjectManifest} for what is covered), keyed by project-relative
@@ -1494,12 +1540,13 @@ declare module 'platform-scripture' {
       ): Promise<DataProviderUpdateInstructions<Pt9InterlinearProjectInterfaceDataTypes>>;
       /**
        * Subscribe to the manifest. Emits the current value on subscription (per
-       * `retrieveDataImmediately`, default true) and again on any project-wide update event (book
-       * management operations, Send/Receive); the interface does not track interlinear file changes
-       * themselves, so an update says nothing about whether interlinear data changed. The manifest
-       * is small, so the default `deeply-equal` subscriber mode is cheap and suppresses the
-       * no-change callbacks those events would otherwise produce, though each update still costs a
-       * read and hash of every interlinear file.
+       * `retrieveDataImmediately`, default true) and again on any project-wide update event (today
+       * emitted only by book management operations - Send/Receive, the operation that actually
+       * changes interlinear files, emits none); the interface does not track interlinear file
+       * changes themselves, so an update says nothing about whether interlinear data changed. The
+       * manifest is small, so the default `deeply-equal` subscriber mode is cheap and suppresses
+       * the no-change callbacks those events would otherwise produce, though each update still
+       * costs a read and hash of every interlinear file.
        *
        * @param selector Always `undefined`: the manifest is argument-less, whole-project data.
        * @param callback Receives the manifest, or a {@link PlatformError} when retrieving it after
@@ -1519,10 +1566,13 @@ declare module 'platform-scripture' {
        * project directory or a file found by the scan cannot be read, or a file cannot be parsed,
        * so an unreadable project never poses as one with no data and a caller never receives a
        * partial payload. Also throws, with an error message starting `PT9 interlinear data is too
-       * large`, when the project's interlinear files exceed what one response can carry - a
-       * response over the WebSocket's message limit would tear down the whole connection, so the
-       * request fails instead. That prefix is the contract for recognizing the condition, since
-       * error types do not cross the RPC boundary.
+       * large`, when the project's interlinear files exceed the size cap - a response over the
+       * WebSocket's message limit would tear down the whole connection, so the request fails
+       * instead. The cap bounds the files' source bytes (realistic data serializes smaller than its
+       * indented on-disk XML; the serialized size itself cannot be confirmed at that layer). The
+       * machine-readable contract for recognizing the condition is the `RESOURCE_EXHAUSTED`
+       * platform error code on the thrown PlatformError; the message prefix remains for consumers
+       * that see only the message, since error types do not cross the RPC boundary.
        *
        * @returns Setups, per-book cluster data, the lexicon, and stored word analyses; empty lists
        *   when the project has no interlinear data.
@@ -1541,13 +1591,14 @@ declare module 'platform-scripture' {
       ): Promise<DataProviderUpdateInstructions<Pt9InterlinearProjectInterfaceDataTypes>>;
       /**
        * Subscribe to the parsed data. Emits the current value on subscription (per
-       * `retrieveDataImmediately`, default true) and again on any project-wide update event (book
-       * management operations, Send/Receive); the interface does not track interlinear file changes
-       * themselves, so an update says nothing about whether interlinear data changed. Every update
-       * re-fetches the whole payload whatever the subscriber options, and one previous payload
-       * stays retained per subscriber for the subscription's lifetime; `whichUpdates: '*'` skips
-       * only the deep comparison and then delivers no-change callbacks. Prefer subscribing to the
-       * manifest and fetching the data only when its hashes actually changed.
+       * `retrieveDataImmediately`, default true) and again on any project-wide update event (today
+       * emitted only by book management operations - Send/Receive, the operation that actually
+       * changes interlinear files, emits none); the interface does not track interlinear file
+       * changes themselves, so an update says nothing about whether interlinear data changed. Every
+       * update re-fetches the whole payload whatever the subscriber options, and one previous
+       * payload stays retained per subscriber for the subscription's lifetime; `whichUpdates: '*'`
+       * skips only the deep comparison and then delivers no-change callbacks. Prefer subscribing to
+       * the manifest and fetching the data only when its hashes actually changed.
        *
        * @param selector Always `undefined`: the payload is argument-less, whole-project data.
        * @param callback Receives the payload, or a {@link PlatformError} when retrieving it after an
