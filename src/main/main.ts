@@ -10,6 +10,7 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  powerMonitor,
   RenderProcessGoneDetails,
   screen,
   session,
@@ -38,6 +39,7 @@ import { enhancedResourceProtocolService } from '@main/services/enhanced-resourc
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
+import { registerPowerMonitorListeners } from '@main/services/power-monitor-logging.service';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { performShutdownTasks, performWindowCloseTasks } from '@main/shutdown-tasks';
 import { performStartupTasks } from '@main/startup-tasks';
@@ -1433,6 +1435,10 @@ async function main() {
         'electronAPI:env.test',
         (_event, message: string) => `From main.ts: test ${message}`,
       );
+
+      // powerMonitor throws if touched before 'ready', so this is registered here rather than at
+      // module load time.
+      registerPowerMonitorListeners(powerMonitor);
 
       // When packaged, the app loads from file:// which has an opaque (null) origin and sends no
       // Referer header. YouTube embeds require a non-null HTTP/HTTPS Referer and show Error 153
