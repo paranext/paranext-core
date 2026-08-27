@@ -48,14 +48,15 @@ import {
 } from '../../../fixtures/helpers';
 import {
   AppOutputCapture,
+  HOME_TAB_UUID,
   MOVE_COMMAND_TIMEOUT_MS,
   WEBSOCKET_PORT,
   captureAppOutput,
   createSecondWindow,
   createStepLogger,
   expectWindowDockHasOnlyHomeTab,
-  getHeldWebViewIds,
   getWindowIdOfPage,
+  homeTabTitle,
   pollUntil,
   quitAppAndWaitForExit,
   waitForAppPages,
@@ -355,9 +356,13 @@ test.describe('window close rule', () => {
     await waitForRendererRegistered(secondId, 120_000);
     logStep(`windows ${primaryId} (primary) and ${secondId} up`);
 
+    // The primary's Home tab comes from the fixed fallback layout, so its id is known without
+    // reading the dock — but it has to have RENDERED before it can be moved, and app-ready does not
+    // wait for the dock. Waiting on the tab itself is what the sibling move spec does.
+    await expect(homeTabTitle(mainPage, primaryId)).toBeVisible({ timeout: 60_000 });
+    const webViewInPrimary = `${HOME_TAB_UUID}-w${primaryId}`;
+
     // Move the primary's only web view into window 2, emptying the primary
-    const [webViewInPrimary] = await getHeldWebViewIds(mainPage);
-    expect(webViewInPrimary).toBeTruthy();
     const movedWebViewId = await sendPapiRequestOnce<string>(
       'command:platform.moveWebViewToWindow',
       [webViewInPrimary, secondId],
