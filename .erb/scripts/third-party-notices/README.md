@@ -53,23 +53,23 @@ message names both signals it read plus the exact JSON to paste. Every instrumen
 
 | Situation                                                                           | Instrument              | What the entry must establish                                                                      |
 | ----------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------- |
-| Package offers a **choice** of licences (`MIT OR GPL-3.0-or-later`)                 | `elections`             | Which branch this project takes, and why. The elected id must be on `allowed`, off `copyleft`.     |
-| Licence **text cannot be identified**, and you have read it yourself                | `exceptions`            | What is actually in that file, a reviewer, a date. Pinned to one version AND one text hash.        |
+| Package offers a **choice** of licenses (`MIT OR GPL-3.0-or-later`)                 | `elections`             | Which branch this project takes, and why. The elected id must be on `allowed`, off `copyleft`.     |
+| License **text cannot be identified**, and you have read it yourself                | `exceptions`            | What is actually in that file, a reviewer, a date. Pinned to one version AND one text hash.        |
 | Package's own metadata **establishes nothing** (legacy `<licenseUrl>`, proprietary) | `overrides`             | The terms that apply. Free text must set `nonSpdx`, which records that nothing checked it.         |
 | Package publishes its terms at a **URL** and bundles no copy                        | `licenseTexts`          | The text, checked in under `vendored-texts/`, hash-pinned and attributed to its source.            |
-| Package ships **no readable licence file** at all                                   | `copyrightNotices`      | The notice read from that package's own licence file by whatever route it publishes one.           |
+| Package ships **no readable license file** at all                                   | `copyrightNotices`      | The notice read from that package's own license file by whatever route it publishes one.           |
 | A third-party file was added under an extension's `assets/`/`public/`               | `staticAssetNotices`    | Why it is there, plus a `sha256` (or `notTracked` if it is fetched at install time).               |
-| A library was added to `snap.stagePackages`                                         | `snapStagePackages`     | `copyleft`, `permissive`, or `not-established`. Guessing a specific licence is worse than the gap. |
+| A library was added to `snap.stagePackages`                                         | `snapStagePackages`     | `copyleft`, `permissive`, or `not-established`. Guessing a specific license is worse than the gap. |
 | A declared `dependencies` entry reaches no bundle                                   | `unbundledDependencies` | Why nothing this repository ships contains it.                                                     |
 | A package ships only in another platform's installer                                | `platformOnlyPackages`  | Nothing beyond the name; CI's other legs fail if it is wrong.                                      |
 
-An **allowed licence this project has simply never met** is not a per-package problem: add the
+An **allowed license this project has simply never met** is not a per-package problem: add the
 identifier to `allowed`, which is one reviewable line, rather than admitting it invisibly through a
 per-package entry.
 
 Any entry above that records an identifier the policy could not previously reach — a new `allowed`
 line, but equally an `exceptions`, `elections` or SPDX `overrides` entry — also needs the canonical
-text for it in the corpus index, or the document renders an empty licence block for it:
+text for it in the corpus index, or the document renders an empty license block for it:
 
 ```bash
 npm run build:third-party-notices:corpus   # then commit spdx-corpus/index.json with the policy
@@ -81,7 +81,7 @@ npm run build:third-party-notices:corpus   # then commit spdx-corpus/index.json 
 
 They answer different questions and are not interchangeable:
 
-- An **exception** says "there IS a licence text here, I read it, and this is what it grants". It
+- An **exception** says "there IS a license text here, I read it, and this is what it grants". It
   requires a text to pin to, and it may not override a text that positively identifies as copyleft —
   an exception records what an _unidentifiable_ text is, and that text is not unidentifiable.
 - An **override** says "this package's own metadata establishes nothing". It applies only where
@@ -123,10 +123,10 @@ and why every escape instrument is pinned.
 
 - Adding an `exceptions` entry, an `overrides` entry, or an identifier to `allowed` is a **code
   review** question, not a build one. The gate treats a new entry exactly like any other.
-- `reviewer` is the email of whoever read the package's licence file; `date` is the day they read
+- `reviewer` is the email of whoever read the package's license file; `date` is the day they read
   it, not the day the template was pasted.
 - An exception is pinned to one version and one text hash, so the block returns the moment the
-  package changes its licence text — and the entry has to be reviewed again.
+  package changes its license text — and the entry has to be reviewed again.
 - Only one `exceptions` entry per package. Re-review edits the entry in place; appending a second
   leaves the stale one in force, and `loadPolicy` refuses the file.
 
@@ -138,7 +138,7 @@ and why every escape instrument is pinned.
 | `shipping-set.ts`          | Which npm packages ship, from the build rather than from manifests               |
 | `nuget-set.ts`             | Which NuGet packages ship, unioned across all four runtime identifiers           |
 | `static-assets.ts`         | Third-party files copied into an extension's packed output                       |
-| `identify.ts`, `detect.rb` | What a licence text on disk is, per `licensee`                                   |
+| `identify.ts`, `detect.rb` | What a license text on disk is, per `licensee`                                   |
 | `declared.ts`              | What a manifest declares, per `spdx-expression-parse`                            |
 | `policy.ts`                | Reconciles those two signals into one verdict per package                        |
 | `report.ts`                | The block message, and the paste-ready remedy for it                             |

@@ -98,9 +98,9 @@ describe('diffLock', () => {
   });
 
   it('reports the matched file changing under an identical text', () => {
-    // Not a licence change - same identifier, same hash - but it IS a change to what the committed
-    // lock records, so the next regeneration rewrites the file. Reporting nothing for it let
-    // `--verify` say "verified" about a lock that was about to change.
+    // Not a license change - same identifier, same hash - but it IS a change to what the committed
+    // lock records, so the next regeneration rewrites the file. Reporting nothing for it lets
+    // `--verify` say "verified" about a lock that is about to change.
     const drift = diffLock(
       lock(verdict('a', 'MIT', 'h1', 'LICENSE')),
       lock(verdict('a', 'MIT', 'h1', 'LICENSE.md')),
@@ -224,7 +224,7 @@ describe('diffLock', () => {
 
 describe('diffShippingSet', () => {
   // Unlike diffLock, this never touches spdxId/confidence/matchedFile/textSha256 - the cheap
-  // cross-platform check has none of that (no licence identification runs), so the fixtures below
+  // cross-platform check has none of that (no license identification runs), so the fixtures below
   // deliberately carry only name/version, the one shape `--verify-shipping-set` actually produces.
   const npm = (name: string, version = '1.0.0') => ({ ecosystem: 'npm' as const, name, version });
   const nuget = (name: string, version = '1.0.0') => ({
@@ -325,7 +325,7 @@ describe('diffDocument', () => {
   });
 
   it('reports a document that was edited after it was generated', () => {
-    // The case no other field in the lock can see: deleting a copyleft row, or swapping one licence
+    // The case no other field in the lock can see: deleting a copyleft row, or swapping one license
     // text for another, leaves every package entry identical. Without this hash the release
     // workflows' only notices gate cannot see a hand-edited document at all.
     const [drift] = diffDocument(documentLock, 'THIRD-PARTY-NOTICES.md', `${DOCUMENT}edited\n`);

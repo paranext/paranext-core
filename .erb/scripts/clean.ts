@@ -18,7 +18,7 @@ import fs from 'fs';
 import path from 'path';
 import webpackPaths from '../configs/webpack.paths';
 
-export const foldersToRemove = [
+const foldersToRemove = [
   webpackPaths.distPath,
   webpackPaths.buildPath,
   webpackPaths.dllPath,
@@ -30,7 +30,7 @@ export const foldersToRemove = [
   path.join(webpackPaths.rootPath, '.notices'),
 ];
 
-export function clean(): void {
+function clean(): void {
   foldersToRemove.forEach((folder) => {
     if (fs.existsSync(folder)) rimrafSync(folder);
   });

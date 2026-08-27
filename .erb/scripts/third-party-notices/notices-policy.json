@@ -92,7 +92,7 @@
       "reason": "Declared as a root runtime dependency and resolved by package-lock.json, but nothing in first-party source imports it yet, so webpack compiles no module for it. It gains a row on its own the moment something does."
     }
   },
-  "exceptionsNote": "An exception is the instrument that lets an otherwise-blocked package past the gate, so a new entry is a code-review question rather than a build one. Each entry's \"reason\" must state what is actually in that package's licence file, so a later reader can check it against the package without repeating the reading, and \"reviewer\" and \"date\" must name who signed it off and when. Every entry is pinned to one version AND one text hash, so the block returns the moment the package changes its licence text. See .erb/scripts/third-party-notices/README.md for when an exception is the right instrument and when it is not.",
+  "exceptionsNote": "An exception is the instrument that lets an otherwise-blocked package past the gate, so a new entry is a code-review question rather than a build one. Each entry's \"reason\" must state what is actually in that package's license file, so a later reader can check it against the package without repeating the reading, and \"reviewer\" and \"date\" must name who signed it off and when. Every entry is pinned to one version AND one text hash, so the block returns the moment the package changes its license text. See .erb/scripts/third-party-notices/README.md for when an exception is the right instrument and when it is not.",
   "exceptions": [
     {
       "package": "npm:bowser@2.14.1",
@@ -105,7 +105,7 @@
     {
       "package": "npm:chroma-js@3.2.0",
       "spdx": "(BSD-3-Clause AND Apache-2.0)",
-      "reason": "LICENSE holds two grants in one file - BSD-3-Clause for chroma.js itself and Apache-2.0 for the colorbrewer2.org colour tables it embeds - which is exactly the conjunction its package.json declares; no single-licence matcher identifies a two-grant document, and both operands are on the allowed list.",
+      "reason": "LICENSE holds two grants in one file - BSD-3-Clause for chroma.js itself and Apache-2.0 for the colorbrewer2.org colour tables it embeds - which is exactly the conjunction its package.json declares; no single-license matcher identifies a two-grant document, and both operands are on the allowed list.",
       "reviewer": "matt_lyons@sil.org",
       "date": "2026-08-21",
       "textSha256": "85aae6740628115550c6e67a85e8f8e70835cd5b14d4a2cb878c90c998f506db"
@@ -129,7 +129,7 @@
     {
       "package": "npm:jszip@3.10.1",
       "spdx": "MIT",
-      "reason": "LICENSE.markdown concatenates the complete MIT and GPL-3.0 texts into one document, so no single-licence matcher identifies it and the recorded election cannot reach a verdict that requires identified text; this project takes the MIT branch of the declared choice, per the elections entry for npm:jszip.",
+      "reason": "LICENSE.markdown concatenates the complete MIT and GPL-3.0 texts into one document, so no single-license matcher identifies it and the recorded election cannot reach a verdict that requires identified text; this project takes the MIT branch of the declared choice, per the elections entry for npm:jszip.",
       "reviewer": "matt_lyons@sil.org",
       "date": "2026-08-21",
       "textSha256": "566c953c6090b1218ca6217dd7359d45dde46581968586dc607d59a78af6a9c4"
@@ -185,7 +185,7 @@
     {
       "package": "npm:quill-delta@5.1.0",
       "spdx": "BSD-3-Clause",
-      "reason": "package.json declares MIT but the LICENSE the package ships is the BSD 3-Clause text (Copyright (c) 2022, Slab, Inc.). The file is the grant and the manifest field is wrong, so the verdict rests on the text; both licences are permissive and on the allowed list, and the discrepancy should be reported upstream.",
+      "reason": "package.json declares MIT but the LICENSE the package ships is the BSD 3-Clause text (Copyright (c) 2022, Slab, Inc.). The file is the grant and the manifest field is wrong, so the verdict rests on the text; both licenses are permissive and on the allowed list, and the discrepancy should be reported upstream.",
       "reviewer": "matt_lyons@sil.org",
       "date": "2026-08-21",
       "textSha256": "2a61fd00f6f3b446a049b71531eba0b3575096249c1a841e2e6b8fe7fa979455"
@@ -193,7 +193,7 @@
     {
       "package": "npm:readable-stream@2.3.8",
       "spdx": "MIT",
-      "reason": "LICENSE is Node.js's own two-part licence document - the Node.js contributors' MIT grant followed by Joyent's MIT grant for the parts originating in joyent/node - which identifies as neither on its own; both parts are MIT.",
+      "reason": "LICENSE is Node.js's own two-part license document - the Node.js contributors' MIT grant followed by Joyent's MIT grant for the parts originating in joyent/node - which identifies as neither on its own; both parts are MIT.",
       "reviewer": "matt_lyons@sil.org",
       "date": "2026-08-21",
       "textSha256": "ec62dc96da0099b87f4511736c87309335527fb7031639493e06c95728dc8c54"
@@ -209,7 +209,7 @@
     {
       "package": "npm:string_decoder@1.1.1",
       "spdx": "MIT",
-      "reason": "LICENSE is Node.js's own two-part licence document (see npm:readable-stream@2.3.8); both parts are MIT.",
+      "reason": "LICENSE is Node.js's own two-part license document (see npm:readable-stream@2.3.8); both parts are MIT.",
       "reviewer": "matt_lyons@sil.org",
       "date": "2026-08-21",
       "textSha256": "11f2aafb37d06b3ee5bdaf06e9811141d0da05263c316f3d627f45c20d43261b"
@@ -223,7 +223,7 @@
       "textSha256": "341baa53605ed85d6f95782322854cca56c655ebc7fd4712649b8e7afc6020ff"
     }
   ],
-  "copyrightNoticesNote": "Every entry is a copyright notice read from that package's own licence file, never a holder inferred from an \"author\" field. Where a package publishes no licence file in its TARBALL, read the notice from the licence file in the repository its own package.json names - the same document by a different route, and the bulk of this table: the ten @radix-ui/* packages are published from one monorepo whose LICENSE they do not each carry. Two packages (imurmurhash, isarray) embed their licence text in README.md and the notice comes from there. Re-verify an entry against the package when its major version changes, and for a notice read from a repository, that the repository still publishes that package. A package that asserts no copyright notice anywhere gets NO entry - inventing a holder is worse than the document recording that none was found. npm:rc-new-window is the worked example: its tarball ships no licence file, its repository LICENSE is the stock Apache-2.0 text whose only occurrences of the word are the \"Grant of Copyright License\" heading and the unfilled boilerplate appendix, and it publishes no NOTICE file. Apache-2.0 section 4(c) obliges retaining the notices FROM the work and there are none, so nothing is outstanding; the document reproduces its licence text, which is what section 4(a) asks for.",
+  "copyrightNoticesNote": "Every entry is a copyright notice read from that package's own license file, never a holder inferred from an \"author\" field. Where a package publishes no license file in its TARBALL, read the notice from the license file in the repository its own package.json names - the same document by a different route, and the bulk of this table: the ten @radix-ui/* packages are published from one monorepo whose LICENSE they do not each carry. Two packages (imurmurhash, isarray) embed their license text in README.md and the notice comes from there. Re-verify an entry against the package when its major version changes, and for a notice read from a repository, that the repository still publishes that package. A package that asserts no copyright notice anywhere gets NO entry - inventing a holder is worse than the document recording that none was found. npm:rc-new-window is the worked example: its tarball ships no license file, its repository LICENSE is the stock Apache-2.0 text whose only occurrences of the word are the \"Grant of Copyright License\" heading and the unfilled boilerplate appendix, and it publishes no NOTICE file. Apache-2.0 section 4(c) obliges retaining the notices FROM the work and there are none, so nothing is outstanding; the document reproduces its license text, which is what section 4(a) asks for.",
   "copyrightNotices": {
     "npm:@eten-tech-foundation/platform-editor": "Copyright © 2023-2025 ETEN Tech Foundation",
     "npm:@eten-tech-foundation/scripture-utilities": "Copyright © 2023-2025 ETEN Tech Foundation",
@@ -243,7 +243,7 @@
     "npm:isarray": "Copyright (c) 2013 Julian Gruber <julian@juliangruber.com>",
     "npm:react-remove-scroll-bar": "Copyright (c) 2025 Anton Korzunov <thekashey@gmail.com>"
   },
-  "licenseTextsNote": "A licence text this repository holds on behalf of a package that publishes its terms at a URL and bundles no copy of them. Reproduced verbatim as that package's licence, INSTEAD of the canonical SPDX text of its recorded identifier - which is the right substitute only where a package's grant is the unmodified standard text. Each entry is pinned to the version the terms were read from and to the text's own hash, and names the source it was read from, so neither a version change nor an edit to the checked-in copy can pass unreviewed. Classification is unaffected: the \"overrides\" entry decides which terms apply and is checked against the lists above; this decides only what text is reproduced.",
+  "licenseTextsNote": "A license text this repository holds on behalf of a package that publishes its terms at a URL and bundles no copy of them. Reproduced verbatim as that package's license, INSTEAD of the canonical SPDX text of its recorded identifier - which is the right substitute only where a package's grant is the unmodified standard text. Each entry is pinned to the version the terms were read from and to the text's own hash, and names the source it was read from, so neither a version change nor an edit to the checked-in copy can pass unreviewed. Classification is unaffected: the \"overrides\" entry decides which terms apply and is checked against the lists above; this decides only what text is reproduced.",
   "licenseTexts": {
     "nuget:Icu4c.Win.Min": {
       "file": "icu4c-59.1-LICENSE.txt",
@@ -394,7 +394,7 @@
       "license": "Unicode-DFS-2016",
       "version": "72.1.0.3",
       "note": "Windows only. Permissive; requires the Unicode copyright and permission notice to travel with copies.",
-      "reason": "ICU 72. ICU moved to the Unicode License Agreement for Data Files and Software (Unicode-DFS-2016) at ICU 58 and to the Unicode License v3 (Unicode-3.0) only at ICU 74, and Microsoft publishes no ICU4C runtime package at 74 or later - so Unicode-DFS-2016 is the licence this version is under, and it is the text reproduced on the package's behalf.",
+      "reason": "ICU 72. ICU moved to the Unicode License Agreement for Data Files and Software (Unicode-DFS-2016) at ICU 58 and to the Unicode License v3 (Unicode-3.0) only at ICU 74, and Microsoft publishes no ICU4C runtime package at 74 or later - so Unicode-DFS-2016 is the license this version is under, and it is the text reproduced on the package's behalf.",
       "alwaysList": true
     },
     "nuget:Spart": {

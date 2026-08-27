@@ -17,12 +17,12 @@ declare module 'spdx-expression-parse' {
   // The types hang off the function's own namespace: a module using `export =` cannot also carry
   // named exports (TS2309), and this package's single export IS the function.
   namespace parse {
-    /** One operand of an expression: a licence identifier, with any `+` or `WITH` it carries. */
+    /** One operand of an expression: a license identifier, with any `+` or `WITH` it carries. */
     export type SpdxLicenseNode = {
       license: string;
       /** The `+` operator - "this version or later". */
       plus?: boolean;
-      /** The right-hand side of a `WITH`, naming a licence exception. */
+      /** The right-hand side of a `WITH`, naming a license exception. */
       exception?: string;
     };
 

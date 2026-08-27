@@ -620,17 +620,24 @@ NOTICES_ACCEPT_SHRINK=1 npm run build:third-party-notices
 
 | Command                                           | Answers                                                                                                                            | Needs                         |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| `npm run verify:third-party-notices`              | Does the committed pair match what this tree derives, verdicts and licence texts included?                                         | Linux, Ruby, `dotnet restore` |
+| `npm run verify:third-party-notices`              | Does the committed pair match what this tree derives, verdicts and license texts included?                                         | Linux, Ruby, `dotnet restore` |
 | `npm run verify:third-party-notices:shipping-set` | Is the committed document the one its lock was written beside, and does this platform ship the same npm packages the lock records? | Nothing beyond a build        |
+| `npm run verify:third-party-notices:document`     | Is the committed document the one its lock was written beside? That half on its own.                                               | Nothing at all                |
 
-The second runs on every platform, and the release workflows and `npm run package` run it
-immediately after their build. Its two halves answer under different conditions. The document check
-compares two committed files — the lock records a sha256 of the document it was written beside — so
-nothing can stop it running; it is what keeps a hand-edited `THIRD-PARTY-NOTICES.md` out of an
-installer on the paths that cannot afford the full check. The npm shipping-set check reads what
-webpack compiled, so it can only answer straight after a build whose cache was cold: on a warm cache
-it says so and skips that half rather than reporting a difference it cannot trust. In CI it only
-ever runs in that cold position, so a warm stamp there is a real anomaly and fails the build.
+The `shipping-set` check runs on every platform, and the release workflows (`publish.yml`,
+`package-main.yml`) run it immediately after their production extension build. Its two halves answer
+under different conditions. The document check compares two committed files — the lock records a
+sha256 of the document it was written beside — so nothing can stop it running; it is what keeps a
+hand-edited `THIRD-PARTY-NOTICES.md` out of an installer on the paths that cannot afford the full
+check. The npm shipping-set check reads what webpack compiled, so it can only answer straight after
+a build whose cache was cold: on a warm cache it says so and skips that half rather than reporting a
+difference it cannot trust. In CI it only ever runs in that cold position, so a warm stamp there is
+a real anomaly and fails the build.
+
+`npm run package` runs the `document` check rather than the `shipping-set` one, and has to: it
+rebuilds from a tree that has already been built, so its webpack caches are warm by construction and
+the shipping-set half would refuse to answer on every platform. The document is what
+`electron-builder` packs into each installer, so `package` verifies it before packaging it.
 
 ## Thanks
 
@@ -641,7 +648,7 @@ Some important decisions in this project were inspired by the work done in [Visu
 This repository contains code under two licenses:
 
 - The core Platform.Bible application — the Electron client, extension host, .NET data provider, the bundled extensions, and the build- and lint-time packages `lib/papi-dts`, `lib/eslint-plugin-paranext`, and `lib/browserslist-config-detect-electron` — is licensed under the [GNU Affero General Public License v3.0 or later](./LICENSE) (`AGPL-3.0-or-later`).
-- The two developer libraries an extension links against at runtime — `platform-bible-react` and `platform-bible-utils`, both under [`lib/`](./lib/) — remain under the MIT License, so an extension takes those two under MIT rather than the AGPL. Each carries its own `LICENSE` file. The boundary keys on runtime linkage, not on the `lib/` directory: three of the five packages there are AGPL. Extensions are covered by the [Platform.Bible Extension Licence Exception](./LICENSE-EXCEPTION.md), an additional permission under AGPL section 7: an extension that talks to Platform.Bible only through the published Extension Interface may be conveyed under terms of its author's choosing. It frees an extension author to choose, and takes no position on what they should choose — see [LICENSING.md](./LICENSING.md), "What a third-party extension links against".
+- The two developer libraries an extension links against at runtime — `platform-bible-react` and `platform-bible-utils`, both under [`lib/`](./lib/) — remain under the MIT License, so an extension takes those two under MIT rather than the AGPL. Each carries its own `LICENSE` file. The boundary keys on runtime linkage, not on the `lib/` directory: three of the five packages there are AGPL. Extensions are covered by the [Platform.Bible Extension License Exception](./LICENSE-EXCEPTION.md), an additional permission under AGPL section 7: an extension that talks to Platform.Bible only through the published Extension Interface may be conveyed under terms of its author's choosing. It frees an extension author to choose, and takes no position on what they should choose — see [LICENSING.md](./LICENSING.md), "What a third-party extension links against".
 
 See [LICENSING.md](./LICENSING.md) for the authoritative path-by-path map and copyright attributions.
 

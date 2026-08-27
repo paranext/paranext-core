@@ -33,8 +33,8 @@ To publish your own DB for a fork, create a `dependencies` repo in your org with
 into the same directory. This is not bookkeeping: the extension's `assets` folder is copied into
 `extensions/dist` and from there into every installer, so those two files are what puts the
 database's terms in front of a user. Portions of the DB are UBS material under CC BY-SA 4.0, whose
-section 3(a)(1) requires the attribution and licence notice to accompany the work, and the rest is
-© United Bible Societies under no open licence, distributable under UBS's permission to Paratext
+section 3(a)(1) requires the attribution and license notice to accompany the work, and the rest is
+© United Bible Societies under no open license, distributable under UBS's permission to Paratext
 and not by Platform.Bible or anyone else.
 
 They follow the same strict/lenient rule as the DB, applied one step later: for the canonical org a

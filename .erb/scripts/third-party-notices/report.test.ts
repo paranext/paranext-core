@@ -36,9 +36,9 @@ describe('describeBlock', () => {
 
   it('leaves the reviewer AND the date for a human to fill in', () => {
     // `applyException` blocks an entry with no reviewer and no date, because "without a name and a
-    // date it is not reviewable". Pre-filling today's date satisfied half of that automatically:
-    // the developer pasted an entry already carrying a date they had not chosen, against a
-    // determination they had not yet made. Both fields are placeholders, and the hash - which IS a
+    // date it is not reviewable". Pre-filling today's date satisfies half of that automatically:
+    // the developer pastes an entry already carrying a date they did not choose, against a
+    // determination they have not yet made. Both fields are placeholders, and the hash - which IS a
     // fact this run computed - is the only thing filled in for them.
     const message = describeBlock(block);
     const parsed = JSON.parse(message.slice(message.indexOf('{'), message.lastIndexOf('}') + 1));
@@ -101,15 +101,15 @@ describe('describeBlock', () => {
 
   it('says an override is not pinned to a text, unlike an exception', () => {
     // The governance difference is real and easy to miss: an exception re-blocks when the package's
-    // licence TEXT changes, an override cannot - which is why it has to record which version the
+    // license TEXT changes, an override cannot - which is why it has to record which version the
     // determination was read from instead.
     const message = describeBlock({ ...noText, declared: undefined });
     expect(message).toContain('not pinned to a license text');
     expect(message).toContain('holds at any version');
   });
 
-  // Both fields are required by the gate. A template omitting them was advice the gate then
-  // rejected: a free-text value is refused without `nonSpdx`, and an entry recording neither
+  // Both fields are required by the gate. A template omitting them is advice the gate then
+  // rejects: a free-text value is refused without `nonSpdx`, and an entry recording neither
   // `version` nor `versionIndependent` is refused outright.
   it('offers an override template carrying every field the gate requires', () => {
     const message = describeBlock({ ...noText, declared: undefined });

@@ -52,7 +52,7 @@ describe('corpus', () => {
     // The other direction, which nothing else checks. Every checksum here is a text this repository
     // may have to reproduce; one for an identifier no verdict path can produce is never read and is
     // re-hashed by `verifyCorpus` on every run. It also keeps SPDX ids that merely LOOK like
-    // credentials - SPDX names licences after the tools they cover, so `TermReadKey`, `HIDAPI` and
+    // credentials - SPDX names licenses after the tools they cover, so `TermReadKey`, `HIDAPI` and
     // `ssh-keyscan` sit beside 64-char hex - out of a committed file, rather than allowlisting them
     // in the secret scanner. `npm run build:third-party-notices:corpus` is what repairs a failure.
     const index = readJsonFile<{ checksums: Record<string, string> }>(
@@ -69,16 +69,16 @@ describe('corpus', () => {
 
 describe('a drifted corpus is detected', () => {
   // `verifyCorpus()` gates every run in `buildReport`, and a committed tree can never make it
-  // return non-empty - so without these cases the one guard protecting the licence texts themselves
+  // return non-empty - so without these cases the one guard protecting the license texts themselves
   // is the one guard nothing falsifies. What it exists to catch is the `spdx-license-list`
   // dependency changing or being substituted under a pinned version, after which the generator
-  // would reproduce whatever it now contains as if it were the licence. Simulated by mutating the
+  // would reproduce whatever it now contains as if it were the license. Simulated by mutating the
   // dependency's own export in a child process, which is exactly the shape of that failure.
   function withMutatedCorpus(expression: string) {
     const script = `
       const target = require.resolve('spdx-license-list/full');
       const real = require(target);
-      // One byte, in one licence, leaving every other text untouched: the gate has to catch a
+      // One byte, in one license, leaving every other text untouched: the gate has to catch a
       // silent edit, not just a wholesale replacement.
       const mutated = { ...real, MIT: { ...real.MIT, licenseText: real.MIT.licenseText + '.' } };
       require.cache[target] = {

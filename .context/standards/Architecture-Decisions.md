@@ -1921,7 +1921,7 @@ step, no automation. Just a record.
   **adding a runtime import of a currently-AGPL build-time package from extension source is a
   licensing change, not just a build change.** Check `extensions/webpack/webpack.config.base.ts`
   `externals` to determine what a given import actually bundles.
-- **The PAPI runtime is covered by a licence exception, not by the `lib/` table.** That `externals`
+- **The PAPI runtime is covered by a license exception, not by the `lib/` table.** That `externals`
   list also names `@papi/backend`, `@papi/core`, `@papi/frontend` and `@papi/frontend/react`, which
   `src/extension-host/` supplies at runtime by shimming `Module.prototype.require` so an extension is
   loaded INTO the host's process and calls the host's own objects directly. `src/extension-host/` is
@@ -1935,7 +1935,7 @@ step, no automation. Just a record.
   that being loaded into the host's process does not disqualify it. It is scoped by INTERFACE rather
   than by file, so a work reaching past that interface into Platform.Bible's internals is outside
   it. It deliberately **recommends nothing**: it removes an obligation an extension author would
-  otherwise have to reason about, and takes no position on what licence they then choose. See
+  otherwise have to reason about, and takes no position on what license they then choose. See
   LICENSING.md, "What a third-party extension links against".
 - **Source:** the AGPL relicense (`LICENSING.md`, per-directory `LICENSE` files); rule settled during
   the relicense code review; PAPI question raised in the review of #2654.
@@ -1976,7 +1976,7 @@ step, no automation. Just a record.
      because monorepo families like `@radix-ui/*` publish dozens of packages against one root
      license and every NuGet package is metadata-only.
   3. **Every admission path is an allowlist, and an unparseable determination must say so.** A
-     licence is admitted because it is on `allowed` and absent from `copyleft`, never because it
+     license is admitted because it is on `allowed` and absent from `copyleft`, never because it
      failed to appear on a denylist — an id nobody enumerated must not default to permitted. This
      governs the declared path, the text-derived path, bundled extra files, and files identified
      BELOW the confidence threshold, which may raise an objection even though they may not resolve a
@@ -1986,7 +1986,7 @@ step, no automation. Just a record.
   4. **The two escape instruments are bounded and pinned.** A reviewed `exception` clears one blocked
      package: it must name a reviewer and a date, record an SPDX expression whose every identifier is
      on `allowed` and absent from `copyleft`, carry no `WITH` operand (whose text the corpus cannot
-     reproduce), and be pinned to one version AND one text hash. It records which licence an
+     reproduce), and be pinned to one version AND one text hash. It records which license an
      *unidentifiable* text actually is, so it may not override a positive copyleft identification. A
      curated `override` answers a package whose own metadata establishes nothing, so it applies only
      where nothing parseable is declared and no text identified; it may record the version it was
@@ -1998,7 +1998,7 @@ step, no automation. Just a record.
      stops the run and nothing is written; the message carries both signals and the exact JSON to
      paste — checked against the policy first, so it never proposes a route the gate would reject. A
      committed lock sidecar (`THIRD-PARTY-NOTICES.lock.json`) records each package's SPDX id, matched
-     file and text hash plus the licensee and corpus versions, so a licence text changing under an
+     file and text hash plus the licensee and corpus versions, so a license text changing under an
      unchanged version is detectable. CI runs `--verify` **before** regeneration: ordering is
      load-bearing, since regeneration overwrites the lock and a check after it compares a file
      against itself.
@@ -2018,7 +2018,7 @@ step, no automation. Just a record.
   decision. Check the canonical SPDX texts into the repository — rejected once they could be read
   from a pinned `spdx-license-list` and verified against a committed checksum index. Recognize
   copyleft by denylist — rejected as the same class of error as the manifest inference: it sees only
-  the licences someone thought of. Require identified text for every npm verdict — rejected: 14
+  the licenses someone thought of. Require identified text for every npm verdict — rejected: 14
   shipped packages declare plain MIT and ship no file, and no instrument could clear them. Bound the
   exception instrument by a data-level test over the committed policy alone — rejected for the
   same-pull-request hole above. Run the drift check after regeneration — rejected: it can only
@@ -2030,8 +2030,8 @@ step, no automation. Just a record.
   text in place of a bundled file would substitute SPDX's `<copyright holders>` placeholder for a
   real notice: 58 packages here bundle the shared Microsoft `LICENSE.TXT` naming ".NET Foundation and
   Contributors" while their nuspecs name "© Microsoft Corporation" — a different entity. Where a
-  package ships no readable licence file at all, its copyright notice is recorded in the policy's
-  `copyrightNotices`, read from that package's own licence file by whatever route it publishes one.
+  package ships no readable license file at all, its copyright notice is recorded in the policy's
+  `copyrightNotices`, read from that package's own license file by whatever route it publishes one.
   **Revisit** if the build cost becomes a problem for pull-request CI.
 - **Source:** the third-party-notices tooling replacement
   (`.superpowers/sdd/2026-08-20-third-party-notices-tooling/`); `LICENSING.md`; the multi-agent
@@ -2063,7 +2063,7 @@ step, no automation. Just a record.
      that impossible to repeat.
   3. **Not-established is a recorded state, not a gap.** A library whose terms nobody has settled is
      named as such in the document. Guessing an identifier would put a specific, possibly wrong
-     licence into a legal artifact, which is worse than the admitted gap. The way OUT of such a gap
+     license into a legal artifact, which is worse than the admitted gap. The way OUT of such a gap
      is to read the terms and record what they say: `Icu4c.Win.Min` was free text until its ICU 59
      LICENSE was read at the tag it builds from, and it is now `Unicode-DFS-2016` with that file
      checked in and hash-pinned so the third-party notices it carries travel too.
@@ -2073,7 +2073,7 @@ step, no automation. Just a record.
   packaged application rather than described from outside it.
 - **Alternatives:** Extend the shipping set to cover them — rejected:
   `adr-notices-derived-from-what-ships`'s verdicts come from reconciling a declared expression
-  against an identified licence text, and neither a `.deb` staged by snapcraft nor a database
+  against an identified license text, and neither a `.deb` staged by snapcraft nor a database
   downloaded at install time has either. Say nothing, on the grounds that neither is an npm or NuGet
   package — rejected: both are redistributed inside the artifact, which is the only test that
   matters. Hand-maintain the prose — rejected on `adr-notices-derived-from-what-ships`'s lesson that
@@ -2081,7 +2081,7 @@ step, no automation. Just a record.
 - **Consequences:** the "Linux snap" and lexical-database sections are generated, so they cannot
   drift from the packaging config. Every staged library is now classified from its own Ubuntu
   `copyright` file, so `not-established` is currently unused — it stays in the schema because the
-  next library added starts there. Their licence TEXTS are still not carried inside the `.snap`:
+  next library added starts there. Their license TEXTS are still not carried inside the `.snap`:
   electron-builder's snapcraft template excludes `usr/share` from the `app` part's stage list
   (`parts.app.stage`), which is where `usr/share/doc/<package>/copyright` lives, and that list is
   only overridable wholesale via the `appPartStage` option. That is a known, open packaging gap —

@@ -56,8 +56,8 @@ describe('electron-builder packaging', () => {
     expect(fs.existsSync(path.join(REPO, 'TERMS-OF-SERVICE.md'))).toBe(true);
   });
 
-  it('ships LICENSE-EXCEPTION.md, which modifies the licence text beside it', () => {
-    // An additional permission under AGPL section 7 is part of the licence a recipient received,
+  it('ships LICENSE-EXCEPTION.md, which modifies the license text beside it', () => {
+    // An additional permission under AGPL section 7 is part of the license a recipient received,
     // not a repository-only document: someone who takes the binary and goes on to build an
     // extension has to be able to read the grant from what they were given.
     expect(asStrings.some((r) => r.includes('LICENSE-EXCEPTION.md'))).toBe(true);
@@ -65,7 +65,7 @@ describe('electron-builder packaging', () => {
   });
 
   it('does not configure an installer EULA', () => {
-    // nsis.license / dmg license is a DIFFERENT artifact - an end-user licence shown during
+    // nsis.license / dmg license is a DIFFERENT artifact - an end-user license shown during
     // install - and acceptance of the Terms of Service happens at account creation instead (Terms
     // section 1). Adding one here would gate installation on a document the user accepts elsewhere.
     // Windows AND macOS both, since each has its own key: checking one would leave the other free to
@@ -79,7 +79,7 @@ describe('electron-builder packaging', () => {
     // picks one up by CONVENTION, from a `license.txt`/`.rtf`/`.html` (or a localized
     // `license_<lang>.*`) in `directories.buildResources` - with no config key involved at all. So
     // the two assertions above would stay green while every Windows and macOS installer showed a
-    // click-through licence, which is not how this application's terms are accepted.
+    // click-through license, which is not how this application's terms are accepted.
     // Checked against the configured buildResources directory rather than a hardcoded 'assets', so
     // moving that directory cannot move the check off the folder it is about.
     const buildResources = path.join(REPO, config.directories?.buildResources || 'build');
@@ -170,7 +170,112 @@ describe('where the per-platform notices check may run', () => {
   it('is the directory both extension configs actually cache in', () => {
     ['webpack.config.main.ts', 'webpack.config.web-view.ts'].forEach((configFile) => {
       const text = fs.readFileSync(path.join(REPO, 'extensions', 'webpack', configFile), 'utf8');
-      expect(text).toContain('cacheDirectory: extensionCacheDirectory(');
+      // Either import style is fine; what this pins is that the config caches in the directory
+      // `extensionCacheDirectory` hands out, not one webpack picked. `web-view` reaches it through a
+      // namespace import so that its paranext-core-only import stays outside the shared region.
+      expect(text).toMatch(/cacheDirectory: (?:\w+\.)?extensionCacheDirectory\(/);
     });
+  });
+});
+
+describe('the notices gate every pull request has to pass', () => {
+  // `test.yml` is the only workflow a pull request runs, so these three steps ARE the gate for
+  // anything that is not a release: `publish.yml` and `package-main.yml` run at release time, and
+  // `npm run package` only ever sees the already-committed document. Nothing else in the repository
+  // references them, so deleting any one of them leaves every other test here green while the check
+  // it carried is simply gone.
+  //
+  // Read as text and cut on the `- name:` lines - the same way the release-ordering cases above
+  // read `publish.yml`. Each step's `if:` is read from INSIDE its own block, because two of the
+  // three are deliberately confined to one leg of the OS matrix: a step that quietly moved legs
+  // would still satisfy a condition matched anywhere in the file.
+  const testWorkflow = fs.readFileSync(path.join(REPO, '.github', 'workflows', 'test.yml'), 'utf8');
+  const stepMarker = '\n      - name: ';
+  const startOf = (name: string) => testWorkflow.indexOf(`${stepMarker}${name}\n`);
+  const step = (name: string) => {
+    const at = startOf(name);
+    if (at === -1) return '';
+    const body = testWorkflow.slice(at + stepMarker.length + name.length);
+    const next = body.indexOf(stepMarker);
+    return next === -1 ? body : body.slice(0, next);
+  };
+
+  // Carries the explanation into the COMPARED VALUE. `expect(value, message)` is unavailable here -
+  // `vitest/valid-expect` allows one argument - and an explanation that lives only in a comment is
+  // not printed by the run that fails, which is the one moment it is needed. Collected into a list
+  // so one case can state every way it broke rather than only the first.
+  const unless = (holds: boolean, whatDeletingItCosts: string) =>
+    holds ? [] : [whatDeletingItCosts];
+
+  it('runs the full check on the Linux leg, where the whole gate lives', () => {
+    const full = step('verify third-party notices against the committed lock');
+    expect([
+      ...unless(
+        // Anchored, or `:shipping-set` below would satisfy it.
+        /^ *run: npm run verify:third-party-notices$/m.test(full),
+        'test.yml no longer runs `npm run verify:third-party-notices`. That step is the only place ' +
+          '`classify` and the strong-copyleft block run on a pull request, and the only ' +
+          'byte-for-byte comparison of THIRD-PARTY-NOTICES.md against what this tree derives - so ' +
+          'without it a hand-edited document, a license text that changed under an unchanged ' +
+          'name@version, and a newly copyleft dependency would each merge green.',
+      ),
+      ...unless(
+        full.includes('matrix.os == env.OS_LINUX'),
+        'the full notices check is no longer confined to the Linux leg. It needs Ruby and the ' +
+          'four-RID dotnet restore, which the Windows and macOS legs install neither of, and the ' +
+          'NuGet section is RID-dependent - so exactly one leg has to be canonical or the three ' +
+          'would each derive a different document.',
+      ),
+    ]).toEqual([]);
+  });
+
+  it("checks each other platform's own npm shipping set, which Linux cannot answer for", () => {
+    const perPlatform = step('verify npm shipping set matches this platform');
+    expect([
+      ...unless(
+        perPlatform.includes('npm run verify:third-party-notices:shipping-set'),
+        'test.yml no longer runs `npm run verify:third-party-notices:shipping-set`. npm installs ' +
+          'an optional dependency only where its os/cpu constraints match, so the npm closure is ' +
+          'the one part of the document the Linux leg cannot answer for - and this is the only ' +
+          'notices check the Windows and macOS legs run at all: without it a package that ships ' +
+          'only on those platforms could reach their installers with no row in the document those ' +
+          'installers carry.',
+      ),
+      ...unless(
+        perPlatform.includes('matrix.os != env.OS_LINUX'),
+        'the per-platform shipping-set check is no longer confined to the non-Linux legs. On ' +
+          'Linux it would only repeat, more cheaply and far less completely, what the full check ' +
+          'above has already established.',
+      ),
+    ]).toEqual([]);
+  });
+
+  it('builds the extensions the installers carry, on every leg', () => {
+    const production = step('Build extensions for production');
+    expect([
+      ...unless(
+        production.includes('npm run build:extensions:production'),
+        'test.yml no longer runs `npm run build:extensions:production`. `npm run build` leaves its ' +
+          'extensions leg in DEVELOPMENT mode, and `collectShippedPackages` refuses a manifest set ' +
+          'that mixes webpack modes - so both notices checks would fail on the mismatch rather ' +
+          'than describe the graph the installers actually carry.',
+      ),
+      ...unless(
+        !/^ *if:/m.test(production),
+        'the production extension build was confined to one leg of the OS matrix. Every leg runs ' +
+          'a notices check that reads the manifests it writes, so every leg has to write them.',
+      ),
+    ]).toEqual([]);
+  });
+
+  it('builds them BEFORE both checks, so neither verifies a graph that never ships', () => {
+    const production = startOf('Build extensions for production');
+    const full = startOf('verify third-party notices against the committed lock');
+    const perPlatform = startOf('verify npm shipping set matches this platform');
+    // All three present, or this asserts nothing: a workflow that dropped one would otherwise pass
+    // on a comparison between two -1s. The cases above are what report WHICH one went missing.
+    expect(Math.min(production, full, perPlatform)).toBeGreaterThan(-1);
+    expect(full).toBeGreaterThan(production);
+    expect(perPlatform).toBeGreaterThan(production);
   });
 });

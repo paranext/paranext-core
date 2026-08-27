@@ -58,7 +58,7 @@ does apply to any hosted or server-side deployment derived from this code.
 The two developer libraries a third-party extension links against at runtime. These stay MIT
 deliberately: an extension that links against them takes them under the MIT License, not the AGPL.
 
-**What that means for the extension's own licence is for its author to determine.** This document
+**What that means for the extension's own license is for its author to determine.** This document
 records the terms of each part of this repository; it does not analyse any particular extension, and
 it makes no claim in either direction about whether a given extension incurs AGPL obligations. That
 depends on how the extension is built and what else it combines with — see "What a third-party
@@ -133,9 +133,9 @@ So the largest runtime linkage a third-party extension makes is against AGPL cod
 closer coupling than the one the `lib/` carve-out was drawn to address — where the question was a
 library compiled into, or supplied to, an extension's own bundle.
 
-That coupling is why the licence of Platform.Bible could otherwise reach an extension. So that it
+That coupling is why the license of Platform.Bible could otherwise reach an extension. So that it
 does not, SIL Global and United Bible Societies grant the
-[Platform.Bible Extension Licence Exception](./LICENSE-EXCEPTION.md) — an _additional permission_
+[Platform.Bible Extension License Exception](./LICENSE-EXCEPTION.md) — an _additional permission_
 under section 7 of the AGPL, of the same kind as the GCC Runtime Library Exception and the Classpath
 Exception on OpenJDK.
 
@@ -177,12 +177,12 @@ The built application is **not** distributed under the AGPL. It is licensed to t
 and built Paratext 10 application is licensed to you solely under these Terms of Service, not under
 the GNU Affero General Public License ('AGPL') or any other license." `release/app/package.json`
 declares `"license": "SEE LICENSE IN TERMS-OF-SERVICE.md"` — npm's registered form for terms that are
-not an SPDX licence — and `electron-builder.json5` packs that file into every installer, so the
+not an SPDX license — and `electron-builder.json5` packs that file into every installer, so the
 declaration resolves against something the user actually has.
 
 The Terms are **not** an installer EULA. Acceptance happens when a user creates their Paratext
 account or installs the client by ticking the agreement box (Terms section 1), not through a
-click-through during install, which is why `nsis.license` and the `dmg` licence stay unset and a test
+click-through during install, which is why `nsis.license` and the `dmg` license stay unset and a test
 pins them that way.
 
 This document is what section 3.B.1 means by "the AGPL Components identified by Paratext": the tables
@@ -198,7 +198,7 @@ redistribute their own binary under the AGPL.
 
 That grant covers this repository's code, and not everything the build pulls in beside it. The UBS
 lexical database the `platform-lexical-tools` extension downloads is the exception that matters:
-portions of that file are © United Bible Societies under no open licence, and UBS's permission to
+portions of that file are © United Bible Societies under no open license, and UBS's permission to
 distribute them is to **Paratext** specifically — not to Platform.Bible, and not to anyone building
 from this repository. Whoever bundles the database is relying on that Paratext permission, not on
 anything this repository grants, however freely the code around it may be redistributed. See
@@ -222,9 +222,9 @@ why that source was chosen over a `package.json` closure, and what each of its t
 It is also not a claim that nothing copyleft is in the Linux artifact. The snap stages Ubuntu shared libraries inside
 itself (`electron-builder.json5` → `snap.stagePackages`), and several are copyleft — ALSA and
 AppIndicator under the LGPL, NSS and NSPR under MPL-2.0. They obstruct nothing: they are unmodified
-archive builds, linked dynamically, and both licences are compatible with AGPL source. But they are
+archive builds, linked dynamically, and both licenses are compatible with AGPL source. But they are
 redistributed inside the `.snap`, no scan in this repository reaches them, and the snap does not
-currently carry their licence texts. THIRD-PARTY-NOTICES.md records that gap under "Linux snap".
+currently carry their license texts. THIRD-PARTY-NOTICES.md records that gap under "Linux snap".
 
 ### Why `CsvHelper` is taken under Apache-2.0 and not MS-PL
 
@@ -262,7 +262,7 @@ Reproducing only the first section would discharge one obligation and drop four.
 `System.Net.Http` 4.3.4 and `System.Net.WebSockets` 4.3.0 are both licensed under the pre-MIT
 "MICROSOFT .NET LIBRARY" terms rather than an SPDX expression. Those terms carry an "Excluded
 License" clause — you may not "modify or distribute the source code of any Distributable Code so
-that any part of it becomes subject to" a licence requiring that "the code be disclosed or
+that any part of it becomes subject to" a license requiring that "the code be disclosed or
 distributed in source code form" — which would raise the same AGPL-compatibility question this
 section answers for `CsvHelper` above. **Neither package's assembly reaches the publish output, so
 the question does not arise.**
@@ -301,7 +301,7 @@ Two things follow the binary:
   genuinely differ by platform, since npm installs an optional dependency only where its `os`/`cpu`
   constraints match - is verified on all three CI platforms: regenerated and checked for staleness
   on Linux, and checked against the committed lock's npm entries on Windows and macOS
-  (`--verify-shipping-set`; licence identification and the NuGet closure do not need re-checking per
+  (`--verify-shipping-set`; license identification and the NuGet closure do not need re-checking per
   platform - see `adr-notices-derived-from-what-ships`). Regenerate on Linux if any of this drifts,
   or the committed file will not match what CI produces.
 
@@ -375,7 +375,7 @@ Two things follow the binary:
   AGPL and make it viral for third-party extension authors, which is precisely the trap described
   under "MIT" above.
 
-- **An end-user licence** embedded in the installers (electron-builder `nsis.license` / `dmg`
+- **An end-user license** embedded in the installers (electron-builder `nsis.license` / `dmg`
   license). No such configuration exists, and none should be added: the Terms of Service are accepted
   at account creation rather than through a click-through during install - see "The distributed
   application" above.
@@ -396,12 +396,12 @@ and distribute their contributions. Sublicensing is the specific right that make
 - `extensions/src/platform-lexical-tools/assets/lexical-db/` — the UBS lexical database, downloaded
   at install time rather than committed, and shipped inside the packaged application. Portions are
   UBS material under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); the remainder
-  is © United Bible Societies under no open licence, distributable under UBS's permission to
+  is © United Bible Societies under no open license, distributable under UBS's permission to
   Paratext and not by Platform.Bible or anyone else. The `LICENSE.md` and `SOURCE.md` downloaded
   beside the database are authoritative for the CC BY-SA portions; note that `SOURCE.md` as
   published upstream states the permission more broadly than this, and the narrower reading here is
   the one to rely on. [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md) carries the attributions
-  the CC BY-SA licence requires.
+  the CC BY-SA license requires.
 - Dependencies retain their own licenses; see
   [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md). Incorporated MIT-licensed code (including the
   `electron-react-boilerplate` foundation this project started from) remains under MIT; the AGPL

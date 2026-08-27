@@ -191,7 +191,7 @@ describe('collectNugetPackages checks each RID before merging them', () => {
       // A real package folder with a real (empty) directory unpacked under it for every fake
       // package. attachLicenseFiles refuses a restore whose package folders do not exist, and
       // equally one whose individual PACKAGE folder does not, and neither refusal is what these two
-      // cases are about. The directories hold no licence file, so every fake package simply
+      // cases are about. The directories hold no license file, so every fake package simply
       // ships none.
       const PACKAGE_FOLDER = fs.mkdtempSync(
         path.join(require('os').tmpdir(), 'notices-nuget-fake-'),
@@ -425,7 +425,7 @@ describe('normalizeValidationErrors', () => {
   // These strings are the only channel by which "No license information found" reaches the policy
   // gate. Reading a shape the pipeline does not recognise as "no findings" clears every SIL package
   // - the ones whose nuspecs establish nothing - past the copyleft gate, and `policy.ts`'s own
-  // malformed-value block can never fire because this had already flattened the value away.
+  // malformed-value block can never fire because this would already have flattened the value away.
   it('throws when ValidationErrors is present in a shape it cannot read', () => {
     expect(() => normalizeValidationErrors('not an array')).toThrow(/not an array/);
     expect(() => normalizeValidationErrors({ Error: 'No license information found' })).toThrow(
@@ -659,8 +659,8 @@ describe('missingDirectReferences', () => {
   // far above the plausibility floor and entirely silent.
   it('says nothing about a reference that cannot ship a file at all', () => {
     // An analyzer contributes nothing to the publish output, so its absence from the shipping
-    // closure is the expected state rather than a discrepancy. Requiring it made adding a Roslyn
-    // analyzer a permanent build failure whose only escape was `alwaysList`, an instrument reserved
+    // closure is the expected state rather than a discrepancy. Requiring it makes adding a Roslyn
+    // analyzer a permanent build failure whose only escape is `alwaysList`, an instrument reserved
     // for platform-conditional packages.
     expect(
       missingDirectReferences([], [{ id: 'Some.Analyzer', shipsRuntimeAssets: false }]),
@@ -771,9 +771,9 @@ describe('bundled license files', () => {
       expect(attached.assemblies).toEqual(['A.dll']);
     });
 
-    // The all-or-nothing case (no package folder exists at all) was already refused. This is the
+    // The all-or-nothing case (no package folder exists at all) is refused above. This is the
     // per-package one, which fails the same way for the same reason: a package whose folder is not
-    // there reads as a package that bundles no licence file, and the document then says so and
+    // there reads as a package that bundles no license file, and the document then says so and
     // substitutes SPDX's `<copyright holders>` placeholder for a real notice that MIT obliges to
     // travel with copies.
     it('refuses a package whose own folder is not under any package folder', () => {

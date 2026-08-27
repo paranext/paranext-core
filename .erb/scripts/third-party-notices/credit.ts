@@ -1,15 +1,16 @@
 /**
- * Reads a package's own copyright notice out of the licence text this pipeline already has.
+ * Reads a package's own copyright notice out of the license text this pipeline already has.
  *
  * A canonical SPDX text carries placeholders (`<year>`, `<copyright holders>`) rather than any
  * package's holder, so the credit line beside it is the only place the actual notice appears - and
- * MIT, BSD and ISC oblige exactly that notice to travel with copies. Where the notice was taken
- * only from a hand-maintained table, a package whose LICENSE states one plainly was credited with
- * "no copyright notice" in the same document that reproduces the file it is written in.
+ * MIT, BSD and ISC oblige exactly that notice to travel with copies. Taken only from a
+ * hand-maintained table, the notice is missing for a package whose LICENSE states one plainly, and
+ * that package is credited with "no copyright notice" in the same document that reproduces the file
+ * it is written in.
  *
  * A curated entry still wins: it is a human's reading of the package, and several of them come from
  * a repository LICENSE for a package that publishes none in its tarball, which this cannot see.
- * This answers the case the table was never meant to cover - the package DID ship its text.
+ * This answers the case the table is not for - the package DOES ship its text.
  */
 
 /** A line that opens a copyright notice. */
@@ -31,23 +32,23 @@ const UNFILLED_PLACEHOLDER =
   /[[<](?:yyyy|year|years|name of copyright owner|copyright holders?|fullname|author|your name)[\]>]/i;
 
 /**
- * The line at which a licence's OPERATIVE TEXT begins.
+ * The line at which a license's OPERATIVE TEXT begins.
  *
  * A package's own notice sits above the grant it accompanies; every occurrence of the word below
- * that point belongs to the licence, not to the package. Without this bound, Apache-2.0's own
+ * that point belongs to the license, not to the package. Without this bound, Apache-2.0's own
  * section 2 - "...irrevocable / copyright license to reproduce, prepare Derivative Works of," -
- * matched `COPYRIGHT_LINE`, and `copyrightNoticeIn` returned a clause of the licence as the
- * package's copyright notice. Measured over every licence file installed in this repository, that
+ * matched `COPYRIGHT_LINE`, and `copyrightNoticeIn` returned a clause of the license as the
+ * package's copyright notice. Measured over every license file installed in this repository, that
  * happened for 77 of 2,307; MPL section 2.3 and the CC-BY preamble accounted for five more.
  *
- * BODY OPENERS, not licence TITLES. Cutting at "Apache License" or "DO WHAT THE FUCK YOU WANT TO
+ * BODY OPENERS, not license TITLES. Cutting at "Apache License" or "DO WHAT THE FUCK YOU WANT TO
  * PUBLIC LICENSE" also removes the 77, but it is the wrong rule and it shows: the WTFPL puts its
  * title above the holder's notice, so cutting there discarded Sam Hocevar's real notice from two
  * packages. Apache-2.0's title reads as a safe cut only because nothing between it and the terms is
  * a notice. Cutting where the terms actually begin keeps both correct - and keeps a notice a
- * package prepended above the licence header, which is the commonest way one is added.
+ * package prepended above the license header, which is the commonest way one is added.
  *
- * Validated over all 2,307 installed licence files: against a cut at the licence title, cutting at
+ * Validated over all 2,307 installed license files: against a cut at the license title, cutting at
  * the grant yields 82 fewer wrong results, loses no real notice, and keeps the continuation line on
  * 60 notices a title cut truncates.
  */
@@ -88,7 +89,7 @@ function isNotice(line: string): boolean {
  *
  * The FIRST run only. A package can bundle a third-party attribution below its own grant -
  * `chroma-js` carries ColorBrewer's notice thirty lines under its own - and the credit line is
- * about the package, not about everything its licence file happens to quote. Every bundled text is
+ * about the package, not about everything its license file happens to quote. Every bundled text is
  * reproduced in full elsewhere in the document either way.
  */
 export function copyrightNoticeIn(texts: (string | undefined)[]): string | undefined {
@@ -103,7 +104,7 @@ export function copyrightNoticeIn(texts: (string | undefined)[]): string | undef
     if (start === -1) return;
     notices.push(searchable[start].trim());
     // The rest of the notice PARAGRAPH: to the first blank line, and no further than a line that
-    // is not continuing it. A blank line ends a paragraph in every licence file shape there is.
+    // is not continuing it. A blank line ends a paragraph in every license file shape there is.
     for (let index = start + 1; index < searchable.length; index += 1) {
       const line = searchable[index];
       if (!line.trim()) break;

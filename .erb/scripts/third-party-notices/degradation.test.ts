@@ -3,9 +3,9 @@
  *
  * Every case here degrades the generator's input the way a real environment does - a pruned
  * `node_modules`, a stale manifest, an empty one - and asserts that the run stops. Each of these is
- * a shape that otherwise warns (or says nothing), writes a document missing packages and licence
+ * a shape that otherwise warns (or says nothing), writes a document missing packages and license
  * texts, and exits 0: a tree missing a handful of packages produces an artifact with 255 packages
- * instead of 262, four licence texts gone, every section renumbered, and a green build. A notices
+ * instead of 262, four license texts gone, every section renumbered, and a green build. A notices
  * file is a legal claim, so "less than the truth, silently" is the one outcome that must be
  * impossible.
  *
@@ -418,7 +418,7 @@ describe('a degraded environment fails closed', () => {
 
   it('exits non-zero when a license text no longer hashes to what the lock records', () => {
     // The quiet one: same package, same version, same identifier, different text. Nobody re-reads
-    // a licence they have already cleared, so this is the drift a human would never catch.
+    // a license they have already cleared, so this is the drift a human would never catch.
     const dir = writePackage(
       tmp,
       'relicensed',
@@ -584,7 +584,7 @@ describe('a degraded environment fails closed', () => {
       });
       // One entry per directory asked about, which is detect.rb's contract: a package it did
       // not answer for is a package nothing is known about, and main.ts refuses that run rather
-      // than treating it as a package that ships no licence file.
+      // than treating it as a package that ships no license file.
       stub('./identify', {
         identify: (dirs) => new Map(dirs.map((dir) => [dir, { dir, files: [] }])),
       });
@@ -642,7 +642,7 @@ describe('a degraded environment fails closed', () => {
       });
       // One entry per directory asked about, which is detect.rb's contract: a package it did
       // not answer for is a package nothing is known about, and main.ts refuses that run rather
-      // than treating it as a package that ships no licence file.
+      // than treating it as a package that ships no license file.
       stub('./identify', {
         identify: (dirs) => new Map(dirs.map((dir) => [dir, { dir, files: [] }])),
       });
@@ -721,7 +721,7 @@ describe('a degraded environment fails closed', () => {
       });
       // One entry per directory asked about, which is detect.rb's contract: a package it did
       // not answer for is a package nothing is known about, and main.ts refuses that run rather
-      // than treating it as a package that ships no licence file.
+      // than treating it as a package that ships no license file.
       stub('./identify', {
         identify: (dirs) => new Map(dirs.map((dir) => [dir, { dir, files: [] }])),
       });
@@ -763,10 +763,10 @@ describe('a degraded environment fails closed', () => {
 
 describe('NOTICES_FORCE_PLATFORM can only turn the write refusal ON', () => {
   // The override exists so this suite can exercise the non-Linux refusal on a Linux CI runner, and
-  // its comment claimed it "cannot weaken the check". It could: setting it to `linux` on macOS or
-  // Windows made the guard not fire and the generator overwrote the committed artifact. Proven the
-  // only way it can be proven from Linux - by lying to the child about `process.platform`, which is
-  // exactly what the environment variable was doing in the other direction.
+  // it must not be able to weaken the check: setting it to `linux` on macOS or Windows must NOT
+  // stop the guard firing and let the generator overwrite the committed artifact. Provable from
+  // Linux only one way - by lying to the child about `process.platform`, which is exactly what the
+  // environment variable does in the other direction.
   function runOnFakePlatform(actual: string, forced: string | undefined): Run {
     const script = `
       Object.defineProperty(process, 'platform', { value: ${JSON.stringify(actual)} });

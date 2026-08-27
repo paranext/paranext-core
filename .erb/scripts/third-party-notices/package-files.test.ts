@@ -101,7 +101,7 @@ describe('declaredLicenseField', () => {
 describe('isLicenseTextFileName', () => {
   // NuGet packages name their grant in ways npm packages do not: `System.Net.Http` 4.3.4 ships
   // `dotnet_library_license.txt` - 9,451 bytes opening "MICROSOFT SOFTWARE LICENSE TERMS /
-  // MICROSOFT .NET LIBRARY", verbatim the licence its nuspec `<licenseUrl>` points at. A match
+  // MICROSOFT .NET LIBRARY", verbatim the license its nuspec `<licenseUrl>` points at. A match
   // anchored to the start of the name reports it as bundling nothing to reproduce.
   it.each([
     'dotnet_library_license.txt',

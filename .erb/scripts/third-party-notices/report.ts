@@ -111,7 +111,7 @@ function exceptionRemedy(
       // "without a name and a date it is not reviewable"; filling one of the two in automatically
       // satisfied half of that check on the reader's behalf, and a template pasted months later
       // then carried a date against a determination nobody made on it. The date has to be the day
-      // somebody read the licence file, which is a thing only they know.
+      // somebody read the license file, which is a thing only they know.
       date: '<YYYY-MM-DD you read this package\u2019s license file>',
       textSha256: v.textSha256,
     }),
@@ -186,10 +186,10 @@ function policyRemedy(v: Verdict, entryKey: string, copyleft: Set<string> = new 
     indented({
       [entryKey]: {
         license: '<SPDX identifier, or a short free-text determination>',
-        // Both are required by the gate, and the template omitting them was the "advice the gate
+        // Both are required by the gate, and a template omitting them is the "advice the gate
         // rejects" failure this function exists to prevent: a value that is not an SPDX expression
         // is refused without `nonSpdx`, and an entry recording neither `version` nor
-        // `versionIndependent` is refused outright. A reader pasting this hit both.
+        // `versionIndependent` is refused outright. A reader pasting the template hits both.
         nonSpdx: '<true if "license" above is free text rather than an SPDX expression>',
         version: '<the version this determination was read from, or drop this field>',
         versionIndependent: '<true instead of "version" if it holds at any version>',
@@ -255,7 +255,7 @@ export function describeBlock(
  * no restore on this machine produces the package (see `alwaysListedPackages` in `main.ts`), so
  * "unused" is their normal state and reporting them would be noise that trains the reader to skip
  * the whole note. Every OTHER override is reported, because nothing else ever looks at one: an
- * override is keyed by name alone, is pinned to neither a version nor a licence text, and clears a
+ * override is keyed by name alone, is pinned to neither a version nor a license text, and clears a
  * package past both the allow list and the copyleft list - so an entry left behind by a package
  * that has gone is a standing determination waiting to auto-apply, unreviewed, to whatever comes
  * back under that name.

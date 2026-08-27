@@ -185,7 +185,7 @@ const staticFiles: {
   // gate that a *declared* license always ships its text.
   // `toType: 'file'` is required, not decorative: without it `copy-webpack-plugin` infers `'dir'`
   // for this destination (no file extension) and nests the text inside a newly created `LICENSE/`
-  // directory instead of copying it as a file named `LICENSE`, which reads as a shipped licence to
+  // directory instead of copying it as a file named `LICENSE`, which reads as a shipped license to
   // any check that looks only at the name.
   { from: 'LICENSE', noErrorOnMissing: true, toType: 'file' },
   // If the extension declares its types as an index.d.ts, copy that into the output

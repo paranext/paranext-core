@@ -39,7 +39,7 @@ export function codeOf(err: unknown): string | undefined {
  * is a missing or unreadable file, the other is a file whose contents are wrong.
  *
  * THROWS rather than returning `undefined`, which is the opposite of `readTextFile` in
- * `package-files.ts` - deliberately. That one reads an OPTIONAL licence text, where "not there" is
+ * `package-files.ts` - deliberately. That one reads an OPTIONAL license text, where "not there" is
  * an ordinary answer the document reports. Every caller here reads something STRUCTURAL, where a
  * file that cannot be read means the shipping set is short by whatever it described: swallowing it
  * would be the silent under-report this pipeline exists to refuse.

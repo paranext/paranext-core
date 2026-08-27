@@ -280,6 +280,31 @@ async function openExternal(url: string) {
   return true;
 }
 
+/**
+ * Name of the Terms of Service document `electron-builder.json5` lists in `extraResources`.
+ *
+ * `globalThis.resourcesPath` is the repository root in development and the install directory's
+ * `resources` folder when packaged, so the same relative name finds the document in both.
+ */
+const TERMS_OF_SERVICE_FILE_NAME = 'TERMS-OF-SERVICE.md';
+
+/**
+ * Open the Terms of Service document that ships beside the application.
+ *
+ * `shell.openPath` hands the file to whatever the operating system opens Markdown with, which is
+ * not guaranteed to be anything. When nothing does - or the document is absent, as it is in a tree
+ * that has never been packaged - reveal it in the file manager so the user can still reach it.
+ */
+async function openTermsOfService() {
+  const termsOfServicePath = path.join(globalThis.resourcesPath, TERMS_OF_SERVICE_FILE_NAME);
+  const openError = await shell.openPath(termsOfServicePath);
+  if (!openError) return;
+  logger.warn(
+    `Could not open ${termsOfServicePath}: ${openError}. Revealing it in the file manager instead.`,
+  );
+  shell.showItemInFolder(termsOfServicePath);
+}
+
 async function main() {
   // This is the run boundary the startup-waterfall parser keys on (main + process-start).
   markStartup(STARTUP_MARK_PROCESS_START);
@@ -1689,6 +1714,23 @@ async function main() {
             schema: { type: 'string' },
           },
         ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.openTermsOfService',
+    async () => {
+      await openTermsOfService();
+    },
+    {
+      method: {
+        summary: 'Open the Terms of Service document that ships with the application',
+        params: [],
         result: {
           name: 'return value',
           schema: { type: 'null' },

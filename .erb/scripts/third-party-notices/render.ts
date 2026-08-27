@@ -1,5 +1,5 @@
 /**
- * Renders the notices document from a resolved report: preamble, per-ecosystem tables, licence-text
+ * Renders the notices document from a resolved report: preamble, per-ecosystem tables, license-text
  * sections, canonical-text section, `NOTICE` section.
  *
  * Pure: every input arrives as an argument, nothing is read from disk, and the same report always
@@ -12,9 +12,9 @@ import { compareByNameThenVersion, compareStrings } from './compare';
 import { canonicalText } from './corpus';
 import { parseDeclared } from './declared';
 import { normalizeText } from './package-files';
-import type { NamedText, Report, ReportRow } from './types';
+import type { NamedText, Report, ReportRow, SnapStagePackage } from './types';
 
-/** A licence or NOTICE text, keyed by its own hash, with every package it covers. */
+/** A license or NOTICE text, keyed by its own hash, with every package it covers. */
 type CollectedTexts = Map<string, { text: string; packages: string[] }>;
 
 /**
@@ -28,7 +28,7 @@ type CollectedTexts = Map<string, { text: string; packages: string[] }>;
  * reproduced, with the Zlib half appearing nowhere in the artifact.
  *
  * An expression carrying a `WITH` exception deliberately yields `[]` rather than its base
- * identifiers: reproducing the unmodified text of a licence the package is NOT under would be worse
+ * identifiers: reproducing the unmodified text of a license the package is NOT under would be worse
  * than reproducing none, and the corpus holds no exception texts.
  */
 export function spdxIdsOf(spdxId: string | undefined): string[] {
@@ -43,8 +43,8 @@ const ECOSYSTEM_LABEL: Record<string, string> = { npm: 'npm', nuget: 'NuGet' };
 /**
  * A Markdown code fence long enough to enclose `text`.
  *
- * Licence texts are third-party content reproduced verbatim, and a fixed ``` fence is closed by the
- * first line in that content that happens to start one - after which the rest of the licence, and
+ * License texts are third-party content reproduced verbatim, and a fixed ``` fence is closed by the
+ * first line in that content that happens to start one - after which the rest of the license, and
  * everything written after it, renders as prose. Markdown closes a fence only on a run at least as
  * long as the opening one, so opening with one backtick more than the longest run in the text
  * cannot be closed early.
@@ -81,12 +81,12 @@ const MISSING_COPYRIGHT_NOTICE: Record<string, string> = {
 };
 
 /**
- * The credit line for one package listed beneath a canonical SPDX licence text.
+ * The credit line for one package listed beneath a canonical SPDX license text.
  *
  * A canonical text carries SPDX's placeholders (`<year>`, `<copyright holders>`) rather than any
  * package's holder, so the package's own copyright notice is what pairs the two - reproducing the
  * permission notice without the copyright notice it is supposed to accompany satisfies neither
- * licence. Absence is stated rather than left blank: a blank reads as "nobody looked".
+ * license. Absence is stated rather than left blank: a blank reads as "nobody looked".
  */
 export function canonicalTextCredit({
   name,
@@ -111,7 +111,7 @@ export function canonicalTextCredit({
  * Several files' texts as one block, each labelled when there is more than one.
  *
  * A dual-licensed package ships one file per branch (`LICENSE-APACHE` and `LICENSE-MIT`), and
- * reproducing only one of them satisfies neither licence, so every file licensee identified is
+ * reproducing only one of them satisfies neither license, so every file licensee identified is
  * carried rather than only the one the verdict rests on.
  */
 export function joinTexts(files: NamedText[]): string | undefined {
@@ -124,11 +124,11 @@ export function joinTexts(files: NamedText[]): string | undefined {
 }
 
 /**
- * Whether a package's own licence obliges this project to redistribute its `NOTICE`.
+ * Whether a package's own license obliges this project to redistribute its `NOTICE`.
  *
  * Apache-2.0 section 4(d) is the clause that does, and it is the only one in play here. Under MIT,
  * BSD or ISC the obligation is to carry the copyright and permission notice - which reproducing the
- * licence text discharges - so a `NOTICE` shipped beside them is informational.
+ * license text discharges - so a `NOTICE` shipped beside them is informational.
  *
  * THREE answers, not two. A regex over the raw `spdxId` collapsed the third into "not required",
  * which is the one direction a legal artifact must not guess in:
@@ -154,9 +154,9 @@ export function noticeDisposition(
 /**
  * Emits one numbered fenced section per collected text, crediting the packages it covers.
  *
- * Written out twice, byte for byte, for the licence texts and again for the NOTICE texts. The
+ * Written out twice, byte for byte, for the license texts and again for the NOTICE texts. The
  * canonical-texts section deliberately differs - it heads each block with the SPDX identifier and
- * lists its credits as bullets - so only the two that were identical are shared here.
+ * lists its credits as bullets - so only the two that are identical are shared here.
  */
 function pushFencedSections(out: string[], collected: CollectedTexts): void {
   [...collected.values()].forEach(({ text, packages: covered }, index) => {
@@ -175,7 +175,7 @@ function collectText(collected: CollectedTexts, text: unknown, subject: string):
 }
 
 /**
- * The licence a row is displayed as.
+ * The license a row is displayed as.
  *
  * `spdxId` is the identifier the verdict actually rests on. An election and a reviewed exception
  * are decisions this repository made rather than facts the package states, so each says so in the
@@ -260,76 +260,115 @@ function snapLicensing(
   return lines;
 }
 
-/** @returns The complete Markdown document, ending in a newline. */
-export function render({
-  verdicts,
-  corpusVersion,
-  licenseeVersion,
-  openPolicyQuestions = [],
-  snapStagePackages = [],
-  snapStagePackageLicenses = {},
-  snapCopyrightTexts = [],
-  staticAssetNotices = [],
-}: Report): string {
+/** One row of the report, plus the derivations the document's tables and paragraphs read. */
+type DescribedRow = ReportRow & {
+  license: string;
+  hasText: boolean;
+  compound: boolean;
+  hasCanonicalText: boolean;
+};
+
+/** What one pass over the verdicts produces: the described rows, and the texts they collected. */
+type DescribedReport = {
+  described: DescribedRow[];
+  texts: CollectedTexts;
+  notices: CollectedTexts;
+  canonical: CollectedTexts;
+  noticesNotReproduced: string[];
+};
+
+/**
+ * The npm rows grouped by the paragraph that accounts for each.
+ *
+ * Overlapping filters rather than a partition, which is why `assertNpmRowsAccountedFor` checks the
+ * groups against the rows instead of trusting them to cover every one.
+ */
+type NpmAccount = {
+  devLinked: DescribedRow[];
+  displaced: DescribedRow[];
+  noTextCanonical: DescribedRow[];
+  noTextAtAll: DescribedRow[];
+  unreadCanonical: DescribedRow[];
+  unreadNoCanonical: DescribedRow[];
+  platformOnly: DescribedRow[];
+  platformOnlyNoCanonical: DescribedRow[];
+};
+
+/** Refuses a row whose ecosystem this module has no table for, before anything is rendered. */
+function assertKnownEcosystems(verdicts: ReportRow[]): void {
   const unknownEcosystem = verdicts.find((row) => !ECOSYSTEM_LABEL[row.ecosystem]);
   if (unknownEcosystem)
     // Silently dropping a row whose ecosystem this function does not know how to table would remove
-    // a shipped component from a legal artifact with nothing to show it had gone.
+    // a shipped component from a legal artifact with nothing to show it has gone.
     throw new Error(
       `cannot render ${unknownEcosystem.name}@${unknownEcosystem.version}: unknown ecosystem ` +
         `"${unknownEcosystem.ecosystem}"`,
     );
+}
 
-  const rows = verdicts.filter((row) => row.ecosystem === 'npm').sort(compareByNameThenVersion);
-  const dotnetRows = verdicts
-    .filter((row) => row.ecosystem === 'nuget')
-    .sort(compareByNameThenVersion);
+/**
+ * The packages one paragraph names, as a comma-separated list of backticked identifiers.
+ *
+ * `name@version`, not a bare name. Two versions of one package can both ship - `@xmldom/xmldom`
+ * 0.8.13 and 0.9.10 do today - and a paragraph naming only the package leaves the reader unable to
+ * tell which of the two rows it is making its claim about.
+ */
+function packageNames(subset: { name: string; version: string }[]): string {
+  return subset.map((row) => `\`${row.name}@${row.version}\``).join(', ');
+}
 
-  const texts: CollectedTexts = new Map(); // sha1 of licence text -> { text, packages: [] }
+/**
+ * Reproduces the canonical text of a row's identifier on its behalf, if the corpus holds one;
+ * reports whether it could. Both ecosystems route through here so a reader never has to work out
+ * which kind of package a text was reproduced for - the credit line beside it says so.
+ *
+ * Derived from the identifier the row actually resolved to, never from a hand-maintained list of
+ * ids: a list reproduces the licenses someone thought of, and leaves every other
+ * declared-but-untexted package's attribution obligation discharged nowhere.
+ */
+function useCanonicalText(canonical: CollectedTexts, row: ReportRow): boolean {
+  const label = ECOSYSTEM_LABEL[row.ecosystem];
+  // Every identifier the row resolved to, not the field as one string - see `spdxIdsOf`. A
+  // conjunction means every operand's terms apply at once, so reproducing one operand's text and
+  // calling the obligation discharged is exactly the half-answer the expression rules out.
+  const ids = spdxIdsOf(row.spdxId);
+  const corpusTexts = ids.map((id) => ({ id, text: canonicalText(id) }));
+  // All or nothing: a row that can only be half reproduced is reported as having no canonical
+  // text, which puts it in the document's "no license text is reproduced for these" list rather
+  // than leaving a reader to notice the missing half.
+  if (!corpusTexts.length || corpusTexts.some(({ text }) => !text)) return false;
+  const credit = canonicalTextCredit({
+    name: row.name,
+    version: row.version,
+    ecosystem: label,
+    copyright: row.copyright,
+    inspected: row.inspected !== false,
+  });
+  corpusTexts.forEach(({ id, text }) => {
+    // `useCanonicalText` returns false above unless EVERY operand has a text, so `text` is a
+    // string by the time this runs - the all-or-nothing rule is what makes that true.
+    if (!text) return;
+    if (!canonical.has(id)) canonical.set(id, { text, packages: [] });
+    canonical.get(id)?.packages.push(credit);
+  });
+  return true;
+}
+
+/**
+ * Collects every text the document reproduces, and derives what each row is described as.
+ *
+ * One pass over both ecosystems in document order, so a text two packages ship identically is
+ * collected once and credited to both.
+ */
+function describeReport(rows: ReportRow[]): DescribedReport {
+  const texts: CollectedTexts = new Map(); // sha1 of license text -> { text, packages: [] }
   const notices: CollectedTexts = new Map(); // sha1 of NOTICE text -> { text, packages: [] }
   // `name@version (ecosystem)` shipping a NOTICE nothing obliges
   const noticesNotReproduced: string[] = [];
   /** SPDX id -> the canonical text and the credit line of every package it covers. */
   const canonical: CollectedTexts = new Map();
 
-  /**
-   * Reproduces the canonical text of a row's identifier on its behalf, if the corpus holds one;
-   * reports whether it could. Both ecosystems route through here so a reader never has to work out
-   * which kind of package a text was reproduced for - the credit line beside it says so.
-   *
-   * Derived from the identifier the row actually resolved to, never from a hand-maintained list of
-   * ids: a list reproduces the licences someone thought of, and leaves every other
-   * declared-but-untexted package's attribution obligation discharged nowhere.
-   */
-  const useCanonicalText = (row: ReportRow) => {
-    const label = ECOSYSTEM_LABEL[row.ecosystem];
-    // Every identifier the row resolved to, not the field as one string - see `spdxIdsOf`. A
-    // conjunction means every operand's terms apply at once, so reproducing one operand's text and
-    // calling the obligation discharged is exactly the half-answer the expression rules out.
-    const ids = spdxIdsOf(row.spdxId);
-    const corpusTexts = ids.map((id) => ({ id, text: canonicalText(id) }));
-    // All or nothing: a row that can only be half reproduced is reported as having no canonical
-    // text, which puts it in the document's "no license text is reproduced for these" list rather
-    // than leaving a reader to notice the missing half.
-    if (!corpusTexts.length || corpusTexts.some(({ text }) => !text)) return false;
-    const credit = canonicalTextCredit({
-      name: row.name,
-      version: row.version,
-      ecosystem: label,
-      copyright: row.copyright,
-      inspected: row.inspected !== false,
-    });
-    corpusTexts.forEach(({ id, text }) => {
-      // `useCanonicalText` returned false above unless EVERY operand had a text, so `text` is a
-      // string by the time this runs - the all-or-nothing rule is what makes that true.
-      if (!text) return;
-      if (!canonical.has(id)) canonical.set(id, { text, packages: [] });
-      canonical.get(id)?.packages.push(credit);
-    });
-    return true;
-  };
-
-  const described = [...rows, ...dotnetRows].map((row) => {
+  const described = rows.map((row) => {
     const label = ECOSYSTEM_LABEL[row.ecosystem];
     const subject = `${row.name}@${row.version}`;
     const hasText = !!normalizeText(row.text);
@@ -345,11 +384,11 @@ export function render({
     // A conjunction means every operand's terms apply at once, and a package under one routinely
     // ships the text of only SOME of them - which is exactly why it needed a reviewed exception in
     // the first place (no matcher could identify the file). `pako@1.0.11` is the live case: it is
-    // recorded as `(MIT AND Zlib)`, the LICENSE it ships carries only the MIT half, and the Zlib
-    // half appeared nowhere in this document. So a compound row gets its operands' canonical texts
-    // IN ADDITION to its own file, rather than the canonical path being skipped because something
-    // was reproduced. The MIT half then appears twice, once as the package's own text and once as
-    // SPDX's; that redundancy is the cost of discharging the half that was missing.
+    // recorded as `(MIT AND Zlib)` and the LICENSE it ships carries only the MIT half, so nothing
+    // it bundles discharges the Zlib half. A compound row therefore gets its operands' canonical
+    // texts IN ADDITION to its own file, rather than the canonical path being skipped because
+    // something was reproduced. The MIT half then appears twice, once as the package's own text and
+    // once as SPDX's; that redundancy is the cost of discharging the half the package omits.
     const compound = spdxIdsOf(row.spdxId).length > 1;
     return {
       ...row,
@@ -358,34 +397,30 @@ export function render({
       // Carried onto the row because the accounting below has to tell the two "has its own text"
       // shapes apart: a simple row is fully described by its own file, a compound one is not
       // (every operand of a conjunction applies at once, and the file it ships typically carries
-      // only some of them), so a compound row whose canonical halves were refused is a row with
+      // only some of them), so a compound row whose canonical halves are refused is a row with
       // something genuinely missing.
       compound,
       // Otherwise only reached when the package itself shipped nothing, so a canonical text never
-      // displaces a package's own copy of its licence.
-      hasCanonicalText: (!hasText || compound) && useCanonicalText(row),
+      // displaces a package's own copy of its license.
+      hasCanonicalText: (!hasText || compound) && useCanonicalText(canonical, row),
     };
   });
 
-  const npmDescribed = described.filter((row) => row.ecosystem === 'npm');
-  const dotnetDescribed = described.filter((row) => row.ecosystem === 'nuget');
+  return { described, texts, notices, canonical, noticesNotReproduced };
+}
 
-  // A Map, not an object: the keys are licence strings taken from third-party manifests, and
-  // `counts['__proto__'] = n` on a plain object writes nowhere a later read can see.
-  const counts = new Map<string, number>();
-  npmDescribed.forEach((row) => counts.set(row.license, (counts.get(row.license) || 0) + 1));
-  // `name@version`, not a bare name. Two versions of one package can both ship - `@xmldom/xmldom`
-  // 0.8.13 and 0.9.10 do today - and a paragraph naming only the package leaves the reader unable
-  // to tell which of the two rows it is making its claim about.
-  const names = (subset: { name: string; version: string }[]) =>
-    subset.map((row) => `\`${row.name}@${row.version}\``).join(', ');
+/**
+ * Groups the npm rows into what the paragraphs beneath the license-distribution table claim about
+ * each.
+ */
+function accountNpmRows(npmDescribed: DescribedRow[]): NpmAccount {
   const noText = npmDescribed.filter((row) => !row.hasText);
   // "Ships no license file" is a claim about a directory that was READ. A `fromLock` package's
   // directory is deliberately never read (`main.ts` excludes it from `identify` entirely), so
-  // asserting it of one states as fact something this run did not establish - and the document did
-  // exactly that, naming both `@eten-tech-foundation/*` packages and `@xmldom/xmldom` two
-  // paragraphs that correctly say nothing was read from them. `canonicalTextCredit` models the
-  // same distinction for the credit lines.
+  // asserting it of one states as fact something this run did not establish. The live cases are the
+  // two `@eten-tech-foundation/*` packages and `@xmldom/xmldom`, which instead get the paragraphs
+  // that correctly say nothing was read from them. `canonicalTextCredit` models the same
+  // distinction for the credit lines.
   const readNoText = noText.filter((row) => row.inspected !== false);
   // A platform-only package is unread for a DIFFERENT reason than a dev link is - npm never
   // installed it here at all - and it gets its own paragraph rather than being folded into the
@@ -414,8 +449,21 @@ export function render({
   const displaced = npmDescribed.filter(
     (row) => row.fromLock && !row.devLinked && !row.platformOnly,
   );
-  const out = [];
 
+  return {
+    devLinked,
+    displaced,
+    noTextCanonical,
+    noTextAtAll,
+    unreadCanonical,
+    unreadNoCanonical,
+    platformOnly,
+    platformOnlyNoCanonical,
+  };
+}
+
+/** The title, the statement of what the document covers, and the generation provenance. */
+function pushPreamble(out: string[], corpusVersion: string, licenseeVersion: string): void {
   out.push('# Third-party notices', '');
   out.push(
     'Platform.Bible incorporates the third-party components listed below. Where a component ships a',
@@ -455,13 +503,19 @@ export function render({
     'For the license covering Platform.Bible itself, see [LICENSING.md](./LICENSING.md).',
     '',
   );
+}
 
-  // A determination deferred BY DECISION rather than by oversight. The generator has always
-  // computed these and printed them to the console with the words "they are listed in the
-  // document", and the document listed none of them: `nuget:System.Net.Http`'s unanswered
-  // AGPL-compatibility question appeared in the table as an ordinary row with no marker at all. A
-  // console line nobody reads after the build is not a disclosure, and a legal artifact that
-  // records an open question nowhere is one that claims to have settled it.
+/**
+ * The section naming the determinations this repository deliberately left open.
+ *
+ * A determination deferred BY DECISION rather than by oversight. The generator has always computed
+ * these and printed them to the console with the words "they are listed in the document", and the
+ * document listed none of them: `nuget:System.Net.Http`'s unanswered AGPL-compatibility question
+ * appeared in the table as an ordinary row with no marker at all. A console line nobody reads after
+ * the build is not a disclosure, and a legal artifact that records an open question nowhere is one
+ * that claims to have settled it.
+ */
+function pushOpenQuestions(out: string[], openPolicyQuestions: string[]): void {
   if (openPolicyQuestions.length) {
     out.push('## Open questions', '');
     out.push(
@@ -472,7 +526,10 @@ export function render({
     );
     openPolicyQuestions.forEach((question) => out.push(`- ${question}`, ''));
   }
+}
 
+/** Electron and what it bundles, which carry their own notices inside the packaged app. */
+function pushElectronSection(out: string[]): void {
   out.push('## Electron, Chromium, and Node.js', '');
   out.push(
     'The packaged application embeds Electron (MIT), which in turn bundles Chromium, V8, and',
@@ -481,7 +538,10 @@ export function render({
     'alongside the executable and are the authoritative text for those components.',
     '',
   );
+}
 
+/** The UBS lexical database, which is redistributed data and belongs to neither package graph. */
+function pushLexicalDatabaseSection(out: string[]): void {
   out.push('## Bundled data \u2014 UBS lexical database', '');
   out.push(
     'The `platform-lexical-tools` extension ships a prebuilt SQLite lexical database. It is fetched',
@@ -512,7 +572,10 @@ export function render({
     'content can be obtained separately from <https://github.com/ubsicap/ubs-open-license>.',
     '',
   );
+}
 
+/** The notices stated by third-party files copied verbatim out of an extension's asset trees. */
+function pushStaticAssetSection(out: string[], staticAssetNotices: NamedText[]): void {
   if (staticAssetNotices.length) {
     out.push('## Files copied into extensions', '');
     out.push(
@@ -528,7 +591,15 @@ export function render({
       out.push(`### \`${name}\``, '', fence, normalizeText(text) || '', fence, '');
     });
   }
+}
 
+/** The Ubuntu libraries snapcraft stages inside the Linux `.snap`, and their copyright files. */
+function pushSnapSection(
+  out: string[],
+  snapStagePackages: string[],
+  snapStagePackageLicenses: Record<string, SnapStagePackage>,
+  snapCopyrightTexts: NamedText[],
+): void {
   out.push('## Linux snap \u2014 staged system libraries', '');
   out.push(
     'The Linux artifact is a snap, and snapcraft stages Ubuntu `core22` shared libraries inside it',
@@ -564,7 +635,7 @@ export function render({
     '',
   );
 
-  // Verbatim, and each under its own heading. A Debian `copyright` file names per-file licences and
+  // Verbatim, and each under its own heading. A Debian `copyright` file names per-file licenses and
   // copyright holders that no SPDX identifier reproduces - `libgtk-3-0`'s spans LGPL-2+, LGPL-2.1+,
   // Expat, SWL, ZPL-2.1 and X11R5 - so summarising one would discharge some obligations and drop
   // others. Read and hash-checked in `main.ts`, which refuses the run before anything is written.
@@ -572,11 +643,14 @@ export function render({
     const fence = fenceFor(text);
     out.push(`### ${name}`, '', fence, normalizeText(text) || '', fence, '');
   });
+}
 
+/** The NuGet closure: its prose, its table, and the account of the rows with no text. */
+function pushDotnetSection(out: string[], dotnetDescribed: DescribedRow[]): void {
   // Split because the sentence describes a PROVENANCE, and the two halves have different ones.
   // Counting them together stated that every row came out of a restore with its nuspec read by
   // `nuget-license`, while `Microsoft.ICU.ICU4C.Runtime` - referenced under an MSBuild condition on
-  // the host OS - is resolved by no restore on any machine that runs this, and its licence comes
+  // the host OS - is resolved by no restore on any machine that runs this, and its license comes
   // from a recorded determination. The same paragraph said so four sentences later.
   const fromPolicy = dotnetDescribed.filter((row) => row.inspected === false);
   const fromClosure = dotnetDescribed.filter((row) => row.inspected !== false);
@@ -653,13 +727,13 @@ export function render({
     out.push(
       `No license text is reproduced anywhere for the remaining ${dotnetNoTextAtAll.length}, whose license is recorded as`,
       'free text rather than as an SPDX identifier the corpus holds a canonical text for:',
-      `${names(dotnetNoTextAtAll)}.`,
+      `${packageNames(dotnetNoTextAtAll)}.`,
       '',
     );
   }
   if (dotnetUnreadNoText.length) {
     out.push(
-      `A further ${dotnetUnreadNoText.length} (${names(dotnetUnreadNoText)}) ${dotnetUnreadNoText.length === 1 ? 'is' : 'are'} listed from a recorded`,
+      `A further ${dotnetUnreadNoText.length} (${packageNames(dotnetUnreadNoText)}) ${dotnetUnreadNoText.length === 1 ? 'is' : 'are'} listed from a recorded`,
       'determination rather than from a restore performed here, so no package folder of theirs was',
       'read and whether they bundle a license file is not established in this document. Where the',
       'recorded determination is an SPDX identifier, that identifier’s canonical text is reproduced',
@@ -667,6 +741,30 @@ export function render({
       '',
     );
   }
+}
+
+/**
+ * The npm closure: its license distribution, and the paragraphs accounting for every row whose
+ * license text is not reproduced in full.
+ */
+function pushNpmSection(
+  out: string[],
+  npmDescribed: DescribedRow[],
+  {
+    devLinked,
+    displaced,
+    noTextCanonical,
+    noTextAtAll,
+    unreadCanonical,
+    unreadNoCanonical,
+    platformOnly,
+    platformOnlyNoCanonical,
+  }: NpmAccount,
+): void {
+  // A Map, not an object: the keys are license strings taken from third-party manifests, and
+  // `counts['__proto__'] = n` on a plain object writes nowhere a later read can see.
+  const counts = new Map<string, number>();
+  npmDescribed.forEach((row) => counts.set(row.license, (counts.get(row.license) || 0) + 1));
 
   out.push('## npm production dependencies', '');
   const npmCount = npmDescribed.length;
@@ -686,7 +784,7 @@ export function render({
       'branch of another repository rather than at a published release. The version and license',
       'below are the ones `package-lock.json` pins, and nothing was read from the link, so this file',
       'describes what this repository depends on rather than what a developer happens to have built',
-      `locally: ${names(devLinked)}.`,
+      `locally: ${packageNames(devLinked)}.`,
       '',
     );
   }
@@ -695,7 +793,7 @@ export function render({
       'Resolved differently on this machine than `package-lock.json` records, because a `yalc` dev',
       'link replaces a package with a symlink and takes the copies nested under it off disk with it.',
       'The version and license below are the ones the lockfile resolves, and nothing was read from',
-      `the copy this machine happens to hold: ${names(displaced)}.`,
+      `the copy this machine happens to hold: ${packageNames(displaced)}.`,
       '',
     );
   }
@@ -707,14 +805,14 @@ export function render({
         : 'from their `package.json`',
       'and nothing of',
       'theirs appears under "License texts". The canonical text of the license each one declares is',
-      `reproduced under "Canonical license texts for declared identifiers" instead: ${names(noTextCanonical)}.`,
+      `reproduced under "Canonical license texts for declared identifiers" instead: ${packageNames(noTextCanonical)}.`,
       '',
     );
   }
   if (noTextAtAll.length) {
     out.push(
       'The following ship no license file of their own and declare no identifier the SPDX corpus',
-      `holds a canonical text for, so no license text for them appears below at all: ${names(noTextAtAll)}.`,
+      `holds a canonical text for, so no license text for them appears below at all: ${packageNames(noTextAtAll)}.`,
       '',
     );
   }
@@ -723,14 +821,14 @@ export function render({
       'For the packages named above whose folder was not read, whether they ship a license file of',
       'their own is not established here. The canonical text of the identifier `package-lock.json`',
       'records for each is reproduced under "Canonical license texts for declared identifiers"',
-      `instead: ${names(unreadCanonical)}.`,
+      `instead: ${packageNames(unreadCanonical)}.`,
       '',
     );
   }
   if (unreadNoCanonical.length) {
     out.push(
       'And for these, whose folder was likewise not read, `package-lock.json` records no identifier',
-      `the SPDX corpus holds a canonical text for, so no license text appears for them at all: ${names(unreadNoCanonical)}.`,
+      `the SPDX corpus holds a canonical text for, so no license text appears for them at all: ${packageNames(unreadNoCanonical)}.`,
       '',
     );
   }
@@ -741,7 +839,7 @@ export function render({
       'the one that redistributes them, and this file covers every platform’s. Their version and',
       'license come from `package-lock.json` and nothing of theirs was read, so the canonical text of',
       'the license each declares is reproduced under "Canonical license texts for declared',
-      `identifiers": ${names(platformOnly)}.`,
+      `identifiers": ${packageNames(platformOnly)}.`,
       '',
     );
   }
@@ -749,30 +847,44 @@ export function render({
     out.push(
       'And these, likewise installed only on another platform, declare no identifier the SPDX',
       'corpus holds a canonical text for, so no license text appears for them at all:',
-      `${names(platformOnlyNoCanonical)}.`,
+      `${packageNames(platformOnlyNoCanonical)}.`,
       '',
     );
   }
+}
 
-  // Every npm row is accounted for, and the paragraphs are checked against the rows rather than
-  // trusted to have stayed in step with them. The buckets above are overlapping filters built from
-  // three independent predicates (`hasText`, `hasCanonicalText`, `inspected`) plus two provenance
-  // flags, and nothing made them a partition: a row could satisfy none of them and be named
-  // nowhere. Both directions are checked, because they fail differently - one drops a package from
-  // the document's account of itself, the other has the document assert an obligation was
-  // discharged when it was not.
-  //
-  // The live case this leaves deliberately unbucketed is a COMPOUND row that ships its own file
-  // while the corpus lacks one of its other operands (`pako@1.0.11`, `(MIT AND Zlib)`, ships only
-  // the MIT half). No such row can exist today - every valid SPDX identifier, current and
-  // deprecated, has a text in the pinned `spdx-license-list`, and `corpus-texts.test.ts` asserts
-  // it for the policy's own ids - so a paragraph for it would be prose that can never render. If a
-  // corpus bump ever drops a text, this throws and a human decides what the document should say,
-  // which is the right failure for a legal artifact and better than quietly growing a sentence.
-  //
-  // Keyed by `name@version`, which is what identifies a ROW. Keying on the bare name let two
-  // versions of one package - `@xmldom/xmldom` 0.8.13 and 0.9.10 both ship - cover for each other:
-  // one is named in a paragraph, and the other passes this check having been named nowhere.
+/**
+ * Every npm row is accounted for, and the paragraphs are checked against the rows rather than
+ * trusted to have stayed in step with them. The buckets above are overlapping filters built from
+ * three independent predicates (`hasText`, `hasCanonicalText`, `inspected`) plus two provenance
+ * flags, and nothing makes them a partition: a row can satisfy none of them and be named nowhere.
+ * Both directions are checked, because they fail differently - one drops a package from the
+ * document's account of itself, the other has the document assert an obligation was discharged when
+ * it was not.
+ *
+ * The live case this leaves deliberately unbucketed is a COMPOUND row that ships its own file while
+ * the corpus lacks one of its other operands (`pako@1.0.11`, `(MIT AND Zlib)`, ships only the MIT
+ * half). No such row can exist today - every valid SPDX identifier, current and deprecated, has a
+ * text in the pinned `spdx-license-list`, and `corpus-texts.test.ts` asserts it for the policy's
+ * own ids - so a paragraph for it would be prose that can never render. If a corpus bump ever drops
+ * a text, this throws and a human decides what the document should say, which is the right failure
+ * for a legal artifact and better than quietly growing a sentence.
+ *
+ * Keyed by `name@version`, which is what identifies a ROW. Keying on the bare name let two versions
+ * of one package - `@xmldom/xmldom` 0.8.13 and 0.9.10 both ship - cover for each other: one is
+ * named in a paragraph, and the other passes this check having been named nowhere.
+ */
+function assertNpmRowsAccountedFor(
+  npmDescribed: DescribedRow[],
+  {
+    noTextCanonical,
+    noTextAtAll,
+    unreadCanonical,
+    unreadNoCanonical,
+    platformOnly,
+    platformOnlyNoCanonical,
+  }: NpmAccount,
+): void {
   const rowKey = (row: { name: string; version: string }) => `${row.name}@${row.version}`;
   const named = new Set(
     [
@@ -806,13 +918,23 @@ export function render({
         'license text is reproduced, but no canonical text was reproduced for them: ' +
         `${overclaimed.map((row) => `${row.name}@${row.version}`).join(', ')}.`,
     );
+}
 
+/** One row per shipped npm package, after the paragraphs that account for them. */
+function pushNpmTable(out: string[], npmDescribed: DescribedRow[]): void {
   out.push('| Package | Version | License |', '| --- | --- | --- |');
   npmDescribed.forEach((row) =>
     out.push(`| \`${row.name}\` | ${cell(row.version)} | ${cell(row.license)} |`),
   );
   out.push('');
+}
 
+/** The license texts read from the packages that ship them, one numbered section each. */
+function pushLicenseTextsSection(
+  out: string[],
+  texts: CollectedTexts,
+  canonical: CollectedTexts,
+): void {
   out.push('## License texts', '');
   out.push(
     `The ${texts.size} distinct license texts below cover the packages named beneath each heading.`,
@@ -825,7 +947,10 @@ export function render({
     '',
   );
   pushFencedSections(out, texts);
+}
 
+/** SPDX's own texts, reproduced for the packages that declare an identifier and ship no copy. */
+function pushCanonicalTextsSection(out: string[], canonical: CollectedTexts): void {
   if (canonical.size) {
     out.push('## Canonical license texts for declared identifiers', '');
     out.push(
@@ -861,7 +986,14 @@ export function render({
         out.push('', `${fence}text`, text, fence, '');
       });
   }
+}
 
+/** The `NOTICE` files, split into those reproduced here and those only recorded as shipping. */
+function pushNoticeSection(
+  out: string[],
+  notices: CollectedTexts,
+  noticesNotReproduced: string[],
+): void {
   if (notices.size || noticesNotReproduced.length) {
     out.push('## Attribution notices (NOTICE files)', '');
     out.push(
@@ -906,6 +1038,48 @@ export function render({
       '',
     );
   }
+}
+
+/** @returns The complete Markdown document, ending in a newline. */
+export function render({
+  verdicts,
+  corpusVersion,
+  licenseeVersion,
+  openPolicyQuestions = [],
+  snapStagePackages = [],
+  snapStagePackageLicenses = {},
+  snapCopyrightTexts = [],
+  staticAssetNotices = [],
+}: Report): string {
+  assertKnownEcosystems(verdicts);
+
+  const rows = verdicts.filter((row) => row.ecosystem === 'npm').sort(compareByNameThenVersion);
+  const dotnetRows = verdicts
+    .filter((row) => row.ecosystem === 'nuget')
+    .sort(compareByNameThenVersion);
+
+  const { described, texts, notices, canonical, noticesNotReproduced } = describeReport([
+    ...rows,
+    ...dotnetRows,
+  ]);
+  const npmDescribed = described.filter((row) => row.ecosystem === 'npm');
+  const dotnetDescribed = described.filter((row) => row.ecosystem === 'nuget');
+  const npmAccount = accountNpmRows(npmDescribed);
+
+  const out: string[] = [];
+  pushPreamble(out, corpusVersion, licenseeVersion);
+  pushOpenQuestions(out, openPolicyQuestions);
+  pushElectronSection(out);
+  pushLexicalDatabaseSection(out);
+  pushStaticAssetSection(out, staticAssetNotices);
+  pushSnapSection(out, snapStagePackages, snapStagePackageLicenses, snapCopyrightTexts);
+  pushDotnetSection(out, dotnetDescribed);
+  pushNpmSection(out, npmDescribed, npmAccount);
+  assertNpmRowsAccountedFor(npmDescribed, npmAccount);
+  pushNpmTable(out, npmDescribed);
+  pushLicenseTextsSection(out, texts, canonical);
+  pushCanonicalTextsSection(out, canonical);
+  pushNoticeSection(out, notices, noticesNotReproduced);
 
   return `${out.join('\n')}\n`;
 }

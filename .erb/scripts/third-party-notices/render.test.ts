@@ -126,12 +126,12 @@ const report = {
 describe('render', () => {
   it('matches the golden document', () => {
     // Regenerating the fixture can never leave this test GREEN. An
-    // `if (process.env.UPDATE_GOLDEN) fs.writeFileSync(file, actual)` sat immediately above the
-    // assertion, so with that variable set anywhere in the environment the test rewrote the
-    // git-tracked fixture and then asserted against what it had just written: permanently passing,
-    // whatever the renderer does. CI would not have caught the rewrite either - `verify-changed-
-    // files` runs before `npm test`. Rewriting now FAILS the run that did it, so the new fixture
-    // has to be read and re-run deliberately:
+    // `if (process.env.UPDATE_GOLDEN) fs.writeFileSync(file, actual)` immediately above the
+    // assertion lets the test rewrite the git-tracked fixture whenever that variable is set
+    // anywhere in the environment, and then assert against what it just wrote: permanently passing,
+    // whatever the renderer does. CI cannot catch the rewrite either - `verify-changed-files` runs
+    // before `npm test`. Rewriting FAILS the run that does it, so the new fixture has to be read
+    // and re-run deliberately:
     //
     //     UPDATE_NOTICES_GOLDEN=1 npx vitest run .erb/scripts/third-party-notices/render.test.ts
     //     git diff .erb/scripts/third-party-notices/__fixtures__/golden/expected.md
@@ -176,10 +176,10 @@ describe('render', () => {
     expect(out).toContain('plus 1 package that no restore on this machine resolves');
   });
 
-  // The invariant that every npm row is accounted for was keyed on the bare package NAME while
-  // every row it guards is `name@version`. Two versions of one package both ship today
-  // (`@xmldom/xmldom` 0.8.13 and 0.9.10), so one being named in a paragraph let the other pass the
-  // check having been named nowhere.
+  // The invariant that every npm row is accounted for has to be keyed on `name@version`, which is
+  // what every row it guards is. Two versions of one package both ship today (`@xmldom/xmldom`
+  // 0.8.13 and 0.9.10), so keyed on the bare NAME, one of them being named in a paragraph lets the
+  // other pass the check having been named nowhere.
   it('does not let one version of a package account for another', () => {
     const compoundWithMissingHalf = {
       ecosystem: 'npm',
@@ -212,9 +212,9 @@ describe('render', () => {
 
   it('reproduces every operand of a conjunction, including one the package ships no text for', () => {
     // `spdxId` is not always a bare identifier: a reviewed exception records the whole expression.
-    // An exact corpus lookup on the field matched nothing for a compound one, so `pako@1.0.11`'s
-    // documented `(MIT AND Zlib)` had only its MIT half reproduced - from its own LICENSE - and the
-    // Zlib half appeared nowhere in the artifact.
+    // An exact corpus lookup on the field matches nothing for a compound one, which leaves
+    // `pako@1.0.11`'s documented `(MIT AND Zlib)` with only its MIT half reproduced - from its own
+    // LICENSE - and the Zlib half nowhere in the artifact.
     const out = render(report);
     expect(out).toContain('### Zlib — canonical text');
     expect(out).toMatch(/### Zlib — canonical text[^#]*`delta@4\.0\.0`/);
@@ -394,7 +394,7 @@ describe('render', () => {
   });
 
   // Reproduced for whatever identifier a row resolved to, not for a hardcoded list: a list covers
-  // the licences someone thought of, and every package declaring anything else discharges its
+  // the licenses someone thought of, and every package declaring anything else discharges its
   // attribution obligation nowhere.
   it('reproduces the canonical text of any declared identifier the corpus holds', () => {
     const out = render({
@@ -514,7 +514,7 @@ describe('canonicalTextCredit', () => {
 
   // Three distinct facts that must never collapse into one another, because each says something
   // different about what was actually checked. A blank would read as "nobody looked". Both sources
-  // are named because a NuGet notice can come from either the nuspec or the package's own licence
+  // are named because a NuGet notice can come from either the nuspec or the package's own license
   // text, so "the nuspec is empty" alone is not the whole reason there is nothing to quote.
   it('names both places a NuGet notice could have come from', () => {
     expect(

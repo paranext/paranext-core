@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { copyrightNoticeIn } from './credit';
 
 describe('copyrightNoticeIn', () => {
-  it('reads the notice a package states in its own licence file, to the end of it', () => {
+  it('reads the notice a package states in its own license file, to the end of it', () => {
     // "All rights reserved." is part of the notice, not a line after it. Requiring every following
-    // line to look like a notice opener truncated it away from 60 of the 2,307 licence files
+    // line to look like a notice opener truncated it away from 60 of the 2,307 license files
     // installed here - in the one place the real holder appears beside a placeholder-bearing
     // canonical text.
     expect(
@@ -14,11 +14,12 @@ describe('copyrightNoticeIn', () => {
     ).toBe('Copyright (c) 2011-2025, Gregor Aisch All rights reserved.');
   });
 
-  it('does not read a clause of the licence as the package\u2019s notice', () => {
+  it('does not read a clause of the license as the package\u2019s notice', () => {
     // Apache-2.0 section 2 grants a "copyright license to reproduce, prepare Derivative Works of,"
-    // and that line opens with the word. It was returned as the copyright notice of 77 of the 2,307
-    // licence files installed here, five shipped packages among them. A package's own notice sits
-    // ABOVE the grant; below it the word belongs to the licence.
+    // and that line opens with the word. Matched naively, it is returned as the copyright notice of
+    // 77 of the 2,307 license files installed here, five shipped packages among them. A package's
+    // own notice sits
+    // ABOVE the grant; below it the word belongs to the license.
     const apache = [
       '                                 Apache License',
       '                           Version 2.0, January 2004',
@@ -37,7 +38,7 @@ describe('copyrightNoticeIn', () => {
     expect(copyrightNoticeIn([apache])).toBeUndefined();
   });
 
-  it('still reads a notice the package prepended above the licence header', () => {
+  it('still reads a notice the package prepended above the license header', () => {
     // The commonest way a notice is added to an Apache-2.0 text, and the reason the cut is made at
     // the TERMS rather than at the title line: cutting at "Apache License" would discard this.
     const prepended = [
@@ -52,8 +53,8 @@ describe('copyrightNoticeIn', () => {
     expect(copyrightNoticeIn([prepended])).toBe('Copyright 2019 Some Author');
   });
 
-  it('reads a notice that sits BELOW its licence title, as the WTFPL puts it', () => {
-    // The control for the rule above. Cutting at a licence TITLE also removes the Apache clauses,
+  it('reads a notice that sits BELOW its license title, as the WTFPL puts it', () => {
+    // The control for the rule above. Cutting at a license TITLE also removes the Apache clauses,
     // but it is the wrong rule: the WTFPL prints its title first and the holder's notice under it,
     // and two packages installed here state their notice exactly that way.
     const wtfpl = [

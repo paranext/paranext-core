@@ -15,7 +15,7 @@ describe('vendoredLicenseText', () => {
     expect(vendoredLicenseText(policy, 'nuget:NoSuchPackage', '1.0.0')).toBeUndefined();
   });
 
-  // Reproduced verbatim as the package's licence, so an edited copy is a changed legal claim. The
+  // Reproduced verbatim as the package's license, so an edited copy is a changed legal claim. The
   // pin is what makes the checked-in file re-checkable against the source it was read from.
   it('refuses a text that no longer hashes to what the policy records', () => {
     const [key, entry] = entries[0];
@@ -41,7 +41,7 @@ describe('vendoredLicenseText', () => {
   });
 });
 
-describe('every vendored licence text in the committed policy', () => {
+describe('every vendored license text in the committed policy', () => {
   it.each(entries)('%s is checked in and hashes to what the policy records', (key, entry) => {
     const file = path.join(DIR, entry.file);
     expect(fs.existsSync(file)).toBe(true);
