@@ -539,6 +539,10 @@ internal class ParatextProjectDataProviderPt9InterlinearTests : PapiTestBase
     )]
     public void GetPt9InterlinearData_SkipsSettingsMergeForAConvertedUser()
     {
+        // PT9's conversion stamp records the registered user's name; with no registration there
+        // is no name to stamp, so the gated state cannot be constructed.
+        if (string.IsNullOrEmpty(RegistrationInfo.DefaultUser.Name))
+            Assert.Ignore("No registered Paratext user; the conversion stamp cannot name one.");
         using var modelScrText = new DummyScrText(
             CreateProjectDetails(HexId.CreateNew().ToString(), "MDL")
         );
