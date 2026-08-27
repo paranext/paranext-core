@@ -24,7 +24,7 @@ import { getErrorMessage, PlatformEvent, PlatformEventEmitter } from 'platform-b
 /** A shard that has gone away, and the registration it went away from */
 export type ServiceShardDeparture = {
   /** Window whose shard is gone */
-  windowId: number;
+  windowId: string;
   /**
    * Network object id the departed shard was announced under.
    *
@@ -48,7 +48,7 @@ export interface ServiceShardIndex<T> {
    * {@link ServiceShardIndex.getShardWindowIds} on subscribing rather than assuming the index was
    * empty.
    */
-  onDidAddShard: PlatformEvent<number>;
+  onDidAddShard: PlatformEvent<string>;
 
   /**
    * Fires when a window's shard leaves the index — the window closed, or its renderer navigated
@@ -71,7 +71,7 @@ export interface ServiceShardIndex<T> {
    *
    * @param windowId Platform id of the window to get the shard's id for
    */
-  getShardNetworkObjectId(windowId: number): string | undefined;
+  getShardNetworkObjectId(windowId: string): string | undefined;
 
   /**
    * The given window's shard, or `undefined` if that window has not registered one — it may not
@@ -83,7 +83,7 @@ export interface ServiceShardIndex<T> {
    *
    * @param windowId Platform id of the window to get the shard for
    */
-  getShard(windowId: number): Promise<T | undefined>;
+  getShard(windowId: string): Promise<T | undefined>;
 
   /**
    * Windows that currently have a shard in the index, in the order they were first indexed.
@@ -92,7 +92,7 @@ export interface ServiceShardIndex<T> {
    * no replay, so anything that reacts to shards appearing has to reconcile against this once when
    * it starts listening or it silently misses every window indexed before that moment.
    */
-  getShardWindowIds(): number[];
+  getShardWindowIds(): string[];
 }
 
 /**
@@ -127,7 +127,7 @@ export function createServiceShardIndex<T>(options: {
     /** Network object id the shard was announced under */
     networkObjectId: string;
     /** Window the shard belongs to */
-    windowId: number;
+    windowId: string;
     /**
      * Which announcement this registration came from, counting up across every announcement this
      * index has heard. A window's shard id is the same string every time that window registers, so
@@ -139,7 +139,7 @@ export function createServiceShardIndex<T>(options: {
   let nextRegistrationGeneration = 1;
 
   /** The registration each window is currently routed to */
-  const liveRegistrationsByWindowId = new Map<number, ShardRegistration>();
+  const liveRegistrationsByWindowId = new Map<string, ShardRegistration>();
   /**
    * Every registration announced under a network object id and not yet announced as disposed,
    * oldest first. Disposal announces an id and nothing else, so this is what turns that id back
@@ -147,7 +147,7 @@ export function createServiceShardIndex<T>(options: {
    */
   const openRegistrationsByShardId = new Map<string, ShardRegistration[]>();
 
-  const onDidAddShardEmitter = new PlatformEventEmitter<number>();
+  const onDidAddShardEmitter = new PlatformEventEmitter<string>();
   const onDidRemoveShardEmitter = new PlatformEventEmitter<ServiceShardDeparture>();
 
   onDidCreateNetworkObject((networkObjectDetails) => {
@@ -240,15 +240,15 @@ export function createServiceShardIndex<T>(options: {
   return {
     onDidAddShard: onDidAddShardEmitter.event,
     onDidRemoveShard: onDidRemoveShardEmitter.event,
-    async getShard(windowId: number): Promise<T | undefined> {
+    async getShard(windowId: string): Promise<T | undefined> {
       const registration = liveRegistrationsByWindowId.get(windowId);
       if (!registration) return undefined;
       return resolveShard(registration.networkObjectId);
     },
-    getShardNetworkObjectId(windowId: number): string | undefined {
+    getShardNetworkObjectId(windowId: string): string | undefined {
       return liveRegistrationsByWindowId.get(windowId)?.networkObjectId;
     },
-    getShardWindowIds(): number[] {
+    getShardWindowIds(): string[] {
       return [...liveRegistrationsByWindowId.keys()];
     },
   };

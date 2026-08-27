@@ -588,7 +588,7 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    *
    * @experimental This option is unstable and may change or disappear without notice
    */
-  targetWindowId?: number;
+  targetWindowId?: string;
 };
 
 /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */

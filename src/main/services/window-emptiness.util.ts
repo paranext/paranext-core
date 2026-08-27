@@ -37,7 +37,7 @@ export type WindowEmptinessHandler = ((
   reason: unknown,
 ) => Promise<WindowEmptiedResponse>) & {
   /** Tell the handler the window with this id is gone. Ids it is not tracking are ignored. */
-  handleWindowGone: (windowId: number) => void;
+  handleWindowGone: (windowId: string) => void;
 };
 
 /** What {@link createWindowEmptinessHandler} needs to answer a window reporting its dock empty */
@@ -55,9 +55,9 @@ export type WindowEmptinessHandlerDependencies = {
    * the Quit menu may close it. Optional so a caller with no notion of a primary keeps the plain
    * equal-siblings rule.
    */
-  isPrimaryWindow?: (windowId: number) => boolean;
+  isPrimaryWindow?: (windowId: string) => boolean;
   /** Close the window with the given id */
-  closeWindow: (windowId: number) => void;
+  closeWindow: (windowId: string) => void;
   /**
    * Whether the reported id names a window main is actually tracking.
    *
@@ -71,12 +71,12 @@ export type WindowEmptinessHandlerDependencies = {
    * answered `closing` on its first report, never closed, and latched there refusing content for
    * the rest of the session.
    */
-  isWindowTracked: (windowId: number) => boolean;
+  isWindowTracked: (windowId: string) => boolean;
   /**
    * Record that this window's close has been decided, so the count above excludes it from every
    * later decision and nothing routes new content into it while its close is in flight
    */
-  markWindowClosing: (windowId: number) => void;
+  markWindowClosing: (windowId: string) => void;
   /**
    * Whether this window's close has been decided by ANY path — the registry `markWindowClosing`
    * writes to, which the user closing a window with its close button also writes to. The handler's
@@ -85,7 +85,7 @@ export type WindowEmptinessHandlerDependencies = {
    * trips main's force-close escape hatch and abandons the close-time work the first close started.
    * Optional so a caller composing only this handler's own decisions can omit it.
    */
-  isWindowClosing?: (windowId: number) => boolean;
+  isWindowClosing?: (windowId: string) => boolean;
   /**
    * Whether anything reached the reporting window's dock after it sent the report — asked of that
    * window, which is the only place that knows.
@@ -102,7 +102,7 @@ export type WindowEmptinessHandlerDependencies = {
    * Optional so a caller with no way to reach the window can compose the handler without it; every
    * report is then taken at its word.
    */
-  hasContentArrivedSinceEmptyReport?: (windowId: number) => Promise<boolean>;
+  hasContentArrivedSinceEmptyReport?: (windowId: string) => Promise<boolean>;
 };
 
 /**
@@ -149,14 +149,14 @@ export function createWindowEmptinessHandler(
    * away, NOT until its close is handed out: closing a window runs an intercepted close whose async
    * close tasks can take seconds, and the window stays open throughout.
    */
-  const closingWindowIds = new Set<number>();
+  const closingWindowIds = new Set<string>();
 
   /**
    * Ask the reporting window whether content reached it since it sent the report, bounded so one
    * unresponsive window cannot hold up every decision behind it. A throw, a timeout, and a plain
    * "no" all mean the same thing here — see the dependency's own doc comment.
    */
-  const hasContentArrivedSinceEmptyReport = async (windowId: number): Promise<boolean> => {
+  const hasContentArrivedSinceEmptyReport = async (windowId: string): Promise<boolean> => {
     if (!deps.hasContentArrivedSinceEmptyReport) return false;
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
@@ -185,7 +185,7 @@ export function createWindowEmptinessHandler(
     windowId: unknown,
     reason: unknown,
   ): Promise<WindowEmptiedResponse> => {
-    if (typeof windowId !== 'number' || !isWindowEmptiedReason(reason)) {
+    if (typeof windowId !== 'string' || !isWindowEmptiedReason(reason)) {
       logger.warn(
         `windowLayout:emptied called with invalid arguments (windowId: ${windowId}, reason: ${reason}); answering open-home`,
       );
@@ -320,7 +320,7 @@ export function createWindowEmptinessHandler(
   };
 
   return Object.assign(handleWindowEmptied, {
-    handleWindowGone: (windowId: number) => {
+    handleWindowGone: (windowId: string) => {
       closingWindowIds.delete(windowId);
     },
   });

@@ -58,13 +58,20 @@ export interface RoutingWindowMocks {
 let announcedShardIds: string[] = [];
 
 /**
+ * Prefix a window's shard network object id carries, so a lookup by id can recover the window id
+ * from the fixed prefix rather than by splitting on a hyphen — which cannot survive an id that
+ * itself contains one.
+ */
+const SHARD_NETWORK_OBJECT_ID_PREFIX = 'shard-of-window-';
+
+/**
  * The network object id a window's shard is announced under.
  *
  * Deliberately unrelated to the generic service name: a router that rebuilt a scoped name from a
  * window id instead of using what the shard announced would find nothing here.
  */
-function getShardNetworkObjectId(windowId: number): string {
-  return `shard-of-window-${windowId}`;
+function getShardNetworkObjectId(windowId: string): string {
+  return `${SHARD_NETWORK_OBJECT_ID_PREFIX}${windowId}`;
 }
 
 /**
@@ -93,14 +100,14 @@ function getShardNetworkObjectId(windowId: number): string {
 export function withWindows(
   mocks: RoutingWindowMocks,
   shardObjectType: string,
-  shardsByWindowId: Record<number, unknown>,
+  shardsByWindowId: Record<string, unknown>,
   options?: {
-    startingWindowIds?: number[];
-    unreachableWindowIds?: number[];
-    abandonedWindowIds?: number[];
+    startingWindowIds?: string[];
+    unreachableWindowIds?: string[];
+    abandonedWindowIds?: string[];
   },
 ): void {
-  const windowIds = Object.keys(shardsByWindowId).map(Number);
+  const windowIds = Object.keys(shardsByWindowId);
   const startingWindowIds = options?.startingWindowIds ?? [];
   const unreachableWindowIds = options?.unreachableWindowIds ?? [];
   const abandonedWindowIds = options?.abandonedWindowIds ?? [];
@@ -121,9 +128,10 @@ export function withWindows(
   // Every window listed here exists, whatever state it is in — a starting, unreachable or
   // abandoned window is one this process has and cannot currently ask, which is a different
   // question from whether it is there at all
-  mocks.isWindowTracked?.mockImplementation((windowId: number) => windowIds.includes(windowId));
+  mocks.isWindowTracked?.mockImplementation((windowId: string) => windowIds.includes(windowId));
   mocks.networkObjectGet.mockImplementation(async (networkObjectId: string) => {
-    const windowId = Number(networkObjectId.split('-').pop());
+    if (!networkObjectId.startsWith(SHARD_NETWORK_OBJECT_ID_PREFIX)) return undefined;
+    const windowId = networkObjectId.slice(SHARD_NETWORK_OBJECT_ID_PREFIX.length);
     return shardsByWindowId[windowId];
   });
 
@@ -149,7 +157,7 @@ export function withWindows(
  * @param mocks The suite's mocked window state and network object lookups
  * @param windowId Window whose shard is gone
  */
-export function withoutWindowShard(mocks: RoutingWindowMocks, windowId: number): void {
+export function withoutWindowShard(mocks: RoutingWindowMocks, windowId: string): void {
   const shardId = getShardNetworkObjectId(windowId);
   announcedShardIds = announcedShardIds.filter((id) => id !== shardId);
   mocks.shardAnnouncementListeners.dispose.forEach((listener) => listener(shardId));

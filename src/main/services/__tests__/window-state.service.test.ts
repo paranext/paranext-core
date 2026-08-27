@@ -138,9 +138,9 @@ describe('window state tracking', () => {
     addWindow(fakeWindow(1));
     addWindow(fakeWindow(2));
 
-    setFocusedWindowId(2);
+    setFocusedWindowId('2');
 
-    expect(getTargetWindowId()).toBe(2);
+    expect(getTargetWindowId()).toBe('2');
   });
 
   test('falls back to the first window when nothing is focused', () => {
@@ -169,13 +169,13 @@ describe('window state tracking', () => {
       // Asserted as the whole sequence rather than as "the new ids differ from the old ones": the
       // sequence is what a reuse would break, and it also pins the increasing order that the
       // router's tie-breaks and the e2e page ordering read as creation order.
-      expect([firstId, secondId, thirdId, fourthId]).toEqual([1, 2, 3, 4]);
+      expect([firstId, secondId, thirdId, fourthId]).toEqual(['1', '2', '3', '4']);
     });
 
     test('continues the sequence across a restart rather than starting over', async () => {
       const firstId = addWindow(fakeWindow(1));
       const secondId = addWindow(fakeWindow(2));
-      expect([firstId, secondId]).toEqual([1, 2]);
+      expect([firstId, secondId]).toEqual(['1', '2']);
 
       // A restart is a fresh module over the same storage: drop the in-memory counter without
       // clearing what it wrote. Reaching for `resetForTesting` here would clear both and prove
@@ -183,14 +183,14 @@ describe('window state tracking', () => {
       vi.resetModules();
       const reloaded = await import('@main/services/window-state.service');
 
-      expect(reloaded.addWindow(fakeWindow(3))).toBe(3);
+      expect(reloaded.addWindow(fakeWindow(3))).toBe('3');
     });
 
     test('restarts the sequence rather than trusting a counter too large to increment', async () => {
       // The positive control first: a sound stored value IS honoured, so the seeding below is
       // reaching the counter rather than silently missing it.
       localStorage.setItem(NEXT_WINDOW_ID_KEY, '5');
-      expect(addWindow(fakeWindow(1))).toBe(5);
+      expect(addWindow(fakeWindow(1))).toBe('5');
 
       // At or beyond 2^53, `+ 1` gives the same number back, so a counter left there would hand
       // every window of the session the same id — and the tracker's lookups would answer with
@@ -199,7 +199,7 @@ describe('window state tracking', () => {
       resetForTesting();
       localStorage.setItem(NEXT_WINDOW_ID_KEY, `${2 ** 53}`);
 
-      expect([addWindow(fakeWindow(1)), addWindow(fakeWindow(2))]).toEqual([1, 2]);
+      expect([addWindow(fakeWindow(1)), addWindow(fakeWindow(2))]).toEqual(['1', '2']);
     });
 
     test('keeps opening windows when the counter cannot be written', () => {
@@ -214,7 +214,7 @@ describe('window state tracking', () => {
 
         // Unique for this session, which is what the tracker needs to stay correct while the app
         // runs; a later launch may repeat one, which the module already treats as survivable
-        expect(ids).toEqual([1, 2]);
+        expect(ids).toEqual(['1', '2']);
         expect(mocks.loggerWarn).toHaveBeenCalledWith(
           expect.stringMatching(/could not persist the next window id/i),
         );
@@ -244,9 +244,9 @@ describe('window state tracking', () => {
   test('reports no target once the last window is removed, so callers fail loudly', () => {
     const only = fakeWindow(1);
     addWindow(only);
-    setFocusedWindowId(1);
+    setFocusedWindowId('1');
 
-    removeWindow(only, 1);
+    removeWindow(only, '1');
 
     expect(getTargetWindowId()).toBeUndefined();
   });
@@ -257,7 +257,7 @@ describe('window state tracking', () => {
     addWindow(first);
     addWindow(second);
 
-    removeWindow(first, 1);
+    removeWindow(first, '1');
 
     expect(getWindows().map((w) => w.id)).toEqual([2]);
   });
@@ -265,7 +265,7 @@ describe('window state tracking', () => {
   test('removing a window that was never tracked leaves the list untouched', () => {
     addWindow(fakeWindow(1));
 
-    removeWindow(fakeWindow(99), 99);
+    removeWindow(fakeWindow(99), '99');
 
     expect(getWindows().map((w) => w.id)).toEqual([1]);
   });
@@ -277,16 +277,16 @@ describe('window state tracking', () => {
     // count of open windows includes one that is gone.
     const closing = destroyableWindow(1);
     addWindow(closing.window);
-    markWindowReady(1);
-    setFocusedWindowId(1);
+    markWindowReady('1');
+    setFocusedWindowId('1');
     addWindow(fakeWindow(2));
-    markWindowReady(2);
+    markWindowReady('2');
     closing.destroyForTest();
 
-    expect(() => removeWindow(closing.window, 1)).not.toThrow();
+    expect(() => removeWindow(closing.window, '1')).not.toThrow();
 
     expect(getWindows().map((window) => window.id)).toEqual([2]);
-    expect(getReadyWindowIds()).toEqual([2]);
+    expect(getReadyWindowIds()).toEqual(['2']);
     expect(getFocusedWindowId()).toBeUndefined();
   });
 
@@ -316,17 +316,17 @@ describe('window state tracking', () => {
     // does not merely fail the question — it abandons the rest of the close.
     const closing = destroyableWindow(1);
     addWindow(closing.window);
-    markWindowReady(1);
+    markWindowReady('1');
     addWindow(fakeWindow(2));
-    markWindowReady(2);
-    markWindowClosing(1);
+    markWindowReady('2');
+    markWindowClosing('1');
 
     closing.destroyForTest();
 
     expect(() => getReadyWindowIds()).not.toThrow();
     expect(() => getTargetWindowId()).not.toThrow();
     expect(() => areAllWindowsClosing()).not.toThrow();
-    expect(getReadyWindowIds()).toEqual([1, 2]);
+    expect(getReadyWindowIds()).toEqual(['1', '2']);
   });
 
   describe('focus', () => {
@@ -334,18 +334,18 @@ describe('window state tracking', () => {
       // Consumers that mean "the window the user is looking at" must not be handed the routing
       // target, which deliberately prefers a window that can answer over the focused one
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
 
-      setFocusedWindowId(2);
+      setFocusedWindowId('2');
 
-      expect(getFocusedWindowId()).toBe(2);
-      expect(getTargetWindowId()).toBe(1);
+      expect(getFocusedWindowId()).toBe('2');
+      expect(getTargetWindowId()).toBe('1');
     });
 
     test('reports no focused window when none has focus', () => {
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
 
       expect(getFocusedWindowId()).toBeUndefined();
     });
@@ -353,9 +353,9 @@ describe('window state tracking', () => {
     test('forgets the focused window when it closes', () => {
       const only = fakeWindow(1);
       addWindow(only);
-      setFocusedWindowId(1);
+      setFocusedWindowId('1');
 
-      removeWindow(only, 1);
+      removeWindow(only, '1');
 
       expect(getFocusedWindowId()).toBeUndefined();
     });
@@ -363,30 +363,30 @@ describe('window state tracking', () => {
 
   describe('routing target change event', () => {
     test('announces the window that took focus', () => {
-      const heard: (number | undefined)[] = [];
+      const heard: (string | undefined)[] = [];
       addWindow(fakeWindow(2));
-      markWindowReady(2);
+      markWindowReady('2');
       addWindow(fakeWindow(3));
-      markWindowReady(3);
-      setFocusedWindowId(2);
+      markWindowReady('3');
+      setFocusedWindowId('2');
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      setFocusedWindowId(3);
+      setFocusedWindowId('3');
       unsubscribe();
 
-      expect(heard).toEqual([3]);
+      expect(heard).toEqual(['3']);
     });
 
     test('stays quiet when the same window is re-reported as focused', () => {
       // Electron re-fires `focus` in situations that do not change which window is focused; service
       // routers re-point their update relay on every emission, so a repeat is real work for nothing
-      const heard: (number | undefined)[] = [];
+      const heard: (string | undefined)[] = [];
       addWindow(fakeWindow(3));
-      setFocusedWindowId(3);
+      setFocusedWindowId('3');
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      setFocusedWindowId(3);
-      setFocusedWindowId(3);
+      setFocusedWindowId('3');
+      setFocusedWindowId('3');
       unsubscribe();
 
       expect(heard).toEqual([]);
@@ -396,14 +396,14 @@ describe('window state tracking', () => {
       // Two windows that are both unready while a third serves the calls: focus churn between them
       // does not change where anything is routed, so subscribers have nothing to re-resolve
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
       addWindow(fakeWindow(3));
-      setFocusedWindowId(2);
-      const heard: (number | undefined)[] = [];
+      setFocusedWindowId('2');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      setFocusedWindowId(3);
+      setFocusedWindowId('3');
       unsubscribe();
 
       expect(heard).toEqual([]);
@@ -412,11 +412,11 @@ describe('window state tracking', () => {
     test('announces focus being cleared when the last window goes away', () => {
       const only = fakeWindow(3);
       addWindow(only);
-      setFocusedWindowId(3);
-      const heard: (number | undefined)[] = [];
+      setFocusedWindowId('3');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      removeWindow(only, 3);
+      removeWindow(only, '3');
       unsubscribe();
 
       expect(heard).toEqual([undefined]);
@@ -428,35 +428,35 @@ describe('window state tracking', () => {
       // routing to a window that no longer exists
       const closing = fakeWindow(1);
       addWindow(closing);
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
-      markWindowReady(2);
-      setFocusedWindowId(1);
-      const heard: (number | undefined)[] = [];
+      markWindowReady('2');
+      setFocusedWindowId('1');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      removeWindow(closing, 1);
+      removeWindow(closing, '1');
       unsubscribe();
 
-      expect(getTargetWindowId()).toBe(2);
-      expect(heard).toEqual([2]);
+      expect(getTargetWindowId()).toBe('2');
+      expect(heard).toEqual(['2']);
     });
 
     test('has already updated the target by the time listeners run', () => {
       // Listeners re-resolve through `getTargetWindowId()`; emitting before the assignment would
       // hand every one of them the window focus just left
-      const targetsSeenByListener: (number | undefined)[] = [];
+      const targetsSeenByListener: (string | undefined)[] = [];
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      setFocusedWindowId(1);
+      setFocusedWindowId('1');
       const unsubscribe = onDidChangeRoutingTarget(() =>
         targetsSeenByListener.push(getTargetWindowId()),
       );
 
-      setFocusedWindowId(2);
+      setFocusedWindowId('2');
       unsubscribe();
 
-      expect(targetsSeenByListener).toEqual([2]);
+      expect(targetsSeenByListener).toEqual(['2']);
     });
 
     test('a subscriber that throws does not take the close that announced with it', () => {
@@ -466,10 +466,10 @@ describe('window state tracking', () => {
       // here lets the window close with none of its shutdown work having run, and an async
       // handler's throw is a rejected promise nothing ever reports.
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
-      markWindowReady(2);
-      setFocusedWindowId(1);
+      markWindowReady('2');
+      setFocusedWindowId('1');
       const unsubscribe = onDidChangeRoutingTarget(() => {
         throw new Error('subscriber blew up');
       });
@@ -477,7 +477,7 @@ describe('window state tracking', () => {
       // `resetForTesting` unwinds window state but not subscriptions, so this one has to come off
       // even when the assertion fails — otherwise it fires in every test that follows
       try {
-        expect(() => markWindowClosing(1)).not.toThrow();
+        expect(() => markWindowClosing('1')).not.toThrow();
       } finally {
         unsubscribe();
       }
@@ -492,17 +492,17 @@ describe('window state tracking', () => {
       // the removal skips the rest of the sweep, leaving routing pinned to a destroyed window.
       const closing = fakeWindow(1);
       addWindow(closing);
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
-      markWindowReady(2);
-      setFocusedWindowId(1);
+      markWindowReady('2');
+      setFocusedWindowId('1');
       const unsubscribe = onDidChangeRoutingTarget(() => {
         throw new Error('subscriber blew up');
       });
 
       // See the note on the sibling test: an escaping subscriber outlives `resetForTesting`
       try {
-        expect(() => removeWindow(closing, 1)).not.toThrow();
+        expect(() => removeWindow(closing, '1')).not.toThrow();
       } finally {
         unsubscribe();
       }
@@ -516,11 +516,11 @@ describe('window state tracking', () => {
       // subscribers hear that routing moved, and it is never repeated for that change. A subscriber
       // that throws must cost only itself the news, not everything subscribed after it.
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
-      markWindowReady(2);
-      setFocusedWindowId(1);
-      const targetsSeenAfterTheThrow: (number | undefined)[] = [];
+      markWindowReady('2');
+      setFocusedWindowId('1');
+      const targetsSeenAfterTheThrow: (string | undefined)[] = [];
       const unsubscribeThrower = onDidChangeRoutingTarget(() => {
         throw new Error('subscriber blew up');
       });
@@ -530,23 +530,23 @@ describe('window state tracking', () => {
 
       // See the note on the sibling tests: an escaping subscriber outlives `resetForTesting`
       try {
-        expect(() => markWindowClosing(1)).not.toThrow();
+        expect(() => markWindowClosing('1')).not.toThrow();
       } finally {
         unsubscribeThrower();
         unsubscribeListener();
       }
 
-      expect(targetsSeenAfterTheThrow).toEqual([2]);
+      expect(targetsSeenAfterTheThrow).toEqual(['2']);
       expect(mocks.loggerError).toHaveBeenCalledOnce();
     });
 
     test('stops calling a listener that unsubscribed', () => {
-      const heard: (number | undefined)[] = [];
+      const heard: (string | undefined)[] = [];
       addWindow(fakeWindow(4));
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
       unsubscribe();
-      setFocusedWindowId(4);
+      setFocusedWindowId('4');
 
       expect(heard).toEqual([]);
     });
@@ -559,29 +559,29 @@ describe('window state tracking', () => {
       // the app fail for as long as the new window takes to start.
       const first = fakeWindow(1);
       addWindow(first);
-      markWindowReady(1);
-      setFocusedWindowId(1);
+      markWindowReady('1');
+      setFocusedWindowId('1');
 
       addWindow(fakeWindow(2));
-      setFocusedWindowId(2);
+      setFocusedWindowId('2');
 
-      expect(getTargetWindowId()).toBe(1);
+      expect(getTargetWindowId()).toBe('1');
     });
 
     test('routes to the window the user was last working in, not the oldest one', () => {
       // Two windows the user has used and a third still starting: the answer is the one they were
       // just in, which creation order cannot tell you
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
-      markWindowReady(2);
-      setFocusedWindowId(1);
-      setFocusedWindowId(2);
+      markWindowReady('2');
+      setFocusedWindowId('1');
+      setFocusedWindowId('2');
 
       addWindow(fakeWindow(3));
-      setFocusedWindowId(3);
+      setFocusedWindowId('3');
 
-      expect(getTargetWindowId()).toBe(2);
+      expect(getTargetWindowId()).toBe('2');
     });
 
     test('walks past the windows that cannot answer to the most recent one that can', () => {
@@ -589,18 +589,18 @@ describe('window state tracking', () => {
       // unready — a reload, a crashed renderer. The answer is the next one back that is serving
       // requests, not the front of the history and not the oldest window.
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
-      markWindowReady(2);
+      markWindowReady('2');
       addWindow(fakeWindow(3));
-      markWindowReady(3);
-      setFocusedWindowId(1);
-      setFocusedWindowId(2);
-      setFocusedWindowId(3);
+      markWindowReady('3');
+      setFocusedWindowId('1');
+      setFocusedWindowId('2');
+      setFocusedWindowId('3');
 
-      markWindowNotReady(3);
+      markWindowNotReady('3');
 
-      expect(getTargetWindowId()).toBe(2);
+      expect(getTargetWindowId()).toBe('2');
     });
 
     test('routes to a ready window the user has never focused', () => {
@@ -608,47 +608,47 @@ describe('window state tracking', () => {
       // tracked windows are still the fallback
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      markWindowReady(2);
+      markWindowReady('2');
 
-      expect(getTargetWindowId()).toBe(2);
+      expect(getTargetWindowId()).toBe('2');
     });
 
     test('hands routing over once the new window is serving requests', () => {
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
-      setFocusedWindowId(2);
+      setFocusedWindowId('2');
 
-      markWindowReady(2);
+      markWindowReady('2');
 
-      expect(getTargetWindowId()).toBe(2);
+      expect(getTargetWindowId()).toBe('2');
     });
 
     test('announces the handover so consumers re-resolve', () => {
       // Routing was deliberately answering with a different window, so anything holding that answer
       // has to be told the moment it stops being true
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
-      setFocusedWindowId(2);
-      const heard: (number | undefined)[] = [];
+      setFocusedWindowId('2');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      markWindowReady(2);
+      markWindowReady('2');
       unsubscribe();
 
-      expect(heard).toEqual([2]);
+      expect(heard).toEqual(['2']);
     });
 
     test('stays quiet when a window becomes ready without taking the routing target', () => {
       addWindow(fakeWindow(1));
-      markWindowReady(1);
-      setFocusedWindowId(1);
+      markWindowReady('1');
+      setFocusedWindowId('1');
       addWindow(fakeWindow(2));
-      const heard: (number | undefined)[] = [];
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      markWindowReady(2);
+      markWindowReady('2');
       unsubscribe();
 
       expect(heard).toEqual([]);
@@ -658,24 +658,24 @@ describe('window state tracking', () => {
       // Startup with one window: nothing else can take the target, so the ID never changes — but
       // the calls that were failing now succeed, and anything that gave up has to try again
       addWindow(fakeWindow(1));
-      setFocusedWindowId(1);
-      const heard: (number | undefined)[] = [];
+      setFocusedWindowId('1');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      markWindowReady(1);
+      markWindowReady('1');
       unsubscribe();
 
-      expect(heard).toEqual([1]);
+      expect(heard).toEqual(['1']);
     });
 
     test('stays quiet when a window that is already ready is marked ready again', () => {
       addWindow(fakeWindow(1));
-      setFocusedWindowId(1);
-      markWindowReady(1);
-      const heard: (number | undefined)[] = [];
+      setFocusedWindowId('1');
+      markWindowReady('1');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      markWindowReady(1);
+      markWindowReady('1');
       unsubscribe();
 
       expect(heard).toEqual([]);
@@ -685,13 +685,13 @@ describe('window state tracking', () => {
       // The renderer lifecycle events that report a window as unable to serve requests also fire
       // during its first load, before it ever registered anything
       addWindow(fakeWindow(1));
-      markWindowReady(1);
-      setFocusedWindowId(1);
+      markWindowReady('1');
+      setFocusedWindowId('1');
       addWindow(fakeWindow(2));
-      const heard: (number | undefined)[] = [];
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      markWindowNotReady(2);
+      markWindowNotReady('2');
       unsubscribe();
 
       expect(heard).toEqual([]);
@@ -701,14 +701,14 @@ describe('window state tracking', () => {
       // A crashed or reloading renderer keeps its BrowserWindow, but every call routed to it now
       // waits out the network service's registration retry against handlers that are gone
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
-      markWindowReady(2);
-      setFocusedWindowId(1);
+      markWindowReady('2');
+      setFocusedWindowId('1');
 
-      markWindowNotReady(1);
+      markWindowNotReady('1');
 
-      expect(getTargetWindowId()).toBe(2);
+      expect(getTargetWindowId()).toBe('2');
     });
 
     test('re-announces when a window recovers, so consumers drop the services that died with it', () => {
@@ -716,35 +716,35 @@ describe('window state tracking', () => {
       // compare what they hold by identity, so the recovery has to reach them even though the ID
       // they would route to never changed.
       addWindow(fakeWindow(1));
-      markWindowReady(1);
-      setFocusedWindowId(1);
-      const heard: (number | undefined)[] = [];
+      markWindowReady('1');
+      setFocusedWindowId('1');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      markWindowNotReady(1);
-      markWindowReady(1);
+      markWindowNotReady('1');
+      markWindowReady('1');
       unsubscribe();
 
-      expect(heard).toEqual([1, 1]);
+      expect(heard).toEqual(['1', '1']);
     });
 
     test('keeps a window that stopped serving requests tracked, since it is still a window', () => {
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
 
-      markWindowNotReady(1);
+      markWindowNotReady('1');
 
       expect(getWindows().map((w) => w.id)).toEqual([1]);
-      expect(isWindowReady(1)).toBe(false);
+      expect(isWindowReady('1')).toBe(false);
     });
 
     test('falls back to the focused window before any window is ready', () => {
       // Ordinary startup: nothing can answer yet, so callers should get the honest "the renderer has
       // not started yet" error rather than routing somewhere misleading
       addWindow(fakeWindow(1));
-      setFocusedWindowId(1);
+      setFocusedWindowId('1');
 
-      expect(getTargetWindowId()).toBe(1);
+      expect(getTargetWindowId()).toBe('1');
     });
 
     test('a closed window’s id stops answering as ready once it is gone', () => {
@@ -774,19 +774,19 @@ describe('window state tracking', () => {
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
       addWindow(fakeWindow(3));
-      markWindowReady(1);
-      markWindowReady(3);
+      markWindowReady('1');
+      markWindowReady('3');
 
-      expect(getReadyWindowIds()).toEqual([1, 3]);
-      expect(isWindowReady(2)).toBe(false);
+      expect(getReadyWindowIds()).toEqual(['1', '3']);
+      expect(isWindowReady('2')).toBe(false);
     });
 
     test('drops a closed window from the fan-out list', () => {
       const closing = fakeWindow(1);
       addWindow(closing);
-      markWindowReady(1);
+      markWindowReady('1');
 
-      removeWindow(closing, 1);
+      removeWindow(closing, '1');
 
       expect(getReadyWindowIds()).toEqual([]);
     });
@@ -803,7 +803,7 @@ describe('window state tracking', () => {
       // routed search in the app for the whole of it.
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      markWindowReady(1);
+      markWindowReady('1');
 
       expect(getUnreachableWindowIds()).toEqual([]);
     });
@@ -813,20 +813,20 @@ describe('window state tracking', () => {
       // user can see, and only that window could ever list them.
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      markWindowReady(1);
-      markWindowReady(2);
+      markWindowReady('1');
+      markWindowReady('2');
 
-      markWindowNotReady(2);
+      markWindowNotReady('2');
 
-      expect(getUnreachableWindowIds()).toEqual([2]);
+      expect(getUnreachableWindowIds()).toEqual(['2']);
     });
 
     test('stops counting it once it is serving again', () => {
       addWindow(fakeWindow(1));
-      markWindowReady(1);
-      markWindowNotReady(1);
+      markWindowReady('1');
+      markWindowNotReady('1');
 
-      markWindowReady(1);
+      markWindowReady('1');
 
       expect(getUnreachableWindowIds()).toEqual([]);
     });
@@ -850,10 +850,10 @@ describe('window state tracking', () => {
     test('drops a window that stopped serving when it finally goes away', () => {
       const crashed = fakeWindow(1);
       addWindow(crashed);
-      markWindowReady(1);
-      markWindowNotReady(1);
+      markWindowReady('1');
+      markWindowNotReady('1');
 
-      removeWindow(crashed, 1);
+      removeWindow(crashed, '1');
 
       expect(getUnreachableWindowIds()).toEqual([]);
     });
@@ -868,14 +868,14 @@ describe('window state tracking', () => {
 
     test('stops counting a window as unreachable once the reload path gives up on it', () => {
       addWindow(fakeWindow(1));
-      markWindowReady(1);
-      markWindowNotReady(1);
+      markWindowReady('1');
+      markWindowNotReady('1');
 
-      markWindowAbandoned(1);
+      markWindowAbandoned('1');
 
       expect(getUnreachableWindowIds()).toEqual([]);
-      expect(getAbandonedWindowIds()).toEqual([1]);
-      expect(isWindowAbandoned(1)).toBe(true);
+      expect(getAbandonedWindowIds()).toEqual(['1']);
+      expect(isWindowAbandoned('1')).toBe(true);
     });
 
     test('records a window given up on before its renderer ever registered', () => {
@@ -883,10 +883,10 @@ describe('window state tracking', () => {
       // it is still tracked, and it is just as dead as the one that had been serving
       addWindow(fakeWindow(1));
 
-      markWindowAbandoned(1);
+      markWindowAbandoned('1');
 
       expect(getUnreachableWindowIds()).toEqual([]);
-      expect(getAbandonedWindowIds()).toEqual([1]);
+      expect(getAbandonedWindowIds()).toEqual(['1']);
     });
 
     test('a closed window’s id is not remembered as abandoned', () => {
@@ -912,14 +912,14 @@ describe('window state tracking', () => {
       // Whatever the route back, the window is a live window again, and a later crash has to make
       // it unreachable rather than land on a stale terminal mark.
       addWindow(fakeWindow(1));
-      markWindowAbandoned(1);
+      markWindowAbandoned('1');
 
-      markWindowReady(1);
+      markWindowReady('1');
 
       expect(getAbandonedWindowIds()).toEqual([]);
-      expect(isWindowAbandoned(1)).toBe(false);
-      markWindowNotReady(1);
-      expect(getUnreachableWindowIds()).toEqual([1]);
+      expect(isWindowAbandoned('1')).toBe(false);
+      markWindowNotReady('1');
+      expect(getUnreachableWindowIds()).toEqual(['1']);
     });
   });
 
@@ -931,7 +931,7 @@ describe('window state tracking', () => {
       const { window, calls } = raisableWindow(1, { isMinimized: true });
       addWindow(window);
 
-      focusWindow(1);
+      focusWindow('1');
 
       // Restored first, or a merely focused window stays minimized; flashed before focusing,
       // because Windows does not cancel a flash on activation and one started afterwards could not
@@ -946,7 +946,7 @@ describe('window state tracking', () => {
       const { window, calls } = raisableWindow(1, { doesActivationSucceed: false });
       addWindow(window);
 
-      focusWindow(1);
+      focusWindow('1');
 
       expect(calls).toEqual(['flashFrame(true)', 'focus']);
     });
@@ -968,7 +968,7 @@ describe('window state tracking', () => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       addWindow(throwsOnFocus as unknown as BrowserWindow);
 
-      expect(() => focusWindow(1)).not.toThrow();
+      expect(() => focusWindow('1')).not.toThrow();
     });
 
     test('does nothing for a window that is already gone', () => {
@@ -978,7 +978,7 @@ describe('window state tracking', () => {
 
       // Every member but `isDestroyed` throws on a destroyed window, so reaching any of them here
       // would show up as a throw rather than as a silent misfire
-      expect(() => focusWindow(1)).not.toThrow();
+      expect(() => focusWindow('1')).not.toThrow();
     });
   });
 
@@ -987,10 +987,10 @@ describe('window state tracking', () => {
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
 
-      markWindowClosing(2);
+      markWindowClosing('2');
 
-      expect(isWindowClosing(1)).toBe(false);
-      expect(isWindowClosing(2)).toBe(true);
+      expect(isWindowClosing('1')).toBe(false);
+      expect(isWindowClosing('2')).toBe(true);
     });
 
     test('stops reporting a window as closing once it is gone', () => {
@@ -1000,11 +1000,11 @@ describe('window state tracking', () => {
       // true.
       const closing = fakeWindow(1);
       addWindow(closing);
-      markWindowClosing(1);
+      markWindowClosing('1');
 
-      removeWindow(closing, 1);
+      removeWindow(closing, '1');
 
-      expect(isWindowClosing(1)).toBe(false);
+      expect(isWindowClosing('1')).toBe(false);
     });
 
     test('ignores a closing mark for a window that is no longer tracked', () => {
@@ -1015,17 +1015,17 @@ describe('window state tracking', () => {
       // never had a close scheduled for it.
       const gone = fakeWindow(1);
       addWindow(gone);
-      removeWindow(gone, 1);
+      removeWindow(gone, '1');
 
-      markWindowClosing(1);
+      markWindowClosing('1');
 
-      expect(isWindowClosing(1)).toBe(false);
+      expect(isWindowClosing('1')).toBe(false);
     });
 
     test('reports the app going down when the only window closes', () => {
       addWindow(fakeWindow(1));
 
-      markWindowClosing(1);
+      markWindowClosing('1');
 
       expect(areAllWindowsClosing()).toBe(true);
     });
@@ -1034,7 +1034,7 @@ describe('window state tracking', () => {
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
 
-      markWindowClosing(1);
+      markWindowClosing('1');
 
       expect(areAllWindowsClosing()).toBe(false);
     });
@@ -1046,9 +1046,9 @@ describe('window state tracking', () => {
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
 
-      markWindowClosing(1);
+      markWindowClosing('1');
       const isAppGoingDownForFirstWindow = areAllWindowsClosing();
-      markWindowClosing(2);
+      markWindowClosing('2');
       const isAppGoingDownForSecondWindow = areAllWindowsClosing();
 
       expect(isAppGoingDownForFirstWindow).toBe(false);
@@ -1064,12 +1064,12 @@ describe('window state tracking', () => {
       // rather than a session that could happen.
       const closing = fakeWindow(1);
       addWindow(closing);
-      markWindowClosing(1);
-      removeWindow(closing, 1);
+      markWindowClosing('1');
+      removeWindow(closing, '1');
 
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      markWindowClosing(2);
+      markWindowClosing('2');
 
       expect(areAllWindowsClosing()).toBe(false);
     });
@@ -1081,13 +1081,13 @@ describe('window state tracking', () => {
       // user is watching disappear.
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      markWindowReady(1);
-      markWindowReady(2);
-      setFocusedWindowId(1);
+      markWindowReady('1');
+      markWindowReady('2');
+      setFocusedWindowId('1');
 
-      markWindowClosing(1);
+      markWindowClosing('1');
 
-      expect(getTargetWindowId()).toBe(2);
+      expect(getTargetWindowId()).toBe('2');
     });
 
     test('announces routing moving off a window that has begun closing', () => {
@@ -1095,16 +1095,16 @@ describe('window state tracking', () => {
       // target moved, so without this they go on forwarding into the closing window.
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      markWindowReady(1);
-      markWindowReady(2);
-      setFocusedWindowId(1);
-      const heard: (number | undefined)[] = [];
+      markWindowReady('1');
+      markWindowReady('2');
+      setFocusedWindowId('1');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      markWindowClosing(1);
+      markWindowClosing('1');
       unsubscribe();
 
-      expect(heard).toEqual([2]);
+      expect(heard).toEqual(['2']);
     });
 
     test('keeps routing to the closing window when every window is closing', () => {
@@ -1112,12 +1112,12 @@ describe('window state tracking', () => {
       // the user — has nowhere else to go during a quit, and the window is alive until its
       // shutdown work finishes. Answering with no window at all would fail those calls outright.
       addWindow(fakeWindow(1));
-      markWindowReady(1);
-      setFocusedWindowId(1);
+      markWindowReady('1');
+      setFocusedWindowId('1');
 
-      markWindowClosing(1);
+      markWindowClosing('1');
 
-      expect(getTargetWindowId()).toBe(1);
+      expect(getTargetWindowId()).toBe('1');
     });
 
     test('prefers a window that can still answer when every window is closing', () => {
@@ -1127,15 +1127,15 @@ describe('window state tracking', () => {
       // until its own teardown finishes. A quit reports its progress and asks its questions through
       // this target, so naming the window that cannot answer fails every one of them.
       addWindow(fakeWindow(1));
-      markWindowReady(1);
-      setFocusedWindowId(1);
+      markWindowReady('1');
+      setFocusedWindowId('1');
       addWindow(fakeWindow(2));
-      setFocusedWindowId(2);
+      setFocusedWindowId('2');
 
-      markWindowClosing(1);
-      markWindowClosing(2);
+      markWindowClosing('1');
+      markWindowClosing('2');
 
-      expect(getTargetWindowId()).toBe(1);
+      expect(getTargetWindowId()).toBe('1');
     });
 
     test('announces once as a window goes from closing to no longer serving', () => {
@@ -1145,18 +1145,18 @@ describe('window state tracking', () => {
       // a move that already happened — every announcement makes routing proxies re-resolve and
       // re-notify their subscribers.
       addWindow(fakeWindow(1));
-      markWindowReady(1);
+      markWindowReady('1');
       addWindow(fakeWindow(2));
-      markWindowReady(2);
-      setFocusedWindowId(1);
-      const heard: (number | undefined)[] = [];
+      markWindowReady('2');
+      setFocusedWindowId('1');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      markWindowClosing(1);
-      markWindowNotReady(1);
+      markWindowClosing('1');
+      markWindowNotReady('1');
       unsubscribe();
 
-      expect(heard).toEqual([2]);
+      expect(heard).toEqual(['2']);
     });
 
     test('announces once as the last window goes from closing to no longer serving', () => {
@@ -1164,16 +1164,16 @@ describe('window state tracking', () => {
       // closing window while it can still answer — that is where the quit's own progress reports
       // go — and moves exactly once, when it stops being able to.
       addWindow(fakeWindow(1));
-      markWindowReady(1);
-      setFocusedWindowId(1);
-      const heard: (number | undefined)[] = [];
+      markWindowReady('1');
+      setFocusedWindowId('1');
+      const heard: (string | undefined)[] = [];
       const unsubscribe = onDidChangeRoutingTarget((windowId) => heard.push(windowId));
 
-      markWindowClosing(1);
-      markWindowNotReady(1);
+      markWindowClosing('1');
+      markWindowNotReady('1');
       unsubscribe();
 
-      expect(heard).toEqual([1]);
+      expect(heard).toEqual(['1']);
     });
 
     test('keeps a closing window in the fan-out list while it is still there to answer', () => {
@@ -1183,13 +1183,13 @@ describe('window state tracking', () => {
       // the shutdown sync of a whole quit select nothing and send nothing.
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      markWindowReady(1);
-      markWindowReady(2);
+      markWindowReady('1');
+      markWindowReady('2');
 
-      markWindowClosing(1);
-      markWindowClosing(2);
+      markWindowClosing('1');
+      markWindowClosing('2');
 
-      expect(getReadyWindowIds()).toEqual([1, 2]);
+      expect(getReadyWindowIds()).toEqual(['1', '2']);
     });
 
     test('does not report the app going down when there is no window to be closing', () => {

@@ -78,7 +78,7 @@ describe('notification service shard', () => {
     vi.clearAllMocks();
     vi.resetModules();
     // The shard registers under this window's scoped name and attributes, so it needs a window id
-    globalThis.windowId = 1;
+    globalThis.windowId = '1';
     mockSendCommand.mockResolvedValue(undefined);
     const { startNotificationServiceShard } = await import(
       '@renderer/services/notification.service-shard'

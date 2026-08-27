@@ -91,7 +91,7 @@ declare module 'papi-shared-types' {
      *
      * @experimental This command is unstable and may change or disappear without notice
      */
-    'platform.getFocusedWindowId': () => Promise<number | undefined>;
+    'platform.getFocusedWindowId': () => Promise<string | undefined>;
     /**
      * List every open window with the title it is currently showing, for offering the user a choice
      * of window. Titles follow each window's own content, so two windows showing the same thing
@@ -176,7 +176,7 @@ declare module 'papi-shared-types' {
      */
     'platform.moveWebViewToWindow': (
       webViewId: WebViewId,
-      targetWindowId: number,
+      targetWindowId: string,
     ) => Promise<WebViewId>;
 
     /** Open a dialog that displays essential information about the application */

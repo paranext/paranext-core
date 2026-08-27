@@ -30,10 +30,10 @@ export type TabMenuContext = {
 };
 
 /** Reads the target window id back out of a generated submenu entry, if that is what was selected */
-export function getMoveTargetWindowId(itemId: string): number | undefined {
+export function getMoveTargetWindowId(itemId: string): string | undefined {
   if (!itemId.startsWith(MOVE_TO_WINDOW_TARGET_ID_PREFIX)) return undefined;
-  const windowId = Number(itemId.slice(MOVE_TO_WINDOW_TARGET_ID_PREFIX.length));
-  return Number.isNaN(windowId) ? undefined : windowId;
+  const windowId = itemId.slice(MOVE_TO_WINDOW_TARGET_ID_PREFIX.length);
+  return windowId || undefined;
 }
 
 /** Whether a contributed item is one this tab cannot currently act on */

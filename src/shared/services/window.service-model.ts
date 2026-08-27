@@ -158,7 +158,7 @@ export type IWindowService = {
  */
 export type WindowSummary = {
   /** Runtime id of the window. Not stable across restarts */
-  windowId: number;
+  windowId: string;
   /**
    * The window's title, which follows its own content. Two windows showing the same thing carry the
    * same label, and nothing disambiguates them.

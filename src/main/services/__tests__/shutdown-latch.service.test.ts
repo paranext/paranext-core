@@ -143,7 +143,7 @@ describe('shutdown latches', () => {
       // to catch this case too, or it only guards half of the ways the app goes down.
       addWindow(fakeWindow(1));
 
-      markWindowClosing(1);
+      markWindowClosing('1');
 
       expect(isAppQuitRequested()).toBe(false);
       expect(isAppShuttingDown()).toBe(true);
@@ -153,7 +153,7 @@ describe('shutdown latches', () => {
       addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
 
-      markWindowClosing(1);
+      markWindowClosing('1');
 
       expect(isAppShuttingDown()).toBe(false);
     });

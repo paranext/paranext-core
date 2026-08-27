@@ -34,7 +34,7 @@ const SHARD_ANNOUNCEMENT_GRACE_MS = 5000;
  * flight would otherwise be missed, and the call would then wait out the whole grace period for
  * news it had already been given.
  */
-function watchForShardAnnouncement<T>(shardIndex: ServiceShardIndex<T>, windowId: number) {
+function watchForShardAnnouncement<T>(shardIndex: ServiceShardIndex<T>, windowId: string) {
   let settle: (() => void) | undefined;
   const announced = new Promise<void>((resolve) => {
     settle = resolve;
@@ -61,7 +61,7 @@ export type TargetWindowShard<T> = {
    * said has to come back to that same window: the routing target can move between the two calls,
    * and re-deriving it would send the second one somewhere else.
    */
-  windowId: number;
+  windowId: string;
   /** That window's shard of the service */
   shard: T;
 };
@@ -79,7 +79,7 @@ export type TargetWindowShard<T> = {
 export async function resolveShardForWindow<T>(
   serviceName: string,
   shardIndex: ServiceShardIndex<T>,
-  windowId: number,
+  windowId: string,
 ): Promise<T> {
   // Read before resolving rather than after: an entry evicted while the resolve was in flight was
   // still a registration that failed to resolve, not a window that never registered one

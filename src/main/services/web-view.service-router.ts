@@ -15,6 +15,7 @@ import {
   getReadyWindowIds,
   getTargetWindowId,
   getUnreachableWindowIds,
+  getWindowCreationRank,
   isApplicationFocused,
   isWindowClosing,
   isWindowTracked,
@@ -82,7 +83,7 @@ const webViewShards = createServiceShardIndex<WebViewServiceShard>({
  *
  * @param windowId Platform id of the window whose shard to get
  */
-export async function getWebViewShard(windowId: number): Promise<WebViewServiceShard | undefined> {
+export async function getWebViewShard(windowId: string): Promise<WebViewServiceShard | undefined> {
   return webViewShards.getShard(windowId);
 }
 
@@ -162,9 +163,9 @@ function isMatchedByMoveInFlight(matcher: OwnerMatcher): boolean {
  */
 export type WebViewWindowCreator = {
   /** Create a window that starts truly empty and waits for routed content. Answers its window id */
-  createPendingContentWindow: () => Promise<number>;
+  createPendingContentWindow: () => Promise<string>;
   /** Close a window this router created whose content never arrived */
-  closeWindow: (windowId: number) => void;
+  closeWindow: (windowId: string) => void;
 };
 
 /**
@@ -210,7 +211,7 @@ type WindowShard = {
    * raising that window afterwards is the only way the user sees where a cross-window operation
    * went.
    */
-  windowId: number;
+  windowId: string;
   shard: WebViewServiceShard;
 };
 
@@ -291,13 +292,15 @@ async function findOwner(
   // Ready-window order is creation order, so picking the first match would prefer a window opened
   // earlier over the one this call is already headed for. Collecting candidates in parallel above
   // does not reintroduce that nondeterminism: selection below only starts once every window has
-  // answered, so whichever one replies fastest cannot change which owner comes out — only window id
-  // and the routing target decide that.
+  // answered, so whichever one replies fastest cannot change which owner comes out — only the
+  // window list's creation order and the routing target decide that.
   const matches = owners.filter((candidate) => candidate !== undefined);
   const targetWindowId = getTargetWindowId();
   const owner =
     matches.find((candidate) => candidate.windowId === targetWindowId) ??
-    matches.sort((a, b) => a.windowId - b.windowId)[0];
+    matches.sort(
+      (a, b) => (getWindowCreationRank(a.windowId) ?? 0) - (getWindowCreationRank(b.windowId) ?? 0),
+    )[0];
   // Both matchers mean "the one in the app", and they differ in what backs that up rather than in
   // what they intend. For an `id` matcher it is enforced: `withWindowScopedWebViewIds` suffixes
   // every id with its window at creation, so two windows answering the same id search means that
@@ -407,13 +410,15 @@ async function findLayoutTargetOwner(
   const holdingWindows = holders.filter((candidate) => candidate !== undefined);
   // Tab group ids are minted per window, so several windows routinely hold the same one, and which
   // window this call is already headed for is what tells those apart — a "+" click in a later
-  // window would otherwise land in an unrelated tab group in the first one. Window id order decides
-  // the rest so that a target held by neither the routing target nor a single window still goes
-  // somewhere predictable rather than wherever answered first.
+  // window would otherwise land in an unrelated tab group in the first one. Creation order (from
+  // the window list) decides the rest so that a target held by neither the routing target nor a
+  // single window still goes somewhere predictable rather than wherever answered first.
   const targetWindowId = getTargetWindowId();
   const owner =
     holdingWindows.find((candidate) => candidate.windowId === targetWindowId) ??
-    holdingWindows.sort((a, b) => a.windowId - b.windowId)[0];
+    holdingWindows.sort(
+      (a, b) => (getWindowCreationRank(a.windowId) ?? 0) - (getWindowCreationRank(b.windowId) ?? 0),
+    )[0];
   return { owner, hadUnreachableWindows: hadServiceErrors };
 }
 
@@ -685,8 +690,13 @@ async function openWebViewInNewWindow(
   );
 }
 
-/** Where a move sends a web view: an existing window's id, or `'new'` for a window created for it */
-type MoveWebViewTarget = number | 'new';
+/**
+ * Where a move sends a web view: an existing window's id, or a window created for it.
+ *
+ * A tagged union rather than `string | 'new'`, which TypeScript collapses to `string` and would
+ * silently destroy the discrimination between an id and the `'new'` sentinel.
+ */
+type MoveWebViewTarget = { kind: 'window'; windowId: string } | { kind: 'new' };
 
 /**
  * How many times {@link findWebViewAdoptedAfterTimeout} asks the target whether the adopt landed.
@@ -759,7 +769,7 @@ async function findWebViewAdoptedAfterTimeout(
  * focus from another application. A new window raises itself when it is created.
  */
 function raiseMoveTarget(target: MoveWebViewTarget): void {
-  if (typeof target === 'number' && isApplicationFocused()) focusWindow(target);
+  if (target.kind === 'window' && isApplicationFocused()) focusWindow(target.windowId);
 }
 
 /**
@@ -794,7 +804,7 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
     throw new Error(`Could not move ${describeMatcher(matcher)}: some windows were unreachable.`);
   if (!owner) throw new Error(`Cannot move webview ${webViewId}: no window has it open.`);
 
-  const targetDescription = target === 'new' ? 'a new window' : `window ${target}`;
+  const targetDescription = target.kind === 'new' ? 'a new window' : `window ${target.windowId}`;
 
   /**
    * The window a move to a new window created and left standing, because content reached it while
@@ -814,7 +824,7 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
    */
   let discardDestination: (() => Promise<void>) | undefined;
 
-  if (target === 'new') {
+  if (target.kind === 'new') {
     // Same read as opening into a new window, but not the same degrade. In Simple mode —
     // single-window by design — there is no other window to move to, and the view already is a
     // tab in the only window there is, so there is nothing to do. A mode that could not be READ is
@@ -846,19 +856,19 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
     discardDestination = freshWindow.discard;
   } else {
     // The web view is already there; closing and reopening it would be churn for nothing
-    if (target === owner.windowId) return webViewId;
+    if (target.windowId === owner.windowId) return webViewId;
     // A window whose close has been decided is a stale target the caller cannot know about:
     // adopting into it would report success and then lose the view when the close lands
-    if (isWindowClosing(target))
+    if (isWindowClosing(target.windowId))
       throw new Error(
-        `Cannot move webview ${webViewId} to window ${target}: that window is closing.`,
+        `Cannot move webview ${webViewId} to window ${target.windowId}: that window is closing.`,
       );
     // Resolved before anything closes: an unknown target must fail the move with the web view
     // untouched
     const shard = await resolveShardForWindow(
       NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
       webViewShards,
-      target,
+      target.windowId,
     );
     targetShard = shard;
     adoptIntoDestination = (definition) => shard.adoptWebView(definition);
@@ -923,8 +933,10 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
       // between the target check at the top of this move and here has been cross-process work the
       // target's close could have been decided during. Throwing hands the web view to the recovery
       // below rather than into a window that is about to take it away.
-      if (typeof target === 'number' && isWindowClosing(target))
-        throw new Error(`window ${target}'s close was decided while the move was in flight`);
+      if (target.kind === 'window' && isWindowClosing(target.windowId))
+        throw new Error(
+          `window ${target.windowId}'s close was decided while the move was in flight`,
+        );
       const movedWebViewId = await adoptIntoDestination(captured);
       if (movedWebViewId !== undefined) {
         raiseMoveTarget(target);
@@ -1146,7 +1158,7 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
           name: 'targetWindowId',
           required: true,
           summary: 'Id of the target window, as `platform.getWindows` reports it',
-          schema: { type: 'number' },
+          schema: { type: 'string' },
         },
       ],
       result: {
@@ -1170,13 +1182,13 @@ const MOVE_COMMAND_DOCS: Record<MoveCommandName, SingleMethodDocumentation> = {
  * letting it reach shard resolution is what tells a caller it named nothing, instead of spending
  * the resolver's retry and failing as though a real window were slow to answer.
  *
- * @param windowId Window id as it arrived, before anything has assumed it is a number
+ * @param windowId Window id as it arrived, before anything has assumed it is a string
  * @param operation Name of the operation to quote back, so a caller can tell which of its calls was
  *   rejected
  */
-function assertWindowExists(windowId: unknown, operation: string): asserts windowId is number {
-  if (typeof windowId !== 'number')
-    throw new Error(`${operation} needs a target window id number; got ${typeof windowId}`);
+function assertWindowExists(windowId: unknown, operation: string): asserts windowId is string {
+  if (typeof windowId !== 'string')
+    throw new Error(`${operation} needs a target window id string; got ${typeof windowId}`);
   if (!isWindowTracked(windowId))
     throw new Error(`${operation} was given window id ${windowId}, which no open window has.`);
 }
@@ -1185,7 +1197,7 @@ function assertWindowExists(windowId: unknown, operation: string): asserts windo
 async function moveWebViewToNewWindow(webViewId: unknown): Promise<WebViewId> {
   if (typeof webViewId !== 'string')
     throw new Error(`platform.moveWebViewToNewWindow needs a web view id; got ${typeof webViewId}`);
-  return moveWebView(webViewId, 'new');
+  return moveWebView(webViewId, { kind: 'new' });
 }
 
 /** Handle `platform.moveWebViewToWindow`. Arguments arrive untyped over the network */
@@ -1196,7 +1208,7 @@ async function moveWebViewToWindow(
   if (typeof webViewId !== 'string')
     throw new Error(`platform.moveWebViewToWindow needs a web view id; got ${typeof webViewId}`);
   assertWindowExists(targetWindowId, 'platform.moveWebViewToWindow');
-  return moveWebView(webViewId, targetWindowId);
+  return moveWebView(webViewId, { kind: 'window', windowId: targetWindowId });
 }
 
 /**
@@ -1434,7 +1446,7 @@ export type OpenWebViewDefinitionsByReachability = {
    *
    * Transient by nature: the window is being reloaded, and it answers again once it comes back.
    */
-  unreachableWindowIds: number[];
+  unreachableWindowIds: string[];
   /**
    * Windows nothing will ever run in again — their renderer died and the reload path gave up — so
    * their web views are missing from `definitions` and will not appear in a later read either.
@@ -1446,7 +1458,7 @@ export type OpenWebViewDefinitionsByReachability = {
    * for the opposite reason: the projects open in a given-up window genuinely never synced, and
    * dropping it here would let the last line of that session's log claim clean coverage.
    */
-  abandonedWindowIds: number[];
+  abandonedWindowIds: string[];
 };
 
 /**
@@ -1463,7 +1475,7 @@ export type OpenWebViewDefinitionsByReachability = {
  * list off as the whole picture.
  */
 export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<OpenWebViewDefinitionsByReachability> {
-  const unreachableWindowIds: number[] = [];
+  const unreachableWindowIds: string[] = [];
 
   // A tracked window that is not ready is not in the list fanned out to below, so nothing else here
   // would ever mention it. For a window that was serving requests and stopped — a crashed renderer,
@@ -1557,7 +1569,7 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
  *   "answered none"
  */
 export async function getOpenWebViewDefinitionsForWindow(
-  windowId: number,
+  windowId: string,
 ): Promise<SavedWebViewDefinition[]> {
   const webViewShard = await getWebViewShard(windowId);
   if (webViewShard) return webViewShard.getAllOpenWebViewDefinitions();

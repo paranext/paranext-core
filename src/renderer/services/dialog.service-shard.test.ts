@@ -138,7 +138,7 @@ describe('dialog.service-shard', () => {
     vi.clearAllMocks();
 
     // A renderer receives its window id as a string query parameter
-    globalThis.windowId = 1;
+    globalThis.windowId = '1';
 
     // Re-mock after clearAllMocks to restore return values
     mockNetworkObjectSet.mockImplementation(
