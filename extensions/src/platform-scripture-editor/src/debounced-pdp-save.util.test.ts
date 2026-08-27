@@ -59,6 +59,29 @@ describe('performDebouncedPdpSave', () => {
     expect(capturedSave).not.toHaveBeenCalled();
   });
 
+  // The chapter keys carry the versification alongside book|chapter (see `getChapterKey`), so a
+  // versification change alone is a cross-chapter fire: the same book and chapter number
+  // re-selected under a different versification is a DIFFERENT chapter document, and writing the
+  // pending content through the new selector would target the wrong document.
+  it('treats a versification-only key change as a chapter change (captured save fn, captured content)', () => {
+    const capturedSave = vi.fn();
+    const latestSave = vi.fn();
+    const getEditorUsj = vi.fn(() => freshEditorUsj);
+
+    performDebouncedPdpSave({
+      usj: scheduledUsj,
+      scheduledChapterKey: 'GEN|1|English',
+      currentChapterKey: 'GEN|1|Septuagint',
+      capturedSave,
+      latestSave,
+      getEditorUsj,
+    });
+
+    expect(capturedSave).toHaveBeenCalledWith(scheduledUsj);
+    expect(latestSave).not.toHaveBeenCalled();
+    expect(getEditorUsj).not.toHaveBeenCalled();
+  });
+
   // Same chapter, but the editor is gone (unmount flush): fall back to the captured USJ.
   it('falls back to the scheduled content when the editor has no USJ to read', () => {
     const latestSave = vi.fn();

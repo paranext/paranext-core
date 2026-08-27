@@ -43,6 +43,22 @@ describe('createFlushableDebouncer', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 
+  // The sync hook's "recent typing wins" replace path relies on both halves of this contract:
+  // the invocation runs synchronously DURING flush (so the save reads the editor before the
+  // caller replaces it), and the returned promise reports whether anything was pending at all.
+  it('flush runs the invocation synchronously and returns its promise; undefined when nothing was pending', async () => {
+    const fn = vi.fn();
+    const d = createFlushableDebouncer(fn, 700);
+
+    expect(d.flush()).toBeUndefined();
+
+    d.schedule('edits');
+    const flushPromise = d.flush();
+    expect(fn).toHaveBeenCalledOnce(); // already ran, before the promise is even awaited
+    expect(flushPromise).toBeInstanceOf(Promise);
+    await expect(flushPromise).resolves.toBeUndefined();
+  });
+
   it('cancel discards the pending call', () => {
     const fn = vi.fn();
     const d = createFlushableDebouncer(fn, 700);

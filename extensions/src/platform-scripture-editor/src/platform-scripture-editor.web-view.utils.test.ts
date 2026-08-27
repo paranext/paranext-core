@@ -11,6 +11,7 @@ import type { EditorRef, SelectionRange, StyleInfo } from '@eten-tech-foundation
 import { isLocalizeKey } from 'platform-bible-utils';
 import {
   generateInlineMarkerMenuListItems,
+  getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
@@ -307,6 +308,25 @@ describe('generateInlineMarkerMenuListItems', () => {
     // fixture above, so this can only pass if the no-styleInfo path is actually wired up.
     expect(items.length).toBeGreaterThan(Object.keys(BASE_STYLE_INFO.markers).length);
     expect(items.some((i) => i.marker === 'wj')).toBe(true);
+  });
+});
+
+describe('getChapterKey', () => {
+  it('is stable for identical inputs', () => {
+    expect(getChapterKey('GEN', 1, 'English')).toBe(getChapterKey('GEN', 1, 'English'));
+  });
+
+  it('differs across book and chapter', () => {
+    expect(getChapterKey('GEN', 1, 'English')).not.toBe(getChapterKey('EXO', 1, 'English'));
+    expect(getChapterKey('GEN', 1, 'English')).not.toBe(getChapterKey('GEN', 2, 'English'));
+  });
+
+  // A versification change re-selects the chapter document just as a chapter switch does, so it
+  // must change the key too — otherwise a pending debounced save scheduled under the old
+  // versification fires as a "same chapter" save through the NEW versification's save function.
+  it('differs when only the versification differs', () => {
+    expect(getChapterKey('GEN', 1, 'English')).not.toBe(getChapterKey('GEN', 1, 'Septuagint'));
+    expect(getChapterKey('GEN', 1, 'English')).not.toBe(getChapterKey('GEN', 1, undefined));
   });
 });
 

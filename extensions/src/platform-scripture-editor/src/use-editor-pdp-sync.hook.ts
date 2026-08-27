@@ -108,6 +108,7 @@ export function useEditorPdpSync({
   usjSentToPdp,
   setEditorUsj,
   saveUsjToPdpIfUpdated,
+  flushPendingDebouncedSave,
   isEditingSessionActive,
   lastLocalEditTimestamp,
 }: {
@@ -133,6 +134,15 @@ export function useEditorPdpSync({
    * that confirmation. A plain `void` return is treated as "ran" for compatibility.
    */
   saveUsjToPdpIfUpdated: () => void | Promise<boolean>;
+  /**
+   * Fires the web view's pending debounced keystroke-driven save NOW, through the normal save
+   * pipeline, and returns that invocation's promise — or `undefined` when no save was pending (or
+   * the capability is not wired). The pending invocation must run SYNCHRONOUSLY during the call
+   * (the flushable debouncer's `flush` contract), so the flushed save reads the editor before the
+   * caller's next statement. Called by the replace path below just before an external update
+   * overwrites the editor — see the "recent typing wins" comment there.
+   */
+  flushPendingDebouncedSave?: () => Promise<void> | undefined;
   /**
    * Extends the "actively editing" deferral beyond DOM focus: returns true while an editing SESSION
    * owns the editor's content even though the editor itself is blurred — a marker-palette session
@@ -193,11 +203,12 @@ export function useEditorPdpSync({
   // one always warns. Reset (below) wherever the round-trip converges or the editor content is
   // replaced, so a genuinely NEW lossy divergence always warns again.
   const warnedLossyDifferences = useRef<UsjContentDivergence[]>([]);
-  // Identity of the document last APPLIED to the editor via setEditorUsj — i.e. what the editor is
-  // showing now. Local edits never change which document the editor shows, so this only moves when
-  // an update is applied. Compared against the current documentSelector to tell a same-document
-  // echo (defer while actively editing) from a different document arriving (navigation: always
-  // replace).
+  // Identity of the document the editor is showing now: recorded when an update is APPLIED via
+  // setEditorUsj, and also when an incoming update matches what this editor last sent (the editor
+  // is already showing that document, and that branch can be the only one a chapter ever runs).
+  // Local edits never change which document the editor shows, so nothing else moves it. Compared
+  // against the current documentSelector to tell a same-document echo (defer while actively
+  // editing) from a different document arriving (navigation: always replace).
   const lastAppliedDocumentSelector = useRef<EditorDocumentSelector | undefined>(undefined);
   // The `usjFromPdp` reference this effect has already acted on. Every decision below reads the
   // (usjFromPdp, documentSelector) PAIR, but the two do not move together: `documentSelector`
@@ -414,11 +425,41 @@ export function useEditorPdpSync({
       lastIncomingUsjDeferred.current = undefined;
       warnedLossyDifferences.current = [];
       lastAppliedDocumentSelector.current = documentSelector;
+      // Recent typing wins: before this external update replaces the editor, flush any pending
+      // debounced keystroke save so the final keystrokes are WRITTEN rather than silently
+      // discarded. (The mirror case — focus still in the editor — pushes them via the deferral
+      // branch above; without this flush, focus at the delivery instant decided between "pushed"
+      // and "lost".) The ordering here is deliberate:
+      //
+      //   - The flush runs its invocation synchronously (see `FlushableDebouncer.flush`), so the
+      //     save reads the editor BEFORE the replace below overwrites it, and its PDP write is
+      //     already in flight — the write-in-flight guard held — when the replace happens. The
+      //     returned promise settles when the invocation completes, not when the PDP write does,
+      //     so awaiting it would only defer the replace to a microtask; the replace proceeds
+      //     synchronously instead, closing any interleaving window.
+      //   - Any pending save here belongs to the CURRENT chapter: a cross-chapter pending save is
+      //     flushed by the web view's chapter-switch effect cleanup before a new chapter's first
+      //     delivery can reach this effect.
+      //   - After the flush, this incoming update is STALE relative to the flushed content. It is
+      //     still applied (below); the flushed write's echo then arrives as an ordinary differing
+      //     delivery and replaces the editor through this same path, converging editor and PDP on
+      //     the typed content. Re-recording the incoming update as last-sent is what routes that
+      //     echo here: the flushed write records its own newer content as last-sent, which would
+      //     make the echo look identical-to-sent and take the push-back branch below — re-pushing
+      //     this stale update's content over the just-flushed keystrokes.
+      if (flushPendingDebouncedSave?.() !== undefined) usjSentToPdp.current = usjFromPdp;
       setEditorUsj.current(usjFromPdp);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
     else {
       nonConvergingDeferralCount.current = 0;
+      // The editor is already showing this document — the incoming update matches what this
+      // editor last sent — so record the selector as applied even though nothing is (re)applied
+      // here. This branch can be the ONLY one a chapter ever runs (the first delivery matches the
+      // sent baseline), and leaving the applied identity unset/stale would make the deferral
+      // branch above misread a later differing delivery as a DIFFERENT document and hard-replace
+      // the actively-edited editor instead of deferring.
+      lastAppliedDocumentSelector.current = documentSelector;
       // Note: warnedLossyDifferences is deliberately NOT reset here. This branch fires when the
       // incoming matches our last-sent baseline, which a damped lossy loop passes through
       // transiently (usjSentToPdp flips between the editor content and the differing echo). Resetting
@@ -434,6 +475,7 @@ export function useEditorPdpSync({
     // are listed to satisfy the exhaustive-deps lint rule.
     documentSelector,
     editorRef,
+    flushPendingDebouncedSave,
     isEditingSessionActive,
     lastLocalEditTimestamp,
     nonConvergingDeferralCount,

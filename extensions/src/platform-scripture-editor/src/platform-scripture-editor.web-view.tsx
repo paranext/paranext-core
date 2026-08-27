@@ -162,6 +162,7 @@ import { CHARACTER_MARKER_MENU_STRING_KEYS } from './character-marker-menu.utils
 import { CHARACTER_MARKER_CONTROL_STRING_KEYS } from './character-marker-control/character-marker-control.component';
 import {
   generateInlineMarkerMenuListItems,
+  getChapterKey,
   markerMenuItemsToResolvedPaletteItems,
   parseCallerSequenceSetting,
   resolveEditingSessionActivity,
@@ -386,12 +387,6 @@ const defaultTextDirection = 'ltr';
 const defaultMarkersMenuTrigger = '\\';
 
 /**
- * Identity of one loaded chapter, for the two places that need to compare "the chapter then"
- * against "the chapter now": the debounced save's chapter-safety guard and the footnotes pane's
- * per-chapter manual override. One helper so those two can never disagree about what counts as the
- * same chapter.
- */
-/**
  * Logs a marker-palette open failure, EXCEPT the routine one: a newer palette request replacing an
  * older one rejects the older show promise with `ABORTED`, which the `\` reopen flow does on every
  * keystroke that commits and reopens.
@@ -406,10 +401,6 @@ function warnUnlessReplaced(paletteDescription: string, error: unknown): void {
   logger.warn(
     `platform-scripture-editor: the ${paletteDescription} did not open: ${getErrorMessage(error)}`,
   );
-}
-
-function getChapterKey(book: string, chapterNum: number): string {
-  return `${book}|${chapterNum}`;
 }
 
 /**
@@ -1718,7 +1709,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         case 'toggleFootnotesPaneVisibility': {
           // A manual toggle wins over the `footnotesAutoShow` auto-show/hide behavior for the
           // chapter it was made in (see `footnotesManualOverrideChapterRef`).
-          footnotesManualOverrideChapterRef.current = getChapterKey(scrRef.book, scrRef.chapterNum);
+          footnotesManualOverrideChapterRef.current = getChapterKey(
+            scrRef.book,
+            scrRef.chapterNum,
+            scrRef.versificationStr,
+          );
           const { current } = footnotesPaneVisibleRef;
           setFootnotesPaneVisible(!current);
           break;
@@ -2558,6 +2553,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // incoming update deliberately did NOT re-push over it); `withWriteInFlightGuard` now owns
   // that flag's lifecycle for the write's own duration, so this counter carries the
   // delivery-arrival half of the old condition instead.
+  //
+  // Known limitation: the counter advances on `usjFromPdp` IDENTITY, and identity-stable
+  // deliveries are invisible to it — in particular the PlatformError path above resolves to the
+  // same module-level `defaultUsj` constant on every errored delivery, so an error burst never
+  // advances the count. The consequence is bounded and mostly harmless: a failed save whose
+  // in-flight window overlapped only such deliveries sees "no newer data" and re-pushes the
+  // editor's content once more.
   const pdpDeliveryCount = useRef(0);
   useEffect(() => {
     pdpDeliveryCount.current += 1;
@@ -2909,7 +2911,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // `performDebouncedPdpSave`'s chapter-safety guard). Assigned during render — NOT in an effect —
   // so that at a chapter-switch flush (which runs in an effect cleanup, before effects) it already
   // reflects the NEW chapter and the guard sees the mismatch.
-  const chapterKey = getChapterKey(scrRef.book, scrRef.chapterNum);
+  const chapterKey = getChapterKey(scrRef.book, scrRef.chapterNum, scrRef.versificationStr);
   const chapterKeyRef = useRef(chapterKey);
   chapterKeyRef.current = chapterKey;
 
@@ -2953,16 +2955,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // window is where a crash, dispose, or quit would otherwise take the final edits with it) nor
   // fire against the WRONG chapter's save context.
   //
-  // (1) Chapter/book switch: flush in this effect's CLEANUP so a pending trailing save is not
-  // dropped when the chapter changes or the web view disposes. Chapter-safety does not rest on
-  // React effect ordering: each `schedule` captured the chapter's save fn and chapter key into the
-  // payload, and `performDebouncedPdpSave` compares the captured chapter key against
+  // (1) Chapter-document switch: flush in this effect's CLEANUP so a pending trailing save is not
+  // dropped when the chapter changes or the web view disposes. The deps mirror `getChapterKey`'s
+  // identity fields exactly — book, chapter number, AND versification, since a versification
+  // change re-selects the chapter document just as a chapter switch does. Chapter-safety does not
+  // rest on React effect ordering: each `schedule` captured the chapter's save fn and chapter key
+  // into the payload, and `performDebouncedPdpSave` compares the captured chapter key against
   // `chapterKeyRef.current` (already the NEW chapter here) — a mismatch saves the captured content
   // via the captured save fn instead of reading the now-swapped editor. Unmount runs the same
   // cleanup, covering web-view dispose.
   useEffect(() => {
-    return () => saveUsjToPdpDebounced.flush();
-  }, [saveUsjToPdpDebounced, scrRef.book, scrRef.chapterNum]);
+    return () => {
+      saveUsjToPdpDebounced.flush();
+    };
+  }, [saveUsjToPdpDebounced, scrRef.book, scrRef.chapterNum, scrRef.versificationStr]);
 
   // (2) Focus loss / page teardown: best-effort flush on window blur and pagehide/beforeunload.
   // The underlying save is async (a papi network send); on teardown paths there is no guarantee
@@ -2970,14 +2976,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // reliability of any async work in these events. On plain blur the send proceeds normally.
   useEffect(() => {
     const flush = () => saveUsjToPdpDebounced.flush();
-    window.addEventListener('blur', flush);
+    const flushOnBlur = () => {
+      // A FOCUSED marker palette is an overlay OUTSIDE this iframe, so opening one blurs this
+      // window — a mid-edit save per palette interaction, not a real focus loss. Skip the blur
+      // flush while a palette session is open: nothing typed during the session lands in the
+      // document (the palette owns the keys and the trigger literal is transient-excluded), so
+      // the debounce simply keeps running, and the chapter-switch and teardown flushes still
+      // cover the windows this one exists for.
+      if (paletteSession.current !== undefined) return;
+      flush();
+    };
+    window.addEventListener('blur', flushOnBlur);
     window.addEventListener('pagehide', flush);
     window.addEventListener('beforeunload', flush);
     return () => {
-      window.removeEventListener('blur', flush);
+      window.removeEventListener('blur', flushOnBlur);
       window.removeEventListener('pagehide', flush);
       window.removeEventListener('beforeunload', flush);
     };
+  }, [saveUsjToPdpDebounced]);
+
+  /**
+   * (3) External replace: fires the pending debounced save, if one is pending, and returns that
+   * invocation's promise (`undefined` when nothing was pending). Passed to `useEditorPdpSync`,
+   * whose replace path calls it just before an external PDP update overwrites the editor — so
+   * recent keystrokes still inside the trailing window are written through the normal save pipeline
+   * instead of being silently discarded (see the "recent typing wins" comment there). Stable
+   * identity (reads only the stable debouncer) so it never re-triggers the sync effect.
+   */
+  const flushPendingDebouncedSave = useCallback(() => {
+    if (!saveUsjToPdpDebounced.isPending()) return undefined;
+    return saveUsjToPdpDebounced.flush();
   }, [saveUsjToPdpDebounced]);
 
   /**
@@ -3139,6 +3168,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     usjSentToPdp,
     setEditorUsj,
     saveUsjToPdpIfUpdated,
+    flushPendingDebouncedSave,
     isEditingSessionActive,
     lastLocalEditTimestamp,
   });

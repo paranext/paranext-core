@@ -541,6 +541,220 @@ describe('useEditorPdpSync', () => {
     expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
   });
 
+  // Recent typing wins: keystrokes still inside the debounce's trailing window when an external
+  // delivery replaces the UNFOCUSED editor must be WRITTEN (the flush fires them through the save
+  // pipeline before the replace), not silently discarded. The mirror case — focus still in the
+  // editor — pushes them via the deferral branch, so without the flush, focus at the delivery
+  // instant decided between "pushed" and "lost".
+  describe('pending-save flush on the replace path', () => {
+    const typedContent = makeChapterUsj('14', 'This is the law of the leper. plus fresh typing');
+    const externalChange = makeChapterUsj('14', 'Externally edited text.');
+
+    /**
+     * Mounts the hook on an UNFOCUSED editor showing LEV 14's typed content, with the initial
+     * delivery already applied. `events` logs 'flush' and 'replace' in call order; `setFlushImpl`
+     * installs what the flush callback does (the callback's identity stays stable, as in the web
+     * view).
+     */
+    function setUpUnfocusedEditorShowingLev14() {
+      const events: string[] = [];
+      let flushImpl: () => Promise<void> | undefined = () => undefined;
+      const flushPendingDebouncedSave = vi.fn(() => flushImpl());
+      const setUsjSpy = vi.fn(() => {
+        events.push('replace');
+      });
+      const saveUsjToPdpIfUpdated = vi.fn();
+      const editorRef: { current: EditorRef | null } = {
+        // EditorRef has many members; casting from a minimal stub is intentional in tests
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        current: {
+          setUsj: setUsjSpy,
+          getUsj: () => typedContent,
+          isFocused: () => false,
+        } as unknown as EditorRef,
+      };
+      const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+      const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+      const { rerender } = renderHook(
+        ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+          useEditorPdpSync({
+            usjFromPdp,
+            documentSelector: lev14Selector,
+            editorRef,
+            usjSentToPdp,
+            lastLocalEditTimestamp,
+            setEditorUsj,
+            saveUsjToPdpIfUpdated,
+            flushPendingDebouncedSave,
+          });
+        },
+        { initialProps: { usjFromPdp: levUsj } },
+      );
+      setUsjSpy.mockClear();
+      flushPendingDebouncedSave.mockClear();
+      events.length = 0;
+
+      return {
+        rerender,
+        events,
+        setUsjSpy,
+        saveUsjToPdpIfUpdated,
+        usjSentToPdp,
+        flushPendingDebouncedSave,
+        setFlushImpl: (impl: () => Promise<void> | undefined) => {
+          flushImpl = impl;
+        },
+      };
+    }
+
+    it("flushes the pending save BEFORE replacing, then routes the flushed write's echo to a replace", () => {
+      const echoOfTyped = { ...typedContent, content: [...typedContent.content] };
+      const harness = setUpUnfocusedEditorShowingLev14();
+      const { rerender, events, setUsjSpy, saveUsjToPdpIfUpdated, usjSentToPdp } = harness;
+      let isSavePending = true; // ONE save is pending when the external delivery lands
+      harness.setFlushImpl(() => {
+        if (!isSavePending) return undefined;
+        isSavePending = false;
+        events.push('flush');
+        // What the real save pipeline does synchronously during a flush: record its own content
+        // as the last thing sent while the PDP write goes into flight.
+        usjSentToPdp.current = typedContent;
+        return Promise.resolve();
+      });
+
+      // An external write lands while the editor is unfocused with a save still pending.
+      act(() => rerender({ usjFromPdp: externalChange }));
+
+      expect(harness.flushPendingDebouncedSave).toHaveBeenCalledOnce();
+      // The flush must run before the replace overwrites the editor content the save reads.
+      expect(events).toEqual(['flush', 'replace']);
+      expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
+      // The incoming (now stale) delivery — not the flushed write's own content — must be
+      // recorded as last-sent, so the flushed write's echo below reads as external and replaces.
+      expect(usjSentToPdp.current).toBe(externalChange);
+
+      setUsjSpy.mockClear();
+      // The flushed write's echo arrives: it must REPLACE the editor (converging on the typed
+      // content), not be mistaken for identical-to-sent and answered by re-pushing the stale
+      // externally-delivered content back over the flushed keystrokes.
+      act(() => rerender({ usjFromPdp: echoOfTyped }));
+      expect(setUsjSpy).toHaveBeenCalledWith(echoOfTyped);
+      expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+    });
+
+    it('replaces exactly as before when no save is pending', () => {
+      const { rerender, setUsjSpy, saveUsjToPdpIfUpdated, usjSentToPdp } =
+        setUpUnfocusedEditorShowingLev14();
+
+      act(() => rerender({ usjFromPdp: externalChange }));
+
+      expect(setUsjSpy).toHaveBeenCalledOnce();
+      expect(setUsjSpy).toHaveBeenCalledWith(externalChange);
+      expect(usjSentToPdp.current).toBe(externalChange);
+      expect(saveUsjToPdpIfUpdated).not.toHaveBeenCalled();
+    });
+
+    it('does not flush while the FOCUSED editor defers the delivery (the push-back path is untouched)', () => {
+      const normalizedEcho = makeChapterUsj('14', 'This is the law of the leper. \\q1');
+      const flushPendingDebouncedSave = vi.fn(() => Promise.resolve());
+      const setUsjSpy = vi.fn();
+      const saveUsjToPdpIfUpdated = vi.fn();
+      const editorRef: { current: EditorRef | null } = {
+        // EditorRef has many members; casting from a minimal stub is intentional in tests
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        current: {
+          setUsj: setUsjSpy,
+          getUsj: () => typedContent,
+          isFocused: () => true,
+        } as unknown as EditorRef,
+      };
+      const usjSentToPdp: { current: Usj | undefined } = { current: undefined };
+      const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+      const { rerender } = renderHook(
+        ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+          useEditorPdpSync({
+            usjFromPdp,
+            documentSelector: lev14Selector,
+            editorRef,
+            usjSentToPdp,
+            lastLocalEditTimestamp,
+            setEditorUsj,
+            saveUsjToPdpIfUpdated,
+            flushPendingDebouncedSave,
+          });
+        },
+        { initialProps: { usjFromPdp: levUsj } },
+      );
+      setUsjSpy.mockClear();
+      saveUsjToPdpIfUpdated.mockClear();
+      flushPendingDebouncedSave.mockClear();
+
+      // A differing same-document echo while actively editing: deferred and pushed back — the
+      // deferral already carries the keystrokes up, so the flush must stay out of it.
+      act(() => rerender({ usjFromPdp: normalizedEcho }));
+
+      expect(setUsjSpy).not.toHaveBeenCalled();
+      expect(saveUsjToPdpIfUpdated).toHaveBeenCalled();
+      expect(flushPendingDebouncedSave).not.toHaveBeenCalled();
+    });
+  });
+
+  // The applied-document identity must be recorded on BOTH exits of the delivery effect. A
+  // delivery that matches the last-sent content applies nothing, but it still proves which
+  // document the editor is showing — and it can be the ONLY delivery a chapter ever gets before
+  // the user starts typing. If that branch skipped the recording, the next differing delivery
+  // read as "different document — always replace" and hard-replaced the actively-edited editor
+  // instead of deferring.
+  it('keeps the deferral keyed to the document after a delivery that matches the last-sent content', () => {
+    const editorContent = makeChapterUsj('14', 'This is the law of the leper. typed more');
+    const differingEcho = makeChapterUsj('14', 'This is the law of the leper. \\q1');
+    // A fresh delivery object with the same content as the sent baseline (whichUpdates '*').
+    const matchingDelivery = { ...levUsj, content: [...levUsj.content] };
+
+    const setUsjSpy = vi.fn();
+    const saveUsjToPdpIfUpdated = vi.fn();
+    const editorRef: { current: EditorRef | null } = {
+      // EditorRef has many members; casting from a minimal stub is intentional in tests
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      current: {
+        setUsj: setUsjSpy,
+        getUsj: () => editorContent,
+        isFocused: () => true,
+      } as unknown as EditorRef,
+    };
+    // This chapter's content was already sent FROM this editor, so the first delivery the effect
+    // observes is the matching confirmation — the else branch — not a differing update.
+    const usjSentToPdp: { current: Usj | undefined } = { current: levUsj };
+    const setEditorUsj = { current: (usj: Usj) => setUsjSpy(usj) };
+
+    const { rerender } = renderHook(
+      ({ usjFromPdp }: { usjFromPdp: Usj }) => {
+        useEditorPdpSync({
+          usjFromPdp,
+          documentSelector: lev14Selector,
+          editorRef,
+          usjSentToPdp,
+          lastLocalEditTimestamp,
+          setEditorUsj,
+          saveUsjToPdpIfUpdated,
+        });
+      },
+      { initialProps: { usjFromPdp: matchingDelivery } },
+    );
+    // The matching delivery applied nothing (it equals what was sent).
+    expect(setUsjSpy).not.toHaveBeenCalled();
+    saveUsjToPdpIfUpdated.mockClear();
+
+    // A differing same-document delivery while actively editing must now DEFER and push back —
+    // not hard-replace — because the matching delivery keyed the deferral to this document.
+    act(() => rerender({ usjFromPdp: differingEcho }));
+
+    expect(setUsjSpy).not.toHaveBeenCalled();
+    expect(saveUsjToPdpIfUpdated).toHaveBeenCalled();
+  });
+
   // Fix 1 (editor-owned focus): the "actively editing" decision must come from the editor
   // instance (editorRef.current.isFocused()), NOT a global document.querySelector('.editor-input')
   // + document.activeElement check. Two failure modes of the old global query, pinned here:

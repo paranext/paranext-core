@@ -44,9 +44,15 @@ export interface DebouncedPdpSaveParams {
    * different content by then), and as a fallback when the editor can no longer be read.
    */
   usj: Usj;
-  /** `book|chapterNum` of the chapter that was active when this save was SCHEDULED. */
+  /**
+   * Identity (`getChapterKey`: book, chapter number, and versification — the chapter-data
+   * selector's identity fields) of the chapter document that was active when this save was
+   * SCHEDULED. Versification participates because a versification change re-selects the chapter
+   * document just as a chapter switch does — firing through the new selector would write through
+   * the wrong document.
+   */
   scheduledChapterKey: string;
-  /** `book|chapterNum` of the chapter active NOW, at fire time. */
+  /** Identity (same shape as {@link scheduledChapterKey}) of the chapter active NOW, at fire time. */
   currentChapterKey: string;
   /**
    * Save fn bound to the chapter that was active when SCHEDULED (captured at schedule time, so it
@@ -77,7 +83,9 @@ export function resolveUsjToSaveToPdp(
 
 /**
  * Runs one fire of the debounced keystroke-driven PDP save, choosing the correct save target so a
- * pending trailing save can NEVER be written to the wrong chapter.
+ * pending trailing save can NEVER be written to the wrong chapter document (a different chapter, or
+ * the same chapter re-selected under a different versification — the chapter keys carry both; see
+ * {@link DebouncedPdpSaveParams.scheduledChapterKey}).
  *
  * A pending 700ms trailing save may fire (via the chapter-switch flush) AFTER the user has already
  * navigated to another chapter. By that point the editor holds the NEW chapter's content and the

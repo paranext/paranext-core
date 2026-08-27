@@ -137,6 +137,26 @@ export function generateInlineMarkerMenuListItems(
   });
 }
 
+/**
+ * Identity of one loaded chapter, for the two places that need to compare "the chapter then"
+ * against "the chapter now": the debounced save's chapter-safety guard and the footnotes pane's
+ * per-chapter manual override. One helper so those two can never disagree about what counts as the
+ * same chapter.
+ *
+ * Carries every identity field of the chapter-data selector (minus `verseNum`, which never changes
+ * which document the subscription delivers): book, chapter number, AND versification. A
+ * versification change re-selects the chapter document just as a chapter switch does, so a key
+ * without it would let a pending debounced save scheduled under the old versification fire through
+ * the NEW versification's save function as a "same chapter" save.
+ */
+export function getChapterKey(
+  book: string,
+  chapterNum: number,
+  versificationStr: string | undefined,
+): string {
+  return `${book}|${chapterNum}|${versificationStr ?? ''}`;
+}
+
 /** Inputs to {@link resolveFootnotesPaneAutoVisibility}. */
 export interface FootnotesPaneAutoVisibilityInput {
   /** Whether the footnotes pane's auto-show/hide behavior is turned on. */
