@@ -8,10 +8,10 @@
   "%acceptButton_tooltip%": {
     "fallbackKey": "%Paratext.Checklists.ChecklistsTool.saveToolStripButton.ToolTipText%"
   },
-  "%closeApp_confirm_cancel%": {
+  "%cancelButton_tooltip%": {
     "fallbackKey": "%general_cancel%"
   },
-  "%cancelButton_tooltip%": {
+  "%closeApp_confirm_cancel%": {
     "fallbackKey": "%general_cancel%"
   },
   "%commentEditor_cancelButton_tooltip%": {
