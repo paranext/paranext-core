@@ -109,8 +109,10 @@ export type WindowEmptiedReason = 'emptied-by-removal' | 'born-empty';
 /**
  * What a window that reported itself empty should do, per the main process:
  *
- * - `open-home`: dock Home instead of staying empty — the window either started empty or is the last
- *   window standing, and closing it would exit the application.
+ * - `open-home`: dock Home instead of staying empty. A window that started empty always gets this; an
+ *   emptied one gets it too when closing it would exit the application — because it is the last
+ *   window standing, or because it is the primary, whose only door out is its own ✕ or the Quit
+ *   menu.
  * - `closing`: the main process is closing this window. Windows are equal siblings; one with nothing
  *   in it has nothing to be.
  * - `stay`: do nothing at all — see below.

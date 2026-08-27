@@ -364,9 +364,8 @@ test.describe('moving a web view between windows', () => {
     // closing that tab. Its own freshly minted Home, whose id can be neither the moved web view's
     // nor the one the fallback layout used.
     //
-    // This no longer exercises the last-window-standing branch it used to (the window created for
-    // the move was still waiting for content while the source emptied). That branch is covered by
-    // `window-emptiness.util.test.ts`; an e2e case for it would need a non-primary source window.
+    // The last-window-standing branch is covered by `window-emptiness.util.test.ts`; an e2e case
+    // for it would need a non-primary source window.
     await expectWindowDockHasOnlyHomeTab(mainPage);
     const [dockedHomeWebViewId] = await getHeldWebViewIds(mainPage);
     expect(dockedHomeWebViewId).toBeDefined();
@@ -447,8 +446,8 @@ test.describe('moving a web view between windows', () => {
     // Window 1 held nothing else, so moving its one web view out empties it — but window 1 is the
     // PRIMARY, and an emptied primary docks Home rather than closing: moving its last tab out does
     // the same thing as closing that last tab. Only its ✕ and the Quit menu close it. Were it to
-    // close here, the live primary reference would name a dead window and window 2 — the one the
-    // user is now working in — would be a secondary whose ✕ drops its layout.
+    // close here, no window would hold the primary role at all, and window 2 — the one the user is
+    // now working in — would be a secondary whose ✕ drops its layout.
     await expectAppWindowCount(
       electronApp,
       2,
