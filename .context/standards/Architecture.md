@@ -28,13 +28,18 @@ Platform.Bible uses **JSON-RPC 2.0 over WebSocket** for inter-process communicat
 │  • Routes messages between processes                     │
 └────────────────┬────────────────────────────────────────┘
                  │ JSON-RPC over WebSocket (port 8876)
-    ┌────────────┼────────────┬───────────────────┐
-    │            │            │                   │
-┌───▼────────┐ ┌─▼──────────┐ ┌▼────────────────┐
-│ Renderer   │ │ Extension  │ │ .NET Data       │
-│ (React UI) │ │ Host       │ │ Provider        │
-└────────────┘ └────────────┘ └─────────────────┘
+    ┌────────────┼─────────────┬───────────────────┐
+    │            │             │                   │
+┌───▼────────┐ ┌─▼──────────┐ ┌▼───────────┐ ┌─────▼───────────┐
+│ Renderer   │ │ Renderer   │ │ Extension  │ │ .NET Data       │
+│ (window 1) │ │ (window N) │ │ Host       │ │ Provider        │
+└────────────┘ └────────────┘ └────────────┘ └─────────────────┘
 ```
+
+One renderer process per window, not one for the application: a window is a full renderer hosting
+its own dock layout and its own window-scoped services, and main is the only process all of them
+have in common. Services that must answer for the whole application therefore live in main, which
+outlives any individual window.
 
 ### Communication Patterns
 
