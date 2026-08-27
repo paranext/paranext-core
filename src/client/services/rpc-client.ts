@@ -51,6 +51,10 @@ export class RpcClient implements IRpcMethodRegistrar {
   private readonly jsonRpcClientServer: JSONRPCServerAndClient;
   private readonly connectionMutex: Mutex = new Mutex();
   private readonly registrationMutexMap: MutexMap = new MutexMap();
+  // TODO(PT-4435): `AsyncVariable` is single-shot and freezes itself once settled, so this
+  // field cannot be reused across connection attempts — a second connect() resolves
+  // instantly and reports Connected before the handshake finishes. Recreate it per attempt
+  // (and move applyMiddleware to the constructor) before adding reconnect.
   private readonly connectionComplete = new AsyncVariable<void>('websocket connected');
   /** Label identifying this process in connection log lines, so multi-window logs stay readable */
   private readonly peerName: string;
