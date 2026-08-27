@@ -122,6 +122,13 @@ type WebViewMoveInFlight = {
   webViewType: WebViewType;
   /** Project the captured view was showing, if any */
   projectId?: string;
+  /**
+   * The definition the capture returned, kept whole rather than split into the fields above:
+   * {@link getAllOpenWebViewDefinitionsWithReachability} folds this into its merged read so a web
+   * view mid-move is not invisible to a caller that selects by `state?.isReadOnly` alongside
+   * `projectId` — a selection `webViewIds`/`webViewType`/`projectId` alone cannot answer.
+   */
+  capturedDefinition: SavedWebViewDefinition;
 };
 
 /**
@@ -868,6 +875,7 @@ async function moveWebView(webViewId: WebViewId, target: MoveWebViewTarget): Pro
     webViewIds: [webViewId, captured.id],
     webViewType: captured.webViewType,
     projectId: captured.projectId,
+    capturedDefinition: captured,
   };
   webViewMovesInFlight.add(moveInFlight);
   try {
@@ -1428,7 +1436,31 @@ export async function getAllOpenWebViewDefinitionsWithReachability(): Promise<Op
       }
     }),
   );
-  return { definitions: definitionsPerWindow.flat(), unreachableWindowIds, abandonedWindowIds };
+  const definitions = definitionsPerWindow.flat();
+
+  // A web view mid-move is open in no window (see `webViewMovesInFlight`), so every window above
+  // answered truthfully and the merged read still misses it — the one gap a caller that selects by
+  // this list, like the shutdown sync's writable-project selection, cannot see for itself. Folded in
+  // by id rather than appended unconditionally: the target may already have adopted while the move
+  // record is still in the set (a late-landing adopt only clears it once its own probe confirms), and
+  // counting that view twice would be as wrong as missing it.
+  const definitionIds = new Set(definitions.map((definition) => definition.id));
+  const foldedInDefinitions: SavedWebViewDefinition[] = [];
+  webViewMovesInFlight.forEach((move) => {
+    if (definitionIds.has(move.capturedDefinition.id)) return;
+    definitionIds.add(move.capturedDefinition.id);
+    foldedInDefinitions.push(move.capturedDefinition);
+  });
+  if (foldedInDefinitions.length > 0)
+    logger.warn(
+      `Web view(s) ${foldedInDefinitions.map((definition) => definition.id).join(', ')} are between windows on a move, so no window reported them; folding in their captured definitions rather than leaving them out of this read.`,
+    );
+
+  return {
+    definitions: [...definitions, ...foldedInDefinitions],
+    unreachableWindowIds,
+    abandonedWindowIds,
+  };
 }
 
 /**
