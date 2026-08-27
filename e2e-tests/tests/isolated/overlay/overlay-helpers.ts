@@ -15,7 +15,7 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
   // calls. Waiting for it ensures the extension has started opening webviews.
   await waitForPapiMethodRegistered('command:helloRock3.openProject', 8876, 60_000);
 
-  // Wait for the Hello Rock3 tab to appear in the dock layout and activate it
+  // Wait for the Hello Rock3 tab to appear in the dock layout and activate it.
   const tab = page.locator('.dock-tab', { hasText: /Hello Rock3/i });
   await tab.first().waitFor({ state: 'visible', timeout: 30_000 });
   await tab.first().click();
@@ -30,6 +30,14 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
   // those looks like success here and fails in the caller ten seconds later on an assertion about
   // some button being hidden, which says nothing about the real problem. Requiring the match to be
   // visible keeps the failure here, where the message can name it.
+  // Activation has to be RE-asserted, not just requested once. helloRock3 opens three web views
+  // into this stack (`helloRock3.html`, the React one, and `helloRock3.react2`), and the command
+  // this function waits for is registered just BEFORE those calls — so the click above can land
+  // while later web views are still arriving, and one of them takes the stack's active tab with it.
+  // Measured: in two of three consecutive full runs the Hello Rock3 tab was present but inactive at
+  // failure time, with "Hello Third Rock React 2" — the last of the three to open — showing instead.
+  // Clicking once and then polling passively can never recover from that, because nothing clicks
+  // again.
   let sawHiddenMatch = false;
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -65,6 +73,15 @@ export async function findHelloRock3Frame(page: Page): Promise<Frame> {
 
     if (match === 'hidden') sawHiddenMatch = true;
     else if (match) return match;
+
+    // The right web view is there but its pane is not the active one, so re-assert the click. A
+    // later-arriving sibling steals activation at most once per web view it opens, so this
+    // converges rather than fighting anything indefinitely.
+    if (match === 'hidden') {
+      // Polling loop: the re-click must finish before the next read, or the read would race it.
+      // eslint-disable-next-line no-await-in-loop
+      await tab.first().click();
+    }
 
     // Polling loop: wait between attempts must be sequential
     // eslint-disable-next-line no-await-in-loop
