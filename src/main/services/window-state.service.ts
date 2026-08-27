@@ -27,16 +27,6 @@ type TrackedWindow = {
 // be closed automatically when the JavaScript objects are garbage collected.
 const trackedWindows: TrackedWindow[] = [];
 
-/**
- * ID of the window holding the primary role — the one whose close decides whether the app quits.
- *
- * Held here, in main, rather than read back from the persisted `isMain` entry: that entry lets go
- * of its runtime id the moment its window starts going down with the app, which is exactly when the
- * close path needs to know which window is primary. This reference is set once when the window is
- * created and is not cleared by the window closing.
- */
-let primaryWindowId: number | undefined;
-
 /** ID of the Electron BrowserWindow that Electron most recently reported as focused, if any */
 let focusedWindowId: number | undefined;
 
@@ -248,30 +238,6 @@ export function countWindowsThatWouldStayOpen(closingWindowId: number): number {
     ({ windowId, window }) =>
       windowId !== closingWindowId && !window.isDestroyed() && !closingWindowIds.has(windowId),
   ).length;
-}
-
-/**
- * Record which window holds the primary role. Called once, when that window is created.
- *
- * @param windowId The window created first by the startup restore
- */
-export function setPrimaryWindowId(windowId: number): void {
-  primaryWindowId = windowId;
-}
-
-/** ID of the window holding the primary role, or `undefined` before one has been created */
-export function getPrimaryWindowId(): number | undefined {
-  return primaryWindowId;
-}
-
-/**
- * Whether a window holds the primary role. Still true while that window is going down with the app,
- * which is when the close path asks.
- *
- * @param windowId Window to check
- */
-export function isPrimaryWindow(windowId: number): boolean {
-  return primaryWindowId !== undefined && primaryWindowId === windowId;
 }
 
 /** Whether a window's renderer has registered its window service, so routing to it can succeed */
@@ -788,7 +754,6 @@ export function resetForTesting(): void {
   closingWindowIds.clear();
   mostRecentlyFocusedWindowIds.length = 0;
   focusedWindowId = undefined;
-  primaryWindowId = undefined;
   doesFocusedWindowHoldOsFocus = false;
   announcedRoutingTarget = { windowId: undefined, isReady: false };
   isWindowPendingContent = () => false;

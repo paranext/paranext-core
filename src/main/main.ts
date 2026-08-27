@@ -72,6 +72,7 @@ import {
   markQuitRequested,
   resetShutdownLatchesForNewSession,
   runShutdownTasksOnce,
+  whenQuitRequested,
 } from '@main/services/shutdown-latch.service';
 import {
   getWebViewShard,
@@ -99,7 +100,6 @@ import {
   markWindowReady,
   removeWindow,
   setFocusedWindowId,
-  setPrimaryWindowId,
   setWindowPendingContentPredicate,
 } from '@main/services/window-state.service';
 import { decideWindowClose } from '@main/services/window-close-decision.service';
@@ -111,6 +111,7 @@ import {
   isWindowPendingContent,
   loadWindowLayouts,
   markWindowPendingContent,
+  isPrimaryWindow,
   setMainWindowId,
   setPendingContentChangeListener,
   trackLegacyWindow,
@@ -406,6 +407,8 @@ async function main() {
     // Which windows may stand in as another window's reason to close is the window-state tracker's
     // rule, whole — see `countWindowsThatCouldBeTheLastOne` for what it leaves out and why
     countWindows: countWindowsThatCouldBeTheLastOne,
+    // The primary reopens Home when emptied rather than closing; only its ✕ and Quit close it
+    isPrimaryWindow,
     closeWindow: (windowId) => BrowserWindow.fromId(windowId)?.close(),
     // A report names its own subject and arrives over the network, so the id is the caller's word.
     // The tracker is what knows whether that word describes a window this process has.
@@ -661,13 +664,20 @@ async function main() {
     if (isAppShuttingDown())
       throw new Error('Cannot create a window while the application is quitting');
 
-    // A window is being created, so the app is alive and whatever brought the last one down is
-    // finished. On macOS that is not the same as process start: closing the final window runs the
-    // shutdown tasks and leaves the app resident, and reactivating from the dock lands here — so
-    // without this the second and every later session would come down without syncing.
-    resetShutdownLatchesForNewSession();
-
     const isFirstWindow = getWindows().length === 0;
+
+    // A window is being created where there were NONE, so the app is alive and whatever brought
+    // the last one down is finished. On macOS that is not the same as process start: closing the
+    // final window runs the shutdown tasks and leaves the app resident, and reactivating from the
+    // dock lands here — so without this the second and every later session would come down without
+    // syncing.
+    //
+    // Only when there were none. A window opened alongside living windows is not a new session,
+    // and resetting there replaces the quit signal the close path may already be waiting on: a
+    // primary showing the close-all question holds the OLD signal, so a quit afterwards would
+    // settle only the new one, the question would never resolve, and the app would sit half-quit
+    // with its latch set.
+    if (isFirstWindow) resetShutdownLatchesForNewSession();
 
     // The flags the process was launched with describe how to show the window that launch is
     // producing, and nothing after it. "No windows tracked" is not that window: on macOS the app
@@ -1104,8 +1114,9 @@ async function main() {
       // escape hatch above, which exists for a close stuck in the bounded sync wait and would take
       // this window down with none of its shutdown work. A second ✕ where the dialog is not truly
       // modal is simply ignored; the open question still stands. A quit-driven close (Cmd+Q, OS
-      // logout) is ignored here too — the decision below is already giving way to that quit, and
-      // the shutdown work runs from THAT pass, so this pass has nothing to add.
+      // logout) is ignored here too — the question is taken down by that same quit and the
+      // decision resolves from it, so the shutdown work runs from THAT pass and this one has
+      // nothing to add.
       if (isAskingAboutClose) return;
 
       // Closing the primary window while others are open takes every window with it, so the user
@@ -1120,6 +1131,12 @@ async function main() {
       let decision;
       try {
         decision = await decideWindowClose(windowId, () => confirmCloseAllWindows(newWindow));
+      } catch (e) {
+        // Nothing has been latched and the window is already prevented from closing, so leaving it
+        // open is the safe outcome — but silently would be indistinguishable from the user
+        // cancelling, and the next ✕ would ask again with no record of why the first did nothing.
+        logger.warn(`Could not ask about closing window ${windowId}: ${getErrorMessage(e)}`);
+        decision = 'stay-open';
       } finally {
         isAskingAboutClose = false;
       }
@@ -1134,7 +1151,15 @@ async function main() {
         // together rather than after this one has finished. Each runs its own handler and finds
         // the quit latch already set.
         getWindows().forEach((otherWindow) => {
-          if (otherWindow.id !== windowId && !otherWindow.isDestroyed()) otherWindow.close();
+          // Excluded by IDENTITY, not by id: `windowId` is this window's id in whichever namespace
+          // the app mints them, and comparing across namespaces would let the primary miss itself
+          // and close itself re-entrantly.
+          if (otherWindow === newWindow || otherWindow.isDestroyed()) return;
+          // A window already on its way out has a close handler mid-flight. Telling it to close
+          // again lands on its `isCloseInProgress` guard, which returns WITHOUT preventing the
+          // close — the escape hatch — so Electron would destroy it before its bounds flush.
+          if (isWindowMarkedClosing(otherWindow.id)) return;
+          otherWindow.close();
         });
       }
 
@@ -1515,25 +1540,11 @@ async function main() {
    * Runs at startup and again on macOS re-activation after the last window closed (the quit-like
    * close path flushed the structure when that window went down).
    */
-  /**
-   * Give a freshly restored window the primary role on both of the surfaces that carry it. The two
-   * are deliberately separate and not derived from each other — the persisted `isMain` entry names
-   * which saved layout restores first, and lets go of its runtime id once that window starts going
-   * down; the live reference is what the close path consults, and survives that — so a restore site
-   * that set one without the other would leave the role half-assigned.
-   *
-   * @param windowId The window the restore created first
-   */
-  const assignPrimaryRole = (windowId: number) => {
-    setMainWindowId(windowId);
-    setPrimaryWindowId(windowId);
-  };
-
   const restoreWindows = async () => {
     const plan = await loadWindowLayouts();
     if (plan.kind === 'legacy') {
       const legacyWindow = await createWindow({ kind: 'legacy', boundsState: plan.boundsState });
-      assignPrimaryRole(legacyWindow.id);
+      setMainWindowId(legacyWindow.id);
       return;
     }
 
@@ -1546,7 +1557,7 @@ async function main() {
       entryIndex: mainEntryIndex,
       entry: entries[mainEntryIndex],
     });
-    assignPrimaryRole(mainWindow.id);
+    setMainWindowId(mainWindow.id);
     if (entries.length <= 1) return;
 
     // Simple mode is single-window: restore only the main window no matter how many entries the
@@ -1609,7 +1620,23 @@ async function main() {
     }
     const closeAllIndex = 0;
     const cancelIndex = 1;
+    // A quit arriving while the question is open takes the box down with it. Electron closes a
+    // signalled message box and answers as if the user had cancelled — so the ANSWER is not what
+    // decides here, the quit latch is; without this the question would sit on screen, inert,
+    // through the whole shutdown, and a click on it would be followed by the app quitting anyway.
+    // Parented to the primary window, which is what makes `signal` work on macOS too.
+    const dismissOnQuit = new AbortController();
+    // Nothing awaits this: it exists to fire once, whenever the quit comes, and the box may well
+    // have been answered and gone by then — aborting a finished box is a no-op
+    const armDismissalOnQuit = async () => {
+      await whenQuitRequested();
+      dismissOnQuit.abort();
+    };
+    armDismissalOnQuit().catch((e: unknown) =>
+      logger.warn(`Could not arm the close-all dismissal: ${getErrorMessage(e)}`),
+    );
     const { response } = await dialog.showMessageBox(primaryWindow, {
+      signal: dismissOnQuit.signal,
       type: 'question',
       // No `title`: macOS hides it, and on Windows and Linux it would print the question twice
       message: strings['%closeApp_confirm_title%'],

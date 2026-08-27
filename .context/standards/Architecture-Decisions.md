@@ -2357,12 +2357,13 @@ step, no automation. Just a record.
   entry: that entry lets go of its runtime id the moment its window starts going down with the
   app, which is exactly when the close path asks. On confirm the quit latch is set BEFORE the other
   windows are told to close, so each reads a quit on its first pass and records `'entry-stays'` by
-  intent rather than by the last-window count happening to flip. Two closes of the primary are
-  NOT the user's ✕ and never ask: a quit already requested (the latch is set, and a quit arriving
-  while the question is open is taken as the answer, since a native dialog cannot be dismissed
-  from code), and a close the app decided itself — the primary emptied of its last web view closes
-  under the equal-siblings rule, and the emptiness handler marks it closing before scheduling that
-  close, which is the signal the decision reads.
+  intent rather than by the last-window count happening to flip. A quit already requested is NOT
+  the user's ✕ and never asks: the latch is set before any window's close, and a quit arriving
+  while the question is open takes the question down with it (Electron closes a signalled message
+  box and reports it as cancelled), so the latch — not the reported answer — is what the decision
+  reads. An emptied primary never reaches this path at all: moving its last tab out reopens Home,
+  exactly as closing that tab does, so the primary cannot disappear except through its own ✕ or
+  Quit.
 - **Alternatives:** Reading `getMainWindowId()` in the close path — rejected; it is the persisted
   lookup and goes `undefined` at the moment of use. A renderer-hosted confirm dialog — rejected;
   see the hanging-requester incident above. Re-electing a new primary when the primary closes —
