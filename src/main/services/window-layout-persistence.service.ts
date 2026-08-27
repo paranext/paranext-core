@@ -38,7 +38,7 @@ import {
   savedLayoutHasAnyTabs,
   savedLayoutHasViewableTabs,
 } from '@shared/utils/saved-layout-reconciliation.util';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, newGuid } from 'platform-bible-utils';
 
 /** File holding the persisted structure, in the app's user data folder */
 const WINDOW_LAYOUTS_FILE_NAME = 'window-layouts.json';
@@ -155,6 +155,9 @@ function parseEntry(value: unknown): ParsedEntry | undefined {
   return {
     entry: {
       ...parseBoundsState(record, record.bounds),
+      // An entry written before slots carried an identity gets one now. It is minted rather than
+      // derived from the entry's position so it never changes once the file is rewritten.
+      slotId: typeof record.slotId === 'string' && record.slotId ? record.slotId : newGuid(),
       // Reconcile at load so phantom content in a saved layout never reaches a window
       layout: layout ? reconcileSavedLayout(layout) : undefined,
       isMain: record.isMain === true ? true : undefined,
@@ -297,13 +300,17 @@ export function assignEntryToWindow(windowId: number, entryIndex: number): void 
  */
 export function trackLegacyWindow(windowId: number): void {
   if (findSlotByWindowId(windowId)) return;
-  fileSlots.push({ entry: { ...legacyBoundsState }, windowId, usesLegacyLayout: true });
+  fileSlots.push({
+    entry: { ...legacyBoundsState, slotId: newGuid() },
+    windowId,
+    usesLegacyLayout: true,
+  });
 }
 
 /** Give a window created mid-session a slot. It has no saved entry, so it starts with an empty one */
 export function trackNewWindow(windowId: number): void {
   if (findSlotByWindowId(windowId)) return;
-  fileSlots.push({ entry: {}, windowId });
+  fileSlots.push({ entry: { slotId: newGuid() }, windowId });
 }
 
 /**
@@ -555,10 +562,11 @@ function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
     logger.warn(`${GET_WINDOW_LAYOUT_REQUEST_TYPE} called for untracked window ${windowId}`);
     return { kind: 'empty' };
   }
-  if (pendingContentWindowIds.has(windowId)) return { kind: 'pending-content' };
-  if (slot.entry.layout) return { kind: 'entry', layout: slot.entry.layout };
-  if (slot.usesLegacyLayout) return { kind: 'legacy' };
-  return { kind: 'empty' };
+  const { slotId } = slot.entry;
+  if (pendingContentWindowIds.has(windowId)) return { kind: 'pending-content', slotId };
+  if (slot.entry.layout) return { kind: 'entry', layout: slot.entry.layout, slotId };
+  if (slot.usesLegacyLayout) return { kind: 'legacy', slotId };
+  return { kind: 'empty', slotId };
 }
 
 function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
@@ -614,8 +622,23 @@ export async function initializeWindowLayoutPersistence(): Promise<void> {
           result: {
             name: 'return value',
             summary:
-              "The window's saved layout, the pre-multi-window layout to fall back to, or nothing to restore",
-            schema: { type: 'object' },
+              "The window's saved layout, the pre-multi-window layout to fall back to, or nothing to restore — plus the stable id of the window's slot, which it keys its per-window storage by",
+            schema: {
+              type: 'object',
+              properties: {
+                kind: {
+                  type: 'string',
+                  enum: ['entry', 'legacy', 'empty', 'pending-content'],
+                },
+                layout: { type: 'object' },
+                slotId: {
+                  type: 'string',
+                  description:
+                    "Stable identity of the window's entry in the persisted structure. Experimental: present on every answer for a tracked window, absent only on the defensive empty answer for an untracked one.",
+                },
+              },
+              required: ['kind'],
+            },
           },
         },
       },

@@ -26,6 +26,7 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import { setWindowSlotId } from '@renderer/services/local-storage.service';
 import FONT_STYLES_RAW from '@renderer/styles/fonts.css?raw';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { LogError } from '@shared/log-error.model';
@@ -1325,6 +1326,10 @@ async function getPersistedLayout(
     return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
   }
   isRunningOnFallbackLayout = false;
+  // Main's answer is the only place this window learns which slot it occupies, and per-window
+  // storage is keyed by that slot. Recorded before any of the returns below so that nothing that
+  // restores web view state during the load reads storage under a key that is not yet known.
+  if (response.slotId !== undefined) setWindowSlotId(response.slotId);
   if (response.kind === 'entry') return { layout: response.layout, isPendingContent: false };
   if (response.kind === 'empty') return { layout: EMPTY_DOCK_LAYOUT, isPendingContent: false };
   if (response.kind === 'pending-content')
