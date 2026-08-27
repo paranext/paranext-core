@@ -426,6 +426,21 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
     expect(state.filter).toBe('ts-S');
   });
 
+  // Numbered markers (`q1`, `li2`, `s0`) are unreachable if a digit does not filter. Paratext 9's
+  // own marker popup cannot type the digit `0` at all — a quirk deliberately not carried over, and
+  // easy to lose again silently, so every digit is claimed and routed here.
+  it('backslash session: every digit is a filter char, including the `0` Paratext 9 cannot type', () => {
+    const driver = makeDriver();
+    const state = session('backslash', 'q');
+    '0123456789'.split('').forEach((digit) => {
+      const event = makeEvent(digit);
+      expect(handleMarkerPaletteSessionKeyDown(event, state, driver)).toBe('continue');
+      expect(event.defaultPrevented).toBe(true); // claimed — typing filters, never lands
+    });
+    expect(state.filter).toBe('q0123456789');
+    expect(driver.commitTyped).not.toHaveBeenCalled();
+  });
+
   it('backslash session: Space COMMITS (claimed, like Enter) when shouldSpaceCommit approves the filter', () => {
     // Typing `\f` then Space must insert an empty footnote exactly like `\f` + Enter — letting
     // the literal ` ` land would hand `\f ` to the Tier-2 tokenizer, which absorbs the rest of
