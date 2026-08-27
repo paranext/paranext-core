@@ -33,7 +33,7 @@ const notificationShards = createServiceShardIndex<INotificationService>({
 });
 
 /** Get the notification service shard for a specific window. Undefined if it has not registered. */
-async function getNotificationShard(windowId: number): Promise<INotificationService | undefined> {
+async function getNotificationShard(windowId: string): Promise<INotificationService | undefined> {
   return notificationShards.getShard(windowId);
 }
 

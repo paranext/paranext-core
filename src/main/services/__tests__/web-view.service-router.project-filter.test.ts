@@ -52,8 +52,8 @@ const mocks = vi.hoisted(() => {
 
 /** Wire windows whose WebView service shards are the given objects */
 function withWindows(
-  shardsByWindowId: Record<number, unknown>,
-  options?: { startingWindowIds?: number[]; unreachableWindowIds?: number[] },
+  shardsByWindowId: Record<string, unknown>,
+  options?: { startingWindowIds?: string[]; unreachableWindowIds?: string[] },
 ) {
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId, options);
 }
@@ -71,6 +71,9 @@ vi.mock('@main/services/window-state.service', () => ({
   // No test here is about the cross-window raise; the app holding focus is what allows one
   isApplicationFocused: () => true,
   focusWindow: mocks.focusWindow,
+  // Ids are still minted from a numeric counter (stringified) in this slice, so a numeric
+  // comparison recovers the creation-order ranking the real function reads from the tracked list.
+  getWindowCreationRank: (windowId: string) => Number(windowId),
 }));
 vi.mock('@shared/services/network-object.service', () => ({
   networkObjectService: { get: mocks.networkObjectGet, set: mocks.networkObjectSet },
@@ -121,12 +124,12 @@ function commentsFor(id: string, projectId: string): SavedWebViewDefinition {
 describe("a '?' reuse search limited to a project", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getTargetWindowId.mockReturnValue('1');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
-    mocks.getFocusedWindowId.mockReturnValue(1);
+    mocks.getFocusedWindowId.mockReturnValue('1');
     mocks.settingsGet.mockResolvedValue('power');
   });
 
@@ -173,7 +176,7 @@ describe("a '?' reuse search limited to a project", () => {
     const target = windowShard([commentsFor('wv-here', 'project-B')]);
     target.openWebView.mockResolvedValue('wv-here');
     withWindows({ 1: older, 2: target });
-    mocks.getTargetWindowId.mockReturnValue(2);
+    mocks.getTargetWindowId.mockReturnValue('2');
     const router = await getRouter();
 
     const result = await router.openWebView('comments', undefined, { existingId: '?' });
@@ -226,7 +229,7 @@ describe("a '?' reuse search limited to a project", () => {
     const target = windowShard([]);
     // What the real shard answers for a probe it cannot satisfy
     target.openWebView.mockResolvedValue(undefined);
-    withWindows({ 1: target, 2: windowShard([]) }, { unreachableWindowIds: [2] });
+    withWindows({ 1: target, 2: windowShard([]) }, { unreachableWindowIds: ['2'] });
     const router = await getRouter();
 
     await expect(
@@ -247,7 +250,7 @@ describe("a '?' reuse search limited to a project", () => {
     // unreachable would make the entry point do nothing at all, so the open falls through to the
     // window the user is looking at — a second copy there is the cheaper way to be wrong
     const target = windowShard([]);
-    withWindows({ 1: target, 2: windowShard([]) }, { unreachableWindowIds: [2] });
+    withWindows({ 1: target, 2: windowShard([]) }, { unreachableWindowIds: ['2'] });
     const router = await getRouter();
 
     await expect(

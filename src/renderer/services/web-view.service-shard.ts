@@ -639,9 +639,8 @@ const EMPTY_DOCK_LAYOUT: LayoutInfo = { dockbox: { mode: 'horizontal', children:
  *
  * @throws If the window id is not set
  */
-function getWindowIdOrThrow(): number {
-  // The id is read and validated once, where the renderer reads the URL. Compared against
-  // `undefined` rather than tested for truthiness, so a 0 could never be mistaken for an absent id.
+function getWindowIdOrThrow(): string {
+  // The id is read and validated once, where the renderer reads the URL.
   if (globalThis.windowId === undefined)
     throw new Error('windowId is not set. Check that the URL includes the windowId parameter.');
   return globalThis.windowId;
@@ -1301,7 +1300,7 @@ async function getPersistedLayout(
     try {
       // Sequential retries: each attempt must settle before the next may start
       // eslint-disable-next-line no-await-in-loop
-      response = await sendNetworkRequest<[number], WindowLayoutGetResponse>(
+      response = await sendNetworkRequest<[string], WindowLayoutGetResponse>(
         GET_WINDOW_LAYOUT_REQUEST_TYPE,
         getWindowIdOrThrow(),
       );
@@ -3263,7 +3262,7 @@ async function reportDockEmptied(reason: WindowEmptiedReason): Promise<void> {
       );
       // Sequential attempts: each one must settle before the next may start
       // eslint-disable-next-line no-await-in-loop
-      response = await sendNetworkRequest<[number, WindowEmptiedReason], WindowEmptiedResponse>(
+      response = await sendNetworkRequest<[string, WindowEmptiedReason], WindowEmptiedResponse>(
         WINDOW_EMPTIED_REQUEST_TYPE,
         windowId,
         reason,

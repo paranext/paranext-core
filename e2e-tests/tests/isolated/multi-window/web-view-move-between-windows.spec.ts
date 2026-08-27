@@ -113,7 +113,7 @@ async function moveWebViewToNewWindow(webViewId: string): Promise<string> {
 }
 
 /** Move a web view to an already-open window, answering its authoritative id after the move. */
-async function moveWebViewToWindow(webViewId: string, targetWindowId: number): Promise<string> {
+async function moveWebViewToWindow(webViewId: string, targetWindowId: string): Promise<string> {
   return sendPapiRequestOnce<string>(
     'command:platform.moveWebViewToWindow',
     [webViewId, targetWindowId],

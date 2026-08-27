@@ -27,7 +27,7 @@ const CONTRIBUTED = [floatItem, moveToNewWindowItem, moveToWindowSubmenu];
 
 const context = (overrides: Partial<TabMenuContext> = {}): TabMenuContext => ({
   webViewId: 'tab-1',
-  otherWindows: [{ windowId: 2, label: 'Biblical Terms', isMain: false }],
+  otherWindows: [{ windowId: '2', label: 'Biblical Terms', isMain: false }],
   isOnlyTabInWindowThatWouldClose: false,
   ...overrides,
 });
@@ -52,8 +52,8 @@ describe('buildTabMenuItems', () => {
       CONTRIBUTED,
       context({
         otherWindows: [
-          { windowId: 2, label: 'Biblical Terms', isMain: false },
-          { windowId: 3, label: 'MRK — wgPIDGIN', isMain: true },
+          { windowId: '2', label: 'Biblical Terms', isMain: false },
+          { windowId: '3', label: 'MRK — wgPIDGIN', isMain: true },
         ],
       }),
       'Empty window',
@@ -73,7 +73,7 @@ describe('buildTabMenuItems', () => {
   test('names a window showing nothing titled', () => {
     const result = buildTabMenuItems(
       CONTRIBUTED,
-      context({ otherWindows: [{ windowId: 2, label: '', isMain: false }] }),
+      context({ otherWindows: [{ windowId: '2', label: '', isMain: false }] }),
       'Empty window',
     );
 

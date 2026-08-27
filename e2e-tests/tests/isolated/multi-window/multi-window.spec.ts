@@ -194,7 +194,7 @@ async function getGenericWindowFocus(): Promise<FocusSubjectLike> {
  * service router. This is the ground truth of what that window would answer if the generic call
  * were routed to it.
  */
-async function getScopedWindowFocus(windowId: number): Promise<FocusSubjectLike> {
+async function getScopedWindowFocus(windowId: string): Promise<FocusSubjectLike> {
   return sendPapiRequestOnce<FocusSubjectLike>(
     `object:platform.windowServiceDataProvider-${windowId}-data.getFocus`,
     [],
@@ -312,7 +312,7 @@ async function expectToolbarReferenceToContain(
  * service reports as a web-view focus subject carrying the scoped web view id. The click lands near
  * the iframe's top-left corner, which is static content in the Home view (no button to trip).
  */
-async function clickIntoHomeWebView(page: Page, windowId: number): Promise<void> {
+async function clickIntoHomeWebView(page: Page, windowId: string): Promise<void> {
   const homeIframe = page.locator(`iframe[data-web-view-id="${homeTabWebViewId(windowId)}"]`);
   await expect(homeIframe).toBeVisible({ timeout: 60_000 });
   await page
@@ -327,7 +327,7 @@ async function clickIntoHomeWebView(page: Page, windowId: number): Promise<void>
  * detection in the renderer is debounced and the service router re-resolves its target on focus
  * changes.
  */
-async function waitForGenericFocusToReportWindow(windowId: number): Promise<FocusSubjectLike> {
+async function waitForGenericFocusToReportWindow(windowId: string): Promise<FocusSubjectLike> {
   return pollUntil(
     getGenericWindowFocus,
     (focus) => typeof focus?.id === 'string' && focus.id.endsWith(`-w${windowId}`),

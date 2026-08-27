@@ -124,7 +124,7 @@ type Rectangle = { x: number; y: number; width: number; height: number };
 /** Read a window's current bounds from the main process. */
 async function getWindowBounds(
   electronApp: ElectronApplication,
-  windowId: number,
+  windowId: string,
 ): Promise<Rectangle> {
   return withPlatformWindow(electronApp, windowId, (win) => win.getBounds());
 }
@@ -160,7 +160,7 @@ async function getDisplayBounds(electronApp: ElectronApplication): Promise<Recta
  */
 async function placeWindowAndSettle(
   electronApp: ElectronApplication,
-  windowId: number,
+  windowId: string,
   targetBounds: Rectangle,
 ): Promise<Rectangle> {
   let settled: Rectangle | undefined;
@@ -673,7 +673,7 @@ test.describe('window layout persistence', () => {
 
       // Two mid-session windows, so the session holds three. Each docks its own Home tab, having
       // nothing else of its own to show.
-      const secondaryIds1: number[] = [];
+      const secondaryIds1: string[] = [];
       for (let index = 1; index < sizes.length; index += 1) {
         // Sequential on purpose: each window must be up and registered before the next is created,
         // so a failure names the window it belongs to.

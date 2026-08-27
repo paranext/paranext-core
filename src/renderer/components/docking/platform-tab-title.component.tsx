@@ -194,7 +194,7 @@ const reportMoveFailure = async (webViewIdToMove: WebViewId, error: unknown) => 
   }
 };
 
-const handleMoveTabToWindow = async (webViewIdToMove: WebViewId, targetWindowId: number) => {
+const handleMoveTabToWindow = async (webViewIdToMove: WebViewId, targetWindowId: string) => {
   try {
     await sendCommand('platform.moveWebViewToWindow', webViewIdToMove, targetWindowId);
   } catch (error) {

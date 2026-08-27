@@ -58,17 +58,11 @@ globalThis.isNoisyDevModeEnabled = searchParams.get(DEV_MODE_QUERY_PARAMETER) !=
 // eslint-disable-next-line no-null/no-null
 globalThis.startupMarks = searchParams.get(STARTUP_MARKS_QUERY_PARAMETER) !== null;
 
-// Id of the window this renderer is running in. Parsed here, once, so that everything downstream
-// holds the same numeric id main routes by rather than a string that has to agree with it — and
-// left `undefined` when the parameter is absent or not an integer, since a window that cannot say
-// which one it is must not claim to be some other one. `URL_PARAMETERS` declares this parameter as
-// an integer; parsing to match is what makes that declaration mean something.
-// Positive rather than merely an integer: `Number(null)` is 0, so an absent parameter would
-// otherwise parse as a window claiming to be window 0. Ids are minted from 1 upward, so no window
-// can legitimately be 0 either.
-const requestedWindowId = Number(searchParams.get(WINDOW_ID));
-globalThis.windowId =
-  Number.isInteger(requestedWindowId) && requestedWindowId > 0 ? requestedWindowId : undefined;
+// Id of the window this renderer is running in. Read here, once, so that everything downstream
+// holds the same id main routes by — and left `undefined` when the parameter is absent or empty,
+// since a window that cannot say which one it is must not claim to be some other one.
+const requestedWindowId = searchParams.get(WINDOW_ID);
+globalThis.windowId = requestedWindowId || undefined;
 
 // Slot this window occupies in the persisted window-layouts structure, which its per-window storage
 // is keyed by. Main puts it on the URL because it knows the slot before the window loads, and this

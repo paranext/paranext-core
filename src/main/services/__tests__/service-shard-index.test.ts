@@ -46,7 +46,7 @@ function announceDispose(networkObjectId: string) {
 }
 
 /** Announce a service shard of the type under test, registered by the given window */
-function announceShard(windowId: number, networkObjectId = `TestService-${windowId}`) {
+function announceShard(windowId: string, networkObjectId = `TestService-${windowId}`) {
   announceCreate({
     id: networkObjectId,
     objectType: SHARD_OBJECT_TYPE,
@@ -64,32 +64,32 @@ describe('service shard index', () => {
     const index = createIndex();
     // An id that has nothing to do with the window id, so a name built from the window id could
     // not possibly find it
-    announceShard(1, 'some-unguessable-shard-id');
+    announceShard('1', 'some-unguessable-shard-id');
 
-    return expect(index.getShard(1)).resolves.toEqual({ id: 'some-unguessable-shard-id' });
+    return expect(index.getShard('1')).resolves.toEqual({ id: 'some-unguessable-shard-id' });
   });
 
   test('discovers a second window that registers after the index was created', async () => {
     const index = createIndex();
-    announceShard(1);
-    expect(await index.getShard(2)).toBeUndefined();
+    announceShard('1');
+    expect(await index.getShard('2')).toBeUndefined();
 
-    announceShard(2);
+    announceShard('2');
 
-    expect(await index.getShard(2)).toEqual({ id: 'TestService-2' });
+    expect(await index.getShard('2')).toEqual({ id: 'TestService-2' });
   });
 
   test('forgets a shard once its network object announces that it is gone', async () => {
     // A window's shard dies with the window; the disposal announcement is the only thing that says
     // so, and a router that kept serving the dead shard would route calls into a closed window
     const index = createIndex();
-    announceShard(1);
-    announceShard(2);
+    announceShard('1');
+    announceShard('2');
 
     announceDispose('TestService-2');
 
-    expect(await index.getShard(2)).toBeUndefined();
-    expect(await index.getShard(1)).toEqual({ id: 'TestService-1' });
+    expect(await index.getShard('2')).toBeUndefined();
+    expect(await index.getShard('1')).toEqual({ id: 'TestService-1' });
   });
 
   test('ignores network objects that are not this service`s shards', async () => {
@@ -100,11 +100,11 @@ describe('service shard index', () => {
     announceCreate({
       id: 'OtherService-1',
       objectType: 'otherServiceShard',
-      attributes: { windowId: 1 },
+      attributes: { windowId: '1' },
     });
     announceCreate({ id: 'SomethingElse' });
 
-    expect(await index.getShard(1)).toBeUndefined();
+    expect(await index.getShard('1')).toBeUndefined();
     expect(mocks.networkObjectGet).not.toHaveBeenCalled();
   });
 
@@ -117,11 +117,11 @@ describe('service shard index', () => {
     announceCreate({
       id: 'TestService-2',
       objectType: SHARD_OBJECT_TYPE,
-      attributes: { windowId: 'two' },
+      attributes: { windowId: 2 },
     });
 
-    expect(await index.getShard(1)).toBeUndefined();
-    expect(await index.getShard(2)).toBeUndefined();
+    expect(await index.getShard('1')).toBeUndefined();
+    expect(await index.getShard('2')).toBeUndefined();
   });
 
   test('says which shard it dropped for not saying which window it belongs to', async () => {
@@ -133,38 +133,38 @@ describe('service shard index', () => {
     announceCreate({
       id: 'TestService-2',
       objectType: SHARD_OBJECT_TYPE,
-      attributes: { windowId: 'two' },
+      attributes: { windowId: 2 },
     });
 
     const [warning] = mocks.loggerWarn.mock.calls[0];
     expect(warning).toContain("'TestService-2'");
-    expect(warning).toContain('"windowId":"two"');
+    expect(warning).toContain('"windowId":2');
   });
 
   test('reports the windows it has shards for, so a late subscriber can catch up', async () => {
     // `onDidAddShard` has no replay. Anything that reacts to shards appearing reconciles against
     // this when it subscribes, or it silently misses every window indexed before that moment.
     const index = createIndex();
-    announceShard(1);
-    announceShard(3);
+    announceShard('1');
+    announceShard('3');
 
-    expect(index.getShardWindowIds()).toEqual([1, 3]);
+    expect(index.getShardWindowIds()).toEqual(['1', '3']);
 
     announceDispose('TestService-1');
 
-    expect(index.getShardWindowIds()).toEqual([3]);
+    expect(index.getShardWindowIds()).toEqual(['3']);
   });
 
   test('announces the window whose shard just registered', () => {
     // Startup wiring keys window readiness off this rather than off a network object id it parses
     const index = createIndex();
-    const readyWindowIds: number[] = [];
+    const readyWindowIds: string[] = [];
     index.onDidAddShard((windowId) => readyWindowIds.push(windowId));
 
-    announceShard(3);
-    announceCreate({ id: 'Unrelated', objectType: 'somethingElse', attributes: { windowId: 4 } });
+    announceShard('3');
+    announceCreate({ id: 'Unrelated', objectType: 'somethingElse', attributes: { windowId: '4' } });
 
-    expect(readyWindowIds).toEqual([3]);
+    expect(readyWindowIds).toEqual(['3']);
   });
 
   test('announces the window whose shard went away, with the id it was announced under', () => {
@@ -174,11 +174,11 @@ describe('service shard index', () => {
     const index = createIndex();
     const departures: unknown[] = [];
     index.onDidRemoveShard((departure) => departures.push(departure));
-    announceShard(3, 'TestService-3');
+    announceShard('3', 'TestService-3');
 
     announceDispose('TestService-3');
 
-    expect(departures).toEqual([{ windowId: 3, networkObjectId: 'TestService-3' }]);
+    expect(departures).toEqual([{ windowId: '3', networkObjectId: 'TestService-3' }]);
   });
 
   test('says nothing went away when a window replaced its shard rather than losing it', () => {
@@ -187,8 +187,8 @@ describe('service shard index', () => {
     const index = createIndex();
     const departures: unknown[] = [];
     index.onDidRemoveShard((departure) => departures.push(departure));
-    announceShard(1, 'TestService-1');
-    announceShard(1, 'TestService-1');
+    announceShard('1', 'TestService-1');
+    announceShard('1', 'TestService-1');
 
     announceDispose('TestService-1');
 
@@ -202,11 +202,11 @@ describe('service shard index', () => {
       throw new Error('this departure subscriber is broken');
     });
     index.onDidRemoveShard((departure) => laterSubscriberSaw.push(departure));
-    announceShard(5, 'TestService-5');
+    announceShard('5', 'TestService-5');
 
     expect(() => announceDispose('TestService-5')).not.toThrow();
 
-    expect(laterSubscriberSaw).toEqual([{ windowId: 5, networkObjectId: 'TestService-5' }]);
+    expect(laterSubscriberSaw).toEqual([{ windowId: '5', networkObjectId: 'TestService-5' }]);
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.stringContaining('this departure subscriber is broken'),
     );
@@ -216,21 +216,21 @@ describe('service shard index', () => {
     // A caller that has to name the shard's methods gets the id the shard actually registered
     // under, rather than a second spelling of the window-scoped name
     const index = createIndex();
-    announceShard(2, 'some-shard-id-2');
+    announceShard('2', 'some-shard-id-2');
 
-    expect(index.getShardNetworkObjectId(2)).toBe('some-shard-id-2');
-    expect(index.getShardNetworkObjectId(9)).toBeUndefined();
+    expect(index.getShardNetworkObjectId('2')).toBe('some-shard-id-2');
+    expect(index.getShardNetworkObjectId('9')).toBeUndefined();
   });
 
   test('serves the newest registration when a window`s renderer registers again', async () => {
     // A renderer that reloads registers a brand new shard under the same window-scoped id; the
     // index has to hand back the new one rather than the page that is gone
     const index = createIndex();
-    announceShard(1, 'TestService-1');
+    announceShard('1', 'TestService-1');
     announceDispose('TestService-1');
-    announceShard(1, 'TestService-1');
+    announceShard('1', 'TestService-1');
 
-    expect(await index.getShard(1)).toEqual({ id: 'TestService-1' });
+    expect(await index.getShard('1')).toEqual({ id: 'TestService-1' });
   });
 
   test('keeps the live shard when the replaced one`s disposal arrives after the replacement', async () => {
@@ -239,28 +239,28 @@ describe('service shard index', () => {
     // a shard that is serving calls, and nothing re-announces a shard that is already registered,
     // so it would never come back.
     const index = createIndex();
-    announceShard(1, 'TestService-1');
-    announceShard(1, 'TestService-1');
+    announceShard('1', 'TestService-1');
+    announceShard('1', 'TestService-1');
 
     announceDispose('TestService-1');
 
-    expect(await index.getShard(1)).toEqual({ id: 'TestService-1' });
-    expect(index.getShardWindowIds()).toEqual([1]);
+    expect(await index.getShard('1')).toEqual({ id: 'TestService-1' });
+    expect(index.getShardWindowIds()).toEqual(['1']);
 
     // The replacement's own disposal still empties the entry, so nothing routes into a dead window
     announceDispose('TestService-1');
 
-    expect(await index.getShard(1)).toBeUndefined();
+    expect(await index.getShard('1')).toBeUndefined();
   });
 
   test('records that a window`s shard went away, so a routing failure has a cause in the log', async () => {
     const index = createIndex();
-    announceShard(1);
+    announceShard('1');
 
     announceDispose('TestService-1');
 
     expect(mocks.loggerInfo).toHaveBeenCalledWith(expect.stringContaining('TestService-1'));
-    expect(await index.getShard(1)).toBeUndefined();
+    expect(await index.getShard('1')).toBeUndefined();
   });
 
   test('tells the remaining subscribers about a shard even when an earlier one throws', async () => {
@@ -268,15 +268,15 @@ describe('service shard index', () => {
     // subscriber that throws would otherwise leave every subscriber after it — and the window they
     // speak for — permanently unaware that the window can serve calls.
     const index = createIndex();
-    const laterSubscriberSaw: number[] = [];
+    const laterSubscriberSaw: string[] = [];
     index.onDidAddShard(() => {
       throw new Error('this subscriber is broken');
     });
     index.onDidAddShard((windowId) => laterSubscriberSaw.push(windowId));
 
-    expect(() => announceShard(7)).not.toThrow();
+    expect(() => announceShard('7')).not.toThrow();
 
-    expect(laterSubscriberSaw).toEqual([7]);
+    expect(laterSubscriberSaw).toEqual(['7']);
     expect(mocks.loggerError).toHaveBeenCalledWith(
       expect.stringContaining('this subscriber is broken'),
     );
@@ -287,9 +287,9 @@ describe('service shard index', () => {
     // provider service so the caller gets the provider proxy rather than the raw object
     const resolveShard = vi.fn(async (id: string) => ({ resolvedBy: 'dataProviderService', id }));
     const index = createServiceShardIndex({ objectType: SHARD_OBJECT_TYPE, resolveShard });
-    announceShard(1, 'TestService-1-data');
+    announceShard('1', 'TestService-1-data');
 
-    expect(await index.getShard(1)).toEqual({
+    expect(await index.getShard('1')).toEqual({
       resolvedBy: 'dataProviderService',
       id: 'TestService-1-data',
     });

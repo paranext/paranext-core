@@ -39,11 +39,11 @@ describe('localWindowStorage', () => {
   test('a restored window finds its slot’s state whatever window id it was given', () => {
     // The whole reason storage is keyed by slot: across a relaunch the slot is the same and the
     // window id is not. A relaunch here is a new window id with the same slot.
-    globalThis.windowId = 1;
+    globalThis.windowId = '1';
     localWindowStorage.setItem(KEY, 'saved last session');
 
     testingLocalWindowStorage.resetForTesting();
-    globalThis.windowId = 2;
+    globalThis.windowId = '2';
     setWindowSlotId(SLOT_A);
 
     expect(localWindowStorage.getItem(KEY)).toBe('saved last session');

@@ -199,8 +199,8 @@ export async function pollUntil<T>(
 const ROUTED_CALL_TIMEOUT_MS = 15_000;
 
 /** Ask the main process which window id it currently routes to. */
-export async function getFocusedWindowId(): Promise<number | undefined> {
-  return sendPapiRequestOnce<number | undefined>(
+export async function getFocusedWindowId(): Promise<string | undefined> {
+  return sendPapiRequestOnce<string | undefined>(
     'command:platform.getFocusedWindowId',
     [],
     WEBSOCKET_PORT,
@@ -235,7 +235,7 @@ const OS_FOCUS_COOPERATION_BUDGET_MS = 10_000;
  */
 export async function focusWindowAndWaitForRouting(
   electronApp: ElectronApplication,
-  windowId: number,
+  windowId: string,
 ): Promise<void> {
   const startTime = Date.now();
   await pollUntil(
@@ -303,7 +303,7 @@ export type PlatformWindowActionContext = {
  */
 export async function withPlatformWindow<TArg, TResult>(
   electronApp: ElectronApplication,
-  windowId: number,
+  windowId: string,
   action: (
     win: import('electron').BrowserWindow,
     context: PlatformWindowActionContext,
@@ -315,7 +315,7 @@ export async function withPlatformWindow<TArg, TResult>(
     ({ BrowserWindow, screen }, { id, actionSource, actionArg }) => {
       const platformIdOf = (someWindow: { webContents: { getURL: () => string } }) => {
         try {
-          return Number(new URL(someWindow.webContents.getURL()).searchParams.get('windowId'));
+          return new URL(someWindow.webContents.getURL()).searchParams.get('windowId') ?? undefined;
         } catch {
           return undefined;
         }
@@ -342,12 +342,10 @@ export async function withPlatformWindow<TArg, TResult>(
  * window from this value has to match on the same query parameter rather than call
  * `BrowserWindow.fromId`.
  */
-export function getWindowIdOfPage(page: Page): number {
+export function getWindowIdOfPage(page: Page): string {
   const rawId = new URL(page.url()).searchParams.get('windowId');
-  const id = Number(rawId);
-  if (!Number.isInteger(id) || id <= 0)
-    throw new Error(`Page URL ${page.url()} has no usable windowId query parameter`);
-  return id;
+  if (!rawId) throw new Error(`Page URL ${page.url()} has no usable windowId query parameter`);
+  return rawId;
 }
 
 /**
@@ -358,10 +356,15 @@ export function getWindowIdOfPage(page: Page): number {
  * before any secondary window.
  */
 export function getAppPages(electronApp: ElectronApplication): Page[] {
-  return electronApp
-    .windows()
-    .filter((page) => !page.isClosed() && page.url().includes('windowId='))
-    .sort((a, b) => getWindowIdOfPage(a) - getWindowIdOfPage(b));
+  return (
+    electronApp
+      .windows()
+      .filter((page) => !page.isClosed() && page.url().includes('windowId='))
+      // Ids are still minted from a numeric counter (stringified) in this slice, so a numeric
+      // comparison recovers creation order; a later slice that mints non-numeric ids will need a
+      // different tie-break here.
+      .sort((a, b) => Number(getWindowIdOfPage(a)) - Number(getWindowIdOfPage(b)))
+  );
 }
 
 /**
@@ -489,11 +492,11 @@ export async function widenWindowForToolbarReference(
  * command at this window right after the gate needs the shard behind THAT command to have arrived.
  */
 const SCOPED_SHARD_METHOD_PATTERNS = [
-  (windowId: number) => `^object:DialogService-${windowId}\\.showDialog$`,
-  (windowId: number) => `^object:UsersnapService-${windowId}\\.submitIdea$`,
-  (windowId: number) => `^object:BookChapterControlService-${windowId}\\.open$`,
-  (windowId: number) => `^object:WebViewService-${windowId}\\.openSettingsTab$`,
-  (windowId: number) => `^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`,
+  (windowId: string) => `^object:DialogService-${windowId}\\.showDialog$`,
+  (windowId: string) => `^object:UsersnapService-${windowId}\\.submitIdea$`,
+  (windowId: string) => `^object:BookChapterControlService-${windowId}\\.open$`,
+  (windowId: string) => `^object:WebViewService-${windowId}\\.openSettingsTab$`,
+  (windowId: string) => `^object:platform\\.windowServiceDataProvider-${windowId}-data\\.`,
 ];
 
 /**
@@ -501,7 +504,7 @@ const SCOPED_SHARD_METHOD_PATTERNS = [
  * routers forward to. Only then can generic-name calls be routed to this window.
  */
 export async function waitForRendererRegistered(
-  windowId: number,
+  windowId: string,
   timeoutMs: number,
 ): Promise<void> {
   // Waited on together: the renderer starts them together too, so they arrive within a poll of one
@@ -520,7 +523,7 @@ export async function waitForRendererRegistered(
  * that scheme surfaces as one place to update instead of every call site's locator silently
  * building against the old id and timing out with nothing to name.
  */
-export function windowScopedWebViewId(webViewId: string, windowId: number): string {
+export function windowScopedWebViewId(webViewId: string, windowId: string): string {
   return `${webViewId}-w${windowId}`;
 }
 
@@ -531,7 +534,7 @@ export function windowScopedWebViewId(webViewId: string, windowId: number): stri
  * Home tab was docked on the fly (see {@link expectWindowDockHasOnlyHomeTab}) gets a freshly
  * generated web view id each time, so this is not that id.
  */
-export function homeTabWebViewId(windowId: number): string {
+export function homeTabWebViewId(windowId: string): string {
   return windowScopedWebViewId(HOME_TAB_UUID, windowId);
 }
 
@@ -541,7 +544,7 @@ export function homeTabWebViewId(windowId: number): string {
  * web view id each time, so this locator will not find it — look that one up with
  * {@link webViewTabTitle}, passing the id it minted.
  */
-export function homeTabTitle(page: Page, windowId: number) {
+export function homeTabTitle(page: Page, windowId: string) {
   return webViewTabTitle(page, homeTabWebViewId(windowId));
 }
 

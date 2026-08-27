@@ -60,10 +60,8 @@ const mocks = vi.hoisted(() => {
  * window serves it — the ids a shard answers with are scoped to its own window (see
  * {@link windowShard}), so a shard that does not know which window it is cannot answer as one.
  */
-function withWindows(shardsByWindowId: Record<number, WindowShard>) {
-  Object.entries(shardsByWindowId).forEach(([windowId, shard]) =>
-    shard.setWindowId(Number(windowId)),
-  );
+function withWindows(shardsByWindowId: Record<string, WindowShard>) {
+  Object.entries(shardsByWindowId).forEach(([windowId, shard]) => shard.setWindowId(windowId));
   withWindowsServingShards(mocks, WEB_VIEW_SERVICE_SHARD_OBJECT_TYPE, shardsByWindowId);
 }
 
@@ -106,9 +104,9 @@ const { moveWebView } = testingWebViewServiceRouter;
  */
 function windowShard(openWebViewIds: string[]) {
   /** Set by `withWindows` from the id the shard is wired under */
-  let windowId = 0;
+  let windowId = '';
   return {
-    setWindowId: (id: number) => {
+    setWindowId: (id: string) => {
       windowId = id;
     },
     getOpenWebViewDefinition: vi.fn(async (id: string) =>
@@ -146,13 +144,13 @@ function requestTimedOutError() {
 describe('moveWebView when the target adopt does not come back a success', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getTargetWindowId.mockReturnValue(1);
+    mocks.getTargetWindowId.mockReturnValue('1');
     mocks.getReadyWindowIds.mockReturnValue([]);
     mocks.getUnreachableWindowIds.mockReturnValue([]);
     mocks.getAbandonedWindowIds.mockReturnValue([]);
     mocks.isWindowReady.mockReturnValue(true);
     mocks.isWindowClosing.mockReturnValue(false);
-    mocks.getFocusedWindowId.mockReturnValue(1);
+    mocks.getFocusedWindowId.mockReturnValue('1');
     mocks.settingsGet.mockResolvedValue('power');
   });
 
@@ -167,7 +165,7 @@ describe('moveWebView when the target adopt does not come back a success', () =>
     target.getOpenWebViewDefinition.mockResolvedValue({ id: 'view-1-window-3' });
     withWindows({ 2: owner, 3: target });
 
-    const movedId = await moveWebView('view-1', 3);
+    const movedId = await moveWebView('view-1', { kind: 'window', windowId: '3' });
 
     // What the target says it holds the view under, not the id the move was given: a late-landed
     // adopt is still an adopt, and the caller has to use the target's id for anything after it
@@ -176,7 +174,7 @@ describe('moveWebView when the target adopt does not come back a success', () =>
     // would put the same web view id live in two windows
     expect(owner.adoptWebView).not.toHaveBeenCalled();
     // Same raise rules as a normal success
-    expect(mocks.focusWindow).toHaveBeenCalledWith(3);
+    expect(mocks.focusWindow).toHaveBeenCalledWith('3');
   });
 
   test('an adopt whose target confirms absence runs the recovery ladder unchanged', async () => {
@@ -187,7 +185,7 @@ describe('moveWebView when the target adopt does not come back a success', () =>
       target.adoptWebView.mockRejectedValue(requestTimedOutError());
       withWindows({ 2: owner, 3: target });
 
-      const moving = moveWebView('view-1', 3);
+      const moving = moveWebView('view-1', { kind: 'window', windowId: '3' });
       moving.catch(() => undefined);
 
       await vi.runAllTimersAsync();
@@ -215,7 +213,9 @@ describe('moveWebView when the target adopt does not come back a success', () =>
     owner.adoptWebView.mockRejectedValue(requestTimedOutError());
     withWindows({ 1: focused, 2: owner, 3: target });
 
-    await expect(moveWebView('view-1', 3)).rejects.toThrow(/window 2, where it came from/);
+    await expect(moveWebView('view-1', { kind: 'window', windowId: '3' })).rejects.toThrow(
+      /window 2, where it came from/,
+    );
 
     expect(focused.adoptWebView).not.toHaveBeenCalled();
   });
@@ -235,7 +235,9 @@ describe('moveWebView when the target adopt does not come back a success', () =>
 
     // Telling the caller nothing could reopen it — while it is sitting in the focused window —
     // sends them looking for a definition in the log for a web view the user can see
-    await expect(moveWebView('view-1', 3)).rejects.toThrow(/reopened in the focused window/);
+    await expect(moveWebView('view-1', { kind: 'window', windowId: '3' })).rejects.toThrow(
+      /reopened in the focused window/,
+    );
   });
 
   test('a rejection the target itself produced enters recovery without probing', async () => {
@@ -244,7 +246,9 @@ describe('moveWebView when the target adopt does not come back a success', () =>
     target.adoptWebView.mockRejectedValue(new Error('provider exploded'));
     withWindows({ 2: owner, 3: target });
 
-    await expect(moveWebView('view-1', 3)).rejects.toThrow(/window 2, where it came from/);
+    await expect(moveWebView('view-1', { kind: 'window', windowId: '3' })).rejects.toThrow(
+      /window 2, where it came from/,
+    );
 
     // Only the ownership search asked the target: an answer the target produced itself means the
     // adopt definitively did not happen, so no probe may delay the recovery reopen
@@ -254,7 +258,7 @@ describe('moveWebView when the target adopt does not come back a success', () =>
   describe('moving to a window created for the move', () => {
     /** The window facilities the new-window path runs through, creating window 7 for the move */
     function withWindowCreator() {
-      const creator = { createPendingContentWindow: vi.fn(async () => 7), closeWindow: vi.fn() };
+      const creator = { createPendingContentWindow: vi.fn(async () => '7'), closeWindow: vi.fn() };
       setWebViewWindowCreator(creator);
       return creator;
     }
@@ -273,7 +277,7 @@ describe('moveWebView when the target adopt does not come back a success', () =>
       withWindows({ 2: owner, 7: created });
       const creator = withWindowCreator();
 
-      const movedId = await moveWebView('view-1', 'new');
+      const movedId = await moveWebView('view-1', { kind: 'new' });
 
       // What the created window says it holds the view under, exactly as a move into an existing
       // window answers with the target's id
@@ -283,7 +287,7 @@ describe('moveWebView when the target adopt does not come back a success', () =>
       expect(owner.adoptWebView).not.toHaveBeenCalled();
       expect(creator.closeWindow).not.toHaveBeenCalled();
       // The window is holding content now, so it must stop restoring as one still waiting for it
-      expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith(7);
+      expect(mocks.clearWindowPendingContent).toHaveBeenCalledWith('7');
     });
 
     test('a probe that finds nothing in a window left standing rejects rather than reopening', async () => {
@@ -297,7 +301,7 @@ describe('moveWebView when the target adopt does not come back a success', () =>
         withWindows({ 1: focused, 2: owner, 7: created });
         const creator = withWindowCreator();
 
-        const moving = moveWebView('view-1', 'new');
+        const moving = moveWebView('view-1', { kind: 'new' });
         moving.catch(() => undefined);
 
         await vi.runAllTimersAsync();
@@ -334,7 +338,7 @@ describe('moveWebView when the target adopt does not come back a success', () =>
       withWindows({ 1: focused, 2: owner, 7: created });
       const creator = withWindowCreator();
 
-      const failure = await moveWebView('view-1', 'new').then(
+      const failure = await moveWebView('view-1', { kind: 'new' }).then(
         () => undefined,
         (e: unknown) => e,
       );
@@ -361,12 +365,12 @@ describe('moveWebView when the target adopt does not come back a success', () =>
       withWindows({ 2: owner, 7: created });
       const creator = withWindowCreator();
 
-      const failure = await moveWebView('view-1', 'new').then(
+      const failure = await moveWebView('view-1', { kind: 'new' }).then(
         () => undefined,
         (e: unknown) => e,
       );
 
-      expect(creator.closeWindow).toHaveBeenCalledWith(7);
+      expect(creator.closeWindow).toHaveBeenCalledWith('7');
       expect(owner.adoptWebView).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'view-1', webViewType: 'test.type' }),
       );

@@ -38,38 +38,38 @@ describe('isApplicationFocused', () => {
   });
 
   test('answers true while a window holds focus', () => {
-    setFocusedWindowId(1);
+    setFocusedWindowId('1');
 
     expect(isApplicationFocused()).toBe(true);
   });
 
   test('a blur of the focused window unfocuses the app but keeps the last-focused answer', () => {
-    setFocusedWindowId(1);
+    setFocusedWindowId('1');
 
-    handleWindowBlurred(1);
+    handleWindowBlurred('1');
 
     expect(isApplicationFocused()).toBe(false);
     // The last-focused answer survives the app going to the background: routing fallbacks and the
     // focused-window command still need "the window the user was last working in"
-    expect(getFocusedWindowId()).toBe(1);
+    expect(getFocusedWindowId()).toBe('1');
   });
 
   test('a blur from a window that already handed focus over changes nothing', () => {
     // Electron delivers the loser's blur and the winner's focus as separate events, and the pair
     // can arrive with the focus first
-    setFocusedWindowId(2);
+    setFocusedWindowId('2');
 
-    handleWindowBlurred(1);
+    handleWindowBlurred('1');
 
     expect(isApplicationFocused()).toBe(true);
-    expect(getFocusedWindowId()).toBe(2);
+    expect(getFocusedWindowId()).toBe('2');
   });
 
   test('focus coming back after a blur refocuses the app', () => {
-    setFocusedWindowId(1);
-    handleWindowBlurred(1);
+    setFocusedWindowId('1');
+    handleWindowBlurred('1');
 
-    setFocusedWindowId(1);
+    setFocusedWindowId('1');
 
     expect(isApplicationFocused()).toBe(true);
   });
@@ -77,9 +77,9 @@ describe('isApplicationFocused', () => {
   test('removing the focused window unfocuses the app', () => {
     const window = fakeWindow(1);
     addWindow(window);
-    setFocusedWindowId(1);
+    setFocusedWindowId('1');
 
-    removeWindow(window, 1);
+    removeWindow(window, '1');
 
     expect(isApplicationFocused()).toBe(false);
   });

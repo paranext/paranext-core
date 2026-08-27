@@ -10,7 +10,7 @@ type SummarizableWindow = {
    * carries an `id`, and it is Electron's, which is not what any caller of this may publish. The
    * mismatch makes passing one a compile error instead of a silently wrong summary.
    */
-  windowId: number;
+  windowId: string;
   getTitle: () => string;
   /**
    * Whether this window's renderer has ever reported itself ready, which is what says its title is
@@ -35,7 +35,7 @@ type SummarizableWindow = {
  */
 export function summarizeWindows(
   windows: readonly SummarizableWindow[],
-  mainWindowId: number | undefined,
+  mainWindowId: string | undefined,
 ): WindowSummary[] {
   return windows.map((window) => ({
     windowId: window.windowId,

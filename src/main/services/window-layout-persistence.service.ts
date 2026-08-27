@@ -78,7 +78,7 @@ export type StartupWindowsPlan =
  */
 type FileSlot = {
   entry: WindowLayoutEntry;
-  windowId?: number;
+  windowId?: string;
   /**
    * Whether this window should fall back to the legacy (pre-multi-window) saved layout when it has
    * no layout of its own: the single window of a legacy startup, or the MAIN entry when it has
@@ -93,7 +93,7 @@ type FileSlot = {
 /** Every window's entry in file order — the whole of what a write puts on disk */
 let fileSlots: FileSlot[] = [];
 /** Windows created to receive specific content, until their first layout push arrives */
-const pendingContentWindowIds = new Set<number>();
+const pendingContentWindowIds = new Set<string>();
 /** Bounds the previous keeper saved, seeded into the legacy window so an upgrade keeps placement */
 let legacyBoundsState: WindowBoundsState | undefined;
 /** Pending debounced write, if any */
@@ -215,7 +215,7 @@ async function readLegacyWindowState(): Promise<WindowBoundsState | undefined> {
 }
 
 /** The slot the given runtime window is living in, if this service knows the window at all */
-function findSlotByWindowId(windowId: number): FileSlot | undefined {
+function findSlotByWindowId(windowId: string): FileSlot | undefined {
   return fileSlots.find((slot) => slot.windowId === windowId);
 }
 
@@ -297,7 +297,7 @@ export async function loadWindowLayouts(): Promise<StartupWindowsPlan> {
  * layout and bounds live from here on, so a session that never updates it writes the entry back out
  * unchanged.
  */
-export function assignEntryToWindow(windowId: number, entryIndex: number): void {
+export function assignEntryToWindow(windowId: string, entryIndex: number): void {
   const slot = fileSlots[entryIndex];
   if (!slot || slot.windowId !== undefined || findSlotByWindowId(windowId)) {
     logger.warn(
@@ -318,7 +318,7 @@ export function assignEntryToWindow(windowId: number, entryIndex: number): void 
  * does not exist yet. Its renderer falls back to the pre-multi-window saved layout, and its bounds
  * seed from the previous keeper's file so an upgrade keeps the user's window placement.
  */
-export function trackLegacyWindow(windowId: number): void {
+export function trackLegacyWindow(windowId: string): void {
   if (findSlotByWindowId(windowId)) return;
   fileSlots.push({
     entry: { ...legacyBoundsState, slotId: newGuid() },
@@ -331,7 +331,7 @@ export function trackLegacyWindow(windowId: number): void {
 }
 
 /** Give a window created mid-session a slot. It has no saved entry, so it starts with an empty one */
-export function trackNewWindow(windowId: number): void {
+export function trackNewWindow(windowId: string): void {
   if (findSlotByWindowId(windowId)) return;
   fileSlots.push({ entry: { slotId: newGuid() }, windowId });
   // As in `trackLegacyWindow`: a minted slot id is not real until the file carries it
@@ -347,7 +347,7 @@ export function trackNewWindow(windowId: number): void {
  * @returns The stable slot id of that window's entry in the structure
  * @throws If no tracked window has that id
  */
-export function getSlotIdOf(windowId: number): string {
+export function getSlotIdOf(windowId: string): string {
   const slot = findSlotByWindowId(windowId);
   if (!slot) throw new Error(`Window ${windowId} is not tracked, so it has no layout slot`);
   return slot.entry.slotId;
@@ -361,7 +361,7 @@ export function getSlotIdOf(windowId: number): string {
  * therefore stays with that entry for the rest of the session however the window itself ends, and
  * leaves the structure only when the entry does.
  */
-export function setMainWindowId(windowId: number): void {
+export function setMainWindowId(windowId: string): void {
   const mainSlot = findSlotByWindowId(windowId);
   if (!mainSlot) {
     logger.warn(`Ignoring the main-window mark for untracked window ${windowId}`);
@@ -380,7 +380,7 @@ export function setMainWindowId(windowId: number): void {
  * a window, so it outlives the window that held it and the role can sit on an entry with no window
  * living in it.
  */
-export function getMainWindowId(): number | undefined {
+export function getMainWindowId(): string | undefined {
   return fileSlots.find((slot) => slot.entry.isMain === true)?.windowId;
 }
 
@@ -396,7 +396,7 @@ export function getMainWindowId(): number | undefined {
  *
  * @param windowId Window to check
  */
-export function isPrimaryWindow(windowId: number): boolean {
+export function isPrimaryWindow(windowId: string): boolean {
   const mainWindowId = getMainWindowId();
   if (mainWindowId !== undefined) return mainWindowId === windowId;
   // No live window holds the marked entry. The startup restore always leaves one that does, so
@@ -422,7 +422,7 @@ export function isPrimaryWindow(windowId: number): boolean {
 }
 
 /** Merge captured bounds into a window's entry and schedule a write */
-export function updateWindowBounds(windowId: number, boundsState: WindowBoundsState): void {
+export function updateWindowBounds(windowId: string, boundsState: WindowBoundsState): void {
   const slot = findSlotByWindowId(windowId);
   if (!slot) {
     logger.warn(`Ignoring bounds update for untracked window ${windowId}`);
@@ -461,7 +461,7 @@ export type RemovedWindowDisposition = 'entry-goes-with-it' | 'entry-stays';
  * @param windowId Window that has gone away
  * @param disposition What that means for the window's entry — see {@link RemovedWindowDisposition}
  */
-export function handleWindowRemoved(windowId: number, disposition: RemovedWindowDisposition): void {
+export function handleWindowRemoved(windowId: string, disposition: RemovedWindowDisposition): void {
   // Unconditional, whatever the disposition and whether or not the id is one this service knows: a
   // write scheduled before the removal fires into a session that is either rewriting the structure
   // itself (a deliberate close) or on its way down, and neither wants a debounce landing behind it.
@@ -565,7 +565,7 @@ export function setPendingContentChangeListener(listener: () => void): void {
  * Mark a window as created-for-content: its layout get answers `pending-content` (start truly
  * empty) until the window pushes its first real layout.
  */
-export function markWindowPendingContent(windowId: number): void {
+export function markWindowPendingContent(windowId: string): void {
   pendingContentWindowIds.add(windowId);
   handlePendingContentChanged();
 }
@@ -574,7 +574,7 @@ export function markWindowPendingContent(windowId: number): void {
  * Un-mark a pending-content window: its routed content has arrived (or its creator gave up), so
  * from now on it restores like any other window.
  */
-export function clearWindowPendingContent(windowId: number): void {
+export function clearWindowPendingContent(windowId: string): void {
   pendingContentWindowIds.delete(windowId);
   handlePendingContentChanged();
 }
@@ -588,12 +588,12 @@ export function clearWindowPendingContent(windowId: number): void {
  * and take it away again. Letting it stand in as "the last window" would leave the app with zero
  * windows the instant that failure path runs.
  */
-export function isWindowPendingContent(windowId: number): boolean {
+export function isWindowPendingContent(windowId: string): boolean {
   return pendingContentWindowIds.has(windowId);
 }
 
 function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
-  if (typeof windowId !== 'number') {
+  if (typeof windowId !== 'string') {
     logger.warn(`${GET_WINDOW_LAYOUT_REQUEST_TYPE} called without a window id`);
     return { kind: 'empty' };
   }
@@ -628,7 +628,7 @@ function handleFilterDeadSlotsRequest(candidateSlotIds: unknown): string[] {
 }
 
 function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
-  if (typeof windowId !== 'number') {
+  if (typeof windowId !== 'string') {
     logger.warn(`${SAVE_WINDOW_LAYOUT_REQUEST_TYPE} called without a window id`);
     return;
   }
@@ -674,7 +674,7 @@ export async function initializeWindowLayoutPersistence(): Promise<void> {
               name: 'windowId',
               required: true,
               summary: 'Id of the window asking what to restore',
-              schema: { type: 'number' },
+              schema: { type: 'string' },
             },
           ],
           result: {
@@ -733,7 +733,7 @@ export async function initializeWindowLayoutPersistence(): Promise<void> {
               name: 'windowId',
               required: true,
               summary: 'Id of the window whose layout this is',
-              schema: { type: 'number' },
+              schema: { type: 'string' },
             },
             {
               name: 'layout',

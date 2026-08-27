@@ -459,7 +459,7 @@ async function main() {
             name: 'windowId',
             required: true,
             summary: 'Id of the window reporting itself empty',
-            schema: { type: 'number' },
+            schema: { type: 'string' },
           },
           {
             name: 'reason',
@@ -677,7 +677,7 @@ async function main() {
     // The platform id comes back alongside the window because this is the only place that has it:
     // it is minted here and is not readable from the BrowserWindow, so a caller that needs to name
     // the window afterwards would otherwise have to look it up by identity.
-  ): Promise<{ window: BrowserWindow; windowId: number }> => {
+  ): Promise<{ window: BrowserWindow; windowId: string }> => {
     // The menu and the `platform.createWindow` command stay live through a quit, because every
     // window sits in `preventDefault()` waiting on the shared shutdown run for as long as that run
     // takes. Opening a window in that gap would start a session the app is in no position to serve:
@@ -1186,8 +1186,10 @@ async function main() {
           if (otherWindow === newWindow || otherWindow.isDestroyed()) return;
           // A window already on its way out has a close handler mid-flight. Telling it to close
           // again lands on its `isCloseInProgress` guard, which returns WITHOUT preventing the
-          // close — the escape hatch — so Electron would destroy it before its bounds flush.
-          if (isWindowMarkedClosing(otherWindow.id)) return;
+          // close — the escape hatch — so Electron would destroy it before its bounds flush. Looked
+          // up by the platform id, not Electron's own `.id`: the two namespaces no longer coincide.
+          const otherWindowId = getWindowIdOf(otherWindow);
+          if (otherWindowId !== undefined && isWindowMarkedClosing(otherWindowId)) return;
           otherWindow.close();
         });
       }
@@ -1975,7 +1977,7 @@ async function main() {
         params: [],
         result: {
           name: 'return value',
-          schema: { oneOf: [{ type: 'number' }, { type: 'null' }] },
+          schema: { oneOf: [{ type: 'string' }, { type: 'null' }] },
         },
       },
     },
@@ -2016,7 +2018,7 @@ async function main() {
             items: {
               type: 'object',
               properties: {
-                windowId: { type: 'number' },
+                windowId: { type: 'string' },
                 label: { type: 'string' },
                 isMain: { type: 'boolean' },
               },

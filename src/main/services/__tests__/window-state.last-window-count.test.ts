@@ -64,7 +64,7 @@ describe('counting the windows that could be the last one', () => {
     addWindow(fakeWindow(1));
     addWindow(fakeWindow(2));
 
-    markWindowClosing(2);
+    markWindowClosing('2');
 
     expect(countWindowsThatCouldBeTheLastOne()).toBe(1);
   });
@@ -73,7 +73,7 @@ describe('counting the windows that could be the last one', () => {
     addWindow(fakeWindow(1));
     addWindow(fakeWindow(2));
 
-    setWindowPendingContentPredicate((windowId) => windowId === 2);
+    setWindowPendingContentPredicate((windowId) => windowId === '2');
 
     expect(countWindowsThatCouldBeTheLastOne()).toBe(1);
   });
@@ -85,7 +85,7 @@ describe('counting the windows that could be the last one', () => {
     addWindow(fakeWindow(1));
     addWindow(fakeWindow(2));
 
-    markWindowAbandoned(2);
+    markWindowAbandoned('2');
 
     expect(countWindowsThatCouldBeTheLastOne()).toBe(1);
   });
@@ -96,9 +96,9 @@ describe('counting the windows that could be the last one', () => {
     addWindow(fakeWindow(3));
     addWindow(fakeWindow(4));
 
-    markWindowClosing(2);
-    setWindowPendingContentPredicate((windowId) => windowId === 3);
-    markWindowAbandoned(4);
+    markWindowClosing('2');
+    setWindowPendingContentPredicate((windowId) => windowId === '3');
+    markWindowAbandoned('4');
 
     expect(countWindowsThatCouldBeTheLastOne()).toBe(1);
   });
@@ -122,10 +122,10 @@ describe('counting the windows that could be the last one', () => {
     const closing = fakeWindow(1);
     addWindow(closing);
     addWindow(fakeWindow(2));
-    markWindowClosing(1);
-    markWindowAbandoned(1);
+    markWindowClosing('1');
+    markWindowAbandoned('1');
 
-    removeWindow(closing, 1);
+    removeWindow(closing, '1');
     addWindow(fakeWindow(1));
 
     expect(countWindowsThatCouldBeTheLastOne()).toBe(2);

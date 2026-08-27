@@ -136,7 +136,7 @@ beforeEach(() => {
   mocks.bufferedEmitters.clear();
   globalThis.open = openWindow;
   localStorage.clear();
-  globalThis.windowId = 2;
+  globalThis.windowId = '2';
   mocks.settingsGet.mockImplementation(async (key: string) =>
     key === 'platform.interfaceMode' ? 'power' : false,
   );

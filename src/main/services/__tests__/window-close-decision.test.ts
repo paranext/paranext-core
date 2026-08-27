@@ -26,8 +26,8 @@ vi.mock('@main/services/window-layout-persistence.service', () => ({
 }));
 
 /** Say which window the persisted structure calls primary */
-function setPrimaryWindowId(windowId: number) {
-  vi.mocked(isPrimaryWindow).mockImplementation((id: number) => id === windowId);
+function setPrimaryWindowId(windowId: string) {
+  vi.mocked(isPrimaryWindow).mockImplementation((id: string) => id === windowId);
 }
 
 vi.mock('@shared/services/logger.service', () => ({
@@ -55,16 +55,18 @@ describe('deciding what a window close means', () => {
   });
 
   describe('primary window with other windows open', () => {
+    let primaryId: string;
+
     beforeEach(() => {
-      addWindow(fakeWindow(1));
+      primaryId = addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      setPrimaryWindowId(1);
+      setPrimaryWindowId(primaryId);
     });
 
     test('asks before doing anything', async () => {
       const { confirm } = promptAnswering('cancel');
 
-      await decideWindowClose(1, confirm);
+      await decideWindowClose(primaryId, confirm);
 
       expect(confirm).toHaveBeenCalledTimes(1);
     });
@@ -72,7 +74,7 @@ describe('deciding what a window close means', () => {
     test('cancel leaves the app exactly as it was', async () => {
       const { confirm } = promptAnswering('cancel');
 
-      const decision = await decideWindowClose(1, confirm);
+      const decision = await decideWindowClose(primaryId, confirm);
 
       expect(decision).toBe('stay-open');
       // Nothing may have been latched: a cancelled close is not a close at all
@@ -85,7 +87,7 @@ describe('deciding what a window close means', () => {
       // unset and record 'entry-goes-with-it' — their layouts would be lost.
       const { confirm } = promptAnswering('close-all');
 
-      const decision = await decideWindowClose(1, confirm);
+      const decision = await decideWindowClose(primaryId, confirm);
 
       expect(decision).toBe('quit-all');
       expect(isAppQuitRequested()).toBe(true);
@@ -99,7 +101,7 @@ describe('deciding what a window close means', () => {
         throw askerFailure;
       });
 
-      const decision = await decideWindowClose(1, confirm);
+      const decision = await decideWindowClose(primaryId, confirm);
 
       expect(decision).toBe('stay-open');
       expect(isAppQuitRequested()).toBe(false);
@@ -109,11 +111,11 @@ describe('deciding what a window close means', () => {
 
   describe('primary window alone', () => {
     test('quits without asking, as it always has', async () => {
-      addWindow(fakeWindow(1));
-      setPrimaryWindowId(1);
+      const primaryId = addWindow(fakeWindow(1));
+      setPrimaryWindowId(primaryId);
       const { confirm } = promptAnswering('cancel');
 
-      const decision = await decideWindowClose(1, confirm);
+      const decision = await decideWindowClose(primaryId, confirm);
 
       expect(confirm).not.toHaveBeenCalled();
       expect(decision).toBe('close-this-window');
@@ -122,12 +124,12 @@ describe('deciding what a window close means', () => {
 
   describe('secondary window', () => {
     test('never asks and never quits, whatever else is open', async () => {
-      addWindow(fakeWindow(1));
-      addWindow(fakeWindow(2));
-      setPrimaryWindowId(1);
+      const primaryId = addWindow(fakeWindow(1));
+      const secondaryId = addWindow(fakeWindow(2));
+      setPrimaryWindowId(primaryId);
       const { confirm } = promptAnswering('close-all');
 
-      const decision = await decideWindowClose(2, confirm);
+      const decision = await decideWindowClose(secondaryId, confirm);
 
       expect(confirm).not.toHaveBeenCalled();
       expect(decision).toBe('close-this-window');
@@ -142,13 +144,13 @@ describe('deciding what a window close means', () => {
       // been marked closing. That looks exactly like a primary ✕ with others open. It is not: the
       // user already chose to quit, so asking "close all windows?" would be asking them twice, and
       // a cancel here could never undo a latch that `before-quit` set.
-      addWindow(fakeWindow(1));
+      const primaryId = addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      setPrimaryWindowId(1);
+      setPrimaryWindowId(primaryId);
       markQuitRequested();
       const { confirm } = promptAnswering('cancel');
 
-      const decision = await decideWindowClose(1, confirm);
+      const decision = await decideWindowClose(primaryId, confirm);
 
       expect(confirm).not.toHaveBeenCalled();
       expect(decision).toBe('close-this-window');
@@ -162,9 +164,9 @@ describe('deciding what a window close means', () => {
       // quit is a stronger statement than any button. The asker takes the question down when one
       // arrives, but the decision must not depend on it doing so — an asker that never answers,
       // as here, still has to stop waiting, or the app hangs with the quit swallowed underneath.
-      addWindow(fakeWindow(1));
+      const primaryId = addWindow(fakeWindow(1));
       addWindow(fakeWindow(2));
-      setPrimaryWindowId(1);
+      setPrimaryWindowId(primaryId);
       const confirm = vi.fn(
         () =>
           new Promise<'close-all' | 'cancel'>(() => {
@@ -172,7 +174,7 @@ describe('deciding what a window close means', () => {
           }),
       );
 
-      const pending = decideWindowClose(1, confirm);
+      const pending = decideWindowClose(primaryId, confirm);
       // The question is showing; now the quit arrives
       markQuitRequested();
 
@@ -186,13 +188,13 @@ describe('deciding what a window close means', () => {
       // A move-to-new-window target that has not finished loading is not a candidate to be the
       // last window, but it is very much a window the user would lose. The question is about what
       // survives this close, not about which windows could be the last one standing.
-      addWindow(fakeWindow(1));
-      addWindow(fakeWindow(2));
-      setPrimaryWindowId(1);
-      setWindowPendingContentPredicate((windowId) => windowId === 2);
+      const primaryId = addWindow(fakeWindow(1));
+      const secondaryId = addWindow(fakeWindow(2));
+      setPrimaryWindowId(primaryId);
+      setWindowPendingContentPredicate((windowId) => windowId === secondaryId);
       const { confirm } = promptAnswering('cancel');
 
-      const decision = await decideWindowClose(1, confirm);
+      const decision = await decideWindowClose(primaryId, confirm);
 
       expect(confirm).toHaveBeenCalledTimes(1);
       expect(decision).toBe('stay-open');
@@ -203,13 +205,13 @@ describe('deciding what a window close means', () => {
     test('does not count a window that is already closing as one that would be left behind', async () => {
       // Two windows, but the second is mid-close: closing the primary now leaves nothing behind,
       // so there is nothing to confirm
-      addWindow(fakeWindow(1));
-      addWindow(fakeWindow(2));
-      setPrimaryWindowId(1);
-      markWindowClosing(2);
+      const primaryId = addWindow(fakeWindow(1));
+      const secondaryId = addWindow(fakeWindow(2));
+      setPrimaryWindowId(primaryId);
+      markWindowClosing(secondaryId);
       const { confirm } = promptAnswering('cancel');
 
-      const decision = await decideWindowClose(1, confirm);
+      const decision = await decideWindowClose(primaryId, confirm);
 
       expect(confirm).not.toHaveBeenCalled();
       expect(decision).toBe('close-this-window');

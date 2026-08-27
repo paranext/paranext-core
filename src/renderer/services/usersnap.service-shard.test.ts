@@ -30,7 +30,7 @@ describe('Usersnap service shard', () => {
     vi.clearAllMocks();
     mocks.networkObjectSet.mockResolvedValue({ dispose: vi.fn() });
     // A renderer receives its window id as a string query parameter
-    globalThis.windowId = 1;
+    globalThis.windowId = '1';
   });
 
   test('registers even when the Usersnap API never initialized', async () => {
