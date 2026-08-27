@@ -354,6 +354,60 @@ namespace TestParanextDataProvider.Projects
 
         [Test]
         [Description(
+            "A TextType value outside the enum's defined members (a corrupt or future stylesheet) "
+                + "must degrade to null/omitted — never throw or leak a numeric string — so one bad "
+                + "tag cannot fail the whole getStyleInfo request. (ScrTextType)3 is scTitle | "
+                + "scSection, a combination no defined member names."
+        )]
+        public void PlatformMarkerStyleInfo_UndefinedTextTypeValue_IsNullNotAnException()
+        {
+            var markerInfo = new PlatformMarkerStyleInfo(
+                new ScrTag("zzz")
+                {
+                    StyleType = ScrStyleType.scCharacterStyle,
+                    TextType = (ScrTextType)3,
+                }
+            );
+
+            Assert.That(markerInfo.TextType, Is.Null);
+        }
+
+        [Test]
+        [Description(
+            "Exhaustiveness guard for the TextType map: every DEFINED ScrTextType member except "
+                + "scNotSpecified must serialize as its enum name minus the 'sc' prefix — the wire "
+                + "values the TS side matches on. A future ParatextData member must fail here "
+                + "loudly instead of silently falling to the map's null default."
+        )]
+        public void PlatformMarkerStyleInfo_EveryDefinedTextType_SerializesEnumNameWithoutScPrefix()
+        {
+            Assert.Multiple(() =>
+            {
+                foreach (ScrTextType textType in Enum.GetValues<ScrTextType>())
+                {
+                    if (textType == ScrTextType.scNotSpecified)
+                        continue;
+
+                    var markerInfo = new PlatformMarkerStyleInfo(
+                        new ScrTag("zzz")
+                        {
+                            StyleType = ScrStyleType.scCharacterStyle,
+                            TextType = textType,
+                        }
+                    );
+
+                    Assert.That(
+                        markerInfo.TextType,
+                        Is.EqualTo(textType.ToString().Substring(2)),
+                        $"ScrTextType.{textType} is not mapped by PlatformMarkerStyleInfo.TextType "
+                            + "— add it to the switch (and the TS side if it consumes the value)."
+                    );
+                }
+            });
+        }
+
+        [Test]
+        [Description(
             "Optional identity/typography properties the omitted-when-unset test only proves "
                 + "ABSENT must also surface when set: NotRepeatable and Superscript as true "
                 + "flags, Description and per-marker FontName as verbatim strings. Subscript "

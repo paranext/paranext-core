@@ -841,9 +841,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   // Project stylesheet-derived style info for the current book; feeds
   // `generateUsjCss` via `useProjectStylesheet` below and `EditorOptions.styleInfo`.
+  // Disabled (undefined source, the hook's no-subscription state) while `currentBookNum` is not a
+  // real book: an unrecognized book id resolves to 0, which the backend rejects, so an enabled
+  // subscription delivered nothing but PlatformErrors — same guard as the versification fetch
+  // below.
   const [styleInfoPossiblyError] = useProjectData(
     'platformScripture.StyleInfo',
-    projectId ?? undefined,
+    currentBookNum > 0 ? (projectId ?? undefined) : undefined,
   ).StyleInfo(currentBookNum, undefined);
   const styleInfo = useMemo<StyleInfo | undefined>(() => {
     if (isPlatformError(styleInfoPossiblyError)) {

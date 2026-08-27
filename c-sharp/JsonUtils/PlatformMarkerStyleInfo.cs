@@ -40,9 +40,24 @@ public class PlatformMarkerStyleInfo(ScrTag tag)
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public int? Rank => tag.RawRank;
 
+    // An explicit map rather than ToString().Substring(2): for a value outside the enum's defined
+    // members (a corrupt or future stylesheet), ToString() yields the numeric string, so the
+    // substring either throws (failing the whole getStyleInfo request) or emits garbage. Unknown
+    // values fall through to null (omitted from the wire), the same default the sibling maps in
+    // this file use; scNotSpecified stays omitted as before.
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? TextType =>
-        tag.TextType != ScrTextType.scNotSpecified ? tag.TextType.ToString().Substring(2) : null;
+        tag.TextType switch
+        {
+            ScrTextType.scTitle => "Title",
+            ScrTextType.scSection => "Section",
+            ScrTextType.scVerseText => "VerseText",
+            ScrTextType.scNoteText => "NoteText",
+            ScrTextType.scOther => "Other",
+            ScrTextType.scBackTranslation => "BackTranslation",
+            ScrTextType.scTranslationNote => "TranslationNote",
+            _ => null,
+        };
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string[]? TextProperties { get; } = TextPropertiesToStrings(tag);
