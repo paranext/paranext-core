@@ -94,7 +94,6 @@ stub('./nuget-set', {
 // Same proof for licence identification.
 stub('./identify', {
   identify: throwing('identify'),
-  identifyText: throwing('identifyText'),
 });
 
 ${setup}
@@ -227,12 +226,12 @@ describe('--verify-shipping-set', () => {
 
   // The two floors measure the DERIVED set, and a warm webpack cache is the one condition under
   // which that set is known to be possibly short - so the order between them and the warm-cache
-  // skip decides whether this run reports a fact or a fabrication. Both floors ran first, which on
-  // any twice-built tree turned "this run cannot answer its question" into a confident failure
-  // whose printed remedy was the one flag that commits the short set.
+  // skip decides whether this run reports a fact or a fabrication. Floors first turns "this run
+  // cannot answer its question" into a confident failure on any twice-built tree, and the remedy
+  // that failure prints is the one flag that commits the short set.
   it('reports a warm cache rather than a fabricated shrink', () => {
     // The REAL floors are left in place here, unlike every other case in this file: they are what
-    // fired before, and stubbing them out would make this pass whatever the order.
+    // the ordering is about, and stubbing them out would make this pass whatever the order.
     const run = runVerifyShippingSet(`
       const realShipping = load('shipping-set.ts');
       stub('./shipping-set', {

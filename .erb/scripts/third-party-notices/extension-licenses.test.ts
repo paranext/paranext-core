@@ -3,7 +3,7 @@ import * as path from 'path';
 import { describe, expect, it } from 'vitest';
 import { BUNDLED_EXTENSION_LICENSE } from '../../../extensions/lib/git.util';
 import { inCi } from './main';
-import { isLicenseFileName } from './package-files';
+import { isLicenseTextFileName } from './package-files';
 
 const REPO = path.resolve(__dirname, '..', '..', '..');
 const DIST = path.join(REPO, 'extensions', 'dist');
@@ -69,11 +69,13 @@ describe.skipIf(built.length === 0 && !inCi())(
         // REGULAR FILE: a directory, a zero-byte file, and a dangling symlink (whose target
         // `statSync` cannot resolve) all have to fail here, not just an absent name.
         const licenseFiles = fs.readdirSync(dir).filter((f) => {
-          // The production predicate, never a local copy of it: `isLicenseFileName` pairs a
-          // LICENSE_FILE match with a NOT_LICENSE_TEXT exclusion, so half of it would accept a
-          // `LICENSE.js` or `LICENSE.svg` the generator refuses to reproduce - and a copy would
-          // go on asserting the old definition after the real one changed.
-          if (!isLicenseFileName(f)) return false;
+          // The generator's own predicate, never a local copy of it: it pairs the filename match
+          // with a NOT_LICENSE_TEXT exclusion, so half of it would accept a `LICENSE.js` or
+          // `LICENSE.svg` the generator refuses to reproduce - and a copy would go on asserting the
+          // old definition after the real one changed. Its looseness about WHERE the word sits is
+          // sound here for the same reason it is in the NuGet reproduction path: the declared
+          // `manifest.json` licence, asserted below, is the second signal that decides the terms.
+          if (!isLicenseTextFileName(f)) return false;
           try {
             const stat = fs.statSync(path.join(dir, f));
             return stat.isFile() && stat.size > 0;

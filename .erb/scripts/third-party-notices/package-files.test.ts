@@ -4,9 +4,8 @@ import * as path from 'path';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
   declaredLicenseField,
-  isLicenseFileName,
+  isLicenseTextFileName,
   isNoticeFileName,
-  isNugetLicenseFileName,
   readNugetLicenseFiles,
   readPackageNotices,
 } from './package-files';
@@ -38,25 +37,6 @@ describe('isNoticeFileName', () => {
     'does not treat %j as an attribution notice',
     (name) => {
       expect(isNoticeFileName(name)).toBe(false);
-    },
-  );
-});
-
-describe('isLicenseFileName', () => {
-  it.each(['LICENSE', 'LICENSE.txt', 'LICENSE.TXT', 'license.md', 'COPYING', 'LICENSE-MIT'])(
-    'treats %j as license text to reproduce',
-    (name) => {
-      expect(isLicenseFileName(name)).toBe(true);
-    },
-  );
-
-  // A package root may hold `license.js` or `license.svg`. Reproducing one verbatim inside a legal
-  // document is worse than reporting no text at all, and reading a binary as UTF-8 yields
-  // replacement characters that corrupt the fenced block around them.
-  it.each(['license.js', 'license.svg', 'LICENSE.png', 'NOTICE', 'README.md', 'licensing.ts'])(
-    'does not treat %j as license text',
-    (name) => {
-      expect(isLicenseFileName(name)).toBe(false);
     },
   );
 });
@@ -118,13 +98,11 @@ describe('declaredLicenseField', () => {
   });
 });
 
-describe('isNugetLicenseFileName', () => {
-  // NuGet packages name their grant in ways npm packages do not. `System.Net.Http` 4.3.4 ships
+describe('isLicenseTextFileName', () => {
+  // NuGet packages name their grant in ways npm packages do not: `System.Net.Http` 4.3.4 ships
   // `dotnet_library_license.txt` - 9,451 bytes opening "MICROSOFT SOFTWARE LICENSE TERMS /
-  // MICROSOFT .NET LIBRARY", verbatim the licence its nuspec `<licenseUrl>` points at - and the
-  // artifact asserted it bundles none, reproducing nothing, while the text sat in the restored
-  // package folder.
-
+  // MICROSOFT .NET LIBRARY", verbatim the licence its nuspec `<licenseUrl>` points at. A match
+  // anchored to the start of the name reports it as bundling nothing to reproduce.
   it.each([
     'dotnet_library_license.txt',
     'MIT-LICENSE.txt',
@@ -133,7 +111,7 @@ describe('isNugetLicenseFileName', () => {
     'license.md',
     'COPYING',
   ])('reproduces %s', (name) => {
-    expect(isNugetLicenseFileName(name)).toBe(true);
+    expect(isLicenseTextFileName(name)).toBe(true);
   });
 
   it.each([
@@ -147,14 +125,7 @@ describe('isNugetLicenseFileName', () => {
     'THIRD-PARTY-NOTICES.TXT',
     'README.md',
   ])('does not reproduce %s', (name) => {
-    expect(isNugetLicenseFileName(name)).toBe(false);
-  });
-
-  it('stays stricter for npm, where the file is a verdict signal rather than a reproduction', () => {
-    // For npm the licence file is the second signal `policy.ts` reconciles the manifest against, so
-    // a loosely matched filename would weaken a verdict rather than enrich a reproduction.
-    expect(isLicenseFileName('dotnet_library_license.txt')).toBe(false);
-    expect(isNugetLicenseFileName('dotnet_library_license.txt')).toBe(true);
+    expect(isLicenseTextFileName(name)).toBe(false);
   });
 });
 

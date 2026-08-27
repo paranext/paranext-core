@@ -215,10 +215,10 @@ describe('runDownload', () => {
   });
 
   // The DB is skipped when a checksum says the local copy is already the right one. A notice file
-  // has no checksum, so the only gate available was existence - and a file that EXISTS can still be
-  // wrong: a truncated write, or a captive-portal interstitial answered with HTTP 200, was then
-  // kept forever and copied into every installer. They are a few kilobytes, so they are re-fetched
-  // every run instead.
+  // has no checksum, so the only gate available is existence - and a file that EXISTS can still be
+  // wrong: a truncated write, or a captive-portal interstitial answered with HTTP 200, would then
+  // be kept forever and copied into every installer. They are a few kilobytes, so they are
+  // re-fetched every run instead.
   it('DB up to date and notices present: still re-fetches the notices', async () => {
     const deps = makeDeps({ fileExists: vi.fn(() => true) });
     await runDownload({ ...baseOpts, detection: { org: 'paranext' } }, deps);
