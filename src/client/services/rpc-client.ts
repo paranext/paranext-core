@@ -73,10 +73,7 @@ export class RpcClient implements IRpcMethodRegistrar {
   }
 
   private static onError(ev: Event): void {
-    RpcClient.handleError(
-      `Client websocket error event occurred: ${describeWebSocketErrorEvent(ev)}`,
-      describeWebSocketErrorEvent(ev),
-    );
+    RpcClient.handleError('Client websocket error event occurred', describeWebSocketErrorEvent(ev));
   }
 
   async connect(localEventHandler: EventHandler): Promise<boolean> {

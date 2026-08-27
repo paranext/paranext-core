@@ -146,6 +146,19 @@ describe('RpcClient close logging', () => {
     expect(logged).not.toContain('{}');
   });
 
+  test('logs the error detail exactly once, not doubled', async () => {
+    await connectedClient();
+
+    dispatch('error', { message: 'read ECONNRESET' });
+
+    const logged = mockLoggerError.mock.calls[0][0];
+    // The formatted detail is fully determined by describeWebSocketErrorEvent's output for this
+    // input, so pin the exact line: a regression that re-interpolates the detail into the message
+    // as well as the data argument would double it and fail this exact match.
+    expect(logged).toBe('Client websocket error event occurred: message=read ECONNRESET code=n/a');
+    expect(logged.split('read ECONNRESET')).toHaveLength(2);
+  });
+
   test('logs a connection failure with the peer and reason, not {}', async () => {
     vi.mocked(createWebSocket).mockRejectedValueOnce(
       Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:8876'), { code: 'ECONNREFUSED' }),
