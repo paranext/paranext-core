@@ -73,7 +73,6 @@ import {
   APP_QUITTING_LOG,
   DUPLICATE_REGISTRATION_PATTERN,
   FAULT_MARKERS,
-  HOME_TAB_UUID,
   RENDERER_STARTING_LOG,
   WEBSOCKET_PORT,
   captureAppOutput,
@@ -85,6 +84,7 @@ import {
   getFocusedWindowId,
   getWindowIdOfPage,
   homeTabTitle,
+  homeTabWebViewId,
   pollUntil,
   quitAndExpectCleanExit,
   waitForRendererRegistered,
@@ -312,10 +312,10 @@ async function expectToolbarReferenceToContain(
  * the iframe's top-left corner, which is static content in the Home view (no button to trip).
  */
 async function clickIntoHomeWebView(page: Page, windowId: number): Promise<void> {
-  const homeIframe = page.locator(`iframe[data-web-view-id="${HOME_TAB_UUID}-w${windowId}"]`);
+  const homeIframe = page.locator(`iframe[data-web-view-id="${homeTabWebViewId(windowId)}"]`);
   await expect(homeIframe).toBeVisible({ timeout: 60_000 });
   await page
-    .frameLocator(`iframe[data-web-view-id="${HOME_TAB_UUID}-w${windowId}"]`)
+    .frameLocator(`iframe[data-web-view-id="${homeTabWebViewId(windowId)}"]`)
     .locator('body')
     .click({ position: { x: 10, y: 10 } });
 }
@@ -394,7 +394,7 @@ test.describe('multi-window lifecycle', () => {
     await focusWindowAndWaitForRouting(electronApp, window1Id);
     await clickIntoHomeWebView(mainPage, window1Id);
     const baselineFocus = await waitForGenericFocusToReportWindow(window1Id);
-    expect(baselineFocus?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    expect(baselineFocus?.id).toBe(homeTabWebViewId(window1Id));
     logStep(`generic getFocus pinned to window ${window1Id}'s Home web view`);
 
     // Create the second window through the public command, with the window listener armed first.
@@ -431,7 +431,7 @@ test.describe('multi-window lifecycle', () => {
     // (`focusType: 'tab'`, `tabType: 'webView'`; see {@link webViewIdFromFocusSubject}): a freshly
     // minted id (docked on the fly, not loaded from any shared layout, so unlike window 1's it
     // carries no `-w{id}` suffix), which can never equal window 1's
-    // `${HOME_TAB_UUID}-w${window1Id}`. Read directly off window 2's own scoped service first
+    // `homeTabWebViewId(window1Id)`. Read directly off window 2's own scoped service first
     // (bypassing the router) so this is the ground truth to poll the generic, routed answer
     // against, independent of how long window 2's own focus takes to settle.
     await focusWindowAndWaitForRouting(electronApp, window2Id);
@@ -450,20 +450,20 @@ test.describe('multi-window lifecycle', () => {
     );
     // The exact shape window 2 reports: its own Home web view id — in particular NOT window 1's.
     expect(focusInWindow2).toEqual(window2OwnFocus);
-    expect(webViewIdFromFocusSubject(focusInWindow2)).not.toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    expect(webViewIdFromFocusSubject(focusInWindow2)).not.toBe(homeTabWebViewId(window1Id));
     // Discriminate "routed to window 2" from "still answering window 1": window 1's own scoped
     // service must still hold its Home web view subject (a background window's focused element is
     // retained while the window is inactive), so the answer above cannot have come from window 1 —
     // only from the service router genuinely forwarding to window 2.
     const window1OwnFocus = await getScopedWindowFocus(window1Id);
-    expect(window1OwnFocus?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    expect(window1OwnFocus?.id).toBe(homeTabWebViewId(window1Id));
     logStep(`generic getFocus answered for window ${window2Id}`);
 
     // …and it follows focus back to window 1.
     await focusWindowAndWaitForRouting(electronApp, window1Id);
     await clickIntoHomeWebView(mainPage, window1Id);
     const focusInWindow1 = await waitForGenericFocusToReportWindow(window1Id);
-    expect(focusInWindow1?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    expect(focusInWindow1?.id).toBe(homeTabWebViewId(window1Id));
     logStep(`generic getFocus followed back to window ${window1Id}`);
 
     // Close the SECONDARY window the way a user does. The app must stay up, keep serving window 1,
@@ -494,7 +494,7 @@ test.describe('multi-window lifecycle', () => {
       `routing to answer for window ${window1Id} after the secondary window closed`,
     );
     const focusAfterClose = await waitForGenericFocusToReportWindow(window1Id);
-    expect(focusAfterClose?.id).toBe(`${HOME_TAB_UUID}-w${window1Id}`);
+    expect(focusAfterClose?.id).toBe(homeTabWebViewId(window1Id));
 
     // No shutdown-task activity and no quit from a secondary-window close.
     const afterCloseLog = output.textFrom(beforeCloseMark);
