@@ -229,6 +229,10 @@ jobs:
 
       - name: Report file changes
         if: steps.verify-changed-files.outputs.files_changed == 'true'
+        # Naming the changed files is the only thing this step does, and `$CHANGED_FILES` is POSIX
+        # shell: the windows leg defaults to pwsh, where it reads as an undefined PowerShell
+        # variable and the message comes out empty. The leg still fails, but with nothing to act on.
+        shell: bash
         env:
           CHANGED_FILES: ${{ steps.verify-changed-files.outputs.changed_files }}
         run: |
