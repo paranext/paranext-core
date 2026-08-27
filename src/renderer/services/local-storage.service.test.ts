@@ -39,8 +39,8 @@ describe('localWindowStorage', () => {
   });
 
   test('leaves the legacy key in place so a changed window ID cannot strand it', () => {
-    // Electron's BrowserWindow.id is not guaranteed to be stable across restarts, so migrating must
-    // not be destructive — a window that comes back with a different ID has to find the value again
+    // A window never comes back under the id it had, since ids are never reused, so migrating must
+    // not be destructive — the restored window has a new id and has to find the value again
     localStorage.setItem(KEY, 'value from before multi-window');
     localWindowStorage.getItem(KEY);
 
