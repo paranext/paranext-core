@@ -1138,6 +1138,17 @@ declare module 'shared/data/rpc.model' {
    * died rather than being closed politely.
    */
   export function describeWebSocketCloseEvent(ev: unknown): string;
+  /**
+   * Describe a WebSocket `error` event for a log line.
+   *
+   * The `ws` library's `ErrorEvent` keeps `message` and `error` as accessors on the prototype, so
+   * `JSON.stringify` on the event yields `{}` — only own properties are serialized. Read the fields
+   * explicitly.
+   *
+   * Note a browser `WebSocket` fires a plain `Event` on error, carrying no detail at all by
+   * specification, so `message=unknown` is the expected result on the renderer end.
+   */
+  export function describeWebSocketErrorEvent(ev: unknown): string;
   /** Serialize a payload, if needed, and send it over the provided WebSocket */
   export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void;
   /**

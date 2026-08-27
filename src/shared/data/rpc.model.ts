@@ -166,6 +166,51 @@ export function describeWebSocketCloseEvent(ev: unknown): string {
   return `code=${code} reason=${reason} wasClean=${wasClean}`;
 }
 
+/**
+ * Describe a WebSocket `error` event for a log line.
+ *
+ * The `ws` library's `ErrorEvent` keeps `message` and `error` as accessors on the prototype, so
+ * `JSON.stringify` on the event yields `{}` — only own properties are serialized. Read the fields
+ * explicitly.
+ *
+ * Note a browser `WebSocket` fires a plain `Event` on error, carrying no detail at all by
+ * specification, so `message=unknown` is the expected result on the renderer end.
+ */
+export function describeWebSocketErrorEvent(ev: unknown): string {
+  let message = 'unknown';
+  let code = 'n/a';
+  let stack = '';
+
+  if (typeof ev === 'object' && ev) {
+    const rawMessage = readEventProperty(ev, 'message');
+    if (typeof rawMessage === 'string') message = sanitizeForLog(rawMessage);
+
+    const error = readEventProperty(ev, 'error');
+    if (typeof error === 'object' && error) {
+      // Duck-type rather than `instanceof Error`: Electron main and renderer are separate
+      // realms, so a genuine Error from the other side fails an instanceof check.
+      const errorMessage = readEventProperty(error, 'message');
+      if (typeof errorMessage === 'string') message = sanitizeForLog(errorMessage);
+
+      const errorCode = readEventProperty(error, 'code');
+      if (typeof errorCode === 'string' || typeof errorCode === 'number')
+        code = sanitizeForLog(`${errorCode}`);
+
+      const errorStack = readEventProperty(error, 'stack');
+      if (typeof errorStack === 'string') stack = sanitizeForLog(errorStack);
+
+      const cause = readEventProperty(error, 'cause');
+      if (typeof cause === 'object' && cause) {
+        const causeMessage = readEventProperty(cause, 'message');
+        if (typeof causeMessage === 'string')
+          message = `${message} (cause: ${sanitizeForLog(causeMessage)})`;
+      }
+    }
+  }
+
+  return `message=${message} code=${code}${stack ? `\nstack: ${stack}` : ''}`;
+}
+
 /** Serialize a payload, if needed, and send it over the provided WebSocket */
 export function sendPayloadToWebSocket(ws: WebSocket | undefined, payload: unknown): void {
   if (!ws) throw new Error(`Tried to send payload while not connected`);

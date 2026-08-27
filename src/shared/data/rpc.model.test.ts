@@ -1,7 +1,10 @@
+// Two independent WebSocket event fixture classes are defined in this file, one per describe block.
+/* eslint-disable max-classes-per-file */
 import { describe, expect, test, vi, beforeEach, afterEach } from 'vitest';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import {
   describeWebSocketCloseEvent,
+  describeWebSocketErrorEvent,
   MAX_LOGGED_DETAIL_LENGTH,
   MAX_REQUEST_ATTEMPTS,
   REQUEST_ATTEMPT_WAIT_TIME_MS,
@@ -353,5 +356,121 @@ describe('describeWebSocketCloseEvent', () => {
     // an unhandled exception during teardown — strictly worse than logging nothing.
     expect(() => describeWebSocketCloseEvent(hostile)).not.toThrow();
     expect(describeWebSocketCloseEvent(hostile)).toContain('code=1006');
+  });
+});
+
+/** Mirrors `ws`'s ErrorEvent: symbol-keyed values, enumerable prototype accessors. */
+const kMessage = Symbol('message');
+const kError = Symbol('error');
+
+class WsLikeErrorEvent {
+  [key: symbol]: unknown;
+
+  constructor(message: string, error?: unknown) {
+    this[kMessage] = message;
+    this[kError] = error;
+  }
+
+  get message() {
+    return this[kMessage];
+  }
+
+  get error() {
+    return this[kError];
+  }
+}
+Object.defineProperty(WsLikeErrorEvent.prototype, 'message', { enumerable: true });
+Object.defineProperty(WsLikeErrorEvent.prototype, 'error', { enumerable: true });
+
+describe('describeWebSocketErrorEvent', () => {
+  test('surfaces the message from a ws-shaped ErrorEvent that JSON.stringify reports as {}', () => {
+    const ev = new WsLikeErrorEvent('read ECONNRESET');
+    // The regression this whole ticket turns on: the old handler logged `{}` here.
+    expect(JSON.stringify(ev)).toBe('{}');
+    expect(describeWebSocketErrorEvent(ev)).toContain('read ECONNRESET');
+  });
+
+  test('returns a useful string for a bare DOM Event, the only shape Chromium sends on error', () => {
+    const result = describeWebSocketErrorEvent(new Event('error'));
+    expect(result).not.toBe('{}');
+    expect(result).toContain('message=unknown');
+  });
+
+  test('surfaces an Error message, string code, and stack', () => {
+    const error = new Error('socket hang up');
+    Object.defineProperty(error, 'code', { value: 'ECONNRESET', enumerable: true });
+    const result = describeWebSocketErrorEvent(new WsLikeErrorEvent('outer', error));
+    expect(result).toContain('socket hang up');
+    expect(result).toContain('ECONNRESET');
+    expect(result).toContain('stack:');
+  });
+
+  test('surfaces a refused-connection error, the startup-race fingerprint', () => {
+    // A refused connect is what `ws` reports when a client dials before the server is
+    // listening. Rendering this as `{}` is what made that class of startup failure opaque.
+    const error = new Error('connect ECONNREFUSED 127.0.0.1:8876');
+    Object.defineProperty(error, 'code', { value: 'ECONNREFUSED', enumerable: true });
+    const result = describeWebSocketErrorEvent(new WsLikeErrorEvent('outer', error));
+    expect(result).toContain('ECONNREFUSED');
+    expect(result).toContain('8876');
+  });
+
+  test('surfaces a numeric error code, which the previous server-side check dropped', () => {
+    const error = new Error('boom');
+    Object.defineProperty(error, 'code', { value: 4091, enumerable: true });
+    expect(describeWebSocketErrorEvent(new WsLikeErrorEvent('outer', error))).toContain('4091');
+  });
+
+  test('surfaces a nested cause, as Node transport errors routinely nest', () => {
+    const inner = new Error('ECONNRESET inner');
+    const outer = new Error('outer failure', { cause: inner });
+    const result = describeWebSocketErrorEvent(new WsLikeErrorEvent('e', outer));
+    expect(result).toContain('ECONNRESET inner');
+  });
+
+  test('handles an error that is not an Error object', () => {
+    expect(() =>
+      describeWebSocketErrorEvent(new WsLikeErrorEvent('e', 'just a string')),
+    ).not.toThrow();
+    expect(describeWebSocketErrorEvent(new WsLikeErrorEvent('e', { odd: true }))).toContain(
+      'message=',
+    );
+  });
+
+  test('omits the stack section entirely when there is no stack', () => {
+    const error = new Error('no stack here');
+    error.stack = undefined;
+    const result = describeWebSocketErrorEvent(new WsLikeErrorEvent('e', error));
+    expect(result).not.toContain('stack:');
+    expect(result).not.toContain('undefined');
+  });
+
+  test('bounds a very long stack', () => {
+    const error = new Error('long');
+    error.stack = 'y'.repeat(MAX_LOGGED_DETAIL_LENGTH * 3);
+    expect(describeWebSocketErrorEvent(new WsLikeErrorEvent('e', error))).toContain('…');
+  });
+
+  test('surfaces a cross-realm error, which an instanceof check would miss', () => {
+    // Duck-typed: an object carrying a string `message` is treated as error-like.
+    const foreign = { message: 'from another realm' };
+    expect(describeWebSocketErrorEvent(new WsLikeErrorEvent('e', foreign))).toContain(
+      'from another realm',
+    );
+  });
+
+  // null is itself one of the garbage inputs under test
+  // eslint-disable-next-line no-null/no-null
+  test.each([undefined, null, {}, 'nope', 42])('never returns {} for input %p', (input) => {
+    expect(describeWebSocketErrorEvent(input)).not.toBe('{}');
+  });
+
+  test('does not throw when a getter throws', () => {
+    const hostile = {
+      get message(): string {
+        throw new Error('hostile');
+      },
+    };
+    expect(() => describeWebSocketErrorEvent(hostile)).not.toThrow();
   });
 });
