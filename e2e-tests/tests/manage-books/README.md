@@ -36,4 +36,4 @@ Three specs here write to whatever real projects the running app has, with no re
 Until this branch, `npm run test:e2e-cdp` collected all of them, so a bare CDP run against a live
 app could have overwritten real project data on the developer's machine.
 
-**Size:** 4 spec files — 72 `test(...)` declarations and 7 `test.fixme(...)`.
+**Size:** 4 spec files — 68 `test(...)` declarations and 6 `test.fixme(...)`.

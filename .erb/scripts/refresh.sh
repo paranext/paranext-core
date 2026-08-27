@@ -4,9 +4,12 @@
 #
 # Environment passed through to the app:
 #   DEV_NOISY=true    Load the test extensions (helloRock3 etc.) and their default layout. Off by
-#                     default, and no e2e suite needs it on: launch-mode suites spawn their own
-#                     Electron with their own DEV_NOISY default, and no suite reachable through
-#                     playwright-cdp.config.ts references the test extensions. Turning it on adds
+#                     default, and no suite needs it on FROM HERE — which is not the same as no
+#                     suite needing it: the overlay suite drives the helloRock3 web views and
+#                     requires it, but it launches its own Electron and sets its own default
+#                     (isolated.fixture defaults DEV_NOISY to 'true'). What this flag governs is the
+#                     app THIS script starts, which only the CDP-attached suites use, and none of
+#                     those reference the test extensions. Turning it on adds
 #                     startup web views that shift iframe ordering (see find.fixture.ts). It is for
 #                     poking at the test extensions by hand:
 #                       DEV_NOISY=true ./.erb/scripts/refresh.sh

@@ -18,8 +18,9 @@ included in the repository or CI environment.
 # Boot the app with CDP enabled (once)
 ./.erb/scripts/refresh.sh
 
-# Run the tests
-npm run test:e2e:enhanced-resources
+# Run the tests. There is no dedicated npm script; these specs attach over CDP, so they go through
+# playwright-cdp.config.ts, which has no globalSetup to reject the running app.
+npx playwright test --config e2e-tests/playwright-cdp.config.ts tests/enhanced-resources/
 ```
 
 These tests are **not** wired into CI (`test:e2e:smoke`).
@@ -53,5 +54,5 @@ rejects the very app they need. They also need real Marble resources (e.g. `ESV1
 available in CI. Two specs are additionally quarantined from type-checking in
 `e2e-tests/tsconfig.json`.
 
-**Size:** 15 spec files — 120 `test(...)` declarations and 45 `test.fixme(...)`. The `fixme` ones
+**Size:** 15 spec files — 113 `test(...)` declarations and 45 `test.fixme(...)`. The `fixme` ones
 cannot run even in principle; they are disabled by their own authors.
