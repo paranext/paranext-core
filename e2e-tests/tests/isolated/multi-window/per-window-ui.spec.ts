@@ -62,6 +62,7 @@ import {
   homeTabTitle,
   pollUntil,
   waitForRendererRegistered,
+  widenWindowForToolbarReference,
 } from './multi-window.util';
 
 /** Fixed GUID of the bundled sample WEB project (c-sharp/assets/WEB/Settings.xml <Guid>). */
@@ -285,6 +286,9 @@ test.describe('per-window UI isolation', () => {
     await waitForAppReady(mainPage, 180_000);
     const window1Id = getWindowIdOfPage(mainPage);
     await expect(homeTabTitle(mainPage, window1Id)).toBeAttached({ timeout: 60_000 });
+    // The scroll-group section below reads references off both windows' toolbars, which show the
+    // book alone at the toolbar shrink ladder's narrowest rung.
+    await widenWindowForToolbarReference(electronApp, mainPage);
     logStep(`window ${window1Id} ready`);
 
     // ── Navigation target, baseline ────────────────────────────────────────────────────────────
@@ -299,6 +303,7 @@ test.describe('per-window UI isolation', () => {
     // own — Home isn't one); the dock-Home behaviour itself is locked by multi-window.spec.ts.
     await expectWindowDockHasOnlyHomeTab(page2);
     await expect(page2.locator(BCV_TRIGGER).first()).toBeDisabled();
+    await widenWindowForToolbarReference(electronApp, page2);
     logStep(`window ${window2Id} up; both BCV controls disabled with no navigable tabs anywhere`);
 
     // ── Navigation target follows only the OWN window's tabs ───────────────────────────────────
