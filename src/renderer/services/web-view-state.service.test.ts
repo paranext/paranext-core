@@ -6,23 +6,32 @@ const WEBVIEW_STATE_KEY = 'web-view-state';
 const MINTED_ID = '0a23566d-1b2c-4dd2-8d3d-cda54b598cd2';
 const OTHER_MINTED_ID = '3cf575f0-2cc2-464b-8765-b588f216dfce';
 
+/** Slot this window occupies — per-window storage is keyed by it, not by window id */
+const SLOT_ID = 'slot-under-test';
+
 /**
  * Import a fresh copy of the service. It holds the loaded state in module-level variables, so each
  * test needs its own copy to start from the storage it seeded.
  */
 async function importWebViewStateService() {
   vi.resetModules();
+  // Resetting modules also re-instantiates the storage module the service imports, which forgets
+  // the slot. The service must see the slot on the SAME storage instance it will read through, so
+  // it is set on the freshly imported one rather than on the copy this file imported at load.
+  const storage = await import('@renderer/services/local-storage.service');
+  storage.testingLocalWindowStorage.resetForTesting();
+  storage.setWindowSlotId(SLOT_ID);
   return import('@renderer/services/web-view-state.service');
 }
 
-/** Seed the state this window's storage starts the session with */
+/** Seed the state this window's slot starts the session with */
 function seedStateForThisWindow(entries: [string, Record<string, unknown>][]): void {
-  localStorage.setItem(`${globalThis.windowId}_${WEBVIEW_STATE_KEY}`, serialize(entries));
+  localStorage.setItem(`${SLOT_ID}_${WEBVIEW_STATE_KEY}`, serialize(entries));
 }
 
-/** Read back what the service persisted for this window */
+/** Read back what the service persisted for this window's slot */
 function readPersistedState(): [string, Record<string, unknown>][] {
-  const serialized = localStorage.getItem(`${globalThis.windowId}_${WEBVIEW_STATE_KEY}`);
+  const serialized = localStorage.getItem(`${SLOT_ID}_${WEBVIEW_STATE_KEY}`);
   return serialized ? deserialize(serialized) : [];
 }
 
@@ -43,8 +52,9 @@ describe('web view state service', () => {
   });
 
   test('stores state under the minted id, so a window id that changes cannot strand it', async () => {
-    // A restored window always carries a new id, since ids are never reused, so a suffix baked into
-    // the storage key would lose the record on every restart
+    // A restored window always carries a new id, since ids are never reused — which is why storage
+    // is keyed by slot — so a window suffix baked into the RECORD key would still lose the record
+    // on every restart even though the storage namespace survives
     const { setFullWebViewStateById, getFullWebViewStateById } = await importWebViewStateService();
 
     setFullWebViewStateById(`${MINTED_ID}-w1`, { scrRef: 'JHN 3:16' });

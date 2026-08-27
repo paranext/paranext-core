@@ -2260,7 +2260,7 @@ step, no automation. Just a record.
 - **Source:** PT-4286 "Window-close rule — team decision 2026-08-26"; design note in the PRD
   folder (`2026-08-27-pt-4286-window-close-rule-design.md`); PR #2702 review findings B2 and H2.
 
-## ADR-0035: Window ids are minted by main, never reused, and numeric on every surface
+## adr-platform-minted-window-ids: Window ids are minted by main, never reused, and numeric on every surface
 
 - **Date:** 2026-08-26
 - **Status:** Accepted
@@ -2300,8 +2300,23 @@ step, no automation. Just a record.
   `localStorage` prefixes, `-w{id}` suffixes inside saved layouts, and the legacy prefixed
   dock-layout keys — so this is a migration, not only a swap. The reuse-defence code may now be
   simplified, but deliberately: `removeWindow`'s cleanup stays correct as hygiene even though its
-  stated reason is gone. Positional identity for persisted layout slots (ADR in PT-4285) is
-  untouched: a never-reused id answers "has this number been handed out", not "which window was
-  this".
+  stated reason is gone. Positional identity for persisted layout slots (PT-4285) is untouched: a
+  never-reused id answers "has this number been handed out", not "which window was this".
+
+  **Per-window renderer state moves off the window id and onto the slot.** Web view state was
+  keyed in `localStorage` by window id, which worked only because Electron's ids restarted at 1
+  each launch, so the same window usually found its own blob. Once an id is never reused, a
+  restored window's id never matches the one that saved its state, and every launch would start
+  empty. Each entry in the persisted structure therefore carries a stable `slotId`, minted when
+  the slot is created and never changed, and main returns it in the window's layout-get answer —
+  the only place a window can learn which slot it occupies. Storage is keyed by that. It is
+  deliberately not the entry's list position: `handleWindowRemoved` splices entries, so a position
+  can silently come to mean a neighbouring slot's state. This does not reopen PT-4285's decision —
+  the slot is still what identifies a window across restarts, and the id is still runtime-only;
+  what changed is that the id can no longer double as the storage key by coincidence. The blobs
+  already on disk under the old `${windowId}_` keys cannot be mapped to slots (nothing recorded
+  the pairing, and windows were never created in slot order), so they are removed on first launch
+  and per-tab UI state resets once; layouts, bounds and open tabs live in the structure and are
+  untouched. Existing structures get a `slotId` minted per entry on first load.
 - **Source:** PT-4464; lead dev's review of PR #2670 (2026-08-25), item 11. Surface inventory
   measured against the top of the multi-window stack.
