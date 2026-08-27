@@ -42,7 +42,7 @@ step, no automation. Just a record.
 
 ### Entry template
 
-```markdown
+``markdown
 ## adr-{slug}: {short title}
 
 - **Date:** YYYY-MM-DD
@@ -51,7 +51,7 @@ step, no automation. Just a record.
 - **Decision:** what we chose.
 - **Alternatives:** what we considered and why we rejected/deferred them.
 - **Consequences:** what this enables or constrains; when to revisit.
-```
+``
 
 ---
 
@@ -280,7 +280,7 @@ step, no automation. Just a record.
   cleaned up by the process that owns the websocket connections, which derives the death from the
   connection teardown and announces the departed window's network objects as disposed once their
   methods are out of the central registry (`onDidDisconnectClient` handling in
-  `network-object.service.ts`; see ADR-0009). A window-scoped service therefore has to tolerate its
+  `network-object.service.ts`; see `adr-singleton-services-elect-host-window`). A window-scoped service therefore has to tolerate its
   own registrations outliving its window for a moment, and consumers have to tolerate resolving one
   that is already gone. The scoped ids remain the registration name (`object:{id}.{method}` derives
   from them) but are no longer how anything FINDS a window's implementation — see
@@ -1846,7 +1846,7 @@ step, no automation. Just a record.
   and still builds `${name}-${targetWindowId}` strings; it keeps no index. That module is
   transitional — each of its commands moves into the router for its own service — so it is expected
   to go away rather than to be converted.
-- **Amended 2026-08-07 (ADR-0032):** `command.service-router.ts` is gone, so the exception above is
+- **Amended 2026-08-07 (`adr-renderer-registers-no-names`):** `command.service-router.ts` is gone, so the exception above is
   spent — every ROUTER now discovers its shards through an index. The index also answers with the id
   a shard ANNOUNCED (`getShardNetworkObjectId`), which is what lets a router name one of a shard's
   methods — `object:{id}.{method}`, for a request timeout — without that being a second rebuild of
@@ -1865,13 +1865,13 @@ step, no automation. Just a record.
   startup, teardown and quit. That is its own change with its own tests, not a rename.
 - **Source:** PT-4275 epic (multi-window architecture plan step 2).
 
-## ADR-0030: The scroll group service is hosted in main, and each renderer keeps a predicting cache
+## adr-scroll-group-hosted-in-main: The scroll group service is hosted in main, and each renderer keeps a predicting cache
 
 - **Date:** 2026-08-07
 - **Status:** Accepted
 - **Context:** A scroll group is app-global — group 1 is on one reference for the whole app — but a
   renderer was holding it, and any window can be closed. The scroll group service's whole job is
-  holding app-global state, so the state had a home problem, not a routing problem: ADR-0008's
+  holding app-global state, so the state had a home problem, not a routing problem: `adr-generic-name-routing-proxies`'s
   routers forward to a window, and there is no per-window answer to forward to.
 - **Decision:** Main owns the scroll group state — each group's Scripture reference and source
   project (persisted through main's file-backed `localStorage` polyfill, under the keys the renderer
@@ -1932,11 +1932,11 @@ step, no automation. Just a record.
   replays that URL, and the pre-host store a reloaded document would otherwise fall back to has been
   handed over by then, so a URL left as old as the window would put a reloaded window
   back on the reference it opened on — which for a restored Scripture editor is the extra chapter
-  load the seed exists to avoid. The theme service is hosted the same way in ADR-0031.
+  load the seed exists to avoid. The theme service is hosted the same way in `adr-theme-hosted-in-main`.
 - **Source:** PT-4275 epic (multi-window architecture plan §6).
 
 
-## ADR-0031: The theme service is hosted in main, and each window caches the current theme
+## adr-theme-hosted-in-main: The theme service is hosted in main, and each window caches the current theme
 
 - **Date:** 2026-08-07
 - **Status:** Accepted
@@ -1959,7 +1959,7 @@ step, no automation. Just a record.
   answer. Main's own consumer (the Windows title-bar overlay colours) reads and subscribes locally
   rather than through the provider its own process registers.
 - **Alternatives:** (a) Leave the engine in a renderer and give the app a way to move it to another
-  window when that one closes — rejected for the same reason as in ADR-0030, and the theme would
+  window when that one closes — rejected for the same reason as in `adr-scroll-group-hosted-in-main`, and the theme would
   have been the second service to need that machinery, which is what made hosting both in main
   better than building it once. (b) Fix the §9.2 staleness in place and leave the engine in a
   renderer — rejected: it treats the symptom of state living somewhere closable. (c) Keep the OS
@@ -1976,7 +1976,7 @@ step, no automation. Just a record.
   leave it for another window to claim. A window that is RELOADED replays the URL main built when the
   window was created, whose theme would otherwise be as old as the window, so the renderer rewrites
   its own query parameter on every change — the same
-  mechanism the scroll group uses (ADR-0030), rather than a second seed source and a navigation-type
+  mechanism the scroll group uses (`adr-scroll-group-hosted-in-main`), rather than a second seed source and a navigation-type
   sniff to choose between them. `shouldMatchSystem` is computed in main only; a renderer that starts
   applying its own `matchMedia` would double-apply it. `hasOwnThemeState` — what makes the host
   refuse a migration offer — is seeded from a DEDICATED marker key that only the three public
@@ -2010,12 +2010,12 @@ step, no automation. Just a record.
 - **Source:** PT-4275 epic (multi-window architecture plan §6, theme half; §9.2 for the staleness it
   closes).
 
-## ADR-0032: Renderer platform code registers no command or request names; routers call shard methods
+## adr-renderer-registers-no-names: Renderer platform code registers no command or request names; routers call shard methods
 
 - **Date:** 2026-08-07
 - **Status:** Accepted
-- **Context:** ADR-0007 scoped each window's copy of the renderer-hosted commands and dialog requests
-  under a `${name}-${windowId}` suffix, and ADR-0008's `command.service-router.ts` forwarded the
+- **Context:** `adr-per-window-service-scoping` scoped each window's copy of the renderer-hosted commands and dialog requests
+  under a `${name}-${windowId}` suffix, and `adr-generic-name-routing-proxies`'s `command.service-router.ts` forwarded the
   generic name to the right window's scoped name. That worked, but it made the set of per-window
   commands a **list** — `RENDERER_HOSTED_COMMAND_NAMES`, `RENDERER_HOSTED_COMMAND_DOCS`,
   `RENDERER_HOSTED_DIALOG_REQUEST_NAMES` — that a renderer had to register against and that nothing
