@@ -385,24 +385,27 @@ Object.defineProperty(WsLikeErrorEvent.prototype, 'error', { enumerable: true })
 describe('describeWebSocketErrorEvent', () => {
   test('surfaces the message from a ws-shaped ErrorEvent that JSON.stringify reports as {}', () => {
     const ev = new WsLikeErrorEvent('read ECONNRESET');
-    // The regression this whole ticket turns on: the old handler logged `{}` here.
+    // Serializing the event directly yields nothing useful (own properties only); the
+    // formatter must read the accessor instead so the detail survives into the log.
     expect(JSON.stringify(ev)).toBe('{}');
-    expect(describeWebSocketErrorEvent(ev)).toContain('read ECONNRESET');
+    expect(describeWebSocketErrorEvent(ev)).toBe('message=read ECONNRESET code=n/a');
   });
 
   test('returns a useful string for a bare DOM Event, the only shape Chromium sends on error', () => {
     const result = describeWebSocketErrorEvent(new Event('error'));
     expect(result).not.toBe('{}');
-    expect(result).toContain('message=unknown');
+    expect(result).toBe('message=unknown code=n/a');
   });
 
   test('surfaces an Error message, string code, and stack', () => {
     const error = new Error('socket hang up');
     Object.defineProperty(error, 'code', { value: 'ECONNRESET', enumerable: true });
     const result = describeWebSocketErrorEvent(new WsLikeErrorEvent('outer', error));
-    expect(result).toContain('socket hang up');
-    expect(result).toContain('ECONNRESET');
-    expect(result).toContain('stack:');
+    // Stack content is environment-dependent (varies by runtime/formatting), so pin the
+    // fixed prefix exactly and assert the stack text follows rather than hard-coding it.
+    const expectedPrefix = 'message=socket hang up code=ECONNRESET\nstack: ';
+    expect(result.startsWith(expectedPrefix)).toBe(true);
+    expect(result.length).toBeGreaterThan(expectedPrefix.length);
   });
 
   test('surfaces a refused-connection error, the startup-race fingerprint', () => {
