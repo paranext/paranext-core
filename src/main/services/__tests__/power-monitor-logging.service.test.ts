@@ -75,16 +75,54 @@ describe('registerPowerMonitorListeners', () => {
       'utf-8',
     );
 
+    /**
+     * True when an import clause (the part between `import` and `from`) brings in only types —
+     * erased at compile time, so it cannot cause a runtime side effect and is not a route into
+     * another service. Handles both `import type { X } from '...'` and inline `import { type X }
+     * from '...'`.
+     */
+    function isTypeOnlyImportClause(clause: string): boolean {
+      const trimmedClause = clause.trim();
+      if (/^type\b/.test(trimmedClause)) return true;
+
+      const namedImports = trimmedClause.match(/^\{([\s\S]*)\}$/);
+      if (!namedImports) return false; // default or namespace import — always a runtime import
+
+      const specifiers = namedImports[1]
+        .split(',')
+        .map((specifier) => specifier.trim())
+        .filter((specifier) => specifier.length > 0);
+      return specifiers.length > 0 && specifiers.every((specifier) => /^type\b/.test(specifier));
+    }
+
     test('imports nothing but the logger service', () => {
-      const importedModules = [...serviceSource.matchAll(/^import .+ from '([^']+)';$/gm)].map(
-        (match) => match[1],
-      );
+      // Lazy `[\s\S]*?` (rather than `.+` anchored to one line) so an import statement Prettier
+      // wraps across multiple lines is still matched.
+      const importStatements = [
+        ...serviceSource.matchAll(/import\s+([\s\S]*?)\s+from\s+'([^']+)';/g),
+      ];
+      const runtimeImportedModules = importStatements
+        .filter((match) => !isTypeOnlyImportClause(match[1]))
+        .map((match) => match[2]);
 
       // Calling into another service (e.g. a reconnect service) requires importing it. Keeping
       // the import list to just the logger is what actually prevents this diagnostic hook from
       // growing into a reconnect trigger — if this assertion fails, the new import is crossing a
       // deliberate boundary: this file logs power transitions and must not act on them.
-      expect(importedModules).toStrictEqual(['@shared/services/logger.service']);
+      expect(runtimeImportedModules).toStrictEqual(['@shared/services/logger.service']);
+    });
+
+    test('contains no require(...) calls', () => {
+      // A `require` call is a second route into another module that the import-statement scan
+      // above does not see.
+      expect(serviceSource).not.toMatch(/\brequire\s*\(/);
+    });
+
+    test('contains no dynamic import(...) calls', () => {
+      // A dynamic `import()` is a third route into another module — also invisible to the
+      // static-import scan above, and awaitable from inside a handler without changing its
+      // top-level import list.
+      expect(serviceSource).not.toMatch(/\bimport\s*\(/);
     });
 
     test("each handler's body is a single logger.info call", () => {
