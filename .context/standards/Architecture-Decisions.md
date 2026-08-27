@@ -1545,3 +1545,50 @@ step, no automation. Just a record.
   required. The window minimum and the column floor are two constants in different files that must
   move together; the test cannot import the Electron-side value, so its comment says to change both.
 - **Source:** PT-4344; Jolie Rabideau measured the shipped floor in the running app on macOS during review of PR #2701, 2026-08-24.
+
+## adr-find-tolerance-as-engine-options: Find expresses whitespace and diacritic tolerance as engine options, never by rewriting the query
+
+- **Date:** 2026-08-26
+- **Status:** Accepted
+- **Context:** PT-3408 reported that a term typed with extra spaces returned no results. The first
+  fix collapsed runs of spaces in the query inside the Find web view's option builder, on the
+  premise that the searched text can never contain consecutive spaces because ParatextData's
+  `UsfmToken.RegularizeSpaces` normalizes them on write. **That premise is false.** Find searches
+  USJ, not USFM: `UsjReaderWriter` concatenates adjacent text nodes with `textChunks.join('')` and
+  no separator, so a trailing space in one node followed by a leading space in the next is a real
+  double space in the searched text. Running the engine against a fixture of that shape
+  (`<char style="it">Salvador. </char><unmatched/> porque`) confirmed it: the exact two-space query
+  matched, and the same query routed through the collapse matched nothing. Rewriting the query also
+  made the reported match span include the user's padding, so a replace spliced the surrounding
+  spaces away and fused the neighboring words; and it did nothing at all under any word restriction.
+- **Decision:** The search term reaches the engine **byte-identical**. Whitespace and diacritic
+  tolerance are expressed only as `FindOptions` the engine applies when _matching_
+  (`ignoreWhitespaceDifferences`, `ignoreDiacritics`, both already implemented in
+  `buildSearchRegex`), and both are surfaced as user-togglable Find filters, mirroring PT9's
+  `FindReplaceOptions`. Both default to off, so an exact search — including for a specific invisible
+  character such as NBSP or ZWSP, which the Find UI deliberately renders in results — is what the
+  user gets unless they opt out of exactness. The UI adapter that maps Find's state onto
+  `FindOptions` lives in its own module (`find/find-options.utils.ts`) rather than in `find.utils.ts`,
+  which the backend PDP engine imports.
+- **Alternatives:**
+  - **Set `ignoreWhitespaceDifferences: true` unconditionally.** Rejected: it makes every invisible
+    character interchangeable with an ordinary space, removing any way to search for an exact
+    invisible character outside regex mode. Correct as an option, wrong as a default.
+  - **Keep the collapse but also trim, and widen it to all whitespace via `normalizeScriptureSpaces`.**
+    Rejected: no amount of tuning fixes it. Any query rewrite destroys information the user typed,
+    so real consecutive whitespace in the text stays unsearchable whatever the pattern.
+  - **Revert and return PT-3408 to UX.** Viable — the ticket's Definition of Done still asks whether
+    spaces should be forgiven — but it ships no fix, and the toggle answers the question in the
+    user's hands rather than guessing at a global default.
+- **Consequences:** Extra spaces are forgiven only when the user asks for it, so the reported
+  PT-3408 symptom now has a remedy that costs nothing by default. Real consecutive whitespace stays
+  searchable, which the collapse had made impossible. Two more persisted web-view state keys and two
+  more search-invalidating dependencies. `ignoreDiacritics`, already implemented and tested at the
+  engine level but never reachable from the UI, becomes user-visible in the same change — it is the
+  sibling flag on the same PT9 dialog and gains its control alongside. The Storybook harness
+  approximates `ignoreWhitespaceDifferences` but not `ignoreDiacritics`, which its TSDoc records,
+  since emulating NFD normalization over the fixture text is out of proportion to a story.
+  Upstream ParatextData is separately moving to preserve consecutive spaces
+  (`PreserveConsecutiveSpacesInTextTokens`); this decision is unaffected by that, since it never
+  relied on the normalization holding.
+- **Source:** PT-3408, review of PR #2715.
