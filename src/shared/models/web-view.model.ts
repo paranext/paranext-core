@@ -582,9 +582,9 @@ export type OpenWebViewOptions = ReloadWebViewOptions & {
    * Combining it with a 'replace-tab' layout is likewise an error — the tab being replaced already
    * names the window.
    *
-   * Window ids are assigned by the platform and never reused, in this run of the app or any later
-   * one, so an id names one window and only ever that window. Get the current window's id via the
-   * `platform.getFocusedWindowId` command.
+   * Window ids are assigned by the platform and never reused within a profile, in this run of the
+   * app or any later one, so an id names one window and only ever that window. Get the current
+   * window's id via the `platform.getFocusedWindowId` command.
    *
    * @experimental This option is unstable and may change or disappear without notice
    */

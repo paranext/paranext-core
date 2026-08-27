@@ -17,6 +17,17 @@ export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
  */
 export const WINDOW_ID = 'windowId';
 
+/**
+ * Query parameter key used to pass a window's layout slot id — the stable identity of its entry in
+ * the persisted window-layouts structure — to its renderer process. The renderer keys its
+ * per-window storage by it, so it travels with the window rather than being asked for after the
+ * window loads: storage then works from the first render, in every interface mode, and before any
+ * layout request has been answered.
+ *
+ * @experimental
+ */
+export const WINDOW_SLOT_ID_QUERY_PARAMETER = 'windowSlotId';
+
 /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
 export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
 
@@ -47,7 +58,7 @@ export const SCROLL_GROUP_STATE_QUERY_PARAMETER = 'scrollGroupState';
 export const THEME_STATE_QUERY_PARAMETER = 'themeState';
 
 /** How a query parameter's text maps to the value the app uses. */
-type UrlParameterKind = 'flag' | 'integer' | 'enum' | 'serialized';
+type UrlParameterKind = 'flag' | 'integer' | 'enum' | 'string' | 'serialized';
 
 /** What a reader needs to turn one query parameter's text into a value it can trust. */
 type UrlParameterSpec = {
@@ -59,8 +70,8 @@ type UrlParameterSpec = {
 /**
  * Every query parameter passed to a renderer, keyed by its parameter name, and what its text means:
  * a `flag` is present-or-absent (any value, including none, means true), an `integer` or `enum` is
- * a single value read at face value, and `serialized` is the output of platform-bible-utils'
- * `serialize`, opaque to this table.
+ * a single value read at face value, a `string` is a single opaque value used as-is, and
+ * `serialized` is the output of platform-bible-utils' `serialize`, opaque to this table.
  *
  * Declarative on purpose, not a table of encode/decode functions: this module is import-free so the
  * `ts-node` startup-waterfall CLI can read it without pulling in the logger, and codec functions
@@ -79,6 +90,7 @@ export const URL_PARAMETERS: Readonly<Record<string, UrlParameterSpec>> = {
   },
   [DEV_MODE_QUERY_PARAMETER]: { kind: 'flag' },
   [WINDOW_ID]: { kind: 'integer' },
+  [WINDOW_SLOT_ID_QUERY_PARAMETER]: { kind: 'string' },
   [STARTUP_MARKS_QUERY_PARAMETER]: { kind: 'flag' },
   [SCROLL_GROUP_STATE_QUERY_PARAMETER]: { kind: 'serialized' },
   [THEME_STATE_QUERY_PARAMETER]: { kind: 'serialized' },

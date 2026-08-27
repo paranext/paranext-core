@@ -84,9 +84,9 @@ async function initializeWindowService(): Promise<void> {
  */
 async function getWindowService(): Promise<IWindowService> {
   // Having a window id is what separates a renderer from the extension host, which has none.
-  // Compared against `undefined` rather than tested for truthiness now that the id is a number: a
-  // falsiness test would send window 0 down the extension host's path. Nothing mints 0 today, and
-  // a check that is correct only because of that is one counter change away from being wrong.
+  // Compared against `undefined` rather than tested for truthiness: a falsiness test would send
+  // window 0 down the extension host's path. Nothing mints 0 today, and a check that is correct
+  // only because of that is one counter change away from being wrong.
   if (globalThis.windowId === undefined) return getFocusedWindowService();
   await initialize();
   // Initializing resolved without setting the provider, which means it was disposed between being

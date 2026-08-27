@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { ProcessType } from '@shared/global-this.model';
 import type {
   Layout,
@@ -166,7 +166,7 @@ function makeLiveDockLayout({ doesLoadReplaceTheDock = false } = {}) {
  * these tests can hold that stretch open, and it is the one stretch of the open path with no bound
  * on it at all: `getWebView` is a round trip into the extension host running extension code.
  */
-async function primeProvider() {
+async function primeProvider(webViewState?: Record<string, unknown>) {
   const { webViewProviderService } = await import('@shared/services/web-view-provider.service');
   const { localThemeService } = await import('@renderer/services/theme.service');
   let doesGetWebViewPark = false;
@@ -186,6 +186,7 @@ async function primeProvider() {
           webViewType: saved.webViewType,
           contentType: 'html',
           content: '<p>moved</p>',
+          state: webViewState,
         };
       },
     }),
@@ -271,6 +272,22 @@ async function settle() {
     });
 }
 
+/**
+ * Boot the renderer's globals from a window URL shaped the way main builds one — window id and slot
+ * included — so per-window storage is keyed the way it is in a real window. Must run before
+ * anything reads that storage, which is the order the renderer's entry point guarantees.
+ */
+async function bootFromWindowUrl(search: string) {
+  window.history.replaceState({}, '', `/${search}`);
+  vi.stubGlobal('webpackRenderer', { isPackaged: false });
+  await import('@renderer/global-this.model');
+}
+
+/** The web view state blob this window's slot holds, as the real state service persists it */
+function persistedWebViewState(slotId: string): string | null {
+  return localStorage.getItem(`${slotId}_web-view-state`);
+}
+
 // Starting the shard deletes `globalThis.open` so web views cannot make popups. That is a one-way
 // change to the real `window`, which these tests share across every re-import.
 const openWindow = globalThis.open;
@@ -287,42 +304,102 @@ beforeEach(() => {
   );
 });
 
-describe('the initial layout load against a dock that gained content mid-load', () => {
+describe('web view state under every way the initial load can go', () => {
+  // These tests prove state survives the load paths, which takes the real state service and the
+  // real per-window storage under it. The file-level mock is lifted for the imports each test
+  // makes (the outer `resetModules` makes them re-resolve) and put back afterwards, since a mock
+  // factory's result is cached across `resetModules` and would otherwise leak either way.
+  beforeEach(() => {
+    vi.doUnmock('@renderer/services/web-view-state.service');
+  });
+
+  afterEach(() => {
+    vi.doMock('@renderer/services/web-view-state.service', () => ({
+      deleteFullWebViewStateById: vi.fn(),
+      getFullWebViewStateById: vi.fn(),
+      setFullWebViewStateById: vi.fn(),
+    }));
+    vi.unstubAllGlobals();
+  });
+
+  test('in simple mode, a web view with state opens and its state lands in this window’s slot', async () => {
+    // Simple mode loads the static layout and never asks main for a saved one, so nothing that
+    // happens during the load can tell this window which slot it is. The slot has to come from the
+    // window's URL, read at boot — or every state read in the app's default mode throws.
+    mocks.settingsGet.mockImplementation(async (key: string) =>
+      key === 'platform.interfaceMode' ? 'simple' : false,
+    );
+    await bootFromWindowUrl('?windowId=7&windowSlotId=slot-seven');
+    const module = await import('@renderer/services/web-view.service-shard');
+    const { dockLayout, dockedWebViews } = makeLiveDockLayout();
+    module.registerDockLayout(dockLayout);
+    await module.startWebViewServiceShard();
+    await primeProvider({ carried: 'through the open' });
+
+    await expect(module.openWebView('test.opened')).resolves.toEqual(expect.any(String));
+
+    expect(dockedWebViews.map((webView) => webView.webViewType)).toContain('test.opened');
+    expect(persistedWebViewState('slot-seven')).toContain('through the open');
+    expect(
+      mocks.networkRequest.mock.calls.some(([requestType]) => requestType === 'windowLayout:get'),
+    ).toBe(false);
+  });
+
+  test('a move into a window whose layout request has not been answered still seeds its state', async () => {
+    // A routed move lands in a brand-new window while that window's own startup load is still
+    // waiting on main. The adopt seeds the moved view's state before opening it, so the slot must
+    // be known before main has said anything — which only the URL can guarantee.
+    await bootFromWindowUrl('?windowId=7&windowSlotId=slot-seven');
+    const { shard, dockedWebViews, releaseLayoutGet } = await registerWithHangingLayoutGet();
+
+    const adoptedId = await shard.adoptWebView({
+      id: 'moved-view',
+      webViewType: 'test.type',
+      state: { carried: 'through the move' },
+    });
+
+    expect(adoptedId).toBe('moved-view');
+    expect(dockedWebViews.map((webView) => webView.id)).toContain('moved-view');
+    expect(persistedWebViewState('slot-seven')).toContain('through the move');
+    releaseLayoutGet({ kind: 'pending-content' });
+  });
+
   test('still lets web views keep state when main never answers the layout request', async () => {
     // Every attempt to ask main for the saved layout fails, so the window falls back to starting
-    // empty. It must still be able to open and run web views: per-window storage keys by the
-    // window's slot, which only main can name, so the fallback has to mint a session-only one or
-    // every state read after it would throw and the "start empty and keep going" recovery would
-    // be a window that cannot open anything.
+    // empty. It must still be able to open and run web views — the slot came with the URL, so the
+    // answer that never arrived was not carrying anything storage needed.
     vi.useFakeTimers();
     try {
       mocks.networkRequest.mockImplementation(async (requestType: string) => {
         if (requestType === 'windowLayout:get') throw new Error('main is not answering');
         return undefined;
       });
+      await bootFromWindowUrl('?windowId=7&windowSlotId=slot-seven');
       const module = await import('@renderer/services/web-view.service-shard');
-      const storage = await import('@renderer/services/local-storage.service');
       const { dockLayout } = makeLiveDockLayout();
       module.registerDockLayout(dockLayout);
       await module.startWebViewServiceShard();
-      await primeProvider();
+      await primeProvider({ carried: 'after the fallback' });
       // The load retries with a delay between attempts; run them all out
       await vi.runAllTimersAsync();
-
       await vi.waitFor(() =>
         expect(mocks.loggerWarn).toHaveBeenCalledWith(
           expect.stringMatching(/starting empty and holding layout pushes/i),
         ),
       );
-      // Storage works for the rest of the session — under a slot that will not be found again
-      // after a restart, which is the same standing this path already gives the layout
-      expect(() => storage.default.setItem('probe', 'value')).not.toThrow();
-      expect(storage.default.getItem('probe')).toBe('value');
+
+      const opening = module.openWebView('test.opened');
+      await vi.runAllTimersAsync();
+      await expect(opening).resolves.toEqual(expect.any(String));
+
+      expect(persistedWebViewState('slot-seven')).toContain('after the fallback');
     } finally {
       vi.useRealTimers();
     }
   });
+});
 
+describe('the initial layout load against a dock that gained content mid-load', () => {
   test('a late initial answer does not wipe an adopted web view or emit close events', async () => {
     const { shard, loadedLayouts, dockedWebViews, releaseLayoutGet } =
       await registerWithHangingLayoutGet();
