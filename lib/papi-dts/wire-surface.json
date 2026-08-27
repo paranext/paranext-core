@@ -1,0 +1,1496 @@
+{
+  "dynamicRegistrations": [
+    {
+      "category": "command",
+      "expression": "commandName as CommandNames",
+      "file": "src/extension-host/extension-host.ts",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "expression": "commandName as CommandNames",
+      "file": "src/main/main.ts",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "expression": "serializeRequestType(CATEGORY_COMMAND, commandName)",
+      "file": "src/main/services/scroll-group-navigation.commands.ts",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "expression": "serializeRequestType(CATEGORY_COMMAND, commandName)",
+      "file": "src/shared/services/command.service.ts",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "dataProviderEngine",
+      "expression": "`${windowServiceProviderName}-${windowId}` as typeof windowServiceProviderName",
+      "file": "src/renderer/services/window.service-shard.ts",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "expression": "providerName as any",
+      "file": "src/shared/services/data-provider.service.ts",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "expression": "pdpId",
+      "file": "src/shared/services/project-data-provider.service.ts",
+      "registeredVia": "registerEngineByType"
+    },
+    {
+      "category": "directRequestHandler",
+      "expression": "getWebViewMessageRequestType(id)",
+      "file": "src/renderer/components/web-view.component.tsx",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "expression": "requestType",
+      "file": "src/shared/services/extension-asset.service.ts",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "expression": "getNetworkObjectRequestType(id)",
+      "file": "src/shared/services/network-object.service.ts",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "expression": "requestType",
+      "file": "src/shared/services/network-object.service.ts",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "expression": "serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key)",
+      "file": "src/shared/services/project-settings.service-model.ts",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "expression": "serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key)",
+      "file": "src/shared/services/settings.service-model.ts",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "networkEvent",
+      "expression": "dynamicEventName as NetworkEventTypes",
+      "file": "src/shared/services/data-provider.service.ts",
+      "registeredVia": "createNetworkEventEmitterAsync"
+    },
+    {
+      "category": "networkEvent",
+      "expression": "eventType",
+      "file": "src/shared/services/network.service.ts",
+      "registeredVia": "createNetworkEventEmitterAsync"
+    },
+    {
+      "category": "networkObject",
+      "expression": "`${BOOK_CHAPTER_CONTROL_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`",
+      "file": "src/renderer/services/book-chapter-control.service-shard.ts",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "expression": "`${DIALOG_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`",
+      "file": "src/renderer/services/dialog.service-shard.ts",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "expression": "`${NotificationServiceNetworkObjectName}-${globalThis.windowId}`",
+      "file": "src/renderer/services/notification.service-shard.ts",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "expression": "`${USERSNAP_SERVICE_SHARD_NETWORK_OBJECT_NAME}-${globalThis.windowId}`",
+      "file": "src/renderer/services/usersnap.service-shard.ts",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "expression": "`${NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE}-${globalThis.windowId}`",
+      "file": "src/renderer/services/web-view.service-shard.ts",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "expression": "dataProviderObjectId",
+      "file": "src/shared/services/data-provider.service.ts",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "expression": "factoryNetworkObjectId",
+      "file": "src/shared/services/project-data-provider.service.ts",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "expression": "webViewControllerObjectId",
+      "file": "src/shared/services/web-view-provider.service.ts",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "expression": "webViewProviderObjectId",
+      "file": "src/shared/services/web-view-provider.service.ts",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "webViewProvider",
+      "expression": "helloRock3ProjectWebViewProvider.webViewType",
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "registeredVia": "registerWebViewProvider"
+    }
+  ],
+  "header": {
+    "excludedPatterns": [
+      "createNetworkEventEmitter(eventType) — the deprecated synchronous event emitter. It does not participate in central registration and deliberately does not appear in the generated OpenRPC document, so it is excluded here for the same reason."
+    ],
+    "granularity": "Each entry records one declared registration call — the same granularity as the source code — rather than the OpenRPC document derived from it, because reproducing that document's per-method fan-out (e.g. a network object's individual methods, or a data provider's per-instance onDidUpdate event) statically is fragile, and several of the names involved are unsnapshottable: they exist only at runtime (a nonce-minted PDP id, a per-window service shard name, a per-provider onDidUpdate event name). A separate end-to-end assertion verifies this file's registrations against the live rpc.discover OpenRPC document served by a running app, which is where that fully-resolved, per-method view is checked instead.",
+    "purpose": "A snapshot of paranext-core's declared wire-visible registration surface (commands, request handlers, network objects, data provider engines, web view providers, PDP factories, and network events), meant to be diffed across PRs the way papi.d.ts already is. A wire-only 'x-experimental': true marker is invisible to every other check: omitting one regenerates a byte-identical papi.d.ts, so nothing else catches it. This file asserts nothing about which entries *ought* to be experimental, or ought to exist at all — plenty of wire registrations legitimately live off papi.d.ts without being experimental. It only records what is declared; a human reviewing the PR diff decides whether a change here is intended, and this generator never fails a build over a missing marker.",
+    "recognizedPatterns": [
+      "registerCommand(name, handler, docs?, options?) -> category \"command\"",
+      "registerRequestHandler(requestType, handler, docs?, options?) -> category \"directRequestHandler\"; when requestType is serializeRequestType(CATEGORY_COMMAND, directive) the registration is re-filed under category \"command\" with the resolved directive as its name, so a command registered by bypassing registerCommand is not missed",
+      "networkObjectService.set(id, obj, objectType?, attributes?, objectDocumentation?) -> category \"networkObject\"",
+      "registerEngine(name, engine, type?, attributes?, documentation?) and its registerEngineByType(name, engine, type?, attributes?, documentation?) sibling -> category \"dataProviderEngine\"",
+      "registerWebViewProvider(webViewType, provider, attributes?, documentation?), including its deprecated `register` alias -> category \"webViewProvider\"",
+      "registerProjectDataProviderEngineFactory(pdpFactoryId, projectInterfaces, factory, attributes?, documentation?) -> category \"pdpFactory\"",
+      "createNetworkEventEmitterAsync(eventType, documentation?) and createBufferedNetworkEventEmitter(eventType, documentation?, options?) -> category \"networkEvent\""
+    ],
+    "scope": "Scans core src/** and the bundled extensions/src/** (excluding __tests__ directories, *.test.ts(x) files, node_modules, dist, and temp-build). Third-party extensions live outside this repository and are excluded by construction, not by an explicit rule. The C# data provider surface is not yet covered by this generator; a second pass for it is coming separately."
+  },
+  "registrations": [
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.createNewProject",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.deleteProject",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.deleteProjectByWebViewId",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.helloException",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.helloRock3",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.openProject",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.openViewerByWebViewId",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.showContextMenuAlert",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/hello-someone/src/main.ts",
+      "name": "helloSomeone.helloSomeone",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "name": "legacyCommentManager.openCommentList",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "name": "legacyCommentManager.openCommentListPanel",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "name": "legacyCommentManager.selectCommentThreadInPanel",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/paratext-registration/src/main.ts",
+      "name": "paratextRegistration.showInternetSettings",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/paratext-registration/src/main.ts",
+      "name": "paratextRegistration.showParatextRegistration",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/dialog.service-router.ts",
+      "name": "platform.about",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/usersnap.service-router.ts",
+      "name": "platform.closeOpenUsersnapForm",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/main.ts",
+      "name": "platform.createWindow",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/main.ts",
+      "name": "platform.getFocusedWindowId",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "platform.getLogFileContent",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "platform.getOSPlatform",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "platform.isFullScreen",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/usersnap.service-router.ts",
+      "name": "platform.isUsersnapFormCurrentlyOpen",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/book-chapter-control.service-router.ts",
+      "name": "platform.openBookChapterControl",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "platform.openDeveloperDocumentationUrl",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/web-view.service-router.ts",
+      "name": "platform.openProjectSettings",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/web-view.service-router.ts",
+      "name": "platform.openSettings",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/web-view.service-router.ts",
+      "name": "platform.openUserSettings",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "platform.openWindow",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "platform.quit",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "platform.restart",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "platform.restartExtensionHost",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/usersnap.service-router.ts",
+      "name": "platform.usersnapReportIssue",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/usersnap.service-router.ts",
+      "name": "platform.usersnapSubmitIdea",
+      "registeredVia": "registerRequestHandler+serializeRequestType(command)"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "platform.zoomIn",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "platform.zoomOut",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-enhanced-resources/src/main.ts",
+      "name": "platformEnhancedResources.openEnhancedResource",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-enhanced-resources/src/main.ts",
+      "name": "platformEnhancedResources.requestAutoShowGuide",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-get-resources/src/main.ts",
+      "name": "platformGetResources.getCachedResources",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-get-resources/src/main.ts",
+      "name": "platformGetResources.isSendReceiveAvailable",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-get-resources/src/main.ts",
+      "name": "platformGetResources.openGetResources",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-get-resources/src/main.ts",
+      "name": "platformGetResources.openHome",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-get-resources/src/main.ts",
+      "name": "platformGetResources.openNewTab",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-lexical-tools/src/main.ts",
+      "name": "platformLexicalTools.openDictionary",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.invalidateCheckResults",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.openCharactersInventory",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.openChecksSidePanel",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.openFind",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.openManageBooks",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.openMarkersChecklist",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.openMarkersChecklistSettings",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.openMarkersInventory",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.openPunctuationInventory",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.openRepeatedWordsInventory",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/checks/extension-host-check-runner.service.ts",
+      "name": "platformScripture.registerCheck",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.updateFindProject",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.applySharedLayout",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.changeFootnotesPaneLocation",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.changeView",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/markers-view-notifier.model.ts",
+      "name": "platformScriptureEditor.dismissMarkerNotificationForProjectToday",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.insertCommentAtSelection",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.insertCrossReferenceAtSelection",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.insertFootnoteAtSelection",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.openModelText",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.openResourceText",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.openResourceViewer",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.openScriptureEditor",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "command",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.toggleFootnotes",
+      "registeredVia": "registerCommand"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-someone/src/main.ts",
+      "name": "helloSomeone.people",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/extension-host/services/localization.service-host.ts",
+      "name": "platform.localizationDataServiceDataProvider",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/extension-host/services/menu-data.service-host.ts",
+      "name": "platform.menuDataServiceDataProvider",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/extension-host/extension-host.ts",
+      "name": "platform.placeholder",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/extension-host/services/settings.service-host.ts",
+      "name": "platform.settingsServiceDataProvider",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/extension-host/services/theme-data.service-host.ts",
+      "name": "platform.themeDataServiceDataProvider",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/theme.service-host.ts",
+      "name": "platform.themeServiceDataProvider",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/window.service-router.ts",
+      "name": "platform.windowServiceDataProvider",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-lexical-tools/src/main.ts",
+      "name": "platformLexicalTools.lexicalReferenceService",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/checks/check-aggregator.service.ts",
+      "name": "platformScripture.checkAggregator",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/checks/extension-host-check-runner.service.ts",
+      "name": "platformScripture.extensionHostCheckRunner",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.findHistory",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/recently-opened-projects.service.ts",
+      "name": "platformScripture.recentlyOpenedProjects",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.annotationStyle",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "dataProviderEngine",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/quick-verse/src/main.ts",
+      "name": "quickVerse.quickVerse",
+      "registeredVia": "registerEngine"
+    },
+    {
+      "category": "directRequestHandler",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/dialog.service-router.ts",
+      "name": "dialog:selectProject",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/dialog.service-router.ts",
+      "name": "dialog:showAboutDialog",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/dialog.service-router.ts",
+      "name": "dialog:showDialog",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/extension-host/services/extension.service.ts",
+      "name": "extensionService:handleUri",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/shared/services/shared-store.service.ts",
+      "name": "shared-store:get",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/window-layout-persistence.service.ts",
+      "name": "windowLayout:get",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "directRequestHandler",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/window-layout-persistence.service.ts",
+      "name": "windowLayout:save",
+      "registeredVia": "registerRequestHandler"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/checks/check-aggregator.service.ts",
+      "name": "checkResultsInvalidated",
+      "registeredVia": "createBufferedNetworkEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.onHelloRock3",
+      "registeredVia": "createBufferedNetworkEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/extension-host/services/extension.service.ts",
+      "name": "platform.onDidReloadExtensions",
+      "registeredVia": "createNetworkEventEmitterAsync"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.focusFindSearch",
+      "registeredVia": "createNetworkEventEmitterAsync"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.openMarkersChecklistSettings",
+      "registeredVia": "createNetworkEventEmitterAsync"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.onDidSwitchProject",
+      "registeredVia": "createNetworkEventEmitterAsync"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.onSharedLayoutApply",
+      "registeredVia": "createNetworkEventEmitterAsync"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.onWillSwitchProject",
+      "registeredVia": "createNetworkEventEmitterAsync"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/scroll-group.service-host.ts",
+      "name": "scrollGroup:onDidChangeReferenceHistory",
+      "registeredVia": "createBufferedNetworkEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/renderer/services/scroll-group.service.ts",
+      "name": "scrollGroup:onDidChangeVersification",
+      "registeredVia": "createBufferedNetworkEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/scroll-group.service-host.ts",
+      "name": "scrollGroup:onDidUpdateScrRef",
+      "registeredVia": "createBufferedNetworkEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/renderer/services/web-view.service-shard.ts",
+      "name": "webView:onDidAddWebView",
+      "registeredVia": "createBufferedNetworkEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/renderer/services/web-view.service-shard.ts",
+      "name": "webView:onDidCloseWebView",
+      "registeredVia": "createBufferedNetworkEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/renderer/services/web-view.service-shard.ts",
+      "name": "webView:onDidOpenWebView",
+      "registeredVia": "createBufferedNetworkEventEmitter"
+    },
+    {
+      "category": "networkEvent",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/renderer/services/web-view.service-shard.ts",
+      "name": "webView:onDidUpdateWebView",
+      "registeredVia": "createBufferedNetworkEventEmitter"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/main/services/app.service-host.ts",
+      "name": "AppService",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/extension-host/services/database.service-host.ts",
+      "name": "DatabaseService",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/main/services/data-protection.service-host.ts",
+      "name": "DataProtectionService",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/main/services/network-object-status.service-host.ts",
+      "name": "NetworkObjectStatusService",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/notification.service-router.ts",
+      "name": "NotificationService",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/project-lookup.service-host.ts",
+      "name": "ProjectLookupService",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/extension-host/services/project-settings.service-host.ts",
+      "name": "ProjectSettingsService",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": false,
+      "file": "src/main/services/scroll-group.service-host.ts",
+      "name": "ScrollGroupService",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/extension-host/extension-host.ts",
+      "name": "testExtensionHost",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "src/main/main.ts",
+      "name": "testMain",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "networkObject",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "src/main/services/web-view.service-router.ts",
+      "name": "WebViewService",
+      "registeredVia": "networkObjectService.set"
+    },
+    {
+      "category": "pdpFactory",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.helloRock3Pdpf",
+      "registeredVia": "registerProjectDataProviderEngineFactory"
+    },
+    {
+      "category": "pdpFactory",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "name": "legacyCommentManager.commentsUsjPdpf",
+      "registeredVia": "registerProjectDataProviderEngineFactory"
+    },
+    {
+      "category": "pdpFactory",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-lexical-tools/src/main.ts",
+      "name": "platformLexicalTools.lexicalReferencePdpf",
+      "registeredVia": "registerProjectDataProviderEngineFactory"
+    },
+    {
+      "category": "pdpFactory",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.scriptureExtenderPdpf",
+      "registeredVia": "registerProjectDataProviderEngineFactory"
+    },
+    {
+      "category": "pdpFactory",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.scriptureFinderPdpf",
+      "registeredVia": "registerProjectDataProviderEngineFactory"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.html",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.projectViewer",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.react",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-rock3/src/main.ts",
+      "name": "helloRock3.react2",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/hello-someone/src/main.ts",
+      "name": "helloSomeone.peopleViewer",
+      "registeredVia": "webViewProviders.register (deprecated alias)"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "name": "legacyCommentManager.commentList",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/legacy-comment-manager/src/main.ts",
+      "name": "legacyCommentManager.commentListPanel",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/paratext-registration/src/main.ts",
+      "name": "paratextRegistration.internetSettingsView",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/paratext-registration/src/main.ts",
+      "name": "paratextRegistration.registrationView",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-enhanced-resources/src/main.ts",
+      "name": "platformEnhancedResources.enhancedResource",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-get-resources/src/main.ts",
+      "name": "platformGetResources.getResources",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-get-resources/src/main.ts",
+      "name": "platformGetResources.home",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-get-resources/src/main.ts",
+      "name": "platformGetResources.newTab",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-lexical-tools/src/main.ts",
+      "name": "platformLexicalTools.dictionary",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.characterInventory",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.checksSidePanel",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.find",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.manageBooks",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": true,
+      "experimental": true,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.markersChecklist",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.markersInventory",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.punctuationInventory",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture/src/main.ts",
+      "name": "platformScripture.repeatedWordsInventory",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.bibleTexts",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.commentaries",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.modelText",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.react",
+      "registeredVia": "registerWebViewProvider"
+    },
+    {
+      "category": "webViewProvider",
+      "docsStaticallyResolved": true,
+      "documented": false,
+      "experimental": false,
+      "file": "extensions/src/platform-scripture-editor/src/main.ts",
+      "name": "platformScriptureEditor.scriptureTextGrid",
+      "registeredVia": "registerWebViewProvider"
+    }
+  ]
+}
