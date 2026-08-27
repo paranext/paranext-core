@@ -17,22 +17,22 @@ describe('the renderer’s window id', () => {
     globalThis.windowId = undefined;
   });
 
-  test('keys per-window storage by the slot the main process put on the URL', async () => {
+  test('keys per-window storage by the id the main process put on the URL', async () => {
     // Boot is the one place guaranteed to run before anything reads per-window storage, in every
-    // interface mode — a slot learned any later would leave storage throwing until then
-    await importWithSearch('?windowId=7&windowSlotId=slot-seven');
+    // interface mode — an id learned any later would leave storage throwing until then
+    await importWithSearch('?windowId=7');
     const storage = (await import('./services/local-storage.service')).default;
 
     storage.setItem('probe', 'value');
 
-    expect(localStorage.getItem('slot-seven_probe')).toBe('value');
+    expect(localStorage.getItem('7_probe')).toBe('value');
   });
 
-  test('leaves per-window storage unusable when the URL names no slot', async () => {
-    await importWithSearch('?windowId=7');
+  test('leaves per-window storage unusable when the URL names no window id', async () => {
+    await importWithSearch('?logLevel=info');
     const storage = (await import('./services/local-storage.service')).default;
 
-    expect(() => storage.setItem('probe', 'value')).toThrow(/does not know its slot/);
+    expect(() => storage.setItem('probe', 'value')).toThrow(/does not know its id/);
   });
 
   test('reads the id the main process put on the URL, as the raw string', async () => {

@@ -51,7 +51,12 @@ export type ServiceShardAttributes = {
  *   than a window that fails to finish starting
  */
 export function getServiceShardAttributes(windowId: string): ServiceShardAttributes {
-  if (!windowId) throw new Error(`Cannot register a service shard for window id "${windowId}"`);
+  // Typed rather than merely truthy: attributes travel over the network, so this is a runtime
+  // boundary the compiler does not hold. A number here is truthy and would register happily, after
+  // which `getServiceShardWindowId` answers `undefined` for it and the shard is unroutable behind
+  // nothing louder than a warning — the failure this throw exists to make obvious.
+  if (typeof windowId !== 'string' || !windowId)
+    throw new Error(`Cannot register a service shard for window id "${windowId}"`);
   return { windowId };
 }
 

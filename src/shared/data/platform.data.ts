@@ -11,22 +11,14 @@ export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
 export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
 
 /**
- * Query parameter key used to pass a window's platform id to its renderer process
+ * Query parameter key used to pass a window's platform id to its renderer process. Durable: on a
+ * restored window this is the id its persisted layout entry already carries (see
+ * `WindowLayoutEntry.windowId`), so the renderer's per-window storage keyed by it survives a
+ * restart under the same id.
  *
  * @experimental
  */
 export const WINDOW_ID = 'windowId';
-
-/**
- * Query parameter key used to pass a window's layout slot id — the stable identity of its entry in
- * the persisted window-layouts structure — to its renderer process. The renderer keys its
- * per-window storage by it, so it travels with the window rather than being asked for after the
- * window loads: storage then works from the first render, in every interface mode, and before any
- * layout request has been answered.
- *
- * @experimental
- */
-export const WINDOW_SLOT_ID_QUERY_PARAMETER = 'windowSlotId';
 
 /** Query parameter passed to the renderer. Determines if it should emit startup timing marks */
 export const STARTUP_MARKS_QUERY_PARAMETER = 'startupMarks';
@@ -90,7 +82,6 @@ export const URL_PARAMETERS: Readonly<Record<string, UrlParameterSpec>> = {
   },
   [DEV_MODE_QUERY_PARAMETER]: { kind: 'flag' },
   [WINDOW_ID]: { kind: 'string' },
-  [WINDOW_SLOT_ID_QUERY_PARAMETER]: { kind: 'string' },
   [STARTUP_MARKS_QUERY_PARAMETER]: { kind: 'flag' },
   [SCROLL_GROUP_STATE_QUERY_PARAMETER]: { kind: 'serialized' },
   [THEME_STATE_QUERY_PARAMETER]: { kind: 'serialized' },

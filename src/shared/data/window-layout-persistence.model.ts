@@ -26,17 +26,17 @@ export const GET_WINDOW_LAYOUT_REQUEST_TYPE = serializeRequestType(CATEGORY_WIND
 export const SAVE_WINDOW_LAYOUT_REQUEST_TYPE = serializeRequestType(CATEGORY_WINDOW_LAYOUT, 'save');
 
 /**
- * Ask which of the given slot ids no longer have an entry in the persisted structure. Takes the
- * slot ids a renderer holds stored state for; returns the subset that is dead.
+ * Ask which of the given window ids no longer have an entry in the persisted structure. Takes the
+ * window ids a renderer holds stored state for; returns the subset that is dead.
  *
  * Asked rather than worked out in the renderer because only the main process holds the structure,
  * and because a renderer filtering against a snapshot it fetched would race a window created while
  * that snapshot was in flight. The main process answers from the structure as it stands at that
- * moment, and a slot id is never reissued, so an id it calls dead cannot come back.
+ * moment, and a window id is never reissued, so an id it calls dead cannot come back.
  */
-export const FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE = serializeRequestType(
+export const FILTER_DEAD_WINDOW_IDS_REQUEST_TYPE = serializeRequestType(
   CATEGORY_WINDOW_LAYOUT,
-  'filterDeadSlots',
+  'filterDeadWindowIds',
 );
 
 /**
@@ -70,17 +70,19 @@ export type WindowBoundsState = {
  */
 export type WindowLayoutEntry = WindowBoundsState & {
   /**
-   * Stable identity of this slot across sessions, minted when the slot is first created and never
-   * changed. This is what per-window renderer state (web view state) is keyed by, so a restored
-   * window finds what its slot saved last time regardless of which window id it was given. Handed
-   * to the window on its URL when it is created.
+   * The window's durable platform id: minted when the entry is first created and never changed
+   * afterwards, even across restarts. This is what per-window renderer state (web view state) is
+   * keyed by, so a restored window finds what it saved last time. Carried to the restoring window
+   * via the ordinary `WINDOW_ID` query parameter — `main.ts` hands this same value to `addWindow`
+   * as the id to reuse, rather than minting a fresh one, so the id a restored window is given
+   * always matches the one its entry carries.
    *
    * Deliberately NOT the entry's position in the list: entries are dropped when their window leaves
-   * the structure, so a position can silently come to mean a neighbouring slot's state.
+   * the structure, so a position can silently come to mean a neighbouring entry's state.
    *
    * @experimental This field is unstable and may change or disappear without notice
    */
-  slotId: string;
+  windowId: string;
   layout?: LayoutInfo;
   isMain?: boolean;
 };
@@ -107,9 +109,9 @@ export type WindowLayoutStructure = { windows: WindowLayoutEntry[] };
  * - `pending-content`: like `empty`, but also skip the default-layout supplement — the window was
  *   created to receive one specific web view, routed separately, and must start with nothing else.
  *
- * The window's slot id — what its renderer keys per-window storage by — is not part of this answer:
+ * The window's own id — what its renderer keys per-window storage by — is not part of this answer:
  * it is settled when the window is tracked, before its first load, and travels on the window's URL
- * (`WINDOW_SLOT_ID_QUERY_PARAMETER`), so storage works before this request is ever made.
+ * (`WINDOW_ID`), so storage works before this request is ever made.
  *
  * An entry whose saved layout held only phantom tabs produces none of these: it is dropped while
  * the structure loads, so no window is ever created to ask. The one exception is the main entry,

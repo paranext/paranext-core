@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, test } from 'vitest';
+import { newGuid } from 'platform-bible-utils';
 import { TAB_TYPE_WEBVIEW } from '@shared/models/docking-framework.model';
 import type { LayoutInfo, SavedTabInfo } from '@shared/models/docking-framework.model';
 import withWindowScopedWebViewIds, {
+  stripWindowScopeFromWebViewId,
   withWindowScopedWebViewIdInTab,
 } from '@renderer/components/docking/window-scoped-web-view-ids.util';
 
@@ -9,6 +11,11 @@ import withWindowScopedWebViewIds, {
 // back out of a result both have to cross that boundary. Restructuring to avoid the assertions
 // would mean asserting on something other than the ids this transform exists to rewrite.
 /* eslint-disable no-type-assertion/no-type-assertion */
+
+/** This window's own (durable) platform id, in the shape a real mint produces */
+const WINDOW_ID = '22222222-2222-4222-8222-222222222222';
+/** A different window's id, for cases exercising a layout scoped by another window */
+const OTHER_WINDOW_ID = '11111111-1111-4111-8111-111111111111';
 
 /** Tab shaped like a saved web view tab: id repeated inside `data` */
 function webViewTab(id: string): SavedTabInfo {
@@ -60,13 +67,13 @@ function readPanel(layout: LayoutInfo) {
 
 describe('withWindowScopedWebViewIds', () => {
   beforeEach(() => {
-    globalThis.windowId = '2';
+    globalThis.windowId = WINDOW_ID;
   });
 
   test('scopes a shared layout’s web view id to this window', () => {
     const scoped = withWindowScopedWebViewIds(layoutWithWebView('abc-123'));
 
-    expect(readWebViewTab(scoped).id).toBe('abc-123-w2');
+    expect(readWebViewTab(scoped).id).toBe(`abc-123-w${WINDOW_ID}`);
   });
 
   test('keeps the id repeated inside the tab data in agreement with the tab id', () => {
@@ -79,12 +86,12 @@ describe('withWindowScopedWebViewIds', () => {
   test('gives two windows different ids for the same shared layout', () => {
     const shared = layoutWithWebView('abc-123');
 
-    globalThis.windowId = '1';
-    const inWindow1 = readWebViewTab(withWindowScopedWebViewIds(shared)).id;
-    globalThis.windowId = '2';
-    const inWindow2 = readWebViewTab(withWindowScopedWebViewIds(shared)).id;
+    globalThis.windowId = OTHER_WINDOW_ID;
+    const inOtherWindow = readWebViewTab(withWindowScopedWebViewIds(shared)).id;
+    globalThis.windowId = WINDOW_ID;
+    const inThisWindow = readWebViewTab(withWindowScopedWebViewIds(shared)).id;
 
-    expect(inWindow1).not.toBe(inWindow2);
+    expect(inOtherWindow).not.toBe(inThisWindow);
   });
 
   test('does not mutate the layout it is given, which is a constant every window reads', () => {
@@ -97,11 +104,11 @@ describe('withWindowScopedWebViewIds', () => {
 
   test('replaces an existing window suffix rather than stacking another one', () => {
     // Layouts are re-scoped on every load, including one this window saved with scoped ids already
-    const alreadyScoped = layoutWithWebView('abc-123-w1');
+    const alreadyScoped = layoutWithWebView(`abc-123-w${OTHER_WINDOW_ID}`);
 
     const scoped = withWindowScopedWebViewIds(alreadyScoped);
 
-    expect(readWebViewTab(scoped).id).toBe('abc-123-w2');
+    expect(readWebViewTab(scoped).id).toBe(`abc-123-w${WINDOW_ID}`);
   });
 
   test('re-scoping is stable, so repeated loads do not drift the id', () => {
@@ -116,12 +123,12 @@ describe('withWindowScopedWebViewIds', () => {
     // storage key, so identical input has to come out per-window distinct
     const legacy = layoutWithWebView('abc-123');
 
-    globalThis.windowId = '1';
-    const inWindow1 = readWebViewTab(withWindowScopedWebViewIds(legacy)).id;
-    globalThis.windowId = '2';
-    const inWindow2 = readWebViewTab(withWindowScopedWebViewIds(legacy)).id;
+    globalThis.windowId = OTHER_WINDOW_ID;
+    const inOtherWindow = readWebViewTab(withWindowScopedWebViewIds(legacy)).id;
+    globalThis.windowId = WINDOW_ID;
+    const inThisWindow = readWebViewTab(withWindowScopedWebViewIds(legacy)).id;
 
-    expect(inWindow1).not.toBe(inWindow2);
+    expect(inOtherWindow).not.toBe(inThisWindow);
   });
 
   test('does not modify the saved data inside the layout it is given', () => {
@@ -140,16 +147,19 @@ describe('withWindowScopedWebViewIds', () => {
     const scoped = withWindowScopedWebViewIds(layout);
 
     const panel = readPanel(scoped);
-    expect(panel.activeId).toBe('second-w2');
+    expect(panel.activeId).toBe(`second-w${WINDOW_ID}`);
     expect(panel.tabs.some((tab) => tab.id === panel.activeId)).toBe(true);
   });
 
   test('rewrites the active tab id of a layout saved by another window', () => {
-    const layout = layoutWithPanel([webViewTab('first-w1'), webViewTab('second-w1')], 'second-w1');
+    const layout = layoutWithPanel(
+      [webViewTab(`first-w${OTHER_WINDOW_ID}`), webViewTab(`second-w${OTHER_WINDOW_ID}`)],
+      `second-w${OTHER_WINDOW_ID}`,
+    );
 
     const scoped = withWindowScopedWebViewIds(layout);
 
-    expect(readPanel(scoped).activeId).toBe('second-w2');
+    expect(readPanel(scoped).activeId).toBe(`second-w${WINDOW_ID}`);
   });
 
   test('leaves an active tab id alone when that tab is not a web view', () => {
@@ -200,7 +210,7 @@ describe('withWindowScopedWebViewIds', () => {
     const base = scoped as unknown as {
       dockbox: { children: { children: { tabs: { id: string }[] }[] }[] };
     };
-    expect(base.dockbox.children[0].children[0].tabs[0].id).toBe('deep-1-w2');
+    expect(base.dockbox.children[0].children[0].tabs[0].id).toBe(`deep-1-w${WINDOW_ID}`);
   });
 });
 
@@ -212,12 +222,12 @@ function readIds(tab: SavedTabInfo) {
 
 describe('withWindowScopedWebViewIdInTab', () => {
   beforeEach(() => {
-    globalThis.windowId = '2';
+    globalThis.windowId = WINDOW_ID;
   });
 
   test('scopes a supplement tab’s id, which is otherwise identical in every window', () => {
     expect(readIds(withWindowScopedWebViewIdInTab(webViewTab('supplement-tab'))).id).toBe(
-      'supplement-tab-w2',
+      `supplement-tab-w${WINDOW_ID}`,
     );
   });
 
@@ -228,9 +238,9 @@ describe('withWindowScopedWebViewIdInTab', () => {
   });
 
   test('replaces an existing window suffix rather than stacking another one', () => {
-    const scoped = withWindowScopedWebViewIdInTab(webViewTab('supplement-tab-w1'));
+    const scoped = withWindowScopedWebViewIdInTab(webViewTab(`supplement-tab-w${OTHER_WINDOW_ID}`));
 
-    expect(readIds(scoped).id).toBe('supplement-tab-w2');
+    expect(readIds(scoped).id).toBe(`supplement-tab-w${WINDOW_ID}`);
   });
 
   test('re-scoping is stable, so repeated loads do not drift the id', () => {
@@ -252,5 +262,17 @@ describe('withWindowScopedWebViewIdInTab', () => {
     const toolTab = { id: 'some-tool', tabType: 'tool' } as unknown as SavedTabInfo;
 
     expect(readIds(withWindowScopedWebViewIdInTab(toolTab)).id).toBe('some-tool');
+  });
+
+  test('round-trips through a real generated window id, not a hand-written stand-in', () => {
+    // The fixtures above use readable hand-written ids to keep assertions legible; this pins the
+    // pattern against what `mintWindowId`/`newGuid` actually produce, since a shape mismatch there
+    // would leave every scoped id unstrippable in production while every test above stayed green
+    globalThis.windowId = newGuid();
+
+    const scoped = withWindowScopedWebViewIdInTab(webViewTab('abc-123'));
+
+    expect(readIds(scoped).id).toBe(`abc-123-w${globalThis.windowId}`);
+    expect(stripWindowScopeFromWebViewId(readIds(scoped).id)).toBe('abc-123');
   });
 });

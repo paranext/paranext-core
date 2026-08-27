@@ -582,11 +582,17 @@ describe('loadLayout scopes web view ids to this window', () => {
 
   test('re-scopes a restored supplement tab instead of adding a second copy', async () => {
     // Power mode restores the merged layout, so the next load restores a supplement tab that is
-    // already scoped — to the id of the window that saved it, which a restored window never shares
+    // already scoped — to the id of the window that saved it, which is durable but still not this
+    // (freshly minted, in a real launch) window's id
+    const savedByAnotherWindowId = '11111111-1111-4111-8111-111111111111';
     const savedSupplementTab: SavedTabInfo = {
-      id: `${SUPPLEMENT_TAB_ID}-w1`,
+      id: `${SUPPLEMENT_TAB_ID}-w${savedByAnotherWindowId}`,
       tabType: TAB_TYPE_WEBVIEW,
-      data: { id: `${SUPPLEMENT_TAB_ID}-w1`, webViewType: 'test.supplement', state: {} },
+      data: {
+        id: `${SUPPLEMENT_TAB_ID}-w${savedByAnotherWindowId}`,
+        webViewType: 'test.supplement',
+        state: {},
+      },
     } as unknown as SavedTabInfo;
     settingsGetMock.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'power' : true,
@@ -1547,7 +1553,12 @@ describe('loadLayout restores this window’s layout from the main process', () 
   });
 
   test('a window assigned an entry loads it, ids scoped to this window', async () => {
-    respondToGetLayout({ kind: 'entry', layout: layoutWithTab('saved-tab-w1') });
+    // Saved under a durable id from a previous session, still not this (freshly minted, in a real
+    // launch) window's id
+    respondToGetLayout({
+      kind: 'entry',
+      layout: layoutWithTab('saved-tab-w11111111-1111-4111-8111-111111111111'),
+    });
 
     const loaded = await loadLayoutInWindow(layoutWithAnchor());
 

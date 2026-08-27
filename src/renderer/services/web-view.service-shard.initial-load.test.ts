@@ -273,9 +273,10 @@ async function settle() {
 }
 
 /**
- * Boot the renderer's globals from a window URL shaped the way main builds one — window id and slot
- * included — so per-window storage is keyed the way it is in a real window. Must run before
- * anything reads that storage, which is the order the renderer's entry point guarantees.
+ * Boot the renderer's globals from a window URL shaped the way main builds one — window id included
+ * — so per-window storage is keyed the way it is in a real window. The id is durable, so it is both
+ * this window's id and what per-window storage is keyed by; must run before anything reads that
+ * storage, which is the order the renderer's entry point guarantees.
  */
 async function bootFromWindowUrl(search: string) {
   window.history.replaceState({}, '', `/${search}`);
@@ -283,9 +284,9 @@ async function bootFromWindowUrl(search: string) {
   await import('@renderer/global-this.model');
 }
 
-/** The web view state blob this window's slot holds, as the real state service persists it */
-function persistedWebViewState(slotId: string): string | null {
-  return localStorage.getItem(`${slotId}_web-view-state`);
+/** The web view state blob this window holds, as the real state service persists it */
+function persistedWebViewState(windowId: string): string | null {
+  return localStorage.getItem(`${windowId}_web-view-state`);
 }
 
 // Starting the shard deletes `globalThis.open` so web views cannot make popups. That is a one-way
@@ -322,14 +323,14 @@ describe('web view state under every way the initial load can go', () => {
     vi.unstubAllGlobals();
   });
 
-  test('in simple mode, a web view with state opens and its state lands in this window’s slot', async () => {
+  test('in simple mode, a web view with state opens and its state lands in this window’s storage', async () => {
     // Simple mode loads the static layout and never asks main for a saved one, so nothing that
-    // happens during the load can tell this window which slot it is. The slot has to come from the
-    // window's URL, read at boot — or every state read in the app's default mode throws.
+    // happens during the load can tell this window its own id. It has to come from the window's
+    // URL, read at boot — or every state read in the app's default mode throws.
     mocks.settingsGet.mockImplementation(async (key: string) =>
       key === 'platform.interfaceMode' ? 'simple' : false,
     );
-    await bootFromWindowUrl('?windowId=7&windowSlotId=slot-seven');
+    await bootFromWindowUrl('?windowId=7');
     const module = await import('@renderer/services/web-view.service-shard');
     const { dockLayout, dockedWebViews } = makeLiveDockLayout();
     module.registerDockLayout(dockLayout);
@@ -339,7 +340,7 @@ describe('web view state under every way the initial load can go', () => {
     await expect(module.openWebView('test.opened')).resolves.toEqual(expect.any(String));
 
     expect(dockedWebViews.map((webView) => webView.webViewType)).toContain('test.opened');
-    expect(persistedWebViewState('slot-seven')).toContain('through the open');
+    expect(persistedWebViewState('7')).toContain('through the open');
     expect(
       mocks.networkRequest.mock.calls.some(([requestType]) => requestType === 'windowLayout:get'),
     ).toBe(false);
@@ -347,9 +348,9 @@ describe('web view state under every way the initial load can go', () => {
 
   test('a move into a window whose layout request has not been answered still seeds its state', async () => {
     // A routed move lands in a brand-new window while that window's own startup load is still
-    // waiting on main. The adopt seeds the moved view's state before opening it, so the slot must
-    // be known before main has said anything — which only the URL can guarantee.
-    await bootFromWindowUrl('?windowId=7&windowSlotId=slot-seven');
+    // waiting on main. The adopt seeds the moved view's state before opening it, so this window's
+    // id must be known before main has said anything — which only the URL can guarantee.
+    await bootFromWindowUrl('?windowId=7');
     const { shard, dockedWebViews, releaseLayoutGet } = await registerWithHangingLayoutGet();
 
     const adoptedId = await shard.adoptWebView({
@@ -360,21 +361,21 @@ describe('web view state under every way the initial load can go', () => {
 
     expect(adoptedId).toBe('moved-view');
     expect(dockedWebViews.map((webView) => webView.id)).toContain('moved-view');
-    expect(persistedWebViewState('slot-seven')).toContain('through the move');
+    expect(persistedWebViewState('7')).toContain('through the move');
     releaseLayoutGet({ kind: 'pending-content' });
   });
 
   test('still lets web views keep state when main never answers the layout request', async () => {
     // Every attempt to ask main for the saved layout fails, so the window falls back to starting
-    // empty. It must still be able to open and run web views — the slot came with the URL, so the
-    // answer that never arrived was not carrying anything storage needed.
+    // empty. It must still be able to open and run web views — this window's id came with the URL,
+    // so the answer that never arrived was not carrying anything storage needed.
     vi.useFakeTimers();
     try {
       mocks.networkRequest.mockImplementation(async (requestType: string) => {
         if (requestType === 'windowLayout:get') throw new Error('main is not answering');
         return undefined;
       });
-      await bootFromWindowUrl('?windowId=7&windowSlotId=slot-seven');
+      await bootFromWindowUrl('?windowId=7');
       const module = await import('@renderer/services/web-view.service-shard');
       const { dockLayout } = makeLiveDockLayout();
       module.registerDockLayout(dockLayout);
@@ -392,51 +393,53 @@ describe('web view state under every way the initial load can go', () => {
       await vi.runAllTimersAsync();
       await expect(opening).resolves.toEqual(expect.any(String));
 
-      expect(persistedWebViewState('slot-seven')).toContain('after the fallback');
+      expect(persistedWebViewState('7')).toContain('after the fallback');
     } finally {
       vi.useRealTimers();
     }
   });
-  test('drops the stored state of slots the main process says are gone', async () => {
-    // Slot ids are never reissued, so state under a slot whose entry has gone can never be read
+
+  test('drops the stored state of windows the main process says are gone', async () => {
+    // Window ids are never reissued, so state under an id whose entry has gone can never be read
     // again and nothing else removes it. Which ones are gone is main's answer about the ids this
     // window actually holds state for, so a window created while the question was in flight cannot
     // have its state deleted by it.
-    localStorage.setItem('slot-seven_web-view-state', 'this window, still live');
-    localStorage.setItem('slot-from-a-closed-window_web-view-state', 'nothing can reach this');
+    const thisWindowId = '11111111-1111-4111-8111-111111111111';
+    const closedWindowId = '22222222-2222-4222-8222-222222222222';
+    localStorage.setItem(`${thisWindowId}_web-view-state`, 'this window, still live');
+    localStorage.setItem(`${closedWindowId}_web-view-state`, 'nothing can reach this');
     let askedWith: unknown;
     mocks.networkRequest.mockImplementation(async (requestType: string, payload: unknown) => {
-      if (requestType === 'windowLayout:filterDeadSlots') {
+      if (requestType === 'windowLayout:filterDeadWindowIds') {
         askedWith = payload;
-        return ['slot-from-a-closed-window'];
+        return [closedWindowId];
       }
       return requestType === 'windowLayout:get' ? { kind: 'empty' } : undefined;
     });
-    await bootFromWindowUrl('?windowId=7&windowSlotId=slot-seven');
+    await bootFromWindowUrl(`?windowId=${thisWindowId}`);
     const module = await import('@renderer/services/web-view.service-shard');
     const { dockLayout } = makeLiveDockLayout();
     module.registerDockLayout(dockLayout);
     await module.startWebViewServiceShard();
 
     await vi.waitFor(() =>
-      expect(localStorage.getItem('slot-from-a-closed-window_web-view-state')).toBeNull(),
+      expect(localStorage.getItem(`${closedWindowId}_web-view-state`)).toBeNull(),
     );
-    expect(localStorage.getItem('slot-seven_web-view-state')).toBe('this window, still live');
-    expect(askedWith).toEqual(expect.arrayContaining(['slot-seven', 'slot-from-a-closed-window']));
+    expect(localStorage.getItem(`${thisWindowId}_web-view-state`)).toBe('this window, still live');
+    expect(askedWith).toEqual(expect.arrayContaining([thisWindowId, closedWindowId]));
   });
 
-  test('keeps every stored blob when the main process cannot be asked which slots are gone', async () => {
+  test('keeps every stored blob when the main process cannot be asked which windows are gone', async () => {
     // A failed answer is not "everything is dead" — deleting on no information would take the
     // state of every window in the profile
-    localStorage.setItem(
-      'slot-from-a-closed-window_web-view-state',
-      'kept: nothing said otherwise',
-    );
+    const closedWindowId = '22222222-2222-4222-8222-222222222222';
+    localStorage.setItem(`${closedWindowId}_web-view-state`, 'kept: nothing said otherwise');
     mocks.networkRequest.mockImplementation(async (requestType: string) => {
-      if (requestType === 'windowLayout:filterDeadSlots') throw new Error('main is not answering');
+      if (requestType === 'windowLayout:filterDeadWindowIds')
+        throw new Error('main is not answering');
       return requestType === 'windowLayout:get' ? { kind: 'empty' } : undefined;
     });
-    await bootFromWindowUrl('?windowId=7&windowSlotId=slot-seven');
+    await bootFromWindowUrl('?windowId=7');
     const module = await import('@renderer/services/web-view.service-shard');
     const { dockLayout } = makeLiveDockLayout();
     module.registerDockLayout(dockLayout);
@@ -444,10 +447,10 @@ describe('web view state under every way the initial load can go', () => {
 
     await vi.waitFor(() =>
       expect(mocks.loggerWarn).toHaveBeenCalledWith(
-        expect.stringMatching(/stored state of window slots that are gone/i),
+        expect.stringMatching(/stored state of windows that are gone/i),
       ),
     );
-    expect(localStorage.getItem('slot-from-a-closed-window_web-view-state')).toBe(
+    expect(localStorage.getItem(`${closedWindowId}_web-view-state`)).toBe(
       'kept: nothing said otherwise',
     );
   });

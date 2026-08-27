@@ -62,18 +62,18 @@ describe('counting the windows that could be the last one', () => {
 
   test('a window whose close has begun does not count', () => {
     addWindow(fakeWindow(1));
-    addWindow(fakeWindow(2));
+    const secondWindowId = addWindow(fakeWindow(2));
 
-    markWindowClosing('2');
+    markWindowClosing(secondWindowId);
 
     expect(countWindowsThatCouldBeTheLastOne()).toBe(1);
   });
 
   test('a window still waiting for the content it was created for does not count', () => {
     addWindow(fakeWindow(1));
-    addWindow(fakeWindow(2));
+    const secondWindowId = addWindow(fakeWindow(2));
 
-    setWindowPendingContentPredicate((windowId) => windowId === '2');
+    setWindowPendingContentPredicate((windowId) => windowId === secondWindowId);
 
     expect(countWindowsThatCouldBeTheLastOne()).toBe(1);
   });
@@ -83,22 +83,22 @@ describe('counting the windows that could be the last one', () => {
     // makes a window emptied in that state dock Home instead of closing: the abandoned one is
     // still on screen, but its renderer is dead and no reload is coming
     addWindow(fakeWindow(1));
-    addWindow(fakeWindow(2));
+    const secondWindowId = addWindow(fakeWindow(2));
 
-    markWindowAbandoned('2');
+    markWindowAbandoned(secondWindowId);
 
     expect(countWindowsThatCouldBeTheLastOne()).toBe(1);
   });
 
   test('one window the user can work in among every kind that cannot be the last one counts as one', () => {
     addWindow(fakeWindow(1));
-    addWindow(fakeWindow(2));
-    addWindow(fakeWindow(3));
-    addWindow(fakeWindow(4));
+    const secondWindowId = addWindow(fakeWindow(2));
+    const thirdWindowId = addWindow(fakeWindow(3));
+    const fourthWindowId = addWindow(fakeWindow(4));
 
-    markWindowClosing('2');
-    setWindowPendingContentPredicate((windowId) => windowId === '3');
-    markWindowAbandoned('4');
+    markWindowClosing(secondWindowId);
+    setWindowPendingContentPredicate((windowId) => windowId === thirdWindowId);
+    markWindowAbandoned(fourthWindowId);
 
     expect(countWindowsThatCouldBeTheLastOne()).toBe(1);
   });
@@ -116,16 +116,18 @@ describe('counting the windows that could be the last one', () => {
   test('a window that has gone away takes its marks with it', () => {
     // The marks are this window's state, keyed by its id, and nothing else ever takes them off:
     // left behind they go on answering for a window that is not there and pile up for the life of
-    // the process. Electron hands out each id at most once per process, so handing the id to
-    // another window is a probe for marks outliving their window rather than a session that could
-    // happen — a mark left behind counts a window out of the arithmetic that should be in it.
+    // the process. A closed window's id is never reused, so handing a later window the same id is a
+    // probe for marks outliving their window rather than a session that could happen — a mark left
+    // behind counts a window out of the arithmetic that should be in it.
     const closing = fakeWindow(1);
-    addWindow(closing);
+    const closingWindowId = addWindow(closing);
     addWindow(fakeWindow(2));
-    markWindowClosing('1');
-    markWindowAbandoned('1');
+    markWindowClosing(closingWindowId);
+    markWindowAbandoned(closingWindowId);
 
-    removeWindow(closing, '1');
+    removeWindow(closing, closingWindowId);
+    // A fresh window never inherits a closed one's id (ids are minted, not reused), so this probes
+    // that the marks came off the closed id rather than merely being invisible to a coincidence
     addWindow(fakeWindow(1));
 
     expect(countWindowsThatCouldBeTheLastOne()).toBe(2);
