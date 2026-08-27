@@ -4,7 +4,9 @@
  * The renderer owns the moment emptiness happens; only the main process knows how many windows
  * exist. A window emptied by removal closes — windows are equal siblings, and one with nothing in
  * it has nothing to be — unless it is the last window standing, which docks Home instead (closing
- * it would exit the application). A window born empty always docks Home.
+ * it would exit the application), or it is the primary window, which docks Home for the same reason
+ * a last window does: only its ✕ and the Quit menu may close it, and moving its last tab out is the
+ * same as closing that tab. A window born empty always docks Home.
  *
  * A report describes a moment that has already passed by the time it is answered, so a close is
  * decided against a fresh reading rather than against the report alone — see
@@ -47,6 +49,13 @@ export type WindowEmptinessHandlerDependencies = {
    * second version to read and a way to rebuild a count that misses one.
    */
   countWindows: () => number;
+  /**
+   * Whether this window holds the primary role. The primary never closes because it emptied —
+   * moving its last tab out reopens Home, exactly as closing that tab does — since only its ✕ and
+   * the Quit menu may close it. Optional so a caller with no notion of a primary keeps the plain
+   * equal-siblings rule.
+   */
+  isPrimaryWindow?: (windowId: number) => boolean;
   /** Close the window with the given id */
   closeWindow: (windowId: number) => void;
   /**
@@ -207,6 +216,16 @@ export function createWindowEmptinessHandler(
 
     if (reason === 'born-empty') {
       logger.debug(`windowLayout:emptied window ${windowId} reason ${reason}: answering open-home`);
+      return { action: 'open-home' };
+    }
+
+    // The primary never closes because it emptied — only its ✕ and the Quit menu may close it —
+    // so moving its last tab out reopens Home, as closing that tab would. Decided ahead of the
+    // count: it does not matter how many other windows there are.
+    if (deps.isPrimaryWindow?.(windowId)) {
+      logger.debug(
+        `windowLayout:emptied window ${windowId} reason ${reason}: primary window, answering open-home`,
+      );
       return { action: 'open-home' };
     }
 
