@@ -267,6 +267,15 @@ const PROCESS_CLOSE_TIME_OUT_MS = 2000;
  */
 const WINDOW_CLOSE_TIME_OUT_MS = 10000;
 
+/**
+ * How long the close-all question waits for its localized text before showing English instead.
+ *
+ * Short on purpose: the user has already clicked ✕ and the window is held open with nothing on
+ * screen until the question appears, so a wait long enough to notice is worse than untranslated
+ * text.
+ */
+const CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS = 3000;
+
 /** How long to coalesce a window's resize/move events before capturing its bounds */
 const BOUNDS_CAPTURE_DEBOUNCE_MS = 100;
 
@@ -1607,11 +1616,25 @@ async function main() {
     };
     let strings = fallbackStrings;
     try {
+      // Bounded, because this is a NETWORK call to the extension host and the ✕ is already
+      // committed by the time it runs: a rejection reaches the English fallback below, but a hang
+      // would leave the window prevented from closing with no question on screen and every further
+      // ✕ a silent no-op — the close button would simply look dead. English on time beats
+      // localized eventually.
+      const localizeTimeout = new Promise<never>((_resolve, reject) => {
+        setTimeout(
+          () => reject(new Error(`no answer within ${CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS} ms`)),
+          CLOSE_PROMPT_LOCALIZE_TIME_OUT_MS,
+        );
+      });
       strings = {
         ...fallbackStrings,
-        ...(await localizationService.getLocalizedStrings({
-          localizeKeys: [titleKey, messageKey, closeAllKey, cancelKey],
-        })),
+        ...(await Promise.race([
+          localizationService.getLocalizedStrings({
+            localizeKeys: [titleKey, messageKey, closeAllKey, cancelKey],
+          }),
+          localizeTimeout,
+        ])),
       };
     } catch (e) {
       logger.warn(
