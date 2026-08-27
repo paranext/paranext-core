@@ -10,6 +10,7 @@ import {
   getReadyWindowIds,
   getTargetWindowId,
   getUnreachableWindowIds,
+  getWindowIdOf,
   getWindows,
   isWindowAbandoned,
   isWindowClosing,
@@ -177,6 +178,23 @@ describe('window state tracking', () => {
       const reloaded = await import('@main/services/window-state.service');
 
       expect(reloaded.addWindow(fakeWindow(3))).toBe(3);
+    });
+
+    test('answers a window’s platform id from the window itself, never from Electron’s', () => {
+      // The deep-link path holds a BrowserWindow that Electron handed it and has to name it to the
+      // tracker. The fake's Electron `id` is chosen to disagree with the minted id, so a lookup that
+      // fell back to `window.id` would be caught rather than pass by coincidence.
+      const tracked = fakeWindow(42);
+      const mintedId = addWindow(tracked);
+
+      expect(mintedId).not.toBe(42);
+      expect(getWindowIdOf(tracked)).toBe(mintedId);
+      // A window this process never tracked has no platform id — the caller falls back rather than
+      // being handed a number that names nothing
+      expect(getWindowIdOf(fakeWindow(42))).toBeUndefined();
+
+      removeWindow(tracked, mintedId);
+      expect(getWindowIdOf(tracked)).toBeUndefined();
     });
   });
 
@@ -689,7 +707,10 @@ describe('window state tracking', () => {
     test('a closed window’s id stops answering as ready once it is gone', () => {
       // Ids are never reused, so no later window can inherit this one's readiness. The cleanup
       // still matters: anything that kept the closed id — a queued routing decision, a caller
-      // mid-call — would otherwise be told the window is ready and route into nothing.
+      // mid-call — would otherwise be told the window is ready and route into nothing. Both
+      // assertions below depend on it: `setFocusedWindowId` records whatever id it is handed,
+      // tracked or not, so a stale readiness mark would make the routing target prefer the dead
+      // focused id over the window that is actually serving.
       const closed = fakeWindow(1);
       const closedId = addWindow(closed);
       markWindowReady(closedId);

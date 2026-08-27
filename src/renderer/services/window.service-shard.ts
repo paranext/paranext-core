@@ -582,7 +582,8 @@ export async function initialize(): Promise<void> {
       const executor = async () => {
         try {
           const { windowId } = globalThis;
-          if (!windowId) throw new Error('Cannot start the window service: windowId is not set');
+          if (windowId === undefined)
+            throw new Error('Cannot start the window service: windowId is not set');
           // What a usable window id is gets decided in exactly one place. Building the scoped name
           // below from an id the router would then reject as an attribute would register a shard
           // under a name nothing looks for, so the check that decides that runs first.
