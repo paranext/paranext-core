@@ -193,6 +193,9 @@ beforeEach(() => {
   mockSendCommand.mockReset();
   mockCommands();
   mockIsDemoMode.mockReturnValue(false);
+  // Module-global and shared with the toolbar, so a value published by one test would otherwise be
+  // the starting state of the next.
+  resetRegistrationValidityStore();
   vi.useFakeTimers();
 });
 
@@ -289,12 +292,9 @@ describe('IdentifyStep', () => {
 
   it('clears a cached invalid registration in this session once the save succeeds', async () => {
     const user = setupUser();
+    mockCommands({ validate: true });
     // The toolbar mounts behind the wizard and has already cached a definitive answer.
-    resetRegistrationValidityStore();
     publishRegistrationValidity('invalid');
-    mockSendCommand
-      .mockResolvedValueOnce(true) // validateParatextRegistrationData
-      .mockResolvedValueOnce(undefined); // setParatextRegistrationData
     // A restart that never settles models the best-effort restart failing to take the process down.
     const onRestartAfterSave = vi.fn().mockReturnValue(new Promise<never>(() => {}));
 
