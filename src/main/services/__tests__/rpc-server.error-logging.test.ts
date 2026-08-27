@@ -2,15 +2,19 @@ import { describe, expect, test, vi, beforeEach } from 'vitest';
 import { RpcServer } from '@main/services/rpc-server';
 import { RpcEventRegistry } from '@main/services/rpc-event-registry';
 
-const { mockLoggerError } = vi.hoisted(() => ({ mockLoggerError: vi.fn() }));
+const { mockLoggerError, mockLoggerWarn, mockLoggerInfo } = vi.hoisted(() => ({
+  mockLoggerError: vi.fn(),
+  mockLoggerWarn: vi.fn(),
+  mockLoggerInfo: vi.fn(),
+}));
 
 // vi.mock and vi.hoisted calls are hoisted above the imports above at transform time, so the
 // static imports can be written first here to satisfy import/first.
 vi.mock('@shared/services/logger.service', () => ({
   logger: {
     error: mockLoggerError,
-    warn: vi.fn(),
-    info: vi.fn(),
+    warn: mockLoggerWarn,
+    info: mockLoggerInfo,
     debug: vi.fn(),
   },
 }));
@@ -71,5 +75,65 @@ describe('RpcServer error logging', () => {
     dispatch('error', new Event('error'));
 
     expect(mockLoggerError.mock.calls[0][0]).toContain('message=unknown');
+  });
+});
+
+describe('RpcServer close logging', () => {
+  beforeEach(() => {
+    mockLoggerWarn.mockClear();
+    mockLoggerInfo.mockClear();
+  });
+
+  test('logs an unexpected close at warn, with the close code', async () => {
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+
+    dispatch('close', new CloseEvent('close', { code: 1006, reason: '', wasClean: false }));
+
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    expect(mockLoggerWarn.mock.calls[0][0]).toContain('code=1006');
+    expect(mockLoggerInfo).not.toHaveBeenCalled();
+  });
+
+  test('logs an intentional close at info, not warn', async () => {
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+
+    dispatch(
+      'close',
+      new CloseEvent('close', { code: 4000, reason: 'app shutdown', wasClean: true }),
+    );
+
+    expect(mockLoggerWarn).not.toHaveBeenCalled();
+    expect(mockLoggerInfo).toHaveBeenCalled();
+  });
+
+  test('logs exactly once when the close event is dispatched twice', async () => {
+    const { socket, dispatch } = makeFakeSocket();
+    const server = makeServer(socket);
+    await server.connect();
+
+    const ev = new CloseEvent('close', { code: 1006, wasClean: false });
+    dispatch('close', ev);
+    dispatch('close', ev);
+
+    // Two scary lines for one disconnect is the noise regression this ticket must not ship.
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+  });
+
+  test('removes only its own registered methods on close', async () => {
+    const { socket, dispatch } = makeFakeSocket();
+    const methods = new Map();
+    const server = new RpcServer('7', socket, () => {}, methods, new RpcEventRegistry());
+    await server.connect();
+    server.registerRemoteMethod('command:mine');
+    methods.set('command:someone-elses', { handler: {}, methodDocs: undefined });
+
+    dispatch('close', new CloseEvent('close', { code: 1006 }));
+
+    expect(methods.has('command:mine')).toBe(false);
+    expect(methods.has('command:someone-elses')).toBe(true);
   });
 });

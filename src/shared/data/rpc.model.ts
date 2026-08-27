@@ -118,6 +118,14 @@ export function createErrorResponse(
 export const MAX_LOGGED_DETAIL_LENGTH = 200;
 
 /**
+ * Close code used when we close a PAPI socket on purpose (shutdown, teardown). The WebSocket spec
+ * reserves 3000-4999 for application use, so carrying intent in the code itself lets a close
+ * handler tell a deliberate shutdown from a connection that died, with no extra state to keep in
+ * sync.
+ */
+export const INTENTIONAL_CLOSE_CODE = 4000;
+
+/**
  * Read a property without trusting the source object. Returns `undefined` if the property is absent
  * or if reading it throws — a hostile or exotic accessor must not turn a logged disconnect into an
  * unhandled exception inside a close handler.

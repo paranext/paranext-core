@@ -21,7 +21,9 @@ import {
   createRequest,
   createSuccessResponse,
   deserializeMessage,
+  describeWebSocketCloseEvent,
   describeWebSocketErrorEvent,
+  INTENTIONAL_CLOSE_CODE,
   InternalRequestHandler,
   REGISTER_EVENT,
   REGISTER_METHOD,
@@ -217,13 +219,20 @@ export class RpcServer implements IRpcHandler {
     }
   }
 
-  private onWebSocketClose(): void {
+  private onWebSocketClose(ev: CloseEvent): void {
+    // A closed socket's listener is already removed, but a caller holding a stale reference to
+    // this bound handler could still invoke it directly; guard so a second call is a no-op rather
+    // than double-logging and re-running teardown.
+    if (this.connectionStatus === ConnectionStatus.Disconnected) return;
+
     this.jsonRpcClient.rejectAllPendingRequests(`Web socket ${this.name} has closed`);
+    const detail = describeWebSocketCloseEvent(ev);
+    const wasIntentional = ev?.code === INTENTIONAL_CLOSE_CODE;
+    const summary = `Websocket ${this.name} closed (${detail}). Removing ${this.rpcMethodDetailsByMethodName.size} methods`;
+    if (wasIntentional) logger.info(summary);
+    else logger.warn(summary);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
-    logger.info(
-      `Websocket ${this.name} closed. Removing ${this.rpcMethodDetailsByMethodName.size} methods`,
-    );
     this.rpcMethodDetailsByMethodName.forEach(({ handler }, methodName) => {
       if (handler !== this) return;
 
