@@ -530,9 +530,10 @@ export interface AppExitResult {
 }
 
 /**
- * Trigger a REAL app quit — exactly what File > Exit or Cmd+Q does — and wait for the Electron OS
- * process to exit, then reap the leftover process group. Returns the exit code/signal for the
- * caller to assert on (a clean quit exits with code 0 and no signal).
+ * Bring the app down — a real quit, exactly what File > Exit or Cmd+Q does, or a caller-supplied
+ * trigger (see `triggerExit`) — and wait for the Electron OS process to exit, then reap the
+ * leftover process group. Returns the exit code/signal for the caller to assert on (a clean quit
+ * exits with code 0 and no signal).
  *
  * Watches the OS process itself, not Playwright's ElectronApplication `close` event. That event
  * additionally waits for the process's stdio streams to close, and a graceful dev-mode quit leaves
@@ -543,8 +544,11 @@ export interface AppExitResult {
  * `app.quit()` is scheduled rather than called inline so the evaluate round-trip completes before
  * teardown begins.
  *
- * Pass `triggerExit` to bring the app down some other way — closing a window through its ✕, say —
- * and it is called in place of the quit, after the exit listener is armed.
+ * Pass `triggerExit` to bring the app down some other way — closing a window through its ✕, say. It
+ * runs after the exit listener is armed, raced against that listener rather than plain-awaited: a
+ * trigger that brings the process down itself can have its own round trip rejected once that
+ * process is already gone, and that rejection must not skip the wait below or the reap that follows
+ * it.
  *
  * Budget: the quit path is a bounded shutdown-sync attempt (which rejects immediately in this
  * suite's configuration, since no S/R extension is registered) plus bounded child-process waits of
@@ -572,15 +576,23 @@ export async function quitAppAndWaitForExit(
     );
   });
 
-  // After the listener above, never before: a trigger whose own round trip outlives the exit would
-  // otherwise land the exit before anything is listening, and the wait would burn its whole budget
-  // on an event that already fired.
-  if (triggerExit) await triggerExit();
+  // Armed before the trigger, never after: a trigger whose own round trip outlives the exit would
+  // otherwise land the exit before anything is listening, and the wait below would burn its whole
+  // budget on an event that already fired.
+  //
+  // Raced against the exit rather than bare-awaited: a trigger that brings the process down itself
+  // (closing the primary through its ✕, say) can have its own round trip rejected with "Target
+  // page, context or browser has been closed" once that process is gone — before it ever resolves.
+  // A bare await would propagate that rejection straight out of this function, skipping both the
+  // wait below and the process-group reap that follows it. Racing lets the exit event settle this
+  // step even when the trigger's own promise never gets to.
+  if (triggerExit) await Promise.race([triggerExit(), processExit]);
   else
     await electronApp.evaluate(({ app }) => {
       setTimeout(() => app.quit(), 0);
     });
 
+  const exitTriggerDescription = triggerExit ? 'the trigger' : 'app.quit()';
   const exitResult = await Promise.race([
     processExit,
     new Promise<never>((_resolve, reject) => {
@@ -588,7 +600,7 @@ export async function quitAppAndWaitForExit(
         const outputTail = output?.text().split('\n').slice(-60).join('\n');
         reject(
           new Error(
-            `Electron process did not exit within 120 s of app.quit()${
+            `Electron process did not exit within 120 s of ${exitTriggerDescription}${
               outputTail ? `; last app output:\n${outputTail}` : ''
             }`,
           ),
