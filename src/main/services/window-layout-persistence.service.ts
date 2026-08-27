@@ -26,6 +26,7 @@ import path from 'path';
 import { readFile, rename, writeFile } from 'fs/promises';
 import { app } from 'electron';
 import {
+  FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE,
   GET_WINDOW_LAYOUT_REQUEST_TYPE,
   SAVE_WINDOW_LAYOUT_REQUEST_TYPE,
   WindowBoundsState,
@@ -324,12 +325,17 @@ export function trackLegacyWindow(windowId: number): void {
     windowId,
     usesLegacyLayout: true,
   });
+  // The slot id this just minted is what the window keys its state by, so the file has to carry it
+  // before the session ends — see the same write after a load mints
+  scheduleWrite();
 }
 
 /** Give a window created mid-session a slot. It has no saved entry, so it starts with an empty one */
 export function trackNewWindow(windowId: number): void {
   if (findSlotByWindowId(windowId)) return;
   fileSlots.push({ entry: { slotId: newGuid() }, windowId });
+  // As in `trackLegacyWindow`: a minted slot id is not real until the file carries it
+  scheduleWrite();
 }
 
 /**
@@ -593,6 +599,25 @@ function handleGetLayoutRequest(windowId: unknown): WindowLayoutGetResponse {
   return { kind: 'empty' };
 }
 
+function handleFilterDeadSlotsRequest(candidateSlotIds: unknown): string[] {
+  if (
+    !Array.isArray(candidateSlotIds) ||
+    candidateSlotIds.some((slotId) => typeof slotId !== 'string')
+  ) {
+    logger.warn(`${FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE} called without a list of slot ids`);
+    return [];
+  }
+  // Nothing can be called dead while this process does not know what is alive. No slots at all
+  // means the structure has not been loaded, and answering "all of them" would tell a renderer to
+  // delete the state of every window in the profile.
+  if (fileSlots.length === 0) {
+    logger.warn(`${FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE} called before any slot exists`);
+    return [];
+  }
+  const liveSlotIds = new Set(fileSlots.map((slot) => slot.entry.slotId));
+  return candidateSlotIds.filter((slotId) => !liveSlotIds.has(slotId));
+}
+
 function handleSaveLayoutRequest(windowId: unknown, layout: unknown): void {
   if (typeof windowId !== 'number') {
     logger.warn(`${SAVE_WINDOW_LAYOUT_REQUEST_TYPE} called without a window id`);
@@ -658,6 +683,31 @@ export async function initializeWindowLayoutPersistence(): Promise<void> {
               },
               required: ['kind'],
             },
+          },
+        },
+      },
+    ),
+    networkService.registerRequestHandler(
+      FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE,
+      async (...args) => handleFilterDeadSlotsRequest(args[0]),
+      {
+        method: {
+          'x-experimental': true,
+          summary:
+            'Report which of the given window-layout slots no longer exist, so a renderer can drop the state it is still holding for them',
+          params: [
+            {
+              name: 'candidateSlotIds',
+              required: true,
+              summary: 'Slot ids the caller holds stored state for',
+              schema: { type: 'array', items: { type: 'string' } },
+            },
+          ],
+          result: {
+            name: 'return value',
+            summary:
+              'The subset with no entry in the persisted structure. Empty when the structure is not loaded, so a caller can never be told to delete everything',
+            schema: { type: 'array', items: { type: 'string' } },
           },
         },
       },

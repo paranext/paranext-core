@@ -1,8 +1,6 @@
 import { stripWindowScopeFromWebViewId } from '@renderer/components/docking/window-scoped-web-view-ids.util';
 import { deserialize, serialize } from 'platform-bible-utils';
-import localWindowStorage from './local-storage.service';
-
-const WEBVIEW_STATE_KEY = 'web-view-state';
+import localWindowStorage, { WEB_VIEW_STATE_KEY } from './local-storage.service';
 /**
  * State for every web view, keyed on the id its web view was minted with.
  *
@@ -21,7 +19,7 @@ function loadIfNeeded(): void {
   // If we have any data or tried to look something up, we've already loaded
   if (stateMap.size > 0 || idsLookedUp.size > 0) return;
 
-  const serializedState = localWindowStorage.getItem(WEBVIEW_STATE_KEY);
+  const serializedState = localWindowStorage.getItem(WEB_VIEW_STATE_KEY);
   if (!serializedState) return;
 
   const entries: [[string, Record<string, unknown>]] = deserialize(serializedState);
@@ -37,7 +35,7 @@ function save(): void {
   if (idsLookedUp.size <= 0) return;
 
   const stateToSave = serialize(Array.from(stateMap.entries()));
-  localWindowStorage.setItem(WEBVIEW_STATE_KEY, stateToSave);
+  localWindowStorage.setItem(WEB_VIEW_STATE_KEY, stateToSave);
 }
 
 function getRecord(id: string): Record<string, unknown> {

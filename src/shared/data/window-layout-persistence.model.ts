@@ -26,6 +26,20 @@ export const GET_WINDOW_LAYOUT_REQUEST_TYPE = serializeRequestType(CATEGORY_WIND
 export const SAVE_WINDOW_LAYOUT_REQUEST_TYPE = serializeRequestType(CATEGORY_WINDOW_LAYOUT, 'save');
 
 /**
+ * Ask which of the given slot ids no longer have an entry in the persisted structure. Takes the
+ * slot ids a renderer holds stored state for; returns the subset that is dead.
+ *
+ * Asked rather than worked out in the renderer because only the main process holds the structure,
+ * and because a renderer filtering against a snapshot it fetched would race a window created while
+ * that snapshot was in flight. The main process answers from the structure as it stands at that
+ * moment, and a slot id is never reissued, so an id it calls dead cannot come back.
+ */
+export const FILTER_DEAD_WINDOW_SLOTS_REQUEST_TYPE = serializeRequestType(
+  CATEGORY_WINDOW_LAYOUT,
+  'filterDeadSlots',
+);
+
+/**
  * Report that a window's dock became empty (or that it started that way) and learn what it should
  * do about it. Takes the reporting window's id and a {@link WindowEmptiedReason}; returns a
  * {@link WindowEmptiedResponse}.
