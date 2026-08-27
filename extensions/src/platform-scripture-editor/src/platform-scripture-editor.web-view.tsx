@@ -697,14 +697,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // affordances are built around (see `resolveViewTypeForInterfaceMode`). This covers both a
   // 'standard' persisted during a power-mode session loading while the app is in simple mode and
   // a live `platform.interfaceMode` flip to simple while this standard-view web view is open.
-  // The coercion is DERIVED for display, never written back: persisting it destroyed the user's
-  // choice permanently — flipping back to power mode could not restore it, because the one-shot
-  // power-default correction above is gated on `hadPersistedViewTypeAtMount` and its fresh
-  // re-probe then found the persisted 'formatted'. Every consumer below reads this effective
-  // value; only an explicit user action (`setViewType` via cycling or `changeScriptureView`)
-  // writes the store. Waits for `platform.interfaceMode` to resolve because `isPowerMode` is
-  // always `false` while the setting loads — coercing then would hide a power user's persisted
-  // standard view on every mount's first frames.
+  // The coercion is DERIVED for display, never written back: persisting it would destroy the
+  // user's choice permanently — flipping back to power mode could not restore it, because the
+  // one-shot power-default correction above is gated on `hadPersistedViewTypeAtMount` and its
+  // fresh re-probe would then find the persisted 'formatted'. Every consumer below reads this
+  // effective value; only an explicit user action (`setViewType` via cycling or
+  // `changeScriptureView`) writes the store. Waits for `platform.interfaceMode` to resolve
+  // because `isPowerMode` is always `false` while the setting loads — coercing then would hide a
+  // power user's persisted standard view on every mount's first frames.
   const viewType = isInterfaceModeLoading
     ? persistedViewType
     : resolveViewTypeForInterfaceMode(persistedViewType, isPowerMode);
@@ -2532,12 +2532,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }, [usjFromPdpPossiblyError]);
   const usjSentToPdp = useRef<Usj | undefined>(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
-  // Monotonic count of PDP deliveries observed — the failed-save retry gate's other half. The
-  // retry used to be conditioned on "no newer PDP data arrived while the write was in flight"
-  // (the in-flight flag was cleared on every delivery, so a failed save that overlapped an
-  // incoming update deliberately did NOT re-push over it); `withWriteInFlightGuard` now owns
-  // that flag's lifecycle for the write's own duration, so this counter carries the
-  // delivery-arrival half of the old condition instead.
+  // Monotonic count of PDP deliveries observed — the failed-save retry gate's other half.
+  // `withWriteInFlightGuard` owns the in-flight flag for exactly the write's own duration, so the
+  // flag carries no information about deliveries; this counter is what lets a failed save tell
+  // whether newer PDP data arrived while its write was in flight (see the retry gate in
+  // `saveUsjToPdpInternal`, which deliberately does NOT re-push over an overlapped delivery).
   //
   // Known limitation: the counter advances on `usjFromPdp` IDENTITY, and identity-stable
   // deliveries are invisible to it — in particular the PlatformError path above resolves to the
@@ -2706,9 +2705,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return Promise.resolve(false);
     }
 
-    // We used to have this running on the editor's `onUsjChanged`, but it seems the editor still
-    // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
-    // `saveUsjToPdpIfUpdated` everywhere.
+    // Not wired directly to the editor's `onUsjChanged`: the editor fires `onUsjChanged` even
+    // when its USJ is SET programmatically, so a save wired there would echo every applied update
+    // straight back to the PDP. Until that is fixed, `saveUsjToPdpIfUpdated` (which compares
+    // first) is used everywhere.
     async function saveUsjToPdpInternal(newUsj: Usj): Promise<boolean> {
       const rawSave = saveUsjToPdpRawStableRef.current;
       if (!rawSave) return false;
@@ -3115,7 +3115,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   // Sync editor content with PDP data. The write-in-flight guard (`currentlyWritingUsjToPdp`) is
-  // owned entirely by the save path (`withWriteInFlightGuard`), so it is no longer passed here.
+  // owned entirely by the save path (`withWriteInFlightGuard`), so it is not passed here.
   // The editor owns its content while a marker-palette session or a LIVE footnote-popover editing
   // session is open, even though DOM focus sits in the overlay/popover: a same-document echo
   // replacing the editor mid-session regenerates every Lexical key and kills the session

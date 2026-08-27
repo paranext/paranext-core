@@ -362,8 +362,9 @@ export function handleMarkerPaletteSessionKeyDown(
 
   if (event.key === 'Enter' || event.key === 'Tab') {
     // Tab commits the highlighted item exactly like Enter — the editor package's own menus treat
-    // the two as one commit gesture, and Tab is in CONTROL_KEYS (so a focused palette forwards
-    // it here); without a branch it fell through to the catch-all and dismissed the session.
+    // the two as one commit gesture. Tab must stay in this branch: it is in CONTROL_KEYS (so a
+    // focused palette forwards it here), and a forwarded key with no branch of its own falls
+    // through to the catch-all below, which dismisses the session.
     //
     // In capture, the claim keeps Lexical's KEY_ENTER (paragraph split / note `\fp`) from running
     // BEFORE the palette commit applies — the popover double-mutation bug. Claimed even for the

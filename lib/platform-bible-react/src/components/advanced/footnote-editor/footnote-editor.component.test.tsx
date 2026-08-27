@@ -750,8 +750,8 @@ describe('FootnoteEditor marker palette wiring', () => {
     });
 
     it('tracks a SELECTION session for the focused wrap palette and claims typed keys', () => {
-      // The wrap palette previously set the session to
-      // undefined, so typing landed in the document and replaced the wrapped selection.
+      // The wrap palette must track a session of its own: with no session, typed keys are not
+      // claimed and land in the document, replacing the wrapped selection.
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const markerPalette = makeMarkerPalette(
         vi.fn(() => new Promise<string | undefined>(() => {})),
@@ -940,7 +940,7 @@ describe('FootnoteEditor marker palette wiring', () => {
         source: 'character',
         previousParaMarkers: [],
         openCharMarkers: ['nd'],
-        hasTextSelection: true, // the shape that used to keep `*` a filter character
+        hasTextSelection: true, // the shape that must NOT demote `*` to a filter character
         inMarkerText: false,
         anchorRect: { x: 1, y: 2, width: 3, height: 4 },
       });
@@ -1287,9 +1287,9 @@ describe('FootnoteEditor marker palette wiring', () => {
     });
 
     it('with the DOM caret outside the note content: claimed and rerouted into the note', () => {
-      // Radix's open-autofocus can park the DOM caret at the wrapper-para start; Enter there
-      // used to plain-split the wrapper instead of inserting \fp. The guard claims the key and
-      // routes the caret into the note instead.
+      // Radix's open-autofocus can park the DOM caret at the wrapper-para start; an unguarded
+      // Enter there would plain-split the wrapper instead of inserting \fp. The guard claims the
+      // key and routes the caret into the note instead.
       mockGetMarkerMenuItems.mockReturnValue([makeItem()]);
       const markerPalette = makeMarkerPalette();
       const { editorInput, editorRef } = renderFootnoteEditor(

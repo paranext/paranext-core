@@ -967,7 +967,7 @@ describe('overlay.service-host', () => {
     it('should apply filterText updates to a non-passive (active) palette (forwarded driving)', async () => {
       // The extension forwards keystrokes via updateCommandPalette when the
       // cross-frame focus handoff loses; the active palette's controlled search input consumes
-      // the driven filterText, so the update must be stored (previously passive-only + warn).
+      // the driven filterText, so the update must be stored for active palettes too.
       const activeRequest: CommandPaletteRequest = {
         items: [{ id: 'ft', label: 'Footnote' }],
       };
@@ -1872,7 +1872,7 @@ describe('overlay.service-host', () => {
 
       // Escape unwinds ONE surface per press, and that surface is the modal — whose own shell
       // answers the key. Nothing may be dismissed through this path, least of all the popover
-      // underneath, which an escape that skipped modals used to close alongside the modal.
+      // underneath — an escape that skipped modals would close it alongside the modal.
       expect(getOverlays().map((overlay) => overlay.type)).toEqual(['popover', 'modalDialog']);
 
       // Clean up

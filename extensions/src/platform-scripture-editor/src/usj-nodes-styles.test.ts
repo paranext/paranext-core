@@ -240,10 +240,11 @@ describe('_usj-nodes.scss vendored editor stylesheet', () => {
   describe('cross-copy drift pins (must agree with the demo copy in platform-bible-react)', () => {
     // The two vendored copies of the editor stylesheet (this one and
     // lib/platform-bible-react/src/components/demo/scripture-editor/usj-nodes.css) are pinned at
-    // different upstream commits, and their suites used to assert DISJOINT rule sets — which is
-    // how the RTL/bidi gutter fixes and the ::after outline landed in only one copy. The demo
-    // suite carries the same three pins, so a fix landing in one copy fails the other's suite
-    // until it is forwarded.
+    // different upstream commits, and nothing structural keeps their rule sets in agreement —
+    // with each suite asserting only its own copy's rules, a fix (the RTL/bidi gutter isolation,
+    // the ::after outline) can land in one copy and silently miss the other. The demo suite
+    // carries the same three pins, so a fix landing in one copy fails the other's suite until it
+    // is forwarded.
     it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {
       expect(scss).toMatch(
         /\.psc-gutter-markers \.para > \.marker:not\(\.verse\):not\(\.chapter\):first-child,\s*\.psc-gutter-markers \.book > \.marker:first-child \{[^}]*unicode-bidi: isolate;/,

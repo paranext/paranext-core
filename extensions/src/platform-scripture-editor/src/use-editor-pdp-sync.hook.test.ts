@@ -1757,7 +1757,7 @@ describe('useEditorPdpSync', () => {
   // EDITOR_OWNERSHIP_WINDOW_MS after the user's last LOCAL edit. Inside the window, a differing
   // same-document incoming defers to the editor and pushes local content up; past it, focus alone
   // confers nothing — the incoming applies as if the editor were unfocused, so a parked caret can
-  // no longer overwrite a Send/Receive merge or another app's concurrent write indefinitely.
+  // never overwrite a Send/Receive merge or another app's concurrent write indefinitely.
   describe('focused-editor ownership window', () => {
     const externalChange = makeChapterUsj('14', 'Externally merged text.');
     const newerEditorContent = makeChapterUsj('14', 'This is the law of the leper. typed more');

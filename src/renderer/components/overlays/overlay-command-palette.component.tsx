@@ -489,12 +489,12 @@ export function OverlayCommandPalettePresentational({
       // Filtering happens OUTSIDE cmdk in BOTH modes (filteredItems above). Passive mode must say
       // so explicitly, even though it registers no cmdk items: cmdk's `Group` renders only when
       // `shouldFilter === false`, or the search is empty, or the group appears in
-      // `filtered.groups`. The search stopped being empty once the search input was rendered here
-      // (cmdk's `Input` pushes a controlled `value` into its own `search` state), and a group with
-      // no cmdk-registered items is never in `filtered.groups` — so every group went `hidden` as
-      // soon as the user typed, emptying a list whose items the session had correctly kept. The
-      // "No results found" element sits outside the group, which is why it kept rendering
-      // correctly and made the failure look like a filter bug rather than a hiding one.
+      // `filtered.groups`. The search is NOT empty while the user types (cmdk's `Input` pushes a
+      // controlled `value` into its own `search` state), and a group with no cmdk-registered
+      // items is never in `filtered.groups` — so without this flag every group would go `hidden`
+      // on the first keystroke, emptying a list whose items the session correctly kept. Beware
+      // that the "No results found" element sits outside the group and would keep rendering,
+      // disguising such hiding as a filter bug.
       shouldFilter={false}
     >
       {searchInput}

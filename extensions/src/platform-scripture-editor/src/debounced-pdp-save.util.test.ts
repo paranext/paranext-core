@@ -100,17 +100,16 @@ describe('performDebouncedPdpSave', () => {
   });
 });
 
-// Regression pins for a Critical review finding on the transient-input fix: `usj` is now
-// contracted to be the SETTLED, transient-excluded snapshot as of scheduling (captured by the
-// caller, `handleEditorialUsjChange` in `platform-scripture-editor.web-view.tsx`, via
-// `EditorRef.getUsj()` — not the raw `onUsjChange` payload). Before that caller-side fix, typing
-// `\f` (a passive backslash palette session) and switching chapters before the 700ms debounce
-// fired forced one of the two paths below with the RAW, un-excluded snapshot, writing the bare
-// `\f` literal to the PDP — the exact garbage-paragraph corruption (ParatextData tokenizes an
-// unrecognized marker in body text as a paragraph) the deleted string-stripping used to guard
-// against. This module has no palette awareness of its own; these tests pin that BOTH paths that
-// cannot re-read the editor at fire time replay the scheduled `usj` byte-for-byte, so a caller that
-// upholds the settled/excluded contract can never have a trigger literal reappear here.
+// Contract pins: `usj` is the SETTLED, transient-excluded snapshot as of scheduling (captured by
+// the caller, `handleEditorialUsjChange` in `platform-scripture-editor.web-view.tsx`, via
+// `EditorRef.getUsj()` — not the raw `onUsjChange` payload). A caller passing the RAW,
+// un-excluded snapshot — e.g. typing `\f` (a passive backslash palette session) and switching
+// chapters before the 700ms debounce fired — would force one of the two paths below to write the
+// bare `\f` literal to the PDP: garbage-paragraph corruption, since ParatextData tokenizes an
+// unrecognized marker in body text as a paragraph. This module has no palette awareness of its
+// own; these tests pin that BOTH paths that cannot re-read the editor at fire time replay the
+// scheduled `usj` byte-for-byte, so a caller that upholds the settled/excluded contract can never
+// have a trigger literal reappear here.
 describe('performDebouncedPdpSave — settled-snapshot replay (no re-derivation of the scheduled usj)', () => {
   // The exact repro this pins: cross-chapter flush racing an open palette session. `usj` here
   // stands in for what `EditorRef.getUsj()` returns once `EditorRef.setTransientInput` has

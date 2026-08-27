@@ -223,7 +223,7 @@ export const test = base.extend<CdpFixtures>({
 
     // AUTO-VALIDATE screenshot dimensions. Wrap `page.screenshot` so every screenshot taken via
     // the fixture is validated against the Full HD minimum the moment the file lands on disk.
-    // Tests can no longer accidentally produce tiny screenshots — they FAIL fast at the call site
+    // Tests cannot accidentally produce tiny screenshots — they FAIL fast at the call site
     // with a precise dimension report. This enforces "small screenshots are failures, no matter
     // how nice the UI looks" without requiring per-test assertion calls.
     //

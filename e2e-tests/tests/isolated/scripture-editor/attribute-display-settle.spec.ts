@@ -112,8 +112,8 @@ test.describe('scripture editor attribute display', () => {
       await clickBeforeGlyph(wjCloser);
 
       // Backspace through the whole nested closing glyph (`\+w*` is 4 characters) — the exact
-      // gesture the design names as the historical "never settles" bug: with the attribute run
-      // treated as an opaque sentinel, this edit used to never re-tokenize.
+      // gesture the design names as the historical "never settles" bug: were the attribute run
+      // treated as an opaque sentinel, this edit would never re-tokenize.
       await editorInput.press('Backspace');
       await editorInput.press('Backspace');
       await editorInput.press('Backspace');

@@ -112,9 +112,9 @@ describe('FootnoteEditor popover init (wrapper-para marker prefix suppressed)', 
       { waitMs: 10 },
     );
 
-    // Visible mode used to render the scaffold's marker as an immutable typed-text node (which the
-    // index-0 insert then left stranded AFTER the note). With the prefix suppressed neither the
-    // glyph nor the stranding can exist.
+    // Were visible mode to render the scaffold's marker as an immutable typed-text node, the
+    // index-0 insert would leave it stranded AFTER the note. With the prefix suppressed neither
+    // the glyph nor the stranding can exist.
     expect(wrapperParaChildTypes(lexical)).toEqual(['note']);
   });
 

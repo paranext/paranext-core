@@ -473,10 +473,10 @@ export default function FootnoteEditor({
       // content load never does (handleUsjChange's hasInitializedEditor guard skips its first
       // call), so this is the one place that reports user edits to the host.
       //
-      // Saves what the EDITOR holds, and rewrites nothing on the way out. The caller used to be
-      // re-derived from this component's `callerType`/`customCaller` state here, which made every
-      // save a chance to write a stale value: the state is set in the same React batch as the
-      // change, so a save triggered from inside that batch still read the pre-change value.
+      // Saves what the EDITOR holds, and rewrites nothing on the way out. The caller must NOT be
+      // re-derived from this component's `callerType`/`customCaller` state here — that would make
+      // every save a chance to write a stale value: the state is set in the same React batch as
+      // the change, so a save triggered from inside that batch still reads the pre-change value.
       // Applying a caller change to the editor (below) and reading it back is what removes that
       // class of bug rather than sequencing around it.
       onNoteEdit?.();

@@ -265,9 +265,10 @@ export function useEditorPdpSync({
       //
       // Once the last local edit is OLDER than the window, focus alone confers nothing: the
       // incoming update is applied exactly as if the editor were unfocused, and nothing is pushed
-      // back. A parked caret used to defer external writes INDEFINITELY — a Send/Receive merge or
-      // another app's concurrent write was overwritten by the focused editor's pre-merge content
-      // however long ago the user last typed. An active editing SESSION (marker palette, footnote
+      // back. A parked caret must never defer external writes indefinitely: a Send/Receive merge
+      // or another app's concurrent write has to land — not be overwritten by the focused editor's
+      // pre-merge content — however long ago the user last typed, and the window is what bounds
+      // the deferral. An active editing SESSION (marker palette, footnote
       // popover — `isEditingSessionActive`) still defers regardless of the window: typing inside
       // the popover's own editor never stamps the main editor's local-edit timestamp, and
       // replacing the main editor mid-session regenerates every Lexical key and kills the session.
@@ -353,14 +354,14 @@ export function useEditorPdpSync({
           lastIncomingUsjDeferred.current = usjFromPdp;
           if (!editorUnchanged || !incomingUnchanged) {
             // Record the push only once the save pipeline CONFIRMS a write ran: a save the
-            // write-in-flight guard drops never leaves the editor, and recording it anyway made
+            // write-in-flight guard drops never leaves the editor, so recording it would make
             // the next deferral compare against content that never left — misattributing an
             // ordinary deferral as "the editor is doing something lossy". A `void`-returning
-            // save has no outcome to wait on and records SYNCHRONOUSLY (the pre-confirmation
-            // behavior — deferring it to a microtask would let a same-tick delivery burst bypass
-            // the damping entirely); a promise-returning save records when it resolves, and
-            // until then the slot keeps its previous value — the worst case of that window is
-            // one extra re-push, never a wrong lossy warning.
+            // save has no outcome to wait on and records SYNCHRONOUSLY (deferring it to a
+            // microtask would let a same-tick delivery burst bypass the damping entirely); a
+            // promise-returning save records when it resolves, and until then the slot keeps
+            // its previous value — the worst case of that window is one extra re-push, never a
+            // wrong lossy warning.
             const pushOutcome = saveUsjToPdpIfUpdated();
             if (pushOutcome) {
               pushOutcome

@@ -1,10 +1,9 @@
 /**
  * Scroll-group synchronization e2e tests.
  *
- * Regression guard for the scroll-into-view defect diagnosed 2026-07-09: a reference change from
- * another source must scroll the scripture editor's content, not just update the BCV controls (the
- * scroll utilities used to target `.editor-container`, which layout wrappers had made
- * non-scrollable, so every programmatic scroll silently no-oped).
+ * Regression guard: a reference change from another source must scroll the scripture editor's
+ * content, not just update the BCV controls (a scroll utility that targets `.editor-container` —
+ * which layout wrappers make non-scrollable — silently no-ops every programmatic scroll).
  *
  * Runs against an isolated project root, so the only project is the bundled sample WEB (installed
  * by the C# backend into the empty root). Any developer can run this suite: `npm run

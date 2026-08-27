@@ -514,9 +514,9 @@ describe('handleMarkerPaletteSessionKeyDown', () => {
   });
 
   it('backslash session: Space with nothing typed closes the palette and commits nothing', () => {
-    // `\` then Space used to materialize the typed run — which with an empty filter is a bare
-    // backslash and a space, landing two characters in the document that name no marker.
-    // Paratext 9 closes the popup and leaves the document untouched.
+    // Materializing the typed run on `\` then Space would land — with an empty filter — a bare
+    // backslash and a space in the document, two characters that name no marker. Paratext 9
+    // closes the popup and leaves the document untouched.
     const driver = makeDriver();
     const event = makeEvent(' ');
     expect(handleMarkerPaletteSessionKeyDown(event, session('backslash', ''), driver)).toBe(

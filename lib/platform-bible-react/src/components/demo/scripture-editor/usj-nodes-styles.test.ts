@@ -298,8 +298,9 @@ describe('usj-nodes.css vendored editor stylesheet', () => {
   describe('cross-copy drift pins (must agree with the shipping copy in platform-scripture-editor)', () => {
     // The two vendored copies of the editor stylesheet (this one and
     // extensions/src/platform-scripture-editor/src/_usj-nodes.scss) are pinned at different
-    // upstream commits, and their suites used to assert DISJOINT rule sets — which is how the
-    // RTL/bidi gutter fixes and the ::after outline landed in only one copy. The shipping suite
+    // upstream commits, and nothing structural keeps their rule sets in agreement — with each
+    // suite asserting only its own copy's rules, a fix (the RTL/bidi gutter isolation, the
+    // ::after outline) can land in one copy and silently miss the other. The shipping suite
     // carries the same three pins, so a fix landing in one copy fails the other's suite until it
     // is forwarded.
     it('isolates gutter marker text as LTR (RTL glyph-offset fix)', () => {

@@ -100,8 +100,8 @@ function $findFtTextNode(): TextNode {
  * Parks the editor-state caret at the wrapper paragraph's start (an element point at offset 0 —
  * BEFORE the note, outside its content): the live stray-caret parking spot. The wrapper renders no
  * marker prefix (`showParaMarkerPrefixes: false`), so this element point is the only
- * outside-the-note position left in the document — the equivalent divergence used to park on the
- * wrapper's `\p` marker glyph before the prefix was suppressed.
+ * outside-the-note position left in the document (with a rendered prefix, the same divergence
+ * would park on the wrapper's `\p` marker glyph instead).
  */
 function $parkStateCaretAtWrapperParaStart(): void {
   const para = $getRoot().getChildren()[0];

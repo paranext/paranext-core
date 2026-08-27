@@ -787,9 +787,9 @@ async function showCommandPalette(
     throw newPlatformError('Overlay request dropped by debounce cooldown', RESOURCE_EXHAUSTED);
   }
 
-  // Replace any existing command palette from this webView BEFORE the localization await below —
-  // with the replace only on the far side of the await, a second request could start while the
-  // first was still resolving localization and BOTH ended up added.
+  // Replace any existing command palette from this webView BEFORE the localization await below:
+  // if the replace ran only on the far side of the await, a second request could start while the
+  // first was still resolving localization and BOTH would end up added.
   replaceExistingCommandPalettes(webViewId);
 
   // Resolve LocalizeKey item text ONCE, up front, so the stored entry only ever holds the same
