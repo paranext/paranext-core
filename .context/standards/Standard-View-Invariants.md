@@ -103,6 +103,17 @@ Every keyboard handler change here must also update `src/stories/keyboard-shortc
   `document.body` instead of nesting it, so the dropdown and `PopoverContent` are stacking SIBLINGS
   and the popover's own z-index competes directly with the dropdown's. Use `Z_INDEX_ABOVE_POPOVER`;
   `lib/platform-bible-react/src/components/z-index.test.ts` pins the ordering.
+- **The note's shell is not typeable, and the view option alone does not achieve that.** The popover
+  passes `isNoteShellEditable: false`, which renders `\f + ` in Lexical's `token` mode — necessary,
+  but on its own that still lets a caret land among those characters, where a keystroke replaces the
+  whole node: a lost caller, or a destroyed note. The editor's `NoteShellCaretGuardPlugin` is what
+  keeps the caret out; the `scripture-editors` invariants carry the full rule. A `\cat` category run
+  typed just after the caller belongs to the note's CONTENT, which is where the guard puts the caret.
+- **The footnotes pane renders a note's `category` from the note's own field.** It is the one part
+  of a footnote that never appears in `content`: the parser folds the file's `\cat People\cat*` run
+  onto the note as an attribute, so anything rendering a footnote from `content` alone drops it
+  silently. `footnote-item.component.tsx` reads the field and renders the run after the caller, in
+  the file's own order.
 
 ---
 
