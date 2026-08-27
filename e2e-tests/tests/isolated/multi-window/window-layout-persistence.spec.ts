@@ -649,18 +649,19 @@ test.describe('window layout persistence', () => {
       );
       // Distinct sizes, all different from each other and from the app's fallback size, so the
       // phase-2 comparison can tell the three entries apart and can tell a restored entry from a
-      // fallback re-placement.
+      // fallback re-placement. Every width clears WINDOW_MIN_WIDTH: Electron clamps a narrower
+      // `setBounds` silently, so such a window settles wider than asked and never matches.
       const sizes = [
         {
-          width: Math.min(1_100, workArea.width - 80),
+          width: Math.max(WINDOW_MIN_WIDTH, Math.min(1_100, workArea.width - 80)),
           height: Math.min(700, workArea.height - 80),
         },
         {
-          width: Math.min(940, workArea.width - 200),
+          width: Math.max(WINDOW_MIN_WIDTH, Math.min(940, workArea.width - 200)),
           height: Math.min(620, workArea.height - 160),
         },
         {
-          width: Math.min(880, workArea.width - 260),
+          width: Math.max(WINDOW_MIN_WIDTH, Math.min(880, workArea.width - 260)),
           height: Math.min(560, workArea.height - 220),
         },
       ];

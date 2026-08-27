@@ -88,6 +88,7 @@ import {
   pollUntil,
   quitAndExpectCleanExit,
   waitForRendererRegistered,
+  widenWindowForToolbarReference,
 } from './multi-window.util';
 
 // #region log markers
@@ -513,6 +514,9 @@ test.describe('multi-window lifecycle', () => {
     const logStep = createStepLogger('multi-window');
     const output = captureAppOutput(electronApp);
     await waitForAppReady(mainPage, 180_000);
+    // This test reads references off both windows' toolbars, so every window it asserts on has to
+    // stay above the toolbar shrink ladder's narrowest rung, where the chapter and verse are gone.
+    await widenWindowForToolbarReference(electronApp, mainPage);
     logStep('window 1 ready');
 
     // Baselines: both app-global services answer before anything is changed or closed. Without
@@ -541,6 +545,7 @@ test.describe('multi-window lifecycle', () => {
     // here), so "up" means its dock container rendered and its startup overlay cleared.
     await expect(page2.locator('div[class*="dock-layout"]')).toBeAttached({ timeout: 120_000 });
     await waitForOverlayGone(page2, 120_000);
+    await widenWindowForToolbarReference(electronApp, page2);
 
     logStep(`window ${window2Id} up`);
 
@@ -568,6 +573,7 @@ test.describe('multi-window lifecycle', () => {
     const window3Url = decodeURIComponent(page3.url());
     expect(window3Url).toContain('JHN');
     expect(window3Url).toContain('paratext-dark');
+    await widenWindowForToolbarReference(electronApp, page3);
     await expectToolbarReferenceToContain(page3, '3:16', 60_000);
     await expectWindowToRenderTheme(page3, 'paratext-dark', 60_000);
     logStep('a newly created window starts on the current reference and theme');

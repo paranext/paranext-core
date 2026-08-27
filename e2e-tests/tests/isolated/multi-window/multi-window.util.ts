@@ -338,6 +338,56 @@ export async function createSecondWindow(electronApp: ElectronApplication): Prom
 }
 
 /**
+ * Renderer width, in CSS pixels, at or above which a window's toolbar still renders the chapter and
+ * verse of a reference.
+ *
+ * The toolbar walks a shrink ladder as its content row narrows (`APP_TOOLBAR_SHRINK_THRESHOLDS_PX`
+ * in `lib/platform-bible-react/src/components/advanced/toolbar.component.tsx`), and at the ladder's
+ * narrowest rung it drops the chapter and verse entirely, leaving the book alone. This sits above
+ * that rung's threshold rather than on it, because the observed content row is narrower than the
+ * window by its own padding.
+ */
+const TOOLBAR_REFERENCE_MIN_CSS_PX = 800;
+
+/**
+ * Widen a window until its toolbar has room to show a reference in full, and return the renderer
+ * width that achieved it.
+ *
+ * A window narrow enough to reach the shrink ladder's narrowest rung shows the book alone, so a
+ * spec reading a reference off that toolbar cannot see a chapter or verse there however correctly
+ * the navigation reached the window. Every window whose toolbar text is asserted needs this first.
+ *
+ * Sized to the work area rather than to a fixed number, and size only: this compositor honors sizes
+ * exactly but assigns positions itself, and the display is not guaranteed to be any given size.
+ */
+export async function widenWindowForToolbarReference(
+  electronApp: ElectronApplication,
+  page: Page,
+): Promise<number> {
+  const windowId = getWindowIdOfPage(page);
+  await electronApp.evaluate(
+    ({ BrowserWindow, screen }, { id }) => {
+      const win = BrowserWindow.fromId(id);
+      if (!win) throw new Error(`No BrowserWindow with id ${id}`);
+      // An unmapped window reports stale bounds and ignores the resize.
+      if (win.isMinimized()) win.restore();
+      const { workArea } = screen.getPrimaryDisplay();
+      const { height, y } = win.getBounds();
+      win.setBounds({ x: workArea.x, y, width: workArea.width, height });
+    },
+    { id: windowId },
+  );
+  // The shrink step comes from a `ResizeObserver`, so the label re-renders after the resize lands
+  // rather than with it.
+  let rendererWidth = 0;
+  await expect(async () => {
+    rendererWidth = await page.evaluate(() => window.innerWidth);
+    expect(rendererWidth).toBeGreaterThanOrEqual(TOOLBAR_REFERENCE_MIN_CSS_PX);
+  }).toPass({ timeout: 30_000, intervals: [500] });
+  return rendererWidth;
+}
+
+/**
  * The window-scoped shard methods a renderer registers, as patterns taking the window id.
  *
  * One per service the main process's routers forward a command or request to. A renderer starts
