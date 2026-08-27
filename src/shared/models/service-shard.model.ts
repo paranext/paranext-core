@@ -39,16 +39,16 @@ export const WINDOW_SERVICE_SHARD_OBJECT_TYPE = 'windowServiceShard';
 
 /** Attributes every service shard registers, so a router can tell which window it belongs to */
 export type ServiceShardAttributes = {
-  /** Electron BrowserWindow ID of the window this shard implements the service for */
+  /** Platform id of the window this shard implements the service for */
   windowId: number;
 };
 
 /**
  * The attributes a window's shard registers with.
  *
- * @param windowId Electron BrowserWindow ID of the registering window. A renderer receives its own
- *   id as a string query parameter, so a string is accepted and converted — the attribute itself is
- *   always a number, matching the ids the main process routes by.
+ * @param windowId Platform id of the registering window. Accepted as a string as well as a number
+ *   for callers that still hold the raw query-parameter form; the attribute itself is always a
+ *   number, matching the ids the main process routes by.
  * @throws If `windowId` is not a window id, since a shard nothing can be routed to is worse than a
  *   window that fails to finish starting
  */

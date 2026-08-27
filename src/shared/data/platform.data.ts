@@ -11,7 +11,7 @@ export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
 export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
 
 /**
- * Query parameter key used to pass the Electron BrowserWindow ID to the renderer process
+ * Query parameter key used to pass a window's platform id to its renderer process
  *
  * @experimental
  */
