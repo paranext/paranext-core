@@ -383,7 +383,7 @@ describe('UserProfilePopover appearance', () => {
   });
 });
 
-describe('UserProfilePopover registration reminder (PT-4325)', () => {
+describe('UserProfilePopover registration reminder', () => {
   test('shows no dot and the plain label while validity is unknown', () => {
     render(<UserProfilePopover />);
     expect(screen.queryByTestId('user-profile-registration-dot')).not.toBeInTheDocument();

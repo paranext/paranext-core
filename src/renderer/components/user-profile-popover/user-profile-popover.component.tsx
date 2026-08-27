@@ -108,7 +108,9 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
       data-testid={testId}
       aria-hidden="true"
       className={cn(
-        'tw:size-2 tw:rounded-full tw:bg-primary',
+        // `shrink-0` is in the base: every caller so far places the dot in a flex row beside text,
+        // where a fixed 8px circle must never be the item that gives.
+        'tw:size-2 tw:shrink-0 tw:rounded-full tw:bg-primary',
         // Raw class, not a `tw:forced-colors:` utility — that variant emits no CSS in this build
         // (verified against the built stylesheet). See the rule in the companion .css file.
         'user-profile-popover-reminder-dot',
@@ -125,9 +127,9 @@ function ReminderDot({ testId, className }: { testId: string; className?: string
  * Paratext-registration buttons in the toolbar.
  *
  * When the user's Paratext registration is missing or invalid, an unobtrusive reminder dot appears
- * on the toolbar trigger and on the "Profile & registration" row (PT-4325). The dot is never the
- * only signal: the trigger's accessible label and tooltip change to match, and the popover row
- * carries screen-reader-only text.
+ * on the toolbar trigger and on the "Profile & registration" row. The dot is never the only signal:
+ * the trigger's accessible label and tooltip change to match, and the popover row carries
+ * screen-reader-only text.
  */
 export function UserProfilePopover() {
   const [isOpen, setIsOpen] = useState(false);
@@ -427,10 +429,7 @@ export function UserProfilePopover() {
             {localizedStrings['%userProfile_profileAndRegistration%']}
             {showRegistrationReminder && (
               <>
-                <ReminderDot
-                  testId="user-profile-action-registration-dot"
-                  className="tw:ms-auto tw:shrink-0"
-                />
+                <ReminderDot testId="user-profile-action-registration-dot" className="tw:ms-auto" />
                 {/* Puts the state into the row's accessible name, since the dot is hidden from it. */}
                 <span className="tw:sr-only">
                   {localizedStrings['%userProfile_registrationNeeded%']}
